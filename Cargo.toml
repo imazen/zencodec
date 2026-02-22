@@ -10,7 +10,7 @@ keywords = ["image", "codec", "traits"]
 repository = "https://github.com/imazen/zencodec-types"
 
 [dependencies]
-enough = "0.3"
+enough = "0.4"
 rgb = { version = "0.8", default-features = false, features = ["as-bytes"] }
 imgref = "1.12"
 whereat = { version = "0.1", default-features = false }
