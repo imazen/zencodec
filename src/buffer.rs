@@ -390,10 +390,15 @@ impl PixelDescriptor {
         self.layout.channels() as u8
     }
 
-    /// Whether this format has an alpha channel.
+    /// Whether this format carries meaningful alpha data.
+    ///
+    /// Returns `false` for formats like BGRX where the layout has an
+    /// alpha-position channel but `AlphaMode::None` indicates it's padding.
+    /// Use [`ChannelLayout::has_alpha()`] to check if the layout includes
+    /// an alpha-position channel regardless of whether it carries data.
     #[inline]
     pub const fn has_alpha(self) -> bool {
-        self.layout.has_alpha()
+        !matches!(self.alpha, AlphaMode::None)
     }
 
     /// Whether the transfer function is [`Linear`](TransferFunction::Linear).
@@ -2266,6 +2271,12 @@ mod tests {
         assert_eq!(d.min_alignment(), 1);
         // Layout-compatible with BGRA8
         assert!(d.layout_compatible(&PixelDescriptor::BGRA8_SRGB));
+        // BGRX has no meaningful alpha — the fourth byte is padding
+        assert!(!d.has_alpha());
+        // BGRA does have meaningful alpha
+        assert!(PixelDescriptor::BGRA8_SRGB.has_alpha());
+        // The layout itself reports an alpha-position channel
+        assert!(d.layout.has_alpha());
     }
 
     #[test]
