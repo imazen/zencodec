@@ -8,7 +8,7 @@ use imgref::ImgRef;
 use rgb::alt::BGRA;
 use rgb::{Gray, Rgb, Rgba};
 
-use crate::{ImageFormat, ImageInfo, ImageMetadata, PixelData};
+use crate::{ImageFormat, ImageInfo, MetadataView, PixelData};
 
 /// Output from an encode operation.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -179,7 +179,7 @@ impl DecodeOutput {
     }
 
     /// Borrow embedded metadata for roundtrip encode.
-    pub fn metadata(&self) -> ImageMetadata<'_> {
+    pub fn metadata(&self) -> MetadataView<'_> {
         self.info.metadata()
     }
 
@@ -391,7 +391,7 @@ impl DecodeFrame {
     /// Borrow embedded metadata for roundtrip encode.
     ///
     /// Convenience for `self.info().metadata()`.
-    pub fn metadata(&self) -> ImageMetadata<'_> {
+    pub fn metadata(&self) -> MetadataView<'_> {
         self.info.metadata()
     }
 

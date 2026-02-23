@@ -8,7 +8,7 @@
 //! - [`EncodeOutput`] / [`DecodeOutput`] — unified output types
 //! - [`PixelSlice`] / [`PixelSliceMut`] / [`PixelBuffer`] — format-erased pixel buffers
 //! - [`PixelData`] — typed pixel buffer enum over `imgref::ImgVec`
-//! - [`ImageInfo`] / [`ImageMetadata`] / [`Orientation`] — image metadata
+//! - [`ImageInfo`] / [`MetadataView`] / [`Orientation`] — image metadata
 //! - [`ImageFormat`] — format detection from magic bytes
 //! - [`CodecCapabilities`] — capability flags for feature discovery
 //! - [`UnsupportedOperation`] / [`HasUnsupportedOperation`] — standard unsupported operation reporting
@@ -48,9 +48,11 @@ pub use color::{ColorContext, ColorProfileSource, NamedProfile, WorkingColorSpac
 pub use format::ImageFormat;
 pub use gainmap::GainMapMetadata;
 pub use info::{
-    Cicp, ContentLightLevel, DecodeCost, EncodeCost, ImageInfo, ImageMetadata, MasteringDisplay,
+    Cicp, ContentLightLevel, DecodeCost, EncodeCost, ImageInfo, MasteringDisplay, MetadataView,
     OutputInfo,
 };
+#[allow(deprecated)]
+pub use info::ImageMetadata;
 pub use limits::{LimitExceeded, ResourceLimits};
 pub use orientation::Orientation;
 pub use output::{

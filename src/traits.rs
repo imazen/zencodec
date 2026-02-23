@@ -35,7 +35,7 @@ use crate::format::ImageFormat;
 use crate::output::{EncodeFrame, TypedEncodeFrame};
 use crate::pixel::{GrayAlpha, PixelData};
 use crate::{
-    CodecCapabilities, DecodeFrame, DecodeOutput, EncodeOutput, ImageInfo, ImageMetadata,
+    CodecCapabilities, DecodeFrame, DecodeOutput, EncodeOutput, ImageInfo, MetadataView,
     PixelSlice, PixelSliceMut, ResourceLimits, Stop,
 };
 
@@ -401,12 +401,12 @@ pub trait EncodeJob<'a>: Sized {
     /// support cancellation (check [`capabilities().encode_cancel()`](CodecCapabilities::encode_cancel)).
     fn with_stop(self, stop: &'a dyn Stop) -> Self;
 
-    /// Set all metadata (ICC, EXIF, XMP) from an [`ImageMetadata`].
+    /// Set all metadata (ICC, EXIF, XMP) from a [`MetadataView`].
     ///
     /// The codec embeds whatever metadata the format supports. Metadata
     /// types not supported by the format are silently skipped — check
     /// [`capabilities()`](EncoderConfig::capabilities) to see what's supported.
-    fn with_metadata(self, meta: &'a ImageMetadata<'a>) -> Self;
+    fn with_metadata(self, meta: &'a MetadataView<'a>) -> Self;
 
     /// Override resource limits for this operation.
     fn with_limits(self, limits: ResourceLimits) -> Self;

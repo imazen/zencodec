@@ -543,8 +543,8 @@ impl ImageInfo {
     }
 
     /// Borrow embedded metadata for roundtrip encode.
-    pub fn metadata(&self) -> ImageMetadata<'_> {
-        ImageMetadata {
+    pub fn metadata(&self) -> MetadataView<'_> {
+        MetadataView {
             icc_profile: self.icc_profile.as_deref(),
             exif: self.exif.as_deref(),
             xmp: self.xmp.as_deref(),
@@ -567,7 +567,7 @@ impl ImageInfo {
 /// before re-encoding).
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct ImageMetadata<'a> {
+pub struct MetadataView<'a> {
     /// ICC color profile.
     pub icc_profile: Option<&'a [u8]>,
     /// EXIF metadata.
@@ -587,7 +587,7 @@ pub struct ImageMetadata<'a> {
     pub orientation: Orientation,
 }
 
-impl Default for ImageMetadata<'_> {
+impl Default for MetadataView<'_> {
     fn default() -> Self {
         Self {
             icc_profile: None,
@@ -601,7 +601,11 @@ impl Default for ImageMetadata<'_> {
     }
 }
 
-impl<'a> ImageMetadata<'a> {
+/// Deprecated alias for [`MetadataView`].
+#[deprecated(since = "0.2.0", note = "renamed to MetadataView")]
+pub type ImageMetadata<'a> = MetadataView<'a>;
+
+impl<'a> MetadataView<'a> {
     /// Create empty metadata.
     pub fn none() -> Self {
         Self::default()
@@ -920,17 +924,17 @@ mod tests {
 
     #[test]
     fn metadata_empty() {
-        let meta = ImageMetadata::none();
+        let meta = MetadataView::none();
         assert!(meta.is_empty());
     }
 
     #[test]
     fn metadata_equality() {
-        let a = ImageMetadata::none().with_icc(&[1, 2, 3]);
-        let b = ImageMetadata::none().with_icc(&[1, 2, 3]);
+        let a = MetadataView::none().with_icc(&[1, 2, 3]);
+        let b = MetadataView::none().with_icc(&[1, 2, 3]);
         assert_eq!(a, b);
 
-        let c = ImageMetadata::none().with_icc(&[4, 5]);
+        let c = MetadataView::none().with_icc(&[4, 5]);
         assert_ne!(a, c);
     }
 
@@ -1053,13 +1057,13 @@ mod tests {
 
     #[test]
     fn metadata_with_cicp_not_empty() {
-        let meta = ImageMetadata::none().with_cicp(Cicp::SRGB);
+        let meta = MetadataView::none().with_cicp(Cicp::SRGB);
         assert!(!meta.is_empty());
     }
 
     #[test]
     fn metadata_with_hdr_not_empty() {
-        let meta = ImageMetadata::none().with_content_light_level(ContentLightLevel {
+        let meta = MetadataView::none().with_content_light_level(ContentLightLevel {
             max_content_light_level: 1000,
             max_frame_average_light_level: 400,
         });
@@ -1101,25 +1105,25 @@ mod tests {
 
     #[test]
     fn metadata_orientation_default_is_normal() {
-        let meta = ImageMetadata::none();
+        let meta = MetadataView::none();
         assert_eq!(meta.orientation, Orientation::Normal);
     }
 
     #[test]
     fn metadata_with_orientation_builder() {
-        let meta = ImageMetadata::none().with_orientation(Orientation::Rotate270);
+        let meta = MetadataView::none().with_orientation(Orientation::Rotate270);
         assert_eq!(meta.orientation, Orientation::Rotate270);
     }
 
     #[test]
     fn metadata_orientation_not_empty() {
-        let meta = ImageMetadata::none().with_orientation(Orientation::Rotate90);
+        let meta = MetadataView::none().with_orientation(Orientation::Rotate90);
         assert!(!meta.is_empty());
     }
 
     #[test]
     fn metadata_normal_orientation_is_empty() {
-        let meta = ImageMetadata::none().with_orientation(Orientation::Normal);
+        let meta = MetadataView::none().with_orientation(Orientation::Normal);
         assert!(meta.is_empty());
     }
 
@@ -1158,10 +1162,10 @@ mod tests {
     fn metadata_transfer_function() {
         use crate::TransferFunction;
 
-        let meta = ImageMetadata::none().with_cicp(Cicp::SRGB);
+        let meta = MetadataView::none().with_cicp(Cicp::SRGB);
         assert_eq!(meta.transfer_function(), TransferFunction::Srgb);
 
-        let meta = ImageMetadata::none();
+        let meta = MetadataView::none();
         assert_eq!(meta.transfer_function(), TransferFunction::Unknown);
     }
 
