@@ -300,6 +300,222 @@ impl PixelData {
         )
     }
 
+    // --- Zero-copy borrowing accessors (as_*) ---
+    //
+    // Return `None` if the variant doesn't match. No conversion.
+
+    /// Borrow as RGB8 if that's the native format.
+    pub fn as_rgb8(&self) -> Option<imgref::ImgRef<'_, Rgb<u8>>> {
+        match self {
+            PixelData::Rgb8(img) => Some(img.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Borrow as RGBA8 if that's the native format.
+    pub fn as_rgba8(&self) -> Option<imgref::ImgRef<'_, Rgba<u8>>> {
+        match self {
+            PixelData::Rgba8(img) => Some(img.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Borrow as BGRA8 if that's the native format.
+    pub fn as_bgra8(&self) -> Option<imgref::ImgRef<'_, BGRA<u8>>> {
+        match self {
+            PixelData::Bgra8(img) => Some(img.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Borrow as Gray8 if that's the native format.
+    pub fn as_gray8(&self) -> Option<imgref::ImgRef<'_, Gray<u8>>> {
+        match self {
+            PixelData::Gray8(img) => Some(img.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Borrow as RGB16 if that's the native format.
+    pub fn as_rgb16(&self) -> Option<imgref::ImgRef<'_, Rgb<u16>>> {
+        match self {
+            PixelData::Rgb16(img) => Some(img.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Borrow as RGBA16 if that's the native format.
+    pub fn as_rgba16(&self) -> Option<imgref::ImgRef<'_, Rgba<u16>>> {
+        match self {
+            PixelData::Rgba16(img) => Some(img.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Borrow as RGB f32 if that's the native format.
+    pub fn as_rgb_f32(&self) -> Option<imgref::ImgRef<'_, Rgb<f32>>> {
+        match self {
+            PixelData::RgbF32(img) => Some(img.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Borrow as RGBA f32 if that's the native format.
+    pub fn as_rgba_f32(&self) -> Option<imgref::ImgRef<'_, Rgba<f32>>> {
+        match self {
+            PixelData::RgbaF32(img) => Some(img.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Borrow as Gray16 if that's the native format.
+    pub fn as_gray16(&self) -> Option<imgref::ImgRef<'_, Gray<u16>>> {
+        match self {
+            PixelData::Gray16(img) => Some(img.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Borrow as Gray f32 if that's the native format.
+    pub fn as_gray_f32(&self) -> Option<imgref::ImgRef<'_, Gray<f32>>> {
+        match self {
+            PixelData::GrayF32(img) => Some(img.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Borrow as GrayAlpha8 if that's the native format.
+    pub fn as_gray_alpha8(&self) -> Option<imgref::ImgRef<'_, GrayAlpha<u8>>> {
+        match self {
+            PixelData::GrayAlpha8(img) => Some(img.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Borrow as GrayAlpha16 if that's the native format.
+    pub fn as_gray_alpha16(&self) -> Option<imgref::ImgRef<'_, GrayAlpha<u16>>> {
+        match self {
+            PixelData::GrayAlpha16(img) => Some(img.as_ref()),
+            _ => None,
+        }
+    }
+
+    /// Borrow as GrayAlpha f32 if that's the native format.
+    pub fn as_gray_alpha_f32(&self) -> Option<imgref::ImgRef<'_, GrayAlpha<f32>>> {
+        match self {
+            PixelData::GrayAlphaF32(img) => Some(img.as_ref()),
+            _ => None,
+        }
+    }
+
+    // --- Consuming extractors (try_into_*) ---
+    //
+    // Return `None` if the variant doesn't match. No conversion.
+
+    /// Extract as owned RGB8 without conversion.
+    pub fn try_into_rgb8(self) -> Option<ImgVec<Rgb<u8>>> {
+        match self {
+            PixelData::Rgb8(img) => Some(img),
+            _ => None,
+        }
+    }
+
+    /// Extract as owned RGBA8 without conversion.
+    pub fn try_into_rgba8(self) -> Option<ImgVec<Rgba<u8>>> {
+        match self {
+            PixelData::Rgba8(img) => Some(img),
+            _ => None,
+        }
+    }
+
+    /// Extract as owned BGRA8 without conversion.
+    pub fn try_into_bgra8(self) -> Option<ImgVec<BGRA<u8>>> {
+        match self {
+            PixelData::Bgra8(img) => Some(img),
+            _ => None,
+        }
+    }
+
+    /// Extract as owned Gray8 without conversion.
+    pub fn try_into_gray8(self) -> Option<ImgVec<Gray<u8>>> {
+        match self {
+            PixelData::Gray8(img) => Some(img),
+            _ => None,
+        }
+    }
+
+    /// Extract as owned RGB16 without conversion.
+    pub fn try_into_rgb16(self) -> Option<ImgVec<Rgb<u16>>> {
+        match self {
+            PixelData::Rgb16(img) => Some(img),
+            _ => None,
+        }
+    }
+
+    /// Extract as owned RGBA16 without conversion.
+    pub fn try_into_rgba16(self) -> Option<ImgVec<Rgba<u16>>> {
+        match self {
+            PixelData::Rgba16(img) => Some(img),
+            _ => None,
+        }
+    }
+
+    /// Extract as owned RGB f32 without conversion.
+    pub fn try_into_rgb_f32(self) -> Option<ImgVec<Rgb<f32>>> {
+        match self {
+            PixelData::RgbF32(img) => Some(img),
+            _ => None,
+        }
+    }
+
+    /// Extract as owned RGBA f32 without conversion.
+    pub fn try_into_rgba_f32(self) -> Option<ImgVec<Rgba<f32>>> {
+        match self {
+            PixelData::RgbaF32(img) => Some(img),
+            _ => None,
+        }
+    }
+
+    /// Extract as owned Gray16 without conversion.
+    pub fn try_into_gray16(self) -> Option<ImgVec<Gray<u16>>> {
+        match self {
+            PixelData::Gray16(img) => Some(img),
+            _ => None,
+        }
+    }
+
+    /// Extract as owned Gray f32 without conversion.
+    pub fn try_into_gray_f32(self) -> Option<ImgVec<Gray<f32>>> {
+        match self {
+            PixelData::GrayF32(img) => Some(img),
+            _ => None,
+        }
+    }
+
+    /// Extract as owned GrayAlpha8 without conversion.
+    pub fn try_into_gray_alpha8(self) -> Option<ImgVec<GrayAlpha<u8>>> {
+        match self {
+            PixelData::GrayAlpha8(img) => Some(img),
+            _ => None,
+        }
+    }
+
+    /// Extract as owned GrayAlpha16 without conversion.
+    pub fn try_into_gray_alpha16(self) -> Option<ImgVec<GrayAlpha<u16>>> {
+        match self {
+            PixelData::GrayAlpha16(img) => Some(img),
+            _ => None,
+        }
+    }
+
+    /// Extract as owned GrayAlpha f32 without conversion.
+    pub fn try_into_gray_alpha_f32(self) -> Option<ImgVec<GrayAlpha<f32>>> {
+        match self {
+            PixelData::GrayAlphaF32(img) => Some(img),
+            _ => None,
+        }
+    }
+
     /// Convert to RGB8 by reference, allocating a new buffer.
     ///
     /// 16-bit values are downscaled with proper rounding. Float values are
@@ -989,6 +1205,72 @@ mod tests {
 
         let data = PixelData::GrayAlphaF32(ImgVec::new(vec![GrayAlpha::new(0.0f32, 0.0)], 1, 1));
         assert!(data.as_pixel_slice().is_none());
+    }
+
+    #[test]
+    fn as_accessors_match() {
+        let rgb8 = PixelData::Rgb8(ImgVec::new(vec![Rgb { r: 1, g: 2, b: 3 }], 1, 1));
+        assert!(rgb8.as_rgb8().is_some());
+        assert!(rgb8.as_rgba8().is_none());
+        assert!(rgb8.as_rgb16().is_none());
+        assert!(rgb8.as_gray8().is_none());
+
+        let rgba16 = PixelData::Rgba16(ImgVec::new(
+            vec![Rgba {
+                r: 1u16,
+                g: 2,
+                b: 3,
+                a: 4,
+            }],
+            1,
+            1,
+        ));
+        assert!(rgba16.as_rgba16().is_some());
+        assert!(rgba16.as_rgba8().is_none());
+        assert!(rgba16.as_rgb16().is_none());
+
+        let gf32 = PixelData::GrayF32(ImgVec::new(vec![Gray::new(0.5f32)], 1, 1));
+        assert!(gf32.as_gray_f32().is_some());
+        assert!(gf32.as_gray8().is_none());
+        assert!(gf32.as_rgb_f32().is_none());
+
+        let ga8 = PixelData::GrayAlpha8(ImgVec::new(vec![GrayAlpha::new(128u8, 255)], 1, 1));
+        assert!(ga8.as_gray_alpha8().is_some());
+        assert!(ga8.as_gray8().is_none());
+    }
+
+    #[test]
+    fn try_into_accessors_match() {
+        let rgb8 = PixelData::Rgb8(ImgVec::new(vec![Rgb { r: 1, g: 2, b: 3 }], 1, 1));
+        assert!(rgb8.try_into_rgb8().is_some());
+
+        let rgb8 = PixelData::Rgb8(ImgVec::new(vec![Rgb { r: 1, g: 2, b: 3 }], 1, 1));
+        assert!(rgb8.try_into_rgba8().is_none());
+
+        let rf32 = PixelData::RgbF32(ImgVec::new(
+            vec![Rgb {
+                r: 0.5f32,
+                g: 0.5,
+                b: 0.5,
+            }],
+            1,
+            1,
+        ));
+        assert!(rf32.try_into_rgb_f32().is_some());
+
+        let rf32 = PixelData::RgbF32(ImgVec::new(
+            vec![Rgb {
+                r: 0.5f32,
+                g: 0.5,
+                b: 0.5,
+            }],
+            1,
+            1,
+        ));
+        assert!(rf32.try_into_rgb8().is_none());
+
+        let ga16 = PixelData::GrayAlpha16(ImgVec::new(vec![GrayAlpha::new(1000u16, 2000)], 1, 1));
+        assert!(ga16.try_into_gray_alpha16().is_some());
     }
 
     #[test]

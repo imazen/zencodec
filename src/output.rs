@@ -118,34 +118,67 @@ impl DecodeOutput {
 
     /// Borrow as RGB8 if that's the native format.
     pub fn as_rgb8(&self) -> Option<imgref::ImgRef<'_, Rgb<u8>>> {
-        match &self.pixels {
-            PixelData::Rgb8(img) => Some(img.as_ref()),
-            _ => None,
-        }
+        self.pixels.as_rgb8()
     }
 
     /// Borrow as RGBA8 if that's the native format.
     pub fn as_rgba8(&self) -> Option<imgref::ImgRef<'_, Rgba<u8>>> {
-        match &self.pixels {
-            PixelData::Rgba8(img) => Some(img.as_ref()),
-            _ => None,
-        }
+        self.pixels.as_rgba8()
     }
 
     /// Borrow as BGRA8 if that's the native format.
     pub fn as_bgra8(&self) -> Option<imgref::ImgRef<'_, BGRA<u8>>> {
-        match &self.pixels {
-            PixelData::Bgra8(img) => Some(img.as_ref()),
-            _ => None,
-        }
+        self.pixels.as_bgra8()
     }
 
     /// Borrow as Gray8 if that's the native format.
     pub fn as_gray8(&self) -> Option<imgref::ImgRef<'_, Gray<u8>>> {
-        match &self.pixels {
-            PixelData::Gray8(img) => Some(img.as_ref()),
-            _ => None,
-        }
+        self.pixels.as_gray8()
+    }
+
+    /// Borrow as RGB16 if that's the native format.
+    pub fn as_rgb16(&self) -> Option<imgref::ImgRef<'_, Rgb<u16>>> {
+        self.pixels.as_rgb16()
+    }
+
+    /// Borrow as RGBA16 if that's the native format.
+    pub fn as_rgba16(&self) -> Option<imgref::ImgRef<'_, Rgba<u16>>> {
+        self.pixels.as_rgba16()
+    }
+
+    /// Borrow as RGB f32 if that's the native format.
+    pub fn as_rgb_f32(&self) -> Option<imgref::ImgRef<'_, Rgb<f32>>> {
+        self.pixels.as_rgb_f32()
+    }
+
+    /// Borrow as RGBA f32 if that's the native format.
+    pub fn as_rgba_f32(&self) -> Option<imgref::ImgRef<'_, Rgba<f32>>> {
+        self.pixels.as_rgba_f32()
+    }
+
+    /// Borrow as Gray16 if that's the native format.
+    pub fn as_gray16(&self) -> Option<imgref::ImgRef<'_, Gray<u16>>> {
+        self.pixels.as_gray16()
+    }
+
+    /// Borrow as Gray f32 if that's the native format.
+    pub fn as_gray_f32(&self) -> Option<imgref::ImgRef<'_, Gray<f32>>> {
+        self.pixels.as_gray_f32()
+    }
+
+    /// Borrow as GrayAlpha8 if that's the native format.
+    pub fn as_gray_alpha8(&self) -> Option<imgref::ImgRef<'_, crate::GrayAlpha<u8>>> {
+        self.pixels.as_gray_alpha8()
+    }
+
+    /// Borrow as GrayAlpha16 if that's the native format.
+    pub fn as_gray_alpha16(&self) -> Option<imgref::ImgRef<'_, crate::GrayAlpha<u16>>> {
+        self.pixels.as_gray_alpha16()
+    }
+
+    /// Borrow as GrayAlpha f32 if that's the native format.
+    pub fn as_gray_alpha_f32(&self) -> Option<imgref::ImgRef<'_, crate::GrayAlpha<f32>>> {
+        self.pixels.as_gray_alpha_f32()
     }
 
     /// Image info.
@@ -332,34 +365,67 @@ impl DecodeFrame {
 
     /// Borrow as RGB8 if that's the native format.
     pub fn as_rgb8(&self) -> Option<imgref::ImgRef<'_, Rgb<u8>>> {
-        match &self.pixels {
-            PixelData::Rgb8(img) => Some(img.as_ref()),
-            _ => None,
-        }
+        self.pixels.as_rgb8()
     }
 
     /// Borrow as RGBA8 if that's the native format.
     pub fn as_rgba8(&self) -> Option<imgref::ImgRef<'_, Rgba<u8>>> {
-        match &self.pixels {
-            PixelData::Rgba8(img) => Some(img.as_ref()),
-            _ => None,
-        }
+        self.pixels.as_rgba8()
     }
 
     /// Borrow as BGRA8 if that's the native format.
     pub fn as_bgra8(&self) -> Option<imgref::ImgRef<'_, BGRA<u8>>> {
-        match &self.pixels {
-            PixelData::Bgra8(img) => Some(img.as_ref()),
-            _ => None,
-        }
+        self.pixels.as_bgra8()
     }
 
     /// Borrow as Gray8 if that's the native format.
     pub fn as_gray8(&self) -> Option<imgref::ImgRef<'_, Gray<u8>>> {
-        match &self.pixels {
-            PixelData::Gray8(img) => Some(img.as_ref()),
-            _ => None,
-        }
+        self.pixels.as_gray8()
+    }
+
+    /// Borrow as RGB16 if that's the native format.
+    pub fn as_rgb16(&self) -> Option<imgref::ImgRef<'_, Rgb<u16>>> {
+        self.pixels.as_rgb16()
+    }
+
+    /// Borrow as RGBA16 if that's the native format.
+    pub fn as_rgba16(&self) -> Option<imgref::ImgRef<'_, Rgba<u16>>> {
+        self.pixels.as_rgba16()
+    }
+
+    /// Borrow as RGB f32 if that's the native format.
+    pub fn as_rgb_f32(&self) -> Option<imgref::ImgRef<'_, Rgb<f32>>> {
+        self.pixels.as_rgb_f32()
+    }
+
+    /// Borrow as RGBA f32 if that's the native format.
+    pub fn as_rgba_f32(&self) -> Option<imgref::ImgRef<'_, Rgba<f32>>> {
+        self.pixels.as_rgba_f32()
+    }
+
+    /// Borrow as Gray16 if that's the native format.
+    pub fn as_gray16(&self) -> Option<imgref::ImgRef<'_, Gray<u16>>> {
+        self.pixels.as_gray16()
+    }
+
+    /// Borrow as Gray f32 if that's the native format.
+    pub fn as_gray_f32(&self) -> Option<imgref::ImgRef<'_, Gray<f32>>> {
+        self.pixels.as_gray_f32()
+    }
+
+    /// Borrow as GrayAlpha8 if that's the native format.
+    pub fn as_gray_alpha8(&self) -> Option<imgref::ImgRef<'_, crate::GrayAlpha<u8>>> {
+        self.pixels.as_gray_alpha8()
+    }
+
+    /// Borrow as GrayAlpha16 if that's the native format.
+    pub fn as_gray_alpha16(&self) -> Option<imgref::ImgRef<'_, crate::GrayAlpha<u16>>> {
+        self.pixels.as_gray_alpha16()
+    }
+
+    /// Borrow as GrayAlpha f32 if that's the native format.
+    pub fn as_gray_alpha_f32(&self) -> Option<imgref::ImgRef<'_, crate::GrayAlpha<f32>>> {
+        self.pixels.as_gray_alpha_f32()
     }
 
     /// Frame delay in milliseconds.
