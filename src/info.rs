@@ -5,6 +5,7 @@ use alloc::vec::Vec;
 
 use crate::buffer::PixelDescriptor;
 use crate::color::{ColorContext, ColorProfileSource};
+use crate::gainmap::GainMapMetadata;
 use crate::{ImageFormat, Orientation};
 
 /// CICP color description (ITU-T H.273).
@@ -254,7 +255,7 @@ impl MasteringDisplay {
 }
 
 /// Image metadata obtained from probing or decoding.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct ImageInfo {
     /// Image width in pixels.
@@ -316,6 +317,13 @@ pub struct ImageInfo {
     /// Detected via UltraHDR XMP metadata (JPEG), `tmap` box (AVIF/HEIF),
     /// or gain map bundle (JPEG XL).
     pub has_gain_map: bool,
+    /// Gain map metadata parameters (ISO 21496-1).
+    ///
+    /// Present when `has_gain_map` is true and the metadata was successfully
+    /// parsed. Describes the mathematical relationship between the base image
+    /// and the gain map image. The gain map pixel data is a separate image
+    /// accessible via [`DecodeOutput::extras`](crate::DecodeOutput).
+    pub gain_map_metadata: Option<GainMapMetadata>,
     /// Non-fatal diagnostic messages from probing or decoding.
     ///
     /// Populated when the operation succeeded but encountered unusual
@@ -347,6 +355,7 @@ impl ImageInfo {
             xmp: None,
             orientation: Orientation::Normal,
             has_gain_map: false,
+            gain_map_metadata: None,
             warnings: Vec::new(),
         }
     }
@@ -428,6 +437,15 @@ impl ImageInfo {
     /// Set whether the image contains an HDR gain map.
     pub fn with_gain_map(mut self, has: bool) -> Self {
         self.has_gain_map = has;
+        self
+    }
+
+    /// Set the gain map metadata (ISO 21496-1 parameters).
+    ///
+    /// Also sets `has_gain_map` to `true`.
+    pub fn with_gain_map_metadata(mut self, meta: GainMapMetadata) -> Self {
+        self.gain_map_metadata = Some(meta);
+        self.has_gain_map = true;
         self
     }
 
@@ -1164,6 +1182,28 @@ mod tests {
         let cicp = Cicp::new(1, 1, 1, false);
         let s = alloc::format!("{}", cicp);
         assert_eq!(s, "BT.709/sRGB / BT.709 / BT.709 (limited range)");
+    }
+
+    #[test]
+    fn gain_map_metadata_builder() {
+        let meta = crate::GainMapMetadata {
+            gain_map_max: [2.0, 2.0, 2.0],
+            hdr_capacity_max: 2.0,
+            ..crate::GainMapMetadata::default()
+        };
+        let info = ImageInfo::new(100, 100, ImageFormat::Jpeg).with_gain_map_metadata(meta);
+        assert!(info.has_gain_map);
+        assert!(info.gain_map_metadata.is_some());
+        let gm = info.gain_map_metadata.unwrap();
+        assert_eq!(gm.gain_map_max, [2.0, 2.0, 2.0]);
+        assert_eq!(gm.hdr_capacity_max, 2.0);
+    }
+
+    #[test]
+    fn gain_map_metadata_default_none() {
+        let info = ImageInfo::new(100, 100, ImageFormat::Jpeg);
+        assert!(!info.has_gain_map);
+        assert!(info.gain_map_metadata.is_none());
     }
 
     #[test]
