@@ -487,10 +487,18 @@ pub trait Encoder: Sized {
     /// Push scanline rows incrementally.
     ///
     /// Codec may buffer internally if it needs full-frame data (e.g. AV1).
-    fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), Self::Error>;
+    ///
+    /// Default: panics. Override if the codec supports row-level encoding.
+    fn push_rows(&mut self, _rows: PixelSlice<'_>) -> Result<(), Self::Error> {
+        unimplemented!("this codec does not support row-level encoding; use encode() instead")
+    }
 
     /// Finalize after push_rows. Returns encoded output.
-    fn finish(self) -> Result<EncodeOutput, Self::Error>;
+    ///
+    /// Default: panics. Override if the codec supports row-level encoding.
+    fn finish(self) -> Result<EncodeOutput, Self::Error> {
+        unimplemented!("this codec does not support row-level encoding; use encode() instead")
+    }
 
     /// Encode by pulling rows from a source callback.
     ///
@@ -501,10 +509,14 @@ pub trait Encoder: Sized {
     ///
     /// This is useful when pixel data is generated on-the-fly or comes
     /// from a source that produces rows in order (e.g., a render pipeline).
+    ///
+    /// Default: panics. Override if the codec supports pull encoding.
     fn encode_from(
         self,
-        source: &mut dyn FnMut(u32, PixelSliceMut<'_>) -> usize,
-    ) -> Result<EncodeOutput, Self::Error>;
+        _source: &mut dyn FnMut(u32, PixelSliceMut<'_>) -> usize,
+    ) -> Result<EncodeOutput, Self::Error> {
+        unimplemented!("this codec does not support pull encoding; use encode() instead")
+    }
 }
 
 /// Animation encode: push complete frames, build frames row-by-row, or
@@ -549,24 +561,48 @@ pub trait FrameEncoder: Sized {
     }
 
     /// Begin a new frame (for row-level building).
-    fn begin_frame(&mut self, duration_ms: u32) -> Result<(), Self::Error>;
+    ///
+    /// Default: panics. Override if the codec supports row-level frame building.
+    fn begin_frame(&mut self, _duration_ms: u32) -> Result<(), Self::Error> {
+        unimplemented!(
+            "this codec does not support row-level frame building; use push_frame() instead"
+        )
+    }
 
     /// Push rows into the current frame (after begin_frame).
-    fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), Self::Error>;
+    ///
+    /// Default: panics. Override if the codec supports row-level frame building.
+    fn push_rows(&mut self, _rows: PixelSlice<'_>) -> Result<(), Self::Error> {
+        unimplemented!(
+            "this codec does not support row-level frame building; use push_frame() instead"
+        )
+    }
 
     /// End the current frame (after pushing all rows).
-    fn end_frame(&mut self) -> Result<(), Self::Error>;
+    ///
+    /// Default: panics. Override if the codec supports row-level frame building.
+    fn end_frame(&mut self) -> Result<(), Self::Error> {
+        unimplemented!(
+            "this codec does not support row-level frame building; use push_frame() instead"
+        )
+    }
 
     /// Encode a frame by pulling rows from a source callback.
     ///
     /// The encoder calls `source` repeatedly with the row index and a
     /// mutable buffer slice. The callback fills the buffer and returns the
     /// number of rows written. Returns `0` to signal end of frame.
+    ///
+    /// Default: panics. Override if the codec supports pull frame building.
     fn pull_frame(
         &mut self,
-        duration_ms: u32,
-        source: &mut dyn FnMut(u32, PixelSliceMut<'_>) -> usize,
-    ) -> Result<(), Self::Error>;
+        _duration_ms: u32,
+        _source: &mut dyn FnMut(u32, PixelSliceMut<'_>) -> usize,
+    ) -> Result<(), Self::Error> {
+        unimplemented!(
+            "this codec does not support pull frame building; use push_frame() instead"
+        )
+    }
 
     /// Set animation loop count.
     ///
