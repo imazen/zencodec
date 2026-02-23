@@ -17,6 +17,16 @@ use rgb::{Gray, Rgb, Rgba};
 ///
 /// A simple two-component pixel type. Not from the `rgb` crate — we own this
 /// type to avoid API instability in `rgb::alt::GrayAlpha`.
+///
+/// # Zero-copy limitation
+///
+/// `GrayAlpha<T>` does not implement `rgb::ComponentBytes`, so it cannot
+/// produce a zero-copy [`PixelSlice`](crate::PixelSlice) via `From`. Use
+/// [`PixelData::as_pixel_slice()`](crate::PixelData::as_pixel_slice) for
+/// non-GrayAlpha variants, or [`PixelData::to_bytes()`](crate::PixelData::to_bytes)
+/// for the buffer-copy path. The typed convenience methods on
+/// [`EncoderConfig`](crate::EncoderConfig) (`encode_gray_alpha8` etc.) handle
+/// this internally by routing through [`PixelData`](crate::PixelData).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 #[repr(C)]
