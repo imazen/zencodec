@@ -219,7 +219,9 @@ impl ColorPrimaries {
     pub const fn contains(self, other: Self) -> bool {
         // Self must be at least as wide as other.
         // Width order: Unknown=0, Bt709=1, DisplayP3=2, Bt2020=3
-        self.gamut_width() >= other.gamut_width() && !matches!(self, Self::Unknown) && !matches!(other, Self::Unknown)
+        self.gamut_width() >= other.gamut_width()
+            && !matches!(self, Self::Unknown)
+            && !matches!(other, Self::Unknown)
     }
 
     /// Internal gamut width ranking (larger = wider gamut).

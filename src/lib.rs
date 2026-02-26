@@ -3,7 +3,7 @@
 //! This crate defines the common API surface that all zen* codecs implement:
 //!
 //! - [`PixelSlice`] / [`PixelSliceMut`] / [`PixelBuffer`] — format-erased pixel buffers
-//! - [`ImageInfo`] / [`MetadataView`] / [`Orientation`] — image metadata
+//! - [`ImageInfo`] / [`MetadataView`] / [`Orientation`] / [`OrientationHint`] — image metadata
 //! - [`ImageFormat`] — format detection from magic bytes
 //! - [`CodecCapabilities`] — capability flags for feature discovery
 //! - [`UnsupportedOperation`] / [`HasUnsupportedOperation`] — standard unsupported operation reporting
@@ -12,8 +12,11 @@
 //!
 //! With the `codec` feature (default):
 //!
-//! - [`EncoderConfig`] / [`EncodeJob`] / [`Encoder`] / [`FrameEncoder`] — encode traits
-//! - [`DecoderConfig`] / [`DecodeJob`] / [`Decoder`] / [`FrameDecoder`] — decode traits
+//! - [`EncoderConfig`] / [`EncodeJob`] — encode configuration and job
+//! - Per-format encode traits: [`EncodeRgb8`], [`EncodeRgba8`], [`EncodeGray8`], etc.
+//! - Per-format frame encode traits: [`FrameEncodeRgb8`], [`FrameEncodeRgba8`]
+//! - [`DecoderConfig`] / [`DecodeJob`] — decode configuration and job
+//! - [`Decode`] / [`FrameDecode`] — type-erased decode with preferred format negotiation
 //! - [`DecodeRowSink`] — zero-copy row sink for streaming decode
 //! - [`DecodeOutput`] — decode output with typed pixel data
 //! - [`PixelData`] — typed pixel buffer enum over `imgref::ImgVec`
@@ -62,10 +65,8 @@ pub use info::{
     Cicp, ContentLightLevel, DecodeCost, EncodeCost, ImageInfo, MasteringDisplay, Metadata,
     MetadataView, OutputInfo,
 };
-#[allow(deprecated)]
-pub use info::ImageMetadata;
 pub use limits::{LimitExceeded, ResourceLimits};
-pub use orientation::Orientation;
+pub use orientation::{Orientation, OrientationHint};
 pub use output::{EncodeFrame, EncodeOutput, FrameBlend, FrameDisposal};
 
 // --- Codec-feature-gated exports ---
@@ -78,34 +79,10 @@ pub use pixel::{GrayAlpha, PixelData};
 pub use sink::DecodeRowSink;
 #[cfg(feature = "codec")]
 pub use traits::{
-    DecodeJob, Decoder, DecoderConfig, EncodeJob, Encoder, EncoderConfig, FrameDecoder,
-    FrameEncoder,
+    Decode, DecodeJob, DecoderConfig, EncodeGray8, EncodeGray16, EncodeGrayF32, EncodeJob,
+    EncodeRgb8, EncodeRgb16, EncodeRgbF16, EncodeRgbF32, EncodeRgba8, EncodeRgba16, EncodeRgbaF16,
+    EncodeRgbaF32, EncoderConfig, FrameDecode, FrameEncodeRgb8, FrameEncodeRgba8,
 };
-
-/// Clamp calibrated quality to the valid 0.0–100.0 range.
-///
-/// Use this in codec [`EncoderConfig::with_calibrated_quality()`] and
-/// [`EncoderConfig::with_alpha_quality()`] implementations to validate
-/// and clamp the input value. Fires a `debug_assert` on out-of-range
-/// values so callers discover mistakes during development.
-///
-/// # Example
-///
-/// ```
-/// use zencodec_types::clamp_quality;
-///
-/// assert_eq!(clamp_quality(85.0), 85.0);
-/// assert_eq!(clamp_quality(0.0), 0.0);
-/// assert_eq!(clamp_quality(100.0), 100.0);
-/// ```
-#[inline]
-pub fn clamp_quality(q: f32) -> f32 {
-    debug_assert!(
-        (0.0..=100.0).contains(&q),
-        "calibrated quality {q} outside 0.0–100.0 range"
-    );
-    q.clamp(0.0, 100.0)
-}
 
 // Re-exports for codec implementors and users (codec feature).
 #[cfg(feature = "codec")]

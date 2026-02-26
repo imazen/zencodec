@@ -5,9 +5,9 @@ use alloc::vec::Vec;
 use crate::ImageFormat;
 
 #[cfg(feature = "codec")]
-use alloc::sync::Arc;
-#[cfg(feature = "codec")]
 use crate::{ImageInfo, MetadataView};
+#[cfg(feature = "codec")]
+use alloc::sync::Arc;
 
 #[cfg(feature = "codec")]
 use alloc::boxed::Box;

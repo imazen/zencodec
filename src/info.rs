@@ -622,10 +622,6 @@ impl Default for MetadataView<'_> {
     }
 }
 
-/// Deprecated alias for [`MetadataView`].
-#[deprecated(since = "0.2.0", note = "renamed to MetadataView")]
-pub type ImageMetadata<'a> = MetadataView<'a>;
-
 /// Owned image metadata for cross-boundary transfer.
 ///
 /// Like [`MetadataView`] but owns its byte buffers. Use when metadata
