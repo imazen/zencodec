@@ -21,7 +21,7 @@ use rgb::alt::BGRA;
 use rgb::{Gray, Rgb, Rgba};
 
 #[cfg(feature = "codec")]
-use crate::PixelData;
+use crate::{PixelBuffer, PixelData, PixelDescriptor, TransferFunction};
 
 /// Output from an encode operation.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -71,19 +71,44 @@ impl AsRef<[u8]> for EncodeOutput {
 
 #[cfg(feature = "codec")]
 /// Output from a decode operation.
+///
+/// Stores pixel data as a [`PixelBuffer`] with embedded format descriptor.
+/// The descriptor carries the correct transfer function, color primaries,
+/// and signal range — no need to resolve from CICP separately.
 #[non_exhaustive]
 pub struct DecodeOutput {
-    pixels: PixelData,
+    pixels: PixelBuffer,
     info: ImageInfo,
     extras: Option<Box<dyn Any + Send>>,
 }
 
 #[cfg(feature = "codec")]
 impl DecodeOutput {
-    /// Create a new decode output.
-    pub fn new(pixels: PixelData, info: ImageInfo) -> Self {
+    /// Create a new decode output from a [`PixelBuffer`].
+    ///
+    /// The PixelBuffer's descriptor should already have the correct transfer
+    /// function and color primaries set by the decoder.
+    pub fn new(pixels: PixelBuffer, info: ImageInfo) -> Self {
         Self {
             pixels,
+            info,
+            extras: None,
+        }
+    }
+
+    /// Create from legacy [`PixelData`], converting to [`PixelBuffer`] internally.
+    ///
+    /// Resolves the transfer function from CICP metadata in `info` and sets it
+    /// on the PixelBuffer's descriptor (since PixelData always returns Unknown TF).
+    pub fn from_pixel_data(pixels: PixelData, info: ImageInfo) -> Self {
+        let mut buf: PixelBuffer = pixels.into();
+        let tf = info.transfer_function();
+        if tf != TransferFunction::Unknown {
+            let desc = buf.descriptor().with_transfer(tf);
+            buf = buf.with_descriptor(desc);
+        }
+        Self {
+            pixels: buf,
             info,
             extras: None,
         }
@@ -106,79 +131,64 @@ impl DecodeOutput {
         extras.downcast().ok().map(|b| *b)
     }
 
-    /// Borrow the pixel data in its native format.
-    pub fn pixels(&self) -> &PixelData {
+    /// Borrow the pixel buffer.
+    pub fn pixels(&self) -> &PixelBuffer {
         &self.pixels
     }
 
-    /// Take the pixel data, consuming this output.
-    pub fn into_pixels(self) -> PixelData {
+    /// Take the pixel buffer, consuming this output.
+    pub fn into_pixels(self) -> PixelBuffer {
         self.pixels
     }
 
-    /// Borrow as RGB8 if that's the native format.
-    pub fn as_rgb8(&self) -> Option<imgref::ImgRef<'_, Rgb<u8>>> {
-        self.pixels.as_rgb8()
+    /// Borrow as RGB8 if that's the native format (zero-copy).
+    pub fn as_rgb8(&self) -> Option<ImgRef<'_, Rgb<u8>>> {
+        self.pixels.try_as_imgref()
     }
 
-    /// Borrow as RGBA8 if that's the native format.
-    pub fn as_rgba8(&self) -> Option<imgref::ImgRef<'_, Rgba<u8>>> {
-        self.pixels.as_rgba8()
+    /// Borrow as RGBA8 if that's the native format (zero-copy).
+    pub fn as_rgba8(&self) -> Option<ImgRef<'_, Rgba<u8>>> {
+        self.pixels.try_as_imgref()
     }
 
-    /// Borrow as BGRA8 if that's the native format.
-    pub fn as_bgra8(&self) -> Option<imgref::ImgRef<'_, BGRA<u8>>> {
-        self.pixels.as_bgra8()
+    /// Borrow as BGRA8 if that's the native format (zero-copy).
+    pub fn as_bgra8(&self) -> Option<ImgRef<'_, BGRA<u8>>> {
+        self.pixels.try_as_imgref()
     }
 
-    /// Borrow as Gray8 if that's the native format.
-    pub fn as_gray8(&self) -> Option<imgref::ImgRef<'_, Gray<u8>>> {
-        self.pixels.as_gray8()
+    /// Borrow as Gray8 if that's the native format (zero-copy).
+    pub fn as_gray8(&self) -> Option<ImgRef<'_, Gray<u8>>> {
+        self.pixels.try_as_imgref()
     }
 
-    /// Borrow as RGB16 if that's the native format.
-    pub fn as_rgb16(&self) -> Option<imgref::ImgRef<'_, Rgb<u16>>> {
-        self.pixels.as_rgb16()
+    /// Borrow as RGB16 if that's the native format (zero-copy).
+    pub fn as_rgb16(&self) -> Option<ImgRef<'_, Rgb<u16>>> {
+        self.pixels.try_as_imgref()
     }
 
-    /// Borrow as RGBA16 if that's the native format.
-    pub fn as_rgba16(&self) -> Option<imgref::ImgRef<'_, Rgba<u16>>> {
-        self.pixels.as_rgba16()
+    /// Borrow as RGBA16 if that's the native format (zero-copy).
+    pub fn as_rgba16(&self) -> Option<ImgRef<'_, Rgba<u16>>> {
+        self.pixels.try_as_imgref()
     }
 
-    /// Borrow as RGB f32 if that's the native format.
-    pub fn as_rgb_f32(&self) -> Option<imgref::ImgRef<'_, Rgb<f32>>> {
-        self.pixels.as_rgb_f32()
+    /// Borrow as RGB f32 if that's the native format (zero-copy).
+    pub fn as_rgb_f32(&self) -> Option<ImgRef<'_, Rgb<f32>>> {
+        self.pixels.try_as_imgref()
     }
 
-    /// Borrow as RGBA f32 if that's the native format.
-    pub fn as_rgba_f32(&self) -> Option<imgref::ImgRef<'_, Rgba<f32>>> {
-        self.pixels.as_rgba_f32()
+    /// Borrow as RGBA f32 if that's the native format (zero-copy).
+    pub fn as_rgba_f32(&self) -> Option<ImgRef<'_, Rgba<f32>>> {
+        self.pixels.try_as_imgref()
     }
 
-    /// Borrow as Gray16 if that's the native format.
-    pub fn as_gray16(&self) -> Option<imgref::ImgRef<'_, Gray<u16>>> {
-        self.pixels.as_gray16()
+    /// Borrow as Gray16 if that's the native format (zero-copy).
+    pub fn as_gray16(&self) -> Option<ImgRef<'_, Gray<u16>>> {
+        self.pixels.try_as_imgref()
     }
 
-    /// Borrow as Gray f32 if that's the native format.
-    pub fn as_gray_f32(&self) -> Option<imgref::ImgRef<'_, Gray<f32>>> {
-        self.pixels.as_gray_f32()
-    }
-
-    /// Borrow as GrayAlpha8 if that's the native format.
-    pub fn as_gray_alpha8(&self) -> Option<imgref::ImgRef<'_, crate::GrayAlpha<u8>>> {
-        self.pixels.as_gray_alpha8()
-    }
-
-    /// Borrow as GrayAlpha16 if that's the native format.
-    pub fn as_gray_alpha16(&self) -> Option<imgref::ImgRef<'_, crate::GrayAlpha<u16>>> {
-        self.pixels.as_gray_alpha16()
-    }
-
-    /// Borrow as GrayAlpha f32 if that's the native format.
-    pub fn as_gray_alpha_f32(&self) -> Option<imgref::ImgRef<'_, crate::GrayAlpha<f32>>> {
-        self.pixels.as_gray_alpha_f32()
+    /// Borrow as Gray f32 if that's the native format (zero-copy).
+    pub fn as_gray_f32(&self) -> Option<ImgRef<'_, Gray<f32>>> {
+        self.pixels.try_as_imgref()
     }
 
     /// Image info.
@@ -201,17 +211,13 @@ impl DecodeOutput {
         self.pixels.has_alpha()
     }
 
-    /// Pixel format descriptor with the transfer function resolved from CICP.
+    /// Pixel format descriptor.
     ///
-    /// Unlike [`PixelData::descriptor()`] which returns
-    /// [`Unknown`](crate::TransferFunction::Unknown), this method uses the
-    /// CICP metadata from [`ImageInfo`] to set the correct transfer function.
-    /// If CICP is absent or the transfer characteristics code is not
-    /// recognized, the transfer function remains `Unknown`.
-    pub fn descriptor(&self) -> crate::PixelDescriptor {
-        self.pixels
-            .descriptor()
-            .with_transfer(self.info.transfer_function())
+    /// Returns the descriptor from the PixelBuffer directly. When constructed
+    /// via [`from_pixel_data()`](Self::from_pixel_data), the transfer function
+    /// is resolved from CICP metadata.
+    pub fn descriptor(&self) -> PixelDescriptor {
+        self.pixels.descriptor()
     }
 
     /// Detected format.
@@ -231,24 +237,44 @@ impl DecodeOutput {
         self.info.metadata()
     }
 
+    /// Convert to RGB8 by reference.
+    pub fn to_rgb8(&self) -> PixelBuffer<Rgb<u8>> {
+        self.pixels.to_rgb8()
+    }
+
+    /// Convert to RGBA8 by reference.
+    pub fn to_rgba8(&self) -> PixelBuffer<Rgba<u8>> {
+        self.pixels.to_rgba8()
+    }
+
+    /// Convert to Gray8 by reference.
+    pub fn to_gray8(&self) -> PixelBuffer<Gray<u8>> {
+        self.pixels.to_gray8()
+    }
+
+    /// Convert to BGRA8 by reference.
+    pub fn to_bgra8(&self) -> PixelBuffer<BGRA<u8>> {
+        self.pixels.to_bgra8()
+    }
+
     /// Convert to RGB8, consuming this output.
-    pub fn into_rgb8(self) -> imgref::ImgVec<Rgb<u8>> {
-        self.pixels.into_rgb8()
+    pub fn into_rgb8(self) -> PixelBuffer<Rgb<u8>> {
+        self.pixels.to_rgb8()
     }
 
     /// Convert to RGBA8, consuming this output.
-    pub fn into_rgba8(self) -> imgref::ImgVec<Rgba<u8>> {
-        self.pixels.into_rgba8()
+    pub fn into_rgba8(self) -> PixelBuffer<Rgba<u8>> {
+        self.pixels.to_rgba8()
     }
 
     /// Convert to Gray8, consuming this output.
-    pub fn into_gray8(self) -> imgref::ImgVec<Gray<u8>> {
-        self.pixels.into_gray8()
+    pub fn into_gray8(self) -> PixelBuffer<Gray<u8>> {
+        self.pixels.to_gray8()
     }
 
     /// Convert to BGRA8, consuming this output.
-    pub fn into_bgra8(self) -> imgref::ImgVec<BGRA<u8>> {
-        self.pixels.into_bgra8()
+    pub fn into_bgra8(self) -> PixelBuffer<BGRA<u8>> {
+        self.pixels.to_bgra8()
     }
 }
 
@@ -291,9 +317,10 @@ pub enum FrameDisposal {
 ///
 /// Carries container-level metadata via `Arc<ImageInfo>` so each frame
 /// is self-describing without duplicating metadata per frame.
+/// Pixel data is stored as a [`PixelBuffer`].
 #[non_exhaustive]
 pub struct DecodeFrame {
-    pixels: PixelData,
+    pixels: PixelBuffer,
     info: Arc<ImageInfo>,
     delay_ms: u32,
     index: u32,
@@ -311,13 +338,40 @@ pub struct DecodeFrame {
 
 #[cfg(feature = "codec")]
 impl DecodeFrame {
-    /// Create a new decode frame with default compositing (keyframe, source blend, no disposal).
+    /// Create a new decode frame from a [`PixelBuffer`].
     ///
     /// The `info` parameter carries container-level metadata (format, color space,
     /// ICC/EXIF/XMP, orientation) shared across all frames via `Arc`.
-    pub fn new(pixels: PixelData, info: Arc<ImageInfo>, delay_ms: u32, index: u32) -> Self {
+    pub fn new(pixels: PixelBuffer, info: Arc<ImageInfo>, delay_ms: u32, index: u32) -> Self {
         Self {
             pixels,
+            info,
+            delay_ms,
+            index,
+            required_frame: None,
+            blend: FrameBlend::Source,
+            disposal: FrameDisposal::None,
+            frame_rect: None,
+        }
+    }
+
+    /// Create from legacy [`PixelData`], converting to [`PixelBuffer`] internally.
+    ///
+    /// Resolves the transfer function from CICP metadata in `info`.
+    pub fn from_pixel_data(
+        pixels: PixelData,
+        info: Arc<ImageInfo>,
+        delay_ms: u32,
+        index: u32,
+    ) -> Self {
+        let mut buf: PixelBuffer = pixels.into();
+        let tf = info.transfer_function();
+        if tf != TransferFunction::Unknown {
+            let desc = buf.descriptor().with_transfer(tf);
+            buf = buf.with_descriptor(desc);
+        }
+        Self {
+            pixels: buf,
             info,
             delay_ms,
             index,
@@ -353,79 +407,64 @@ impl DecodeFrame {
         self
     }
 
-    /// Borrow the pixel data.
-    pub fn pixels(&self) -> &PixelData {
+    /// Borrow the pixel buffer.
+    pub fn pixels(&self) -> &PixelBuffer {
         &self.pixels
     }
 
-    /// Take the pixel data, consuming this frame.
-    pub fn into_pixels(self) -> PixelData {
+    /// Take the pixel buffer, consuming this frame.
+    pub fn into_pixels(self) -> PixelBuffer {
         self.pixels
     }
 
-    /// Borrow as RGB8 if that's the native format.
-    pub fn as_rgb8(&self) -> Option<imgref::ImgRef<'_, Rgb<u8>>> {
-        self.pixels.as_rgb8()
+    /// Borrow as RGB8 if that's the native format (zero-copy).
+    pub fn as_rgb8(&self) -> Option<ImgRef<'_, Rgb<u8>>> {
+        self.pixels.try_as_imgref()
     }
 
-    /// Borrow as RGBA8 if that's the native format.
-    pub fn as_rgba8(&self) -> Option<imgref::ImgRef<'_, Rgba<u8>>> {
-        self.pixels.as_rgba8()
+    /// Borrow as RGBA8 if that's the native format (zero-copy).
+    pub fn as_rgba8(&self) -> Option<ImgRef<'_, Rgba<u8>>> {
+        self.pixels.try_as_imgref()
     }
 
-    /// Borrow as BGRA8 if that's the native format.
-    pub fn as_bgra8(&self) -> Option<imgref::ImgRef<'_, BGRA<u8>>> {
-        self.pixels.as_bgra8()
+    /// Borrow as BGRA8 if that's the native format (zero-copy).
+    pub fn as_bgra8(&self) -> Option<ImgRef<'_, BGRA<u8>>> {
+        self.pixels.try_as_imgref()
     }
 
-    /// Borrow as Gray8 if that's the native format.
-    pub fn as_gray8(&self) -> Option<imgref::ImgRef<'_, Gray<u8>>> {
-        self.pixels.as_gray8()
+    /// Borrow as Gray8 if that's the native format (zero-copy).
+    pub fn as_gray8(&self) -> Option<ImgRef<'_, Gray<u8>>> {
+        self.pixels.try_as_imgref()
     }
 
-    /// Borrow as RGB16 if that's the native format.
-    pub fn as_rgb16(&self) -> Option<imgref::ImgRef<'_, Rgb<u16>>> {
-        self.pixels.as_rgb16()
+    /// Borrow as RGB16 if that's the native format (zero-copy).
+    pub fn as_rgb16(&self) -> Option<ImgRef<'_, Rgb<u16>>> {
+        self.pixels.try_as_imgref()
     }
 
-    /// Borrow as RGBA16 if that's the native format.
-    pub fn as_rgba16(&self) -> Option<imgref::ImgRef<'_, Rgba<u16>>> {
-        self.pixels.as_rgba16()
+    /// Borrow as RGBA16 if that's the native format (zero-copy).
+    pub fn as_rgba16(&self) -> Option<ImgRef<'_, Rgba<u16>>> {
+        self.pixels.try_as_imgref()
     }
 
-    /// Borrow as RGB f32 if that's the native format.
-    pub fn as_rgb_f32(&self) -> Option<imgref::ImgRef<'_, Rgb<f32>>> {
-        self.pixels.as_rgb_f32()
+    /// Borrow as RGB f32 if that's the native format (zero-copy).
+    pub fn as_rgb_f32(&self) -> Option<ImgRef<'_, Rgb<f32>>> {
+        self.pixels.try_as_imgref()
     }
 
-    /// Borrow as RGBA f32 if that's the native format.
-    pub fn as_rgba_f32(&self) -> Option<imgref::ImgRef<'_, Rgba<f32>>> {
-        self.pixels.as_rgba_f32()
+    /// Borrow as RGBA f32 if that's the native format (zero-copy).
+    pub fn as_rgba_f32(&self) -> Option<ImgRef<'_, Rgba<f32>>> {
+        self.pixels.try_as_imgref()
     }
 
-    /// Borrow as Gray16 if that's the native format.
-    pub fn as_gray16(&self) -> Option<imgref::ImgRef<'_, Gray<u16>>> {
-        self.pixels.as_gray16()
+    /// Borrow as Gray16 if that's the native format (zero-copy).
+    pub fn as_gray16(&self) -> Option<ImgRef<'_, Gray<u16>>> {
+        self.pixels.try_as_imgref()
     }
 
-    /// Borrow as Gray f32 if that's the native format.
-    pub fn as_gray_f32(&self) -> Option<imgref::ImgRef<'_, Gray<f32>>> {
-        self.pixels.as_gray_f32()
-    }
-
-    /// Borrow as GrayAlpha8 if that's the native format.
-    pub fn as_gray_alpha8(&self) -> Option<imgref::ImgRef<'_, crate::GrayAlpha<u8>>> {
-        self.pixels.as_gray_alpha8()
-    }
-
-    /// Borrow as GrayAlpha16 if that's the native format.
-    pub fn as_gray_alpha16(&self) -> Option<imgref::ImgRef<'_, crate::GrayAlpha<u16>>> {
-        self.pixels.as_gray_alpha16()
-    }
-
-    /// Borrow as GrayAlpha f32 if that's the native format.
-    pub fn as_gray_alpha_f32(&self) -> Option<imgref::ImgRef<'_, crate::GrayAlpha<f32>>> {
-        self.pixels.as_gray_alpha_f32()
+    /// Borrow as Gray f32 if that's the native format (zero-copy).
+    pub fn as_gray_f32(&self) -> Option<ImgRef<'_, Gray<f32>>> {
+        self.pixels.try_as_imgref()
     }
 
     /// Frame delay in milliseconds.
@@ -499,24 +538,44 @@ impl DecodeFrame {
         self.pixels.has_alpha()
     }
 
+    /// Convert to RGB8 by reference.
+    pub fn to_rgb8(&self) -> PixelBuffer<Rgb<u8>> {
+        self.pixels.to_rgb8()
+    }
+
+    /// Convert to RGBA8 by reference.
+    pub fn to_rgba8(&self) -> PixelBuffer<Rgba<u8>> {
+        self.pixels.to_rgba8()
+    }
+
+    /// Convert to Gray8 by reference.
+    pub fn to_gray8(&self) -> PixelBuffer<Gray<u8>> {
+        self.pixels.to_gray8()
+    }
+
+    /// Convert to BGRA8 by reference.
+    pub fn to_bgra8(&self) -> PixelBuffer<BGRA<u8>> {
+        self.pixels.to_bgra8()
+    }
+
     /// Convert to RGB8, consuming this frame.
-    pub fn into_rgb8(self) -> imgref::ImgVec<Rgb<u8>> {
-        self.pixels.into_rgb8()
+    pub fn into_rgb8(self) -> PixelBuffer<Rgb<u8>> {
+        self.pixels.to_rgb8()
     }
 
     /// Convert to RGBA8, consuming this frame.
-    pub fn into_rgba8(self) -> imgref::ImgVec<Rgba<u8>> {
-        self.pixels.into_rgba8()
+    pub fn into_rgba8(self) -> PixelBuffer<Rgba<u8>> {
+        self.pixels.to_rgba8()
     }
 
     /// Convert to Gray8, consuming this frame.
-    pub fn into_gray8(self) -> imgref::ImgVec<Gray<u8>> {
-        self.pixels.into_gray8()
+    pub fn into_gray8(self) -> PixelBuffer<Gray<u8>> {
+        self.pixels.to_gray8()
     }
 
     /// Convert to BGRA8, consuming this frame.
-    pub fn into_bgra8(self) -> imgref::ImgVec<BGRA<u8>> {
-        self.pixels.into_bgra8()
+    pub fn into_bgra8(self) -> PixelBuffer<BGRA<u8>> {
+        self.pixels.to_bgra8()
     }
 }
 
@@ -772,7 +831,7 @@ mod codec_tests {
             2,
         );
         let info = ImageInfo::new(2, 2, ImageFormat::Png).with_frame_count(1);
-        let output = DecodeOutput::new(PixelData::Rgb8(img), info);
+        let output = DecodeOutput::from_pixel_data(PixelData::Rgb8(img), info);
         assert_eq!(output.width(), 2);
         assert_eq!(output.height(), 2);
         assert!(!output.has_alpha());
@@ -785,7 +844,7 @@ mod codec_tests {
     fn decode_output_extras() {
         let img = ImgVec::new(vec![Rgb { r: 0u8, g: 0, b: 0 }; 4], 2, 2);
         let info = ImageInfo::new(2, 2, ImageFormat::Jpeg);
-        let mut output = DecodeOutput::new(PixelData::Rgb8(img), info).with_extras(42u32);
+        let mut output = DecodeOutput::from_pixel_data(PixelData::Rgb8(img), info).with_extras(42u32);
         assert_eq!(output.extras::<u32>(), Some(&42u32));
         assert_eq!(output.extras::<u64>(), None); // wrong type
         let taken = output.take_extras::<u32>();
@@ -809,7 +868,7 @@ mod codec_tests {
             2,
         );
         let info = test_info(2, 2, ImageFormat::Png);
-        let frame = DecodeFrame::new(PixelData::Rgba8(img), info, 100, 0);
+        let frame = DecodeFrame::from_pixel_data(PixelData::Rgba8(img), info, 100, 0);
         assert_eq!(frame.delay_ms(), 100);
         assert_eq!(frame.index(), 0);
         assert_eq!(frame.width(), 2);
@@ -832,7 +891,7 @@ mod codec_tests {
             2,
             2,
         );
-        let frame = DecodeFrame::new(
+        let frame = DecodeFrame::from_pixel_data(
             PixelData::Rgb8(img),
             test_info(2, 2, ImageFormat::Png),
             50,
@@ -847,7 +906,7 @@ mod codec_tests {
     #[test]
     fn decode_frame_debug() {
         let img = ImgVec::new(vec![Gray::new(0u8); 4], 2, 2);
-        let frame = DecodeFrame::new(
+        let frame = DecodeFrame::from_pixel_data(
             PixelData::Gray8(img),
             test_info(2, 2, ImageFormat::Gif),
             100,
@@ -863,7 +922,7 @@ mod codec_tests {
     fn decode_output_as_gray8() {
         let img = ImgVec::new(vec![Gray::new(42u8); 4], 2, 2);
         let info = ImageInfo::new(2, 2, ImageFormat::Png);
-        let output = DecodeOutput::new(PixelData::Gray8(img), info);
+        let output = DecodeOutput::from_pixel_data(PixelData::Gray8(img), info);
         assert!(output.as_gray8().is_some());
         assert!(output.as_rgb8().is_none());
     }
@@ -873,7 +932,7 @@ mod codec_tests {
         let img = ImgVec::new(vec![Rgb { r: 0u8, g: 0, b: 0 }; 4], 2, 2);
         let info =
             Arc::new(ImageInfo::new(2, 2, ImageFormat::WebP).with_icc_profile(vec![10, 20, 30]));
-        let frame = DecodeFrame::new(PixelData::Rgb8(img), Arc::clone(&info), 100, 0);
+        let frame = DecodeFrame::from_pixel_data(PixelData::Rgb8(img), Arc::clone(&info), 100, 0);
         assert_eq!(frame.info().format, ImageFormat::WebP);
         assert_eq!(
             frame.info().source_color.icc_profile.as_deref(),
@@ -890,7 +949,7 @@ mod codec_tests {
                 .with_cicp(crate::info::Cicp::SRGB)
                 .with_orientation(crate::Orientation::Rotate90),
         );
-        let frame = DecodeFrame::new(PixelData::Rgb8(img), info, 50, 0);
+        let frame = DecodeFrame::from_pixel_data(PixelData::Rgb8(img), info, 50, 0);
         let meta = frame.metadata();
         assert_eq!(meta.cicp, Some(crate::info::Cicp::SRGB));
         assert_eq!(meta.orientation, crate::Orientation::Rotate90);
@@ -900,7 +959,7 @@ mod codec_tests {
     fn decode_frame_info_arc_shared() {
         let img = ImgVec::new(vec![Rgb { r: 0u8, g: 0, b: 0 }; 4], 2, 2);
         let info = Arc::new(ImageInfo::new(2, 2, ImageFormat::Gif));
-        let frame = DecodeFrame::new(PixelData::Rgb8(img), Arc::clone(&info), 100, 0);
+        let frame = DecodeFrame::from_pixel_data(PixelData::Rgb8(img), Arc::clone(&info), 100, 0);
         let arc2 = frame.info_arc();
         assert!(Arc::ptr_eq(&info, &arc2));
     }
