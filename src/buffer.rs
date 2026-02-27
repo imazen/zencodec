@@ -20,6 +20,9 @@ use crate::color::{ColorContext, WorkingColorSpace};
 #[cfg(feature = "codec")]
 use crate::pixel::{GrayAlpha, PixelData};
 
+#[cfg(feature = "codec")]
+use imgref::ImgVec;
+
 // ---------------------------------------------------------------------------
 // Descriptor enums
 // ---------------------------------------------------------------------------
@@ -1004,12 +1007,18 @@ impl<'a, P> PixelSlice<'a, P> {
 
     /// Replace the descriptor, preserving all other fields.
     ///
-    /// Used by `PixelData::as_pixel_slice()` to keep the transfer-agnostic
-    /// descriptor from decoded data instead of the convention-based one
-    /// from the `From<ImgRef>` impl.
-    #[cfg(feature = "codec")]
+    /// Use after a transform that changes pixel metadata without changing
+    /// the buffer layout (e.g., transfer function change, alpha mode change,
+    /// signal range expansion).
+    ///
+    /// # Safety (logical)
+    ///
+    /// The caller must ensure the new descriptor is layout-compatible with
+    /// the data — same `channel_type` and `layout`. Changing those requires
+    /// a new buffer. This method does **not** validate compatibility to
+    /// allow zero-cost metadata updates.
     #[inline]
-    pub(crate) fn with_descriptor(mut self, descriptor: PixelDescriptor) -> Self {
+    pub fn with_descriptor(mut self, descriptor: PixelDescriptor) -> Self {
         self.descriptor = descriptor;
         self
     }
@@ -1326,6 +1335,171 @@ impl<P: Pixel> PixelBuffer<P> {
     }
 }
 
+#[cfg(feature = "codec")]
+impl<P: Pixel + bytemuck::NoUninit> PixelBuffer<P> {
+    /// Construct from a typed pixel `Vec`.
+    ///
+    /// Zero-copy when `P` has alignment 1 (u8-component types like `Rgb<u8>`).
+    /// Copies the data for types with higher alignment (`Rgb<u16>`, `Rgb<f32>`, etc.)
+    /// because `Vec` tracks allocation alignment and `Vec<u8>` requires alignment 1.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BufferError::InvalidDimensions`] if `pixels.len() != width * height`.
+    pub fn from_pixels(pixels: Vec<P>, width: u32, height: u32) -> Result<Self, BufferError> {
+        const { assert!(core::mem::size_of::<P>() == P::DESCRIPTOR.bytes_per_pixel()) }
+        let expected = width as usize * height as usize;
+        if pixels.len() != expected {
+            return Err(BufferError::InvalidDimensions);
+        }
+        let descriptor = P::DESCRIPTOR;
+        let stride = descriptor.aligned_stride(width);
+        let data: Vec<u8> = pixels_to_bytes(pixels);
+        Ok(Self {
+            data,
+            offset: 0,
+            width,
+            height,
+            stride,
+            descriptor,
+            working_space: WorkingColorSpace::Native,
+            color: None,
+            _pixel: PhantomData,
+        })
+    }
+
+    /// Construct from a typed `ImgVec`.
+    ///
+    /// Zero-copy when `P` has alignment 1 (u8-component types).
+    /// Copies for higher-alignment types.
+    pub fn from_imgvec(img: ImgVec<P>) -> Self {
+        const { assert!(core::mem::size_of::<P>() == P::DESCRIPTOR.bytes_per_pixel()) }
+        let width = img.width() as u32;
+        let height = img.height() as u32;
+        let stride_pixels = img.stride();
+        let descriptor = P::DESCRIPTOR;
+        let stride_bytes = stride_pixels * core::mem::size_of::<P>();
+        let (buf, ..) = img.into_contiguous_buf();
+        let data: Vec<u8> = pixels_to_bytes(buf);
+        Self {
+            data,
+            offset: 0,
+            width,
+            height,
+            stride: stride_bytes,
+            descriptor,
+            working_space: WorkingColorSpace::Native,
+            color: None,
+            _pixel: PhantomData,
+        }
+    }
+}
+
+#[cfg(feature = "codec")]
+impl<P: Pixel + bytemuck::AnyBitPattern + bytemuck::NoUninit> PixelBuffer<P> {
+    /// Borrow the buffer as an [`ImgRef`].
+    ///
+    /// Zero-copy: reinterprets the raw bytes as typed pixels via
+    /// [`bytemuck::cast_slice`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the stride is not pixel-aligned (always succeeds for
+    /// buffers created via `new_typed()`, `from_pixels()`, or `from_imgvec()`).
+    pub fn as_imgref(&self) -> ImgRef<'_, P> {
+        let total_bytes = if self.height == 0 {
+            0
+        } else {
+            (self.height as usize - 1) * self.stride
+                + self.width as usize * core::mem::size_of::<P>()
+        };
+        let data = &self.data[self.offset..self.offset + total_bytes];
+        let pixels: &[P] = bytemuck::cast_slice(data);
+        let stride_px = self.stride / core::mem::size_of::<P>();
+        imgref::Img::new_stride(pixels, self.width as usize, self.height as usize, stride_px)
+    }
+
+    /// Borrow the buffer as a mutable [`ImgRefMut`](imgref::ImgRefMut).
+    ///
+    /// Zero-copy: reinterprets the raw bytes as typed pixels.
+    pub fn as_imgref_mut(&mut self) -> imgref::ImgRefMut<'_, P> {
+        let total_bytes = if self.height == 0 {
+            0
+        } else {
+            (self.height as usize - 1) * self.stride
+                + self.width as usize * core::mem::size_of::<P>()
+        };
+        let offset = self.offset;
+        let data = &mut self.data[offset..offset + total_bytes];
+        let pixels: &mut [P] = bytemuck::cast_slice_mut(data);
+        let stride_px = self.stride / core::mem::size_of::<P>();
+        imgref::Img::new_stride(pixels, self.width as usize, self.height as usize, stride_px)
+    }
+}
+
+/// Type-erased `try_as_imgref` for PixelBuffer.
+#[cfg(feature = "codec")]
+impl PixelBuffer {
+    /// Try to borrow the buffer as a typed [`ImgRef`].
+    ///
+    /// Returns `None` if the descriptor is not layout-compatible with `P`.
+    pub fn try_as_imgref<P: Pixel + bytemuck::AnyBitPattern>(&self) -> Option<ImgRef<'_, P>> {
+        if !self.descriptor.layout_compatible(&P::DESCRIPTOR) {
+            return None;
+        }
+        let pixel_size = core::mem::size_of::<P>();
+        if pixel_size == 0 || !self.stride.is_multiple_of(pixel_size) {
+            return None;
+        }
+        let total_bytes = if self.height == 0 {
+            0
+        } else {
+            (self.height as usize - 1) * self.stride
+                + self.width as usize * pixel_size
+        };
+        let data = &self.data[self.offset..self.offset + total_bytes];
+        let pixels: &[P] = bytemuck::cast_slice(data);
+        let stride_px = self.stride / pixel_size;
+        Some(imgref::Img::new_stride(
+            pixels,
+            self.width as usize,
+            self.height as usize,
+            stride_px,
+        ))
+    }
+
+    /// Try to borrow the buffer as a typed mutable [`ImgRefMut`](imgref::ImgRefMut).
+    ///
+    /// Returns `None` if the descriptor is not layout-compatible with `P`.
+    pub fn try_as_imgref_mut<P: Pixel + bytemuck::AnyBitPattern + bytemuck::NoUninit>(
+        &mut self,
+    ) -> Option<imgref::ImgRefMut<'_, P>> {
+        if !self.descriptor.layout_compatible(&P::DESCRIPTOR) {
+            return None;
+        }
+        let pixel_size = core::mem::size_of::<P>();
+        if pixel_size == 0 || !self.stride.is_multiple_of(pixel_size) {
+            return None;
+        }
+        let total_bytes = if self.height == 0 {
+            0
+        } else {
+            (self.height as usize - 1) * self.stride
+                + self.width as usize * pixel_size
+        };
+        let offset = self.offset;
+        let data = &mut self.data[offset..offset + total_bytes];
+        let pixels: &mut [P] = bytemuck::cast_slice_mut(data);
+        let stride_px = self.stride / pixel_size;
+        Some(imgref::Img::new_stride(
+            pixels,
+            self.width as usize,
+            self.height as usize,
+            stride_px,
+        ))
+    }
+}
+
 impl<P> fmt::Debug for PixelSlice<'_, P> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -1426,6 +1600,15 @@ impl<'a, P> PixelSliceMut<'a, P> {
         } else {
             None
         }
+    }
+
+    /// Replace the descriptor, preserving all other fields.
+    ///
+    /// See [`PixelSlice::with_descriptor()`] for details.
+    #[inline]
+    pub fn with_descriptor(mut self, descriptor: PixelDescriptor) -> Self {
+        self.descriptor = descriptor;
+        self
     }
 
     /// Image width in pixels.
@@ -1987,6 +2170,27 @@ impl<P> PixelBuffer<P> {
         }
     }
 
+    /// Replace the descriptor, preserving all other fields.
+    ///
+    /// See [`PixelSlice::with_descriptor()`] for details.
+    #[inline]
+    pub fn with_descriptor(mut self, descriptor: PixelDescriptor) -> Self {
+        self.descriptor = descriptor;
+        self
+    }
+
+    /// Whether this buffer carries meaningful alpha data.
+    #[inline]
+    pub fn has_alpha(&self) -> bool {
+        self.descriptor.has_alpha()
+    }
+
+    /// Whether this buffer is grayscale (Gray or GrayAlpha layout).
+    #[inline]
+    pub fn is_grayscale(&self) -> bool {
+        self.descriptor.is_grayscale()
+    }
+
     /// Consume the buffer and return the backing `Vec<u8>` for pool reuse.
     pub fn into_vec(self) -> Vec<u8> {
         self.data
@@ -2230,6 +2434,134 @@ impl<P> PixelBuffer<P> {
             dst.data[dst_start..dst_start + row_bytes].copy_from_slice(&src_row[..row_bytes]);
         }
         dst
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Format conversion methods (type-erased PixelBuffer)
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "codec")]
+impl PixelBuffer {
+    /// Convert to RGB8, allocating a new buffer.
+    ///
+    /// 16-bit values are downscaled with proper rounding. Float values are
+    /// clamped to [0.0, 1.0]. Gray is expanded with R=G=B. RGBA/BGRA variants
+    /// discard alpha.
+    pub fn to_rgb8(&self) -> PixelBuffer<Rgb<u8>> {
+        let w = self.width as usize;
+        let h = self.height as usize;
+        let mut out = Vec::with_capacity(w * h * 3);
+        let slice = self.as_slice();
+
+        for y in 0..self.height {
+            let row = slice.row(y);
+            convert_row_to_rgb8(row, &self.descriptor, &mut out);
+        }
+
+        let descriptor = PixelDescriptor::RGB8_SRGB;
+        let stride = descriptor.aligned_stride(self.width);
+        PixelBuffer {
+            data: out,
+            offset: 0,
+            width: self.width,
+            height: self.height,
+            stride,
+            descriptor,
+            working_space: self.working_space,
+            color: self.color.clone(),
+            _pixel: PhantomData,
+        }
+    }
+
+    /// Convert to RGBA8, allocating a new buffer.
+    ///
+    /// Gray is expanded with R=G=B, A=255. RGB gets A=255 added.
+    /// 16-bit values are downscaled with proper rounding.
+    /// Float values are clamped to [0.0, 1.0].
+    pub fn to_rgba8(&self) -> PixelBuffer<Rgba<u8>> {
+        let w = self.width as usize;
+        let h = self.height as usize;
+        let mut out = Vec::with_capacity(w * h * 4);
+        let slice = self.as_slice();
+
+        for y in 0..self.height {
+            let row = slice.row(y);
+            convert_row_to_rgba8(row, &self.descriptor, &mut out);
+        }
+
+        let descriptor = PixelDescriptor::RGBA8_SRGB;
+        let stride = descriptor.aligned_stride(self.width);
+        PixelBuffer {
+            data: out,
+            offset: 0,
+            width: self.width,
+            height: self.height,
+            stride,
+            descriptor,
+            working_space: self.working_space,
+            color: self.color.clone(),
+            _pixel: PhantomData,
+        }
+    }
+
+    /// Convert to Gray8, allocating a new buffer.
+    ///
+    /// RGB uses BT.601 luminance: 0.299R + 0.587G + 0.114B.
+    /// RGBA/BGRA ignore alpha.
+    pub fn to_gray8(&self) -> PixelBuffer<Gray<u8>> {
+        let w = self.width as usize;
+        let h = self.height as usize;
+        let mut out = Vec::with_capacity(w * h);
+        let slice = self.as_slice();
+
+        for y in 0..self.height {
+            let row = slice.row(y);
+            convert_row_to_gray8(row, &self.descriptor, &mut out);
+        }
+
+        let descriptor = PixelDescriptor::GRAY8_SRGB;
+        let stride = descriptor.aligned_stride(self.width);
+        PixelBuffer {
+            data: out,
+            offset: 0,
+            width: self.width,
+            height: self.height,
+            stride,
+            descriptor,
+            working_space: self.working_space,
+            color: self.color.clone(),
+            _pixel: PhantomData,
+        }
+    }
+
+    /// Convert to BGRA8, allocating a new buffer.
+    ///
+    /// Channel reordering, 8-bit clamping/truncation, alpha fill.
+    pub fn to_bgra8(&self) -> PixelBuffer<BGRA<u8>> {
+        let w = self.width as usize;
+        let h = self.height as usize;
+        let mut out = Vec::with_capacity(w * h * 4);
+        let slice = self.as_slice();
+
+        for y in 0..self.height {
+            let row = slice.row(y);
+            convert_row_to_bgra8(row, &self.descriptor, &mut out);
+        }
+
+        let descriptor = PixelDescriptor::BGRA8_SRGB;
+        let stride = descriptor.aligned_stride(self.width);
+        PixelBuffer {
+            data: out,
+            offset: 0,
+            width: self.width,
+            height: self.height,
+            stride,
+            descriptor,
+            working_space: self.working_space,
+            color: self.color.clone(),
+            _pixel: PhantomData,
+        }
     }
 }
 
@@ -2601,6 +2933,404 @@ fn parse_u16(bytes: &[u8]) -> u16 {
 #[inline]
 fn parse_f32(bytes: &[u8]) -> f32 {
     f32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
+}
+
+/// Convert `Vec<P>` to `Vec<u8>`. Zero-copy when alignment matches (u8-component
+/// types), copies via `cast_slice` otherwise.
+#[cfg(feature = "codec")]
+fn pixels_to_bytes<P: bytemuck::NoUninit>(pixels: Vec<P>) -> Vec<u8> {
+    match bytemuck::try_cast_vec(pixels) {
+        Ok(bytes) => bytes,
+        Err((_err, pixels)) => bytemuck::cast_slice::<P, u8>(&pixels).to_vec(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Row conversion helpers (descriptor-driven, no enum matching)
+// ---------------------------------------------------------------------------
+
+/// Convert 16-bit to 8-bit with proper rounding.
+/// Maps 0→0 and 65535→255 exactly.
+#[cfg(feature = "codec")]
+#[inline]
+fn u16_to_u8(v: u16) -> u8 {
+    ((v as u32 * 255 + 32768) >> 16) as u8
+}
+
+/// BT.601 luminance from 8-bit RGB.
+#[cfg(feature = "codec")]
+#[inline]
+fn rgb_to_luma(r: u8, g: u8, b: u8) -> u8 {
+    ((77u32 * r as u32 + 150u32 * g as u32 + 29u32 * b as u32) >> 8) as u8
+}
+
+/// Clamp f32 to [0,1] and scale to u8.
+#[cfg(feature = "codec")]
+#[inline]
+fn f32_to_u8(v: f32) -> u8 {
+    (v.clamp(0.0, 1.0) * 255.0) as u8
+}
+
+/// Convert one row of pixels to RGB8, appending to `out`.
+#[cfg(feature = "codec")]
+fn convert_row_to_rgb8(row: &[u8], desc: &PixelDescriptor, out: &mut Vec<u8>) {
+    let bpp = desc.bytes_per_pixel();
+    match (desc.channel_type, desc.layout) {
+        // --- U8 ---
+        (ChannelType::U8, ChannelLayout::Rgb) => out.extend_from_slice(row),
+        (ChannelType::U8, ChannelLayout::Rgba) => {
+            for chunk in row.chunks_exact(bpp) {
+                out.extend_from_slice(&chunk[..3]);
+            }
+        }
+        (ChannelType::U8, ChannelLayout::Gray) => {
+            for &v in row {
+                out.extend_from_slice(&[v, v, v]);
+            }
+        }
+        (ChannelType::U8, ChannelLayout::GrayAlpha) => {
+            for chunk in row.chunks_exact(2) {
+                let v = chunk[0];
+                out.extend_from_slice(&[v, v, v]);
+            }
+        }
+        (ChannelType::U8, ChannelLayout::Bgra) => {
+            for chunk in row.chunks_exact(bpp) {
+                // BGRA order: b=0, g=1, r=2, a=3
+                out.extend_from_slice(&[chunk[2], chunk[1], chunk[0]]);
+            }
+        }
+        // --- U16 ---
+        (ChannelType::U16, ChannelLayout::Rgb) => {
+            for chunk in row.chunks_exact(bpp) {
+                let r = u16_to_u8(parse_u16(chunk));
+                let g = u16_to_u8(parse_u16(&chunk[2..]));
+                let b = u16_to_u8(parse_u16(&chunk[4..]));
+                out.extend_from_slice(&[r, g, b]);
+            }
+        }
+        (ChannelType::U16, ChannelLayout::Rgba) => {
+            for chunk in row.chunks_exact(bpp) {
+                let r = u16_to_u8(parse_u16(chunk));
+                let g = u16_to_u8(parse_u16(&chunk[2..]));
+                let b = u16_to_u8(parse_u16(&chunk[4..]));
+                out.extend_from_slice(&[r, g, b]);
+            }
+        }
+        (ChannelType::U16, ChannelLayout::Gray) => {
+            for chunk in row.chunks_exact(bpp) {
+                let v = u16_to_u8(parse_u16(chunk));
+                out.extend_from_slice(&[v, v, v]);
+            }
+        }
+        (ChannelType::U16, ChannelLayout::GrayAlpha) => {
+            for chunk in row.chunks_exact(bpp) {
+                let v = u16_to_u8(parse_u16(chunk));
+                out.extend_from_slice(&[v, v, v]);
+            }
+        }
+        (ChannelType::U16, ChannelLayout::Bgra) => {
+            for chunk in row.chunks_exact(bpp) {
+                let b = u16_to_u8(parse_u16(chunk));
+                let g = u16_to_u8(parse_u16(&chunk[2..]));
+                let r = u16_to_u8(parse_u16(&chunk[4..]));
+                out.extend_from_slice(&[r, g, b]);
+            }
+        }
+        // --- F32 ---
+        (ChannelType::F32, ChannelLayout::Rgb) => {
+            for chunk in row.chunks_exact(bpp) {
+                let r = f32_to_u8(parse_f32(chunk));
+                let g = f32_to_u8(parse_f32(&chunk[4..]));
+                let b = f32_to_u8(parse_f32(&chunk[8..]));
+                out.extend_from_slice(&[r, g, b]);
+            }
+        }
+        (ChannelType::F32, ChannelLayout::Rgba) => {
+            for chunk in row.chunks_exact(bpp) {
+                let r = f32_to_u8(parse_f32(chunk));
+                let g = f32_to_u8(parse_f32(&chunk[4..]));
+                let b = f32_to_u8(parse_f32(&chunk[8..]));
+                out.extend_from_slice(&[r, g, b]);
+            }
+        }
+        (ChannelType::F32, ChannelLayout::Gray) => {
+            for chunk in row.chunks_exact(bpp) {
+                let v = f32_to_u8(parse_f32(chunk));
+                out.extend_from_slice(&[v, v, v]);
+            }
+        }
+        (ChannelType::F32, ChannelLayout::GrayAlpha) => {
+            for chunk in row.chunks_exact(bpp) {
+                let v = f32_to_u8(parse_f32(chunk));
+                out.extend_from_slice(&[v, v, v]);
+            }
+        }
+        (ChannelType::F32, ChannelLayout::Bgra) => {
+            for chunk in row.chunks_exact(bpp) {
+                let b = f32_to_u8(parse_f32(chunk));
+                let g = f32_to_u8(parse_f32(&chunk[4..]));
+                let r = f32_to_u8(parse_f32(&chunk[8..]));
+                out.extend_from_slice(&[r, g, b]);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Convert one row of pixels to RGBA8, appending to `out`.
+#[cfg(feature = "codec")]
+fn convert_row_to_rgba8(row: &[u8], desc: &PixelDescriptor, out: &mut Vec<u8>) {
+    let bpp = desc.bytes_per_pixel();
+    match (desc.channel_type, desc.layout) {
+        // --- U8 ---
+        (ChannelType::U8, ChannelLayout::Rgba) => out.extend_from_slice(row),
+        (ChannelType::U8, ChannelLayout::Rgb) => {
+            for chunk in row.chunks_exact(bpp) {
+                out.extend_from_slice(&[chunk[0], chunk[1], chunk[2], 255]);
+            }
+        }
+        (ChannelType::U8, ChannelLayout::Gray) => {
+            for &v in row {
+                out.extend_from_slice(&[v, v, v, 255]);
+            }
+        }
+        (ChannelType::U8, ChannelLayout::GrayAlpha) => {
+            for chunk in row.chunks_exact(2) {
+                let v = chunk[0];
+                out.extend_from_slice(&[v, v, v, chunk[1]]);
+            }
+        }
+        (ChannelType::U8, ChannelLayout::Bgra) => {
+            for chunk in row.chunks_exact(bpp) {
+                out.extend_from_slice(&[chunk[2], chunk[1], chunk[0], chunk[3]]);
+            }
+        }
+        // --- U16 ---
+        (ChannelType::U16, ChannelLayout::Rgba) => {
+            for chunk in row.chunks_exact(bpp) {
+                let r = u16_to_u8(parse_u16(chunk));
+                let g = u16_to_u8(parse_u16(&chunk[2..]));
+                let b = u16_to_u8(parse_u16(&chunk[4..]));
+                let a = u16_to_u8(parse_u16(&chunk[6..]));
+                out.extend_from_slice(&[r, g, b, a]);
+            }
+        }
+        (ChannelType::U16, ChannelLayout::Rgb) => {
+            for chunk in row.chunks_exact(bpp) {
+                let r = u16_to_u8(parse_u16(chunk));
+                let g = u16_to_u8(parse_u16(&chunk[2..]));
+                let b = u16_to_u8(parse_u16(&chunk[4..]));
+                out.extend_from_slice(&[r, g, b, 255]);
+            }
+        }
+        (ChannelType::U16, ChannelLayout::Gray) => {
+            for chunk in row.chunks_exact(bpp) {
+                let v = u16_to_u8(parse_u16(chunk));
+                out.extend_from_slice(&[v, v, v, 255]);
+            }
+        }
+        (ChannelType::U16, ChannelLayout::GrayAlpha) => {
+            for chunk in row.chunks_exact(bpp) {
+                let v = u16_to_u8(parse_u16(chunk));
+                let a = u16_to_u8(parse_u16(&chunk[2..]));
+                out.extend_from_slice(&[v, v, v, a]);
+            }
+        }
+        (ChannelType::U16, ChannelLayout::Bgra) => {
+            for chunk in row.chunks_exact(bpp) {
+                let b = u16_to_u8(parse_u16(chunk));
+                let g = u16_to_u8(parse_u16(&chunk[2..]));
+                let r = u16_to_u8(parse_u16(&chunk[4..]));
+                let a = u16_to_u8(parse_u16(&chunk[6..]));
+                out.extend_from_slice(&[r, g, b, a]);
+            }
+        }
+        // --- F32 ---
+        (ChannelType::F32, ChannelLayout::Rgba) => {
+            for chunk in row.chunks_exact(bpp) {
+                let r = f32_to_u8(parse_f32(chunk));
+                let g = f32_to_u8(parse_f32(&chunk[4..]));
+                let b = f32_to_u8(parse_f32(&chunk[8..]));
+                let a = f32_to_u8(parse_f32(&chunk[12..]));
+                out.extend_from_slice(&[r, g, b, a]);
+            }
+        }
+        (ChannelType::F32, ChannelLayout::Rgb) => {
+            for chunk in row.chunks_exact(bpp) {
+                let r = f32_to_u8(parse_f32(chunk));
+                let g = f32_to_u8(parse_f32(&chunk[4..]));
+                let b = f32_to_u8(parse_f32(&chunk[8..]));
+                out.extend_from_slice(&[r, g, b, 255]);
+            }
+        }
+        (ChannelType::F32, ChannelLayout::Gray) => {
+            for chunk in row.chunks_exact(bpp) {
+                let v = f32_to_u8(parse_f32(chunk));
+                out.extend_from_slice(&[v, v, v, 255]);
+            }
+        }
+        (ChannelType::F32, ChannelLayout::GrayAlpha) => {
+            for chunk in row.chunks_exact(bpp) {
+                let v = f32_to_u8(parse_f32(chunk));
+                let a = f32_to_u8(parse_f32(&chunk[4..]));
+                out.extend_from_slice(&[v, v, v, a]);
+            }
+        }
+        (ChannelType::F32, ChannelLayout::Bgra) => {
+            for chunk in row.chunks_exact(bpp) {
+                let b = f32_to_u8(parse_f32(chunk));
+                let g = f32_to_u8(parse_f32(&chunk[4..]));
+                let r = f32_to_u8(parse_f32(&chunk[8..]));
+                let a = f32_to_u8(parse_f32(&chunk[12..]));
+                out.extend_from_slice(&[r, g, b, a]);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Convert one row of pixels to Gray8, appending to `out`.
+/// RGB uses BT.601 luminance. Alpha is discarded.
+#[cfg(feature = "codec")]
+fn convert_row_to_gray8(row: &[u8], desc: &PixelDescriptor, out: &mut Vec<u8>) {
+    let bpp = desc.bytes_per_pixel();
+    match (desc.channel_type, desc.layout) {
+        // --- U8 ---
+        (ChannelType::U8, ChannelLayout::Gray) => out.extend_from_slice(row),
+        (ChannelType::U8, ChannelLayout::GrayAlpha) => {
+            for chunk in row.chunks_exact(2) {
+                out.push(chunk[0]);
+            }
+        }
+        (ChannelType::U8, ChannelLayout::Rgb) => {
+            for chunk in row.chunks_exact(bpp) {
+                out.push(rgb_to_luma(chunk[0], chunk[1], chunk[2]));
+            }
+        }
+        (ChannelType::U8, ChannelLayout::Rgba) => {
+            for chunk in row.chunks_exact(bpp) {
+                out.push(rgb_to_luma(chunk[0], chunk[1], chunk[2]));
+            }
+        }
+        (ChannelType::U8, ChannelLayout::Bgra) => {
+            for chunk in row.chunks_exact(bpp) {
+                // BGRA: b=0, g=1, r=2
+                out.push(rgb_to_luma(chunk[2], chunk[1], chunk[0]));
+            }
+        }
+        // --- U16 ---
+        (ChannelType::U16, ChannelLayout::Gray) => {
+            for chunk in row.chunks_exact(bpp) {
+                out.push(u16_to_u8(parse_u16(chunk)));
+            }
+        }
+        (ChannelType::U16, ChannelLayout::GrayAlpha) => {
+            for chunk in row.chunks_exact(bpp) {
+                out.push(u16_to_u8(parse_u16(chunk)));
+            }
+        }
+        (ChannelType::U16, ChannelLayout::Rgb) => {
+            for chunk in row.chunks_exact(bpp) {
+                let r = u16_to_u8(parse_u16(chunk));
+                let g = u16_to_u8(parse_u16(&chunk[2..]));
+                let b = u16_to_u8(parse_u16(&chunk[4..]));
+                out.push(rgb_to_luma(r, g, b));
+            }
+        }
+        (ChannelType::U16, ChannelLayout::Rgba) => {
+            for chunk in row.chunks_exact(bpp) {
+                let r = u16_to_u8(parse_u16(chunk));
+                let g = u16_to_u8(parse_u16(&chunk[2..]));
+                let b = u16_to_u8(parse_u16(&chunk[4..]));
+                out.push(rgb_to_luma(r, g, b));
+            }
+        }
+        (ChannelType::U16, ChannelLayout::Bgra) => {
+            for chunk in row.chunks_exact(bpp) {
+                let b = u16_to_u8(parse_u16(chunk));
+                let g = u16_to_u8(parse_u16(&chunk[2..]));
+                let r = u16_to_u8(parse_u16(&chunk[4..]));
+                out.push(rgb_to_luma(r, g, b));
+            }
+        }
+        // --- F32 ---
+        (ChannelType::F32, ChannelLayout::Gray) => {
+            for chunk in row.chunks_exact(bpp) {
+                out.push(f32_to_u8(parse_f32(chunk)));
+            }
+        }
+        (ChannelType::F32, ChannelLayout::GrayAlpha) => {
+            for chunk in row.chunks_exact(bpp) {
+                out.push(f32_to_u8(parse_f32(chunk)));
+            }
+        }
+        (ChannelType::F32, ChannelLayout::Rgb) => {
+            for chunk in row.chunks_exact(bpp) {
+                let r = f32_to_u8(parse_f32(chunk));
+                let g = f32_to_u8(parse_f32(&chunk[4..]));
+                let b = f32_to_u8(parse_f32(&chunk[8..]));
+                out.push(rgb_to_luma(r, g, b));
+            }
+        }
+        (ChannelType::F32, ChannelLayout::Rgba) => {
+            for chunk in row.chunks_exact(bpp) {
+                let r = f32_to_u8(parse_f32(chunk));
+                let g = f32_to_u8(parse_f32(&chunk[4..]));
+                let b = f32_to_u8(parse_f32(&chunk[8..]));
+                out.push(rgb_to_luma(r, g, b));
+            }
+        }
+        (ChannelType::F32, ChannelLayout::Bgra) => {
+            for chunk in row.chunks_exact(bpp) {
+                let b = f32_to_u8(parse_f32(chunk));
+                let g = f32_to_u8(parse_f32(&chunk[4..]));
+                let r = f32_to_u8(parse_f32(&chunk[8..]));
+                out.push(rgb_to_luma(r, g, b));
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Convert one row of pixels to BGRA8, appending to `out`.
+#[cfg(feature = "codec")]
+fn convert_row_to_bgra8(row: &[u8], desc: &PixelDescriptor, out: &mut Vec<u8>) {
+    let bpp = desc.bytes_per_pixel();
+    match (desc.channel_type, desc.layout) {
+        // --- U8 ---
+        (ChannelType::U8, ChannelLayout::Bgra) => out.extend_from_slice(row),
+        (ChannelType::U8, ChannelLayout::Rgba) => {
+            for chunk in row.chunks_exact(bpp) {
+                out.extend_from_slice(&[chunk[2], chunk[1], chunk[0], chunk[3]]);
+            }
+        }
+        (ChannelType::U8, ChannelLayout::Rgb) => {
+            for chunk in row.chunks_exact(bpp) {
+                out.extend_from_slice(&[chunk[2], chunk[1], chunk[0], 255]);
+            }
+        }
+        (ChannelType::U8, ChannelLayout::Gray) => {
+            for &v in row {
+                out.extend_from_slice(&[v, v, v, 255]);
+            }
+        }
+        (ChannelType::U8, ChannelLayout::GrayAlpha) => {
+            for chunk in row.chunks_exact(2) {
+                let v = chunk[0];
+                out.extend_from_slice(&[v, v, v, chunk[1]]);
+            }
+        }
+        // Fall back: convert to RGBA8 first, then swizzle
+        _ => {
+            let start = out.len();
+            convert_row_to_rgba8(row, desc, out);
+            // Swizzle RGBA → BGRA in-place
+            for i in (start..out.len()).step_by(4) {
+                out.swap(i, i + 2); // R ↔ B
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -3337,5 +4067,190 @@ mod codec_tests {
         let buf = PixelBuffer::new(1, 1, desc);
         let err = PixelData::try_from(buf);
         assert_eq!(err.unwrap_err(), BufferError::FormatMismatch);
+    }
+
+    // --- PixelBuffer format conversion tests ---
+
+    #[test]
+    fn convert_rgb8_to_rgba8() {
+        let pixels: Vec<Rgb<u8>> = vec![
+            Rgb { r: 10, g: 20, b: 30 },
+            Rgb { r: 40, g: 50, b: 60 },
+        ];
+        let buf = PixelBuffer::from_pixels(pixels, 2, 1).unwrap();
+        let erased: PixelBuffer = buf.into();
+        let rgba = erased.to_rgba8();
+        assert_eq!(rgba.width(), 2);
+        assert_eq!(rgba.height(), 1);
+        let s = rgba.as_slice();
+        assert_eq!(s.row(0), &[10, 20, 30, 255, 40, 50, 60, 255]);
+    }
+
+    #[test]
+    fn convert_rgba8_to_rgb8() {
+        let pixels: Vec<Rgba<u8>> = vec![Rgba { r: 10, g: 20, b: 30, a: 128 }];
+        let buf = PixelBuffer::from_pixels(pixels, 1, 1).unwrap();
+        let erased: PixelBuffer = buf.into();
+        let rgb = erased.to_rgb8();
+        let s = rgb.as_slice();
+        assert_eq!(s.row(0), &[10, 20, 30]);
+    }
+
+    #[test]
+    fn convert_gray8_to_rgb8() {
+        let pixels = vec![Gray::new(128u8), Gray::new(64u8)];
+        let buf = PixelBuffer::from_pixels(pixels, 2, 1).unwrap();
+        let erased: PixelBuffer = buf.into();
+        let rgb = erased.to_rgb8();
+        let s = rgb.as_slice();
+        assert_eq!(s.row(0), &[128, 128, 128, 64, 64, 64]);
+    }
+
+    #[test]
+    fn convert_gray8_to_rgba8() {
+        let pixels = vec![Gray::new(200u8)];
+        let buf = PixelBuffer::from_pixels(pixels, 1, 1).unwrap();
+        let erased: PixelBuffer = buf.into();
+        let rgba = erased.to_rgba8();
+        let s = rgba.as_slice();
+        assert_eq!(s.row(0), &[200, 200, 200, 255]);
+    }
+
+    #[test]
+    fn convert_bgra8_to_rgb8() {
+        let pixels: Vec<BGRA<u8>> = vec![BGRA { b: 10, g: 20, r: 30, a: 255 }];
+        let buf = PixelBuffer::from_pixels(pixels, 1, 1).unwrap();
+        let erased: PixelBuffer = buf.into();
+        let rgb = erased.to_rgb8();
+        let s = rgb.as_slice();
+        // rgb order: r=30, g=20, b=10
+        assert_eq!(s.row(0), &[30, 20, 10]);
+    }
+
+    #[test]
+    fn convert_bgra8_to_rgba8() {
+        let pixels: Vec<BGRA<u8>> = vec![BGRA { b: 10, g: 20, r: 30, a: 128 }];
+        let buf = PixelBuffer::from_pixels(pixels, 1, 1).unwrap();
+        let erased: PixelBuffer = buf.into();
+        let rgba = erased.to_rgba8();
+        let s = rgba.as_slice();
+        assert_eq!(s.row(0), &[30, 20, 10, 128]);
+    }
+
+    #[test]
+    fn convert_rgb8_to_gray8() {
+        // BT.601: luma = (77*r + 150*g + 29*b) >> 8
+        let pixels: Vec<Rgb<u8>> = vec![Rgb { r: 255, g: 0, b: 0 }]; // pure red
+        let buf = PixelBuffer::from_pixels(pixels, 1, 1).unwrap();
+        let erased: PixelBuffer = buf.into();
+        let gray = erased.to_gray8();
+        let s = gray.as_slice();
+        let expected = ((77u32 * 255) >> 8) as u8; // 76
+        assert_eq!(s.row(0), &[expected]);
+    }
+
+    #[test]
+    fn convert_rgb8_to_bgra8() {
+        let pixels: Vec<Rgb<u8>> = vec![Rgb { r: 10, g: 20, b: 30 }];
+        let buf = PixelBuffer::from_pixels(pixels, 1, 1).unwrap();
+        let erased: PixelBuffer = buf.into();
+        let bgra = erased.to_bgra8();
+        let s = bgra.as_slice();
+        // BGRA order: b=30, g=20, r=10, a=255
+        assert_eq!(s.row(0), &[30, 20, 10, 255]);
+    }
+
+    #[test]
+    fn convert_rgba8_to_bgra8() {
+        let pixels: Vec<Rgba<u8>> = vec![Rgba { r: 10, g: 20, b: 30, a: 128 }];
+        let buf = PixelBuffer::from_pixels(pixels, 1, 1).unwrap();
+        let erased: PixelBuffer = buf.into();
+        let bgra = erased.to_bgra8();
+        let s = bgra.as_slice();
+        assert_eq!(s.row(0), &[30, 20, 10, 128]);
+    }
+
+    #[test]
+    fn convert_u16_to_rgb8() {
+        // u16 65535 → u8 255, u16 0 → u8 0
+        let pixels: Vec<Rgb<u16>> = vec![Rgb { r: 65535, g: 0, b: 32768 }];
+        let buf = PixelBuffer::from_pixels(pixels, 1, 1).unwrap();
+        let erased: PixelBuffer = buf.into();
+        let rgb = erased.to_rgb8();
+        let s = rgb.as_slice();
+        let row = s.row(0);
+        assert_eq!(row[0], 255); // 65535 → 255
+        assert_eq!(row[1], 0);   // 0 → 0
+        // 32768 → (32768*255+32768)>>16 = (8388608)>>16 = 128
+        assert_eq!(row[2], 128);
+    }
+
+    #[test]
+    fn convert_f32_to_rgba8() {
+        let pixels: Vec<Rgba<f32>> = vec![Rgba { r: 1.0, g: 0.0, b: 0.5, a: 0.75 }];
+        let buf = PixelBuffer::from_pixels(pixels, 1, 1).unwrap();
+        let erased: PixelBuffer = buf.into();
+        let rgba = erased.to_rgba8();
+        let s = rgba.as_slice();
+        let row = s.row(0);
+        assert_eq!(row[0], 255); // 1.0
+        assert_eq!(row[1], 0);   // 0.0
+        assert_eq!(row[2], 127); // 0.5 * 255 = 127.5 → 127
+        assert_eq!(row[3], 191); // 0.75 * 255 = 191.25 → 191
+    }
+
+    #[test]
+    fn convert_grayalpha8_to_rgba8() {
+        // GrayAlpha8 needs manual buffer construction since GrayAlpha lacks bytemuck
+        let mut buf = PixelBuffer::new(1, 1, PixelDescriptor::GRAYA8_SRGB);
+        {
+            let mut s = buf.as_slice_mut();
+            let row = s.row_mut(0);
+            row[0] = 100; // gray value
+            row[1] = 200; // alpha
+        }
+        let rgba = buf.to_rgba8();
+        let s = rgba.as_slice();
+        assert_eq!(s.row(0), &[100, 100, 100, 200]);
+    }
+
+    #[test]
+    fn convert_preserves_multirow() {
+        let pixels: Vec<Rgb<u8>> = vec![
+            Rgb { r: 10, g: 20, b: 30 },
+            Rgb { r: 40, g: 50, b: 60 },
+            Rgb { r: 70, g: 80, b: 90 },
+            Rgb { r: 100, g: 110, b: 120 },
+        ];
+        let buf = PixelBuffer::from_pixels(pixels, 2, 2).unwrap();
+        let erased: PixelBuffer = buf.into();
+        let rgba = erased.to_rgba8();
+        assert_eq!(rgba.width(), 2);
+        assert_eq!(rgba.height(), 2);
+        let s = rgba.as_slice();
+        assert_eq!(s.row(0), &[10, 20, 30, 255, 40, 50, 60, 255]);
+        assert_eq!(s.row(1), &[70, 80, 90, 255, 100, 110, 120, 255]);
+    }
+
+    #[test]
+    fn convert_u16_gray_to_gray8() {
+        let pixels = vec![Gray::new(65535u16), Gray::new(0u16)];
+        let buf = PixelBuffer::from_pixels(pixels, 2, 1).unwrap();
+        let erased: PixelBuffer = buf.into();
+        let gray = erased.to_gray8();
+        let s = gray.as_slice();
+        assert_eq!(s.row(0), &[255, 0]);
+    }
+
+    #[test]
+    fn convert_f32_rgb_to_gray8() {
+        // Pure white → 255 via luma
+        let pixels: Vec<Rgb<f32>> = vec![Rgb { r: 1.0, g: 1.0, b: 1.0 }];
+        let buf = PixelBuffer::from_pixels(pixels, 1, 1).unwrap();
+        let erased: PixelBuffer = buf.into();
+        let gray = erased.to_gray8();
+        let s = gray.as_slice();
+        // luma of (255,255,255) = (77*255+150*255+29*255)>>8 = (65280)>>8 = 255
+        assert_eq!(s.row(0), &[255]);
     }
 }
