@@ -17,7 +17,7 @@ use rgb::{Gray, Rgb, Rgba};
 
 use crate::color::{ColorContext, WorkingColorSpace};
 #[cfg(feature = "codec")]
-use crate::pixel::GrayAlpha;
+use crate::pixel::{GrayAlpha8, GrayAlpha16, GrayAlphaF32};
 
 #[cfg(feature = "codec")]
 use imgref::ImgVec;
@@ -1294,17 +1294,17 @@ impl Pixel for BGRA<u8> {
 }
 
 #[cfg(feature = "codec")]
-impl Pixel for GrayAlpha<u8> {
+impl Pixel for GrayAlpha8 {
     const DESCRIPTOR: PixelDescriptor = PixelDescriptor::GRAYA8;
 }
 
 #[cfg(feature = "codec")]
-impl Pixel for GrayAlpha<u16> {
+impl Pixel for GrayAlpha16 {
     const DESCRIPTOR: PixelDescriptor = PixelDescriptor::GRAYA16;
 }
 
 #[cfg(feature = "codec")]
-impl Pixel for GrayAlpha<f32> {
+impl Pixel for GrayAlphaF32 {
     const DESCRIPTOR: PixelDescriptor = PixelDescriptor::GRAYAF32;
 }
 

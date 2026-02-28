@@ -10,58 +10,60 @@ use imgref::ImgVec;
 use rgb::alt::BGRA;
 use rgb::{Gray, Rgb, Rgba};
 
-/// Grayscale pixel with alpha channel.
-///
-/// A simple two-component pixel type. Not from the `rgb` crate — we own this
-/// type to avoid API instability in `rgb::alt::GrayAlpha`.
-///
-/// # Zero-copy limitation
-///
-/// `GrayAlpha<T>` does not implement `rgb::ComponentBytes`, so it cannot
-/// produce a zero-copy [`PixelSlice`](crate::PixelSlice) via `From`. Use
-/// [`PixelData::as_pixel_slice()`](crate::PixelData::as_pixel_slice) for
-/// non-GrayAlpha variants, or [`PixelData::to_bytes()`](crate::PixelData::to_bytes)
-/// for the buffer-copy path. The typed convenience methods on
-/// [`EncoderConfig`](crate::EncoderConfig) (`encode_gray_alpha8` etc.) handle
-/// this internally by routing through [`PixelData`](crate::PixelData).
+/// Grayscale + alpha, 8-bit.
+#[cfg_attr(feature = "codec", derive(bytemuck::Zeroable, bytemuck::Pod))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[repr(C)]
-pub struct GrayAlpha<T> {
+pub struct GrayAlpha8 {
     /// Gray value.
-    pub v: T,
+    pub v: u8,
     /// Alpha value.
-    pub a: T,
+    pub a: u8,
 }
 
-// bytemuck Pod/Zeroable for GrayAlpha concrete types.
-//
-// GrayAlpha<T> is #[repr(C)] with two T fields, no padding — Pod whenever T
-// is Pod. bytemuck derives don't support generics, so we impl manually.
-// These are the bytemuck equivalent of what `#[derive(Pod, Zeroable)]` would
-// generate if it supported generics.
-#[cfg(feature = "codec")]
-#[allow(unsafe_code)]
-mod gray_alpha_pod {
-    use super::GrayAlpha;
-
-    // SAFETY: GrayAlpha<T> is #[repr(C)] with two T fields and no padding.
-    // All-zeros is valid for u8/u16/f32, making GrayAlpha<T> zeroable.
-    unsafe impl bytemuck::Zeroable for GrayAlpha<u8> {}
-    unsafe impl bytemuck::Zeroable for GrayAlpha<u16> {}
-    unsafe impl bytemuck::Zeroable for GrayAlpha<f32> {}
-
-    // SAFETY: #[repr(C)] + two Pod fields + no padding = Pod.
-    unsafe impl bytemuck::Pod for GrayAlpha<u8> {}
-    unsafe impl bytemuck::Pod for GrayAlpha<u16> {}
-    unsafe impl bytemuck::Pod for GrayAlpha<f32> {}
+/// Grayscale + alpha, 16-bit.
+#[cfg_attr(feature = "codec", derive(bytemuck::Zeroable, bytemuck::Pod))]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[repr(C)]
+pub struct GrayAlpha16 {
+    /// Gray value.
+    pub v: u16,
+    /// Alpha value.
+    pub a: u16,
 }
 
-impl<T> GrayAlpha<T> {
+/// Grayscale + alpha, f32.
+#[cfg_attr(feature = "codec", derive(bytemuck::Zeroable, bytemuck::Pod))]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[repr(C)]
+pub struct GrayAlphaF32 {
+    /// Gray value.
+    pub v: f32,
+    /// Alpha value.
+    pub a: f32,
+}
+
+impl GrayAlpha8 {
     /// Create a new gray+alpha pixel.
-    pub const fn new(v: T, a: T) -> Self {
+    pub const fn new(v: u8, a: u8) -> Self {
         Self { v, a }
     }
 }
+
+impl GrayAlpha16 {
+    /// Create a new gray+alpha pixel.
+    pub const fn new(v: u16, a: u16) -> Self {
+        Self { v, a }
+    }
+}
+
+impl GrayAlphaF32 {
+    /// Create a new gray+alpha pixel.
+    pub const fn new(v: f32, a: f32) -> Self {
+        Self { v, a }
+    }
+}
+
 
 /// Decoded pixel data in a typed buffer.
 ///
@@ -104,11 +106,11 @@ pub enum PixelData {
     /// Native byte order for Windows/DirectX surfaces.
     Bgra8(ImgVec<BGRA<u8>>),
     /// 8-bit grayscale with alpha.
-    GrayAlpha8(ImgVec<GrayAlpha<u8>>),
+    GrayAlpha8(ImgVec<GrayAlpha8>),
     /// 16-bit grayscale with alpha. Full 0–65535 range regardless of source bit depth.
-    GrayAlpha16(ImgVec<GrayAlpha<u16>>),
+    GrayAlpha16(ImgVec<GrayAlpha16>),
     /// Grayscale + alpha f32.
-    GrayAlphaF32(ImgVec<GrayAlpha<f32>>),
+    GrayAlphaF32(ImgVec<GrayAlphaF32>),
 }
 
 impl PixelData {
@@ -200,7 +202,7 @@ impl PixelData {
 
     /// Borrow pixel data as a [`PixelSlice`](crate::buffer::PixelSlice).
     ///
-    /// Returns `None` for GrayAlpha variants (our `GrayAlpha<T>` type
+    /// Returns `None` for GrayAlpha variants (our `GrayAlpha types` type
     /// doesn't implement `rgb::ComponentBytes`, so we can't get a byte
     /// slice without copying).
     pub fn as_pixel_slice(&self) -> Option<crate::buffer::PixelSlice<'_>> {
@@ -402,7 +404,7 @@ impl PixelData {
     }
 
     /// Borrow as GrayAlpha8 if that's the native format.
-    pub fn as_gray_alpha8(&self) -> Option<imgref::ImgRef<'_, GrayAlpha<u8>>> {
+    pub fn as_gray_alpha8(&self) -> Option<imgref::ImgRef<'_, GrayAlpha8>> {
         match self {
             PixelData::GrayAlpha8(img) => Some(img.as_ref()),
             _ => None,
@@ -410,7 +412,7 @@ impl PixelData {
     }
 
     /// Borrow as GrayAlpha16 if that's the native format.
-    pub fn as_gray_alpha16(&self) -> Option<imgref::ImgRef<'_, GrayAlpha<u16>>> {
+    pub fn as_gray_alpha16(&self) -> Option<imgref::ImgRef<'_, GrayAlpha16>> {
         match self {
             PixelData::GrayAlpha16(img) => Some(img.as_ref()),
             _ => None,
@@ -418,7 +420,7 @@ impl PixelData {
     }
 
     /// Borrow as GrayAlpha f32 if that's the native format.
-    pub fn as_gray_alpha_f32(&self) -> Option<imgref::ImgRef<'_, GrayAlpha<f32>>> {
+    pub fn as_gray_alpha_f32(&self) -> Option<imgref::ImgRef<'_, GrayAlphaF32>> {
         match self {
             PixelData::GrayAlphaF32(img) => Some(img.as_ref()),
             _ => None,
@@ -510,7 +512,7 @@ impl PixelData {
     }
 
     /// Extract as owned GrayAlpha8 without conversion.
-    pub fn try_into_gray_alpha8(self) -> Option<ImgVec<GrayAlpha<u8>>> {
+    pub fn try_into_gray_alpha8(self) -> Option<ImgVec<GrayAlpha8>> {
         match self {
             PixelData::GrayAlpha8(img) => Some(img),
             _ => None,
@@ -518,7 +520,7 @@ impl PixelData {
     }
 
     /// Extract as owned GrayAlpha16 without conversion.
-    pub fn try_into_gray_alpha16(self) -> Option<ImgVec<GrayAlpha<u16>>> {
+    pub fn try_into_gray_alpha16(self) -> Option<ImgVec<GrayAlpha16>> {
         match self {
             PixelData::GrayAlpha16(img) => Some(img),
             _ => None,
@@ -526,7 +528,7 @@ impl PixelData {
     }
 
     /// Extract as owned GrayAlpha f32 without conversion.
-    pub fn try_into_gray_alpha_f32(self) -> Option<ImgVec<GrayAlpha<f32>>> {
+    pub fn try_into_gray_alpha_f32(self) -> Option<ImgVec<GrayAlphaF32>> {
         match self {
             PixelData::GrayAlphaF32(img) => Some(img),
             _ => None,
@@ -1136,7 +1138,7 @@ mod tests {
 
     #[test]
     fn gray_alpha8_has_alpha() {
-        let data = PixelData::GrayAlpha8(ImgVec::new(vec![GrayAlpha::new(128, 200); 4], 2, 2));
+        let data = PixelData::GrayAlpha8(ImgVec::new(vec![GrayAlpha8::new(128, 200); 4], 2, 2));
         assert!(data.has_alpha());
         assert_eq!(data.width(), 2);
         assert_eq!(data.height(), 2);
@@ -1174,7 +1176,7 @@ mod tests {
 
     #[test]
     fn gray_alpha_debug() {
-        let data = PixelData::GrayAlpha8(ImgVec::new(vec![GrayAlpha::new(0u8, 0); 6], 3, 2));
+        let data = PixelData::GrayAlpha8(ImgVec::new(vec![GrayAlpha8::new(0, 0); 6], 3, 2));
         assert_eq!(alloc::format!("{:?}", data), "PixelData::GrayAlpha8(3x2)");
     }
 
@@ -1214,13 +1216,13 @@ mod tests {
 
     #[test]
     fn as_pixel_slice_gray_alpha_returns_none() {
-        let data = PixelData::GrayAlpha8(ImgVec::new(vec![GrayAlpha::new(0u8, 0)], 1, 1));
+        let data = PixelData::GrayAlpha8(ImgVec::new(vec![GrayAlpha8::new(0, 0)], 1, 1));
         assert!(data.as_pixel_slice().is_none());
 
-        let data = PixelData::GrayAlpha16(ImgVec::new(vec![GrayAlpha::new(0u16, 0)], 1, 1));
+        let data = PixelData::GrayAlpha16(ImgVec::new(vec![GrayAlpha16::new(0, 0)], 1, 1));
         assert!(data.as_pixel_slice().is_none());
 
-        let data = PixelData::GrayAlphaF32(ImgVec::new(vec![GrayAlpha::new(0.0f32, 0.0)], 1, 1));
+        let data = PixelData::GrayAlphaF32(ImgVec::new(vec![GrayAlphaF32::new(0.0, 0.0)], 1, 1));
         assert!(data.as_pixel_slice().is_none());
     }
 
@@ -1251,7 +1253,7 @@ mod tests {
         assert!(gf32.as_gray8().is_none());
         assert!(gf32.as_rgb_f32().is_none());
 
-        let ga8 = PixelData::GrayAlpha8(ImgVec::new(vec![GrayAlpha::new(128u8, 255)], 1, 1));
+        let ga8 = PixelData::GrayAlpha8(ImgVec::new(vec![GrayAlpha8::new(128, 255)], 1, 1));
         assert!(ga8.as_gray_alpha8().is_some());
         assert!(ga8.as_gray8().is_none());
     }
@@ -1286,7 +1288,7 @@ mod tests {
         ));
         assert!(rf32.try_into_rgb8().is_none());
 
-        let ga16 = PixelData::GrayAlpha16(ImgVec::new(vec![GrayAlpha::new(1000u16, 2000)], 1, 1));
+        let ga16 = PixelData::GrayAlpha16(ImgVec::new(vec![GrayAlpha16::new(1000, 2000)], 1, 1));
         assert!(ga16.try_into_gray_alpha16().is_some());
     }
 

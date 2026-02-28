@@ -27,10 +27,7 @@
 //! `zencodecs` provides multi-format dispatch and convenience entry points.
 
 #![no_std]
-// deny rather than forbid: bytemuck Pod/Zeroable impls for GrayAlpha<T>
-// require `unsafe impl` since bytemuck derives don't support generics.
-// The impls are trivially correct (#[repr(C)], two Pod fields, no padding).
-#![deny(unsafe_code)]
+#![forbid(unsafe_code)]
 
 extern crate alloc;
 
@@ -77,7 +74,7 @@ pub use output::{EncodeFrame, EncodeOutput, FrameBlend, FrameDisposal};
 pub use output::{DecodeFrame, DecodeOutput, TypedEncodeFrame};
 #[cfg(feature = "codec")]
 #[allow(deprecated)]
-pub use pixel::{GrayAlpha, PixelData};
+pub use pixel::{GrayAlpha8, GrayAlpha16, GrayAlphaF32, PixelData};
 #[cfg(feature = "codec")]
 pub use sink::DecodeRowSink;
 #[cfg(feature = "codec")]
