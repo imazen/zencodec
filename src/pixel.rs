@@ -25,13 +25,35 @@ use rgb::{Gray, Rgb, Rgba};
 /// [`EncoderConfig`](crate::EncoderConfig) (`encode_gray_alpha8` etc.) handle
 /// this internally by routing through [`PixelData`](crate::PixelData).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-#[non_exhaustive]
 #[repr(C)]
 pub struct GrayAlpha<T> {
     /// Gray value.
     pub v: T,
     /// Alpha value.
     pub a: T,
+}
+
+// bytemuck Pod/Zeroable for GrayAlpha concrete types.
+//
+// GrayAlpha<T> is #[repr(C)] with two T fields, no padding — Pod whenever T
+// is Pod. bytemuck derives don't support generics, so we impl manually.
+// These are the bytemuck equivalent of what `#[derive(Pod, Zeroable)]` would
+// generate if it supported generics.
+#[cfg(feature = "codec")]
+#[allow(unsafe_code)]
+mod gray_alpha_pod {
+    use super::GrayAlpha;
+
+    // SAFETY: GrayAlpha<T> is #[repr(C)] with two T fields and no padding.
+    // All-zeros is valid for u8/u16/f32, making GrayAlpha<T> zeroable.
+    unsafe impl bytemuck::Zeroable for GrayAlpha<u8> {}
+    unsafe impl bytemuck::Zeroable for GrayAlpha<u16> {}
+    unsafe impl bytemuck::Zeroable for GrayAlpha<f32> {}
+
+    // SAFETY: #[repr(C)] + two Pod fields + no padding = Pod.
+    unsafe impl bytemuck::Pod for GrayAlpha<u8> {}
+    unsafe impl bytemuck::Pod for GrayAlpha<u16> {}
+    unsafe impl bytemuck::Pod for GrayAlpha<f32> {}
 }
 
 impl<T> GrayAlpha<T> {

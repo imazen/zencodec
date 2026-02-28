@@ -14,7 +14,7 @@ default = ["codec"]
 codec = ["dep:rgb", "dep:imgref", "dep:enough", "dep:bytemuck"]
 
 [dependencies]
-bytemuck = { version = "1.25", default-features = false, features = ["extern_crate_alloc"], optional = true }
+bytemuck = { version = "1.25", default-features = false, features = ["extern_crate_alloc", "derive"], optional = true }
 enough = { version = "0.4", optional = true }
 rgb = { version = "0.8", default-features = false, features = ["as-bytes"], optional = true }
 imgref = { version = "1.12", optional = true }

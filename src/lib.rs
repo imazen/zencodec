@@ -27,7 +27,10 @@
 //! `zencodecs` provides multi-format dispatch and convenience entry points.
 
 #![no_std]
-#![forbid(unsafe_code)]
+// deny rather than forbid: bytemuck Pod/Zeroable impls for GrayAlpha<T>
+// require `unsafe impl` since bytemuck derives don't support generics.
+// The impls are trivially correct (#[repr(C)], two Pod fields, no padding).
+#![deny(unsafe_code)]
 
 extern crate alloc;
 
