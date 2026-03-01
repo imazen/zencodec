@@ -19,12 +19,57 @@ use crate::buffer::{
 ///
 /// Used by [`PixelSlice::convert()`] when the source layout is grayscale
 /// and the target layout is RGB or RGBA.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum GrayExpand {
     /// Channel broadcast: `v → (v, v, v)`. Lossless.
-    #[default]
     Broadcast,
+}
+
+/// Policy for alpha channel removal. Required when converting
+/// from a layout with alpha to one without.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum AlphaPolicy {
+    /// Discard only if every pixel is fully opaque. Returns error otherwise.
+    DiscardIfOpaque,
+    /// Discard unconditionally. Caller acknowledges data loss.
+    DiscardUnchecked,
+    /// Composite onto solid background (values in source range, 0–255 for U8).
+    CompositeOnto {
+        /// Red background value.
+        r: u8,
+        /// Green background value.
+        g: u8,
+        /// Blue background value.
+        b: u8,
+    },
+    /// Return error rather than dropping alpha.
+    Forbid,
+}
+
+/// Policy for bit depth reduction (U16→U8, etc.).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum DepthPolicy {
+    /// Round to nearest value.
+    Round,
+    /// Truncate (floor). Faster, biased toward lower values.
+    Truncate,
+    /// Return error rather than reducing depth.
+    Forbid,
+}
+
+/// Explicit options for pixel format conversion. All lossy
+/// operations require a policy choice — no silent defaults.
+#[derive(Clone, Copy, Debug)]
+pub struct ConvertOptions {
+    /// How to expand grayscale to RGB.
+    pub gray_expand: GrayExpand,
+    /// How to handle alpha removal.
+    pub alpha_policy: AlphaPolicy,
+    /// How to handle depth reduction.
+    pub depth_policy: DepthPolicy,
 }
 
 /// Error from [`PixelSlice::convert()`].
@@ -38,6 +83,14 @@ pub enum ConvertError {
     UnsupportedChannelType,
     /// Cross-layout conversion involving Bgra is not supported.
     UnsupportedLayout,
+    /// Alpha channel is not fully opaque and [`AlphaPolicy::DiscardIfOpaque`] was set.
+    AlphaNotOpaque,
+    /// Depth reduction was requested but [`DepthPolicy::Forbid`] was set.
+    DepthReductionForbidden,
+    /// Alpha removal was requested but [`AlphaPolicy::Forbid`] was set.
+    AlphaRemovalForbidden,
+    /// Buffer allocation failed.
+    AllocationFailed,
 }
 
 impl core::fmt::Display for ConvertError {
@@ -49,6 +102,18 @@ impl core::fmt::Display for ConvertError {
             }
             Self::UnsupportedLayout => {
                 write!(f, "cross-layout Bgra conversion not supported")
+            }
+            Self::AlphaNotOpaque => {
+                write!(f, "alpha channel is not fully opaque")
+            }
+            Self::DepthReductionForbidden => {
+                write!(f, "depth reduction forbidden by policy")
+            }
+            Self::AlphaRemovalForbidden => {
+                write!(f, "alpha removal forbidden by policy")
+            }
+            Self::AllocationFailed => {
+                write!(f, "buffer allocation failed")
             }
         }
     }
@@ -242,6 +307,52 @@ fn convert_row(
     }
 }
 
+// ── Alpha channel scanning ─────────────────────────────────────────────
+
+/// Check if all alpha values in the source are fully opaque.
+fn is_fully_opaque(src: &[u8], width: usize, height: usize, desc: &PixelDescriptor) -> bool {
+    if !desc.layout.has_alpha() {
+        return true;
+    }
+    let bpp = desc.bytes_per_pixel();
+    let cs = desc.channel_type.byte_size();
+    let alpha_offset = (desc.layout.channels() - 1) * cs;
+    let max = max_value(desc.channel_type);
+    for y in 0..height {
+        for x in 0..width {
+            let off = (y * width + x) * bpp + alpha_offset;
+            if read_ch(src, off, desc.channel_type) != max {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+// ── Policy validation ─────────────────────────────────────────────────
+
+/// Check that the requested conversion is allowed by the given policies.
+fn validate_policies(
+    src_desc: &PixelDescriptor,
+    dst_layout: ChannelLayout,
+    dst_ty: ChannelType,
+    options: &ConvertOptions,
+) -> Result<(), ConvertError> {
+    // Alpha removal check
+    let drops_alpha = src_desc.layout.has_alpha() && !dst_layout.has_alpha();
+    if drops_alpha && options.alpha_policy == AlphaPolicy::Forbid {
+        return Err(ConvertError::AlphaRemovalForbidden);
+    }
+
+    // Depth reduction check
+    let reduces_depth = src_desc.channel_type == ChannelType::U16 && dst_ty == ChannelType::U8;
+    if reduces_depth && options.depth_policy == DepthPolicy::Forbid {
+        return Err(ConvertError::DepthReductionForbidden);
+    }
+
+    Ok(())
+}
+
 // ── PixelSlice conversion methods ───────────────────────────────────────
 
 impl<P> PixelSlice<'_, P> {
@@ -251,6 +362,7 @@ impl<P> PixelSlice<'_, P> {
     /// and grayscale-to-RGB expansion. RGB-to-grayscale is not supported.
     ///
     /// Returns a new tightly-packed [`PixelBuffer`] with the target format.
+    /// **Allocates** a new buffer.
     /// Color metadata (transfer function, primaries, working space, color
     /// context) is preserved from the source.
     ///
@@ -271,6 +383,155 @@ impl<P> PixelSlice<'_, P> {
             target_layout,
         )?;
 
+        self.convert_inner(target_layout, target_depth, gray_expand)
+    }
+
+    /// Convert with explicit policies for all lossy operations. **Allocates**.
+    ///
+    /// Unlike [`convert()`](Self::convert), this method enforces policies on
+    /// alpha removal and depth reduction, returning errors when forbidden.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConvertError`] if:
+    /// - The conversion is structurally unsupported (same as `convert()`)
+    /// - Alpha removal is forbidden or pixels are not opaque with `DiscardIfOpaque`
+    /// - Depth reduction is forbidden
+    pub fn convert_explicit(
+        &self,
+        target_layout: ChannelLayout,
+        target_depth: ChannelType,
+        options: ConvertOptions,
+    ) -> Result<PixelBuffer, ConvertError> {
+        let src_desc = self.descriptor();
+        validate_conversion(
+            src_desc.channel_type,
+            src_desc.layout,
+            target_depth,
+            target_layout,
+        )?;
+        validate_policies(&src_desc, target_layout, target_depth, &options)?;
+
+        // Runtime opacity check for DiscardIfOpaque
+        let drops_alpha = src_desc.layout.has_alpha() && !target_layout.has_alpha();
+        if drops_alpha && options.alpha_policy == AlphaPolicy::DiscardIfOpaque {
+            let w = self.width() as usize;
+            let h = self.rows() as usize;
+            // For strided buffers we need to check row by row
+            let mut opaque = true;
+            for y in 0..h as u32 {
+                let row = self.row(y);
+                if !is_fully_opaque(row, w, 1, &src_desc) {
+                    opaque = false;
+                    break;
+                }
+            }
+            if !opaque {
+                return Err(ConvertError::AlphaNotOpaque);
+            }
+        }
+
+        self.convert_inner(target_layout, target_depth, options.gray_expand)
+    }
+
+    /// Add alpha channel (lossless). **Allocates** a new `PixelBuffer`.
+    ///
+    /// - Gray → GrayAlpha (opaque alpha)
+    /// - Rgb → Rgba (opaque alpha)
+    /// - Already has alpha → identity copy
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConvertError`] if the source uses an unsupported channel type.
+    pub fn try_add_alpha(&self) -> Result<PixelBuffer, ConvertError> {
+        let desc = self.descriptor();
+        let target = match desc.layout {
+            ChannelLayout::Gray => ChannelLayout::GrayAlpha,
+            ChannelLayout::Rgb => ChannelLayout::Rgba,
+            other => other,
+        };
+        self.convert(target, desc.channel_type, GrayExpand::Broadcast)
+    }
+
+    /// Widen to U16 depth (lossless, ×257). **Allocates** a new `PixelBuffer`.
+    ///
+    /// No-op copy if already U16.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConvertError`] if the source uses an unsupported channel type.
+    pub fn try_widen_to_u16(&self) -> Result<PixelBuffer, ConvertError> {
+        let desc = self.descriptor();
+        self.convert(desc.layout, ChannelType::U16, GrayExpand::Broadcast)
+    }
+
+    /// Narrow to U8 depth (lossy, rounded). **Allocates** a new `PixelBuffer`.
+    ///
+    /// U16 values are rounded: `(v * 255 + 32768) >> 16`.
+    /// No-op copy if already U8.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConvertError`] if the source uses an unsupported channel type.
+    pub fn try_narrow_to_u8(&self, depth: DepthPolicy) -> Result<PixelBuffer, ConvertError> {
+        let desc = self.descriptor();
+        let reduces = desc.channel_type == ChannelType::U16;
+        if reduces && depth == DepthPolicy::Forbid {
+            return Err(ConvertError::DepthReductionForbidden);
+        }
+        self.convert(desc.layout, ChannelType::U8, GrayExpand::Broadcast)
+    }
+
+    /// Add an alpha channel. No-op copy if already has alpha.
+    ///
+    /// - Gray → GrayAlpha (opaque)
+    /// - Rgb → Rgba (opaque)
+    /// - GrayAlpha / Rgba / Bgra → identity copy
+    ///
+    /// # Panics
+    ///
+    /// Panics if the source uses an unsupported channel type (F32, F16, I16).
+    #[deprecated(note = "use try_add_alpha() which returns Result")]
+    pub fn to_with_alpha(&self) -> PixelBuffer {
+        self.try_add_alpha()
+            .expect("to_with_alpha: add-alpha conversion should not fail")
+    }
+
+    /// Widen to U16 depth. No-op copy if already U16.
+    ///
+    /// U8 values are scaled by ×257 (0→0, 128→32896, 255→65535).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the source uses an unsupported channel type (F32, F16, I16).
+    #[deprecated(note = "use try_widen_to_u16() which returns Result")]
+    pub fn to_u16(&self) -> PixelBuffer {
+        self.try_widen_to_u16()
+            .expect("to_u16: depth conversion should not fail")
+    }
+
+    /// Narrow to U8 depth. No-op copy if already U8.
+    ///
+    /// U16 values are rounded: `(v * 255 + 32768) >> 16` (0→0, 32896→128, 65535→255).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the source uses an unsupported channel type (F32, F16, I16).
+    #[deprecated(note = "use try_narrow_to_u8() which returns Result")]
+    pub fn to_u8(&self) -> PixelBuffer {
+        self.try_narrow_to_u8(DepthPolicy::Round)
+            .expect("to_u8: depth conversion should not fail")
+    }
+
+    // ── Internal ────────────────────────────────────────────────────────
+
+    fn convert_inner(
+        &self,
+        target_layout: ChannelLayout,
+        target_depth: ChannelType,
+        gray_expand: GrayExpand,
+    ) -> Result<PixelBuffer, ConvertError> {
+        let src_desc = self.descriptor();
         let w = self.width() as usize;
         let h = self.rows() as usize;
 
@@ -317,55 +578,10 @@ impl<P> PixelSlice<'_, P> {
 
         Ok(buf)
     }
-
-    /// Add an alpha channel. No-op copy if already has alpha.
-    ///
-    /// - Gray → GrayAlpha (opaque)
-    /// - Rgb → Rgba (opaque)
-    /// - GrayAlpha / Rgba / Bgra → identity copy
-    ///
-    /// # Panics
-    ///
-    /// Panics if the source uses an unsupported channel type (F32, F16, I16).
-    pub fn to_with_alpha(&self) -> PixelBuffer {
-        let desc = self.descriptor();
-        let target = match desc.layout {
-            ChannelLayout::Gray => ChannelLayout::GrayAlpha,
-            ChannelLayout::Rgb => ChannelLayout::Rgba,
-            other => other,
-        };
-        self.convert(target, desc.channel_type, GrayExpand::default())
-            .expect("to_with_alpha: add-alpha conversion should not fail")
-    }
-
-    /// Widen to U16 depth. No-op copy if already U16.
-    ///
-    /// U8 values are scaled by ×257 (0→0, 128→32896, 255→65535).
-    ///
-    /// # Panics
-    ///
-    /// Panics if the source uses an unsupported channel type (F32, F16, I16).
-    pub fn to_u16(&self) -> PixelBuffer {
-        let desc = self.descriptor();
-        self.convert(desc.layout, ChannelType::U16, GrayExpand::default())
-            .expect("to_u16: depth conversion should not fail")
-    }
-
-    /// Narrow to U8 depth. No-op copy if already U8.
-    ///
-    /// U16 values are rounded: `(v * 255 + 32768) >> 16` (0→0, 32896→128, 65535→255).
-    ///
-    /// # Panics
-    ///
-    /// Panics if the source uses an unsupported channel type (F32, F16, I16).
-    pub fn to_u8(&self) -> PixelBuffer {
-        let desc = self.descriptor();
-        self.convert(desc.layout, ChannelType::U8, GrayExpand::default())
-            .expect("to_u8: depth conversion should not fail")
-    }
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use alloc::vec::Vec;
 
@@ -450,7 +666,7 @@ mod tests {
         let data = [10, 20, 30, 255, 40, 50, 60, 128];
         let s = make_slice(&data, 2, 1, PixelDescriptor::RGBA8);
         let buf = s
-            .convert(ChannelLayout::Rgb, ChannelType::U8, GrayExpand::default())
+            .convert(ChannelLayout::Rgb, ChannelType::U8, GrayExpand::Broadcast)
             .unwrap();
         let bytes = buf.as_contiguous_bytes().unwrap();
         assert_eq!(bytes, &[10, 20, 30, 40, 50, 60]);
@@ -502,7 +718,7 @@ mod tests {
         let data = [42, 128];
         let s = make_slice(&data, 1, 1, PixelDescriptor::GRAYA8);
         let buf = s
-            .convert(ChannelLayout::Gray, ChannelType::U8, GrayExpand::default())
+            .convert(ChannelLayout::Gray, ChannelType::U8, GrayExpand::Broadcast)
             .unwrap();
         let bytes = buf.as_contiguous_bytes().unwrap();
         assert_eq!(bytes, &[42]);
@@ -513,7 +729,7 @@ mod tests {
         let data = [1, 2, 3];
         let s = make_slice(&data, 1, 1, PixelDescriptor::RGB8);
         let err = s
-            .convert(ChannelLayout::Gray, ChannelType::U8, GrayExpand::default())
+            .convert(ChannelLayout::Gray, ChannelType::U8, GrayExpand::Broadcast)
             .unwrap_err();
         assert_eq!(err, ConvertError::RgbToGray);
     }
@@ -526,7 +742,7 @@ mod tests {
             .convert(
                 ChannelLayout::GrayAlpha,
                 ChannelType::U8,
-                GrayExpand::default(),
+                GrayExpand::Broadcast,
             )
             .unwrap_err();
         assert_eq!(err, ConvertError::RgbToGray);
@@ -551,7 +767,7 @@ mod tests {
         let data = [1, 2, 3, 4];
         let s = make_slice(&data, 1, 1, PixelDescriptor::BGRA8);
         let err = s
-            .convert(ChannelLayout::Rgba, ChannelType::U8, GrayExpand::default())
+            .convert(ChannelLayout::Rgba, ChannelType::U8, GrayExpand::Broadcast)
             .unwrap_err();
         assert_eq!(err, ConvertError::UnsupportedLayout);
     }
@@ -652,5 +868,149 @@ mod tests {
         assert_eq!(bytes[2], 128);
         // 33153 / 257.0 = 129.0 → exactly 129
         assert_eq!(bytes[3], 129);
+    }
+
+    // ── convert_explicit tests ──────────────────────────────────────────
+
+    #[test]
+    fn convert_explicit_forbid_alpha_removal() {
+        let data = [10, 20, 30, 255];
+        let s = make_slice(&data, 1, 1, PixelDescriptor::RGBA8);
+        let err = s
+            .convert_explicit(
+                ChannelLayout::Rgb,
+                ChannelType::U8,
+                ConvertOptions {
+                    gray_expand: GrayExpand::Broadcast,
+                    alpha_policy: AlphaPolicy::Forbid,
+                    depth_policy: DepthPolicy::Round,
+                },
+            )
+            .unwrap_err();
+        assert_eq!(err, ConvertError::AlphaRemovalForbidden);
+    }
+
+    #[test]
+    fn convert_explicit_discard_if_opaque_succeeds() {
+        let data = [10, 20, 30, 255, 40, 50, 60, 255];
+        let s = make_slice(&data, 2, 1, PixelDescriptor::RGBA8);
+        let buf = s
+            .convert_explicit(
+                ChannelLayout::Rgb,
+                ChannelType::U8,
+                ConvertOptions {
+                    gray_expand: GrayExpand::Broadcast,
+                    alpha_policy: AlphaPolicy::DiscardIfOpaque,
+                    depth_policy: DepthPolicy::Round,
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            buf.as_contiguous_bytes().unwrap(),
+            &[10, 20, 30, 40, 50, 60]
+        );
+    }
+
+    #[test]
+    fn convert_explicit_discard_if_opaque_fails() {
+        let data = [10, 20, 30, 128]; // alpha = 128, not opaque
+        let s = make_slice(&data, 1, 1, PixelDescriptor::RGBA8);
+        let err = s
+            .convert_explicit(
+                ChannelLayout::Rgb,
+                ChannelType::U8,
+                ConvertOptions {
+                    gray_expand: GrayExpand::Broadcast,
+                    alpha_policy: AlphaPolicy::DiscardIfOpaque,
+                    depth_policy: DepthPolicy::Round,
+                },
+            )
+            .unwrap_err();
+        assert_eq!(err, ConvertError::AlphaNotOpaque);
+    }
+
+    #[test]
+    fn convert_explicit_discard_unchecked() {
+        let data = [10, 20, 30, 128]; // alpha = 128
+        let s = make_slice(&data, 1, 1, PixelDescriptor::RGBA8);
+        let buf = s
+            .convert_explicit(
+                ChannelLayout::Rgb,
+                ChannelType::U8,
+                ConvertOptions {
+                    gray_expand: GrayExpand::Broadcast,
+                    alpha_policy: AlphaPolicy::DiscardUnchecked,
+                    depth_policy: DepthPolicy::Round,
+                },
+            )
+            .unwrap();
+        assert_eq!(buf.as_contiguous_bytes().unwrap(), &[10, 20, 30]);
+    }
+
+    #[test]
+    fn convert_explicit_forbid_depth_reduction() {
+        let data: Vec<u8> = [32896u16].iter().flat_map(|v| v.to_ne_bytes()).collect();
+        let s = make_slice(&data, 1, 1, PixelDescriptor::GRAY16);
+        let err = s
+            .convert_explicit(
+                ChannelLayout::Gray,
+                ChannelType::U8,
+                ConvertOptions {
+                    gray_expand: GrayExpand::Broadcast,
+                    alpha_policy: AlphaPolicy::DiscardUnchecked,
+                    depth_policy: DepthPolicy::Forbid,
+                },
+            )
+            .unwrap_err();
+        assert_eq!(err, ConvertError::DepthReductionForbidden);
+    }
+
+    #[test]
+    fn try_add_alpha_returns_result() {
+        let data = [10, 20, 30];
+        let s = make_slice(&data, 1, 1, PixelDescriptor::RGB8);
+        let buf = s.try_add_alpha().unwrap();
+        assert_eq!(buf.as_contiguous_bytes().unwrap(), &[10, 20, 30, 255]);
+    }
+
+    #[test]
+    fn try_widen_to_u16_returns_result() {
+        let data = [100];
+        let s = make_slice(&data, 1, 1, PixelDescriptor::GRAY8);
+        let buf = s.try_widen_to_u16().unwrap();
+        let bytes = buf.as_contiguous_bytes().unwrap();
+        let expected: Vec<u8> = [100u16 * 257]
+            .iter()
+            .flat_map(|v| v.to_ne_bytes())
+            .collect();
+        assert_eq!(bytes, &expected[..]);
+    }
+
+    #[test]
+    fn try_narrow_to_u8_round() {
+        let data: Vec<u8> = [32896u16, 65535]
+            .iter()
+            .flat_map(|v| v.to_ne_bytes())
+            .collect();
+        let s = make_slice(&data, 2, 1, PixelDescriptor::GRAY16);
+        let buf = s.try_narrow_to_u8(DepthPolicy::Round).unwrap();
+        assert_eq!(buf.as_contiguous_bytes().unwrap(), &[128, 255]);
+    }
+
+    #[test]
+    fn try_narrow_to_u8_forbid() {
+        let data: Vec<u8> = [32896u16].iter().flat_map(|v| v.to_ne_bytes()).collect();
+        let s = make_slice(&data, 1, 1, PixelDescriptor::GRAY16);
+        let err = s.try_narrow_to_u8(DepthPolicy::Forbid).unwrap_err();
+        assert_eq!(err, ConvertError::DepthReductionForbidden);
+    }
+
+    #[test]
+    fn try_narrow_to_u8_noop_on_u8() {
+        let data = [42, 99];
+        let s = make_slice(&data, 2, 1, PixelDescriptor::GRAY8);
+        // Forbid should still succeed when no actual reduction needed
+        let buf = s.try_narrow_to_u8(DepthPolicy::Forbid).unwrap();
+        assert_eq!(buf.as_contiguous_bytes().unwrap(), &[42, 99]);
     }
 }
