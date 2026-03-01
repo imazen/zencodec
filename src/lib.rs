@@ -59,7 +59,9 @@ pub use buffer::{
 };
 pub use capabilities::{CodecCapabilities, HasUnsupportedOperation, UnsupportedOperation};
 pub use color::{ColorContext, ColorProfileSource, NamedProfile, WorkingColorSpace};
-pub use convert::{AlphaPolicy, ConvertError, ConvertOptions, DepthPolicy, GrayExpand};
+pub use convert::{
+    AlphaPolicy, ConvertError, ConvertOptions, DepthPolicy, GrayExpand, LumaCoefficients,
+};
 pub use format::ImageFormat;
 pub use gainmap::GainMapMetadata;
 pub use info::{

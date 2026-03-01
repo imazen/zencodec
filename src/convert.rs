@@ -60,6 +60,16 @@ pub enum DepthPolicy {
     Forbid,
 }
 
+/// Luma coefficients for RGB→Gray conversion.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum LumaCoefficients {
+    /// BT.709: `0.2126R + 0.7152G + 0.0722B` (HDTV, sRGB).
+    Bt709,
+    /// BT.601: `0.299R + 0.587G + 0.114B` (SDTV, JPEG).
+    Bt601,
+}
+
 /// Explicit options for pixel format conversion. All lossy
 /// operations require a policy choice — no silent defaults.
 #[derive(Clone, Copy, Debug)]
@@ -70,6 +80,9 @@ pub struct ConvertOptions {
     pub alpha_policy: AlphaPolicy,
     /// How to handle depth reduction.
     pub depth_policy: DepthPolicy,
+    /// Luma coefficients for RGB→Gray conversion. `None` means
+    /// RGB→Gray is forbidden (returns `ConvertError::RgbToGray`).
+    pub luma: Option<LumaCoefficients>,
 }
 
 /// Error from [`PixelSlice::convert()`].
@@ -884,6 +897,7 @@ mod tests {
                     gray_expand: GrayExpand::Broadcast,
                     alpha_policy: AlphaPolicy::Forbid,
                     depth_policy: DepthPolicy::Round,
+                    luma: None,
                 },
             )
             .unwrap_err();
@@ -902,6 +916,7 @@ mod tests {
                     gray_expand: GrayExpand::Broadcast,
                     alpha_policy: AlphaPolicy::DiscardIfOpaque,
                     depth_policy: DepthPolicy::Round,
+                    luma: None,
                 },
             )
             .unwrap();
@@ -923,6 +938,7 @@ mod tests {
                     gray_expand: GrayExpand::Broadcast,
                     alpha_policy: AlphaPolicy::DiscardIfOpaque,
                     depth_policy: DepthPolicy::Round,
+                    luma: None,
                 },
             )
             .unwrap_err();
@@ -941,6 +957,7 @@ mod tests {
                     gray_expand: GrayExpand::Broadcast,
                     alpha_policy: AlphaPolicy::DiscardUnchecked,
                     depth_policy: DepthPolicy::Round,
+                    luma: None,
                 },
             )
             .unwrap();
@@ -959,6 +976,7 @@ mod tests {
                     gray_expand: GrayExpand::Broadcast,
                     alpha_policy: AlphaPolicy::DiscardUnchecked,
                     depth_policy: DepthPolicy::Forbid,
+                    luma: None,
                 },
             )
             .unwrap_err();
