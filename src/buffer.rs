@@ -80,6 +80,22 @@ impl ChannelLayout {
     pub const fn has_alpha(self) -> bool {
         matches!(self, Self::GrayAlpha | Self::Rgba | Self::Bgra)
     }
+
+    /// Convert to [`ColorModel`](crate::ColorModel) and [`ByteOrder`](crate::ByteOrder).
+    #[inline]
+    pub const fn color_model_and_byte_order(
+        self,
+    ) -> (
+        crate::pixel_format::ColorModel,
+        crate::pixel_format::ByteOrder,
+    ) {
+        use crate::pixel_format::{ByteOrder, ColorModel};
+        match self {
+            Self::Gray | Self::GrayAlpha => (ColorModel::Gray, ByteOrder::Native),
+            Self::Rgb | Self::Rgba => (ColorModel::Rgb, ByteOrder::Native),
+            Self::Bgra => (ColorModel::Rgb, ByteOrder::Bgr),
+        }
+    }
 }
 
 /// Alpha channel interpretation.
