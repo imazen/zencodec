@@ -325,7 +325,7 @@ impl<P> PixelSlice<'_, P> {
     /// # Panics
     ///
     /// Panics if the source uses an unsupported channel type (F32, F16, I16).
-    pub fn to_alpha(&self) -> PixelBuffer {
+    pub fn to_with_alpha(&self) -> PixelBuffer {
         let desc = self.descriptor();
         let target = match desc.layout {
             ChannelLayout::Gray => ChannelLayout::GrayAlpha,
@@ -333,7 +333,7 @@ impl<P> PixelSlice<'_, P> {
             other => other,
         };
         self.convert(target, desc.channel_type, GrayExpand::default())
-            .expect("to_alpha: add-alpha conversion should not fail")
+            .expect("to_with_alpha: add-alpha conversion should not fail")
     }
 
     /// Widen to U16 depth. No-op copy if already U16.
@@ -426,7 +426,7 @@ mod tests {
     fn rgb_to_rgba_add_alpha() {
         let data = [10, 20, 30, 40, 50, 60];
         let s = make_slice(&data, 2, 1, PixelDescriptor::RGB8);
-        let buf = s.to_alpha();
+        let buf = s.to_with_alpha();
         let bytes = buf.as_contiguous_bytes().unwrap();
         assert_eq!(bytes, &[10, 20, 30, 255, 40, 50, 60, 255]);
         assert_eq!(buf.descriptor().layout, ChannelLayout::Rgba);
@@ -437,7 +437,7 @@ mod tests {
     fn gray_to_grayalpha_add_alpha() {
         let data = [42, 99];
         let s = make_slice(&data, 2, 1, PixelDescriptor::GRAY8);
-        let buf = s.to_alpha();
+        let buf = s.to_with_alpha();
         let bytes = buf.as_contiguous_bytes().unwrap();
         assert_eq!(bytes, &[42, 255, 99, 255]);
         assert_eq!(buf.descriptor().layout, ChannelLayout::GrayAlpha);
@@ -562,7 +562,7 @@ mod tests {
             7, 8, 9, 10, 11, 12, // row 1: pixels (7,8,9) and (10,11,12)
         ];
         let s = make_slice(&data, 2, 2, PixelDescriptor::RGB8);
-        let buf = s.to_alpha();
+        let buf = s.to_with_alpha();
         let bytes = buf.as_contiguous_bytes().unwrap();
         assert_eq!(
             bytes,
