@@ -26,6 +26,10 @@ pub enum ChannelType {
     U8 = 1,
     /// 16-bit unsigned integer (2 bytes per channel).
     U16 = 2,
+    /// 16-bit IEEE 754 half-precision float (2 bytes per channel).
+    ///
+    /// Used by JXL, OpenEXR, and some GPU pipelines.
+    F16 = 3,
     /// 32-bit floating point (4 bytes per channel).
     F32 = 4,
 }
@@ -34,7 +38,11 @@ impl ChannelType {
     /// Byte size of a single channel value.
     #[inline]
     pub const fn byte_size(self) -> usize {
-        self as usize
+        match self {
+            Self::U8 => 1,
+            Self::U16 | Self::F16 => 2,
+            Self::F32 => 4,
+        }
     }
 }
 
@@ -262,6 +270,56 @@ impl PixelDescriptor {
         alpha: AlphaMode::Straight,
         transfer: TransferFunction::Srgb,
     };
+
+    // Conversion helpers for PixelFormat interop ----------------------------
+
+    /// Extract [`ColorModel`](crate::ColorModel) and [`ByteOrder`](crate::ByteOrder)
+    /// from the legacy [`ChannelLayout`] field.
+    pub(crate) const fn color_model_and_byte_order(
+        &self,
+    ) -> (
+        crate::pixel_format::ColorModel,
+        crate::pixel_format::ByteOrder,
+    ) {
+        use crate::pixel_format::{ByteOrder, ColorModel};
+        match self.layout {
+            ChannelLayout::Gray | ChannelLayout::GrayAlpha => (ColorModel::Gray, ByteOrder::Native),
+            ChannelLayout::Rgb | ChannelLayout::Rgba => (ColorModel::Rgb, ByteOrder::Native),
+            ChannelLayout::Bgra => (ColorModel::Rgb, ByteOrder::Bgr),
+        }
+    }
+
+    /// Create a [`PixelDescriptor`] from [`ColorModel`](crate::ColorModel)
+    /// and [`ByteOrder`](crate::ByteOrder), mapping back to the legacy
+    /// [`ChannelLayout`].
+    ///
+    /// Non-RGB color models (YCbCr, Oklab, Xyz, Lab) map to the RGB layout
+    /// family since [`ChannelLayout`] has no variants for them.
+    pub(crate) const fn from_color_model_and_byte_order(
+        channel_type: ChannelType,
+        color_model: crate::pixel_format::ColorModel,
+        alpha: AlphaMode,
+        transfer: TransferFunction,
+        byte_order: crate::pixel_format::ByteOrder,
+    ) -> Self {
+        use crate::pixel_format::{ByteOrder, ColorModel};
+
+        let layout = match (color_model, byte_order, alpha) {
+            (ColorModel::Gray, _, AlphaMode::None) => ChannelLayout::Gray,
+            (ColorModel::Gray, _, _) => ChannelLayout::GrayAlpha,
+            (_, ByteOrder::Bgr, _) => ChannelLayout::Bgra,
+            // RGB, YCbCr, Oklab, Xyz, Lab → Rgb or Rgba
+            (_, ByteOrder::Native, AlphaMode::None) => ChannelLayout::Rgb,
+            (_, ByteOrder::Native, _) => ChannelLayout::Rgba,
+        };
+
+        Self {
+            channel_type,
+            layout,
+            alpha,
+            transfer,
+        }
+    }
 
     // Methods -----------------------------------------------------------------
 
@@ -1232,6 +1290,7 @@ mod tests {
     fn channel_type_byte_size() {
         assert_eq!(ChannelType::U8.byte_size(), 1);
         assert_eq!(ChannelType::U16.byte_size(), 2);
+        assert_eq!(ChannelType::F16.byte_size(), 2);
         assert_eq!(ChannelType::F32.byte_size(), 4);
     }
 

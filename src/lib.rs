@@ -32,6 +32,7 @@ mod limits;
 mod orientation;
 mod output;
 mod pixel;
+mod pixel_format;
 mod traits;
 
 pub use buffer::{
@@ -52,6 +53,7 @@ pub use output::{
     TypedEncodeFrame,
 };
 pub use pixel::{GrayAlpha, PixelData};
+pub use pixel_format::{ByteOrder, ColorModel, PixelFormat, Subsampling, YuvMatrix};
 pub use traits::{
     DecodeJob, Decoder, DecoderConfig, EncodeJob, Encoder, EncoderConfig, FrameDecoder,
     FrameEncoder,
