@@ -6,6 +6,7 @@
 //! continues to work unchanged.
 
 pub use zenpixels::{
-    AlphaMode, Bgrx, BufferError, ChannelLayout, ChannelType, ColorPrimaries, Pixel, PixelBuffer,
-    PixelDescriptor, PixelFormat, PixelSlice, PixelSliceMut, Rgbx, SignalRange, TransferFunction,
+    AlphaMode, Bgrx, BufferError, ChannelLayout, ChannelType, ColorPrimaries, InterleaveFormat,
+    Pixel, PixelBuffer, PixelDescriptor, PixelFormat, PixelSlice, PixelSliceMut, Rgbx, SignalRange,
+    TransferFunction,
 };

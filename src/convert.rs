@@ -231,8 +231,8 @@ fn convert_row(
     dst_desc: &PixelDescriptor,
     gray_expand: GrayExpand,
 ) {
-    let src_ty = src_desc.channel_type;
-    let dst_ty = dst_desc.channel_type;
+    let src_ty = src_desc.channel_type();
+    let dst_ty = dst_desc.channel_type();
     let src_bpp = src_desc.bytes_per_pixel();
     let dst_bpp = dst_desc.bytes_per_pixel();
     let src_cs = src_ty.byte_size();
@@ -241,7 +241,7 @@ fn convert_row(
     for x in 0..width {
         let si = x * src_bpp;
         let di = x * dst_bpp;
-        let (c0, c1, c2, a) = read_rgba(src, si, src_ty, src_desc.layout, src_cs, gray_expand);
+        let (c0, c1, c2, a) = read_rgba(src, si, src_ty, src_desc.layout(), src_cs, gray_expand);
         write_pixel(
             dst,
             di,
@@ -251,7 +251,7 @@ fn convert_row(
             a,
             src_ty,
             dst_ty,
-            dst_desc.layout,
+            dst_desc.layout(),
             dst_cs,
         );
     }
@@ -261,17 +261,17 @@ fn convert_row(
 
 /// Check if all alpha values in the source are fully opaque.
 fn is_fully_opaque(src: &[u8], width: usize, height: usize, desc: &PixelDescriptor) -> bool {
-    if !desc.layout.has_alpha() {
+    if !desc.layout().has_alpha() {
         return true;
     }
     let bpp = desc.bytes_per_pixel();
-    let cs = desc.channel_type.byte_size();
-    let alpha_offset = (desc.layout.channels() - 1) * cs;
-    let max = max_value(desc.channel_type);
+    let cs = desc.channel_type().byte_size();
+    let alpha_offset = (desc.layout().channels() - 1) * cs;
+    let max = max_value(desc.channel_type());
     for y in 0..height {
         for x in 0..width {
             let off = (y * width + x) * bpp + alpha_offset;
-            if read_ch(src, off, desc.channel_type) != max {
+            if read_ch(src, off, desc.channel_type()) != max {
                 return false;
             }
         }
@@ -289,13 +289,13 @@ fn validate_policies(
     options: &ConvertOptions,
 ) -> Result<(), ConvertError> {
     // Alpha removal check
-    let drops_alpha = src_desc.layout.has_alpha() && !dst_layout.has_alpha();
+    let drops_alpha = src_desc.layout().has_alpha() && !dst_layout.has_alpha();
     if drops_alpha && options.alpha_policy == AlphaPolicy::Forbid {
         return Err(ConvertError::AlphaRemovalForbidden);
     }
 
     // Depth reduction check
-    let reduces_depth = src_desc.channel_type == ChannelType::U16 && dst_ty == ChannelType::U8;
+    let reduces_depth = src_desc.channel_type() == ChannelType::U16 && dst_ty == ChannelType::U8;
     if reduces_depth && options.depth_policy == DepthPolicy::Forbid {
         return Err(ConvertError::DepthReductionForbidden);
     }
@@ -310,8 +310,8 @@ fn build_target_descriptor(
     target_depth: ChannelType,
 ) -> PixelDescriptor {
     let alpha = if target_layout.has_alpha() {
-        if src_desc.layout.has_alpha() {
-            src_desc.alpha
+        if src_desc.layout().has_alpha() {
+            src_desc.alpha()
         } else {
             Some(AlphaMode::Straight)
         }
@@ -319,7 +319,7 @@ fn build_target_descriptor(
         None
     };
 
-    PixelDescriptor::new(target_depth, target_layout, alpha, src_desc.transfer)
+    PixelDescriptor::new(target_depth, target_layout, alpha, src_desc.transfer())
         .with_primaries(src_desc.primaries)
         .with_signal_range(src_desc.signal_range)
 }
@@ -339,8 +339,7 @@ fn convert_impl<P>(
     let dst_desc = build_target_descriptor(&src_desc, target_layout, target_depth);
 
     // Allocate output buffer (handles alignment internally)
-    let mut buf = PixelBuffer::new(src.width(), src.rows(), dst_desc)
-        .with_working_space(src.working_space());
+    let mut buf = PixelBuffer::new(src.width(), src.rows(), dst_desc);
     if let Some(ctx) = src.color_context() {
         buf = buf.with_color_context(Arc::clone(ctx));
     }
@@ -348,7 +347,7 @@ fn convert_impl<P>(
     // Write pixel data
     if h > 0 && w > 0 {
         let is_identity =
-            src_desc.channel_type == target_depth && src_desc.layout == target_layout;
+            src_desc.channel_type() == target_depth && src_desc.layout() == target_layout;
         let mut dst = buf.as_slice_mut();
         for y in 0..h as u32 {
             let src_row = src.row(y);
@@ -379,8 +378,8 @@ pub trait PixelSliceConvertExt<P> {
     ///
     /// Returns a new tightly-packed [`PixelBuffer`] with the target format.
     /// **Allocates** a new buffer.
-    /// Color metadata (transfer function, primaries, working space, color
-    /// context) is preserved from the source.
+    /// Color metadata (transfer function, primaries, color context)
+    /// is preserved from the source.
     ///
     /// # Errors
     ///
@@ -419,10 +418,8 @@ pub trait PixelSliceConvertExt<P> {
     ///
     /// Returns [`ConvertError`] if the source uses an unsupported channel type,
     /// or if depth reduction is forbidden by the given policy.
-    fn try_narrow_to_u8_with_policy(
-        &self,
-        depth: DepthPolicy,
-    ) -> Result<PixelBuffer, ConvertError>;
+    fn try_narrow_to_u8_with_policy(&self, depth: DepthPolicy)
+    -> Result<PixelBuffer, ConvertError>;
 
     /// Add an alpha channel. No-op copy if already has alpha.
     ///
@@ -458,8 +455,8 @@ impl<P> PixelSliceConvertExt<P> for PixelSlice<'_, P> {
     ) -> Result<PixelBuffer, ConvertError> {
         let src_desc = self.descriptor();
         validate_conversion(
-            src_desc.channel_type,
-            src_desc.layout,
+            src_desc.channel_type(),
+            src_desc.layout(),
             target_depth,
             target_layout,
         )?;
@@ -475,15 +472,15 @@ impl<P> PixelSliceConvertExt<P> for PixelSlice<'_, P> {
     ) -> Result<PixelBuffer, ConvertError> {
         let src_desc = self.descriptor();
         validate_conversion(
-            src_desc.channel_type,
-            src_desc.layout,
+            src_desc.channel_type(),
+            src_desc.layout(),
             target_depth,
             target_layout,
         )?;
         validate_policies(&src_desc, target_layout, target_depth, &options)?;
 
         // Runtime opacity check for DiscardIfOpaque
-        let drops_alpha = src_desc.layout.has_alpha() && !target_layout.has_alpha();
+        let drops_alpha = src_desc.layout().has_alpha() && !target_layout.has_alpha();
         if drops_alpha && options.alpha_policy == AlphaPolicy::DiscardIfOpaque {
             let w = self.width() as usize;
             let h = self.rows() as usize;
@@ -509,27 +506,27 @@ impl<P> PixelSliceConvertExt<P> for PixelSlice<'_, P> {
         depth: DepthPolicy,
     ) -> Result<PixelBuffer, ConvertError> {
         let desc = self.descriptor();
-        let reduces = desc.channel_type == ChannelType::U16;
+        let reduces = desc.channel_type() == ChannelType::U16;
         if reduces && depth == DepthPolicy::Forbid {
             return Err(ConvertError::DepthReductionForbidden);
         }
-        PixelSliceConvertExt::convert(self, desc.layout, ChannelType::U8, GrayExpand::Broadcast)
+        PixelSliceConvertExt::convert(self, desc.layout(), ChannelType::U8, GrayExpand::Broadcast)
     }
 
     fn to_with_alpha(&self) -> PixelBuffer {
         let desc = self.descriptor();
-        let target = match desc.layout {
+        let target = match desc.layout() {
             ChannelLayout::Gray => ChannelLayout::GrayAlpha,
             ChannelLayout::Rgb => ChannelLayout::Rgba,
             other => other,
         };
-        PixelSliceConvertExt::convert(self, target, desc.channel_type, GrayExpand::Broadcast)
+        PixelSliceConvertExt::convert(self, target, desc.channel_type(), GrayExpand::Broadcast)
             .expect("to_with_alpha: add-alpha conversion should not fail")
     }
 
     fn to_u16(&self) -> PixelBuffer {
         let desc = self.descriptor();
-        PixelSliceConvertExt::convert(self, desc.layout, ChannelType::U16, GrayExpand::Broadcast)
+        PixelSliceConvertExt::convert(self, desc.layout(), ChannelType::U16, GrayExpand::Broadcast)
             .expect("to_u16: depth conversion should not fail")
     }
 
@@ -606,8 +603,8 @@ mod tests {
         let buf = s.to_with_alpha();
         let bytes = buf.as_contiguous_bytes().unwrap();
         assert_eq!(bytes, &[10, 20, 30, 255, 40, 50, 60, 255]);
-        assert_eq!(buf.descriptor().layout, ChannelLayout::Rgba);
-        assert_eq!(buf.descriptor().alpha, Some(AlphaMode::Straight));
+        assert_eq!(buf.descriptor().layout(), ChannelLayout::Rgba);
+        assert_eq!(buf.descriptor().alpha(), Some(AlphaMode::Straight));
     }
 
     #[test]
@@ -617,7 +614,7 @@ mod tests {
         let buf = s.to_with_alpha();
         let bytes = buf.as_contiguous_bytes().unwrap();
         assert_eq!(bytes, &[42, 255, 99, 255]);
-        assert_eq!(buf.descriptor().layout, ChannelLayout::GrayAlpha);
+        assert_eq!(buf.descriptor().layout(), ChannelLayout::GrayAlpha);
     }
 
     #[test]
@@ -629,7 +626,7 @@ mod tests {
             .unwrap();
         let bytes = buf.as_contiguous_bytes().unwrap();
         assert_eq!(bytes, &[10, 20, 30, 40, 50, 60]);
-        assert_eq!(buf.descriptor().alpha, None);
+        assert_eq!(buf.descriptor().alpha(), None);
     }
 
     #[test]
@@ -753,18 +750,21 @@ mod tests {
     #[test]
     fn preserves_metadata() {
         use crate::buffer::{ColorPrimaries, SignalRange, TransferFunction};
-        use crate::color::WorkingColorSpace;
 
         let data = [42];
-        let desc = PixelDescriptor::new(ChannelType::U8, ChannelLayout::Gray, None, TransferFunction::Srgb)
-            .with_primaries(ColorPrimaries::Bt709)
-            .with_signal_range(SignalRange::Full);
-        let s = make_slice(&data, 1, 1, desc).with_working_space(WorkingColorSpace::LinearSrgb);
+        let desc = PixelDescriptor::new(
+            ChannelType::U8,
+            ChannelLayout::Gray,
+            None,
+            TransferFunction::Srgb,
+        )
+        .with_primaries(ColorPrimaries::Bt709)
+        .with_signal_range(SignalRange::Full);
+        let s = make_slice(&data, 1, 1, desc);
         let buf = s.to_u16();
-        assert_eq!(buf.descriptor().transfer, TransferFunction::Srgb);
+        assert_eq!(buf.descriptor().transfer(), TransferFunction::Srgb);
         assert_eq!(buf.descriptor().primaries, ColorPrimaries::Bt709);
         assert_eq!(buf.descriptor().signal_range, SignalRange::Full);
-        assert_eq!(buf.working_space(), WorkingColorSpace::LinearSrgb);
     }
 
     #[test]
@@ -943,9 +943,7 @@ mod tests {
             .flat_map(|v| v.to_ne_bytes())
             .collect();
         let s = make_slice(&data, 2, 1, PixelDescriptor::GRAY16);
-        let buf = s
-            .try_narrow_to_u8_with_policy(DepthPolicy::Round)
-            .unwrap();
+        let buf = s.try_narrow_to_u8_with_policy(DepthPolicy::Round).unwrap();
         assert_eq!(buf.as_contiguous_bytes().unwrap(), &[128, 255]);
     }
 
@@ -964,9 +962,7 @@ mod tests {
         let data = [42, 99];
         let s = make_slice(&data, 2, 1, PixelDescriptor::GRAY8);
         // Forbid should still succeed when no actual reduction needed
-        let buf = s
-            .try_narrow_to_u8_with_policy(DepthPolicy::Forbid)
-            .unwrap();
+        let buf = s.try_narrow_to_u8_with_policy(DepthPolicy::Forbid).unwrap();
         assert_eq!(buf.as_contiguous_bytes().unwrap(), &[42, 99]);
     }
 }

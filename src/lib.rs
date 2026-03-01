@@ -54,11 +54,12 @@ mod traits;
 // --- Always-available exports ---
 
 pub use buffer::{
-    AlphaMode, Bgrx, BufferError, ChannelLayout, ChannelType, ColorPrimaries, Pixel, PixelBuffer,
-    PixelDescriptor, PixelFormat, PixelSlice, PixelSliceMut, Rgbx, SignalRange, TransferFunction,
+    AlphaMode, Bgrx, BufferError, ChannelLayout, ChannelType, ColorPrimaries, InterleaveFormat,
+    Pixel, PixelBuffer, PixelDescriptor, PixelFormat, PixelSlice, PixelSliceMut, Rgbx, SignalRange,
+    TransferFunction,
 };
 pub use capabilities::{CodecCapabilities, HasUnsupportedOperation, UnsupportedOperation};
-pub use color::{ColorContext, ColorProfileSource, NamedProfile, WorkingColorSpace};
+pub use color::{ColorContext, ColorProfileSource, NamedProfile};
 pub use convert::{
     AlphaPolicy, ConvertError, ConvertOptions, DepthPolicy, GrayExpand, LumaCoefficients,
     PixelSliceConvertExt,
