@@ -91,6 +91,10 @@ pub use traits::{
     EncodeRgbaF32, EncoderConfig, FrameDecode, FrameEncodeRgb8, FrameEncodeRgba8,
 };
 
+// Re-export PixelBufferConvertExt so codec crates get to_rgb8() etc. automatically.
+#[cfg(feature = "codec")]
+pub use zenpixels_convert::ext::PixelBufferConvertExt;
+
 // Re-exports for codec implementors and users (codec feature).
 #[cfg(feature = "codec")]
 pub use enough::{Stop, Unstoppable};
