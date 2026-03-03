@@ -877,7 +877,7 @@ impl OutputInfo {
 
 /// Estimated resource cost of a decode operation.
 ///
-/// Returned by [`DecodeJob::estimated_cost()`](crate::DecodeJob::estimated_cost).
+/// Returned by `DecodeJob::estimated_cost()`.
 /// Use this for resource management: reject oversized images, limit
 /// concurrency, enforce memory budgets, or choose processing strategies
 /// before committing to a decode.
@@ -930,7 +930,7 @@ impl DecodeCost {
 
 /// Estimated resource cost of an encode operation.
 ///
-/// Returned by [`EncodeJob::estimated_cost()`](crate::EncodeJob::estimated_cost).
+/// Returned by `EncodeJob::estimated_cost()`.
 /// Use this for resource management before committing to an encode.
 ///
 /// The caller already knows the input dimensions and pixel format, so

@@ -22,6 +22,8 @@ use rgb::{Gray, Rgb, Rgba};
 
 #[cfg(feature = "codec")]
 use crate::{PixelBuffer, PixelDescriptor};
+#[cfg(feature = "codec")]
+use zenpixels_convert::ext::PixelBufferConvertExt;
 
 /// Output from an encode operation.
 #[derive(Clone, Debug, PartialEq, Eq)]

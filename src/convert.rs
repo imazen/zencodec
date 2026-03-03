@@ -308,7 +308,7 @@ fn build_target_descriptor(
     src_desc: &PixelDescriptor,
     target_layout: ChannelLayout,
     target_depth: ChannelType,
-) -> PixelDescriptor {
+) -> Result<PixelDescriptor, ConvertError> {
     let alpha = if target_layout.has_alpha() {
         if src_desc.layout().has_alpha() {
             src_desc.alpha()
@@ -319,9 +319,12 @@ fn build_target_descriptor(
         None
     };
 
-    PixelDescriptor::new(target_depth, target_layout, alpha, src_desc.transfer())
+    let format = zenpixels::PixelFormat::from_parts(target_depth, target_layout, alpha)
+        .ok_or(ConvertError::UnsupportedLayout)?;
+    Ok(PixelDescriptor::from_pixel_format(format)
+        .with_transfer(src_desc.transfer())
         .with_primaries(src_desc.primaries)
-        .with_signal_range(src_desc.signal_range)
+        .with_signal_range(src_desc.signal_range))
 }
 
 /// Perform the conversion from src PixelSlice to a new PixelBuffer.
@@ -336,7 +339,7 @@ fn convert_impl<P>(
     let h = src.rows() as usize;
 
     // Build target descriptor, preserving color metadata
-    let dst_desc = build_target_descriptor(&src_desc, target_layout, target_depth);
+    let dst_desc = build_target_descriptor(&src_desc, target_layout, target_depth)?;
 
     // Allocate output buffer (handles alignment internally)
     let mut buf = PixelBuffer::new(src.width(), src.rows(), dst_desc);
@@ -705,17 +708,14 @@ mod tests {
     }
 
     #[test]
-    fn bgra_depth_conversion() {
-        // Bgra->Bgra with depth change is allowed (same layout, positional copy)
+    fn bgra_depth_conversion_unsupported() {
+        // Bgra16 doesn't exist in the flat PixelFormat enum, so Bgra8->U16 fails
         let data = [10, 20, 30, 255]; // B=10, G=20, R=30, A=255
         let s = make_slice(&data, 1, 1, PixelDescriptor::BGRA8);
-        let buf = s.to_u16();
-        let bytes = buf.as_contiguous_bytes().unwrap();
-        let expected: Vec<u8> = [10u16 * 257, 20u16 * 257, 30u16 * 257, 255u16 * 257]
-            .iter()
-            .flat_map(|v| v.to_ne_bytes())
-            .collect();
-        assert_eq!(bytes, &expected[..]);
+        let err = s
+            .convert(ChannelLayout::Bgra, ChannelType::U16, GrayExpand::Broadcast)
+            .unwrap_err();
+        assert_eq!(err, ConvertError::UnsupportedLayout);
     }
 
     #[test]
@@ -919,7 +919,9 @@ mod tests {
     fn try_add_alpha_returns_result() {
         let data = [10, 20, 30];
         let s = make_slice(&data, 1, 1, PixelDescriptor::RGB8);
-        let buf = s.try_add_alpha().unwrap();
+        let buf = s
+            .convert(ChannelLayout::Rgba, ChannelType::U8, GrayExpand::Broadcast)
+            .unwrap();
         assert_eq!(buf.as_contiguous_bytes().unwrap(), &[10, 20, 30, 255]);
     }
 
@@ -927,7 +929,9 @@ mod tests {
     fn try_widen_to_u16_returns_result() {
         let data = [100];
         let s = make_slice(&data, 1, 1, PixelDescriptor::GRAY8);
-        let buf = s.try_widen_to_u16().unwrap();
+        let buf = s
+            .convert(ChannelLayout::Gray, ChannelType::U16, GrayExpand::Broadcast)
+            .unwrap();
         let bytes = buf.as_contiguous_bytes().unwrap();
         let expected: Vec<u8> = [100u16 * 257]
             .iter()

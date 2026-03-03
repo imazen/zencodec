@@ -11,7 +11,7 @@ repository = "https://github.com/imazen/zencodec-types"
 
 [features]
 default = ["codec"]
-codec = ["dep:rgb", "dep:imgref", "dep:enough", "dep:bytemuck", "zenpixels/codec"]
+codec = ["dep:rgb", "dep:imgref", "dep:enough", "dep:bytemuck", "dep:zenpixels-convert", "zenpixels/buffer"]
 
 [dependencies]
 zenpixels = { version = "0.1", path = "../zenpixels", features = ["buffer"] }
@@ -19,4 +19,5 @@ bytemuck = { version = "1.25", default-features = false, features = ["extern_cra
 enough = { version = "0.4", optional = true }
 rgb = { version = "0.8", default-features = false, features = ["as-bytes"], optional = true }
 imgref = { version = "1.12", optional = true }
+zenpixels-convert = { version = "0.1", path = "../zenpixels/convert", features = ["buffer"], optional = true }
 whereat = { version = "0.1", default-features = false }

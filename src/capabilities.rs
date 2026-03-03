@@ -120,8 +120,8 @@ pub trait HasUnsupportedOperation {
 
 /// Describes what a codec supports.
 ///
-/// Returned by [`EncoderConfig::capabilities()`](crate::EncoderConfig::capabilities) and
-/// [`DecoderConfig::capabilities()`](crate::DecoderConfig::capabilities) as a `&'static`
+/// Returned by `EncoderConfig::capabilities()` and
+/// `DecoderConfig::capabilities()` as a `&'static`
 /// reference. The struct uses getter methods so fields can be added over time
 /// without breaking changes.
 ///
@@ -333,7 +333,7 @@ impl CodecCapabilities {
     /// Meaningful effort range `[min, max]`.
     ///
     /// `None` means the codec has no effort tuning —
-    /// [`EncoderConfig::with_effort()`](crate::EncoderConfig::with_effort) is a no-op.
+    /// [`EncoderConfig::with_generic_effort()`](crate::EncoderConfig::with_generic_effort) is a no-op.
     pub const fn effort_range(&self) -> Option<[i32; 2]> {
         self.effort_range
     }
@@ -341,7 +341,7 @@ impl CodecCapabilities {
     /// Meaningful quality range `[min, max]` on the calibrated 0.0–100.0 scale.
     ///
     /// `None` means the codec is lossless-only —
-    /// [`EncoderConfig::with_lossy_quality()`](crate::EncoderConfig::with_lossy_quality) is a no-op.
+    /// [`EncoderConfig::with_generic_quality()`](crate::EncoderConfig::with_generic_quality) is a no-op.
     /// Most lossy codecs return `Some([0.0, 100.0])`.
     pub const fn quality_range(&self) -> Option<[f32; 2]> {
         self.quality_range
@@ -366,25 +366,25 @@ impl CodecCapabilities {
         self.native_alpha
     }
 
-    /// Whether [`Decoder::decode_into()`](crate::Decoder::decode_into) is
+    /// Whether `decode_into()` is
     /// implemented (not just a stub that returns an error).
     pub const fn decode_into(&self) -> bool {
         self.decode_into
     }
 
-    /// Whether [`Encoder::push_rows()`](crate::Encoder::push_rows) /
-    /// [`Encoder::finish()`](crate::Encoder::finish) actually work.
+    /// Whether `push_rows()` / `finish()` actually work
+    /// (row-level encode).
     pub const fn row_level_encode(&self) -> bool {
         self.row_level_encode
     }
 
-    /// Whether [`Encoder::encode_from()`](crate::Encoder::encode_from) works.
+    /// Whether `encode_from()` works (pull-from-source encode).
     pub const fn pull_encode(&self) -> bool {
         self.pull_encode
     }
 
-    /// Whether [`Decoder::decode_rows()`](crate::Decoder::decode_rows)
-    /// pushes real streaming rows (not a single full-frame callback).
+    /// Whether `decode_rows()` pushes real streaming rows
+    /// (not a single full-frame callback).
     pub const fn row_level_decode(&self) -> bool {
         self.row_level_decode
     }
@@ -394,17 +394,17 @@ impl CodecCapabilities {
         self.row_level_frame_encode
     }
 
-    /// Whether [`FrameEncoder::pull_frame()`](crate::FrameEncoder::pull_frame) works.
+    /// Whether `pull_frame()` works (pull-from-source frame encode).
     pub const fn pull_frame_encode(&self) -> bool {
         self.pull_frame_encode
     }
 
-    /// Whether [`FrameDecoder::next_frame_into()`](crate::FrameDecoder::next_frame_into) works.
+    /// Whether `next_frame_into()` works (frame decode into caller buffer).
     pub const fn frame_decode_into(&self) -> bool {
         self.frame_decode_into
     }
 
-    /// Whether [`FrameDecoder::next_frame_rows()`](crate::FrameDecoder::next_frame_rows) works.
+    /// Whether `next_frame_rows()` works (row-level frame decode).
     pub const fn row_level_frame_decode(&self) -> bool {
         self.row_level_frame_decode
     }

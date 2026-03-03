@@ -53,6 +53,7 @@ mod traits;
 
 // --- Always-available exports ---
 
+#[allow(deprecated)]
 pub use buffer::{
     AlphaMode, Bgrx, BufferError, ChannelLayout, ChannelType, ColorPrimaries, InterleaveFormat,
     Pixel, PixelBuffer, PixelDescriptor, PixelFormat, PixelSlice, PixelSliceMut, Rgbx, SignalRange,

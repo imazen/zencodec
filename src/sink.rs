@@ -37,7 +37,7 @@
 /// The codec calls [`demand`](DecodeRowSink::demand) for each strip of rows,
 /// writes decoded pixels directly into the returned buffer at stride offsets,
 /// then calls `demand` again for the next strip. After
-/// [`Decoder::decode_rows()`](crate::Decoder::decode_rows) returns, the last
+/// `decode_rows()` returns, the last
 /// demanded buffer has been fully written.
 ///
 /// The sink controls the stride — it can return tightly-packed buffers
