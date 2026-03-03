@@ -4,9 +4,9 @@
 //!
 //! ```text
 //! ENCODE:
-//!                                  ┌→ Enc (implements EncodeRgb8, EncodeRgba8, ...)
+//!                                  ┌→ Enc (implements Encoder and/or EncodeRgb8, EncodeRgba8, ...)
 //! EncoderConfig → EncodeJob<'a> ──┤
-//!                                  └→ FrameEnc (implements FrameEncodeRgba8, ...)
+//!                                  └→ FrameEnc (implements FrameEncoder and/or FrameEncodeRgba8, ...)
 //!
 //! DECODE:
 //!                                  ┌→ Dec (implements Decode)
@@ -14,14 +14,26 @@
 //!                                  └→ FrameDec (implements FrameDecode)
 //! ```
 //!
-//! Encoding is **typed per-format**: each pixel format the codec accepts is a
-//! separate trait (`EncodeRgb8`, `EncodeRgba8`, etc.). If a codec doesn't
-//! implement a trait, you get a compile error, not a runtime surprise.
+//! # Encoding: two complementary approaches
 //!
-//! Decoding is **type-erased**: the output format is discovered at runtime from
-//! the file. The caller provides a ranked preference list of
-//! [`PixelDescriptor`](crate::PixelDescriptor)s and the decoder picks the best
-//! match it can produce without lossy conversion.
+//! **Type-erased** ([`Encoder`], [`FrameEncoder`]): The encoder accepts any
+//! pixel format at runtime via [`PixelSlice`]. It dispatches internally based
+//! on the descriptor. Good for generic pipelines and codecs that handle many
+//! formats uniformly (e.g. PNM, BMP).
+//!
+//! **Per-format typed** ([`EncodeRgb8`], [`EncodeRgba8`], etc.): Each trait
+//! is a compile-time guarantee that the codec can encode that exact format.
+//! No runtime dispatch needed. Good for codecs with format-specific paths.
+//!
+//! A codec can implement both: type-erased for generic callers, per-format
+//! for callers that know the pixel type statically.
+//!
+//! # Decoding
+//!
+//! Decoding is **type-erased**: the output format is discovered at runtime
+//! from the file. The caller provides a ranked preference list of
+//! [`PixelDescriptor`](crate::PixelDescriptor)s and the decoder picks the
+//! best match it can produce without lossy conversion.
 //!
 //! Color management is explicitly **not** the codec's job. Decoders return
 //! native pixels with ICC/CICP metadata. Encoders accept pixels as-is and
@@ -30,8 +42,8 @@
 use crate::format::ImageFormat;
 use crate::orientation::OrientationHint;
 use crate::{
-    DecodeFrame, DecodeOutput, EncodeOutput, ImageInfo, MetadataView, OutputInfo, PixelDescriptor,
-    PixelSlice, ResourceLimits, Stop,
+    CodecCapabilities, DecodeFrame, DecodeOutput, EncodeFrame, EncodeOutput, ImageInfo,
+    MetadataView, OutputInfo, PixelDescriptor, PixelSlice, PixelSliceMut, ResourceLimits, Stop,
 };
 use rgb::{Gray, Rgb, Rgba};
 
@@ -68,6 +80,13 @@ pub trait EncoderConfig: Clone + Send + Sync {
     /// per-format encode trait is implemented and will work without format
     /// conversion. Must not be empty.
     fn supported_descriptors() -> &'static [PixelDescriptor];
+
+    /// Codec capabilities (metadata support, cancellation, etc.).
+    ///
+    /// Returns a static reference describing what this codec supports.
+    fn capabilities() -> &'static CodecCapabilities {
+        &CodecCapabilities::EMPTY
+    }
 
     /// Set encoding quality on a calibrated 0.0–100.0 scale.
     ///
@@ -335,6 +354,163 @@ pub trait FrameEncodeRgba8 {
 }
 
 // ===========================================================================
+// Type-erased encode traits
+// ===========================================================================
+
+/// Type-erased single-image encoder.
+///
+/// Accepts any pixel format at runtime via [`PixelSlice`] (type-erased).
+/// The encoder dispatches internally based on the pixel descriptor.
+///
+/// Three mutually exclusive usage paths:
+/// - [`encode()`](Encoder::encode) — all at once, consumes self
+/// - [`push_rows()`](Encoder::push_rows) + [`finish()`](Encoder::finish) — caller pushes rows
+/// - [`encode_from()`](Encoder::encode_from) — encoder pulls rows from a callback
+///
+/// Codecs that need full-frame data (e.g. AV1) may buffer internally
+/// when rows are pushed or pulled incrementally.
+///
+/// Codecs may implement this alongside per-format traits like [`EncodeRgb8`].
+pub trait Encoder: Sized {
+    /// The codec-specific error type.
+    ///
+    /// Must implement `From<UnsupportedOperation>` so default method
+    /// implementations can return proper errors for unimplemented paths.
+    type Error: core::error::Error + Send + Sync + 'static + From<crate::UnsupportedOperation>;
+
+    /// Suggested strip height for optimal row-level encoding.
+    ///
+    /// For JPEG, typically the MCU height (8 or 16 rows).
+    /// For PNG, typically 1 (row-at-a-time filtering).
+    ///
+    /// Returns 0 if the codec has no preference or doesn't support
+    /// row-level encoding.
+    fn preferred_strip_height(&self) -> u32 {
+        0
+    }
+
+    /// Encode a complete image at once (consumes self).
+    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error>;
+
+    /// Push scanline rows incrementally.
+    ///
+    /// # Errors
+    ///
+    /// Default returns [`UnsupportedOperation::RowLevelEncode`](crate::UnsupportedOperation::RowLevelEncode).
+    fn push_rows(&mut self, _rows: PixelSlice<'_>) -> Result<(), Self::Error> {
+        Err(crate::UnsupportedOperation::RowLevelEncode.into())
+    }
+
+    /// Finalize after push_rows. Returns encoded output.
+    ///
+    /// # Errors
+    ///
+    /// Default returns [`UnsupportedOperation::RowLevelEncode`](crate::UnsupportedOperation::RowLevelEncode).
+    fn finish(self) -> Result<EncodeOutput, Self::Error> {
+        Err(crate::UnsupportedOperation::RowLevelEncode.into())
+    }
+
+    /// Encode by pulling rows from a source callback.
+    ///
+    /// The encoder calls `source` repeatedly with the row index and a
+    /// mutable buffer slice. The callback fills the buffer and returns
+    /// the number of rows written. Returns `0` to signal end of image.
+    ///
+    /// # Errors
+    ///
+    /// Default returns [`UnsupportedOperation::PullEncode`](crate::UnsupportedOperation::PullEncode).
+    fn encode_from(
+        self,
+        _source: &mut dyn FnMut(u32, PixelSliceMut<'_>) -> usize,
+    ) -> Result<EncodeOutput, Self::Error> {
+        Err(crate::UnsupportedOperation::PullEncode.into())
+    }
+}
+
+/// Type-erased animation encoder.
+///
+/// Accepts any pixel format at runtime via [`PixelSlice`] (type-erased).
+///
+/// Three mutually exclusive per-frame paths:
+/// - [`push_frame()`](FrameEncoder::push_frame) /
+///   [`push_encode_frame()`](FrameEncoder::push_encode_frame) — complete frame at once
+/// - [`begin_frame()`](FrameEncoder::begin_frame) +
+///   [`push_rows()`](FrameEncoder::push_rows) +
+///   [`end_frame()`](FrameEncoder::end_frame) — caller pushes rows
+/// - [`pull_frame()`](FrameEncoder::pull_frame) — encoder pulls rows from a callback
+///
+/// Codecs may implement this alongside per-format frame traits like [`FrameEncodeRgba8`].
+pub trait FrameEncoder: Sized {
+    /// The codec-specific error type.
+    ///
+    /// Must implement `From<UnsupportedOperation>` so default method
+    /// implementations can return proper errors for unimplemented paths.
+    type Error: core::error::Error + Send + Sync + 'static + From<crate::UnsupportedOperation>;
+
+    /// Push a complete full-canvas frame.
+    fn push_frame(&mut self, pixels: PixelSlice<'_>, duration_ms: u32) -> Result<(), Self::Error>;
+
+    /// Push a frame with sub-canvas positioning and compositing.
+    ///
+    /// Default: delegates to [`push_frame()`](FrameEncoder::push_frame).
+    fn push_encode_frame(&mut self, frame: EncodeFrame<'_>) -> Result<(), Self::Error> {
+        self.push_frame(frame.pixels, frame.duration_ms)
+    }
+
+    /// Begin a new frame (for row-level building).
+    ///
+    /// # Errors
+    ///
+    /// Default returns [`UnsupportedOperation::RowLevelFrameEncode`](crate::UnsupportedOperation::RowLevelFrameEncode).
+    fn begin_frame(&mut self, _duration_ms: u32) -> Result<(), Self::Error> {
+        Err(crate::UnsupportedOperation::RowLevelFrameEncode.into())
+    }
+
+    /// Push rows into the current frame (after begin_frame).
+    ///
+    /// # Errors
+    ///
+    /// Default returns [`UnsupportedOperation::RowLevelFrameEncode`](crate::UnsupportedOperation::RowLevelFrameEncode).
+    fn push_rows(&mut self, _rows: PixelSlice<'_>) -> Result<(), Self::Error> {
+        Err(crate::UnsupportedOperation::RowLevelFrameEncode.into())
+    }
+
+    /// End the current frame (after pushing all rows).
+    ///
+    /// # Errors
+    ///
+    /// Default returns [`UnsupportedOperation::RowLevelFrameEncode`](crate::UnsupportedOperation::RowLevelFrameEncode).
+    fn end_frame(&mut self) -> Result<(), Self::Error> {
+        Err(crate::UnsupportedOperation::RowLevelFrameEncode.into())
+    }
+
+    /// Encode a frame by pulling rows from a source callback.
+    ///
+    /// # Errors
+    ///
+    /// Default returns [`UnsupportedOperation::PullFrameEncode`](crate::UnsupportedOperation::PullFrameEncode).
+    fn pull_frame(
+        &mut self,
+        _duration_ms: u32,
+        _source: &mut dyn FnMut(u32, PixelSliceMut<'_>) -> usize,
+    ) -> Result<(), Self::Error> {
+        Err(crate::UnsupportedOperation::PullFrameEncode.into())
+    }
+
+    /// Set animation loop count.
+    ///
+    /// - `Some(0)` = loop forever
+    /// - `Some(n)` = loop `n` times
+    /// - `None` = format default
+    ///
+    /// Default no-op.
+    fn with_loop_count(&mut self, _count: Option<u32>) {}
+
+    /// Finalize animation. Returns encoded output.
+    fn finish(self) -> Result<EncodeOutput, Self::Error>;
+}
+
+// ===========================================================================
 // Decode traits
 // ===========================================================================
 
@@ -362,6 +538,13 @@ pub trait DecoderConfig: Clone + Send + Sync {
     /// Every descriptor is a guarantee: the decoder can produce this format
     /// without lossy conversion. Must not be empty.
     fn supported_descriptors() -> &'static [PixelDescriptor];
+
+    /// Codec capabilities (metadata support, cancellation, etc.).
+    ///
+    /// Returns a static reference describing what this codec supports.
+    fn capabilities() -> &'static CodecCapabilities {
+        &CodecCapabilities::EMPTY
+    }
 
     /// Create a per-operation job.
     fn job(&self) -> Self::Job<'_>;
@@ -505,3 +688,19 @@ pub trait FrameDecode: Sized {
         preferred: &[PixelDescriptor],
     ) -> Result<Option<DecodeFrame>, Self::Error>;
 }
+
+// ===========================================================================
+// Deprecated aliases
+// ===========================================================================
+
+/// Deprecated alias for [`Decode`].
+#[deprecated(since = "0.2.0", note = "renamed to Decode")]
+pub trait Decoder: Decode {}
+#[allow(deprecated)]
+impl<T: Decode> Decoder for T {}
+
+/// Deprecated alias for [`FrameDecode`].
+#[deprecated(since = "0.2.0", note = "renamed to FrameDecode")]
+pub trait FrameDecoder: FrameDecode {}
+#[allow(deprecated)]
+impl<T: FrameDecode> FrameDecoder for T {}

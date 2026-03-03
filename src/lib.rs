@@ -88,8 +88,12 @@ pub use sink::DecodeRowSink;
 pub use traits::{
     Decode, DecodeJob, DecoderConfig, EncodeGray8, EncodeGray16, EncodeGrayF32, EncodeJob,
     EncodeRgb8, EncodeRgb16, EncodeRgbF16, EncodeRgbF32, EncodeRgba8, EncodeRgba16, EncodeRgbaF16,
-    EncodeRgbaF32, EncoderConfig, FrameDecode, FrameEncodeRgb8, FrameEncodeRgba8,
+    EncodeRgbaF32, Encoder, EncoderConfig, FrameDecode, FrameEncodeRgb8, FrameEncodeRgba8,
+    FrameEncoder,
 };
+#[cfg(feature = "codec")]
+#[allow(deprecated)]
+pub use traits::{Decoder, FrameDecoder};
 
 // Re-export PixelBufferConvertExt so codec crates get to_rgb8() etc. automatically.
 #[cfg(feature = "codec")]

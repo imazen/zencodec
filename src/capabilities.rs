@@ -189,6 +189,9 @@ impl Default for CodecCapabilities {
 }
 
 impl CodecCapabilities {
+    /// Empty capabilities (everything disabled).
+    pub const EMPTY: Self = Self::new();
+
     /// Create capabilities with everything disabled.
     pub const fn new() -> Self {
         Self {
