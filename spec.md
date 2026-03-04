@@ -247,12 +247,14 @@ trait FrameDecode: Sized {
 
 ```rust
 trait DecodeRowSink {
-    fn demand(&mut self, y: u32, height: u32, width: u32, bpp: usize) -> (&mut [u8], usize);
+    fn demand(&mut self, y: u32, height: u32, width: u32, descriptor: PixelDescriptor) -> PixelSliceMut<'_>;
 }
 ```
 
-The codec calls `demand()` per strip, writes decoded pixels at stride offsets.
-The sink controls the stride (can return SIMD-aligned buffers). Object-safe.
+The codec calls `demand()` per strip, writes decoded pixels via
+`PixelSliceMut::row_mut()`. The sink controls the stride (can return
+SIMD-aligned buffers). The returned `PixelSliceMut` carries buffer, stride,
+dimensions, and pixel descriptor together. Object-safe.
 
 ---
 
