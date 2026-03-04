@@ -15,9 +15,7 @@
 
 use alloc::sync::Arc;
 
-use crate::buffer::{
-    AlphaMode, ChannelLayout, ChannelType, PixelBuffer, PixelDescriptor, PixelSlice,
-};
+use zenpixels::{AlphaMode, ChannelLayout, ChannelType, PixelBuffer, PixelDescriptor, PixelSlice};
 
 // Re-export policy types from zenpixels (identical definitions).
 pub use zenpixels::{AlphaPolicy, ConvertOptions, DepthPolicy, GrayExpand, LumaCoefficients};
@@ -749,7 +747,7 @@ mod tests {
 
     #[test]
     fn preserves_metadata() {
-        use crate::buffer::{ColorPrimaries, SignalRange, TransferFunction};
+        use zenpixels::{ColorPrimaries, SignalRange, TransferFunction};
 
         let data = [42];
         let desc = PixelDescriptor::new(

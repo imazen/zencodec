@@ -32,7 +32,6 @@
 extern crate alloc;
 
 // Always-available modules (no external deps beyond whereat).
-mod buffer;
 mod capabilities;
 mod color;
 mod convert;
@@ -53,12 +52,6 @@ mod traits;
 
 // --- Always-available exports ---
 
-#[allow(deprecated)]
-pub use buffer::{
-    AlphaMode, Bgrx, BufferError, ChannelLayout, ChannelType, ColorPrimaries, InterleaveFormat,
-    Pixel, PixelBuffer, PixelDescriptor, PixelFormat, PixelSlice, PixelSliceMut, Rgbx, SignalRange,
-    TransferFunction,
-};
 pub use capabilities::{CodecCapabilities, HasUnsupportedOperation, UnsupportedOperation};
 pub use color::{ColorContext, ColorProfileSource, NamedProfile};
 pub use convert::{
@@ -81,7 +74,7 @@ pub use output::{EncodeFrame, EncodeOutput, FrameBlend, FrameDisposal};
 pub use output::{DecodeFrame, DecodeOutput, TypedEncodeFrame};
 #[cfg(feature = "codec")]
 #[allow(deprecated)]
-pub use pixel::{GrayAlpha8, GrayAlpha16, GrayAlphaF32, PixelData};
+pub use pixel::PixelData;
 #[cfg(feature = "codec")]
 pub use sink::DecodeRowSink;
 #[cfg(feature = "codec")]

@@ -27,8 +27,7 @@
 //! - When `demand()` is called again, the previous buffer has been fully
 //!   written. When `decode_rows()` returns, the last buffer has been written.
 
-use crate::PixelDescriptor;
-use crate::PixelSliceMut;
+use zenpixels::{PixelDescriptor, PixelSliceMut};
 
 /// Receives decoded rows during streaming decode.
 ///
@@ -49,7 +48,8 @@ use crate::PixelSliceMut;
 /// # Example implementation
 ///
 /// ```
-/// use zencodec_types::{DecodeRowSink, PixelSliceMut, PixelDescriptor};
+/// use zencodec_types::DecodeRowSink;
+/// use zenpixels::{PixelSliceMut, PixelDescriptor};
 ///
 /// struct CollectSink {
 ///     buf: Vec<u8>,

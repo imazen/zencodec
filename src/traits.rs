@@ -43,9 +43,10 @@ use crate::format::ImageFormat;
 use crate::orientation::OrientationHint;
 use crate::{
     CodecCapabilities, DecodeFrame, DecodeOutput, EncodeFrame, EncodeOutput, ImageInfo,
-    MetadataView, OutputInfo, PixelDescriptor, PixelSlice, PixelSliceMut, ResourceLimits, Stop,
+    MetadataView, OutputInfo, ResourceLimits, Stop,
 };
 use rgb::{Gray, Rgb, Rgba};
+use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 
 // ===========================================================================
 // Encode traits
@@ -764,9 +765,7 @@ pub trait StreamingDecode {
     ///
     /// Format preferences were bound at construction. The format remains
     /// consistent across all batches.
-    fn next_batch(
-        &mut self,
-    ) -> Result<Option<(u32, PixelSlice<'_>)>, Self::Error>;
+    fn next_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, Self::Error>;
 
     /// Image metadata, available after construction.
     fn info(&self) -> &ImageInfo;
@@ -777,9 +776,7 @@ pub trait StreamingDecode {
 impl StreamingDecode for () {
     type Error = crate::UnsupportedOperation;
 
-    fn next_batch(
-        &mut self,
-    ) -> Result<Option<(u32, PixelSlice<'_>)>, Self::Error> {
+    fn next_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, Self::Error> {
         Err(crate::UnsupportedOperation::RowLevelDecode)
     }
 
@@ -815,9 +812,7 @@ pub trait FrameDecode: Sized {
     /// Pull next frame. Returns `None` when all frames consumed.
     ///
     /// Format preferences were bound at construction.
-    fn next_frame(
-        &mut self,
-    ) -> Result<Option<DecodeFrame>, Self::Error>;
+    fn next_frame(&mut self) -> Result<Option<DecodeFrame>, Self::Error>;
 
     /// Decode next frame directly into a caller-owned sink (push model).
     ///

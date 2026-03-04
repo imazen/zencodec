@@ -3,7 +3,7 @@
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use crate::buffer::PixelDescriptor;
+use zenpixels::{ColorPrimaries, PixelDescriptor, TransferFunction};
 use crate::color::{ColorContext, ColorProfileSource};
 use crate::gainmap::GainMapMetadata;
 use crate::{ImageFormat, Orientation};
@@ -172,17 +172,17 @@ impl SourceColor {
     }
 
     /// Derive the transfer function from CICP metadata.
-    pub fn transfer_function(&self) -> crate::TransferFunction {
+    pub fn transfer_function(&self) -> TransferFunction {
         self.cicp
-            .and_then(|c| crate::TransferFunction::from_cicp(c.transfer_characteristics))
-            .unwrap_or(crate::TransferFunction::Unknown)
+            .and_then(|c| TransferFunction::from_cicp(c.transfer_characteristics))
+            .unwrap_or(TransferFunction::Unknown)
     }
 
     /// Derive the color primaries from CICP metadata.
-    pub fn color_primaries(&self) -> crate::ColorPrimaries {
+    pub fn color_primaries(&self) -> ColorPrimaries {
         self.cicp
             .map(|c| c.color_primaries_enum())
-            .unwrap_or(crate::ColorPrimaries::Bt709)
+            .unwrap_or(ColorPrimaries::Bt709)
     }
 
     /// Get the source color profile for CMS integration.
@@ -472,14 +472,14 @@ impl ImageInfo {
     /// ```ignore
     /// let desc = pixels.descriptor().with_transfer(info.transfer_function());
     /// ```
-    pub fn transfer_function(&self) -> crate::TransferFunction {
+    pub fn transfer_function(&self) -> TransferFunction {
         self.source_color.transfer_function()
     }
 
     /// Derive the color primaries from CICP metadata.
     ///
     /// Delegates to [`SourceColor::color_primaries()`].
-    pub fn color_primaries(&self) -> crate::ColorPrimaries {
+    pub fn color_primaries(&self) -> ColorPrimaries {
         self.source_color.color_primaries()
     }
 
@@ -733,23 +733,23 @@ impl<'a> MetadataView<'a> {
 
     /// Derive the transfer function from CICP metadata.
     ///
-    /// Returns the [`TransferFunction`](crate::TransferFunction) corresponding
+    /// Returns the [`TransferFunction`](TransferFunction) corresponding
     /// to the CICP `transfer_characteristics` code, or
-    /// [`Unknown`](crate::TransferFunction::Unknown) if CICP is absent or
+    /// [`Unknown`](TransferFunction::Unknown) if CICP is absent or
     /// the code is not recognized.
-    pub fn transfer_function(&self) -> crate::TransferFunction {
+    pub fn transfer_function(&self) -> TransferFunction {
         self.cicp
-            .and_then(|c| crate::TransferFunction::from_cicp(c.transfer_characteristics))
-            .unwrap_or(crate::TransferFunction::Unknown)
+            .and_then(|c| TransferFunction::from_cicp(c.transfer_characteristics))
+            .unwrap_or(TransferFunction::Unknown)
     }
 
     /// Derive the color primaries from CICP metadata.
     ///
-    /// Returns [`Bt709`](crate::ColorPrimaries::Bt709) if CICP is absent.
-    pub fn color_primaries(&self) -> crate::ColorPrimaries {
+    /// Returns [`Bt709`](ColorPrimaries::Bt709) if CICP is absent.
+    pub fn color_primaries(&self) -> ColorPrimaries {
         self.cicp
             .map(|c| c.color_primaries_enum())
-            .unwrap_or(crate::ColorPrimaries::Bt709)
+            .unwrap_or(ColorPrimaries::Bt709)
     }
 
     /// Get the source color profile for CMS integration.
@@ -1231,7 +1231,7 @@ mod tests {
 
     #[test]
     fn transfer_function_from_cicp() {
-        use crate::TransferFunction;
+        use TransferFunction;
 
         let info = ImageInfo::new(100, 100, ImageFormat::Avif).with_cicp(Cicp::SRGB);
         assert_eq!(info.transfer_function(), TransferFunction::Srgb);
@@ -1245,7 +1245,7 @@ mod tests {
 
     #[test]
     fn transfer_function_without_cicp() {
-        use crate::TransferFunction;
+        use TransferFunction;
 
         let info = ImageInfo::new(100, 100, ImageFormat::Jpeg);
         assert_eq!(info.transfer_function(), TransferFunction::Unknown);
@@ -1253,7 +1253,7 @@ mod tests {
 
     #[test]
     fn transfer_function_unrecognized_cicp() {
-        use crate::TransferFunction;
+        use TransferFunction;
 
         // CICP with unrecognized transfer characteristics code
         let info = ImageInfo::new(100, 100, ImageFormat::Avif).with_cicp(Cicp::new(1, 99, 0, true));
@@ -1262,7 +1262,7 @@ mod tests {
 
     #[test]
     fn metadata_transfer_function() {
-        use crate::TransferFunction;
+        use TransferFunction;
 
         let meta = MetadataView::none().with_cicp(Cicp::SRGB);
         assert_eq!(meta.transfer_function(), TransferFunction::Srgb);

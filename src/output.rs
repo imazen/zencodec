@@ -21,7 +21,7 @@ use rgb::alt::BGRA;
 use rgb::{Gray, Rgb, Rgba};
 
 #[cfg(feature = "codec")]
-use crate::{PixelBuffer, PixelDescriptor};
+use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
 #[cfg(feature = "codec")]
 use zenpixels_convert::ext::PixelBufferConvertExt;
 
@@ -651,7 +651,8 @@ impl<Pixel> core::fmt::Debug for TypedEncodeFrame<'_, Pixel> {
 /// # Example
 ///
 /// ```
-/// use zencodec_types::{EncodeFrame, FrameBlend, FrameDisposal, PixelSlice};
+/// use zencodec_types::{EncodeFrame, FrameBlend, FrameDisposal};
+/// use zenpixels::PixelSlice;
 ///
 /// # fn example(full_canvas: PixelSlice<'_>, sub_region: PixelSlice<'_>) {
 /// // Full-canvas frame (simple case)
@@ -666,7 +667,7 @@ impl<Pixel> core::fmt::Debug for TypedEncodeFrame<'_, Pixel> {
 /// ```
 pub struct EncodeFrame<'a> {
     /// The pixel data for this frame.
-    pub pixels: crate::PixelSlice<'a>,
+    pub pixels: PixelSlice<'a>,
     /// Frame duration in milliseconds.
     pub duration_ms: u32,
     /// Canvas region `[x, y, w, h]` this frame occupies.
@@ -683,7 +684,7 @@ pub struct EncodeFrame<'a> {
 
 impl<'a> EncodeFrame<'a> {
     /// Create a full-canvas encode frame with default compositing.
-    pub fn new(pixels: crate::PixelSlice<'a>, duration_ms: u32) -> Self {
+    pub fn new(pixels: PixelSlice<'a>, duration_ms: u32) -> Self {
         Self {
             pixels,
             duration_ms,
@@ -762,7 +763,7 @@ mod tests {
 #[cfg(all(test, feature = "codec"))]
 mod codec_tests {
     use super::*;
-    use crate::PixelBuffer;
+    use zenpixels::PixelBuffer;
     use alloc::vec;
     use imgref::ImgVec;
 

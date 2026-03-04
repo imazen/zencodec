@@ -78,8 +78,8 @@ impl PixelData {
     /// let tf = info.transfer_function(); // derives from CICP
     /// let resolved = desc.with_transfer(tf);
     /// ```
-    pub fn descriptor(&self) -> crate::buffer::PixelDescriptor {
-        use crate::buffer::PixelDescriptor;
+    pub fn descriptor(&self) -> zenpixels::PixelDescriptor {
+        use zenpixels::PixelDescriptor;
         match self {
             PixelData::Rgb8(_) => PixelDescriptor::RGB8,
             PixelData::Rgba8(_) => PixelDescriptor::RGBA8,
@@ -149,13 +149,13 @@ impl PixelData {
         )
     }
 
-    /// Borrow pixel data as a [`PixelSlice`](crate::buffer::PixelSlice).
+    /// Borrow pixel data as a [`PixelSlice`](zenpixels::PixelSlice).
     ///
     /// Returns `None` for GrayAlpha variants (our `GrayAlpha types` type
     /// doesn't implement `rgb::ComponentBytes`, so we can't get a byte
     /// slice without copying).
-    pub fn as_pixel_slice(&self) -> Option<crate::buffer::PixelSlice<'_>> {
-        use crate::buffer::PixelSlice;
+    pub fn as_pixel_slice(&self) -> Option<zenpixels::PixelSlice<'_>> {
+        use zenpixels::PixelSlice;
         // The From<ImgRef> impls use convention-based descriptors (sRGB for u8,
         // linear for f32). Override with self.descriptor() which preserves the
         // transfer-agnostic Unknown from decoded pixel data.
@@ -1159,7 +1159,7 @@ mod tests {
         let slice = data.as_pixel_slice().unwrap();
         assert_eq!(slice.width(), 2);
         assert_eq!(slice.rows(), 1);
-        assert_eq!(slice.descriptor(), crate::buffer::PixelDescriptor::RGB8);
+        assert_eq!(slice.descriptor(), zenpixels::PixelDescriptor::RGB8);
         assert_eq!(slice.row(0), &[10, 20, 30, 40, 50, 60]);
     }
 
