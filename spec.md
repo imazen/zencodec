@@ -213,16 +213,16 @@ trait DecodeJob<'a>: Sized {
     // Output prediction
     fn output_info(&self, data: &[u8]) -> Result<OutputInfo, Self::Error>;
 
-    // Executor creation — all bind preferred + data here
-    // Consistent parameter order: preferred, data, [sink]
-    fn decoder(self, preferred: &[PixelDescriptor], data: &'a [u8]) -> Result<Self::Dec, Self::Error>;
-    fn push_decoder(self, preferred: &[PixelDescriptor], data: &'a [u8], sink: &mut dyn DecodeRowSink) -> Result<OutputInfo, Self::Error>;  // default: decode() + copy to sink
-    fn streaming_decoder(self, preferred: &[PixelDescriptor], data: &'a [u8]) -> Result<Self::StreamDec, Self::Error>;
-    fn frame_decoder(self, preferred: &[PixelDescriptor], data: &'a [u8]) -> Result<Self::FrameDec, Self::Error>;
+    // Executor creation — all bind data + preferred here
+    // Consistent parameter order: data, [sink], preferred
+    fn decoder(self, data: &'a [u8], preferred: &[PixelDescriptor]) -> Result<Self::Dec, Self::Error>;
+    fn push_decoder(self, data: &'a [u8], sink: &mut dyn DecodeRowSink, preferred: &[PixelDescriptor]) -> Result<OutputInfo, Self::Error>;  // default: decode() + copy to sink
+    fn streaming_decoder(self, data: &'a [u8], preferred: &[PixelDescriptor]) -> Result<Self::StreamDec, Self::Error>;
+    fn frame_decoder(self, data: &'a [u8], preferred: &[PixelDescriptor]) -> Result<Self::FrameDec, Self::Error>;
 }
 ```
 
-All executor creation methods bind `preferred` and `data` at the job level.
+All executor creation methods bind `data` and `preferred` at the job level.
 `preferred` is a ranked list of desired output formats — the decoder picks
 the first it can produce without lossy conversion. Pass `&[]` for native
 format. This keeps `Decode`/`StreamingDecode`/`FrameDecode` parameter-free,

@@ -641,28 +641,29 @@ pub trait DecodeJob<'a>: Sized {
     // FrameDecode free of data parameters, and prepares for future
     // IO-read sources (the job can bind a reader instead of a slice).
     //
-    // Consistent parameter order: preferred, data, [sink].
+    // Consistent parameter order: data, [sink], preferred.
 
     /// Create a one-shot decoder bound to `data`.
+    ///
+    /// The returned `Dec` borrows `data` for the duration of decoding.
+    /// Call [`Decode::decode()`] on the result to get pixels.
     ///
     /// `preferred` is a ranked list of desired output formats. The decoder
     /// picks the first it can produce without lossy conversion. Pass `&[]`
     /// for the decoder's native format.
-    ///
-    /// The returned `Dec` borrows `data` for the duration of decoding.
-    /// Call [`Decode::decode()`] on the result to get pixels.
     fn decoder(
         self,
-        preferred: &[PixelDescriptor],
         data: &'a [u8],
+        preferred: &[PixelDescriptor],
     ) -> Result<Self::Dec, Self::Error>;
 
     /// Decode directly into a caller-owned sink (push model).
     ///
-    /// `preferred` is a ranked list of desired output formats.
     /// Decodes and pushes strips into `sink` via
     /// [`DecodeRowSink::demand()`]. Returns [`OutputInfo`] describing
     /// what was produced (pixels went into the sink, not a return value).
+    ///
+    /// `preferred` is a ranked list of desired output formats.
     ///
     /// Default implementation creates a [`decoder()`](DecodeJob::decoder),
     /// calls [`Decode::decode()`], then copies the result into the sink
@@ -670,11 +671,11 @@ pub trait DecodeJob<'a>: Sized {
     /// this for zero-copy.
     fn push_decoder(
         self,
-        preferred: &[PixelDescriptor],
         data: &'a [u8],
         sink: &mut dyn crate::DecodeRowSink,
+        preferred: &[PixelDescriptor],
     ) -> Result<OutputInfo, Self::Error> {
-        let dec = self.decoder(preferred, data)?;
+        let dec = self.decoder(data, preferred)?;
         let output = dec.decode()?;
         let ps = output.pixels().as_slice();
         let desc = ps.descriptor();
@@ -693,26 +694,28 @@ pub trait DecodeJob<'a>: Sized {
 
     /// Create a streaming decoder that yields scanline batches.
     ///
-    /// `preferred` is a ranked list of desired output formats.
     /// Binds `data` — the decoder borrows the input for the duration
     /// of streaming. Returns an error if the codec does not support
     /// streaming decode.
     ///
+    /// `preferred` is a ranked list of desired output formats.
+    ///
     /// See [`StreamingDecode`] for the batch pull API.
     fn streaming_decoder(
         self,
-        preferred: &[PixelDescriptor],
         data: &'a [u8],
+        preferred: &[PixelDescriptor],
     ) -> Result<Self::StreamDec, Self::Error>;
 
     /// Create a frame-by-frame animation decoder.
     ///
-    /// `preferred` is a ranked list of desired output formats.
     /// Binds `data` — the decoder parses the container upfront.
+    ///
+    /// `preferred` is a ranked list of desired output formats.
     fn frame_decoder(
         self,
-        preferred: &[PixelDescriptor],
         data: &'a [u8],
+        preferred: &[PixelDescriptor],
     ) -> Result<Self::FrameDec, Self::Error>;
 }
 
