@@ -184,48 +184,23 @@ impl PixelData {
     /// Returns the raw bytes of the pixel buffer in its native format.
     /// No format conversion is performed.
     pub fn to_bytes(&self) -> Vec<u8> {
-        use rgb::ComponentBytes;
+        macro_rules! cast_to_bytes {
+            ($img:expr) => {{
+                let (buf, _, _) = $img.as_ref().to_contiguous_buf();
+                bytemuck::cast_slice(&*buf).to_vec()
+            }};
+        }
         match self {
-            PixelData::Rgb8(img) => {
-                let (buf, _, _) = img.as_ref().to_contiguous_buf();
-                buf.as_bytes().to_vec()
-            }
-            PixelData::Rgba8(img) => {
-                let (buf, _, _) = img.as_ref().to_contiguous_buf();
-                buf.as_bytes().to_vec()
-            }
-            PixelData::Rgb16(img) => {
-                let (buf, _, _) = img.as_ref().to_contiguous_buf();
-                buf.as_bytes().to_vec()
-            }
-            PixelData::Rgba16(img) => {
-                let (buf, _, _) = img.as_ref().to_contiguous_buf();
-                buf.as_bytes().to_vec()
-            }
-            PixelData::RgbF32(img) => {
-                let (buf, _, _) = img.as_ref().to_contiguous_buf();
-                buf.as_bytes().to_vec()
-            }
-            PixelData::RgbaF32(img) => {
-                let (buf, _, _) = img.as_ref().to_contiguous_buf();
-                buf.as_bytes().to_vec()
-            }
-            PixelData::Gray8(img) => {
-                let (buf, _, _) = img.as_ref().to_contiguous_buf();
-                buf.as_bytes().to_vec()
-            }
-            PixelData::Gray16(img) => {
-                let (buf, _, _) = img.as_ref().to_contiguous_buf();
-                buf.as_bytes().to_vec()
-            }
-            PixelData::GrayF32(img) => {
-                let (buf, _, _) = img.as_ref().to_contiguous_buf();
-                buf.as_bytes().to_vec()
-            }
-            PixelData::Bgra8(img) => {
-                let (buf, _, _) = img.as_ref().to_contiguous_buf();
-                buf.as_bytes().to_vec()
-            }
+            PixelData::Rgb8(img) => cast_to_bytes!(img),
+            PixelData::Rgba8(img) => cast_to_bytes!(img),
+            PixelData::Rgb16(img) => cast_to_bytes!(img),
+            PixelData::Rgba16(img) => cast_to_bytes!(img),
+            PixelData::RgbF32(img) => cast_to_bytes!(img),
+            PixelData::RgbaF32(img) => cast_to_bytes!(img),
+            PixelData::Gray8(img) => cast_to_bytes!(img),
+            PixelData::Gray16(img) => cast_to_bytes!(img),
+            PixelData::GrayF32(img) => cast_to_bytes!(img),
+            PixelData::Bgra8(img) => cast_to_bytes!(img),
             PixelData::GrayAlpha8(img) => {
                 let (buf, _, _) = img.as_ref().to_contiguous_buf();
                 buf.iter().flat_map(|p| [p.v, p.a]).collect()
