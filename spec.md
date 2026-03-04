@@ -6,6 +6,26 @@ for the public API surface.
 `#![no_std]` + `alloc`. `#![forbid(unsafe_code)]`. Codec feature gates the
 trait hierarchy; everything else is always available.
 
+### zenpixels: use but never re-export
+
+`zenpixels` defines the cross-crate pixel interchange types: `PixelDescriptor`,
+`PixelFormat`, `PixelSlice`, `PixelSliceMut`, `PixelBuffer`, `ChannelLayout`,
+`ChannelType`, `TransferFunction`, `ColorPrimaries`, `AlphaMode`, `SignalRange`,
+`InterleaveFormat`.
+
+**All crates in the zen ecosystem MUST use `zenpixels` types directly.**
+zencodec-types re-exports them for convenience, but callers and codec
+implementors should depend on `zenpixels` directly and use `zenpixels::` paths
+in their public APIs. This ensures a single source of truth for pixel types
+across all crates, avoids version-mismatch breakage from re-export chains, and
+lets crates that only need pixel types (no codec traits) depend on `zenpixels`
+alone without pulling in `zencodec-types`.
+
+**zencodec-types MUST NOT re-export zenpixels types.** The re-exports that
+currently exist are a migration artifact and will be removed. Codec crates
+should `pub use zenpixels::PixelDescriptor` etc. in their own APIs, not
+`pub use zencodec_types::PixelDescriptor`.
+
 ---
 
 ## Trait hierarchy
@@ -193,12 +213,26 @@ trait DecodeJob<'a>: Sized {
     // Output prediction
     fn output_info(&self, data: &[u8]) -> Result<OutputInfo, Self::Error>;
 
-    // Executor creation
-    fn decoder(self) -> Result<Self::Dec, Self::Error>;
-    fn streaming_decoder(self, data: &'a [u8]) -> Result<Self::StreamDec, Self::Error>;
-    fn frame_decoder(self, data: &'a [u8]) -> Result<Self::FrameDec, Self::Error>;
+    // Executor creation — all bind preferred + data here
+    // Consistent parameter order: preferred, data, [sink]
+    fn decoder(self, preferred: &[PixelDescriptor], data: &'a [u8]) -> Result<Self::Dec, Self::Error>;
+    fn push_decoder(self, preferred: &[PixelDescriptor], data: &'a [u8], sink: &mut dyn DecodeRowSink) -> Result<OutputInfo, Self::Error>;  // default: decode() + copy to sink
+    fn streaming_decoder(self, preferred: &[PixelDescriptor], data: &'a [u8]) -> Result<Self::StreamDec, Self::Error>;
+    fn frame_decoder(self, preferred: &[PixelDescriptor], data: &'a [u8]) -> Result<Self::FrameDec, Self::Error>;
 }
 ```
+
+All executor creation methods bind `preferred` and `data` at the job level.
+`preferred` is a ranked list of desired output formats — the decoder picks
+the first it can produce without lossy conversion. Pass `&[]` for native
+format. This keeps `Decode`/`StreamingDecode`/`FrameDecode` parameter-free,
+and prepares for future IO-read sources.
+
+`push_decoder` has a default implementation that creates a decoder, calls
+`decode()`, and copies the result into the sink. Codecs with native row
+streaming should override for zero-copy. Returns `OutputInfo` because
+pixels went into the sink. Metadata is available from `probe()` /
+`output_info()` before decode starts.
 
 ### `Decode` (single-image decode, returns owned pixels)
 
@@ -206,12 +240,12 @@ trait DecodeJob<'a>: Sized {
 trait Decode: Sized {
     type Error: core::error::Error + Send + Sync + 'static;
 
-    fn decode(self, data: &[u8], preferred: &[PixelDescriptor]) -> Result<DecodeOutput, Self::Error>;
+    fn decode(self) -> Result<DecodeOutput, Self::Error>;
 }
 ```
 
-`preferred` is a ranked list of desired output formats. The decoder picks the
-first it can produce without lossy conversion. Pass `&[]` for native format.
+Created by `DecodeJob::decoder(preferred, data)` with input and format
+preferences already bound.
 
 ### `StreamingDecode` (scanline-batch decode, pull iterator)
 
@@ -219,13 +253,15 @@ first it can produce without lossy conversion. Pass `&[]` for native format.
 trait StreamingDecode {
     type Error: core::error::Error + Send + Sync + 'static;
 
-    fn next_batch(&mut self, preferred: &[PixelDescriptor]) -> Result<Option<(u32, PixelSlice<'_>)>, Self::Error>;
+    fn next_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, Self::Error>;
     fn info(&self) -> &ImageInfo;
 }
 ```
 
-Yields strips of scanlines at whatever height the decoder prefers: MCU height
-for JPEG, single scanline for PNG, full image for simple formats.
+Created by `DecodeJob::streaming_decoder(preferred, data)` with preferences
+and input already bound. Yields strips of scanlines at whatever height the
+decoder prefers: MCU height for JPEG, single scanline for PNG, full image
+for simple formats.
 
 `impl StreamingDecode for ()` is the trivial rejection type — codecs that
 don't support streaming set `type StreamDec = ()` and return `Err` from
@@ -239,7 +275,13 @@ trait FrameDecode: Sized {
 
     fn frame_count(&self) -> Option<u32>;      // default: None
     fn loop_count(&self) -> Option<u32>;       // default: None
-    fn next_frame(&mut self, preferred: &[PixelDescriptor]) -> Result<Option<DecodeFrame>, Self::Error>;
+    fn next_frame(&mut self) -> Result<Option<DecodeFrame>, Self::Error>;
+
+    // Push model: decode next frame directly into caller-owned sink
+    fn next_frame_to_sink(
+        &mut self,
+        sink: &mut dyn DecodeRowSink,
+    ) -> Result<Option<OutputInfo>, Self::Error>;  // default: next_frame() + copy to sink
 }
 ```
 
@@ -258,7 +300,12 @@ dimensions, and pixel descriptor together. Object-safe.
 
 ---
 
-## Pixel types (always available)
+## Pixel types (from `zenpixels`, always available)
+
+These types are defined in the `zenpixels` crate and used throughout the zen
+ecosystem as the cross-crate interchange format. All crates depend on
+`zenpixels` directly. zencodec-types uses them in trait signatures but does
+not re-export them.
 
 ### `PixelSlice<'a, P = ()>`
 
@@ -450,6 +497,10 @@ Flags: `encode_icc`, `encode_exif`, `encode_xmp`, `decode_icc`, `decode_exif`,
 `row_level_frame_decode`.
 
 Ranges: `effort_range() -> Option<[i32; 2]>`, `quality_range() -> Option<[f32; 2]>`.
+
+`row_level_decode` means the codec streams rows natively (not decode-then-copy)
+for both pull (`StreamingDecode::next_batch`) and push (`Decode::decode_to_sink`).
+Same for `row_level_frame_decode` covering `FrameDecode::next_frame_to_sink`.
 
 ### `UnsupportedOperation`
 

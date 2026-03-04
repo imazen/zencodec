@@ -635,44 +635,100 @@ pub trait DecodeJob<'a>: Sized {
     fn output_info(&self, data: &[u8]) -> Result<OutputInfo, Self::Error>;
 
     // --- Executor creation ---
+    //
+    // All executors bind `data` here so the DecodeJob is the single
+    // place where input is provided. This keeps Decode/StreamingDecode/
+    // FrameDecode free of data parameters, and prepares for future
+    // IO-read sources (the job can bind a reader instead of a slice).
+    //
+    // Consistent parameter order: preferred, data, [sink].
 
-    /// Create a one-shot decoder.
-    fn decoder(self) -> Result<Self::Dec, Self::Error>;
+    /// Create a one-shot decoder bound to `data`.
+    ///
+    /// `preferred` is a ranked list of desired output formats. The decoder
+    /// picks the first it can produce without lossy conversion. Pass `&[]`
+    /// for the decoder's native format.
+    ///
+    /// The returned `Dec` borrows `data` for the duration of decoding.
+    /// Call [`Decode::decode()`] on the result to get pixels.
+    fn decoder(
+        self,
+        preferred: &[PixelDescriptor],
+        data: &'a [u8],
+    ) -> Result<Self::Dec, Self::Error>;
+
+    /// Decode directly into a caller-owned sink (push model).
+    ///
+    /// `preferred` is a ranked list of desired output formats.
+    /// Decodes and pushes strips into `sink` via
+    /// [`DecodeRowSink::demand()`]. Returns [`OutputInfo`] describing
+    /// what was produced (pixels went into the sink, not a return value).
+    ///
+    /// Default implementation creates a [`decoder()`](DecodeJob::decoder),
+    /// calls [`Decode::decode()`], then copies the result into the sink
+    /// strip by strip. Codecs with native row streaming should override
+    /// this for zero-copy.
+    fn push_decoder(
+        self,
+        preferred: &[PixelDescriptor],
+        data: &'a [u8],
+        sink: &mut dyn crate::DecodeRowSink,
+    ) -> Result<OutputInfo, Self::Error> {
+        let dec = self.decoder(preferred, data)?;
+        let output = dec.decode()?;
+        let ps = output.pixels().as_slice();
+        let desc = ps.descriptor();
+        let w = ps.width();
+        let h = ps.rows();
+
+        // Push all rows into the sink as a single strip
+        let mut dst = sink.demand(0, h, w, desc);
+        for row in 0..h {
+            dst.row_mut(row).copy_from_slice(ps.row(row));
+        }
+
+        let info = output.info();
+        Ok(OutputInfo::full_decode(info.width, info.height, desc))
+    }
 
     /// Create a streaming decoder that yields scanline batches.
     ///
+    /// `preferred` is a ranked list of desired output formats.
     /// Binds `data` — the decoder borrows the input for the duration
     /// of streaming. Returns an error if the codec does not support
     /// streaming decode.
     ///
     /// See [`StreamingDecode`] for the batch pull API.
-    fn streaming_decoder(self, data: &'a [u8]) -> Result<Self::StreamDec, Self::Error>;
+    fn streaming_decoder(
+        self,
+        preferred: &[PixelDescriptor],
+        data: &'a [u8],
+    ) -> Result<Self::StreamDec, Self::Error>;
 
     /// Create a frame-by-frame animation decoder.
     ///
+    /// `preferred` is a ranked list of desired output formats.
     /// Binds `data` — the decoder parses the container upfront.
-    fn frame_decoder(self, data: &'a [u8]) -> Result<Self::FrameDec, Self::Error>;
+    fn frame_decoder(
+        self,
+        preferred: &[PixelDescriptor],
+        data: &'a [u8],
+    ) -> Result<Self::FrameDec, Self::Error>;
 }
 
 /// Single-image decode. Returns owned pixels.
 ///
-/// The caller provides a ranked preference list of pixel descriptors.
-/// The decoder picks the first it can produce without lossy conversion.
-/// Empty slice = decoder's native format.
+/// Created by [`DecodeJob::decoder()`] with input data and format
+/// preferences already bound.
 pub trait Decode: Sized {
     /// The codec-specific error type.
     type Error: core::error::Error + Send + Sync + 'static;
 
     /// Decode to owned pixels.
     ///
-    /// `preferred` is a ranked list of desired output formats. The decoder
-    /// picks the first it can produce without lossy conversion. Pass `&[]`
-    /// for the decoder's native format.
-    fn decode(
-        self,
-        data: &[u8],
-        preferred: &[PixelDescriptor],
-    ) -> Result<DecodeOutput, Self::Error>;
+    /// Input data and format preferences were bound when the decoder
+    /// was created via [`DecodeJob::decoder()`].
+    fn decode(self) -> Result<DecodeOutput, Self::Error>;
 }
 
 /// Streaming scanline-batch decode.
@@ -681,16 +737,16 @@ pub trait Decode: Sized {
 /// MCU height for JPEG, full image for simple formats, single scanline
 /// for PNG, etc. The caller pulls batches until `None` is returned.
 ///
-/// Created by [`DecodeJob::streaming_decoder()`]. Borrows the input data
-/// for the lifetime of the decoder.
+/// Created by [`DecodeJob::streaming_decoder()`] with input data and
+/// format preferences already bound.
 ///
 /// # Usage
 ///
 /// ```text
 /// let job = config.job();
 /// let info = job.output_info(data)?;
-/// let mut dec = job.streaming_decoder(data)?;
-/// while let Some((y, strip)) = dec.next_batch(&[])? {
+/// let mut dec = job.streaming_decoder(&[], data)?;
+/// while let Some((y, strip)) = dec.next_batch()? {
 ///     // process strip.rows() scanlines starting at row y
 /// }
 /// ```
@@ -703,12 +759,10 @@ pub trait StreamingDecode {
     /// Returns `Ok(Some((y, strip)))` with the row offset and pixel data,
     /// or `Ok(None)` when the image is fully decoded.
     ///
-    /// `preferred` is a ranked list of desired output formats (same
-    /// semantics as [`Decode::decode()`]). Pass `&[]` for native format.
-    /// The format must remain consistent across all batches.
+    /// Format preferences were bound at construction. The format remains
+    /// consistent across all batches.
     fn next_batch(
         &mut self,
-        preferred: &[PixelDescriptor],
     ) -> Result<Option<(u32, PixelSlice<'_>)>, Self::Error>;
 
     /// Image metadata, available after construction.
@@ -722,7 +776,6 @@ impl StreamingDecode for () {
 
     fn next_batch(
         &mut self,
-        _preferred: &[PixelDescriptor],
     ) -> Result<Option<(u32, PixelSlice<'_>)>, Self::Error> {
         Err(crate::UnsupportedOperation::RowLevelDecode)
     }
@@ -735,6 +788,9 @@ impl StreamingDecode for () {
 }
 
 /// Animation decode. Returns owned frames.
+///
+/// Created by [`DecodeJob::frame_decoder()`] with input data and
+/// format preferences already bound.
 pub trait FrameDecode: Sized {
     /// The codec-specific error type.
     type Error: core::error::Error + Send + Sync + 'static;
@@ -755,12 +811,40 @@ pub trait FrameDecode: Sized {
 
     /// Pull next frame. Returns `None` when all frames consumed.
     ///
-    /// `preferred` is a ranked list of desired output formats (same
-    /// semantics as [`Decode::decode()`]).
+    /// Format preferences were bound at construction.
     fn next_frame(
         &mut self,
-        preferred: &[PixelDescriptor],
     ) -> Result<Option<DecodeFrame>, Self::Error>;
+
+    /// Decode next frame directly into a caller-owned sink (push model).
+    ///
+    /// Returns `Ok(Some(info))` with frame metadata, or `Ok(None)` when
+    /// all frames are consumed.
+    ///
+    /// Default implementation calls [`next_frame()`](FrameDecode::next_frame)
+    /// and copies the result into the sink. Codecs with native row streaming
+    /// should override for zero-copy.
+    fn next_frame_to_sink(
+        &mut self,
+        sink: &mut dyn crate::DecodeRowSink,
+    ) -> Result<Option<OutputInfo>, Self::Error> {
+        let frame = match self.next_frame()? {
+            Some(f) => f,
+            None => return Ok(None),
+        };
+        let ps = frame.pixels().as_slice();
+        let desc = ps.descriptor();
+        let w = ps.width();
+        let h = ps.rows();
+
+        let mut dst = sink.demand(0, h, w, desc);
+        for row in 0..h {
+            dst.row_mut(row).copy_from_slice(ps.row(row));
+        }
+
+        let info = frame.info();
+        Ok(Some(OutputInfo::full_decode(info.width, info.height, desc)))
+    }
 }
 
 // ===========================================================================
