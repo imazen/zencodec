@@ -284,7 +284,11 @@ impl ImageFormat {
     pub fn supports_animation(self) -> bool {
         matches!(
             self,
-            ImageFormat::WebP | ImageFormat::Gif | ImageFormat::Avif | ImageFormat::Jxl
+            ImageFormat::Png
+                | ImageFormat::WebP
+                | ImageFormat::Gif
+                | ImageFormat::Avif
+                | ImageFormat::Jxl
         )
     }
 
@@ -471,7 +475,7 @@ mod tests {
         assert!(ImageFormat::Png.supports_lossless());
         assert!(!ImageFormat::Png.supports_lossy());
         assert!(ImageFormat::Png.supports_alpha());
-        assert!(!ImageFormat::Png.supports_animation());
+        assert!(ImageFormat::Png.supports_animation());
 
         assert!(ImageFormat::WebP.supports_lossy());
         assert!(ImageFormat::WebP.supports_lossless());
