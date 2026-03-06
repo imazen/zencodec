@@ -31,6 +31,12 @@ Tiny, stable crate defining the common interface that all zen* codecs implement:
 - Traits use GATs for lifetime-parameterized Job types
 - `EncodeJob::Enc`/`FrameEnc` have NO trait bounds — codecs implement whichever
   encode approach they support (type-erased `Encoder`, per-format, or both)
+- **zenpixels types: use but NEVER re-export.** `PixelDescriptor`, `PixelSlice`,
+  `PixelSliceMut`, `PixelBuffer`, `PixelFormat`, `ChannelLayout`, `ChannelType`,
+  etc. are defined in `zenpixels` and used as the cross-crate interchange format.
+  All zen crates depend on `zenpixels` directly. zencodec-types uses these types
+  in trait signatures but must not re-export them — callers import from `zenpixels`
+  directly. Current re-exports are a migration artifact to be removed.
 
 ## Key Design Decisions
 
