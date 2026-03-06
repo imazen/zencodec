@@ -8,11 +8,11 @@ description = "Shared traits and types for zen* image codecs"
 categories = ["multimedia::images"]
 keywords = ["image", "codec", "traits"]
 repository = "https://github.com/imazen/zencodec-types"
-exclude = ["CLAUDE.md", "CLEANUP_PLAN.md", "TODOS.md", "TRAIT-DESIGN.md", "io-ideas.md", "streaming.md", "thoughts.md"]
+exclude = ["CLAUDE.md", "docs/"]
 
 [dependencies]
-zenpixels = { version = "0.1", path = "../zenpixels/zenpixels", features = ["buffer"] }
-zenpixels-convert = { version = "0.1", path = "../zenpixels/zenpixels-convert", features = ["buffer"] }
+zenpixels = { version = "0.1", features = ["buffer"] }
+zenpixels-convert = { version = "0.1", features = ["buffer"] }
 bytemuck = { version = "1.25", default-features = false, features = ["extern_crate_alloc", "derive"] }
 enough = "0.4"
 rgb = { version = "0.8", default-features = false, features = ["bytemuck"] }
