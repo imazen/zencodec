@@ -1,28 +1,16 @@
 //! Encode and decode output types.
 
-use alloc::vec::Vec;
-
-use crate::ImageFormat;
-
-#[cfg(feature = "codec")]
-use crate::{ImageInfo, MetadataView};
-#[cfg(feature = "codec")]
-use alloc::sync::Arc;
-
-#[cfg(feature = "codec")]
 use alloc::boxed::Box;
-#[cfg(feature = "codec")]
+use alloc::sync::Arc;
+use alloc::vec::Vec;
 use core::any::Any;
-#[cfg(feature = "codec")]
+
 use imgref::ImgRef;
-#[cfg(feature = "codec")]
 use rgb::alt::BGRA;
-#[cfg(feature = "codec")]
 use rgb::{Gray, Rgb, Rgba};
 
-#[cfg(feature = "codec")]
+use crate::{ImageFormat, ImageInfo, MetadataView};
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
-#[cfg(feature = "codec")]
 use zenpixels_convert::ext::PixelBufferConvertExt;
 
 /// Output from an encode operation.
@@ -71,7 +59,6 @@ impl AsRef<[u8]> for EncodeOutput {
     }
 }
 
-#[cfg(feature = "codec")]
 /// Output from a decode operation.
 ///
 /// Stores pixel data as a [`PixelBuffer`] with embedded format descriptor.
@@ -84,7 +71,6 @@ pub struct DecodeOutput {
     extras: Option<Box<dyn Any + Send>>,
 }
 
-#[cfg(feature = "codec")]
 impl DecodeOutput {
     /// Create a new decode output from a [`PixelBuffer`].
     ///
@@ -258,7 +244,6 @@ impl DecodeOutput {
     }
 }
 
-#[cfg(feature = "codec")]
 impl core::fmt::Debug for DecodeOutput {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("DecodeOutput")
@@ -292,7 +277,6 @@ pub enum FrameDisposal {
     RestorePrevious,
 }
 
-#[cfg(feature = "codec")]
 /// A single frame from animation decoding.
 ///
 /// Carries container-level metadata via `Arc<ImageInfo>` so each frame
@@ -316,7 +300,6 @@ pub struct DecodeFrame {
     frame_rect: Option<[u32; 4]>,
 }
 
-#[cfg(feature = "codec")]
 impl DecodeFrame {
     /// Create a new decode frame from a [`PixelBuffer`].
     ///
@@ -532,7 +515,6 @@ impl DecodeFrame {
     }
 }
 
-#[cfg(feature = "codec")]
 impl core::fmt::Debug for DecodeFrame {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut s = f.debug_struct("DecodeFrame");
@@ -556,7 +538,6 @@ impl core::fmt::Debug for DecodeFrame {
     }
 }
 
-#[cfg(feature = "codec")]
 /// A single typed frame for animation encoding.
 ///
 /// Pairs typed pixel data with a frame duration. Used by
@@ -583,7 +564,6 @@ pub struct TypedEncodeFrame<'a, Pixel> {
     pub disposal: FrameDisposal,
 }
 
-#[cfg(feature = "codec")]
 impl<'a, Pixel> TypedEncodeFrame<'a, Pixel> {
     /// Create a full-canvas typed encode frame with default compositing.
     pub fn new(image: ImgRef<'a, Pixel>, duration_ms: u32) -> Self {
@@ -615,7 +595,6 @@ impl<'a, Pixel> TypedEncodeFrame<'a, Pixel> {
     }
 }
 
-#[cfg(feature = "codec")]
 impl<Pixel> core::fmt::Debug for TypedEncodeFrame<'_, Pixel> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut s = f.debug_struct("TypedEncodeFrame");
@@ -635,7 +614,6 @@ impl<Pixel> core::fmt::Debug for TypedEncodeFrame<'_, Pixel> {
     }
 }
 
-#[cfg(feature = "codec")]
 #[non_exhaustive]
 /// A single frame for animation encoding.
 ///
@@ -683,7 +661,6 @@ pub struct EncodeFrame<'a> {
     pub disposal: FrameDisposal,
 }
 
-#[cfg(feature = "codec")]
 impl<'a> EncodeFrame<'a> {
     /// Create a full-canvas encode frame with default compositing.
     pub fn new(pixels: PixelSlice<'a>, duration_ms: u32) -> Self {
@@ -748,7 +725,6 @@ impl<'a> EncodeFrame<'a> {
     }
 }
 
-#[cfg(feature = "codec")]
 impl core::fmt::Debug for EncodeFrame<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut s = f.debug_struct("EncodeFrame");
@@ -791,31 +767,10 @@ mod tests {
         let c = EncodeOutput::new(vec![1, 2, 3], ImageFormat::Png);
         assert_ne!(a, c);
     }
-}
-
-#[cfg(all(test, feature = "codec"))]
-mod codec_tests {
-    use super::*;
-    use alloc::vec;
-    use imgref::ImgVec;
-    use zenpixels::PixelBuffer;
-
-    fn make_rgb8_buf(w: u32, h: u32) -> PixelBuffer {
-        let img = ImgVec::new(
-            vec![Rgb { r: 0u8, g: 0, b: 0 }; (w * h) as usize],
-            w as usize,
-            h as usize,
-        );
-        PixelBuffer::from_imgvec(img).into()
-    }
-
-    fn test_info(w: u32, h: u32, fmt: ImageFormat) -> Arc<ImageInfo> {
-        Arc::new(ImageInfo::new(w, h, fmt))
-    }
 
     #[test]
     fn decode_output() {
-        let img = ImgVec::new(
+        let img = imgref::ImgVec::new(
             vec![
                 Rgb {
                     r: 10u8,
@@ -827,7 +782,7 @@ mod codec_tests {
             2,
             2,
         );
-        let buf = PixelBuffer::from_imgvec(img);
+        let buf = zenpixels::PixelBuffer::from_imgvec(img);
         let info = ImageInfo::new(2, 2, ImageFormat::Png).with_frame_count(1);
         let output = DecodeOutput::new(buf.into(), info);
         assert_eq!(output.width(), 2);
@@ -840,7 +795,8 @@ mod codec_tests {
 
     #[test]
     fn decode_output_extras() {
-        let buf = make_rgb8_buf(2, 2);
+        let img = imgref::ImgVec::new(vec![Rgb { r: 0u8, g: 0, b: 0 }; 4], 2, 2);
+        let buf: zenpixels::PixelBuffer = zenpixels::PixelBuffer::from_imgvec(img).into();
         let info = ImageInfo::new(2, 2, ImageFormat::Jpeg);
         let mut output = DecodeOutput::new(buf, info).with_extras(42u32);
         assert_eq!(output.extras::<u32>(), Some(&42u32));
@@ -852,7 +808,7 @@ mod codec_tests {
 
     #[test]
     fn decode_frame() {
-        let img = ImgVec::new(
+        let img = imgref::ImgVec::new(
             vec![
                 Rgba {
                     r: 1u8,
@@ -865,8 +821,8 @@ mod codec_tests {
             2,
             2,
         );
-        let buf: PixelBuffer = PixelBuffer::from_imgvec(img).into();
-        let info = test_info(2, 2, ImageFormat::Png);
+        let buf: zenpixels::PixelBuffer = zenpixels::PixelBuffer::from_imgvec(img).into();
+        let info = Arc::new(ImageInfo::new(2, 2, ImageFormat::Png));
         let frame = DecodeFrame::new(buf, info, 100, 0);
         assert_eq!(frame.duration_ms(), 100);
         assert_eq!(frame.index(), 0);
@@ -878,8 +834,10 @@ mod codec_tests {
 
     #[test]
     fn decode_frame_as_methods() {
-        let buf = make_rgb8_buf(2, 2);
-        let frame = DecodeFrame::new(buf, test_info(2, 2, ImageFormat::Png), 50, 1);
+        let img = imgref::ImgVec::new(vec![Rgb { r: 0u8, g: 0, b: 0 }; 4], 2, 2);
+        let buf: zenpixels::PixelBuffer = zenpixels::PixelBuffer::from_imgvec(img).into();
+        let info = Arc::new(ImageInfo::new(2, 2, ImageFormat::Png));
+        let frame = DecodeFrame::new(buf, info, 50, 1);
         assert!(frame.as_rgb8().is_some());
         assert!(frame.as_rgba8().is_none());
         assert!(frame.as_bgra8().is_none());
@@ -888,9 +846,10 @@ mod codec_tests {
 
     #[test]
     fn decode_frame_debug() {
-        let img = ImgVec::new(vec![Gray::new(0u8); 4], 2, 2);
-        let buf: PixelBuffer = PixelBuffer::from_imgvec(img).into();
-        let frame = DecodeFrame::new(buf, test_info(2, 2, ImageFormat::Gif), 100, 3);
+        let img = imgref::ImgVec::new(vec![Gray::new(0u8); 4], 2, 2);
+        let buf: zenpixels::PixelBuffer = zenpixels::PixelBuffer::from_imgvec(img).into();
+        let info = Arc::new(ImageInfo::new(2, 2, ImageFormat::Gif));
+        let frame = DecodeFrame::new(buf, info, 100, 3);
         let s = alloc::format!("{:?}", frame);
         assert!(s.contains("DecodeFrame"));
         assert!(s.contains("delay_ms: 100"));
@@ -899,8 +858,8 @@ mod codec_tests {
 
     #[test]
     fn decode_output_as_gray8() {
-        let img = ImgVec::new(vec![Gray::new(42u8); 4], 2, 2);
-        let buf: PixelBuffer = PixelBuffer::from_imgvec(img).into();
+        let img = imgref::ImgVec::new(vec![Gray::new(42u8); 4], 2, 2);
+        let buf: zenpixels::PixelBuffer = zenpixels::PixelBuffer::from_imgvec(img).into();
         let info = ImageInfo::new(2, 2, ImageFormat::Png);
         let output = DecodeOutput::new(buf, info);
         assert!(output.as_gray8().is_some());
@@ -909,7 +868,8 @@ mod codec_tests {
 
     #[test]
     fn decode_frame_info_accessor() {
-        let buf = make_rgb8_buf(2, 2);
+        let img = imgref::ImgVec::new(vec![Rgb { r: 0u8, g: 0, b: 0 }; 4], 2, 2);
+        let buf: zenpixels::PixelBuffer = zenpixels::PixelBuffer::from_imgvec(img).into();
         let info =
             Arc::new(ImageInfo::new(2, 2, ImageFormat::WebP).with_icc_profile(vec![10, 20, 30]));
         let frame = DecodeFrame::new(buf, Arc::clone(&info), 100, 0);
@@ -923,7 +883,8 @@ mod codec_tests {
 
     #[test]
     fn decode_frame_metadata_accessor() {
-        let buf = make_rgb8_buf(2, 2);
+        let img = imgref::ImgVec::new(vec![Rgb { r: 0u8, g: 0, b: 0 }; 4], 2, 2);
+        let buf: zenpixels::PixelBuffer = zenpixels::PixelBuffer::from_imgvec(img).into();
         let info = Arc::new(
             ImageInfo::new(2, 2, ImageFormat::Avif)
                 .with_cicp(crate::info::Cicp::SRGB)
@@ -937,7 +898,8 @@ mod codec_tests {
 
     #[test]
     fn decode_frame_info_arc_shared() {
-        let buf = make_rgb8_buf(2, 2);
+        let img = imgref::ImgVec::new(vec![Rgb { r: 0u8, g: 0, b: 0 }; 4], 2, 2);
+        let buf: zenpixels::PixelBuffer = zenpixels::PixelBuffer::from_imgvec(img).into();
         let info = Arc::new(ImageInfo::new(2, 2, ImageFormat::Gif));
         let frame = DecodeFrame::new(buf, Arc::clone(&info), 100, 0);
         let arc2 = frame.info_arc();

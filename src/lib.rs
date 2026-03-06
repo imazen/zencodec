@@ -8,10 +8,6 @@
 //! - [`CodecCapabilities`] — capability flags for feature discovery
 //! - [`UnsupportedOperation`] / [`HasUnsupportedOperation`] — standard unsupported operation reporting
 //! - [`ResourceLimits`] — resource limit configuration
-//! - [`At`] / [`AtTrace`] / [`AtTraceable`] — error location tracking (via [`whereat`])
-//!
-//! With the `codec` feature (default):
-//!
 //! - [`EncoderConfig`] / [`EncodeJob`] — encode configuration and job
 //! - Per-format encode traits: [`EncodeRgb8`], [`EncodeRgba8`], [`EncodeGray8`], etc.
 //! - Per-format frame encode traits: [`FrameEncodeRgb8`], [`FrameEncodeRgba8`]
@@ -19,6 +15,7 @@
 //! - [`Decode`] / [`FrameDecode`] — type-erased decode with preferred format negotiation
 //! - [`DecodeRowSink`] — zero-copy row sink for streaming decode
 //! - [`DecodeOutput`] — decode output with typed pixel data
+//! - [`At`] / [`AtTrace`] / [`AtTraceable`] — error location tracking (via [`whereat`])
 //!
 //! Individual codecs (zenjpeg, zenwebp, zengif, zenavif) implement these traits
 //! on their own config types. Format-specific methods live on the concrete types,
@@ -31,7 +28,6 @@
 
 extern crate alloc;
 
-// Always-available modules (no external deps beyond whereat).
 mod capabilities;
 mod color;
 mod convert;
@@ -41,14 +37,8 @@ mod info;
 mod limits;
 mod orientation;
 mod output;
-
-// Modules gated behind the `codec` feature (require rgb, imgref, enough).
-#[cfg(feature = "codec")]
 mod sink;
-#[cfg(feature = "codec")]
 mod traits;
-
-// --- Always-available exports ---
 
 pub use capabilities::{CodecCapabilities, HasUnsupportedOperation, UnsupportedOperation};
 pub use color::{ColorContext, ColorProfileSource, NamedProfile};
@@ -64,15 +54,11 @@ pub use info::{
 };
 pub use limits::{LimitExceeded, ResourceLimits};
 pub use orientation::{Orientation, OrientationHint};
-pub use output::{EncodeOutput, FrameBlend, FrameDisposal};
-
-// --- Codec-feature-gated exports ---
-
-#[cfg(feature = "codec")]
-pub use output::{DecodeFrame, DecodeOutput, EncodeFrame, TypedEncodeFrame};
-#[cfg(feature = "codec")]
+pub use output::{
+    DecodeFrame, DecodeOutput, EncodeFrame, EncodeOutput, FrameBlend, FrameDisposal,
+    TypedEncodeFrame,
+};
 pub use sink::DecodeRowSink;
-#[cfg(feature = "codec")]
 pub use traits::{
     Decode, DecodeJob, DecoderConfig, EncodeGray8, EncodeGray16, EncodeGrayF32, EncodeJob,
     EncodeRgb8, EncodeRgb16, EncodeRgbF16, EncodeRgbF32, EncodeRgba8, EncodeRgba16, EncodeRgbaF16,
@@ -81,22 +67,16 @@ pub use traits::{
 };
 
 // Re-export PixelBufferConvertExt so codec crates get to_rgb8() etc. automatically.
-#[cfg(feature = "codec")]
 pub use zenpixels_convert::ext::PixelBufferConvertExt;
 
-// Re-exports for codec implementors and users (codec feature).
-#[cfg(feature = "codec")]
+// Re-exports for codec implementors and users.
 pub use enough::{Stop, Unstoppable};
-#[cfg(feature = "codec")]
 pub use imgref::{Img, ImgRef, ImgRefMut, ImgVec};
-#[cfg(feature = "codec")]
 pub use rgb;
-#[cfg(feature = "codec")]
 pub use rgb::alt::BGRA as Bgra;
-#[cfg(feature = "codec")]
 pub use rgb::{Gray, Rgb, Rgba};
 
-// Error location tracking re-exports (always available).
+// Error location tracking re-exports.
 //
 // Codec error types use `whereat` for file:line tracking.
 // The recommended pattern (codecs depend on `thiserror` directly):

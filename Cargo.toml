@@ -10,15 +10,11 @@ keywords = ["image", "codec", "traits"]
 repository = "https://github.com/imazen/zencodec-types"
 exclude = ["CLAUDE.md", "CLEANUP_PLAN.md", "TODOS.md", "TRAIT-DESIGN.md", "io-ideas.md", "streaming.md", "thoughts.md"]
 
-[features]
-default = ["codec"]
-codec = ["dep:rgb", "dep:imgref", "dep:enough", "dep:bytemuck", "dep:zenpixels-convert", "zenpixels/buffer"]
-
 [dependencies]
 zenpixels = { version = "0.1", path = "../zenpixels/zenpixels", features = ["buffer"] }
-bytemuck = { version = "1.25", default-features = false, features = ["extern_crate_alloc", "derive"], optional = true }
-enough = { version = "0.4", optional = true }
-rgb = { version = "0.8", default-features = false, features = ["bytemuck"], optional = true }
-imgref = { version = "1.12", optional = true }
-zenpixels-convert = { version = "0.1", path = "../zenpixels/zenpixels-convert", features = ["buffer"], optional = true }
+zenpixels-convert = { version = "0.1", path = "../zenpixels/zenpixels-convert", features = ["buffer"] }
+bytemuck = { version = "1.25", default-features = false, features = ["extern_crate_alloc", "derive"] }
+enough = "0.4"
+rgb = { version = "0.8", default-features = false, features = ["bytemuck"] }
+imgref = "1.12"
 whereat = { version = "0.1", default-features = false }
