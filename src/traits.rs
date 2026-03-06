@@ -661,7 +661,7 @@ pub trait DecodeJob<'a>: Sized {
     /// Decode directly into a caller-owned sink (push model).
     ///
     /// Decodes and pushes strips into `sink` via
-    /// [`DecodeRowSink::demand()`]. Returns [`OutputInfo`] describing
+    /// [`crate::DecodeRowSink::demand`]. Returns [`OutputInfo`] describing
     /// what was produced (pixels went into the sink, not a return value).
     ///
     /// `preferred` is a ranked list of desired output formats.
@@ -844,4 +844,3 @@ pub trait FrameDecode: Sized {
         Ok(Some(OutputInfo::full_decode(info.width, info.height, desc)))
     }
 }
-

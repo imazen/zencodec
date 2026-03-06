@@ -369,7 +369,7 @@ fn convert_impl<P>(
 /// Extension trait for backward-compatible pixel format conversion on [`PixelSlice`].
 ///
 /// These methods provide the zencodec-types-specific conversion API that takes
-/// layout and depth separately. For new code, prefer [`PixelSlice::convert_to()`]
+/// layout and depth separately. For new code, prefer `PixelSlice::convert_to()`
 /// from zenpixels which takes a full [`PixelDescriptor`].
 pub trait PixelSliceConvertExt<P> {
     /// Convert pixel data to a different format in a single pass.
@@ -421,7 +421,6 @@ pub trait PixelSliceConvertExt<P> {
     /// or if depth reduction is forbidden by the given policy.
     fn try_narrow_to_u8_with_policy(&self, depth: DepthPolicy)
     -> Result<PixelBuffer, ConvertError>;
-
 }
 
 impl<P> PixelSliceConvertExt<P> for PixelSlice<'_, P> {
@@ -490,7 +489,6 @@ impl<P> PixelSliceConvertExt<P> for PixelSlice<'_, P> {
         }
         PixelSliceConvertExt::convert(self, desc.layout(), ChannelType::U8, GrayExpand::Broadcast)
     }
-
 }
 
 #[cfg(test)]
@@ -574,7 +572,11 @@ mod tests {
         let data = [42, 99];
         let s = make_slice(&data, 2, 1, PixelDescriptor::GRAY8);
         let buf = s
-            .convert(ChannelLayout::GrayAlpha, ChannelType::U8, GrayExpand::Broadcast)
+            .convert(
+                ChannelLayout::GrayAlpha,
+                ChannelType::U8,
+                GrayExpand::Broadcast,
+            )
             .unwrap();
         let bytes = buf.as_contiguous_bytes().unwrap();
         assert_eq!(bytes, &[42, 255, 99, 255]);

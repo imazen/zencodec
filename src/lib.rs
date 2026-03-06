@@ -2,7 +2,7 @@
 //!
 //! This crate defines the common API surface that all zen* codecs implement:
 //!
-//! - [`PixelSlice`] / [`PixelSliceMut`] / [`PixelBuffer`] — format-erased pixel buffers
+//! - `PixelSlice` / `PixelSliceMut` / `PixelBuffer` — format-erased pixel buffers (from [`zenpixels`])
 //! - [`ImageInfo`] / [`MetadataView`] / [`Orientation`] / [`OrientationHint`] — image metadata
 //! - [`ImageFormat`] — format detection from magic bytes
 //! - [`CodecCapabilities`] — capability flags for feature discovery
@@ -64,12 +64,12 @@ pub use info::{
 };
 pub use limits::{LimitExceeded, ResourceLimits};
 pub use orientation::{Orientation, OrientationHint};
-pub use output::{EncodeFrame, EncodeOutput, FrameBlend, FrameDisposal};
+pub use output::{EncodeOutput, FrameBlend, FrameDisposal};
 
 // --- Codec-feature-gated exports ---
 
 #[cfg(feature = "codec")]
-pub use output::{DecodeFrame, DecodeOutput, TypedEncodeFrame};
+pub use output::{DecodeFrame, DecodeOutput, EncodeFrame, TypedEncodeFrame};
 #[cfg(feature = "codec")]
 pub use sink::DecodeRowSink;
 #[cfg(feature = "codec")]

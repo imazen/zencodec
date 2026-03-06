@@ -8,6 +8,7 @@ description = "Shared traits and types for zen* image codecs"
 categories = ["multimedia::images"]
 keywords = ["image", "codec", "traits"]
 repository = "https://github.com/imazen/zencodec-types"
+exclude = ["CLAUDE.md", "CLEANUP_PLAN.md", "TODOS.md", "TRAIT-DESIGN.md", "io-ideas.md", "streaming.md", "thoughts.md"]
 
 [features]
 default = ["codec"]

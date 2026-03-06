@@ -74,7 +74,7 @@ pub trait DecodeRowSink {
     /// [`PixelSliceMut`] with its chosen stride.
     ///
     /// The codec writes into the buffer via
-    /// [`row_mut()`](crate::PixelSliceMut::row_mut) for each row.
+    /// `row_mut()` for each row.
     ///
     /// When this method is called, any buffer returned by a previous call
     /// has been fully written with decoded pixel data.

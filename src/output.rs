@@ -635,6 +635,7 @@ impl<Pixel> core::fmt::Debug for TypedEncodeFrame<'_, Pixel> {
     }
 }
 
+#[cfg(feature = "codec")]
 #[non_exhaustive]
 /// A single frame for animation encoding.
 ///
@@ -682,6 +683,7 @@ pub struct EncodeFrame<'a> {
     pub disposal: FrameDisposal,
 }
 
+#[cfg(feature = "codec")]
 impl<'a> EncodeFrame<'a> {
     /// Create a full-canvas encode frame with default compositing.
     pub fn new(pixels: PixelSlice<'a>, duration_ms: u32) -> Self {
@@ -746,6 +748,7 @@ impl<'a> EncodeFrame<'a> {
     }
 }
 
+#[cfg(feature = "codec")]
 impl core::fmt::Debug for EncodeFrame<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut s = f.debug_struct("EncodeFrame");
