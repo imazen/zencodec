@@ -3,14 +3,15 @@
 //! Supports RGB8 and Gray8 only. Used as an integration test to exercise the
 //! full Config → Job → Executor pipeline in both concrete and dyn-dispatch modes.
 //!
-//! Uses `thiserror` for error derivation, validating that error chains survive
-//! dyn dispatch and `find_cause` can walk source chains through `BoxedError`.
+//! Uses `thiserror` + `whereat::At<E>` for error derivation and location
+//! tracking, validating that error chains and traces survive dyn dispatch.
 
 use zc::decode::{Decode, DecodeCapabilities, DecodeJob, DecoderConfig};
 use zc::encode::{EncodeCapabilities, EncodeJob, EncodeOutput, Encoder, EncoderConfig};
 use zc::{ImageFormat, ImageInfo, MetadataView, ResourceLimits, Unsupported, UnsupportedOperation};
 
 use enough::{Stop, StopReason};
+use whereat::{At, ErrorAtExt};
 use zc::decode::{DecodeOutput, OutputInfo};
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
 
@@ -70,7 +71,7 @@ static PNM_ENCODE_CAPS: EncodeCapabilities = EncodeCapabilities::new()
     .with_native_gray(true);
 
 impl EncoderConfig for PnmEncoderConfig {
-    type Error = PnmError;
+    type Error = At<PnmError>;
     type Job<'a> = PnmEncodeJob<'a>;
 
     fn format() -> ImageFormat {
@@ -95,7 +96,7 @@ impl EncoderConfig for PnmEncoderConfig {
 }
 
 impl<'a> EncodeJob<'a> for PnmEncodeJob<'a> {
-    type Error = PnmError;
+    type Error = At<PnmError>;
     type Enc = PnmEnc;
     type FrameEnc = (); // no animation
 
@@ -114,7 +115,7 @@ impl<'a> EncodeJob<'a> for PnmEncodeJob<'a> {
         self
     }
 
-    fn encoder(self) -> Result<PnmEnc, PnmError> {
+    fn encoder(self) -> Result<PnmEnc, At<PnmError>> {
         let stop: Option<Box<dyn Fn() -> Result<(), StopReason> + Send>> = self.stop.map(|s| {
             let _ = s.check();
             Box::new(|| Ok(())) as Box<dyn Fn() -> Result<(), StopReason> + Send>
@@ -122,15 +123,19 @@ impl<'a> EncodeJob<'a> for PnmEncodeJob<'a> {
         Ok(PnmEnc { stop })
     }
 
-    fn frame_encoder(self) -> Result<(), PnmError> {
-        Err(UnsupportedOperation::AnimationEncode.into())
+    fn frame_encoder(self) -> Result<(), At<PnmError>> {
+        Err(PnmError::from(UnsupportedOperation::AnimationEncode).start_at())
     }
 }
 
 impl Encoder for PnmEnc {
-    type Error = PnmError;
+    type Error = At<PnmError>;
 
-    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, PnmError> {
+    fn reject(op: UnsupportedOperation) -> At<PnmError> {
+        PnmError::from(op).start_at()
+    }
+
+    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, At<PnmError>> {
         let desc = pixels.descriptor();
         let w = pixels.width();
         let h = pixels.rows();
@@ -144,7 +149,8 @@ impl Encoder for PnmEnc {
             return Err(PnmError::InvalidData(format!(
                 "PNM encoder only supports RGB8 and Gray8, got {:?}",
                 desc
-            )));
+            ))
+            .start_at());
         }
 
         if is_gray {
@@ -201,7 +207,7 @@ static PNM_DECODE_CAPS: DecodeCapabilities = DecodeCapabilities::new()
     .with_native_gray(true);
 
 impl DecoderConfig for PnmDecoderConfig {
-    type Error = PnmError;
+    type Error = At<PnmError>;
     type Job<'a> = PnmDecodeJob<'a>;
 
     fn format() -> ImageFormat {
@@ -225,10 +231,10 @@ impl DecoderConfig for PnmDecoderConfig {
 }
 
 impl<'a> DecodeJob<'a> for PnmDecodeJob<'a> {
-    type Error = PnmError;
+    type Error = At<PnmError>;
     type Dec = PnmDec<'a>;
-    type StreamDec = Unsupported<PnmError>;
-    type FrameDec = Unsupported<PnmError>;
+    type StreamDec = Unsupported<At<PnmError>>;
+    type FrameDec = Unsupported<At<PnmError>>;
 
     fn with_stop(mut self, stop: &'a dyn Stop) -> Self {
         self.stop = Some(stop);
@@ -240,14 +246,14 @@ impl<'a> DecodeJob<'a> for PnmDecodeJob<'a> {
         self
     }
 
-    fn probe(&self, data: &[u8]) -> Result<ImageInfo, PnmError> {
-        let (w, h, _is_gray) = parse_pnm_header(data)?;
+    fn probe(&self, data: &[u8]) -> Result<ImageInfo, At<PnmError>> {
+        let (w, h, _is_gray) = parse_pnm_header(data).map_err(|e| e.start_at())?;
         let info = ImageInfo::new(w, h, ImageFormat::Pnm).with_frame_count(1);
         Ok(info)
     }
 
-    fn output_info(&self, data: &[u8]) -> Result<OutputInfo, PnmError> {
-        let (w, h, is_gray) = parse_pnm_header(data)?;
+    fn output_info(&self, data: &[u8]) -> Result<OutputInfo, At<PnmError>> {
+        let (w, h, is_gray) = parse_pnm_header(data).map_err(|e| e.start_at())?;
         let desc = if is_gray {
             PixelDescriptor::GRAY8_SRGB
         } else {
@@ -260,9 +266,11 @@ impl<'a> DecodeJob<'a> for PnmDecodeJob<'a> {
         self,
         data: &'a [u8],
         _preferred: &[PixelDescriptor],
-    ) -> Result<PnmDec<'a>, PnmError> {
-        let (w, h, _) = parse_pnm_header(data)?;
-        self.limits.check_dimensions(w, h)?;
+    ) -> Result<PnmDec<'a>, At<PnmError>> {
+        let (w, h, _) = parse_pnm_header(data).map_err(|e| e.start_at())?;
+        self.limits
+            .check_dimensions(w, h)
+            .map_err(|e| PnmError::from(e).start_at())?;
         Ok(PnmDec { data })
     }
 
@@ -270,45 +278,45 @@ impl<'a> DecodeJob<'a> for PnmDecodeJob<'a> {
         self,
         _data: &'a [u8],
         _preferred: &[PixelDescriptor],
-    ) -> Result<Unsupported<PnmError>, PnmError> {
-        Err(UnsupportedOperation::RowLevelDecode.into())
+    ) -> Result<Unsupported<At<PnmError>>, At<PnmError>> {
+        Err(PnmError::from(UnsupportedOperation::RowLevelDecode).start_at())
     }
 
     fn frame_decoder(
         self,
         _data: &'a [u8],
         _preferred: &[PixelDescriptor],
-    ) -> Result<Unsupported<PnmError>, PnmError> {
-        Err(UnsupportedOperation::AnimationDecode.into())
+    ) -> Result<Unsupported<At<PnmError>>, At<PnmError>> {
+        Err(PnmError::from(UnsupportedOperation::AnimationDecode).start_at())
     }
 }
 
 impl<'a> Decode for PnmDec<'a> {
-    type Error = PnmError;
+    type Error = At<PnmError>;
 
-    fn decode(self) -> Result<DecodeOutput, PnmError> {
-        let (w, h, is_gray) = parse_pnm_header(self.data)?;
-        let data_offset = find_data_offset(self.data)?;
+    fn decode(self) -> Result<DecodeOutput, At<PnmError>> {
+        let (w, h, is_gray) = parse_pnm_header(self.data).map_err(|e| e.start_at())?;
+        let data_offset = find_data_offset(self.data).map_err(|e| e.start_at())?;
         let pixel_data = &self.data[data_offset..];
 
         if is_gray {
             let expected = w as usize * h as usize;
             if pixel_data.len() < expected {
-                return Err(PnmError::InvalidData("truncated pixel data".into()));
+                return Err(PnmError::InvalidData("truncated pixel data".into()).start_at());
             }
             let desc = PixelDescriptor::GRAY8_SRGB;
             let buf = PixelBuffer::from_vec(pixel_data[..expected].to_vec(), w, h, desc)
-                .map_err(|e| PnmError::InvalidData(format!("buffer error: {e}")))?;
+                .map_err(|e| PnmError::InvalidData(format!("buffer error: {e}")).start_at())?;
             let info = ImageInfo::new(w, h, ImageFormat::Pnm);
             Ok(DecodeOutput::new(buf, info))
         } else {
             let expected = w as usize * h as usize * 3;
             if pixel_data.len() < expected {
-                return Err(PnmError::InvalidData("truncated pixel data".into()));
+                return Err(PnmError::InvalidData("truncated pixel data".into()).start_at());
             }
             let desc = PixelDescriptor::RGB8_SRGB;
             let buf = PixelBuffer::from_vec(pixel_data[..expected].to_vec(), w, h, desc)
-                .map_err(|e| PnmError::InvalidData(format!("buffer error: {e}")))?;
+                .map_err(|e| PnmError::InvalidData(format!("buffer error: {e}")).start_at())?;
             let info = ImageInfo::new(w, h, ImageFormat::Pnm);
             Ok(DecodeOutput::new(buf, info))
         }

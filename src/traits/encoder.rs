@@ -19,10 +19,20 @@ use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 /// The encoder dispatches internally based on the pixel descriptor.
 pub trait Encoder: Sized {
     /// The codec-specific error type.
+    type Error: core::error::Error + Send + Sync + 'static;
+
+    /// Convert an [`UnsupportedOperation`](crate::UnsupportedOperation) into this
+    /// encoder's error type.
     ///
-    /// Must implement `From<UnsupportedOperation>` so default method
-    /// implementations can return proper errors for unimplemented paths.
-    type Error: core::error::Error + Send + Sync + 'static + From<crate::UnsupportedOperation>;
+    /// Used by default method implementations to report unsupported paths.
+    /// A typical implementation:
+    ///
+    /// ```rust,ignore
+    /// fn reject(op: UnsupportedOperation) -> Self::Error {
+    ///     MyError::from(op).start_at() // or just MyError::from(op)
+    /// }
+    /// ```
+    fn reject(op: crate::UnsupportedOperation) -> Self::Error;
 
     /// Suggested strip height for optimal row-level encoding.
     ///
@@ -82,7 +92,7 @@ pub trait Encoder: Sized {
     ///
     /// Default returns [`UnsupportedOperation::RowLevelEncode`](crate::UnsupportedOperation::RowLevelEncode).
     fn push_rows(&mut self, _rows: PixelSlice<'_>) -> Result<(), Self::Error> {
-        Err(crate::UnsupportedOperation::RowLevelEncode.into())
+        Err(Self::reject(crate::UnsupportedOperation::RowLevelEncode))
     }
 
     /// Finalize after push_rows. Returns encoded output.
@@ -91,7 +101,7 @@ pub trait Encoder: Sized {
     ///
     /// Default returns [`UnsupportedOperation::RowLevelEncode`](crate::UnsupportedOperation::RowLevelEncode).
     fn finish(self) -> Result<EncodeOutput, Self::Error> {
-        Err(crate::UnsupportedOperation::RowLevelEncode.into())
+        Err(Self::reject(crate::UnsupportedOperation::RowLevelEncode))
     }
 
     /// Encode by pulling rows from a source callback.
@@ -107,7 +117,7 @@ pub trait Encoder: Sized {
         self,
         _source: &mut dyn FnMut(u32, PixelSliceMut<'_>) -> usize,
     ) -> Result<EncodeOutput, Self::Error> {
-        Err(crate::UnsupportedOperation::PullEncode.into())
+        Err(Self::reject(crate::UnsupportedOperation::PullEncode))
     }
 }
 
@@ -126,10 +136,11 @@ pub trait Encoder: Sized {
 /// The frame encoder dispatches internally based on the pixel descriptor.
 pub trait FrameEncoder: Sized {
     /// The codec-specific error type.
-    ///
-    /// Must implement `From<UnsupportedOperation>` so default method
-    /// implementations can return proper errors for unimplemented paths.
-    type Error: core::error::Error + Send + Sync + 'static + From<crate::UnsupportedOperation>;
+    type Error: core::error::Error + Send + Sync + 'static;
+
+    /// Convert an [`UnsupportedOperation`](crate::UnsupportedOperation) into this
+    /// encoder's error type. Used by default method implementations.
+    fn reject(op: crate::UnsupportedOperation) -> Self::Error;
 
     /// Push a complete full-canvas frame.
     fn push_frame(&mut self, pixels: PixelSlice<'_>, duration_ms: u32) -> Result<(), Self::Error>;
@@ -147,7 +158,9 @@ pub trait FrameEncoder: Sized {
     ///
     /// Default returns [`UnsupportedOperation::RowLevelFrameEncode`](crate::UnsupportedOperation::RowLevelFrameEncode).
     fn begin_frame(&mut self, _duration_ms: u32) -> Result<(), Self::Error> {
-        Err(crate::UnsupportedOperation::RowLevelFrameEncode.into())
+        Err(Self::reject(
+            crate::UnsupportedOperation::RowLevelFrameEncode,
+        ))
     }
 
     /// Push rows into the current frame (after begin_frame).
@@ -156,7 +169,9 @@ pub trait FrameEncoder: Sized {
     ///
     /// Default returns [`UnsupportedOperation::RowLevelFrameEncode`](crate::UnsupportedOperation::RowLevelFrameEncode).
     fn push_rows(&mut self, _rows: PixelSlice<'_>) -> Result<(), Self::Error> {
-        Err(crate::UnsupportedOperation::RowLevelFrameEncode.into())
+        Err(Self::reject(
+            crate::UnsupportedOperation::RowLevelFrameEncode,
+        ))
     }
 
     /// End the current frame (after pushing all rows).
@@ -165,7 +180,9 @@ pub trait FrameEncoder: Sized {
     ///
     /// Default returns [`UnsupportedOperation::RowLevelFrameEncode`](crate::UnsupportedOperation::RowLevelFrameEncode).
     fn end_frame(&mut self) -> Result<(), Self::Error> {
-        Err(crate::UnsupportedOperation::RowLevelFrameEncode.into())
+        Err(Self::reject(
+            crate::UnsupportedOperation::RowLevelFrameEncode,
+        ))
     }
 
     /// Encode a frame by pulling rows from a source callback.
@@ -178,7 +195,9 @@ pub trait FrameEncoder: Sized {
         _duration_ms: u32,
         _source: &mut dyn FnMut(u32, PixelSliceMut<'_>) -> usize,
     ) -> Result<(), Self::Error> {
-        Err(crate::UnsupportedOperation::PullFrameEncode.into())
+        Err(Self::reject(
+            crate::UnsupportedOperation::PullFrameEncode,
+        ))
     }
 
     /// Set animation loop count.
@@ -198,6 +217,10 @@ pub trait FrameEncoder: Sized {
 /// `type FrameEnc = ()` and `frame_encoder()` returns an error.
 impl FrameEncoder for () {
     type Error = crate::UnsupportedOperation;
+
+    fn reject(op: crate::UnsupportedOperation) -> Self::Error {
+        op
+    }
 
     fn push_frame(&mut self, _: PixelSlice<'_>, _: u32) -> Result<(), Self::Error> {
         Err(crate::UnsupportedOperation::AnimationEncode)

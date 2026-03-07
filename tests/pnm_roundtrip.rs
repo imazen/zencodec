@@ -1,6 +1,8 @@
 //! Integration test exercising the full zencodec-types API via a PNM codec.
 //!
 //! Tests both concrete (generic) and dyn-dispatch (object-safe) paths.
+//! The PNM codec uses `whereat::At<PnmError>` as its error type to validate
+//! that location traces survive dyn dispatch and error chain inspection.
 
 mod pnm;
 
@@ -388,7 +390,6 @@ fn unsupported_animation_decode() {
 
 #[test]
 fn find_cause_limit_exceeded_through_dyn_decode() {
-    // Encode a valid 4x2 image
     let pixels = test_rgb8_pixels();
     let config = PnmEncoderConfig::new();
     let encoded = config
@@ -413,12 +414,14 @@ fn find_cause_limit_exceeded_through_dyn_decode() {
         Ok(_) => panic!("should fail with limit exceeded"),
     };
 
-    // The error is a BoxedError containing PnmError::LimitExceeded(LimitExceeded)
-    // find_cause should walk: BoxedError → PnmError → source() → LimitExceeded
+    // The error is BoxedError containing At<PnmError>.
+    // At<PnmError>::source() delegates to PnmError::source(),
+    // which for #[from] LimitExceeded returns Some(&LimitExceeded).
+    // find_cause walks: At<PnmError> → PnmError::source() → LimitExceeded
     let limit = zc::find_cause::<zc::LimitExceeded>(&*err);
     assert!(
         limit.is_some(),
-        "find_cause should find LimitExceeded through BoxedError → PnmError chain"
+        "find_cause should find LimitExceeded through BoxedError → At<PnmError> chain"
     );
 }
 
@@ -441,7 +444,6 @@ fn find_cause_unsupported_through_dyn_decode() {
     let job = dyn_dec.dyn_job();
     let result = job.into_streaming_decoder(&encoded, &[]);
 
-    // Can't use expect_err because Box<dyn DynStreamingDecoder> doesn't impl Debug
     let err = match result {
         Err(e) => e,
         Ok(_) => panic!("streaming decode should fail"),
@@ -450,14 +452,13 @@ fn find_cause_unsupported_through_dyn_decode() {
     let op = zc::find_cause::<UnsupportedOperation>(&*err);
     assert!(
         op.is_some(),
-        "find_cause should find UnsupportedOperation through BoxedError"
+        "find_cause should find UnsupportedOperation through BoxedError → At<PnmError>"
     );
     assert_eq!(op.unwrap(), &UnsupportedOperation::RowLevelDecode);
 }
 
 #[test]
 fn find_cause_unsupported_through_dyn_encode() {
-    // Try animation encode (unsupported) through dyn dispatch
     let enc_config = PnmEncoderConfig::new();
     let dyn_enc: &dyn DynEncoderConfig = &enc_config;
 
@@ -472,14 +473,14 @@ fn find_cause_unsupported_through_dyn_encode() {
     let op = zc::find_cause::<UnsupportedOperation>(&*err);
     assert!(
         op.is_some(),
-        "find_cause should find UnsupportedOperation through BoxedError"
+        "find_cause should find UnsupportedOperation through BoxedError → At<PnmError>"
     );
     assert_eq!(op.unwrap(), &UnsupportedOperation::AnimationEncode);
 }
 
 #[test]
-fn concrete_error_downcast_preserves_type() {
-    // Verify that concrete PnmError variants are accessible through BoxedError
+fn concrete_error_preserves_at_wrapper() {
+    // Verify that At<PnmError> is accessible through BoxedError via downcast
     let pixels = test_rgb8_pixels();
     let config = PnmEncoderConfig::new();
     let encoded = config
@@ -502,21 +503,44 @@ fn concrete_error_downcast_preserves_type() {
         Ok(_) => panic!("should fail with limit exceeded"),
     };
 
-    // Can downcast BoxedError to the concrete PnmError type
-    let pnm_err = err.downcast_ref::<pnm::PnmError>();
+    // BoxedError contains At<PnmError> — downcast to access it
+    let at_err = err.downcast_ref::<whereat::At<pnm::PnmError>>();
     assert!(
-        pnm_err.is_some(),
-        "BoxedError should be downcastable to concrete PnmError"
+        at_err.is_some(),
+        "BoxedError should be downcastable to At<PnmError>"
     );
+
+    // Access the inner PnmError through At::error()
+    let pnm_err = at_err.unwrap().error();
     assert!(
-        matches!(pnm_err.unwrap(), pnm::PnmError::LimitExceeded(_)),
-        "should be the LimitExceeded variant"
+        matches!(pnm_err, pnm::PnmError::LimitExceeded(_)),
+        "inner error should be the LimitExceeded variant"
+    );
+}
+
+#[test]
+fn whereat_trace_has_location() {
+    // Verify that At<PnmError> captures source location via start_at()
+    let dec_config = PnmDecoderConfig::new();
+    let job = dec_config.job();
+    let err = job.probe(b"not a pnm").expect_err("should fail");
+
+    // The error is At<PnmError> with at least one location frame
+    assert!(
+        err.frame_count() > 0,
+        "At<PnmError> from start_at() should have at least one location frame"
+    );
+
+    // Check that the trace includes a file path (from #[track_caller])
+    let debug_str = format!("{:?}", err);
+    assert!(
+        debug_str.contains("pnm"),
+        "Debug output should contain source file reference: {debug_str}"
     );
 }
 
 #[test]
 fn find_cause_returns_none_for_absent_type() {
-    // Verify find_cause returns None when the target type isn't in the chain
     let dec_config = PnmDecoderConfig::new();
     let dyn_dec: &dyn DynDecoderConfig = &dec_config;
 
