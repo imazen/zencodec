@@ -10,7 +10,7 @@ use zenpixels::{PixelDescriptor, PixelFormat};
 ///
 /// Given a caller's ranked preference list and the formats the decoder can
 /// produce for this image, returns the best match. Decoders call this inside
-/// their [`DecodeJob::decoder`](crate::DecodeJob::decoder) (and similar)
+/// their [`DecodeJob::decoder`](crate::decode::DecodeJob::decoder) (and similar)
 /// implementations to resolve the `preferred` parameter consistently.
 ///
 /// # Matching strategy

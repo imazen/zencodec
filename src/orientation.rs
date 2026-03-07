@@ -91,7 +91,7 @@ impl Orientation {
 /// additional transforms, which the decoder can coalesce into a
 /// single operation (e.g., JPEG lossless DCT rotation).
 ///
-/// Pass to [`DecodeJob::with_orientation()`](crate::DecodeJob::with_orientation).
+/// Pass to [`DecodeJob::with_orientation()`](crate::decode::DecodeJob::with_orientation).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum OrientationHint {

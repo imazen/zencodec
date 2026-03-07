@@ -1,27 +1,35 @@
 //! Shared traits and types for zen* image codecs.
 //!
-//! This crate defines the common API surface that all zen* codecs implement:
+//! This crate defines the common API surface that all zen* codecs implement.
 //!
-//! - `PixelSlice` / `PixelSliceMut` / `PixelBuffer` — format-erased pixel buffers (from [`zenpixels`])
-//! - [`ImageInfo`] / [`MetadataView`] / [`Orientation`] / [`OrientationHint`] — image metadata
+//! # Module organization
+//!
+//! - [`encode`] — encoder traits, per-format encode traits, dyn dispatch, output types
+//! - [`decode`] — decoder traits, streaming/animation decode, dyn dispatch, output types
+//! - Root — shared types used by both encode and decode paths
+//!
+//! # Shared types (root)
+//!
 //! - [`ImageFormat`] — format detection from magic bytes
-//! - [`EncodeCapabilities`] / [`DecodeCapabilities`] — capability flags for feature discovery
-//! - [`UnsupportedOperation`] / [`HasUnsupportedOperation`] — standard unsupported operation reporting
+//! - [`ImageInfo`] / [`MetadataView`] / [`Orientation`] / [`OrientationHint`] — image metadata
 //! - [`ResourceLimits`] / [`ThreadingPolicy`] — resource limit and threading configuration
-//! - [`EncoderConfig`] / [`EncodeJob`] — encode configuration and job
-//! - [`Encoder`] / [`FrameEncoder`] — type-erased encode execution
-//! - Per-format encode traits: [`EncodeRgb8`], [`EncodeRgba8`], [`EncodeGray8`], etc.
-//! - Per-format frame encode traits: [`FrameEncodeRgb8`], [`FrameEncodeRgba8`]
-//! - [`DecoderConfig`] / [`DecodeJob`] — decode configuration and job
-//! - [`Decode`] / [`StreamingDecode`] / [`FrameDecode`] — decode execution
-//! - [`DecodeRowSink`] — zero-copy row sink for streaming decode
-//! - [`DecodeOutput`] — decode output with typed pixel data
-//! - Object-safe dyn dispatch: [`DynEncoderConfig`], [`DynDecoderConfig`], [`DynEncoder`], [`DynDecoder`], etc.
-//! - [`At`] / [`AtTrace`] / [`AtTraceable`] — error location tracking (via [`whereat`])
+//! - [`UnsupportedOperation`] / [`HasUnsupportedOperation`] — standard unsupported operation reporting
 //!
-//! Individual codecs (zenjpeg, zenwebp, zengif, zenavif) implement these traits
-//! on their own config types. Format-specific methods live on the concrete types,
-//! not on the traits.
+//! # Re-exported crates
+//!
+//! Pixel types, cancellation, and error tracking crates are re-exported at
+//! crate level for qualified access: [`rgb`], [`imgref`], [`enough`], [`whereat`].
+//!
+//! ```rust,ignore
+//! use rgb::Rgba;
+//! use imgref::ImgVec;
+//! use enough::Stop;
+//! use whereat::At;
+//! ```
+//!
+//! Individual codecs (zenjpeg, zenwebp, zengif, zenavif) implement the
+//! [`encode`] and [`decode`] traits on their own config types.
+//! Format-specific methods live on the concrete types, not on the traits.
 //!
 //! `zencodecs` provides multi-format dispatch and convenience entry points.
 
@@ -44,9 +52,10 @@ mod policy;
 mod sink;
 mod traits;
 
-pub use capabilities::{
-    DecodeCapabilities, EncodeCapabilities, HasUnsupportedOperation, UnsupportedOperation,
-};
+// =========================================================================
+// Public root: shared types used by both encode and decode
+// =========================================================================
+
 pub use color::{ColorContext, ColorProfileSource, NamedProfile};
 pub use convert::{
     AlphaPolicy, ConvertError, ConvertOptions, DepthPolicy, GrayExpand, LumaCoefficients,
@@ -54,38 +63,129 @@ pub use convert::{
 };
 pub use format::ImageFormat;
 pub use gainmap::GainMapMetadata;
-pub use info::{
-    Cicp, ContentLightLevel, DecodeCost, EmbeddedMetadata, EncodeCost, ImageInfo, MasteringDisplay,
-    Metadata, MetadataView, OutputInfo, SourceColor,
-};
+pub use info::{Cicp, ContentLightLevel, ImageInfo, MasteringDisplay, Metadata, MetadataView};
 pub use limits::{LimitExceeded, ResourceLimits, ThreadingPolicy};
 pub use negotiate::{best_encode_format, is_format_available, negotiate_pixel_format};
-// TODO: Add PixelPreference preset lists once real callers validate the designs
 pub use orientation::{Orientation, OrientationHint};
-pub use output::{
-    DecodeFrame, DecodeOutput, EncodeFrame, EncodeOutput, FrameBlend, FrameDisposal,
-    TypedEncodeFrame,
-};
-pub use policy::{DecodePolicy, EncodePolicy};
-pub use sink::DecodeRowSink;
-pub use traits::{
-    BoxedError, Decode, DecodeJob, DecoderConfig, DynDecodeJob, DynDecoder, DynDecoderConfig,
-    DynEncodeJob, DynEncoder, DynEncoderConfig, DynFrameDecoder, DynFrameEncoder,
-    DynStreamingDecoder, EncodeGray8, EncodeGray16, EncodeGrayF32, EncodeJob, EncodeRgb8,
-    EncodeRgb16, EncodeRgbF16, EncodeRgbF32, EncodeRgba8, EncodeRgba16, EncodeRgbaF16,
-    EncodeRgbaF32, Encoder, EncoderConfig, FrameDecode, FrameEncodeRgb8, FrameEncodeRgba8,
-    FrameEncoder, StreamingDecode,
-};
+pub use output::{FrameBlend, FrameDisposal};
+
+pub use capabilities::{HasUnsupportedOperation, UnsupportedOperation};
 
 // Re-export PixelBufferConvertExt so codec crates get to_rgb8() etc. automatically.
 pub use zenpixels_convert::ext::PixelBufferConvertExt;
 
-// Re-exports for codec implementors and users.
-pub use enough::{Stop, Unstoppable};
-pub use imgref::{Img, ImgRef, ImgRefMut, ImgVec};
+// =========================================================================
+// Crate-level re-exports (qualified access, not individual types)
+// =========================================================================
+//
+// Use `rgb::Rgba`, `imgref::ImgVec`, `enough::Stop`, `whereat::At`.
+
+pub use enough;
+pub use imgref;
 pub use rgb;
-pub use rgb::alt::BGRA as Bgra;
-pub use rgb::{Gray, Rgb, Rgba};
+pub use whereat;
+
+// =========================================================================
+// pub(crate) re-exports — keep internal `use crate::Foo` paths working
+// for items that moved out of the public root into sub-modules.
+// =========================================================================
+
+pub(crate) use capabilities::{DecodeCapabilities, EncodeCapabilities};
+pub(crate) use enough::Stop;
+pub(crate) use info::{DecodeCost, EncodeCost, OutputInfo};
+pub(crate) use output::{DecodeFrame, DecodeOutput, EncodeFrame, EncodeOutput};
+pub(crate) use policy::{DecodePolicy, EncodePolicy};
+pub(crate) use sink::DecodeRowSink;
+
+// =========================================================================
+// Public sub-modules
+// =========================================================================
+
+/// Encode traits, types, and configuration.
+///
+/// # Trait hierarchy
+///
+/// ```text
+///                                  ┌→ Enc (implements Encoder and/or EncodeRgb8, EncodeRgba8, ...)
+/// EncoderConfig → EncodeJob<'a> ──┤
+///                                  └→ FrameEnc (implements FrameEncoder and/or FrameEncodeRgba8, ...)
+/// ```
+///
+/// # Object-safe dyn dispatch
+///
+/// ```text
+/// DynEncoderConfig → DynEncodeJob → DynEncoder / DynFrameEncoder
+/// ```
+///
+/// Codec implementors implement the generic traits. Dispatch callers
+/// use the `Dyn*` variants for codec-agnostic operation.
+pub mod encode {
+    // Traits — config, job, execution
+    pub use crate::traits::{
+        EncodeJob, Encoder, EncoderConfig, FrameEncoder,
+    };
+
+    // Per-format typed encode traits
+    pub use crate::traits::{
+        EncodeGray8, EncodeGray16, EncodeGrayF32, EncodeRgb8, EncodeRgb16, EncodeRgbF16,
+        EncodeRgbF32, EncodeRgba8, EncodeRgba16, EncodeRgbaF16, EncodeRgbaF32,
+    };
+
+    // Per-format frame encode traits (animation)
+    pub use crate::traits::{FrameEncodeRgb8, FrameEncodeRgba8};
+
+    // Object-safe dyn dispatch
+    pub use crate::traits::{
+        BoxedError, DynEncodeJob, DynEncoder, DynEncoderConfig, DynFrameEncoder,
+    };
+
+    // Types
+    pub use crate::capabilities::EncodeCapabilities;
+    pub use crate::info::EncodeCost;
+    pub use crate::output::{EncodeFrame, EncodeOutput, TypedEncodeFrame};
+    pub use crate::policy::EncodePolicy;
+}
+
+/// Decode traits, types, and configuration.
+///
+/// # Trait hierarchy
+///
+/// ```text
+///                                  ┌→ Dec (implements Decode)
+/// DecoderConfig → DecodeJob<'a> ──┤→ StreamDec (implements StreamingDecode)
+///                                  └→ FrameDec (implements FrameDecode)
+/// ```
+///
+/// # Object-safe dyn dispatch
+///
+/// ```text
+/// DynDecoderConfig → DynDecodeJob → DynDecoder / DynFrameDecoder / DynStreamingDecoder
+/// ```
+///
+/// Codec implementors implement the generic traits. Dispatch callers
+/// use the `Dyn*` variants for codec-agnostic operation.
+pub mod decode {
+    // Traits — config, job, execution
+    pub use crate::traits::{
+        Decode, DecodeJob, DecoderConfig, FrameDecode, StreamingDecode,
+    };
+
+    // Object-safe dyn dispatch
+    pub use crate::traits::{
+        BoxedError, DynDecodeJob, DynDecoder, DynDecoderConfig, DynFrameDecoder,
+        DynStreamingDecoder,
+    };
+
+    // Types
+    pub use crate::capabilities::DecodeCapabilities;
+    pub use crate::info::{DecodeCost, OutputInfo};
+    pub use crate::output::{DecodeFrame, DecodeOutput};
+    pub use crate::policy::DecodePolicy;
+    pub use crate::sink::DecodeRowSink;
+
+    // Shared types re-exported for convenience (commonly needed alongside decode)
+    pub use crate::info::{EmbeddedMetadata, SourceColor};
+}
 
 // Error location tracking re-exports.
 //
@@ -93,7 +193,7 @@ pub use rgb::{Gray, Rgb, Rgba};
 // The recommended pattern (codecs depend on `thiserror` directly):
 //
 // ```rust,ignore
-// use zencodec_types::{At, ResultAtExt};
+// use whereat::{At, ResultAtExt};
 //
 // #[derive(Debug, thiserror::Error)]
 // pub enum MyCodecError {
@@ -110,5 +210,3 @@ pub use rgb::{Gray, Rgb, Rgba};
 //     Ok(...)
 // }
 // ```
-pub use whereat;
-pub use whereat::{At, AtTrace, AtTraceable, ErrorAtExt, ResultAtExt};

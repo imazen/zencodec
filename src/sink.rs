@@ -48,7 +48,7 @@ use zenpixels::{PixelDescriptor, PixelSliceMut};
 /// # Example implementation
 ///
 /// ```
-/// use zencodec_types::DecodeRowSink;
+/// use zencodec_types::decode::DecodeRowSink;
 /// use zenpixels::{PixelSliceMut, PixelDescriptor};
 ///
 /// struct CollectSink {

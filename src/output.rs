@@ -541,13 +541,13 @@ impl core::fmt::Debug for DecodeFrame {
 /// A single typed frame for animation encoding.
 ///
 /// Pairs typed pixel data with a frame duration. Used by
-/// typed convenience methods on [`EncoderConfig`](crate::EncoderConfig).
+/// typed convenience methods on [`EncoderConfig`](crate::encode::EncoderConfig).
 #[derive(Clone, Copy)]
 #[non_exhaustive]
 /// A typed frame for animation encoding convenience methods.
 ///
 /// Like [`EncodeFrame`] but with a concrete pixel type for use with
-/// the typed convenience methods on [`EncoderConfig`](crate::EncoderConfig)
+/// the typed convenience methods on [`EncoderConfig`](crate::encode::EncoderConfig)
 /// (e.g. `encode_animation_rgb8`).
 pub struct TypedEncodeFrame<'a, Pixel> {
     /// The pixel data for this frame.
@@ -624,13 +624,13 @@ impl<Pixel> core::fmt::Debug for TypedEncodeFrame<'_, Pixel> {
 /// For sub-canvas frames (GIF, APNG, WebP, JXL), set `frame_rect` to
 /// the region this frame occupies within the canvas, and set `blend`
 /// and `disposal` to control compositing. Use
-/// [`EncodeJob::with_canvas_size()`](crate::EncodeJob::with_canvas_size)
+/// [`EncodeJob::with_canvas_size()`](crate::encode::EncodeJob::with_canvas_size)
 /// to set the canvas dimensions before pushing sub-canvas frames.
 ///
 /// # Example
 ///
 /// ```
-/// use zencodec_types::{EncodeFrame, FrameBlend, FrameDisposal};
+/// use zencodec_types::{FrameBlend, FrameDisposal, encode::EncodeFrame};
 /// use zenpixels::PixelSlice;
 ///
 /// # fn example(full_canvas: PixelSlice<'_>, sub_region: PixelSlice<'_>) {

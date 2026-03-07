@@ -44,9 +44,12 @@ pub trait DynEncoder {
     fn encode(self: Box<Self>, pixels: PixelSlice<'_>) -> Result<EncodeOutput, BoxedError>;
 
     /// Encode from sRGB RGBA8 raw bytes (consumes self).
+    ///
+    /// The buffer is mutable — the encoder may modify it in-place for
+    /// format adaptation. See [`Encoder::encode_srgba8`] for details.
     fn encode_srgba8(
         self: Box<Self>,
-        data: &[u8],
+        data: &mut [u8],
         make_opaque: bool,
         width: u32,
         height: u32,
@@ -79,7 +82,7 @@ impl<E: Encoder> DynEncoder for EncoderShim<E> {
 
     fn encode_srgba8(
         self: Box<Self>,
-        data: &[u8],
+        data: &mut [u8],
         make_opaque: bool,
         width: u32,
         height: u32,

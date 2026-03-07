@@ -782,7 +782,7 @@ impl<'a> MetadataView<'a> {
 
 /// Predicted output from a decode operation.
 ///
-/// Returned by [`DecodeJob::output_info()`](crate::DecodeJob::output_info).
+/// Returned by [`DecodeJob::output_info()`](crate::decode::DecodeJob::output_info).
 /// Describes what `decode()` or `decode_into()` will produce given the
 /// current decode hints (crop, scale, orientation).
 ///
@@ -807,7 +807,7 @@ pub struct OutputInfo {
     /// Pixel format the decoder will produce natively (for `decode()`).
     ///
     /// For `decode_into()`, use any format from
-    /// [`supported_descriptors()`](crate::DecoderConfig::supported_descriptors) —
+    /// [`supported_descriptors()`](crate::decode::DecoderConfig::supported_descriptors) —
     /// this field tells you what the codec would pick if you let it choose.
     pub native_format: PixelDescriptor,
     /// Whether the output has an alpha channel.

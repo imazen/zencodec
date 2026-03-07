@@ -40,21 +40,23 @@ pub trait Encoder: Sized {
 
     /// Encode from sRGB(A) 8-bit pixels provided as raw bytes.
     ///
-    /// Universal entry point for RGBA8 data. Codecs should override this
-    /// to handle pixel format conversion internally (e.g. JPEG drops
-    /// the alpha channel and encodes as RGB).
+    /// Universal entry point for RGBA8 data. The buffer is mutable —
+    /// the encoder may modify it in-place for format adaptation (e.g.
+    /// RGBA→BGRA channel reorder, alpha premultiplication, stripping
+    /// alpha to RGB). Callers must not rely on the buffer contents
+    /// after this call returns.
     ///
     /// The default delegates to [`encode()`](Encoder::encode) by wrapping
     /// the raw bytes in a [`PixelSlice`] with the appropriate descriptor.
     ///
-    /// - `data`: raw pixel bytes in RGBA order, 4 bytes per pixel
+    /// - `data`: raw pixel bytes in RGBA order, 4 bytes per pixel (may be mutated)
     /// - `make_opaque`: if `true`, treat the alpha channel as padding
     ///   (enables RGB fast paths in codecs that don't support alpha)
     /// - `width`, `height`: image dimensions in pixels
     /// - `stride_pixels`: row stride in pixels (≥ width)
     fn encode_srgba8(
         self,
-        data: &[u8],
+        data: &mut [u8],
         make_opaque: bool,
         width: u32,
         height: u32,

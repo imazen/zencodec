@@ -124,14 +124,14 @@ pub trait HasUnsupportedOperation {
 
 /// Describes what an encoder supports.
 ///
-/// Returned by [`EncoderConfig::capabilities()`](crate::EncoderConfig::capabilities)
+/// Returned by [`EncoderConfig::capabilities()`](crate::encode::EncoderConfig::capabilities)
 /// as a `&'static` reference. Uses getter methods so fields can be added
 /// without breaking changes.
 ///
 /// # Example
 ///
 /// ```
-/// use zencodec_types::EncodeCapabilities;
+/// use zencodec_types::encode::EncodeCapabilities;
 ///
 /// static CAPS: EncodeCapabilities = EncodeCapabilities::new()
 ///     .with_icc(true)
@@ -451,14 +451,14 @@ impl fmt::Debug for EncodeCapabilities {
 
 /// Describes what a decoder supports.
 ///
-/// Returned by [`DecoderConfig::capabilities()`](crate::DecoderConfig::capabilities)
+/// Returned by [`DecoderConfig::capabilities()`](crate::decode::DecoderConfig::capabilities)
 /// as a `&'static` reference. Uses getter methods so fields can be added
 /// without breaking changes.
 ///
 /// # Example
 ///
 /// ```
-/// use zencodec_types::DecodeCapabilities;
+/// use zencodec_types::decode::DecodeCapabilities;
 ///
 /// static CAPS: DecodeCapabilities = DecodeCapabilities::new()
 ///     .with_icc(true)
