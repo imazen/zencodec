@@ -56,15 +56,9 @@ use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 /// related methods that erase the concrete codec type.
 pub type BoxedError = Box<dyn core::error::Error + Send + Sync>;
 
-/// Type-erased one-shot encoder: accepts any pixel format, produces encoded output.
-pub type DynEncoder<'a> = Box<dyn FnOnce(PixelSlice<'_>) -> Result<EncodeOutput, BoxedError> + 'a>;
-
 /// Type-erased frame encoder: `Some(frame)` pushes a frame, `None` finalizes.
 pub type DynFrameEncoder<'a> =
     Box<dyn FnMut(Option<EncodeFrame<'_>>) -> Result<Option<EncodeOutput>, BoxedError> + 'a>;
-
-/// Type-erased one-shot decoder: call to get decoded pixels.
-pub type DynDecoder<'a> = Box<dyn FnOnce() -> Result<DecodeOutput, BoxedError> + 'a>;
 
 /// Type-erased frame decoder: call repeatedly until `Ok(None)`.
 pub type DynFrameDecoder<'a> = Box<dyn FnMut() -> Result<Option<DecodeFrame>, BoxedError> + 'a>;
@@ -260,17 +254,15 @@ pub trait EncodeJob<'a>: Sized {
     ///     .dyn_encoder()?;
     ///
     /// // No generics from here on
-    /// let output = encode(pixels)?;
+    /// let output = encode.encode(pixels)?;
     /// ```
-    fn dyn_encoder(self) -> Result<DynEncoder<'a>, BoxedError>
+    fn dyn_encoder(self) -> Result<Box<dyn DynEncoder + 'a>, BoxedError>
     where
         Self: 'a,
         Self::Enc: Encoder,
     {
         let enc = self.encoder().map_err(|e| Box::new(e) as BoxedError)?;
-        Ok(Box::new(move |pixels: PixelSlice<'_>| {
-            enc.encode(pixels).map_err(|e| Box::new(e) as BoxedError)
-        }))
+        Ok(Box::new(EncoderShim(enc)))
     }
 
     /// Create a type-erased frame-by-frame encoder.
@@ -508,6 +500,42 @@ pub trait Encoder: Sized {
 
     /// Encode a complete image at once (consumes self).
     fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error>;
+
+    /// Encode from sRGB(A) 8-bit pixels provided as raw bytes.
+    ///
+    /// Universal entry point for RGBA8 data. Codecs should override this
+    /// to handle pixel format conversion internally (e.g. JPEG drops
+    /// the alpha channel and encodes as RGB).
+    ///
+    /// The default delegates to [`encode()`](Encoder::encode) by wrapping
+    /// the raw bytes in a [`PixelSlice`] with the appropriate descriptor.
+    ///
+    /// - `data`: raw pixel bytes in RGBA order, 4 bytes per pixel
+    /// - `make_opaque`: if `true`, treat the alpha channel as padding
+    ///   (enables RGB fast paths in codecs that don't support alpha)
+    /// - `width`, `height`: image dimensions in pixels
+    /// - `stride_pixels`: row stride in pixels (≥ width)
+    fn encode_srgba8(
+        self,
+        data: &[u8],
+        make_opaque: bool,
+        width: u32,
+        height: u32,
+        stride_pixels: u32,
+    ) -> Result<EncodeOutput, Self::Error> {
+        use zenpixels::AlphaMode;
+        let descriptor = if make_opaque {
+            PixelDescriptor::RGBA8_SRGB.with_alpha(Some(AlphaMode::Undefined))
+        } else {
+            PixelDescriptor::RGBA8_SRGB
+        };
+        let stride_bytes = stride_pixels as usize * 4;
+        // PixelSlice::new only fails on dimension/stride/length mismatch,
+        // which would be a caller bug. Panic is appropriate here.
+        let pixels = PixelSlice::new(data, width, height, stride_bytes, descriptor)
+            .expect("encode_srgba8: invalid dimensions or data length for RGBA8");
+        self.encode(pixels)
+    }
 
     /// Push scanline rows incrementally.
     ///
@@ -857,22 +885,20 @@ pub trait DecodeJob<'a>: Sized {
     ///     .with_scale_hint(800, 600)
     ///     .dyn_decoder(data, &[PixelDescriptor::rgb8()])?;
     ///
-    /// let output: DecodeOutput = decode()?;
+    /// let output: DecodeOutput = decode.decode()?;
     /// ```
     fn dyn_decoder(
         self,
         data: &'a [u8],
         preferred: &[PixelDescriptor],
-    ) -> Result<DynDecoder<'a>, BoxedError>
+    ) -> Result<Box<dyn DynDecoder + 'a>, BoxedError>
     where
         Self: 'a,
     {
         let dec = self
             .decoder(data, preferred)
             .map_err(|e| Box::new(e) as BoxedError)?;
-        Ok(Box::new(move || {
-            dec.decode().map_err(|e| Box::new(e) as BoxedError)
-        }))
+        Ok(Box::new(DecoderShim(dec)))
     }
 
     /// Create a type-erased frame-by-frame decoder.
@@ -1029,5 +1055,291 @@ pub trait FrameDecode: Sized {
 
         let info = frame.info();
         Ok(Some(OutputInfo::full_decode(info.width, info.height, desc)))
+    }
+}
+
+// ===========================================================================
+// Object-safe layered traits — zero-generics codec-agnostic dispatch
+// ===========================================================================
+//
+// Mirrors the generic hierarchy with dyn-safe traits:
+//
+//   DynEncoderConfig → DynEncodeJob → DynEncoder
+//   DynDecoderConfig → DynDecodeJob → DynDecoder
+//
+// Each layer is a separate trait with blanket impls via private shim structs.
+// Usage:
+//
+// ```rust,ignore
+// fn save(config: &dyn DynEncoderConfig, data: &[u8], w: u32, h: u32) -> Result<Vec<u8>, BoxedError> {
+//     let mut job = config.dyn_job();
+//     job.set_metadata(&meta);
+//     job.set_limits(limits);
+//     let encoder = job.into_encoder()?;
+//     let output = encoder.encode_srgba8(data, true, w, h, w)?;
+//     Ok(output.into_vec())
+// }
+// ```
+
+// --- Encode ---
+
+/// Object-safe single-image encoder.
+///
+/// Wraps [`Encoder`] for dyn dispatch. Produced by
+/// [`DynEncodeJob::into_encoder`].
+pub trait DynEncoder {
+    /// Encode a complete image from type-erased pixels (consumes self).
+    fn encode(self: Box<Self>, pixels: PixelSlice<'_>) -> Result<EncodeOutput, BoxedError>;
+
+    /// Encode from sRGB RGBA8 raw bytes (consumes self).
+    fn encode_srgba8(
+        self: Box<Self>,
+        data: &[u8],
+        make_opaque: bool,
+        width: u32,
+        height: u32,
+        stride_pixels: u32,
+    ) -> Result<EncodeOutput, BoxedError>;
+}
+
+struct EncoderShim<E>(E);
+
+impl<E: Encoder> DynEncoder for EncoderShim<E> {
+    fn encode(self: Box<Self>, pixels: PixelSlice<'_>) -> Result<EncodeOutput, BoxedError> {
+        self.0.encode(pixels).map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn encode_srgba8(
+        self: Box<Self>,
+        data: &[u8],
+        make_opaque: bool,
+        width: u32,
+        height: u32,
+        stride_pixels: u32,
+    ) -> Result<EncodeOutput, BoxedError> {
+        self.0
+            .encode_srgba8(data, make_opaque, width, height, stride_pixels)
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+}
+
+/// Object-safe encode job.
+///
+/// Wraps [`EncodeJob`] for dyn dispatch. Produced by
+/// [`DynEncoderConfig::dyn_job`]. Use the `set_*` methods to configure,
+/// then call [`into_encoder`](DynEncodeJob::into_encoder) to create
+/// the encoder.
+pub trait DynEncodeJob<'a> {
+    /// Set cooperative cancellation token.
+    fn set_stop(&mut self, stop: &'a dyn Stop);
+
+    /// Override resource limits.
+    fn set_limits(&mut self, limits: ResourceLimits);
+
+    /// Set metadata (ICC, EXIF, XMP) to embed.
+    fn set_metadata(&mut self, meta: &'a MetadataView<'a>);
+
+    /// Create the encoder (consumes this job).
+    fn into_encoder(self: Box<Self>) -> Result<Box<dyn DynEncoder + 'a>, BoxedError>;
+}
+
+struct EncodeJobShim<J>(Option<J>);
+
+impl<'a, J> DynEncodeJob<'a> for EncodeJobShim<J>
+where
+    J: EncodeJob<'a> + 'a,
+    J::Enc: Encoder,
+{
+    fn set_stop(&mut self, stop: &'a dyn Stop) {
+        let job = self.0.take().expect("job already consumed");
+        self.0 = Some(job.with_stop(stop));
+    }
+
+    fn set_limits(&mut self, limits: ResourceLimits) {
+        let job = self.0.take().expect("job already consumed");
+        self.0 = Some(job.with_limits(limits));
+    }
+
+    fn set_metadata(&mut self, meta: &'a MetadataView<'a>) {
+        let job = self.0.take().expect("job already consumed");
+        self.0 = Some(job.with_metadata(meta));
+    }
+
+    fn into_encoder(mut self: Box<Self>) -> Result<Box<dyn DynEncoder + 'a>, BoxedError> {
+        let job = self.0.take().expect("job already consumed");
+        let enc = job.encoder().map_err(|e| Box::new(e) as BoxedError)?;
+        Ok(Box::new(EncoderShim(enc)))
+    }
+}
+
+/// Object-safe encoder configuration.
+///
+/// Blanket-implemented for all [`EncoderConfig`] types whose encoder
+/// implements [`Encoder`]. Enables fully codec-agnostic code with no
+/// generic parameters.
+///
+/// ```rust,ignore
+/// fn save(config: &dyn DynEncoderConfig, pixels: &[u8], w: u32, h: u32) -> Result<Vec<u8>, BoxedError> {
+///     let encoder = config.dyn_job().into_encoder()?;
+///     encoder.encode_srgba8(pixels, true, w, h, w)
+///         .map(|o| o.into_vec())
+/// }
+///
+/// let jpeg = JpegEncoderConfig::new().with_generic_quality(85.0);
+/// let webp = WebpEncoderConfig::lossy();
+/// save(&jpeg, &pixels, 100, 100)?;
+/// save(&webp, &pixels, 100, 100)?;
+/// ```
+pub trait DynEncoderConfig: Send + Sync {
+    /// The image format this encoder produces.
+    fn format(&self) -> ImageFormat;
+
+    /// Pixel formats this encoder accepts natively.
+    fn supported_descriptors(&self) -> &'static [PixelDescriptor];
+
+    /// Create a dyn-dispatched encode job.
+    fn dyn_job(&self) -> Box<dyn DynEncodeJob<'_> + '_>;
+}
+
+impl<C> DynEncoderConfig for C
+where
+    C: EncoderConfig,
+    for<'a> <C::Job<'a> as EncodeJob<'a>>::Enc: Encoder,
+{
+    fn format(&self) -> ImageFormat {
+        C::format()
+    }
+
+    fn supported_descriptors(&self) -> &'static [PixelDescriptor] {
+        C::supported_descriptors()
+    }
+
+    fn dyn_job(&self) -> Box<dyn DynEncodeJob<'_> + '_> {
+        Box::new(EncodeJobShim(Some(EncoderConfig::job(self))))
+    }
+}
+
+// --- Decode ---
+
+/// Object-safe one-shot decoder.
+///
+/// Wraps [`Decode`] for dyn dispatch. Produced by
+/// [`DynDecodeJob::into_decoder`].
+pub trait DynDecoder {
+    /// Decode to owned pixels (consumes self).
+    fn decode(self: Box<Self>) -> Result<DecodeOutput, BoxedError>;
+}
+
+struct DecoderShim<D>(D);
+
+impl<D: Decode> DynDecoder for DecoderShim<D> {
+    fn decode(self: Box<Self>) -> Result<DecodeOutput, BoxedError> {
+        self.0.decode().map_err(|e| Box::new(e) as BoxedError)
+    }
+}
+
+/// Object-safe decode job.
+///
+/// Wraps [`DecodeJob`] for dyn dispatch. Produced by
+/// [`DynDecoderConfig::dyn_job`]. Use the `set_*` methods to configure,
+/// then call [`into_decoder`](DynDecodeJob::into_decoder) to decode.
+pub trait DynDecodeJob<'a> {
+    /// Set cooperative cancellation token.
+    fn set_stop(&mut self, stop: &'a dyn Stop);
+
+    /// Override resource limits.
+    fn set_limits(&mut self, limits: ResourceLimits);
+
+    /// Probe image metadata without decoding pixels.
+    fn probe(&self, data: &[u8]) -> Result<ImageInfo, BoxedError>;
+
+    /// Create a one-shot decoder bound to `data` (consumes this job).
+    ///
+    /// `preferred` is a ranked list of desired output pixel formats.
+    /// Pass `&[]` for the decoder's native format.
+    fn into_decoder(
+        self: Box<Self>,
+        data: &'a [u8],
+        preferred: &[PixelDescriptor],
+    ) -> Result<Box<dyn DynDecoder + 'a>, BoxedError>;
+}
+
+struct DecodeJobShim<J>(Option<J>);
+
+impl<'a, J> DynDecodeJob<'a> for DecodeJobShim<J>
+where
+    J: DecodeJob<'a> + 'a,
+{
+    fn set_stop(&mut self, stop: &'a dyn Stop) {
+        let job = self.0.take().expect("job already consumed");
+        self.0 = Some(job.with_stop(stop));
+    }
+
+    fn set_limits(&mut self, limits: ResourceLimits) {
+        let job = self.0.take().expect("job already consumed");
+        self.0 = Some(job.with_limits(limits));
+    }
+
+    fn probe(&self, data: &[u8]) -> Result<ImageInfo, BoxedError> {
+        self.0
+            .as_ref()
+            .expect("job already consumed")
+            .probe(data)
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn into_decoder(
+        mut self: Box<Self>,
+        data: &'a [u8],
+        preferred: &[PixelDescriptor],
+    ) -> Result<Box<dyn DynDecoder + 'a>, BoxedError> {
+        let job = self.0.take().expect("job already consumed");
+        let dec = job
+            .decoder(data, preferred)
+            .map_err(|e| Box::new(e) as BoxedError)?;
+        Ok(Box::new(DecoderShim(dec)))
+    }
+}
+
+/// Object-safe decoder configuration.
+///
+/// Blanket-implemented for all [`DecoderConfig`] types. Enables fully
+/// codec-agnostic decode with no generic parameters.
+///
+/// ```rust,ignore
+/// fn load(config: &dyn DynDecoderConfig, data: &[u8]) -> Result<DecodeOutput, BoxedError> {
+///     config.dyn_job().into_decoder(data, &[])?.decode()
+/// }
+///
+/// let jpeg = JpegDecoderConfig::new();
+/// let webp = WebpDecoderConfig::new();
+/// let img = load(&jpeg, &jpeg_bytes)?;
+/// let img = load(&webp, &webp_bytes)?;
+/// ```
+pub trait DynDecoderConfig: Send + Sync {
+    /// The image format this decoder handles.
+    fn format(&self) -> ImageFormat;
+
+    /// Pixel formats this decoder can produce natively.
+    fn supported_descriptors(&self) -> &'static [PixelDescriptor];
+
+    /// Create a dyn-dispatched decode job.
+    fn dyn_job(&self) -> Box<dyn DynDecodeJob<'_> + '_>;
+}
+
+impl<C> DynDecoderConfig for C
+where
+    C: DecoderConfig,
+{
+    fn format(&self) -> ImageFormat {
+        C::format()
+    }
+
+    fn supported_descriptors(&self) -> &'static [PixelDescriptor] {
+        C::supported_descriptors()
+    }
+
+    fn dyn_job(&self) -> Box<dyn DynDecodeJob<'_> + '_> {
+        Box::new(DecodeJobShim(Some(DecoderConfig::job(self))))
     }
 }

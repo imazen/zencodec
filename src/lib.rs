@@ -65,10 +65,11 @@ pub use output::{
 pub use policy::{DecodePolicy, EncodePolicy};
 pub use sink::DecodeRowSink;
 pub use traits::{
-    BoxedError, Decode, DecodeJob, DecoderConfig, DynDecoder, DynEncoder, DynFrameDecoder,
-    DynFrameEncoder, EncodeGray8, EncodeGray16, EncodeGrayF32, EncodeJob, EncodeRgb8, EncodeRgb16,
-    EncodeRgbF16, EncodeRgbF32, EncodeRgba8, EncodeRgba16, EncodeRgbaF16, EncodeRgbaF32, Encoder,
-    EncoderConfig, FrameDecode, FrameEncodeRgb8, FrameEncodeRgba8, FrameEncoder, StreamingDecode,
+    BoxedError, Decode, DecodeJob, DecoderConfig, DynDecodeJob, DynDecoder, DynDecoderConfig,
+    DynEncodeJob, DynEncoder, DynEncoderConfig, DynFrameDecoder, DynFrameEncoder, EncodeGray8,
+    EncodeGray16, EncodeGrayF32, EncodeJob, EncodeRgb8, EncodeRgb16, EncodeRgbF16, EncodeRgbF32,
+    EncodeRgba8, EncodeRgba16, EncodeRgbaF16, EncodeRgbaF32, Encoder, EncoderConfig, FrameDecode,
+    FrameEncodeRgb8, FrameEncodeRgba8, FrameEncoder, StreamingDecode,
 };
 
 // Re-export PixelBufferConvertExt so codec crates get to_rgb8() etc. automatically.
