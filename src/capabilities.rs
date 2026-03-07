@@ -5,9 +5,8 @@
 //! discover behavior before calling methods that might be no-ops or expensive.
 //!
 //! [`UnsupportedOperation`] provides a standard enum for codecs to report
-//! which operations they don't support. [`HasUnsupportedOperation`] lets
-//! generic callers check for unsupported operations without downcasting
-//! codec-specific error types.
+//! which operations they don't support. Use [`CodecErrorExt`](crate::CodecErrorExt)
+//! to find these in any error's source chain.
 
 use core::fmt;
 
@@ -15,7 +14,7 @@ use core::fmt;
 ///
 /// Codecs include this in their error types (e.g. as a variant payload)
 /// so callers can generically detect "this codec doesn't support this
-/// operation" without downcasting. See [`HasUnsupportedOperation`].
+/// operation" without downcasting. See [`CodecErrorExt`](crate::CodecErrorExt).
 ///
 /// # Example
 ///
@@ -79,44 +78,6 @@ impl fmt::Display for UnsupportedOperation {
 
 impl core::error::Error for UnsupportedOperation {}
 
-/// Trait for codec errors that can report unsupported operations.
-///
-/// Implement this on your codec's error type so generic callers can
-/// check `err.unsupported_operation()` without downcasting.
-///
-/// This is opt-in — not a trait bound on the associated `Error` type.
-///
-/// # Example
-///
-/// ```
-/// use zc::{HasUnsupportedOperation, UnsupportedOperation};
-///
-/// #[derive(Debug)]
-/// enum MyCodecError {
-///     Unsupported(UnsupportedOperation),
-///     Other,
-/// }
-///
-/// impl HasUnsupportedOperation for MyCodecError {
-///     fn unsupported_operation(&self) -> Option<UnsupportedOperation> {
-///         match self {
-///             MyCodecError::Unsupported(op) => Some(*op),
-///             _ => None,
-///         }
-///     }
-/// }
-///
-/// let err = MyCodecError::Unsupported(UnsupportedOperation::DecodeInto);
-/// assert_eq!(err.unsupported_operation(), Some(UnsupportedOperation::DecodeInto));
-///
-/// let err2 = MyCodecError::Other;
-/// assert_eq!(err2.unsupported_operation(), None);
-/// ```
-pub trait HasUnsupportedOperation {
-    /// Returns the [`UnsupportedOperation`] if this error represents one,
-    /// or `None` for other error kinds.
-    fn unsupported_operation(&self) -> Option<UnsupportedOperation>;
-}
 
 // ===========================================================================
 // EncodeCapabilities
@@ -945,27 +906,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn has_unsupported_operation_trait() {
-        #[derive(Debug)]
-        enum TestError {
-            Unsupported(UnsupportedOperation),
-            Other,
-        }
-        impl HasUnsupportedOperation for TestError {
-            fn unsupported_operation(&self) -> Option<UnsupportedOperation> {
-                match self {
-                    TestError::Unsupported(op) => Some(*op),
-                    TestError::Other => None,
-                }
-            }
-        }
-        let err = TestError::Unsupported(UnsupportedOperation::AnimationEncode);
-        assert_eq!(
-            err.unsupported_operation(),
-            Some(UnsupportedOperation::AnimationEncode)
-        );
-        let err2 = TestError::Other;
-        assert_eq!(err2.unsupported_operation(), None);
-    }
 }

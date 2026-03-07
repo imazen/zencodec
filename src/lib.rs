@@ -13,7 +13,7 @@
 //! - [`ImageFormat`] — format detection from magic bytes
 //! - [`ImageInfo`] / [`MetadataView`] / [`Orientation`] / [`OrientationHint`] — image metadata
 //! - [`ResourceLimits`] / [`ThreadingPolicy`] — resource limit and threading configuration
-//! - [`UnsupportedOperation`] / [`HasUnsupportedOperation`] — standard unsupported operation reporting
+//! - [`UnsupportedOperation`] / [`CodecErrorExt`] — standard unsupported operation reporting and error chain inspection
 //!
 //! # Re-exported crates
 //!
@@ -61,8 +61,8 @@ pub use limits::{LimitExceeded, ResourceLimits, ThreadingPolicy};
 pub use orientation::{Orientation, OrientationHint};
 pub use output::{FrameBlend, FrameDisposal};
 
-pub use capabilities::{HasUnsupportedOperation, UnsupportedOperation};
-pub use error::find_cause;
+pub use capabilities::UnsupportedOperation;
+pub use error::{find_cause, CodecErrorExt};
 pub use traits::Unsupported;
 
 // =========================================================================
