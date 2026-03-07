@@ -36,7 +36,7 @@ use zenpixels::{PixelDescriptor, PixelFormat};
 /// # Example
 ///
 /// ```
-/// use zc::negotiate_pixel_format;
+/// use zc::decode::negotiate_pixel_format;
 /// use zenpixels::PixelDescriptor;
 ///
 /// // Caller wants RGBA8, falling back to RGB8
@@ -83,7 +83,7 @@ pub fn negotiate_pixel_format(
 /// # Example
 ///
 /// ```
-/// use zc::best_encode_format;
+/// use zc::encode::best_encode_format;
 /// use zenpixels::PixelDescriptor;
 ///
 /// let source = PixelDescriptor::RGB8_SRGB;

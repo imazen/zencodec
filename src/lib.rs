@@ -62,7 +62,6 @@ pub use format::ImageFormat;
 pub use gainmap::GainMapMetadata;
 pub use info::{Cicp, ContentLightLevel, ImageInfo, MasteringDisplay, Metadata, MetadataView};
 pub use limits::{LimitExceeded, ResourceLimits, ThreadingPolicy};
-pub use negotiate::{best_encode_format, is_format_available, negotiate_pixel_format};
 pub use orientation::{Orientation, OrientationHint};
 pub use output::{FrameBlend, FrameDisposal};
 
@@ -119,6 +118,7 @@ pub mod encode {
     // Types
     pub use crate::capabilities::EncodeCapabilities;
     pub use crate::info::EncodeCost;
+    pub use crate::negotiate::best_encode_format;
     pub use crate::output::{EncodeFrame, EncodeOutput};
     pub use crate::policy::EncodePolicy;
 }
@@ -159,6 +159,8 @@ pub mod decode {
     pub use crate::output::{DecodeFrame, DecodeOutput};
     pub use crate::policy::DecodePolicy;
     pub use crate::sink::DecodeRowSink;
+
+    pub use crate::negotiate::{is_format_available, negotiate_pixel_format};
 
     // Shared types re-exported for convenience (commonly needed alongside decode)
     pub use crate::info::{EmbeddedMetadata, SourceColor};
