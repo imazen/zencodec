@@ -5,16 +5,18 @@
 //! - `PixelSlice` / `PixelSliceMut` / `PixelBuffer` — format-erased pixel buffers (from [`zenpixels`])
 //! - [`ImageInfo`] / [`MetadataView`] / [`Orientation`] / [`OrientationHint`] — image metadata
 //! - [`ImageFormat`] — format detection from magic bytes
-//! - [`CodecCapabilities`] — capability flags for feature discovery
+//! - [`EncodeCapabilities`] / [`DecodeCapabilities`] — capability flags for feature discovery
 //! - [`UnsupportedOperation`] / [`HasUnsupportedOperation`] — standard unsupported operation reporting
-//! - [`ResourceLimits`] — resource limit configuration
+//! - [`ResourceLimits`] / [`ThreadingPolicy`] — resource limit and threading configuration
 //! - [`EncoderConfig`] / [`EncodeJob`] — encode configuration and job
+//! - [`Encoder`] / [`FrameEncoder`] — type-erased encode execution
 //! - Per-format encode traits: [`EncodeRgb8`], [`EncodeRgba8`], [`EncodeGray8`], etc.
 //! - Per-format frame encode traits: [`FrameEncodeRgb8`], [`FrameEncodeRgba8`]
 //! - [`DecoderConfig`] / [`DecodeJob`] — decode configuration and job
-//! - [`Decode`] / [`FrameDecode`] — type-erased decode with preferred format negotiation
+//! - [`Decode`] / [`StreamingDecode`] / [`FrameDecode`] — decode execution
 //! - [`DecodeRowSink`] — zero-copy row sink for streaming decode
 //! - [`DecodeOutput`] — decode output with typed pixel data
+//! - Object-safe dyn dispatch: [`DynEncoderConfig`], [`DynDecoderConfig`], [`DynEncoder`], [`DynDecoder`], etc.
 //! - [`At`] / [`AtTrace`] / [`AtTraceable`] — error location tracking (via [`whereat`])
 //!
 //! Individual codecs (zenjpeg, zenwebp, zengif, zenavif) implement these traits
