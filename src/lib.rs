@@ -142,7 +142,10 @@ pub mod encode {
 /// use the `Dyn*` variants for codec-agnostic operation.
 pub mod decode {
     // Traits — config, job, execution
-    pub use crate::traits::{Decode, DecodeJob, DecoderConfig, FullFrameDecoder, StreamingDecode};
+    pub use crate::traits::{
+        Decode, DecodeJob, DecoderConfig, FullFrameDecoder, StreamingDecode,
+        push_decoder_via_full_decode, render_frame_to_sink_via_copy,
+    };
 
     // Object-safe dyn dispatch
     pub use crate::traits::{

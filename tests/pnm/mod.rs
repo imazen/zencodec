@@ -8,7 +8,7 @@
 
 use std::borrow::Cow;
 
-use zc::decode::{Decode, DecodeCapabilities, DecodeJob, DecoderConfig};
+use zc::decode::{Decode, DecodeCapabilities, DecodeJob, DecoderConfig, push_decoder_via_full_decode};
 use zc::encode::{EncodeCapabilities, EncodeJob, EncodeOutput, Encoder, EncoderConfig};
 use zc::{ImageFormat, ImageInfo, MetadataView, ResourceLimits, Unsupported, UnsupportedOperation};
 
@@ -274,6 +274,17 @@ impl<'a> DecodeJob<'a> for PnmDecodeJob<'a> {
             .check_dimensions(w, h)
             .map_err(|e| PnmError::from(e).start_at())?;
         Ok(PnmDec { data })
+    }
+
+    fn push_decoder(
+        self,
+        data: Cow<'a, [u8]>,
+        sink: &mut dyn zc::decode::DecodeRowSink,
+        preferred: &[PixelDescriptor],
+    ) -> Result<OutputInfo, At<PnmError>> {
+        push_decoder_via_full_decode(self, data, sink, preferred, |e| {
+            PnmError::InvalidData(e.to_string()).start_at()
+        })
     }
 
     fn streaming_decoder(

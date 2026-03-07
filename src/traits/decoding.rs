@@ -208,40 +208,15 @@ pub trait DecodeJob<'a>: Sized {
     ///
     /// `preferred` is a ranked list of desired output formats.
     ///
-    /// Default implementation creates a [`decoder()`](DecodeJob::decoder),
-    /// calls [`Decode::decode()`], then copies the result into the sink
-    /// as a single strip. Codecs with native row streaming should override
-    /// for zero-copy.
+    /// Codecs with native row/strip streaming should write decoded rows
+    /// directly into the sink. Codecs that can only do one-shot decode
+    /// should call [`push_decoder_via_full_decode()`] as a fallback.
     fn push_decoder(
         self,
         data: Cow<'a, [u8]>,
         sink: &mut dyn crate::DecodeRowSink,
         preferred: &[PixelDescriptor],
-    ) -> Result<OutputInfo, Self::Error> {
-        let dec = self.decoder(data, preferred)?;
-        let output = dec.decode()?;
-        let ps = output.pixels();
-        let desc = ps.descriptor();
-        let w = ps.width();
-        let h = ps.rows();
-
-        sink.begin(w, h, desc)
-            .map_err(Self::FullFrameDec::wrap_sink_error)?;
-
-        let mut dst = sink
-            .provide_next_buffer(0, h, w, desc)
-            .map_err(Self::FullFrameDec::wrap_sink_error)?;
-        for row in 0..h {
-            dst.row_mut(row).copy_from_slice(ps.row(row));
-        }
-        drop(dst);
-
-        sink.finish()
-            .map_err(Self::FullFrameDec::wrap_sink_error)?;
-
-        let info = output.info();
-        Ok(OutputInfo::full_decode(info.width, info.height, desc))
-    }
+    ) -> Result<OutputInfo, Self::Error>;
 
     /// Create a streaming decoder that yields scanline batches.
     ///
@@ -351,4 +326,63 @@ pub trait DecodeJob<'a>: Sized {
             .map_err(|e| Box::new(e) as BoxedError)?;
         Ok(Box::new(StreamingDecoderShim(dec)))
     }
+}
+
+// ===========================================================================
+// Fallback helpers
+// ===========================================================================
+
+/// Fallback [`push_decoder`](DecodeJob::push_decoder) implementation via
+/// one-shot decode.
+///
+/// Decodes the full image into owned pixels, then copies row-by-row into the
+/// sink. This is correct but wasteful — use it only for codecs that cannot
+/// stream natively.
+///
+/// The `wrap_sink_error` function converts sink errors into the codec's error
+/// type.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// fn push_decoder(
+///     self,
+///     data: Cow<'a, [u8]>,
+///     sink: &mut dyn DecodeRowSink,
+///     preferred: &[PixelDescriptor],
+/// ) -> Result<OutputInfo, Self::Error> {
+///     push_decoder_via_full_decode(self, data, sink, preferred, MyError::from_sink)
+/// }
+/// ```
+pub fn push_decoder_via_full_decode<'a, J>(
+    job: J,
+    data: Cow<'a, [u8]>,
+    sink: &mut dyn crate::DecodeRowSink,
+    preferred: &[PixelDescriptor],
+    wrap_sink_error: fn(crate::sink::SinkError) -> J::Error,
+) -> Result<OutputInfo, J::Error>
+where
+    J: DecodeJob<'a>,
+{
+    let dec = job.decoder(data, preferred)?;
+    let output = dec.decode()?;
+    let ps = output.pixels();
+    let desc = ps.descriptor();
+    let w = ps.width();
+    let h = ps.rows();
+
+    sink.begin(w, h, desc).map_err(wrap_sink_error)?;
+
+    let mut dst = sink
+        .provide_next_buffer(0, h, w, desc)
+        .map_err(wrap_sink_error)?;
+    for row in 0..h {
+        dst.row_mut(row).copy_from_slice(ps.row(row));
+    }
+    drop(dst);
+
+    sink.finish().map_err(wrap_sink_error)?;
+
+    let info = output.info();
+    Ok(OutputInfo::full_decode(info.width, info.height, desc))
 }
