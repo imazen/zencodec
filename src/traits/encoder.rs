@@ -1,6 +1,7 @@
 //! Type-erased single-image and animation encoder traits.
 
 use crate::EncodeOutput;
+use enough::Stop;
 use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 
 /// Type-erased single-image encoder.
@@ -50,20 +51,31 @@ pub trait Encoder: Sized {
 
     /// Encode from sRGB(A) 8-bit pixels provided as raw bytes.
     ///
-    /// Universal entry point for RGBA8 data. The buffer is mutable —
-    /// the encoder may modify it in-place for format adaptation (e.g.
-    /// RGBA→BGRA channel reorder, alpha premultiplication, stripping
-    /// alpha to RGB). Callers must not rely on the buffer contents
-    /// after this call returns.
+    /// Hot-path entry point for RGBA8 data from bitmap sources (e.g.
+    /// imageflow). The buffer is mutable — the encoder may modify it
+    /// in-place for format adaptation (e.g. RGBA→BGRA channel reorder,
+    /// alpha premultiplication, stripping alpha to RGB). Callers must
+    /// not rely on the buffer contents after this call returns.
     ///
     /// The default delegates to [`encode()`](Encoder::encode) by wrapping
     /// the raw bytes in a [`PixelSlice`] with the appropriate descriptor.
+    /// Codec overrides (e.g. zenjpeg) may bypass `PixelSlice` construction
+    /// for zero-overhead encoding from raw buffers.
     ///
-    /// - `data`: raw pixel bytes in RGBA order, 4 bytes per pixel (may be mutated)
+    /// # Parameters
+    ///
+    /// - `data`: raw pixel bytes in RGBA order, 4 bytes per pixel (may be mutated).
+    ///   Length must be ≥ `stride_pixels * height * 4`.
     /// - `make_opaque`: if `true`, treat the alpha channel as padding
-    ///   (enables RGB fast paths in codecs that don't support alpha)
+    ///   (enables RGB fast paths in codecs that don't support alpha).
+    ///   Some codecs set all alpha bytes to 255 in-place.
     /// - `width`, `height`: image dimensions in pixels
-    /// - `stride_pixels`: row stride in pixels (≥ width)
+    /// - `stride_pixels`: row stride in **pixels** (not bytes), must be ≥ `width`.
+    ///   Stride in bytes is `stride_pixels * 4`. Callers creating bitmaps
+    ///   for this method should allocate rows with `stride_pixels = width`
+    ///   (contiguous) unless alignment requirements dictate otherwise.
+    ///   Non-contiguous strides (stride > width) are supported but may
+    ///   prevent zero-copy fast paths in some codecs.
     fn encode_srgba8(
         self,
         data: &mut [u8],
@@ -132,6 +144,16 @@ pub trait Encoder: Sized {
 /// Loop count is set on the [`EncodeJob`](super::EncodeJob) before
 /// creating this encoder, because formats write the loop count before
 /// frame data.
+///
+/// # Cooperative cancellation
+///
+/// Each method takes an `Option<&dyn Stop>` token for cooperative
+/// cancellation. Because `FullFrameEnc: 'static`, the encoder cannot
+/// borrow the job's stop token. Instead, the caller passes a stop
+/// token per call. Codecs that also stored an owned stop at
+/// construction time can combine the two with
+/// [`OrStop`](https://docs.rs/almost-enough/latest/almost_enough/struct.OrStop.html).
+/// Pass `None` when cancellation is not needed.
 pub trait FullFrameEncoder: Sized {
     /// The codec-specific error type.
     type Error: core::error::Error + Send + Sync + 'static;
@@ -141,10 +163,19 @@ pub trait FullFrameEncoder: Sized {
     fn reject(op: crate::UnsupportedOperation) -> Self::Error;
 
     /// Push a complete full-canvas frame.
-    fn push_frame(&mut self, pixels: PixelSlice<'_>, duration_ms: u32) -> Result<(), Self::Error>;
+    ///
+    /// Pass `None` if cancellation is not needed.
+    fn push_frame(
+        &mut self,
+        pixels: PixelSlice<'_>,
+        duration_ms: u32,
+        stop: Option<&dyn Stop>,
+    ) -> Result<(), Self::Error>;
 
     /// Finalize animation. Returns encoded output.
-    fn finish(self) -> Result<EncodeOutput, Self::Error>;
+    ///
+    /// Pass `None` if cancellation is not needed.
+    fn finish(self, stop: Option<&dyn Stop>) -> Result<EncodeOutput, Self::Error>;
 }
 
 /// Trivial rejection impl — codecs that don't support animation set
@@ -156,11 +187,16 @@ impl FullFrameEncoder for () {
         op
     }
 
-    fn push_frame(&mut self, _: PixelSlice<'_>, _: u32) -> Result<(), Self::Error> {
+    fn push_frame(
+        &mut self,
+        _: PixelSlice<'_>,
+        _: u32,
+        _: Option<&dyn Stop>,
+    ) -> Result<(), Self::Error> {
         Err(crate::UnsupportedOperation::AnimationEncode)
     }
 
-    fn finish(self) -> Result<EncodeOutput, Self::Error> {
+    fn finish(self, _: Option<&dyn Stop>) -> Result<EncodeOutput, Self::Error> {
         Err(crate::UnsupportedOperation::AnimationEncode)
     }
 }
