@@ -53,7 +53,7 @@ mod traits;
 // =========================================================================
 
 pub use color::{ColorContext, ColorProfileSource, NamedProfile};
-pub use format::{CustomImageFormat, ImageFormat};
+pub use format::{ImageFormat, ImageFormatDefinition, ImageFormatRegistry};
 pub use gainmap::GainMapMetadata;
 pub use info::{Cicp, ContentLightLevel, ImageInfo, MasteringDisplay, Metadata, MetadataView};
 pub use limits::{LimitExceeded, ResourceLimits, ThreadingPolicy};
@@ -138,9 +138,7 @@ pub mod encode {
 /// use the `Dyn*` variants for codec-agnostic operation.
 pub mod decode {
     // Traits — config, job, execution
-    pub use crate::traits::{
-        Decode, DecodeJob, DecoderConfig, FrameDecode, StreamingDecode,
-    };
+    pub use crate::traits::{Decode, DecodeJob, DecoderConfig, FrameDecode, StreamingDecode};
 
     // Object-safe dyn dispatch
     pub use crate::traits::{
@@ -160,4 +158,3 @@ pub mod decode {
     // Shared types re-exported for convenience (commonly needed alongside decode)
     pub use crate::info::{EmbeddedMetadata, SourceColor};
 }
-

@@ -1,23 +1,34 @@
-//! Image format detection and metadata.
+//! Image format detection, metadata, and registry.
 
-/// Metadata for a format not known to zencodec-types.
+use alloc::borrow::Cow;
+use alloc::vec::Vec;
+
+// ===========================================================================
+// ImageFormatDefinition
+// ===========================================================================
+
+/// Describes an image format's metadata, capabilities, and detection logic.
 ///
-/// Define as a `static` and reference via [`ImageFormat::Custom`].
-/// Identity is based on `name` — two custom formats with the same name
-/// are considered equal.
+/// Used both for built-in formats (via [`ImageFormatRegistry::common()`]) and
+/// for custom formats defined by downstream crates. Define as a `static` and
+/// reference via [`ImageFormat::Custom`].
+///
+/// Identity is based on `name` — two definitions with the same name are
+/// considered equal.
 ///
 /// # Example
 ///
 /// ```rust,ignore
-/// use zc::{CustomImageFormat, ImageFormat};
+/// use zc::{ImageFormatDefinition, ImageFormat, ImageFormatRegistry};
 ///
 /// fn detect_jpeg2000(data: &[u8]) -> bool {
 ///     data.len() >= 12 && data[..4] == [0x00, 0x00, 0x00, 0x0C]
 ///         && &data[4..8] == b"jP  "
 /// }
 ///
-/// static JPEG2000: CustomImageFormat = CustomImageFormat {
+/// static JPEG2000: ImageFormatDefinition = ImageFormatDefinition {
 ///     name: "jpeg2000",
+///     image_format: None,
 ///     display_name: "JPEG 2000",
 ///     preferred_extension: "jp2",
 ///     extensions: &["jp2", "j2k", "jpx"],
@@ -31,16 +42,23 @@
 ///     detect: detect_jpeg2000,
 /// };
 ///
-/// let fmt = ImageFormat::Custom(&JPEG2000);
-/// assert_eq!(fmt.mime_type(), "image/jp2");
-/// assert_eq!(fmt.extension(), "jp2");
+/// // Build a registry with custom + common formats
+/// let registry = ImageFormatRegistry::from_vec(vec![&JPEG2000]);
+/// let fmt = registry.detect(data);
 /// ```
-pub struct CustomImageFormat {
+pub struct ImageFormatDefinition {
     /// Unique lowercase format identifier (e.g. `"jpeg2000"`, `"dds"`).
     ///
     /// Used for equality comparison and hashing. Must be unique across
-    /// all custom formats in use.
+    /// all format definitions in use.
     pub name: &'static str,
+
+    /// The corresponding built-in [`ImageFormat`] variant, if any.
+    ///
+    /// Set to `Some(ImageFormat::Jpeg)` etc. for definitions that describe
+    /// built-in formats. Set to `None` for custom formats — the registry
+    /// wraps them as [`ImageFormat::Custom`].
+    pub image_format: Option<ImageFormat>,
 
     /// Human-readable format name for display (e.g. `"JPEG 2000"`, `"DDS"`).
     pub display_name: &'static str,
@@ -69,38 +87,373 @@ pub struct CustomImageFormat {
     /// Whether this format supports lossy encoding.
     pub supports_lossy: bool,
 
-    /// Minimum bytes needed for reliable magic byte detection.
+    /// Recommended bytes to fetch for reliable format probing.
+    ///
+    /// The `detect` function must still handle shorter inputs safely
+    /// (returning `false` for inconclusive data).
     pub magic_bytes_needed: usize,
 
     /// Magic byte detection function.
     ///
     /// Returns `true` if the data appears to be this format.
-    /// The input will have at least `magic_bytes_needed` bytes.
+    /// Must handle any data length safely (including empty slices).
     pub detect: fn(&[u8]) -> bool,
 }
 
-impl PartialEq for CustomImageFormat {
+impl ImageFormatDefinition {
+    /// Convert this definition to the corresponding [`ImageFormat`].
+    ///
+    /// Returns the built-in variant if `image_format` is `Some`, otherwise
+    /// wraps as [`ImageFormat::Custom`].
+    pub fn to_image_format(&'static self) -> ImageFormat {
+        self.image_format.unwrap_or(ImageFormat::Custom(self))
+    }
+}
+
+impl PartialEq for ImageFormatDefinition {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
     }
 }
 
-impl Eq for CustomImageFormat {}
+impl Eq for ImageFormatDefinition {}
 
-impl core::hash::Hash for CustomImageFormat {
+impl core::hash::Hash for ImageFormatDefinition {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.name.hash(state);
     }
 }
 
-impl core::fmt::Debug for CustomImageFormat {
+impl core::fmt::Debug for ImageFormatDefinition {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("CustomImageFormat")
+        f.debug_struct("ImageFormatDefinition")
             .field("name", &self.name)
             .field("display_name", &self.display_name)
             .finish()
     }
 }
+
+// ===========================================================================
+// Built-in format definitions
+// ===========================================================================
+
+/// Built-in format definition statics and shared detection helpers.
+mod builtins {
+    use super::{ImageFormat, ImageFormatDefinition};
+
+    // ------- ISOBMFF helpers (shared by AVIF + HEIC) -------
+
+    pub(super) const HEIC_BRANDS: &[&[u8; 4]] = &[
+        b"heic", b"heix", b"hevc", b"hevx", b"heim", b"heis", b"hevm", b"hevs",
+    ];
+
+    fn has_ftyp(data: &[u8]) -> bool {
+        data.len() >= 12 && &data[4..8] == b"ftyp"
+    }
+
+    fn scan_compat_brands(data: &[u8], target: &[&[u8; 4]]) -> bool {
+        let box_size = u32::from_be_bytes([data[0], data[1], data[2], data[3]]) as usize;
+        let end = box_size.min(data.len());
+        let mut offset = 16;
+        while offset + 4 <= end {
+            let compat = &data[offset..offset + 4];
+            if target.iter().any(|b| compat[..4] == b[..]) {
+                return true;
+            }
+            offset += 4;
+        }
+        false
+    }
+
+    fn detect_avif(data: &[u8]) -> bool {
+        if !has_ftyp(data) {
+            return false;
+        }
+        let major = &data[8..12];
+        if major == b"avif" || major == b"avis" {
+            return true;
+        }
+        if major == b"mif1" || major == b"msf1" {
+            scan_compat_brands(data, &[b"avif", b"avis"])
+        } else {
+            false
+        }
+    }
+
+    fn detect_heic(data: &[u8]) -> bool {
+        if !has_ftyp(data) {
+            return false;
+        }
+        let major = &data[8..12];
+        if HEIC_BRANDS.iter().any(|b| major == &b[..]) {
+            return true;
+        }
+        if major == b"mif1" || major == b"msf1" {
+            scan_compat_brands(data, HEIC_BRANDS)
+        } else {
+            false
+        }
+    }
+
+    fn detect_jxl(data: &[u8]) -> bool {
+        // Codestream: FF 0A
+        if data.len() >= 2 && data[0] == 0xFF && data[1] == 0x0A {
+            return true;
+        }
+        // Container: 00 00 00 0C 4A 58 4C 20 0D 0A 87 0A
+        data.len() >= 12
+            && data[..4] == [0x00, 0x00, 0x00, 0x0C]
+            && data[4..8] == [b'J', b'X', b'L', b' ']
+            && data[8..12] == [0x0D, 0x0A, 0x87, 0x0A]
+    }
+
+    // ------- Built-in format definitions -------
+
+    pub static JPEG: ImageFormatDefinition = ImageFormatDefinition {
+        name: "jpeg",
+        image_format: Some(ImageFormat::Jpeg),
+        display_name: "JPEG",
+        preferred_extension: "jpg",
+        extensions: &["jpg", "jpeg", "jpe", "jfif"],
+        preferred_mime_type: "image/jpeg",
+        mime_types: &["image/jpeg"],
+        supports_alpha: false,
+        supports_animation: false,
+        supports_lossless: false,
+        supports_lossy: true,
+        magic_bytes_needed: 2048,
+        detect: |data| data.len() >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF,
+    };
+
+    pub static PNG: ImageFormatDefinition = ImageFormatDefinition {
+        name: "png",
+        image_format: Some(ImageFormat::Png),
+        display_name: "PNG",
+        preferred_extension: "png",
+        extensions: &["png"],
+        preferred_mime_type: "image/png",
+        mime_types: &["image/png"],
+        supports_alpha: true,
+        supports_animation: true,
+        supports_lossless: true,
+        supports_lossy: false,
+        magic_bytes_needed: 33,
+        detect: |data| {
+            data.len() >= 8 && data[..8] == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+        },
+    };
+
+    pub static GIF: ImageFormatDefinition = ImageFormatDefinition {
+        name: "gif",
+        image_format: Some(ImageFormat::Gif),
+        display_name: "GIF",
+        preferred_extension: "gif",
+        extensions: &["gif"],
+        preferred_mime_type: "image/gif",
+        mime_types: &["image/gif"],
+        supports_alpha: true,
+        supports_animation: true,
+        supports_lossless: true,
+        supports_lossy: false,
+        magic_bytes_needed: 13,
+        detect: |data| {
+            data.len() >= 6
+                && data[..3] == *b"GIF"
+                && data[3] == b'8'
+                && (data[4] == b'7' || data[4] == b'9')
+                && data[5] == b'a'
+        },
+    };
+
+    pub static WEBP: ImageFormatDefinition = ImageFormatDefinition {
+        name: "webp",
+        image_format: Some(ImageFormat::WebP),
+        display_name: "WebP",
+        preferred_extension: "webp",
+        extensions: &["webp"],
+        preferred_mime_type: "image/webp",
+        mime_types: &["image/webp"],
+        supports_alpha: true,
+        supports_animation: true,
+        supports_lossless: true,
+        supports_lossy: true,
+        magic_bytes_needed: 30,
+        detect: |data| data.len() >= 12 && data[..4] == *b"RIFF" && data[8..12] == *b"WEBP",
+    };
+
+    pub static AVIF: ImageFormatDefinition = ImageFormatDefinition {
+        name: "avif",
+        image_format: Some(ImageFormat::Avif),
+        display_name: "AVIF",
+        preferred_extension: "avif",
+        extensions: &["avif"],
+        preferred_mime_type: "image/avif",
+        mime_types: &["image/avif"],
+        supports_alpha: true,
+        supports_animation: true,
+        supports_lossless: true,
+        supports_lossy: true,
+        magic_bytes_needed: 512,
+        detect: detect_avif,
+    };
+
+    pub static JXL: ImageFormatDefinition = ImageFormatDefinition {
+        name: "jxl",
+        image_format: Some(ImageFormat::Jxl),
+        display_name: "JPEG XL",
+        preferred_extension: "jxl",
+        extensions: &["jxl"],
+        preferred_mime_type: "image/jxl",
+        mime_types: &["image/jxl"],
+        supports_alpha: true,
+        supports_animation: true,
+        supports_lossless: true,
+        supports_lossy: true,
+        magic_bytes_needed: 256,
+        detect: detect_jxl,
+    };
+
+    pub static HEIC: ImageFormatDefinition = ImageFormatDefinition {
+        name: "heic",
+        image_format: Some(ImageFormat::Heic),
+        display_name: "HEIC",
+        preferred_extension: "heif",
+        extensions: &["heic", "heif", "hif"],
+        preferred_mime_type: "image/heif",
+        mime_types: &["image/heif", "image/heic"],
+        supports_alpha: true,
+        supports_animation: false,
+        supports_lossless: false,
+        supports_lossy: true,
+        magic_bytes_needed: 512,
+        detect: detect_heic,
+    };
+
+    pub static BMP: ImageFormatDefinition = ImageFormatDefinition {
+        name: "bmp",
+        image_format: Some(ImageFormat::Bmp),
+        display_name: "BMP",
+        preferred_extension: "bmp",
+        extensions: &["bmp"],
+        preferred_mime_type: "image/bmp",
+        mime_types: &["image/bmp", "image/x-bmp"],
+        supports_alpha: true,
+        supports_animation: false,
+        supports_lossless: true,
+        supports_lossy: false,
+        magic_bytes_needed: 54,
+        detect: |data| data.len() >= 2 && data[0] == b'B' && data[1] == b'M',
+    };
+
+    pub static FARBFELD: ImageFormatDefinition = ImageFormatDefinition {
+        name: "farbfeld",
+        image_format: Some(ImageFormat::Farbfeld),
+        display_name: "farbfeld",
+        preferred_extension: "ff",
+        extensions: &["ff"],
+        preferred_mime_type: "image/x-farbfeld",
+        mime_types: &["image/x-farbfeld"],
+        supports_alpha: true,
+        supports_animation: false,
+        supports_lossless: true,
+        supports_lossy: false,
+        magic_bytes_needed: 16,
+        detect: |data| data.len() >= 8 && data[..8] == *b"farbfeld",
+    };
+
+    pub static PNM: ImageFormatDefinition = ImageFormatDefinition {
+        name: "pnm",
+        image_format: Some(ImageFormat::Pnm),
+        display_name: "PNM",
+        preferred_extension: "pnm",
+        extensions: &["pnm", "ppm", "pgm", "pbm", "pam", "pfm"],
+        preferred_mime_type: "image/x-portable-anymap",
+        mime_types: &[
+            "image/x-portable-anymap",
+            "image/x-portable-pixmap",
+            "image/x-portable-graymap",
+            "image/x-portable-bitmap",
+        ],
+        supports_alpha: true,
+        supports_animation: false,
+        supports_lossless: true,
+        supports_lossy: false,
+        magic_bytes_needed: 20,
+        detect: |data| {
+            data.len() >= 2 && data[0] == b'P' && matches!(data[1], b'1'..=b'7' | b'F' | b'f')
+        },
+    };
+
+    pub static TIFF: ImageFormatDefinition = ImageFormatDefinition {
+        name: "tiff",
+        image_format: Some(ImageFormat::Tiff),
+        display_name: "TIFF",
+        preferred_extension: "tiff",
+        extensions: &["tiff", "tif"],
+        preferred_mime_type: "image/tiff",
+        mime_types: &["image/tiff"],
+        supports_alpha: true,
+        supports_animation: false,
+        supports_lossless: true,
+        supports_lossy: false,
+        magic_bytes_needed: 8,
+        detect: |data| {
+            data.len() >= 4
+                && ((data[0] == b'I' && data[1] == b'I' && data[2] == 42 && data[3] == 0)
+                    || (data[0] == b'M' && data[1] == b'M' && data[2] == 0 && data[3] == 42))
+        },
+    };
+
+    pub static ICO: ImageFormatDefinition = ImageFormatDefinition {
+        name: "ico",
+        image_format: Some(ImageFormat::Ico),
+        display_name: "ICO",
+        preferred_extension: "ico",
+        extensions: &["ico", "cur"],
+        preferred_mime_type: "image/x-icon",
+        mime_types: &["image/x-icon", "image/vnd.microsoft.icon"],
+        supports_alpha: true,
+        supports_animation: false,
+        supports_lossless: true,
+        supports_lossy: false,
+        magic_bytes_needed: 22,
+        detect: |data| {
+            data.len() >= 4
+                && data[0] == 0
+                && data[1] == 0
+                && (data[2] == 1 || data[2] == 2)
+                && data[3] == 0
+        },
+    };
+
+    pub static QOI: ImageFormatDefinition = ImageFormatDefinition {
+        name: "qoi",
+        image_format: Some(ImageFormat::Qoi),
+        display_name: "QOI",
+        preferred_extension: "qoi",
+        extensions: &["qoi"],
+        preferred_mime_type: "image/x-qoi",
+        mime_types: &["image/x-qoi"],
+        supports_alpha: true,
+        supports_animation: false,
+        supports_lossless: true,
+        supports_lossy: false,
+        magic_bytes_needed: 14,
+        detect: |data| data.len() >= 4 && data[..4] == *b"qoif",
+    };
+
+    /// All built-in definitions in detection priority order.
+    ///
+    /// Order matters: JPEG first (most common), AVIF before HEIC
+    /// (for ambiguous mif1/msf1 containers, AVIF takes priority).
+    pub static ALL: &[&ImageFormatDefinition] = &[
+        &JPEG, &PNG, &GIF, &WEBP, &AVIF, &JXL, &HEIC, &BMP, &FARBFELD, &PNM, &TIFF, &ICO, &QOI,
+    ];
+}
+
+// ===========================================================================
+// ImageFormat enum
+// ===========================================================================
 
 /// Supported image formats.
 ///
@@ -125,323 +478,77 @@ pub enum ImageFormat {
     Unknown,
     /// Format not known to zencodec-types.
     ///
-    /// Define a [`CustomImageFormat`] as a `static` and reference it here.
-    /// The custom format carries its own metadata (extensions, MIME types,
+    /// Define an [`ImageFormatDefinition`] as a `static` and reference it here.
+    /// The definition carries its own metadata (extensions, MIME types,
     /// detection function, capability flags).
-    Custom(&'static CustomImageFormat),
+    Custom(&'static ImageFormatDefinition),
 }
 
 impl ImageFormat {
-    /// Detect format from magic bytes. Returns [`Unknown`](ImageFormat::Unknown) if unrecognized.
+    /// The [`ImageFormatDefinition`] for this format, if known.
     ///
-    /// Only detects built-in formats. For custom format detection, use
-    /// [`CustomImageFormat::detect`] or a codec registry.
-    pub fn from_magic(data: &[u8]) -> Self {
-        Self::detect(data).unwrap_or(Self::Unknown)
-    }
-
-    /// Detect format from magic bytes. Returns `None` if unrecognized.
-    ///
-    /// Only detects built-in formats. For custom format detection, use
-    /// [`CustomImageFormat::detect`] or a codec registry.
-    pub fn detect(data: &[u8]) -> Option<Self> {
-        // JPEG: FF D8 FF
-        if data.len() >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF {
-            return Some(ImageFormat::Jpeg);
-        }
-
-        // PNG: 89 50 4E 47 0D 0A 1A 0A
-        if data.len() >= 8 && data[..8] == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A] {
-            return Some(ImageFormat::Png);
-        }
-
-        // GIF: "GIF87a" or "GIF89a"
-        if data.len() >= 6
-            && data[..3] == *b"GIF"
-            && data[3] == b'8'
-            && (data[4] == b'7' || data[4] == b'9')
-            && data[5] == b'a'
-        {
-            return Some(ImageFormat::Gif);
-        }
-
-        // WebP: "RIFF....WEBP"
-        if data.len() >= 12 && data[..4] == *b"RIFF" && data[8..12] == *b"WEBP" {
-            return Some(ImageFormat::WebP);
-        }
-
-        // ISOBMFF ftyp box: AVIF and HEIC share the same container structure
-        // ftyp layout: [4 bytes size][ftyp][4 bytes major_brand][4 bytes minor_version][compatible_brands...]
-        if data.len() >= 12 && &data[4..8] == b"ftyp" {
-            let major = &data[8..12];
-
-            // AVIF: avif/avis major brand
-            if major == b"avif" || major == b"avis" {
-                return Some(ImageFormat::Avif);
-            }
-
-            // HEIC: heic/heix/hevc/hevx/heim/heis/hevm/hevs major brand
-            const HEIC_BRANDS: &[&[u8; 4]] = &[
-                b"heic", b"heix", b"hevc", b"hevx", b"heim", b"heis", b"hevm", b"hevs",
-            ];
-            if HEIC_BRANDS.iter().any(|b| major == *b) {
-                return Some(ImageFormat::Heic);
-            }
-
-            // mif1 is ambiguous — scan compatible brands to disambiguate
-            if major == b"mif1" {
-                // Read ftyp box size to bound the compatible brand scan
-                let box_size = u32::from_be_bytes([data[0], data[1], data[2], data[3]]) as usize;
-                let end = box_size.min(data.len());
-                // Compatible brands start at offset 16 (after size + ftyp + major + minor_version)
-                let mut offset = 16;
-                let mut found_avif = false;
-                let mut found_heic = false;
-                while offset + 4 <= end {
-                    let compat = &data[offset..offset + 4];
-                    if compat == b"avif" || compat == b"avis" {
-                        found_avif = true;
-                    }
-                    if HEIC_BRANDS.iter().any(|b| compat == *b) {
-                        found_heic = true;
-                    }
-                    offset += 4;
-                }
-                // AVIF takes priority over HEIC when both present
-                if found_avif {
-                    return Some(ImageFormat::Avif);
-                }
-                if found_heic {
-                    return Some(ImageFormat::Heic);
-                }
-            }
-        }
-
-        // JPEG XL codestream: FF 0A
-        if data.len() >= 2 && data[0] == 0xFF && data[1] == 0x0A {
-            return Some(ImageFormat::Jxl);
-        }
-
-        // JPEG XL container: 00 00 00 0C 4A 58 4C 20 0D 0A 87 0A
-        if data.len() >= 12
-            && data[..4] == [0x00, 0x00, 0x00, 0x0C]
-            && data[4..8] == [b'J', b'X', b'L', b' ']
-            && data[8..12] == [0x0D, 0x0A, 0x87, 0x0A]
-        {
-            return Some(ImageFormat::Jxl);
-        }
-
-        // BMP: "BM"
-        if data.len() >= 2 && data[0] == b'B' && data[1] == b'M' {
-            return Some(ImageFormat::Bmp);
-        }
-
-        // farbfeld: "farbfeld"
-        if data.len() >= 8 && data[..8] == *b"farbfeld" {
-            return Some(ImageFormat::Farbfeld);
-        }
-
-        // PNM family: P1-P7, Pf (grayscale PFM), PF (color PFM)
-        if data.len() >= 2 && data[0] == b'P' {
-            match data[1] {
-                b'1'..=b'7' | b'F' | b'f' => return Some(ImageFormat::Pnm),
-                _ => {}
-            }
-        }
-
-        // TIFF: II (little-endian) or MM (big-endian) + magic number 42
-        if data.len() >= 4 {
-            if data[0] == b'I' && data[1] == b'I' && data[2] == 42 && data[3] == 0 {
-                return Some(ImageFormat::Tiff);
-            }
-            if data[0] == b'M' && data[1] == b'M' && data[2] == 0 && data[3] == 42 {
-                return Some(ImageFormat::Tiff);
-            }
-        }
-
-        // ICO: 00 00 01 00 (icon) or 00 00 02 00 (cursor)
-        if data.len() >= 4
-            && data[0] == 0
-            && data[1] == 0
-            && (data[2] == 1 || data[2] == 2)
-            && data[3] == 0
-        {
-            return Some(ImageFormat::Ico);
-        }
-
-        // QOI: "qoif"
-        if data.len() >= 4 && data[..4] == *b"qoif" {
-            return Some(ImageFormat::Qoi);
-        }
-
-        None
-    }
-
-    /// Detect format from file extension (case-insensitive).
-    ///
-    /// Only matches built-in formats. For custom formats, iterate your
-    /// registered [`CustomImageFormat::extensions`] or use a codec registry.
-    pub fn from_extension(ext: &str) -> Option<Self> {
-        // Manual case-insensitive comparison without std.
-        let mut buf = [0u8; 8];
-        let ext_bytes = ext.as_bytes();
-        if ext_bytes.len() > buf.len() {
-            return None;
-        }
-        for (i, &b) in ext_bytes.iter().enumerate() {
-            buf[i] = b.to_ascii_lowercase();
-        }
-        let lower = &buf[..ext_bytes.len()];
-
-        match lower {
-            b"jpg" | b"jpeg" | b"jpe" | b"jfif" => Some(ImageFormat::Jpeg),
-            b"webp" => Some(ImageFormat::WebP),
-            b"gif" => Some(ImageFormat::Gif),
-            b"png" => Some(ImageFormat::Png),
-            b"avif" => Some(ImageFormat::Avif),
-            b"jxl" => Some(ImageFormat::Jxl),
-            b"heic" | b"heif" | b"hif" => Some(ImageFormat::Heic),
-            b"pnm" | b"ppm" | b"pgm" | b"pbm" | b"pam" | b"pfm" => Some(ImageFormat::Pnm),
-            b"bmp" => Some(ImageFormat::Bmp),
-            b"tiff" | b"tif" => Some(ImageFormat::Tiff),
-            b"ico" | b"cur" => Some(ImageFormat::Ico),
-            b"ff" => Some(ImageFormat::Farbfeld),
-            b"qoi" => Some(ImageFormat::Qoi),
-            _ => None,
+    /// Returns `None` only for [`Unknown`](ImageFormat::Unknown).
+    /// All built-in variants and [`Custom`](ImageFormat::Custom) formats
+    /// have definitions.
+    pub fn definition(self) -> Option<&'static ImageFormatDefinition> {
+        match self {
+            ImageFormat::Jpeg => Some(&builtins::JPEG),
+            ImageFormat::Png => Some(&builtins::PNG),
+            ImageFormat::Gif => Some(&builtins::GIF),
+            ImageFormat::WebP => Some(&builtins::WEBP),
+            ImageFormat::Avif => Some(&builtins::AVIF),
+            ImageFormat::Jxl => Some(&builtins::JXL),
+            ImageFormat::Heic => Some(&builtins::HEIC),
+            ImageFormat::Bmp => Some(&builtins::BMP),
+            ImageFormat::Tiff => Some(&builtins::TIFF),
+            ImageFormat::Ico => Some(&builtins::ICO),
+            ImageFormat::Pnm => Some(&builtins::PNM),
+            ImageFormat::Farbfeld => Some(&builtins::FARBFELD),
+            ImageFormat::Qoi => Some(&builtins::QOI),
+            ImageFormat::Custom(def) => Some(def),
+            ImageFormat::Unknown => None,
         }
     }
 
     /// Primary MIME type string.
     pub fn mime_type(self) -> &'static str {
-        match self {
-            ImageFormat::Jpeg => "image/jpeg",
-            ImageFormat::Png => "image/png",
-            ImageFormat::Gif => "image/gif",
-            ImageFormat::WebP => "image/webp",
-            ImageFormat::Avif => "image/avif",
-            ImageFormat::Jxl => "image/jxl",
-            ImageFormat::Heic => "image/heif",
-            ImageFormat::Bmp => "image/bmp",
-            ImageFormat::Tiff => "image/tiff",
-            ImageFormat::Ico => "image/x-icon",
-            ImageFormat::Pnm => "image/x-portable-anymap",
-            ImageFormat::Farbfeld => "image/x-farbfeld",
-            ImageFormat::Qoi => "image/x-qoi",
-            ImageFormat::Unknown => "application/octet-stream",
-            ImageFormat::Custom(fmt) => fmt.preferred_mime_type,
-        }
+        self.definition()
+            .map_or("application/octet-stream", |d| d.preferred_mime_type)
     }
 
     /// All recognized MIME types for this format.
     pub fn mime_types(self) -> &'static [&'static str] {
-        match self {
-            ImageFormat::Jpeg => &["image/jpeg"],
-            ImageFormat::Png => &["image/png"],
-            ImageFormat::Gif => &["image/gif"],
-            ImageFormat::WebP => &["image/webp"],
-            ImageFormat::Avif => &["image/avif"],
-            ImageFormat::Jxl => &["image/jxl"],
-            ImageFormat::Heic => &["image/heif", "image/heic"],
-            ImageFormat::Bmp => &["image/bmp", "image/x-bmp"],
-            ImageFormat::Tiff => &["image/tiff"],
-            ImageFormat::Ico => &["image/x-icon", "image/vnd.microsoft.icon"],
-            ImageFormat::Pnm => &[
-                "image/x-portable-anymap",
-                "image/x-portable-pixmap",
-                "image/x-portable-graymap",
-                "image/x-portable-bitmap",
-            ],
-            ImageFormat::Farbfeld => &["image/x-farbfeld"],
-            ImageFormat::Qoi => &["image/x-qoi"],
-            ImageFormat::Unknown => &[],
-            ImageFormat::Custom(fmt) => fmt.mime_types,
-        }
+        self.definition().map_or(&[], |d| d.mime_types)
     }
 
     /// Primary file extension (without dot).
     pub fn extension(self) -> &'static str {
-        match self {
-            ImageFormat::Jpeg => "jpg",
-            ImageFormat::Png => "png",
-            ImageFormat::Gif => "gif",
-            ImageFormat::WebP => "webp",
-            ImageFormat::Avif => "avif",
-            ImageFormat::Jxl => "jxl",
-            ImageFormat::Heic => "heif",
-            ImageFormat::Bmp => "bmp",
-            ImageFormat::Tiff => "tiff",
-            ImageFormat::Ico => "ico",
-            ImageFormat::Pnm => "pnm",
-            ImageFormat::Farbfeld => "ff",
-            ImageFormat::Qoi => "qoi",
-            ImageFormat::Unknown => "bin",
-            ImageFormat::Custom(fmt) => fmt.preferred_extension,
-        }
+        self.definition().map_or("bin", |d| d.preferred_extension)
     }
 
     /// All recognized file extensions.
     pub fn extensions(self) -> &'static [&'static str] {
-        match self {
-            ImageFormat::Jpeg => &["jpg", "jpeg", "jpe", "jfif"],
-            ImageFormat::Png => &["png"],
-            ImageFormat::Gif => &["gif"],
-            ImageFormat::WebP => &["webp"],
-            ImageFormat::Avif => &["avif"],
-            ImageFormat::Jxl => &["jxl"],
-            ImageFormat::Heic => &["heic", "heif", "hif"],
-            ImageFormat::Bmp => &["bmp"],
-            ImageFormat::Tiff => &["tiff", "tif"],
-            ImageFormat::Ico => &["ico", "cur"],
-            ImageFormat::Pnm => &["pnm", "ppm", "pgm", "pbm", "pam", "pfm"],
-            ImageFormat::Farbfeld => &["ff"],
-            ImageFormat::Qoi => &["qoi"],
-            ImageFormat::Unknown => &[],
-            ImageFormat::Custom(fmt) => fmt.extensions,
-        }
+        self.definition().map_or(&[], |d| d.extensions)
     }
 
     /// Whether this format supports lossy encoding.
     pub fn supports_lossy(self) -> bool {
-        match self {
-            ImageFormat::Jpeg
-            | ImageFormat::WebP
-            | ImageFormat::Avif
-            | ImageFormat::Jxl
-            | ImageFormat::Heic => true,
-            ImageFormat::Custom(fmt) => fmt.supports_lossy,
-            _ => false,
-        }
+        self.definition().is_some_and(|d| d.supports_lossy)
     }
 
     /// Whether this format supports lossless encoding.
     pub fn supports_lossless(self) -> bool {
-        match self {
-            ImageFormat::WebP
-            | ImageFormat::Gif
-            | ImageFormat::Png
-            | ImageFormat::Avif
-            | ImageFormat::Jxl
-            | ImageFormat::Tiff
-            | ImageFormat::Pnm
-            | ImageFormat::Bmp
-            | ImageFormat::Farbfeld
-            | ImageFormat::Qoi => true,
-            ImageFormat::Custom(fmt) => fmt.supports_lossless,
-            _ => false,
-        }
+        self.definition().is_some_and(|d| d.supports_lossless)
     }
 
     /// Whether this format supports animation.
     pub fn supports_animation(self) -> bool {
-        match self {
-            ImageFormat::Png
-            | ImageFormat::WebP
-            | ImageFormat::Gif
-            | ImageFormat::Avif
-            | ImageFormat::Jxl => true,
-            ImageFormat::Custom(fmt) => fmt.supports_animation,
-            _ => false,
-        }
+        self.definition().is_some_and(|d| d.supports_animation)
+    }
+
+    /// Whether this format supports alpha channel.
+    pub fn supports_alpha(self) -> bool {
+        self.definition().is_some_and(|d| d.supports_alpha)
     }
 
     /// Recommended bytes to fetch for probing any format.
@@ -450,68 +557,150 @@ impl ImageFormat {
     /// may have large EXIF/APP segments before the SOF marker).
     pub const RECOMMENDED_PROBE_BYTES: usize = 4096;
 
-    /// Minimum bytes needed for reliable magic byte detection.
+    /// Recommended bytes to fetch for reliable format probing.
     pub fn magic_bytes_needed(self) -> usize {
-        match self {
-            ImageFormat::Png => 33,      // 8 sig + 25 IHDR
-            ImageFormat::Gif => 13,      // 6 header + 7 LSD
-            ImageFormat::WebP => 30,     // RIFF(12) + chunk header + VP8X dims
-            ImageFormat::Jpeg => 2048,   // SOF can follow large EXIF/APP segments
-            ImageFormat::Avif => 512,    // ISOBMFF box traversal (ftyp + meta)
-            ImageFormat::Heic => 512,    // ISOBMFF box traversal (ftyp + meta)
-            ImageFormat::Jxl => 256,     // codestream header or container + jxlc
-            ImageFormat::Pnm => 20,      // magic + ASCII dimensions
-            ImageFormat::Bmp => 54,      // 14 file header + 40 info header
-            ImageFormat::Tiff => 8,      // endian marker + magic + IFD offset
-            ImageFormat::Ico => 22,      // 6 header + 16 first entry
-            ImageFormat::Farbfeld => 16, // 8 magic + 4 width + 4 height
-            ImageFormat::Qoi => 14,      // 4 magic + 4 width + 4 height + 1 channels + 1 colorspace
-            ImageFormat::Unknown => 0,
-            ImageFormat::Custom(fmt) => fmt.magic_bytes_needed,
-        }
-    }
-
-    /// Whether this format supports alpha channel.
-    pub fn supports_alpha(self) -> bool {
-        match self {
-            ImageFormat::Jpeg => false,
-            ImageFormat::Custom(fmt) => fmt.supports_alpha,
-            _ => true,
-        }
+        self.definition().map_or(0, |d| d.magic_bytes_needed)
     }
 }
 
 impl core::fmt::Display for ImageFormat {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str(match self {
-            ImageFormat::Jpeg => "JPEG",
-            ImageFormat::Png => "PNG",
-            ImageFormat::Gif => "GIF",
-            ImageFormat::WebP => "WebP",
-            ImageFormat::Avif => "AVIF",
-            ImageFormat::Jxl => "JPEG XL",
-            ImageFormat::Heic => "HEIC",
-            ImageFormat::Bmp => "BMP",
-            ImageFormat::Tiff => "TIFF",
-            ImageFormat::Ico => "ICO",
-            ImageFormat::Pnm => "PNM",
-            ImageFormat::Farbfeld => "farbfeld",
-            ImageFormat::Qoi => "QOI",
-            ImageFormat::Unknown => "Unknown",
-            ImageFormat::Custom(fmt) => fmt.display_name,
-        })
+        match self.definition() {
+            Some(def) => f.write_str(def.display_name),
+            None => f.write_str("Unknown"),
+        }
     }
 }
+
+// ===========================================================================
+// ImageFormatRegistry
+// ===========================================================================
+
+/// A collection of [`ImageFormatDefinition`]s with lookup methods.
+///
+/// Use [`common()`](ImageFormatRegistry::common) for the default registry
+/// containing all built-in formats. Use [`with()`](ImageFormatRegistry::with)
+/// to add custom formats.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use zc::{ImageFormatRegistry, ImageFormatDefinition};
+///
+/// // Default: all built-in formats
+/// let reg = ImageFormatRegistry::common();
+/// assert_eq!(reg.detect(jpeg_bytes), Some(ImageFormat::Jpeg));
+///
+/// // Custom: build your own
+/// let reg = ImageFormatRegistry::from_vec(vec![&JPEG2000]);
+/// ```
+#[derive(Clone, Debug)]
+pub struct ImageFormatRegistry {
+    formats: Cow<'static, [&'static ImageFormatDefinition]>,
+}
+
+impl ImageFormatRegistry {
+    /// Registry containing all built-in format definitions.
+    ///
+    /// Detection order follows priority: JPEG, PNG, GIF, WebP, AVIF, JXL,
+    /// HEIC, BMP, farbfeld, PNM, TIFF, ICO, QOI. AVIF is checked before
+    /// HEIC so that ambiguous ISOBMFF containers (mif1/msf1 with both
+    /// brands) resolve to AVIF.
+    ///
+    /// Zero allocation — backed by a static slice.
+    pub fn common() -> Self {
+        Self {
+            formats: Cow::Borrowed(builtins::ALL),
+        }
+    }
+
+    /// Registry backed by a static slice. Zero allocation.
+    pub fn from_static(defs: &'static [&'static ImageFormatDefinition]) -> Self {
+        Self {
+            formats: Cow::Borrowed(defs),
+        }
+    }
+
+    /// Create a registry from an owned list of definitions.
+    pub fn from_vec(defs: Vec<&'static ImageFormatDefinition>) -> Self {
+        Self {
+            formats: Cow::Owned(defs),
+        }
+    }
+
+    /// The format definitions in this registry, in detection priority order.
+    pub fn formats(&self) -> &[&'static ImageFormatDefinition] {
+        &self.formats
+    }
+
+    /// Detect format from magic bytes.
+    ///
+    /// Checks definitions in order, returns the first match. Returns `None`
+    /// if no definition matches.
+    pub fn detect(&self, data: &[u8]) -> Option<ImageFormat> {
+        for def in self.formats.iter() {
+            if (def.detect)(data) {
+                return Some(def.image_format.unwrap_or(ImageFormat::Custom(def)));
+            }
+        }
+        None
+    }
+
+    /// Detect format from file extension (case-insensitive).
+    pub fn from_extension(&self, ext: &str) -> Option<ImageFormat> {
+        let ext_bytes = ext.as_bytes();
+        for def in self.formats.iter() {
+            for &def_ext in def.extensions {
+                if ext_bytes.len() == def_ext.len()
+                    && ext_bytes
+                        .iter()
+                        .zip(def_ext.as_bytes())
+                        .all(|(&a, &b)| a.to_ascii_lowercase() == b)
+                {
+                    return Some(def.image_format.unwrap_or(ImageFormat::Custom(def)));
+                }
+            }
+        }
+        None
+    }
+
+    /// Detect format from MIME type (case-insensitive).
+    pub fn from_mime_type(&self, mime: &str) -> Option<ImageFormat> {
+        for def in self.formats.iter() {
+            for &def_mime in def.mime_types {
+                if mime.eq_ignore_ascii_case(def_mime) {
+                    return Some(def.image_format.unwrap_or(ImageFormat::Custom(def)));
+                }
+            }
+        }
+        None
+    }
+}
+
+impl Default for ImageFormatRegistry {
+    /// Returns [`common()`](ImageFormatRegistry::common).
+    fn default() -> Self {
+        Self::common()
+    }
+}
+
+// ===========================================================================
+// Tests
+// ===========================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use alloc::vec;
 
+    fn reg() -> ImageFormatRegistry {
+        ImageFormatRegistry::common()
+    }
+
     #[test]
     fn detect_jpeg() {
         assert_eq!(
-            ImageFormat::detect(&[0xFF, 0xD8, 0xFF, 0xE0]),
+            reg().detect(&[0xFF, 0xD8, 0xFF, 0xE0]),
             Some(ImageFormat::Jpeg)
         );
     }
@@ -519,23 +708,20 @@ mod tests {
     #[test]
     fn detect_png() {
         assert_eq!(
-            ImageFormat::detect(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+            reg().detect(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
             Some(ImageFormat::Png)
         );
     }
 
     #[test]
     fn detect_gif() {
-        assert_eq!(
-            ImageFormat::detect(b"GIF89a\x00\x00"),
-            Some(ImageFormat::Gif)
-        );
+        assert_eq!(reg().detect(b"GIF89a\x00\x00"), Some(ImageFormat::Gif));
     }
 
     #[test]
     fn detect_webp() {
         assert_eq!(
-            ImageFormat::detect(b"RIFF\x00\x00\x00\x00WEBP"),
+            reg().detect(b"RIFF\x00\x00\x00\x00WEBP"),
             Some(ImageFormat::WebP)
         );
     }
@@ -543,20 +729,20 @@ mod tests {
     #[test]
     fn detect_avif() {
         assert_eq!(
-            ImageFormat::detect(b"\x00\x00\x00\x18ftypavif"),
+            reg().detect(b"\x00\x00\x00\x18ftypavif"),
             Some(ImageFormat::Avif)
         );
     }
 
     #[test]
     fn detect_jxl_codestream() {
-        assert_eq!(ImageFormat::detect(&[0xFF, 0x0A]), Some(ImageFormat::Jxl));
+        assert_eq!(reg().detect(&[0xFF, 0x0A]), Some(ImageFormat::Jxl));
     }
 
     #[test]
     fn detect_jxl_container() {
         assert_eq!(
-            ImageFormat::detect(&[
+            reg().detect(&[
                 0x00, 0x00, 0x00, 0x0C, b'J', b'X', b'L', b' ', 0x0D, 0x0A, 0x87, 0x0A
             ]),
             Some(ImageFormat::Jxl)
@@ -565,15 +751,15 @@ mod tests {
 
     #[test]
     fn detect_unknown() {
-        assert_eq!(ImageFormat::detect(b"nope"), None);
-        assert_eq!(ImageFormat::detect(&[]), None);
+        assert_eq!(reg().detect(b"nope"), None);
+        assert_eq!(reg().detect(&[]), None);
     }
 
     #[test]
     fn from_extension_case_insensitive() {
-        assert_eq!(ImageFormat::from_extension("JPG"), Some(ImageFormat::Jpeg));
-        assert_eq!(ImageFormat::from_extension("WebP"), Some(ImageFormat::WebP));
-        assert_eq!(ImageFormat::from_extension("unknown"), None);
+        assert_eq!(reg().from_extension("JPG"), Some(ImageFormat::Jpeg));
+        assert_eq!(reg().from_extension("WebP"), Some(ImageFormat::WebP));
+        assert_eq!(reg().from_extension("unknown"), None);
     }
 
     #[test]
@@ -607,24 +793,23 @@ mod tests {
 
     #[test]
     fn from_extension_all_variants() {
-        assert_eq!(ImageFormat::from_extension("jpg"), Some(ImageFormat::Jpeg));
-        assert_eq!(ImageFormat::from_extension("jpeg"), Some(ImageFormat::Jpeg));
-        assert_eq!(ImageFormat::from_extension("jpe"), Some(ImageFormat::Jpeg));
-        assert_eq!(ImageFormat::from_extension("jfif"), Some(ImageFormat::Jpeg));
-        assert_eq!(ImageFormat::from_extension("JPEG"), Some(ImageFormat::Jpeg));
-        assert_eq!(ImageFormat::from_extension("webp"), Some(ImageFormat::WebP));
-        assert_eq!(ImageFormat::from_extension("gif"), Some(ImageFormat::Gif));
-        assert_eq!(ImageFormat::from_extension("png"), Some(ImageFormat::Png));
-        assert_eq!(ImageFormat::from_extension("avif"), Some(ImageFormat::Avif));
-        assert_eq!(ImageFormat::from_extension("jxl"), Some(ImageFormat::Jxl));
+        assert_eq!(reg().from_extension("jpg"), Some(ImageFormat::Jpeg));
+        assert_eq!(reg().from_extension("jpeg"), Some(ImageFormat::Jpeg));
+        assert_eq!(reg().from_extension("jpe"), Some(ImageFormat::Jpeg));
+        assert_eq!(reg().from_extension("jfif"), Some(ImageFormat::Jpeg));
+        assert_eq!(reg().from_extension("JPEG"), Some(ImageFormat::Jpeg));
+        assert_eq!(reg().from_extension("webp"), Some(ImageFormat::WebP));
+        assert_eq!(reg().from_extension("gif"), Some(ImageFormat::Gif));
+        assert_eq!(reg().from_extension("png"), Some(ImageFormat::Png));
+        assert_eq!(reg().from_extension("avif"), Some(ImageFormat::Avif));
+        assert_eq!(reg().from_extension("jxl"), Some(ImageFormat::Jxl));
     }
 
     #[test]
     fn from_extension_edge_cases() {
-        assert_eq!(ImageFormat::from_extension(""), None);
-        assert_eq!(ImageFormat::from_extension("tiff"), Some(ImageFormat::Tiff));
-        // Too long for buffer
-        assert_eq!(ImageFormat::from_extension("very_long_extension"), None);
+        assert_eq!(reg().from_extension(""), None);
+        assert_eq!(reg().from_extension("tiff"), Some(ImageFormat::Tiff));
+        assert_eq!(reg().from_extension("very_long_extension"), None);
     }
 
     #[test]
@@ -662,52 +847,43 @@ mod tests {
 
     #[test]
     fn detect_pnm_p5() {
-        assert_eq!(
-            ImageFormat::detect(b"P5\n3 2\n255\n"),
-            Some(ImageFormat::Pnm)
-        );
+        assert_eq!(reg().detect(b"P5\n3 2\n255\n"), Some(ImageFormat::Pnm));
     }
 
     #[test]
     fn detect_pnm_p6() {
-        assert_eq!(
-            ImageFormat::detect(b"P6\n3 2\n255\n"),
-            Some(ImageFormat::Pnm)
-        );
+        assert_eq!(reg().detect(b"P6\n3 2\n255\n"), Some(ImageFormat::Pnm));
     }
 
     #[test]
     fn detect_pnm_p7() {
-        assert_eq!(
-            ImageFormat::detect(b"P7\nWIDTH 2\n"),
-            Some(ImageFormat::Pnm)
-        );
+        assert_eq!(reg().detect(b"P7\nWIDTH 2\n"), Some(ImageFormat::Pnm));
     }
 
     #[test]
     fn detect_pnm_pfm_color() {
-        assert_eq!(ImageFormat::detect(b"PF\n3 2\n"), Some(ImageFormat::Pnm));
+        assert_eq!(reg().detect(b"PF\n3 2\n"), Some(ImageFormat::Pnm));
     }
 
     #[test]
     fn detect_pnm_pfm_gray() {
-        assert_eq!(ImageFormat::detect(b"Pf\n3 2\n"), Some(ImageFormat::Pnm));
+        assert_eq!(reg().detect(b"Pf\n3 2\n"), Some(ImageFormat::Pnm));
     }
 
     #[test]
     fn detect_pnm_p1_ascii() {
-        assert_eq!(ImageFormat::detect(b"P1\n3 2\n"), Some(ImageFormat::Pnm));
+        assert_eq!(reg().detect(b"P1\n3 2\n"), Some(ImageFormat::Pnm));
     }
 
     #[test]
     fn from_extension_pnm_variants() {
-        assert_eq!(ImageFormat::from_extension("pnm"), Some(ImageFormat::Pnm));
-        assert_eq!(ImageFormat::from_extension("ppm"), Some(ImageFormat::Pnm));
-        assert_eq!(ImageFormat::from_extension("pgm"), Some(ImageFormat::Pnm));
-        assert_eq!(ImageFormat::from_extension("pbm"), Some(ImageFormat::Pnm));
-        assert_eq!(ImageFormat::from_extension("pam"), Some(ImageFormat::Pnm));
-        assert_eq!(ImageFormat::from_extension("pfm"), Some(ImageFormat::Pnm));
-        assert_eq!(ImageFormat::from_extension("PNM"), Some(ImageFormat::Pnm));
+        assert_eq!(reg().from_extension("pnm"), Some(ImageFormat::Pnm));
+        assert_eq!(reg().from_extension("ppm"), Some(ImageFormat::Pnm));
+        assert_eq!(reg().from_extension("pgm"), Some(ImageFormat::Pnm));
+        assert_eq!(reg().from_extension("pbm"), Some(ImageFormat::Pnm));
+        assert_eq!(reg().from_extension("pam"), Some(ImageFormat::Pnm));
+        assert_eq!(reg().from_extension("pfm"), Some(ImageFormat::Pnm));
+        assert_eq!(reg().from_extension("PNM"), Some(ImageFormat::Pnm));
     }
 
     #[test]
@@ -746,29 +922,26 @@ mod tests {
 
     #[test]
     fn detect_bmp() {
-        assert_eq!(ImageFormat::detect(b"BM\x00\x00"), Some(ImageFormat::Bmp));
+        assert_eq!(reg().detect(b"BM\x00\x00"), Some(ImageFormat::Bmp));
     }
 
     #[test]
     fn detect_farbfeld() {
         assert_eq!(
-            ImageFormat::detect(b"farbfeld\x00\x00\x00\x01\x00\x00\x00\x01"),
+            reg().detect(b"farbfeld\x00\x00\x00\x01\x00\x00\x00\x01"),
             Some(ImageFormat::Farbfeld)
         );
     }
 
     #[test]
     fn from_extension_bmp() {
-        assert_eq!(ImageFormat::from_extension("bmp"), Some(ImageFormat::Bmp));
-        assert_eq!(ImageFormat::from_extension("BMP"), Some(ImageFormat::Bmp));
+        assert_eq!(reg().from_extension("bmp"), Some(ImageFormat::Bmp));
+        assert_eq!(reg().from_extension("BMP"), Some(ImageFormat::Bmp));
     }
 
     #[test]
     fn from_extension_farbfeld() {
-        assert_eq!(
-            ImageFormat::from_extension("ff"),
-            Some(ImageFormat::Farbfeld)
-        );
+        assert_eq!(reg().from_extension("ff"), Some(ImageFormat::Farbfeld));
     }
 
     #[test]
@@ -821,13 +994,12 @@ mod tests {
 
     #[test]
     fn detect_heic() {
-        // ftyp box with heic major brand: [size=20][ftyp][heic][minor][no compat brands]
         let mut data = vec![0u8; 20];
-        data[0..4].copy_from_slice(&20u32.to_be_bytes()); // box size
+        data[0..4].copy_from_slice(&20u32.to_be_bytes());
         data[4..8].copy_from_slice(b"ftyp");
         data[8..12].copy_from_slice(b"heic");
-        data[12..16].copy_from_slice(&[0, 0, 0, 0]); // minor version
-        assert_eq!(ImageFormat::detect(&data), Some(ImageFormat::Heic));
+        data[12..16].copy_from_slice(&[0, 0, 0, 0]);
+        assert_eq!(reg().detect(&data), Some(ImageFormat::Heic));
     }
 
     #[test]
@@ -837,7 +1009,7 @@ mod tests {
         data[4..8].copy_from_slice(b"ftyp");
         data[8..12].copy_from_slice(b"heix");
         data[12..16].copy_from_slice(&[0, 0, 0, 0]);
-        assert_eq!(ImageFormat::detect(&data), Some(ImageFormat::Heic));
+        assert_eq!(reg().detect(&data), Some(ImageFormat::Heic));
     }
 
     #[test]
@@ -847,68 +1019,64 @@ mod tests {
         data[4..8].copy_from_slice(b"ftyp");
         data[8..12].copy_from_slice(b"hevc");
         data[12..16].copy_from_slice(&[0, 0, 0, 0]);
-        assert_eq!(ImageFormat::detect(&data), Some(ImageFormat::Heic));
+        assert_eq!(reg().detect(&data), Some(ImageFormat::Heic));
     }
 
     #[test]
     fn detect_avif_still_works() {
-        // Regression: AVIF detection must still work after HEIC addition
         let mut data = vec![0u8; 20];
         data[0..4].copy_from_slice(&20u32.to_be_bytes());
         data[4..8].copy_from_slice(b"ftyp");
         data[8..12].copy_from_slice(b"avif");
         data[12..16].copy_from_slice(&[0, 0, 0, 0]);
-        assert_eq!(ImageFormat::detect(&data), Some(ImageFormat::Avif));
+        assert_eq!(reg().detect(&data), Some(ImageFormat::Avif));
 
         data[8..12].copy_from_slice(b"avis");
-        assert_eq!(ImageFormat::detect(&data), Some(ImageFormat::Avif));
+        assert_eq!(reg().detect(&data), Some(ImageFormat::Avif));
     }
 
     #[test]
     fn detect_mif1_with_heic_compat() {
-        // mif1 major brand + heic compatible brand → Heic
-        let mut data = vec![0u8; 24];
-        data[0..4].copy_from_slice(&24u32.to_be_bytes()); // box size = 24
-        data[4..8].copy_from_slice(b"ftyp");
-        data[8..12].copy_from_slice(b"mif1"); // major brand
-        data[12..16].copy_from_slice(&[0, 0, 0, 0]); // minor version
-        data[16..20].copy_from_slice(b"heic"); // compatible brand
-        data[20..24].copy_from_slice(b"hevx"); // another compatible brand
-        assert_eq!(ImageFormat::detect(&data), Some(ImageFormat::Heic));
-    }
-
-    #[test]
-    fn detect_mif1_with_avif_compat() {
-        // mif1 major brand + avif compatible brand → Avif
         let mut data = vec![0u8; 24];
         data[0..4].copy_from_slice(&24u32.to_be_bytes());
         data[4..8].copy_from_slice(b"ftyp");
         data[8..12].copy_from_slice(b"mif1");
         data[12..16].copy_from_slice(&[0, 0, 0, 0]);
-        data[16..20].copy_from_slice(b"avif"); // compatible brand
-        data[20..24].copy_from_slice(b"heic"); // also heic — but avif takes priority
-        assert_eq!(ImageFormat::detect(&data), Some(ImageFormat::Avif));
+        data[16..20].copy_from_slice(b"heic");
+        data[20..24].copy_from_slice(b"hevx");
+        assert_eq!(reg().detect(&data), Some(ImageFormat::Heic));
+    }
+
+    #[test]
+    fn detect_mif1_with_avif_compat() {
+        let mut data = vec![0u8; 24];
+        data[0..4].copy_from_slice(&24u32.to_be_bytes());
+        data[4..8].copy_from_slice(b"ftyp");
+        data[8..12].copy_from_slice(b"mif1");
+        data[12..16].copy_from_slice(&[0, 0, 0, 0]);
+        data[16..20].copy_from_slice(b"avif");
+        data[20..24].copy_from_slice(b"heic");
+        assert_eq!(reg().detect(&data), Some(ImageFormat::Avif));
     }
 
     #[test]
     fn detect_mif1_no_known_compat() {
-        // mif1 with no recognized compatible brands → None
         let mut data = vec![0u8; 20];
         data[0..4].copy_from_slice(&20u32.to_be_bytes());
         data[4..8].copy_from_slice(b"ftyp");
         data[8..12].copy_from_slice(b"mif1");
         data[12..16].copy_from_slice(&[0, 0, 0, 0]);
-        data[16..20].copy_from_slice(b"xxxx"); // unknown brand
-        assert_eq!(ImageFormat::detect(&data), None);
+        data[16..20].copy_from_slice(b"xxxx");
+        assert_eq!(reg().detect(&data), None);
     }
 
     #[test]
     fn from_extension_heic() {
-        assert_eq!(ImageFormat::from_extension("heic"), Some(ImageFormat::Heic));
-        assert_eq!(ImageFormat::from_extension("heif"), Some(ImageFormat::Heic));
-        assert_eq!(ImageFormat::from_extension("hif"), Some(ImageFormat::Heic));
-        assert_eq!(ImageFormat::from_extension("HEIC"), Some(ImageFormat::Heic));
-        assert_eq!(ImageFormat::from_extension("HEIF"), Some(ImageFormat::Heic));
+        assert_eq!(reg().from_extension("heic"), Some(ImageFormat::Heic));
+        assert_eq!(reg().from_extension("heif"), Some(ImageFormat::Heic));
+        assert_eq!(reg().from_extension("hif"), Some(ImageFormat::Heic));
+        assert_eq!(reg().from_extension("HEIC"), Some(ImageFormat::Heic));
+        assert_eq!(reg().from_extension("HEIF"), Some(ImageFormat::Heic));
     }
 
     #[test]
@@ -942,14 +1110,40 @@ mod tests {
         assert_eq!(ImageFormat::Heic.magic_bytes_needed(), 512);
     }
 
+    // --- msf1 HEIF sequence tests ---
+
+    #[test]
+    fn detect_msf1_with_heic_compat() {
+        let mut data = vec![0u8; 24];
+        data[0..4].copy_from_slice(&24u32.to_be_bytes());
+        data[4..8].copy_from_slice(b"ftyp");
+        data[8..12].copy_from_slice(b"msf1");
+        data[12..16].copy_from_slice(&[0, 0, 0, 0]);
+        data[16..20].copy_from_slice(b"hevc");
+        data[20..24].copy_from_slice(b"heic");
+        assert_eq!(reg().detect(&data), Some(ImageFormat::Heic));
+    }
+
+    #[test]
+    fn detect_msf1_with_avif_compat() {
+        let mut data = vec![0u8; 24];
+        data[0..4].copy_from_slice(&24u32.to_be_bytes());
+        data[4..8].copy_from_slice(b"ftyp");
+        data[8..12].copy_from_slice(b"msf1");
+        data[12..16].copy_from_slice(&[0, 0, 0, 0]);
+        data[16..20].copy_from_slice(b"avis");
+        assert_eq!(reg().detect(&data), Some(ImageFormat::Avif));
+    }
+
     // --- Custom format tests ---
 
     fn detect_test_format(data: &[u8]) -> bool {
         data.len() >= 4 && data[..4] == *b"TEST"
     }
 
-    static TEST_FORMAT: CustomImageFormat = CustomImageFormat {
+    static TEST_FORMAT: ImageFormatDefinition = ImageFormatDefinition {
         name: "testformat",
+        image_format: None,
         display_name: "Test Format",
         preferred_extension: "test",
         extensions: &["test", "tst"],
@@ -963,8 +1157,9 @@ mod tests {
         detect: detect_test_format,
     };
 
-    static TEST_FORMAT_2: CustomImageFormat = CustomImageFormat {
+    static TEST_FORMAT_2: ImageFormatDefinition = ImageFormatDefinition {
         name: "testformat",
+        image_format: None,
         display_name: "Test Format 2",
         preferred_extension: "tf2",
         extensions: &["tf2"],
@@ -1012,8 +1207,9 @@ mod tests {
         assert_eq!(a, b);
 
         // Different name → not equal
-        static OTHER: CustomImageFormat = CustomImageFormat {
+        static OTHER: ImageFormatDefinition = ImageFormatDefinition {
             name: "other",
+            image_format: None,
             display_name: "Other",
             preferred_extension: "oth",
             extensions: &["oth"],
@@ -1034,7 +1230,9 @@ mod tests {
         use core::hash::{Hash, Hasher};
         struct SimpleHasher(u64);
         impl Hasher for SimpleHasher {
-            fn finish(&self) -> u64 { self.0 }
+            fn finish(&self) -> u64 {
+                self.0
+            }
             fn write(&mut self, bytes: &[u8]) {
                 for &b in bytes {
                     self.0 = self.0.wrapping_mul(31).wrapping_add(b as u64);
@@ -1065,5 +1263,156 @@ mod tests {
         let a = ImageFormat::Custom(&TEST_FORMAT);
         let b = a; // Copy
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn to_image_format_builtin() {
+        let fmt = builtins::JPEG.to_image_format();
+        assert_eq!(fmt, ImageFormat::Jpeg);
+    }
+
+    #[test]
+    fn to_image_format_custom() {
+        let fmt = TEST_FORMAT.to_image_format();
+        assert_eq!(fmt, ImageFormat::Custom(&TEST_FORMAT));
+    }
+
+    // --- from_mime_type tests ---
+
+    #[test]
+    fn from_mime_type_builtin() {
+        assert_eq!(reg().from_mime_type("image/jpeg"), Some(ImageFormat::Jpeg));
+        assert_eq!(reg().from_mime_type("image/heif"), Some(ImageFormat::Heic));
+        assert_eq!(reg().from_mime_type("image/heic"), Some(ImageFormat::Heic));
+        assert_eq!(reg().from_mime_type("video/mp4"), None);
+    }
+
+    // --- Registry tests ---
+
+    #[test]
+    fn registry_common_detect() {
+        let reg = ImageFormatRegistry::common();
+        assert_eq!(
+            reg.detect(&[0xFF, 0xD8, 0xFF, 0xE0]),
+            Some(ImageFormat::Jpeg)
+        );
+        assert_eq!(
+            reg.detect(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+            Some(ImageFormat::Png)
+        );
+        assert_eq!(reg.detect(b"nope"), None);
+    }
+
+    #[test]
+    fn registry_common_from_extension() {
+        let reg = ImageFormatRegistry::common();
+        assert_eq!(reg.from_extension("jpg"), Some(ImageFormat::Jpeg));
+        assert_eq!(reg.from_extension("PNG"), Some(ImageFormat::Png));
+        assert_eq!(reg.from_extension("unknown"), None);
+    }
+
+    #[test]
+    fn registry_common_from_mime_type() {
+        let reg = ImageFormatRegistry::common();
+        assert_eq!(reg.from_mime_type("image/jpeg"), Some(ImageFormat::Jpeg));
+        assert_eq!(reg.from_mime_type("image/webp"), Some(ImageFormat::WebP));
+        assert_eq!(reg.from_mime_type("video/mp4"), None);
+    }
+
+    fn reg_with_test_format() -> ImageFormatRegistry {
+        let mut defs: Vec<&'static ImageFormatDefinition> = builtins::ALL.to_vec();
+        defs.push(&TEST_FORMAT);
+        ImageFormatRegistry::from_vec(defs)
+    }
+
+    #[test]
+    fn registry_from_vec_custom() {
+        let reg = reg_with_test_format();
+        // Custom format detected
+        assert_eq!(
+            reg.detect(b"TESTdata"),
+            Some(ImageFormat::Custom(&TEST_FORMAT))
+        );
+        // Built-in still works
+        assert_eq!(reg.detect(&[0xFF, 0xD8, 0xFF]), Some(ImageFormat::Jpeg));
+    }
+
+    #[test]
+    fn registry_from_vec_custom_extension() {
+        let reg = reg_with_test_format();
+        assert_eq!(
+            reg.from_extension("test"),
+            Some(ImageFormat::Custom(&TEST_FORMAT))
+        );
+        assert_eq!(
+            reg.from_extension("TST"),
+            Some(ImageFormat::Custom(&TEST_FORMAT))
+        );
+        assert_eq!(reg.from_extension("jpg"), Some(ImageFormat::Jpeg));
+    }
+
+    #[test]
+    fn registry_from_vec_custom_mime_type() {
+        let reg = reg_with_test_format();
+        assert_eq!(
+            reg.from_mime_type("image/x-test"),
+            Some(ImageFormat::Custom(&TEST_FORMAT))
+        );
+        assert_eq!(
+            reg.from_mime_type("application/x-test"),
+            Some(ImageFormat::Custom(&TEST_FORMAT))
+        );
+    }
+
+    #[test]
+    fn registry_from_static() {
+        static DEFS: &[&ImageFormatDefinition] = &[&builtins::PNG, &builtins::JPEG];
+        let reg = ImageFormatRegistry::from_static(DEFS);
+        assert_eq!(reg.formats().len(), 2);
+        assert_eq!(
+            reg.detect(&[0xFF, 0xD8, 0xFF, 0xE0]),
+            Some(ImageFormat::Jpeg)
+        );
+        assert_eq!(reg.detect(b"GIF89a\x00\x00"), None); // GIF not in this registry
+    }
+
+    #[test]
+    fn registry_from_static_custom_only() {
+        static DEFS: &[&ImageFormatDefinition] = &[&TEST_FORMAT];
+        let reg = ImageFormatRegistry::from_static(DEFS);
+        assert_eq!(
+            reg.detect(b"TESTdata"),
+            Some(ImageFormat::Custom(&TEST_FORMAT))
+        );
+        assert_eq!(reg.detect(&[0xFF, 0xD8, 0xFF]), None); // no JPEG
+        assert_eq!(reg.formats().len(), 1);
+    }
+
+    #[test]
+    fn registry_formats_list() {
+        let reg = ImageFormatRegistry::common();
+        assert_eq!(reg.formats().len(), 13);
+        assert_eq!(reg.formats()[0].name, "jpeg");
+    }
+
+    #[test]
+    fn registry_default_is_common() {
+        let def = ImageFormatRegistry::default();
+        let com = ImageFormatRegistry::common();
+        assert_eq!(def.formats().len(), com.formats().len());
+    }
+
+    #[test]
+    fn registry_new_from_vec() {
+        let reg = ImageFormatRegistry::from_vec(vec![&builtins::PNG, &builtins::JPEG]);
+        assert_eq!(reg.formats().len(), 2);
+        // PNG is first, so PNG-like data matches PNG
+        assert_eq!(
+            reg.detect(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+            Some(ImageFormat::Png)
+        );
+        assert_eq!(reg.detect(&[0xFF, 0xD8, 0xFF]), Some(ImageFormat::Jpeg));
+        // GIF not in registry
+        assert_eq!(reg.detect(b"GIF89a\x00\x00"), None);
     }
 }
