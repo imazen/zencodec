@@ -9,9 +9,11 @@
 //!
 //! RGB->Gray is **not** supported (requires explicit luma coefficients).
 //!
-//! Policy types are re-exported from [`zenpixels`]. The conversion extension
-//! trait and error type are local to this crate because they have a different
-//! API signature than zenpixels' format negotiation system.
+//! Works on **borrowed** [`PixelSlice`] references (no need to own the buffer).
+//! Includes policy-aware methods ([`AlphaPolicy`], [`DepthPolicy`]) for
+//! controlled lossy operations.
+//!
+//! Policy types are re-exported from [`zenpixels`].
 
 use alloc::sync::Arc;
 
@@ -366,11 +368,10 @@ fn convert_impl<P>(
 
 // -- PixelSlice conversion extension trait --
 
-/// Extension trait for backward-compatible pixel format conversion on [`PixelSlice`].
+/// Extension trait for pixel format conversion on borrowed [`PixelSlice`] references.
 ///
-/// These methods provide the zencodec-types-specific conversion API that takes
-/// layout and depth separately. For new code, prefer `PixelSlice::convert_to()`
-/// from zenpixels which takes a full [`PixelDescriptor`].
+/// Takes target layout and depth separately, with optional policy control
+/// for lossy operations (alpha removal, depth reduction).
 pub trait PixelSliceConvertExt<P> {
     /// Convert pixel data to a different format in a single pass.
     ///

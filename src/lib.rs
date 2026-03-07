@@ -4,7 +4,7 @@
 //!
 //! # Module organization
 //!
-//! - [`encode`] — encoder traits, per-format encode traits, dyn dispatch, output types
+//! - [`encode`] — encoder traits, dyn dispatch, output types
 //! - [`decode`] — decoder traits, streaming/animation decode, dyn dispatch, output types
 //! - Root — shared types used by both encode and decode paths
 //!
