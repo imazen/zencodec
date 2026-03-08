@@ -421,22 +421,43 @@ Container for ICC, EXIF, XMP, IPTC byte blobs.
 
 ### `EncodeOutput`
 
-Encoded image bytes + metadata.
+Encoded image bytes + metadata. Supports typed extras for codec-specific data.
 
 ```rust
 fn data(&self) -> &[u8];
 fn into_vec(self) -> Vec<u8>;
 fn format(&self) -> ImageFormat;
+fn with_extras<T: Any + Send>(self, extras: T) -> Self;
+fn extras<T: Any + Send>(&self) -> Option<&T>;
+fn take_extras<T: Any + Send>(&mut self) -> Option<T>;
 ```
+
+Clone drops extras. PartialEq/Eq skip extras.
 
 ### `DecodeOutput` (codec feature)
 
-Decoded image with owned pixel data.
+Decoded image with owned pixel data. Supports typed extras for codec-specific data.
 
 ```rust
 fn pixels(&self) -> PixelSlice<'_>;
 fn info(&self) -> &ImageInfo;
 fn into_buffer(self) -> PixelBuffer;
+fn with_extras<T: Any + Send>(self, extras: T) -> Self;
+fn extras<T: Any + Send>(&self) -> Option<&T>;
+fn take_extras<T: Any + Send>(&mut self) -> Option<T>;
+```
+
+### `OwnedFullFrame` (codec feature)
+
+Owned animation frame with pixel data. Supports typed extras.
+
+```rust
+fn pixels(&self) -> PixelSlice<'_>;
+fn duration_ms(&self) -> u32;
+fn frame_index(&self) -> u32;
+fn with_extras<T: Any + Send>(self, extras: T) -> Self;
+fn extras<T: Any + Send>(&self) -> Option<&T>;
+fn take_extras<T: Any + Send>(&mut self) -> Option<T>;
 ```
 
 ### `EncodeFrame<'a>` / `DecodeFrame`
