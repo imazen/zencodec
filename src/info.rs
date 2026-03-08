@@ -7,6 +7,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use crate::color::{ColorContext, ColorProfileSource};
+use crate::detect::SourceEncodingDetails;
 use crate::gainmap::GainMapMetadata;
 use crate::metadata::MetadataView;
 use crate::{ImageFormat, Orientation};
@@ -300,7 +301,7 @@ impl EmbeddedMetadata {
 }
 
 /// Image metadata obtained from probing or decoding.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone)]
 #[non_exhaustive]
 pub struct ImageInfo {
     /// Image width in pixels.
@@ -345,6 +346,16 @@ pub struct ImageInfo {
     /// and the gain map image. The gain map pixel data is a separate image
     /// accessible via [`DecodeOutput::extras`](crate::decode::DecodeOutput).
     pub gain_map_metadata: Option<GainMapMetadata>,
+    /// Source encoding details (quality estimate, encoder fingerprint, etc.).
+    ///
+    /// Populated by codecs that can detect how the image was encoded.
+    /// Use [`source_encoding_details()`](ImageInfo::source_encoding_details)
+    /// for the generic interface and
+    /// [`codec_details::<T>()`](dyn crate::SourceEncodingDetails::codec_details)
+    /// for codec-specific fields.
+    ///
+    /// Skipped by `PartialEq` (trait objects aren't comparable).
+    pub source_encoding: Option<Arc<dyn SourceEncodingDetails>>,
     /// Non-fatal diagnostic messages from probing or decoding.
     ///
     /// Populated when the operation succeeded but encountered unusual
@@ -371,6 +382,7 @@ impl ImageInfo {
             embedded_metadata: EmbeddedMetadata::default(),
             has_gain_map: false,
             gain_map_metadata: None,
+            source_encoding: None,
             warnings: Vec::new(),
         }
     }
@@ -476,6 +488,27 @@ impl ImageInfo {
         self
     }
 
+    /// Attach source encoding details (quality estimate, codec-specific probe data).
+    ///
+    /// The concrete type must implement [`SourceEncodingDetails`] — typically
+    /// a codec's probe type (e.g. `WebPProbe`, `JpegProbe`).
+    pub fn with_source_encoding_details<T: SourceEncodingDetails + 'static>(
+        mut self,
+        details: T,
+    ) -> Self {
+        self.source_encoding = Some(Arc::new(details));
+        self
+    }
+
+    /// Source encoding details, if available.
+    ///
+    /// Returns the generic interface for querying source quality and losslessness.
+    /// Downcast to the codec-specific type via
+    /// [`codec_details::<T>()`](dyn SourceEncodingDetails::codec_details).
+    pub fn source_encoding_details(&self) -> Option<&dyn SourceEncodingDetails> {
+        self.source_encoding.as_deref()
+    }
+
     /// Add a single warning message.
     pub fn with_warning(mut self, msg: alloc::string::String) -> Self {
         self.warnings.push(msg);
@@ -568,6 +601,48 @@ impl ImageInfo {
             orientation: self.orientation,
             resolution: None,
         }
+    }
+}
+
+impl core::fmt::Debug for ImageInfo {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut s = f.debug_struct("ImageInfo");
+        s.field("width", &self.width)
+            .field("height", &self.height)
+            .field("format", &self.format)
+            .field("has_alpha", &self.has_alpha)
+            .field("has_animation", &self.has_animation)
+            .field("frame_count", &self.frame_count)
+            .field("orientation", &self.orientation)
+            .field("source_color", &self.source_color)
+            .field("embedded_metadata", &self.embedded_metadata)
+            .field("has_gain_map", &self.has_gain_map)
+            .field("gain_map_metadata", &self.gain_map_metadata);
+        if self.source_encoding.is_some() {
+            s.field("source_encoding", &"Some(...)");
+        }
+        if !self.warnings.is_empty() {
+            s.field("warnings", &self.warnings);
+        }
+        s.finish()
+    }
+}
+
+/// Manual `PartialEq` — skips `source_encoding` (trait objects aren't comparable).
+impl PartialEq for ImageInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.width == other.width
+            && self.height == other.height
+            && self.format == other.format
+            && self.has_alpha == other.has_alpha
+            && self.has_animation == other.has_animation
+            && self.frame_count == other.frame_count
+            && self.orientation == other.orientation
+            && self.source_color == other.source_color
+            && self.embedded_metadata == other.embedded_metadata
+            && self.has_gain_map == other.has_gain_map
+            && self.gain_map_metadata == other.gain_map_metadata
+            && self.warnings == other.warnings
     }
 }
 

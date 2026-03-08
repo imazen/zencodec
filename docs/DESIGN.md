@@ -320,22 +320,20 @@ Downcasting rules:
 The dyn API uses `set_*()` methods (mutation) instead of `with_*()` (builder)
 because `Box<dyn Trait>` can't return `Self`.
 
-## SourceEncodingDetails: decode-time, not probe-time
+## SourceEncodingDetails: available from both probe and decode
 
-`SourceEncodingDetails` lives on `DecodeOutput`, not on `ImageInfo`. This is
-intentional — it describes how the image was *encoded* (quality estimate, encoder
-fingerprint, chroma subsampling), not what the image *is* (dimensions, color
-space, metadata).
+`SourceEncodingDetails` lives on both `ImageInfo` (available from probe) and
+`DecodeOutput` (available from decode). It describes how the image was *encoded*
+(quality estimate, encoder fingerprint, chroma subsampling).
 
-Why decode-time and not probe-time:
-- `probe()` returns `ImageInfo`. Keeping it lightweight means probing stays fast
-  (header-only). Quality estimation often requires reading quantization tables,
-  Huffman statistics, or VP8 partition data that's deeper than the header.
-- `DecodeOutput` is the natural home because the decoder already parsed the
-  bitstream — the encoding details are a byproduct of decoding.
-- The trait uses `Any + Send + Sync` for downcasting, which would add boxing
-  overhead to `ImageInfo` (a `Clone + PartialEq` type) for a feature most
-  probe callers don't need.
+`ImageInfo` uses `Option<Arc<dyn SourceEncodingDetails>>` — the `Arc` makes it
+`Clone`-compatible, and `PartialEq` skips the field (trait objects aren't
+comparable). This is the same pattern used for other non-comparable metadata.
+
+Codecs that can cheaply detect encoding properties from headers (JPEG
+quantization tables, WebP VP8 header) populate it during `probe()`. Codecs
+that need deeper parsing populate it only during `decode()`. Either way, the
+caller gets a uniform interface via `source_encoding_details()`.
 
 Why a trait instead of struct fields:
 - Each codec has different encoding properties. JPEG has quantization tables and

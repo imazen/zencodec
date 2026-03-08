@@ -424,13 +424,17 @@ Fields: `width`, `height`, `format: ImageFormat`, `has_alpha`, `has_animation`,
 `frame_count: Option<u32>`, `orientation: Orientation`,
 `source_color: SourceColor`, `embedded_metadata: EmbeddedMetadata`,
 `has_gain_map`, `gain_map_metadata: Option<GainMapMetadata>`,
+`source_encoding: Option<Arc<dyn SourceEncodingDetails>>`,
 `warnings: Vec<String>`.
 
 Builder pattern: `ImageInfo::new(w, h, format).with_alpha(true).with_cicp(...)`.
 
 Key methods: `display_width()`, `display_height()` (orientation-corrected),
 `transfer_function()`, `color_primaries()`, `color_profile_source()`,
-`color_context()`, `metadata() -> MetadataView<'_>`.
+`color_context()`, `metadata() -> MetadataView<'_>`,
+`source_encoding_details() -> Option<&dyn SourceEncodingDetails>`.
+
+`PartialEq` skips `source_encoding` (trait objects aren't comparable).
 
 ### `SourceColor`
 
@@ -702,10 +706,10 @@ impl dyn SourceEncodingDetails {
 `EncoderConfig::with_generic_quality()`. Returns `None` for lossless encodings
 or when quality can't be determined from headers. Approximate (±5).
 
-Attached to `DecodeOutput` via `with_source_encoding_details()`. Codec
-implementors populate this during decode (not probe — probe returns `ImageInfo`
-only). The concrete probe struct carries codec-specific fields accessible via
-`codec_details::<MyProbe>()`.
+Available on both `ImageInfo` (from probe or decode) and `DecodeOutput`. Codec
+implementors populate it when the codec can detect source encoding properties
+from headers. The concrete probe struct carries codec-specific fields accessible
+via `codec_details::<MyProbe>()`.
 
 ---
 

@@ -362,11 +362,35 @@ impl SourceEncodingDetails for JpegProbe {
 }
 ```
 
-### Attach during decode, not probe
+### Attach to ImageInfo or DecodeOutput
 
-`probe()` returns `ImageInfo` only — it reads headers for dimensions, metadata,
-and format. Source encoding analysis (quality estimation, encoder detection) is
-heavier work and belongs in the decode path.
+`SourceEncodingDetails` can be attached to `ImageInfo` (available from probe)
+or to `DecodeOutput` (available from decode). Use both when appropriate:
+
+**During probe** — if your codec can cheaply detect encoding properties from
+headers (quality estimate from quantization tables, encoder fingerprint from
+marker ordering), attach to the `ImageInfo`:
+
+```rust
+fn probe(&self, data: &[u8]) -> Result<ImageInfo, MyError> {
+    let header = parse_header(data)?;
+
+    let probe = JpegProbe {
+        encoder: detect_encoder(&header),
+        subsampling: header.subsampling,
+        quality_estimate: estimate_quality(&header.quant_tables),
+        is_progressive: header.is_progressive,
+    };
+
+    Ok(ImageInfo::new(header.width, header.height, ImageFormat::Jpeg)
+        .with_frame_count(1)
+        .with_source_encoding_details(probe))
+}
+```
+
+**During decode** — attach the same (or more detailed) probe data to the
+`DecodeOutput`. Decoding may reveal additional details not available from
+headers alone:
 
 ```rust
 impl<'a> Decode for MyDecoder<'a> {
@@ -380,7 +404,6 @@ impl<'a> Decode for MyDecoder<'a> {
             ImageFormat::Jpeg,
         );
 
-        // Build probe details from what we learned during decode
         let probe = JpegProbe {
             encoder: detect_encoder(&self.header),
             subsampling: self.header.subsampling,
@@ -394,13 +417,9 @@ impl<'a> Decode for MyDecoder<'a> {
 }
 ```
 
-Don't attach during `probe()` — there's no `DecodeOutput` to attach to. The
-`probe()` method returns `ImageInfo`, which describes the image. Source encoding
-details describe the *encoder*, and are only available after parsing enough of
-the bitstream to estimate quality tables, detect encoder fingerprints, etc.
-
-If your codec can cheaply detect encoding details from headers alone, do the
-analysis in `decode()` and attach it there. There's no cost to the probe path.
+If detection is cheap (header-only), populate it in both `probe()` and
+`decode()`. If it requires deeper parsing, only populate it in `decode()`.
+Callers who only probe will get whatever the codec can provide from headers.
 
 ## Format Negotiation (Decode Side)
 
