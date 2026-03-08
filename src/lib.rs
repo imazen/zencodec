@@ -38,6 +38,7 @@ extern crate alloc;
 mod capabilities;
 mod color;
 mod cost;
+mod detect;
 mod error;
 mod format;
 mod gainmap;
@@ -65,6 +66,7 @@ pub use orientation::{Orientation, OrientationHint};
 pub use output::{FullFrame, OwnedFullFrame};
 
 pub use capabilities::UnsupportedOperation;
+pub use detect::SourceEncodingDetails;
 pub use error::{CodecErrorExt, find_cause};
 pub use traits::Unsupported;
 
@@ -164,6 +166,9 @@ pub mod decode {
     pub use crate::sink::{DecodeRowSink, SinkError};
 
     pub use crate::negotiate::{is_format_available, negotiate_pixel_format};
+
+    // Source encoding detection
+    pub use crate::detect::SourceEncodingDetails;
 
     // Shared types re-exported for convenience (commonly needed alongside decode)
     pub use crate::info::{EmbeddedMetadata, SourceColor};

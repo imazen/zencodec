@@ -4,6 +4,7 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::any::Any;
 
+use crate::detect::SourceEncodingDetails;
 use crate::{ImageFormat, ImageInfo, MetadataView};
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
 
@@ -168,6 +169,7 @@ impl AsRef<[u8]> for EncodeOutput {
 pub struct DecodeOutput {
     pixels: PixelBuffer,
     info: ImageInfo,
+    source_encoding: Option<Box<dyn SourceEncodingDetails>>,
     extras: Option<Box<dyn Any + Send>>,
 }
 
@@ -180,8 +182,39 @@ impl DecodeOutput {
         Self {
             pixels,
             info,
+            source_encoding: None,
             extras: None,
         }
+    }
+
+    /// Attach source encoding details (quality estimate, codec-specific probe data).
+    ///
+    /// The concrete type must implement [`SourceEncodingDetails`] — typically
+    /// a codec's probe type (e.g. `WebPProbe`, `JpegProbe`).
+    ///
+    /// Callers access the generic quality via
+    /// [`source_encoding_details()`](DecodeOutput::source_encoding_details)
+    /// and downcast for codec-specific fields.
+    pub fn with_source_encoding_details<T: SourceEncodingDetails + 'static>(
+        mut self,
+        details: T,
+    ) -> Self {
+        self.source_encoding = Some(Box::new(details));
+        self
+    }
+
+    /// Source encoding details, if available.
+    ///
+    /// Returns the codec's probe result with both generic quality
+    /// (via [`SourceEncodingDetails::source_generic_quality()`]) and
+    /// codec-specific fields (via [`codec_details()`](dyn SourceEncodingDetails::codec_details)).
+    pub fn source_encoding_details(&self) -> Option<&dyn SourceEncodingDetails> {
+        self.source_encoding.as_deref()
+    }
+
+    /// Take source encoding details, consuming them from this output.
+    pub fn take_source_encoding_details(&mut self) -> Option<Box<dyn SourceEncodingDetails>> {
+        self.source_encoding.take()
     }
 
     /// Attach format-specific extras (e.g., JPEG gain maps, MPF data).
@@ -259,6 +292,7 @@ impl core::fmt::Debug for DecodeOutput {
         f.debug_struct("DecodeOutput")
             .field("pixels", &self.pixels)
             .field("format", &self.info.format)
+            .field("has_source_encoding", &self.source_encoding.is_some())
             .finish()
     }
 }
