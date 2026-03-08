@@ -37,11 +37,13 @@ extern crate alloc;
 
 mod capabilities;
 mod color;
+mod cost;
 mod error;
 mod format;
 mod gainmap;
 mod info;
 mod limits;
+mod metadata;
 mod negotiate;
 mod orientation;
 mod output;
@@ -56,11 +58,9 @@ mod traits;
 pub use color::{ColorContext, ColorProfileSource, NamedProfile};
 pub use format::{ImageFormat, ImageFormatDefinition, ImageFormatRegistry};
 pub use gainmap::GainMapMetadata;
-pub use info::{
-    Cicp, ContentLightLevel, ImageInfo, MasteringDisplay, Metadata, MetadataView, Resolution,
-    ResolutionUnit,
-};
+pub use info::{Cicp, ContentLightLevel, ImageInfo, MasteringDisplay, Resolution, ResolutionUnit};
 pub use limits::{LimitExceeded, ResourceLimits, ThreadingPolicy};
+pub use metadata::{Metadata, MetadataView};
 pub use orientation::{Orientation, OrientationHint};
 pub use output::{FullFrame, OwnedFullFrame};
 
@@ -81,7 +81,7 @@ pub use enough::Unstoppable;
 // =========================================================================
 
 pub(crate) use capabilities::{DecodeCapabilities, EncodeCapabilities};
-pub(crate) use info::{DecodeCost, EncodeCost, OutputInfo};
+pub(crate) use cost::{DecodeCost, EncodeCost, OutputInfo};
 pub(crate) use output::{DecodeOutput, EncodeOutput};
 pub(crate) use policy::{DecodePolicy, EncodePolicy};
 pub(crate) use sink::DecodeRowSink;
@@ -119,7 +119,7 @@ pub mod encode {
 
     // Types
     pub use crate::capabilities::EncodeCapabilities;
-    pub use crate::info::EncodeCost;
+    pub use crate::cost::EncodeCost;
     pub use crate::negotiate::best_encode_format;
     pub use crate::output::EncodeOutput;
     pub use crate::policy::EncodePolicy;
@@ -158,7 +158,7 @@ pub mod decode {
 
     // Types
     pub use crate::capabilities::DecodeCapabilities;
-    pub use crate::info::{DecodeCost, OutputInfo};
+    pub use crate::cost::{DecodeCost, OutputInfo};
     pub use crate::output::{DecodeOutput, FullFrame, OwnedFullFrame};
     pub use crate::policy::DecodePolicy;
     pub use crate::sink::{DecodeRowSink, SinkError};
