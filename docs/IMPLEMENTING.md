@@ -335,85 +335,103 @@ impl<'a> Decode for MyDecoder<'a> {
 
 ## Source Encoding Details
 
-Codecs that can detect how an image was encoded should attach a
-`SourceEncodingDetails` implementation to the `DecodeOutput`. This lets
-callers query source quality (for re-encode-at-matching-quality workflows)
-and access codec-specific probe data.
+Codecs that can detect how an image was encoded should implement
+`SourceEncodingDetails` on a probe struct and attach it to both `ImageInfo`
+(from probe) and `DecodeOutput` (from decode). This lets callers query
+source quality and access codec-specific probe data.
+
+### The trait is minimal — put details on your struct
+
+The `SourceEncodingDetails` trait has only two methods: `source_generic_quality()`
+and `is_lossless()`. These are the only properties meaningful across **all** image
+formats.
+
+Everything codec-specific — color type, bit depth, palette size, chroma
+subsampling, encoder family, quantizer tables, compression ratio — belongs as
+**fields or methods on your concrete probe struct**, not on the trait. Callers
+access codec-specific data via `codec_details::<T>()` downcast:
+
+```rust
+// Caller side:
+if let Some(png) = details.codec_details::<PngProbe>() {
+    println!("PNG{} ({:?})", png.bits_per_pixel(), png.color_type);
+    println!("Palette: {} entries", png.palette_size);
+}
+```
+
+This is a general zen* design principle: **traits define the cross-codec contract;
+concrete types carry codec-specific richness.** The same pattern applies to
+`EncoderConfig` (concrete configs expose codec-specific knobs), `EncodeOutput`
+(concrete extras via `extras::<T>()`), and `DecodeOutput` (concrete extras and
+source encoding details via downcast). Never add a method to a trait just because
+two or three codecs happen to share a concept — if it's not universal, it belongs
+on the concrete type.
 
 ### Define your probe struct
 
 ```rust
-use zc::decode::SourceEncodingDetails;
+use zc::SourceEncodingDetails;
 
-/// JPEG-specific source encoding properties.
+/// PNG-specific source encoding properties.
 #[derive(Debug, Clone)]
-pub struct JpegProbe {
-    pub encoder: Option<JpegEncoder>,   // detected encoder software
-    pub subsampling: ChromaSubsampling,  // 4:2:0, 4:4:4, etc.
-    pub quality_estimate: Option<f32>,   // 0-100, from quantization tables
-    pub is_progressive: bool,
+pub struct PngProbe {
+    pub color_type: ColorType,    // Grayscale, Rgb, Indexed, Rgba, ...
+    pub bit_depth: u8,            // 1, 2, 4, 8, or 16
+    pub palette_size: u16,        // 0 if not indexed
+    pub interlaced: bool,
+    pub compression_ratio: f32,
     // ... other codec-specific fields
 }
 
-impl SourceEncodingDetails for JpegProbe {
+impl PngProbe {
+    /// Bits per pixel (PNG24=24, PNG32=32, PNG48=48, PNG64=64).
+    pub fn bits_per_pixel(&self) -> u16 {
+        self.color_type.channels() as u16 * self.bit_depth as u16
+    }
+}
+
+impl SourceEncodingDetails for PngProbe {
     fn source_generic_quality(&self) -> Option<f32> {
-        self.quality_estimate
+        None // PNG is lossless
+    }
+    fn is_lossless(&self) -> bool {
+        true
     }
 }
 ```
 
-### Attach to ImageInfo or DecodeOutput
+For lossy codecs, map to the generic 0–100 scale:
 
-`SourceEncodingDetails` can be attached to `ImageInfo` (available from probe)
-or to `DecodeOutput` (available from decode). Use both when appropriate:
+```rust
+impl SourceEncodingDetails for JpegProbe {
+    fn source_generic_quality(&self) -> Option<f32> {
+        self.quality_estimate // already 0-100 for IJG/mozjpeg
+    }
+    // is_lossless() defaults to false
+}
+```
 
-**During probe** — if your codec can cheaply detect encoding properties from
-headers (quality estimate from quantization tables, encoder fingerprint from
-marker ordering), attach to the `ImageInfo`:
+### Attach to ImageInfo and DecodeOutput
+
+**During probe** — if detection is cheap (header-only), attach to `ImageInfo`:
 
 ```rust
 fn probe(&self, data: &[u8]) -> Result<ImageInfo, MyError> {
     let header = parse_header(data)?;
-
-    let probe = JpegProbe {
-        encoder: detect_encoder(&header),
-        subsampling: header.subsampling,
-        quality_estimate: estimate_quality(&header.quant_tables),
-        is_progressive: header.is_progressive,
-    };
-
-    Ok(ImageInfo::new(header.width, header.height, ImageFormat::Jpeg)
-        .with_frame_count(1)
+    let probe = PngProbe { /* ... */ };
+    Ok(ImageInfo::new(header.width, header.height, ImageFormat::Png)
         .with_source_encoding_details(probe))
 }
 ```
 
-**During decode** — attach the same (or more detailed) probe data to the
-`DecodeOutput`. Decoding may reveal additional details not available from
-headers alone:
+**During decode** — attach to `DecodeOutput` too (may have richer data):
 
 ```rust
-impl<'a> Decode for MyDecoder<'a> {
-    type Error = MyError;
-
-    fn decode(self) -> Result<DecodeOutput, MyError> {
-        let pixels = do_decode(self.data, &self.header)?;
-        let info = ImageInfo::new(
-            self.header.width,
-            self.header.height,
-            ImageFormat::Jpeg,
-        );
-
-        let probe = JpegProbe {
-            encoder: detect_encoder(&self.header),
-            subsampling: self.header.subsampling,
-            quality_estimate: estimate_quality(&self.header.quant_tables),
-            is_progressive: self.header.is_progressive,
-        };
-
-        Ok(DecodeOutput::new(pixels, info)
-            .with_source_encoding_details(probe))
-    }
+fn decode(self) -> Result<DecodeOutput, MyError> {
+    let pixels = do_decode(&self.data)?;
+    let probe = PngProbe { /* ... */ };
+    Ok(DecodeOutput::new(pixels, info)
+        .with_source_encoding_details(probe))
 }
 ```
 

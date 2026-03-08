@@ -63,24 +63,25 @@ pub trait SourceEncodingDetails: Any + Send + Sync {
     fn is_lossless(&self) -> bool {
         false
     }
-
-    /// Source bits per pixel (all channels combined).
-    ///
-    /// For example: PNG24 = 24, PNG32 = 32, PNG48 = 48, PNG64 = 64,
-    /// 8-bit palette = 8, grayscale = 8 or 16.
-    /// Returns `None` when not available from headers.
-    fn source_bits_per_pixel(&self) -> Option<u16> {
-        None
-    }
-
-    /// Number of entries in the source palette, if palette-based.
-    ///
-    /// Returns `Some(n)` for indexed PNG, GIF (global palette size), etc.
-    /// Returns `None` for truecolor formats or when not applicable.
-    fn source_palette_size(&self) -> Option<u16> {
-        None
-    }
 }
+
+// ── Design note ────────────────────────────────────────────────────────
+//
+// This trait intentionally has very few methods. Only properties that are
+// meaningful across ALL image formats belong here (quality, lossless).
+//
+// Codec-specific details — color type, bit depth, palette size, chroma
+// subsampling, encoder family, quantizer tables, etc. — belong as fields
+// or methods on the concrete probe struct (e.g. `PngProbe`, `JpegProbe`).
+// Callers access them via downcast:
+//
+//     if let Some(png) = details.codec_details::<PngProbe>() {
+//         println!("{}bpp, palette: {:?}", png.bits_per_pixel(), png.palette_size);
+//     }
+//
+// This keeps the trait stable and avoids a combinatorial explosion of
+// optional methods that only apply to a subset of codecs.
+// ───────────────────────────────────────────────────────────────────────
 
 // Downcast helper — avoids requiring callers to import `core::any::Any`.
 impl dyn SourceEncodingDetails {

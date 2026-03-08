@@ -462,25 +462,31 @@ if let Some(details) = output.source_encoding_details() {
         println!("Source was lossless");
     }
 
-    // Color depth (PNG24=24, PNG32=32, PNG48=48, PNG64=64, GIF=8)
-    if let Some(bpp) = details.source_bits_per_pixel() {
-        println!("Source: {bpp} bits per pixel");
-    }
-
-    // Palette size for indexed formats (PNG indexed, GIF)
-    if let Some(n) = details.source_palette_size() {
-        println!("Palette: {n} colors");
-    }
-
-    // Downcast for codec-specific fields:
+    // Downcast for codec-specific fields.
+    // The trait only carries universal properties (quality, lossless).
+    // Everything else lives on the concrete probe struct.
     if let Some(jpeg) = details.codec_details::<zenjpeg::detect::JpegProbe>() {
         println!("JPEG encoder: {:?}", jpeg.encoder);
         println!("Chroma subsampling: {:?}", jpeg.subsampling);
     }
+
+    if let Some(png) = details.codec_details::<zenpng::detect::PngProbe>() {
+        println!("PNG{}  ({:?}, {}bpp)",
+            png.bits_per_pixel(), png.color_type, png.bit_depth);
+        if png.color_type == zenpng::detect::ColorType::Indexed {
+            println!("Palette: {} colors", png.palette_size);
+        }
+    }
+
+    if let Some(gif) = details.codec_details::<zengif::detect::GifProbe>() {
+        println!("GIF palette: {} colors", gif.global_palette_size);
+    }
 }
 ```
 
-Not all codecs populate this. `source_encoding_details()` returns `None` if the codec doesn't support quality detection.
+The trait intentionally has very few methods — only properties meaningful across all image formats. Codec-specific details (color type, bit depth, palette size, chroma subsampling, encoder family, quantizer tables) live on the concrete probe struct and are accessed via `codec_details::<T>()` downcast.
+
+Not all codecs populate this. `source_encoding_details()` returns `None` if the codec doesn't support source detection.
 
 ## Error Handling
 

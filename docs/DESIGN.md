@@ -343,6 +343,19 @@ Why a trait instead of struct fields:
 - The trait gives a generic interface (`source_generic_quality()`, `is_lossless()`)
   plus downcast access to the full codec-specific type.
 
+The trait is intentionally minimal — only properties meaningful across **all**
+image formats belong on it. Codec-specific data (color type, bit depth, palette
+size, chroma subsampling, encoder family, etc.) belongs as fields or methods on
+the concrete probe struct, accessed via `codec_details::<T>()`. Adding methods to
+a shared trait because two or three codecs share a concept creates a combinatorial
+explosion and couples the trait to specific codecs.
+
+This is a general zen* design principle that applies wherever traits meet concrete
+types: `EncoderConfig` traits define cross-codec settings (quality, effort);
+concrete configs expose codec-specific knobs. `EncodeOutput` has `extras::<T>()`
+for codec-specific output data. The trait is the stable contract; the concrete
+type carries the richness.
+
 ## I/O abstraction: deferred
 
 The current API requires `&[u8]` (or `Cow<[u8]>`) — the full file must be in
