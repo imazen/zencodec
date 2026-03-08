@@ -3,8 +3,7 @@
 Shared traits and types for zen* image codecs. This is the canonical reference
 for the public API surface.
 
-`#![no_std]` + `alloc`. `#![forbid(unsafe_code)]`. Codec feature gates the
-trait hierarchy; everything else is always available.
+`#![no_std]` + `alloc`. `#![forbid(unsafe_code)]`.
 
 ### zenpixels: use but never re-export
 
@@ -14,17 +13,9 @@ trait hierarchy; everything else is always available.
 `InterleaveFormat`.
 
 **All crates in the zen ecosystem MUST use `zenpixels` types directly.**
-zencodec-types re-exports them for convenience, but callers and codec
+zencodec-types uses them in trait signatures but callers and codec
 implementors should depend on `zenpixels` directly and use `zenpixels::` paths
-in their public APIs. This ensures a single source of truth for pixel types
-across all crates, avoids version-mismatch breakage from re-export chains, and
-lets crates that only need pixel types (no codec traits) depend on `zenpixels`
-alone without pulling in `zencodec-types`.
-
-**zencodec-types MUST NOT re-export zenpixels types.** The re-exports that
-currently exist are a migration artifact and will be removed. Codec crates
-should `pub use zenpixels::PixelDescriptor` etc. in their own APIs, not
-`pub use zencodec_types::PixelDescriptor`.
+in their public APIs.
 
 ---
 
@@ -32,15 +23,24 @@ should `pub use zenpixels::PixelDescriptor` etc. in their own APIs, not
 
 ```text
 ENCODE:
-                                 ┌→ Enc (Encoder and/or EncodeRgb8, EncodeRgba8, ...)
+                                 ┌→ Enc (Encoder)
 EncoderConfig → EncodeJob<'a> ──┤
-                                 └→ FrameEnc (FrameEncoder and/or FrameEncodeRgba8, ...)
+                                 └→ FullFrameEnc (FullFrameEncoder, 'static)
 
 DECODE:
                                  ┌→ Dec (Decode)
 DecoderConfig → DecodeJob<'a> ──┤→ StreamDec (StreamingDecode)
-                                 └→ FrameDec (FrameDecode)
+                                 └→ FullFrameDec (FullFrameDecoder, 'static)
 ```
+
+Each layer has object-safe `Dyn*` variants for codec-agnostic dispatch:
+
+```text
+DynEncoderConfig → DynEncodeJob → DynEncoder / DynFullFrameEncoder
+DynDecoderConfig → DynDecodeJob → DynDecoder / DynStreamingDecoder / DynFullFrameDecoder
+```
+
+Blanket impls generate the dyn API automatically from the generic traits.
 
 Color management is **not** the codec's job. Decoders return native pixels
 with ICC/CICP metadata. Encoders accept pixels as-is and embed the provided
@@ -59,17 +59,17 @@ trait EncoderConfig: Clone + Send + Sync {
 
     fn format() -> ImageFormat;
     fn supported_descriptors() -> &'static [PixelDescriptor];
-    fn capabilities() -> &'static CodecCapabilities;    // default: EMPTY
+    fn capabilities() -> &'static EncodeCapabilities;    // default: EMPTY
 
-    // Universal knobs (default no-op, check via getters)
-    fn with_generic_quality(self, quality: f32) -> Self;
-    fn with_generic_effort(self, effort: i32) -> Self;
-    fn with_lossless(self, lossless: bool) -> Self;
-    fn with_alpha_quality(self, quality: f32) -> Self;
-    fn generic_quality(&self) -> Option<f32>;
-    fn generic_effort(&self) -> Option<i32>;
-    fn is_lossless(&self) -> Option<bool>;
-    fn alpha_quality(&self) -> Option<f32>;
+    // Universal knobs (default no-op, codec overrides what it supports)
+    fn with_generic_quality(self, quality: f32) -> Self;  // default: self
+    fn with_generic_effort(self, effort: i32) -> Self;    // default: self
+    fn with_lossless(self, lossless: bool) -> Self;       // default: self
+    fn with_alpha_quality(self, quality: f32) -> Self;    // default: self
+    fn generic_quality(&self) -> Option<f32>;   // default: None
+    fn generic_effort(&self) -> Option<i32>;    // default: None
+    fn is_lossless(&self) -> Option<bool>;      // default: None
+    fn alpha_quality(&self) -> Option<f32>;     // default: None
 
     fn job(&self) -> Self::Job<'_>;
 }
@@ -80,17 +80,28 @@ trait EncoderConfig: Clone + Send + Sync {
 ```rust
 trait EncodeJob<'a>: Sized {
     type Error: core::error::Error + Send + Sync + 'static;
-    type Enc: Sized;        // single-image encoder
-    type FrameEnc: Sized;   // animation encoder
+    type Enc: Sized;                    // single-image encoder
+    type FullFrameEnc: Sized + 'static; // animation encoder
 
     fn with_stop(self, stop: &'a dyn Stop) -> Self;
     fn with_limits(self, limits: ResourceLimits) -> Self;
+    fn with_policy(self, policy: EncodePolicy) -> Self;         // default: self
     fn with_metadata(self, meta: &'a MetadataView<'a>) -> Self;
-    fn with_canvas_size(self, width: u32, height: u32) -> Self;  // default no-op
-    fn with_loop_count(self, count: Option<u32>) -> Self;        // default no-op
+    fn with_canvas_size(self, width: u32, height: u32) -> Self; // default: self
+    fn with_loop_count(self, count: Option<u32>) -> Self;       // default: self
+
+    // Codec-specific extensions (downcasted by callers who know the codec)
+    fn extensions(&self) -> Option<&dyn Any>;          // default: None
+    fn extensions_mut(&mut self) -> Option<&mut dyn Any>; // default: None
 
     fn encoder(self) -> Result<Self::Enc, Self::Error>;
-    fn frame_encoder(self) -> Result<Self::FrameEnc, Self::Error>;
+    fn full_frame_encoder(self) -> Result<Self::FullFrameEnc, Self::Error>;
+
+    // Type-erased convenience (default impls via shims)
+    fn dyn_encoder(self) -> Result<Box<dyn DynEncoder + 'a>, BoxedError>
+        where Self: 'a, Self::Enc: Encoder;
+    fn dyn_full_frame_encoder(self) -> Result<Box<dyn DynFullFrameEncoder>, BoxedError>
+        where Self: 'a, Self::FullFrameEnc: FullFrameEncoder;
 }
 ```
 
@@ -98,77 +109,48 @@ trait EncodeJob<'a>: Sized {
 
 ```rust
 trait Encoder: Sized {
-    type Error: core::error::Error + Send + Sync + 'static + From<UnsupportedOperation>;
+    type Error: core::error::Error + Send + Sync + 'static;
 
+    fn reject(op: UnsupportedOperation) -> Self::Error;
     fn preferred_strip_height(&self) -> u32;    // default: 0
     fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error>;
-    fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), Self::Error>;    // default: Err
-    fn finish(self) -> Result<EncodeOutput, Self::Error>;                        // default: Err
-    fn encode_from(self, source: &mut dyn FnMut(u32, PixelSliceMut<'_>) -> usize) -> Result<EncodeOutput, Self::Error>; // default: Err
+
+    // Hot path: encode from mutable sRGB RGBA8 buffer (encoder may modify in-place)
+    fn encode_srgba8(
+        self, data: &mut [u8], make_opaque: bool,
+        width: u32, height: u32, stride_pixels: u32,
+    ) -> Result<EncodeOutput, Self::Error>;  // default: wraps encode()
+
+    // Row-level push (mutually exclusive with encode)
+    fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), Self::Error>;  // default: Err
+    fn finish(self) -> Result<EncodeOutput, Self::Error>;                       // default: Err
+
+    // Pull from source callback
+    fn encode_from(
+        self, source: &mut dyn FnMut(u32, PixelSliceMut<'_>) -> usize,
+    ) -> Result<EncodeOutput, Self::Error>;  // default: Err
 }
 ```
 
-Three mutually exclusive paths: `encode()`, `push_rows()+finish()`, `encode_from()`.
+Three mutually exclusive paths: `encode()`/`encode_srgba8()`, `push_rows()+finish()`, `encode_from()`.
 
-### `FrameEncoder` (type-erased animation encode)
+### `FullFrameEncoder` (animation encode)
 
 ```rust
-trait FrameEncoder: Sized {
-    type Error: core::error::Error + Send + Sync + 'static + From<UnsupportedOperation>;
+trait FullFrameEncoder: Sized {
+    type Error: core::error::Error + Send + Sync + 'static;
 
-    fn push_frame(&mut self, pixels: PixelSlice<'_>, duration_ms: u32) -> Result<(), Self::Error>;
-    fn push_encode_frame(&mut self, frame: EncodeFrame<'_>) -> Result<(), Self::Error>;  // default: delegates to push_frame
-    fn begin_frame(&mut self, duration_ms: u32) -> Result<(), Self::Error>;              // default: Err
-    fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), Self::Error>;            // default: Err
-    fn end_frame(&mut self) -> Result<(), Self::Error>;                                  // default: Err
-    fn pull_frame(&mut self, duration_ms: u32, source: &mut dyn FnMut(u32, PixelSliceMut<'_>) -> usize) -> Result<(), Self::Error>; // default: Err
-    fn with_loop_count(&mut self, count: Option<u32>);  // default no-op
-    fn finish(self) -> Result<EncodeOutput, Self::Error>;
+    fn reject(op: UnsupportedOperation) -> Self::Error;
+    fn push_frame(
+        &mut self, pixels: PixelSlice<'_>, duration_ms: u32, stop: Option<&dyn Stop>,
+    ) -> Result<(), Self::Error>;
+    fn finish(self, stop: Option<&dyn Stop>) -> Result<EncodeOutput, Self::Error>;
 }
 ```
 
-Three mutually exclusive per-frame paths: `push_frame()`/`push_encode_frame()`,
-`begin_frame()+push_rows()+end_frame()`, `pull_frame()`.
-
-### Per-format encode traits (compile-time typed)
-
-Each trait guarantees the codec can encode that exact pixel format.
-Codec implements only the formats it accepts.
-
-```rust
-trait EncodeRgb8     { type Error; fn encode_rgb8(self, pixels: PixelSlice<'_, Rgb<u8>>)   -> Result<EncodeOutput, Self::Error>; }
-trait EncodeRgba8    { type Error; fn encode_rgba8(self, pixels: PixelSlice<'_, Rgba<u8>>)  -> Result<EncodeOutput, Self::Error>; }
-trait EncodeGray8    { type Error; fn encode_gray8(self, pixels: PixelSlice<'_, Gray<u8>>)  -> Result<EncodeOutput, Self::Error>; }
-trait EncodeRgb16    { type Error; fn encode_rgb16(self, pixels: PixelSlice<'_, Rgb<u16>>)  -> Result<EncodeOutput, Self::Error>; }
-trait EncodeRgba16   { type Error; fn encode_rgba16(self, pixels: PixelSlice<'_, Rgba<u16>>)-> Result<EncodeOutput, Self::Error>; }
-trait EncodeGray16   { type Error; fn encode_gray16(self, pixels: PixelSlice<'_, Gray<u16>>)-> Result<EncodeOutput, Self::Error>; }
-trait EncodeRgbF16   { type Error; fn encode_rgb_f16(self, pixels: PixelSlice<'_>)          -> Result<EncodeOutput, Self::Error>; }
-trait EncodeRgbaF16  { type Error; fn encode_rgba_f16(self, pixels: PixelSlice<'_>)         -> Result<EncodeOutput, Self::Error>; }
-trait EncodeRgbF32   { type Error; fn encode_rgb_f32(self, pixels: PixelSlice<'_, Rgb<f32>>)-> Result<EncodeOutput, Self::Error>; }
-trait EncodeRgbaF32  { type Error; fn encode_rgba_f32(self, pixels: PixelSlice<'_, Rgba<f32>>) -> Result<EncodeOutput, Self::Error>; }
-trait EncodeGrayF32  { type Error; fn encode_gray_f32(self, pixels: PixelSlice<'_, Gray<f32>>) -> Result<EncodeOutput, Self::Error>; }
-```
-
-f16 traits use type-erased `PixelSlice<'_>` because `rgb` has no half-float type.
-
-### Per-format frame encode traits
-
-```rust
-trait FrameEncodeRgb8  { type Error; fn push_frame_rgb8(&mut self, pixels: PixelSlice<'_, Rgb<u8>>, duration_ms: u32) -> Result<(), Self::Error>; fn finish_rgb8(self) -> Result<EncodeOutput, Self::Error>; }
-trait FrameEncodeRgba8 { type Error; fn push_frame_rgba8(&mut self, pixels: PixelSlice<'_, Rgba<u8>>, duration_ms: u32) -> Result<(), Self::Error>; fn finish_rgba8(self) -> Result<EncodeOutput, Self::Error>; }
-```
-
-### Codec format matrix
-
-```
-              Rgb8  Rgba8  Gray8  Rgb16  Rgba16  Gray16  RgbF16  RgbaF16  RgbF32  RgbaF32  GrayF32
-JPEG           ✓             ✓
-WebP           ✓      ✓
-GIF                   ✓
-PNG            ✓      ✓      ✓      ✓       ✓      ✓
-AVIF           ✓      ✓                                                    ✓        ✓
-JXL            ✓      ✓      ✓      ✓       ✓      ✓      ✓        ✓      ✓        ✓        ✓
-```
+Full-canvas frames only. Animation encoder is `'static` — it owns its data.
+Codecs without animation set `type FullFrameEnc = ()` (unit implements
+`FullFrameEncoder` with all methods returning `Err`).
 
 ---
 
@@ -181,9 +163,9 @@ trait DecoderConfig: Clone + Send + Sync {
     type Error: core::error::Error + Send + Sync + 'static;
     type Job<'a>: DecodeJob<'a, Error = Self::Error> where Self: 'a;
 
-    fn format() -> ImageFormat;
+    fn formats() -> &'static [ImageFormat]; // may return multiple
     fn supported_descriptors() -> &'static [PixelDescriptor];
-    fn capabilities() -> &'static CodecCapabilities;    // default: EMPTY
+    fn capabilities() -> &'static DecodeCapabilities;  // default: EMPTY
 
     fn job(&self) -> Self::Job<'_>;
 }
@@ -196,172 +178,239 @@ trait DecodeJob<'a>: Sized {
     type Error: core::error::Error + Send + Sync + 'static;
     type Dec: Decode<Error = Self::Error>;
     type StreamDec: StreamingDecode<Error = Self::Error>;
-    type FrameDec: FrameDecode<Error = Self::Error>;
+    type FullFrameDec: FullFrameDecoder<Error = Self::Error> + 'static;
 
     fn with_stop(self, stop: &'a dyn Stop) -> Self;
     fn with_limits(self, limits: ResourceLimits) -> Self;
+    fn with_policy(self, policy: DecodePolicy) -> Self;  // default: self
 
-    // Probing
-    fn probe(&self, data: &[u8]) -> Result<ImageInfo, Self::Error>;
-    fn probe_full(&self, data: &[u8]) -> Result<ImageInfo, Self::Error>;  // default: probe()
+    // Probing (needs limits + stop context)
+    fn probe(&self, data: &[u8]) -> Result<ImageInfo, Self::Error>;      // header only
+    fn probe_full(&self, data: &[u8]) -> Result<ImageInfo, Self::Error>; // default: probe()
 
     // Decode hints (optional, decoder may ignore)
-    fn with_crop_hint(self, x: u32, y: u32, width: u32, height: u32) -> Self;  // default no-op
-    fn with_scale_hint(self, max_width: u32, max_height: u32) -> Self;          // default no-op
-    fn with_orientation(self, hint: OrientationHint) -> Self;                   // default no-op
+    fn with_crop_hint(self, x: u32, y: u32, width: u32, height: u32) -> Self;  // default: self
+    fn with_scale_hint(self, max_width: u32, max_height: u32) -> Self;          // default: self
+    fn with_orientation(self, hint: OrientationHint) -> Self;                   // default: self
+    fn with_start_frame_index(self, index: u32) -> Self;                        // default: self
+
+    // Codec-specific extensions
+    fn extensions(&self) -> Option<&dyn Any>;          // default: None
+    fn extensions_mut(&mut self) -> Option<&mut dyn Any>; // default: None
 
     // Output prediction
     fn output_info(&self, data: &[u8]) -> Result<OutputInfo, Self::Error>;
 
     // Executor creation — all bind data + preferred here
-    // Consistent parameter order: data, [sink], preferred
-    fn decoder(self, data: &'a [u8], preferred: &[PixelDescriptor]) -> Result<Self::Dec, Self::Error>;
-    fn push_decoder(self, data: &'a [u8], sink: &mut dyn DecodeRowSink, preferred: &[PixelDescriptor]) -> Result<OutputInfo, Self::Error>;  // default: decode() + copy to sink
-    fn streaming_decoder(self, data: &'a [u8], preferred: &[PixelDescriptor]) -> Result<Self::StreamDec, Self::Error>;
-    fn frame_decoder(self, data: &'a [u8], preferred: &[PixelDescriptor]) -> Result<Self::FrameDec, Self::Error>;
+    // data is Cow<'a, [u8]> — pass Cow::Borrowed for zero-copy, Cow::Owned to donate
+    fn decoder(self, data: Cow<'a, [u8]>, preferred: &[PixelDescriptor])
+        -> Result<Self::Dec, Self::Error>;
+    fn push_decoder(self, data: Cow<'a, [u8]>, sink: &mut dyn DecodeRowSink,
+        preferred: &[PixelDescriptor]) -> Result<OutputInfo, Self::Error>;
+    fn streaming_decoder(self, data: Cow<'a, [u8]>, preferred: &[PixelDescriptor])
+        -> Result<Self::StreamDec, Self::Error>;
+    fn full_frame_decoder(self, data: Cow<'a, [u8]>, preferred: &[PixelDescriptor])
+        -> Result<Self::FullFrameDec, Self::Error>;
+
+    // Type-erased convenience (default impls via shims)
+    fn dyn_decoder(...) -> Result<Box<dyn DynDecoder + 'a>, BoxedError>;
+    fn dyn_full_frame_decoder(...) -> Result<Box<dyn DynFullFrameDecoder>, BoxedError>;
+    fn dyn_streaming_decoder(...) -> Result<Box<dyn DynStreamingDecoder + 'a>, BoxedError>;
 }
 ```
 
-All executor creation methods bind `data` and `preferred` at the job level.
-`preferred` is a ranked list of desired output formats — the decoder picks
-the first it can produce without lossy conversion. Pass `&[]` for native
-format. This keeps `Decode`/`StreamingDecode`/`FrameDecode` parameter-free,
-and prepares for future IO-read sources.
-
-`push_decoder` has a default implementation that creates a decoder, calls
-`decode()`, and copies the result into the sink. Codecs with native row
-streaming should override for zero-copy. Returns `OutputInfo` because
-pixels went into the sink. Metadata is available from `probe()` /
-`output_info()` before decode starts.
+`preferred` is a ranked list of desired output formats — the decoder picks the
+first it can produce without lossy conversion. Pass `&[]` for native format.
 
 ### `Decode` (single-image decode, returns owned pixels)
 
 ```rust
 trait Decode: Sized {
     type Error: core::error::Error + Send + Sync + 'static;
-
     fn decode(self) -> Result<DecodeOutput, Self::Error>;
 }
 ```
-
-Created by `DecodeJob::decoder(preferred, data)` with input and format
-preferences already bound.
 
 ### `StreamingDecode` (scanline-batch decode, pull iterator)
 
 ```rust
 trait StreamingDecode {
     type Error: core::error::Error + Send + Sync + 'static;
-
     fn next_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, Self::Error>;
     fn info(&self) -> &ImageInfo;
 }
 ```
 
-Created by `DecodeJob::streaming_decoder(preferred, data)` with preferences
-and input already bound. Yields strips of scanlines at whatever height the
-decoder prefers: MCU height for JPEG, single scanline for PNG, full image
-for simple formats.
+`impl StreamingDecode for ()` is the rejection stub — set `type StreamDec = ()`
+for codecs that don't support streaming.
 
-`impl StreamingDecode for ()` is the trivial rejection type — codecs that
-don't support streaming set `type StreamDec = ()` and return `Err` from
-`streaming_decoder()`.
-
-### `FrameDecode` (animation decode, pull iterator)
+### `FullFrameDecoder` (animation decode, composited full-canvas frames)
 
 ```rust
-trait FrameDecode: Sized {
+trait FullFrameDecoder: Sized {
     type Error: core::error::Error + Send + Sync + 'static;
 
-    fn frame_count(&self) -> Option<u32>;      // default: None
-    fn loop_count(&self) -> Option<u32>;       // default: None
-    fn next_frame(&mut self) -> Result<Option<DecodeFrame>, Self::Error>;
+    fn wrap_sink_error(err: SinkError) -> Self::Error;
+    fn info(&self) -> &ImageInfo;
+    fn frame_count(&self) -> Option<u32>;       // default: None
+    fn loop_count(&self) -> Option<u32>;        // default: None
 
-    // Push model: decode next frame directly into caller-owned sink
-    fn next_frame_to_sink(
-        &mut self,
-        sink: &mut dyn DecodeRowSink,
-    ) -> Result<Option<OutputInfo>, Self::Error>;  // default: next_frame() + copy to sink
+    fn render_next_frame(&mut self, stop: Option<&dyn Stop>)
+        -> Result<Option<FullFrame<'_>>, Self::Error>;
+    fn render_next_frame_owned(&mut self, stop: Option<&dyn Stop>)
+        -> Result<Option<OwnedFullFrame>, Self::Error>;   // default: copies from render_next_frame
+    fn render_next_frame_to_sink(&mut self, stop: Option<&dyn Stop>,
+        sink: &mut dyn DecodeRowSink) -> Result<Option<OutputInfo>, Self::Error>;
 }
 ```
+
+Use `Unsupported<E>` as the associated type for codecs without animation support.
 
 ### `DecodeRowSink` (zero-copy row sink, push-based)
 
 ```rust
 trait DecodeRowSink {
-    fn demand(&mut self, y: u32, height: u32, width: u32, descriptor: PixelDescriptor) -> PixelSliceMut<'_>;
+    fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor)
+        -> Result<(), SinkError>;  // default: Ok(())
+    fn provide_next_buffer(&mut self, y: u32, height: u32, width: u32,
+        descriptor: PixelDescriptor) -> Result<PixelSliceMut<'_>, SinkError>;
+    fn finish(&mut self) -> Result<(), SinkError>;  // default: Ok(())
 }
 ```
 
-The codec calls `demand()` per strip, writes decoded pixels via
-`PixelSliceMut::row_mut()`. The sink controls the stride (can return
-SIMD-aligned buffers). The returned `PixelSliceMut` carries buffer, stride,
-dimensions, and pixel descriptor together. Object-safe.
+The codec calls `begin()`, then `provide_next_buffer()` per strip, writes
+decoded pixels via `PixelSliceMut::row_mut()`, then calls `finish()`. The sink
+controls stride (can return SIMD-aligned buffers). Object-safe.
+
+`SinkError = Box<dyn core::error::Error + Send + Sync>`
 
 ---
 
-## Pixel types (from `zenpixels`, always available)
+## Dyn dispatch traits
 
-These types are defined in the `zenpixels` crate and used throughout the zen
-ecosystem as the cross-crate interchange format. All crates depend on
-`zenpixels` directly. zencodec-types uses them in trait signatures but does
-not re-export them.
-
-### `PixelSlice<'a, P = ()>`
-
-Format-erased pixel buffer view. `P = ()` is type-erased (runtime descriptor),
-`P = Rgb<u8>` etc. is compile-time typed. `From<PixelSlice<'a, P>>` converts
-typed → erased.
+### Encode side
 
 ```rust
-fn data(&self) -> &[u8];
-fn descriptor(&self) -> PixelDescriptor;
-fn width(&self) -> u32;
-fn height(&self) -> u32;
-fn stride(&self) -> usize;
-fn rows(&self) -> u32;   // alias for height
+trait DynEncoderConfig: Send + Sync {
+    fn as_any(&self) -> &dyn Any;  // downcast to concrete config
+    fn format(&self) -> ImageFormat;
+    fn supported_descriptors(&self) -> &'static [PixelDescriptor];
+    fn capabilities(&self) -> &'static EncodeCapabilities;
+    fn dyn_job(&self) -> Box<dyn DynEncodeJob<'_> + '_>;
+}
+
+trait DynEncodeJob<'a> {
+    fn set_stop(&mut self, stop: &'a dyn Stop);
+    fn set_limits(&mut self, limits: ResourceLimits);
+    fn set_policy(&mut self, policy: EncodePolicy);
+    fn set_metadata(&mut self, meta: &'a MetadataView<'a>);
+    fn set_canvas_size(&mut self, width: u32, height: u32);
+    fn set_loop_count(&mut self, count: Option<u32>);
+    fn extensions(&self) -> Option<&dyn Any>;
+    fn extensions_mut(&mut self) -> Option<&mut dyn Any>;
+    fn into_encoder(self: Box<Self>) -> Result<Box<dyn DynEncoder + 'a>, BoxedError>;
+    fn into_full_frame_encoder(self: Box<Self>) -> Result<Box<dyn DynFullFrameEncoder>, BoxedError>;
+}
+
+trait DynEncoder {
+    fn preferred_strip_height(&self) -> u32;
+    fn encode(self: Box<Self>, pixels: PixelSlice<'_>) -> Result<EncodeOutput, BoxedError>;
+    fn encode_srgba8(self: Box<Self>, data: &mut [u8], make_opaque: bool,
+        width: u32, height: u32, stride_pixels: u32) -> Result<EncodeOutput, BoxedError>;
+    fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), BoxedError>;
+    fn finish(self: Box<Self>) -> Result<EncodeOutput, BoxedError>;
+    fn encode_from(self: Box<Self>,
+        source: &mut dyn FnMut(u32, PixelSliceMut<'_>) -> usize) -> Result<EncodeOutput, BoxedError>;
+}
+
+trait DynFullFrameEncoder {
+    fn as_any(&self) -> &dyn Any;       // downcast to concrete encoder
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+    fn into_any(self: Box<Self>) -> Box<dyn Any>;
+    fn push_frame(&mut self, pixels: PixelSlice<'_>, duration_ms: u32,
+        stop: Option<&dyn Stop>) -> Result<(), BoxedError>;
+    fn finish(self: Box<Self>, stop: Option<&dyn Stop>) -> Result<EncodeOutput, BoxedError>;
+}
 ```
 
-### `PixelSliceMut<'a, P = ()>`
-
-Mutable version of `PixelSlice`.
-
-### `PixelBuffer`
-
-Owned pixel buffer (`Vec<u8>` backing).
-
-### `PixelDescriptor`
-
-Describes pixel format: channel layout, channel type, signal range, transfer
-function, color primaries, alpha mode. Provides named constants:
+### Decode side
 
 ```rust
-PixelDescriptor::RGB8_SRGB
-PixelDescriptor::RGBA8_SRGB
-PixelDescriptor::GRAY8_SRGB
-PixelDescriptor::RGB16_LINEAR
-PixelDescriptor::RGBA16_LINEAR
-PixelDescriptor::RGBF32_LINEAR
-PixelDescriptor::RGBAF32_LINEAR
-PixelDescriptor::GRAYF32_LINEAR
-// ... etc.
+trait DynDecoderConfig: Send + Sync {
+    fn as_any(&self) -> &dyn Any;
+    fn formats(&self) -> &'static [ImageFormat];
+    fn supported_descriptors(&self) -> &'static [PixelDescriptor];
+    fn capabilities(&self) -> &'static DecodeCapabilities;
+    fn dyn_job(&self) -> Box<dyn DynDecodeJob<'_> + '_>;
+}
+
+trait DynDecodeJob<'a> {
+    fn set_stop(&mut self, stop: &'a dyn Stop);
+    fn set_limits(&mut self, limits: ResourceLimits);
+    fn set_policy(&mut self, policy: DecodePolicy);
+    fn probe(&self, data: &[u8]) -> Result<ImageInfo, BoxedError>;
+    fn probe_full(&self, data: &[u8]) -> Result<ImageInfo, BoxedError>;
+    fn set_crop_hint(&mut self, x: u32, y: u32, width: u32, height: u32);
+    fn set_scale_hint(&mut self, max_width: u32, max_height: u32);
+    fn set_orientation(&mut self, hint: OrientationHint);
+    fn set_start_frame_index(&mut self, index: u32);
+    fn extensions(&self) -> Option<&dyn Any>;
+    fn extensions_mut(&mut self) -> Option<&mut dyn Any>;
+    fn output_info(&self, data: &[u8]) -> Result<OutputInfo, BoxedError>;
+    fn into_decoder(self: Box<Self>, data: Cow<'a, [u8]>, preferred: &[PixelDescriptor])
+        -> Result<Box<dyn DynDecoder + 'a>, BoxedError>;
+    fn push_decode(self: Box<Self>, data: Cow<'a, [u8]>,
+        sink: &mut dyn DecodeRowSink, preferred: &[PixelDescriptor])
+        -> Result<OutputInfo, BoxedError>;
+    fn into_streaming_decoder(self: Box<Self>, data: Cow<'a, [u8]>,
+        preferred: &[PixelDescriptor])
+        -> Result<Box<dyn DynStreamingDecoder + 'a>, BoxedError>;
+    fn into_full_frame_decoder(self: Box<Self>, data: Cow<'a, [u8]>,
+        preferred: &[PixelDescriptor])
+        -> Result<Box<dyn DynFullFrameDecoder>, BoxedError>;
+}
+
+trait DynDecoder {
+    fn decode(self: Box<Self>) -> Result<DecodeOutput, BoxedError>;
+}
+
+trait DynFullFrameDecoder {
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+    fn into_any(self: Box<Self>) -> Box<dyn Any>;
+    fn info(&self) -> &ImageInfo;
+    fn frame_count(&self) -> Option<u32>;
+    fn loop_count(&self) -> Option<u32>;
+    fn render_next_frame_owned(&mut self, stop: Option<&dyn Stop>)
+        -> Result<Option<OwnedFullFrame>, BoxedError>;
+    fn render_next_frame_to_sink(&mut self, stop: Option<&dyn Stop>,
+        sink: &mut dyn DecodeRowSink) -> Result<Option<OutputInfo>, BoxedError>;
+}
+
+trait DynStreamingDecoder {
+    fn next_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, BoxedError>;
+    fn info(&self) -> &ImageInfo;
+}
 ```
 
-### `PixelFormat`
+### Downcasting rules
 
-Enum: `Rgb8`, `Rgba8`, `Gray8`, `Rgb16`, `Rgba16`, `Gray16`, `RgbF16`,
-`RgbaF16`, `RgbF32`, `RgbaF32`, `GrayF32`, `GrayAlpha8`, `GrayAlpha16`,
-`GrayAlphaF32`, `Bgra8`, `Bgrx8`, `Rgbx8`.
+- `DynEncoderConfig`, `DynDecoderConfig`: `as_any()` — configs are `'static`
+- `DynFullFrameEncoder`, `DynFullFrameDecoder`: `as_any()`, `as_any_mut()`, `into_any()` — frame decoders/encoders are `'static`
+- `DynEncoder`, `DynDecoder`, `DynStreamingDecoder`: **no downcasting** — they borrow `'a` data
 
-### Supporting enums
+Use `extensions()`/`extensions_mut()` on jobs for codec-specific access through the dyn pipeline.
 
-- `ChannelLayout` — RGB, RGBA, Gray, GrayAlpha, BGRA, BGRX, RGBX
-- `ChannelType` — U8, U16, F16, F32
-- `SignalRange` — Full, Limited
-- `TransferFunction` — Srgb, Linear, Pq, Hlg
-- `ColorPrimaries` — Bt709, Bt2020, DisplayP3, AdobeRgb, ...
-- `AlphaMode` — Straight, Premultiplied, None
-- `InterleaveFormat` — Interleaved, Planar
+---
+
+## Pixel types (from `zenpixels`)
+
+These types are defined in `zenpixels` and used throughout the zen ecosystem.
+All crates depend on `zenpixels` directly. See `zenpixels` documentation.
+
+Key types: `PixelSlice<'a>`, `PixelSliceMut<'a>`, `PixelBuffer`, `PixelDescriptor`,
+`PixelFormat`, `ChannelLayout`, `ChannelType`, `SignalRange`, `TransferFunction`,
+`ColorPrimaries`, `AlphaMode`.
 
 ---
 
@@ -369,51 +418,68 @@ Enum: `Rgb8`, `Rgba8`, `Gray8`, `Rgb16`, `Rgba16`, `Gray16`, `RgbF16`,
 
 ### `ImageInfo`
 
-Full image metadata from probing/decoding:
+Image metadata from probing or decoding. `#[non_exhaustive]`, `Clone + Debug + PartialEq`.
 
-```rust
-fn width(&self) -> u32;
-fn height(&self) -> u32;
-fn descriptor(&self) -> PixelDescriptor;
-fn orientation(&self) -> Orientation;
-fn metadata(&self) -> &Metadata;
-fn source_color(&self) -> Option<&SourceColor>;
-```
+Fields: `width`, `height`, `format: ImageFormat`, `has_alpha`, `has_animation`,
+`frame_count: Option<u32>`, `orientation: Orientation`,
+`source_color: SourceColor`, `embedded_metadata: EmbeddedMetadata`,
+`has_gain_map`, `gain_map_metadata: Option<GainMapMetadata>`,
+`warnings: Vec<String>`.
 
-### `Metadata`
+Builder pattern: `ImageInfo::new(w, h, format).with_alpha(true).with_cicp(...)`.
 
-```rust
-fn icc_profile(&self) -> Option<&[u8]>;
-fn exif(&self) -> Option<&[u8]>;
-fn xmp(&self) -> Option<&[u8]>;
-fn iptc(&self) -> Option<&[u8]>;
-fn cicp(&self) -> Option<&Cicp>;
-```
-
-### `MetadataView<'a>`
-
-Borrowed metadata for encoding. Same accessors as `Metadata` but borrowed.
-
-### `OutputInfo`
-
-Predicted decoder output (dimensions, format, which hints were honored).
+Key methods: `display_width()`, `display_height()` (orientation-corrected),
+`transfer_function()`, `color_primaries()`, `color_profile_source()`,
+`color_context()`, `metadata() -> MetadataView<'_>`.
 
 ### `SourceColor`
 
-Source color information for embedded ICC profile tracking.
-
-### `Orientation` / `OrientationHint`
-
-EXIF orientation (1-8) and decode-time orientation handling strategy.
-
-### `Cicp`
-
-Color primaries, transfer characteristics, matrix coefficients, video full
-range flag (ITU-T H.273).
+Source color description. Fields: `cicp: Option<Cicp>`,
+`icc_profile: Option<Arc<[u8]>>`, `bit_depth: Option<u8>`,
+`channel_count: Option<u8>`, `content_light_level: Option<ContentLightLevel>`,
+`mastering_display: Option<MasteringDisplay>`.
 
 ### `EmbeddedMetadata`
 
-Container for ICC, EXIF, XMP, IPTC byte blobs.
+Non-color metadata blobs. Fields: `exif: Option<Vec<u8>>`, `xmp: Option<Vec<u8>>`.
+
+### `MetadataView<'a>`
+
+Borrowed metadata for encoding. Fields: `icc_profile`, `exif`, `xmp` (borrowed slices),
+`cicp`, `content_light_level`, `mastering_display` (Copy), `orientation`, `resolution`.
+
+Methods: builder pattern (`with_icc()`, etc.), `transfer_function()`,
+`color_primaries()`, `color_profile_source()`, `is_empty()`.
+
+### `Metadata`
+
+Owned metadata for cross-boundary transfer. Same fields as `MetadataView` but owned.
+`From<MetadataView<'_>>`, `From<&ImageInfo>`. Methods: `as_view()`, `is_empty()`.
+
+### `OutputInfo`
+
+Predicted decoder output. Fields: `width`, `height`, `native_format: PixelDescriptor`,
+`has_alpha`, `orientation_applied: Orientation`, `crop_applied: Option<[u32; 4]>`.
+
+Methods: `full_decode()`, `buffer_size()`, `pixel_count()`.
+
+### `Cicp`
+
+ITU-T H.273 color description. Re-exported from `zenpixels`. Constants:
+`SRGB`, `BT2100_PQ`, `BT2100_HLG`, `LINEAR_SRGB`, `DISPLAY_P3`, `DISPLAY_P3_PQ`.
+
+### `ContentLightLevel` / `MasteringDisplay`
+
+HDR metadata types (CEA-861.3 / SMPTE ST 2086).
+
+### `Resolution` / `ResolutionUnit`
+
+Physical resolution (DPI / pixels-per-cm / pixels-per-meter).
+
+### `Orientation` / `OrientationHint`
+
+EXIF orientation (1-8 enum) and decode-time orientation strategy
+(`Preserve`, `Correct`, `CorrectAndTransform`, `ExactTransform`).
 
 ---
 
@@ -421,67 +487,39 @@ Container for ICC, EXIF, XMP, IPTC byte blobs.
 
 ### `EncodeOutput`
 
-Encoded image bytes + metadata. Supports typed extras for codec-specific data.
+Encoded image bytes. `#[non_exhaustive]`.
 
-```rust
-fn data(&self) -> &[u8];
-fn into_vec(self) -> Vec<u8>;
-fn format(&self) -> ImageFormat;
-fn with_extras<T: Any + Send>(self, extras: T) -> Self;
-fn extras<T: Any + Send>(&self) -> Option<&T>;
-fn take_extras<T: Any + Send>(&mut self) -> Option<T>;
-```
+Fields: `data: Vec<u8>`, `format: ImageFormat`, `mime_type`, `extension`,
+`extras: Option<Box<dyn Any + Send>>`.
+
+Methods: `new()`, `data()`, `into_vec()`, `format()`, `mime_type()`, `extension()`,
+`with_extras<T>()`, `extras<T>()`, `take_extras<T>()`.
 
 Clone drops extras. PartialEq/Eq skip extras.
 
-### `DecodeOutput` (codec feature)
+### `DecodeOutput`
 
-Decoded image with owned pixel data. Supports typed extras for codec-specific data.
+Decoded image with owned pixels. `#[non_exhaustive]`.
 
-```rust
-fn pixels(&self) -> PixelSlice<'_>;
-fn info(&self) -> &ImageInfo;
-fn into_buffer(self) -> PixelBuffer;
-fn with_extras<T: Any + Send>(self, extras: T) -> Self;
-fn extras<T: Any + Send>(&self) -> Option<&T>;
-fn take_extras<T: Any + Send>(&mut self) -> Option<T>;
-```
+Fields: `pixels: PixelBuffer`, `info: ImageInfo`,
+`extras: Option<Box<dyn Any + Send>>`.
 
-### `OwnedFullFrame` (codec feature)
+Methods: `pixels()`, `into_buffer()`, `info()`, `width()`, `height()`,
+`has_alpha()`, `descriptor()`, `format()`, `color_context()`, `metadata()`,
+`with_extras<T>()`, `extras<T>()`, `take_extras<T>()`.
 
-Owned animation frame with pixel data. Supports typed extras.
+### `FullFrame<'a>`
 
-```rust
-fn pixels(&self) -> PixelSlice<'_>;
-fn duration_ms(&self) -> u32;
-fn frame_index(&self) -> u32;
-fn with_extras<T: Any + Send>(self, extras: T) -> Self;
-fn extras<T: Any + Send>(&self) -> Option<&T>;
-fn take_extras<T: Any + Send>(&mut self) -> Option<T>;
-```
+Borrowed animation frame. Fields: `pixels: PixelSlice<'a>`, `duration_ms: u32`,
+`frame_index: u32`. Method: `to_owned_frame()`.
 
-### `EncodeFrame<'a>` / `DecodeFrame`
+### `OwnedFullFrame`
 
-Animation frame with positioning, timing, blend/disposal modes.
+Owned animation frame. Fields: `pixels: PixelBuffer`, `duration_ms: u32`,
+`frame_index: u32`, `extras: Option<Box<dyn Any + Send>>`.
 
-```rust
-// EncodeFrame
-fn pixels(&self) -> PixelSlice<'_>;
-fn duration_ms(&self) -> u32;
-fn x(&self) -> u32;
-fn y(&self) -> u32;
-fn blend(&self) -> FrameBlend;
-fn disposal(&self) -> FrameDisposal;
-
-// DecodeFrame
-fn pixels(&self) -> PixelSlice<'_>;
-fn info(&self) -> &ImageInfo;
-fn duration_ms(&self) -> u32;
-```
-
-### `FrameBlend` / `FrameDisposal`
-
-Animation compositing: `Source` / `Over` and `None` / `Background` / `Previous`.
+Methods: `pixels()`, `into_buffer()`, `as_full_frame()`,
+`with_extras<T>()`, `extras<T>()`, `take_extras<T>()`.
 
 ---
 
@@ -491,63 +529,112 @@ Animation compositing: `Source` / `Over` and `None` / `Background` / `Previous`.
 
 ```rust
 enum ImageFormat {
-    Jpeg, Png, Gif, WebP, Avif, Jxl, Heif, Bmp, Tiff, Ico, Pnm, Farbfeld, Qoi, Unknown,
+    Jpeg, Png, Gif, WebP, Avif, Jxl, Heic, Bmp, Tiff, Ico, Pnm, Farbfeld, Qoi, Unknown,
+    Custom(&'static ImageFormatDefinition),
 }
-
-fn from_magic(data: &[u8]) -> Self;    // detect from first bytes
-fn mime_type(&self) -> &'static str;
-fn extension(&self) -> &'static str;
 ```
+
+Methods: `from_magic(data)`, `definition()`, `mime_type()`, `extension()`,
+`display_name()`, `supports_alpha()`, `supports_animation()`, etc.
+
+### `ImageFormatDefinition`
+
+Metadata for a format: name, extensions, MIME types, capability flags, detection function.
+
+### `ImageFormatRegistry`
+
+Thread-safe registry for custom formats. `common()` returns built-in formats.
 
 ---
 
 ## Capabilities
 
-### `CodecCapabilities`
+### `EncodeCapabilities` / `DecodeCapabilities`
 
-Const-constructible struct with builder pattern. Returned by
-`EncoderConfig::capabilities()` / `DecoderConfig::capabilities()`.
+Const-constructible structs with builder pattern. Returned by config `capabilities()`.
 
-Flags: `encode_icc`, `encode_exif`, `encode_xmp`, `decode_icc`, `decode_exif`,
-`decode_xmp`, `encode_cancel`, `decode_cancel`, `native_gray`, `cheap_probe`,
-`encode_animation`, `decode_animation`, `native_16bit`, `lossless`, `lossy`,
-`hdr`, `encode_cicp`, `decode_cicp`, `enforces_max_pixels`,
-`enforces_max_memory`, `enforces_max_file_size`, `native_f32`, `native_alpha`,
-`decode_into`, `row_level_encode`, `pull_encode`, `row_level_decode`,
-`row_level_frame_encode`, `pull_frame_encode`, `frame_decode_into`,
-`row_level_frame_decode`.
+**`EncodeCapabilities` flags:** `icc`, `exif`, `xmp`, `cicp`, `cancel`, `animation`,
+`row_level`, `pull`, `lossy`, `lossless`, `hdr`, `native_gray`, `native_16bit`,
+`native_f32`, `native_alpha`, `enforces_max_pixels`, `enforces_max_memory`,
+`effort_range`, `quality_range`, `threads_supported_range`.
 
-Ranges: `effort_range() -> Option<[i32; 2]>`, `quality_range() -> Option<[f32; 2]>`.
+**`DecodeCapabilities` flags:** `icc`, `exif`, `xmp`, `cicp`, `cancel`, `animation`,
+`cheap_probe`, `decode_into`, `row_level`, `hdr`, `native_gray`, `native_16bit`,
+`native_f32`, `native_alpha`, `enforces_max_pixels`, `enforces_max_memory`,
+`enforces_max_input_bytes`, `threads_supported_range`.
 
-`row_level_decode` means the codec streams rows natively (not decode-then-copy)
-for both pull (`StreamingDecode::next_batch`) and push (`Decode::decode_to_sink`).
-Same for `row_level_frame_decode` covering `FrameDecode::next_frame_to_sink`.
+Method: `supports(UnsupportedOperation) -> bool`.
 
 ### `UnsupportedOperation`
 
-Enum for codecs to report which operations they don't support. Implements
-`core::error::Error` + `Display`.
-
-### `HasUnsupportedOperation`
-
-Trait for codec errors that can report unsupported operations without
-downcasting.
+```rust
+enum UnsupportedOperation {
+    RowLevelEncode, PullEncode, AnimationEncode,
+    DecodeInto, RowLevelDecode, AnimationDecode,
+    PixelFormat,
+}
+```
 
 ---
 
 ## Resource limits
 
-### `ResourceLimits`
+### `ResourceLimits` (`Copy + Clone + Debug + PartialEq + Eq`)
 
-```rust
-fn max_pixels(&self) -> Option<u64>;
-fn max_memory_bytes(&self) -> Option<u64>;
-fn max_file_size(&self) -> Option<u64>;
-```
+Fields: `max_pixels`, `max_memory_bytes`, `max_output_bytes`, `max_width`,
+`max_height`, `max_input_bytes`, `max_frames`, `max_duration_ms`,
+`threading: ThreadingPolicy`.
+
+Validation methods: `check_dimensions()`, `check_memory()`, `check_image_info()`,
+`check_output_info()`, `check_decode_cost()`, `check_encode_cost()`.
 
 ### `LimitExceeded`
 
-Error type when a resource limit is exceeded.
+Error enum: `Width`, `Height`, `Pixels`, `Memory`, `InputSize`, `OutputSize`,
+`Frames`, `Duration` — each carries `actual` and `max`.
+
+### `ThreadingPolicy`
+
+```rust
+enum ThreadingPolicy {
+    SingleThread,
+    LimitOrSingle { max_threads: u16 },
+    LimitOrAny { preferred_max_threads: u16 },
+    Balanced,
+    Unlimited,  // #[default]
+}
+```
+
+---
+
+## Security policies
+
+### `DecodePolicy` / `EncodePolicy`
+
+Const-constructible structs controlling what metadata to extract/embed,
+what features to allow.
+
+**`DecodePolicy` flags:** `allow_icc`, `allow_exif`, `allow_xmp`, `allow_progressive`,
+`allow_animation`, `allow_truncated`, `strict`.
+
+**`EncodePolicy` flags:** `embed_icc`, `embed_exif`, `embed_xmp`, `allow_animation`,
+`deterministic`.
+
+Constructors: `none()`, `strict()`, `permissive()`.
+
+---
+
+## Cost estimation
+
+### `DecodeCost` / `EncodeCost`
+
+Resource cost estimates for pre-decode/pre-encode budget checks.
+
+`DecodeCost`: `output_bytes`, `pixel_count`, `peak_memory: Option<u64>`.
+Constructor: `from_output_info(&OutputInfo)`.
+
+`EncodeCost`: `input_bytes`, `pixel_count`, `peak_memory: Option<u64>`.
+Constructor: `for_input(width, height, descriptor)`.
 
 ---
 
@@ -555,49 +642,61 @@ Error type when a resource limit is exceeded.
 
 ### `ColorContext` / `ColorProfileSource` / `NamedProfile`
 
-Color context for pipeline tracking (ICC profile bytes, named profiles,
-CICP parameters).
+Color context for pipeline tracking (ICC profile bytes + CICP parameters).
+Re-exported from `zenpixels`.
 
 ### `GainMapMetadata`
 
-HDR gain map metadata (ISO 21496-1).
+HDR gain map metadata (ISO 21496-1). Fields: per-channel gain map parameters,
+HDR capacity range, base/alternate rendition flags.
 
 ---
 
-## Conversion types (always available)
+## Error utilities
 
-### `ConvertOptions` / `ConvertError`
+### `CodecErrorExt` (trait)
 
-Options and error type for pixel format conversion.
-
-### `AlphaPolicy` / `DepthPolicy` / `GrayExpand` / `LumaCoefficients`
-
-Policies for alpha handling, bit depth changes, grayscale expansion, and
-luma coefficient selection during conversion.
-
-### `PixelSliceConvertExt`
-
-Extension trait on `PixelSlice` for in-place and allocating format conversions.
-
----
-
-## Error tracking (always available, re-exported from `whereat`)
+Extension trait for inspecting error chains without downcasting:
 
 ```rust
-pub use whereat::{At, AtTrace, AtTraceable, ErrorAtExt, ResultAtExt};
+trait CodecErrorExt {
+    fn unsupported_operation(&self) -> Option<&UnsupportedOperation>;
+    fn limit_exceeded(&self) -> Option<&LimitExceeded>;
+    fn find_cause<T: core::error::Error + 'static>(&self) -> Option<&T>;
+}
 ```
 
-Pattern: `type Error = At<MyCodecError>;` then `.at()` captures file:line.
+### `find_cause<T>(err) -> Option<&T>`
+
+Walk an error chain looking for a specific cause type.
+
+### `Unsupported<E>`
+
+Generic stub type for unsupported decode modes. Implements `StreamingDecode`
+and `FullFrameDecoder` with unreachable bodies. Use as `type StreamDec = Unsupported<E>`.
 
 ---
 
-## Re-exports (codec feature)
+## Re-exports
 
 ```rust
-pub use enough::{Stop, Unstoppable};
-pub use imgref::{Img, ImgRef, ImgRefMut, ImgVec};
-pub use rgb::{self, Gray, Rgb, Rgba};
-pub use rgb::alt::BGRA as Bgra;
-pub use zenpixels_convert::ext::PixelBufferConvertExt;
+pub use enough;             // cooperative cancellation (Stop trait)
+pub use enough::Unstoppable;
 ```
 
+---
+
+## Helpers
+
+### `push_decoder_via_full_decode()`
+
+Fallback `push_decoder` implementation via one-shot decode + copy to sink.
+For codecs that can't stream natively.
+
+### `render_frame_to_sink_via_copy()`
+
+Fallback `render_next_frame_to_sink` implementation via `render_next_frame` + copy.
+
+### `negotiate_pixel_format()` / `best_encode_format()` / `is_format_available()`
+
+Format negotiation helpers for matching preferred descriptors to codec capabilities.

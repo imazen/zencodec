@@ -34,8 +34,8 @@ Executor   →  borrows pixel data or file bytes, consumes self to produce outpu
 ```
 
 ```text
-ENCODE:  EncoderConfig → EncodeJob<'a> → Encoder / FrameEncoder
-DECODE:  DecoderConfig → DecodeJob<'a> → Decode / StreamingDecode / FrameDecode
+ENCODE:  EncoderConfig → EncodeJob<'a> → Encoder / FullFrameEncoder
+DECODE:  DecoderConfig → DecodeJob<'a> → Decode / StreamingDecode / FullFrameDecoder
 ```
 
 Config lives in a struct and gets shared across threads. A web server keeps one `JpegEncoderConfig` at quality 85 for all requests. Job borrows stack-local data (cancellation token, resource limits, metadata view). Executor borrows pixels or bytes and consumes itself to produce output.
@@ -43,15 +43,16 @@ Config lives in a struct and gets shared across threads. A web server keeps one 
 Each layer also has object-safe `Dyn*` variants for codec-agnostic dispatch:
 
 ```text
-DynEncoderConfig → DynEncodeJob → DynEncoder / DynFrameEncoder
-DynDecoderConfig → DynDecodeJob → DynDecoder / DynStreamingDecoder / DynFrameDecoder
+DynEncoderConfig → DynEncodeJob → DynEncoder / DynFullFrameEncoder
+DynDecoderConfig → DynDecodeJob → DynDecoder / DynStreamingDecoder / DynFullFrameDecoder
 ```
 
 Blanket impls generate the dyn API automatically — codec authors implement the generic traits and get dyn dispatch for free.
 
 ## Quick Example
 
-```rust
+```rust,ignore
+use std::borrow::Cow;
 use zenjpeg::{JpegEncoderConfig, JpegDecoderConfig};
 use zc::encode::{EncoderConfig, EncodeJob, Encoder};
 use zc::decode::{DecoderConfig, DecodeJob, Decode};
@@ -63,7 +64,7 @@ let jpeg_bytes = output.into_vec();
 
 // Decode
 let config = JpegDecoderConfig::new();
-let decoded = config.job().decoder(&jpeg_bytes, &[])?.decode()?;
+let decoded = config.job().decoder(Cow::Borrowed(&jpeg_bytes), &[])?.decode()?;
 let pixels = decoded.into_buffer();
 ```
 
@@ -81,9 +82,9 @@ let pixels = decoded.into_buffer();
 
 | Module | Contents |
 |--------|----------|
-| `zc::encode` | `EncoderConfig`, `EncodeJob`, `Encoder`, `FrameEncoder`, `EncodeOutput`, `EncodeCapabilities`, `EncodePolicy`, dyn dispatch traits |
-| `zc::decode` | `DecoderConfig`, `DecodeJob`, `Decode`, `StreamingDecode`, `FrameDecode`, `DecodeOutput`, `DecodeCapabilities`, `DecodePolicy`, `DecodeRowSink`, dyn dispatch traits, format negotiation |
-| root | `ImageFormat`, `ImageInfo`, `MetadataView`, `Orientation`, `ResourceLimits`, `UnsupportedOperation`, `FrameBlend`, `FrameDisposal` |
+| `zc::encode` | `EncoderConfig`, `EncodeJob`, `Encoder`, `FullFrameEncoder`, `EncodeOutput`, `EncodeCapabilities`, `EncodePolicy`, dyn dispatch traits |
+| `zc::decode` | `DecoderConfig`, `DecodeJob`, `Decode`, `StreamingDecode`, `FullFrameDecoder`, `DecodeOutput`, `DecodeCapabilities`, `DecodePolicy`, `DecodeRowSink`, dyn dispatch traits, format negotiation |
+| root | `ImageFormat`, `ImageInfo`, `MetadataView`, `Metadata`, `Orientation`, `OrientationHint`, `ResourceLimits`, `UnsupportedOperation` |
 
 ## License
 
