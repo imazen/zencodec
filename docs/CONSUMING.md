@@ -462,6 +462,16 @@ if let Some(details) = output.source_encoding_details() {
         println!("Source was lossless");
     }
 
+    // Color depth (PNG24=24, PNG32=32, PNG48=48, PNG64=64, GIF=8)
+    if let Some(bpp) = details.source_bits_per_pixel() {
+        println!("Source: {bpp} bits per pixel");
+    }
+
+    // Palette size for indexed formats (PNG indexed, GIF)
+    if let Some(n) = details.source_palette_size() {
+        println!("Palette: {n} colors");
+    }
+
     // Downcast for codec-specific fields:
     if let Some(jpeg) = details.codec_details::<zenjpeg::detect::JpegProbe>() {
         println!("JPEG encoder: {:?}", jpeg.encoder);

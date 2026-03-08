@@ -694,7 +694,9 @@ probe type (e.g. `JpegProbe`, `WebPProbe`) implements this trait.
 ```rust
 trait SourceEncodingDetails: Any + Send + Sync {
     fn source_generic_quality(&self) -> Option<f32>;
-    fn is_lossless(&self) -> bool;  // default: false
+    fn is_lossless(&self) -> bool;                   // default: false
+    fn source_bits_per_pixel(&self) -> Option<u16>;  // default: None
+    fn source_palette_size(&self) -> Option<u16>;    // default: None
 }
 
 impl dyn SourceEncodingDetails {
@@ -705,6 +707,10 @@ impl dyn SourceEncodingDetails {
 `source_generic_quality()` returns a 0.0–100.0 estimate on the same scale as
 `EncoderConfig::with_generic_quality()`. Returns `None` for lossless encodings
 or when quality can't be determined from headers. Approximate (±5).
+
+`source_bits_per_pixel()` returns the source color depth (e.g. PNG24=24, PNG32=32,
+PNG48=48, PNG64=64, GIF=8). `source_palette_size()` returns the number of palette
+entries for indexed formats (PNG indexed, GIF).
 
 Available on both `ImageInfo` (from probe or decode) and `DecodeOutput`. Codec
 implementors populate it when the codec can detect source encoding properties
