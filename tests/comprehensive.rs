@@ -1980,7 +1980,12 @@ fn downcast_dyn_encoder_config_wrong_type_returns_none() {
     let dyn_config: &dyn DynEncoderConfig = &config;
 
     // Trying to downcast to the wrong type returns None
-    assert!(dyn_config.as_any().downcast_ref::<MockDecoderConfig>().is_none());
+    assert!(
+        dyn_config
+            .as_any()
+            .downcast_ref::<MockDecoderConfig>()
+            .is_none()
+    );
 }
 
 #[test]
@@ -1993,7 +1998,11 @@ fn downcast_dyn_full_frame_encoder_as_any() {
 
     // as_any: verify the concrete type
     assert!(enc.as_any().downcast_ref::<MockFullFrameEnc>().is_some());
-    assert!(enc.as_any_mut().downcast_mut::<MockFullFrameEnc>().is_some());
+    assert!(
+        enc.as_any_mut()
+            .downcast_mut::<MockFullFrameEnc>()
+            .is_some()
+    );
 }
 
 #[test]
@@ -2012,9 +2021,7 @@ fn downcast_dyn_full_frame_encoder_into_any() {
 
     // Use the concrete encoder: push a frame and finish
     let buf = make_rgb8_buffer(2, 2);
-    concrete
-        .push_frame(buf.as_slice(), 100, None)
-        .unwrap();
+    concrete.push_frame(buf.as_slice(), 100, None).unwrap();
     let output = concrete.finish(None).unwrap();
     assert!(!output.data().is_empty());
 }
@@ -2028,13 +2035,15 @@ fn downcast_dyn_full_frame_decoder_as_any() {
 
     let config = MockDecoderConfig;
     let job = config.job();
-    let mut dec = job
-        .dyn_full_frame_decoder(Cow::Owned(data), &[])
-        .unwrap();
+    let mut dec = job.dyn_full_frame_decoder(Cow::Owned(data), &[]).unwrap();
 
     // as_any: verify the concrete type
     assert!(dec.as_any().downcast_ref::<MockFullFrameDec>().is_some());
-    assert!(dec.as_any_mut().downcast_mut::<MockFullFrameDec>().is_some());
+    assert!(
+        dec.as_any_mut()
+            .downcast_mut::<MockFullFrameDec>()
+            .is_some()
+    );
 
     // Still usable through dyn after as_any inspection
     let frame = dec.render_next_frame_owned(None).unwrap().unwrap();
@@ -2050,9 +2059,7 @@ fn downcast_dyn_full_frame_decoder_into_any() {
 
     let config = MockDecoderConfig;
     let job = config.job();
-    let dec = job
-        .dyn_full_frame_decoder(Cow::Owned(data), &[])
-        .unwrap();
+    let dec = job.dyn_full_frame_decoder(Cow::Owned(data), &[]).unwrap();
 
     // into_any: consume and recover
     let any_box = dec.into_any();
@@ -2077,9 +2084,7 @@ fn downcast_dyn_full_frame_decoder_via_dyn_job() {
     let config = MockDecoderConfig;
     let dyn_config: &dyn DynDecoderConfig = &config;
     let job = dyn_config.dyn_job();
-    let dec = job
-        .into_full_frame_decoder(Cow::Owned(data), &[])
-        .unwrap();
+    let dec = job.into_full_frame_decoder(Cow::Owned(data), &[]).unwrap();
 
     assert!(dec.as_any().downcast_ref::<MockFullFrameDec>().is_some());
     assert_eq!(dec.frame_count(), Some(1));
@@ -2096,24 +2101,31 @@ fn encode_output_extras_roundtrip() {
         actual_quality: f32,
     }
 
-    let mut output = EncodeOutput::new(vec![1, 2, 3], ImageFormat::Jpeg)
-        .with_extras(JpegStats { actual_quality: 92.5 });
+    let mut output = EncodeOutput::new(vec![1, 2, 3], ImageFormat::Jpeg).with_extras(JpegStats {
+        actual_quality: 92.5,
+    });
 
     assert_eq!(
         output.extras::<JpegStats>(),
-        Some(&JpegStats { actual_quality: 92.5 })
+        Some(&JpegStats {
+            actual_quality: 92.5
+        })
     );
     assert!(output.extras::<u32>().is_none());
 
     let taken = output.take_extras::<JpegStats>();
-    assert_eq!(taken, Some(JpegStats { actual_quality: 92.5 }));
+    assert_eq!(
+        taken,
+        Some(JpegStats {
+            actual_quality: 92.5
+        })
+    );
     assert!(output.extras::<JpegStats>().is_none());
 }
 
 #[test]
 fn encode_output_clone_drops_extras() {
-    let output = EncodeOutput::new(vec![1, 2, 3], ImageFormat::Jpeg)
-        .with_extras(42u32);
+    let output = EncodeOutput::new(vec![1, 2, 3], ImageFormat::Jpeg).with_extras(42u32);
     assert_eq!(output.extras::<u32>(), Some(&42));
 
     let cloned = output.clone();
@@ -2138,8 +2150,8 @@ fn owned_full_frame_extras_roundtrip() {
     }
 
     let buf = make_rgb8_buffer(2, 2);
-    let mut frame = zc::OwnedFullFrame::new(buf, 100, 0)
-        .with_extras(FrameMeta { is_keyframe: true });
+    let mut frame =
+        zc::OwnedFullFrame::new(buf, 100, 0).with_extras(FrameMeta { is_keyframe: true });
 
     assert_eq!(
         frame.extras::<FrameMeta>(),
