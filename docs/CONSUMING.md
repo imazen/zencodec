@@ -434,6 +434,37 @@ output.extension();  // "jpg" (may differ from format default)
 output.into_vec();   // Vec<u8> — take ownership
 ```
 
+## Source Encoding Details
+
+After decoding, you can query how the image was originally encoded — useful for re-encoding at matching quality or for diagnostics:
+
+```rust
+use zc::decode::SourceEncodingDetails;
+
+let output = decoder.decode()?;
+
+if let Some(details) = output.source_encoding_details() {
+    // Generic quality on the 0-100 scale (same as with_generic_quality)
+    if let Some(q) = details.source_generic_quality() {
+        println!("Source quality: {q:.0}");
+        // Re-encode at matching quality:
+        let enc_config = JpegEncoderConfig::new().with_generic_quality(q);
+    }
+
+    if details.is_lossless() {
+        println!("Source was lossless");
+    }
+
+    // Downcast for codec-specific fields:
+    if let Some(jpeg) = details.codec_details::<zenjpeg::detect::JpegProbe>() {
+        println!("JPEG encoder: {:?}", jpeg.encoder);
+        println!("Chroma subsampling: {:?}", jpeg.subsampling);
+    }
+}
+```
+
+Not all codecs populate this. `source_encoding_details()` returns `None` if the codec doesn't support quality detection.
+
 ## Error Handling
 
 With the concrete API, errors are codec-specific:

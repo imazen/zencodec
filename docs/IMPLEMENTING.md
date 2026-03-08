@@ -333,6 +333,75 @@ impl<'a> Decode for MyDecoder<'a> {
 }
 ```
 
+## Source Encoding Details
+
+Codecs that can detect how an image was encoded should attach a
+`SourceEncodingDetails` implementation to the `DecodeOutput`. This lets
+callers query source quality (for re-encode-at-matching-quality workflows)
+and access codec-specific probe data.
+
+### Define your probe struct
+
+```rust
+use zc::decode::SourceEncodingDetails;
+
+/// JPEG-specific source encoding properties.
+#[derive(Debug, Clone)]
+pub struct JpegProbe {
+    pub encoder: Option<JpegEncoder>,   // detected encoder software
+    pub subsampling: ChromaSubsampling,  // 4:2:0, 4:4:4, etc.
+    pub quality_estimate: Option<f32>,   // 0-100, from quantization tables
+    pub is_progressive: bool,
+    // ... other codec-specific fields
+}
+
+impl SourceEncodingDetails for JpegProbe {
+    fn source_generic_quality(&self) -> Option<f32> {
+        self.quality_estimate
+    }
+}
+```
+
+### Attach during decode, not probe
+
+`probe()` returns `ImageInfo` only — it reads headers for dimensions, metadata,
+and format. Source encoding analysis (quality estimation, encoder detection) is
+heavier work and belongs in the decode path.
+
+```rust
+impl<'a> Decode for MyDecoder<'a> {
+    type Error = MyError;
+
+    fn decode(self) -> Result<DecodeOutput, MyError> {
+        let pixels = do_decode(self.data, &self.header)?;
+        let info = ImageInfo::new(
+            self.header.width,
+            self.header.height,
+            ImageFormat::Jpeg,
+        );
+
+        // Build probe details from what we learned during decode
+        let probe = JpegProbe {
+            encoder: detect_encoder(&self.header),
+            subsampling: self.header.subsampling,
+            quality_estimate: estimate_quality(&self.header.quant_tables),
+            is_progressive: self.header.is_progressive,
+        };
+
+        Ok(DecodeOutput::new(pixels, info)
+            .with_source_encoding_details(probe))
+    }
+}
+```
+
+Don't attach during `probe()` — there's no `DecodeOutput` to attach to. The
+`probe()` method returns `ImageInfo`, which describes the image. Source encoding
+details describe the *encoder*, and are only available after parsing enough of
+the bitstream to estimate quality tables, detect encoder fingerprints, etc.
+
+If your codec can cheaply detect encoding details from headers alone, do the
+analysis in `decode()` and attach it there. There's no cost to the probe path.
+
 ## Format Negotiation (Decode Side)
 
 The `preferred` parameter in `decoder()` is a ranked list of pixel formats the caller wants. Your decoder should pick the first format it can produce without lossy conversion:

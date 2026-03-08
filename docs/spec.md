@@ -502,10 +502,13 @@ Clone drops extras. PartialEq/Eq skip extras.
 Decoded image with owned pixels. `#[non_exhaustive]`.
 
 Fields: `pixels: PixelBuffer`, `info: ImageInfo`,
+`source_encoding: Option<Box<dyn SourceEncodingDetails>>`,
 `extras: Option<Box<dyn Any + Send>>`.
 
 Methods: `pixels()`, `into_buffer()`, `info()`, `width()`, `height()`,
 `has_alpha()`, `descriptor()`, `format()`, `color_context()`, `metadata()`,
+`with_source_encoding_details<T>()`, `source_encoding_details()`,
+`take_source_encoding_details()`,
 `with_extras<T>()`, `extras<T>()`, `take_extras<T>()`.
 
 ### `FullFrame<'a>`
@@ -674,6 +677,35 @@ Walk an error chain looking for a specific cause type.
 
 Generic stub type for unsupported decode modes. Implements `StreamingDecode`
 and `FullFrameDecoder` with unreachable bodies. Use as `type StreamDec = Unsupported<E>`.
+
+---
+
+## Source encoding detection
+
+### `SourceEncodingDetails` (trait)
+
+Codec-agnostic interface for querying how an image was encoded. Each codec's
+probe type (e.g. `JpegProbe`, `WebPProbe`) implements this trait.
+
+```rust
+trait SourceEncodingDetails: Any + Send + Sync {
+    fn source_generic_quality(&self) -> Option<f32>;
+    fn is_lossless(&self) -> bool;  // default: false
+}
+
+impl dyn SourceEncodingDetails {
+    fn codec_details<T: SourceEncodingDetails + 'static>(&self) -> Option<&T>;
+}
+```
+
+`source_generic_quality()` returns a 0.0–100.0 estimate on the same scale as
+`EncoderConfig::with_generic_quality()`. Returns `None` for lossless encodings
+or when quality can't be determined from headers. Approximate (±5).
+
+Attached to `DecodeOutput` via `with_source_encoding_details()`. Codec
+implementors populate this during decode (not probe — probe returns `ImageInfo`
+only). The concrete probe struct carries codec-specific fields accessible via
+`codec_details::<MyProbe>()`.
 
 ---
 

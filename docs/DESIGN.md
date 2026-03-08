@@ -320,6 +320,31 @@ Downcasting rules:
 The dyn API uses `set_*()` methods (mutation) instead of `with_*()` (builder)
 because `Box<dyn Trait>` can't return `Self`.
 
+## SourceEncodingDetails: decode-time, not probe-time
+
+`SourceEncodingDetails` lives on `DecodeOutput`, not on `ImageInfo`. This is
+intentional — it describes how the image was *encoded* (quality estimate, encoder
+fingerprint, chroma subsampling), not what the image *is* (dimensions, color
+space, metadata).
+
+Why decode-time and not probe-time:
+- `probe()` returns `ImageInfo`. Keeping it lightweight means probing stays fast
+  (header-only). Quality estimation often requires reading quantization tables,
+  Huffman statistics, or VP8 partition data that's deeper than the header.
+- `DecodeOutput` is the natural home because the decoder already parsed the
+  bitstream — the encoding details are a byproduct of decoding.
+- The trait uses `Any + Send + Sync` for downcasting, which would add boxing
+  overhead to `ImageInfo` (a `Clone + PartialEq` type) for a feature most
+  probe callers don't need.
+
+Why a trait instead of struct fields:
+- Each codec has different encoding properties. JPEG has quantization tables and
+  subsampling. WebP has VP8 quantizer and partition type. PNG has filter strategy
+  and compression level. A struct would either be too generic (just quality) or
+  too bloated (every codec's fields).
+- The trait gives a generic interface (`source_generic_quality()`, `is_lossless()`)
+  plus downcast access to the full codec-specific type.
+
 ## I/O abstraction: deferred
 
 The current API requires `&[u8]` (or `Cow<[u8]>`) — the full file must be in
