@@ -15,13 +15,13 @@ use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
 /// overridden with [`with_mime_type()`](EncodeOutput::with_mime_type) /
 /// [`with_extension()`](EncodeOutput::with_extension) for cases where the
 /// output differs from the base format (e.g. `image/apng` vs `image/png`).
-#[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct EncodeOutput {
     data: Vec<u8>,
     format: ImageFormat,
     mime_type: &'static str,
     extension: &'static str,
+    extras: Option<Box<dyn Any + Send>>,
 }
 
 impl EncodeOutput {
@@ -37,6 +37,7 @@ impl EncodeOutput {
             mime_type: format.mime_type(),
             extension: format.extension(),
             format,
+            extras: None,
         }
     }
 
@@ -98,7 +99,59 @@ impl EncodeOutput {
     pub fn extension(&self) -> &'static str {
         self.extension
     }
+
+    /// Attach format-specific extras (e.g., encoding statistics, codec-specific metadata).
+    pub fn with_extras<T: Any + Send + 'static>(mut self, extras: T) -> Self {
+        self.extras = Some(Box::new(extras));
+        self
+    }
+
+    /// Borrow typed extras if present and the type matches.
+    pub fn extras<T: Any + Send + 'static>(&self) -> Option<&T> {
+        self.extras.as_ref()?.downcast_ref()
+    }
+
+    /// Take typed extras, consuming them from this output.
+    pub fn take_extras<T: Any + Send + 'static>(&mut self) -> Option<T> {
+        let extras = self.extras.take()?;
+        extras.downcast().ok().map(|b| *b)
+    }
 }
+
+impl Clone for EncodeOutput {
+    fn clone(&self) -> Self {
+        Self {
+            data: self.data.clone(),
+            format: self.format,
+            mime_type: self.mime_type,
+            extension: self.extension,
+            extras: None,
+        }
+    }
+}
+
+impl core::fmt::Debug for EncodeOutput {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("EncodeOutput")
+            .field("data_len", &self.data.len())
+            .field("format", &self.format)
+            .field("mime_type", &self.mime_type)
+            .field("extension", &self.extension)
+            .field("has_extras", &self.extras.is_some())
+            .finish()
+    }
+}
+
+impl PartialEq for EncodeOutput {
+    fn eq(&self, other: &Self) -> bool {
+        self.data == other.data
+            && self.format == other.format
+            && self.mime_type == other.mime_type
+            && self.extension == other.extension
+    }
+}
+
+impl Eq for EncodeOutput {}
 
 impl AsRef<[u8]> for EncodeOutput {
     fn as_ref(&self) -> &[u8] {
@@ -279,6 +332,7 @@ impl<'a> FullFrame<'a> {
             pixels,
             duration_ms: self.duration_ms,
             frame_index: self.frame_index,
+            extras: None,
         }
     }
 }
@@ -302,6 +356,7 @@ pub struct OwnedFullFrame {
     pixels: PixelBuffer,
     duration_ms: u32,
     frame_index: u32,
+    extras: Option<Box<dyn Any + Send>>,
 }
 
 impl OwnedFullFrame {
@@ -311,6 +366,7 @@ impl OwnedFullFrame {
             pixels,
             duration_ms,
             frame_index,
+            extras: None,
         }
     }
 
@@ -338,6 +394,23 @@ impl OwnedFullFrame {
     pub fn as_full_frame(&self) -> FullFrame<'_> {
         FullFrame::new(self.pixels.as_slice(), self.duration_ms, self.frame_index)
     }
+
+    /// Attach format-specific extras (e.g., per-frame codec metadata).
+    pub fn with_extras<T: Any + Send + 'static>(mut self, extras: T) -> Self {
+        self.extras = Some(Box::new(extras));
+        self
+    }
+
+    /// Borrow typed extras if present and the type matches.
+    pub fn extras<T: Any + Send + 'static>(&self) -> Option<&T> {
+        self.extras.as_ref()?.downcast_ref()
+    }
+
+    /// Take typed extras, consuming them from this frame.
+    pub fn take_extras<T: Any + Send + 'static>(&mut self) -> Option<T> {
+        let extras = self.extras.take()?;
+        extras.downcast().ok().map(|b| *b)
+    }
 }
 
 impl core::fmt::Debug for OwnedFullFrame {
@@ -346,6 +419,7 @@ impl core::fmt::Debug for OwnedFullFrame {
             .field("pixels", &self.pixels)
             .field("duration_ms", &self.duration_ms)
             .field("frame_index", &self.frame_index)
+            .field("has_extras", &self.extras.is_some())
             .finish()
     }
 }

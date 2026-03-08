@@ -1984,39 +1984,6 @@ fn downcast_dyn_encoder_config_wrong_type_returns_none() {
 }
 
 #[test]
-fn downcast_dyn_encoder_as_any_ref() {
-    use mock_anim::MockEnc;
-
-    let config = MockEncoderConfig::new();
-    let job = config.job();
-    let mut enc = job.dyn_encoder().unwrap();
-
-    // as_any: inspect the concrete encoder type
-    assert!(enc.as_any().downcast_ref::<MockEnc>().is_some());
-
-    // as_any_mut: mutable access to the concrete encoder
-    assert!(enc.as_any_mut().downcast_mut::<MockEnc>().is_some());
-}
-
-#[test]
-fn downcast_dyn_encoder_into_any() {
-    use mock_anim::MockEnc;
-
-    let config = MockEncoderConfig::new();
-    let job = config.job();
-    let enc = job.dyn_encoder().unwrap();
-
-    // into_any: consume the dyn encoder and recover the concrete type
-    let any_box = enc.into_any();
-    let concrete: Box<MockEnc> = any_box.downcast().expect("should downcast to MockEnc");
-
-    // Use the concrete encoder directly
-    let buf = make_rgb8_buffer(2, 2);
-    let output = concrete.encode(buf.as_slice()).unwrap();
-    assert!(!output.data().is_empty());
-}
-
-#[test]
 fn downcast_dyn_full_frame_encoder_as_any() {
     use mock_anim::MockFullFrameEnc;
 
@@ -2097,20 +2064,6 @@ fn downcast_dyn_full_frame_decoder_into_any() {
     assert_eq!(concrete.frame_count(), Some(1));
     let frame = concrete.render_next_frame(None).unwrap().unwrap();
     assert_eq!(frame.duration_ms(), 100);
-}
-
-#[test]
-fn downcast_dyn_encoder_via_dyn_job() {
-    use mock_anim::MockEnc;
-
-    // Full dyn dispatch path: DynEncoderConfig → DynEncodeJob → DynEncoder → concrete
-    let config = MockEncoderConfig::new().with_generic_quality(75.0);
-    let dyn_config: &dyn DynEncoderConfig = &config;
-    let job = dyn_config.dyn_job();
-    let enc = job.into_encoder().unwrap();
-
-    // Verify the concrete type through the fully-erased pipeline
-    assert!(enc.as_any().downcast_ref::<MockEnc>().is_some());
 }
 
 #[test]

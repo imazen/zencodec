@@ -39,32 +39,11 @@ use super::encoding::{EncodeJob, EncoderConfig};
 /// Wraps [`Encoder`] for dyn dispatch. Produced by
 /// [`DynEncodeJob::into_encoder`].
 ///
-/// # Downcasting to concrete types
-///
-/// Use [`as_any()`](DynEncoder::as_any) /
-/// [`as_any_mut()`](DynEncoder::as_any_mut) /
-/// [`into_any()`](DynEncoder::into_any) to downcast back to the concrete
-/// codec encoder type for codec-specific operations.
-///
-/// ```rust,ignore
-/// let enc: Box<dyn DynEncoder> = config.job().dyn_encoder()?;
-/// if let Some(jpeg) = enc.as_any().downcast_ref::<JpegEncoder>() {
-///     // access JPEG-specific state
-/// }
-/// ```
+/// Encoders may borrow job-scoped data (stop tokens, metadata) so they
+/// are not guaranteed `'static`. Attach codec-specific output data via
+/// [`EncodeOutput::with_extras`](crate::EncodeOutput::with_extras) instead
+/// of downcasting.
 pub trait DynEncoder {
-    /// Downcast to the concrete encoder type.
-    fn as_any(&self) -> &dyn Any;
-
-    /// Downcast to the concrete encoder type (mutable).
-    fn as_any_mut(&mut self) -> &mut dyn Any;
-
-    /// Consume and downcast to the concrete encoder type.
-    ///
-    /// Use [`Box::downcast`] on the returned value to recover the
-    /// concrete type.
-    fn into_any(self: Box<Self>) -> Box<dyn Any>;
-
     /// Suggested strip height for optimal row-level encoding.
     fn preferred_strip_height(&self) -> u32;
 
@@ -105,19 +84,7 @@ impl core::fmt::Debug for dyn DynEncoder + '_ {
 
 pub(super) struct EncoderShim<E>(pub(super) E);
 
-impl<E: Encoder + 'static> DynEncoder for EncoderShim<E> {
-    fn as_any(&self) -> &dyn Any {
-        &self.0
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        &mut self.0
-    }
-
-    fn into_any(self: Box<Self>) -> Box<dyn Any> {
-        Box::new(self.0)
-    }
-
+impl<E: Encoder> DynEncoder for EncoderShim<E> {
     fn preferred_strip_height(&self) -> u32 {
         self.0.preferred_strip_height()
     }
@@ -286,7 +253,7 @@ impl<J> EncodeJobShim<J> {
 impl<'a, J> DynEncodeJob<'a> for EncodeJobShim<J>
 where
     J: EncodeJob<'a> + 'a,
-    J::Enc: Encoder + 'static,
+    J::Enc: Encoder,
     J::FullFrameEnc: FullFrameEncoder,
 {
     fn set_stop(&mut self, stop: &'a dyn Stop) {
@@ -383,7 +350,7 @@ pub trait DynEncoderConfig: Send + Sync {
 impl<C> DynEncoderConfig for C
 where
     C: EncoderConfig + 'static,
-    for<'a> <C::Job<'a> as EncodeJob<'a>>::Enc: Encoder + 'static,
+    for<'a> <C::Job<'a> as EncodeJob<'a>>::Enc: Encoder,
     for<'a> <C::Job<'a> as EncodeJob<'a>>::FullFrameEnc: FullFrameEncoder,
 {
     fn as_any(&self) -> &dyn Any {
