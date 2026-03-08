@@ -2084,3 +2084,70 @@ fn downcast_dyn_full_frame_decoder_via_dyn_job() {
     assert!(dec.as_any().downcast_ref::<MockFullFrameDec>().is_some());
     assert_eq!(dec.frame_count(), Some(1));
 }
+
+// =========================================================================
+// Extras on output types
+// =========================================================================
+
+#[test]
+fn encode_output_extras_roundtrip() {
+    #[derive(Debug, PartialEq)]
+    struct JpegStats {
+        actual_quality: f32,
+    }
+
+    let mut output = EncodeOutput::new(vec![1, 2, 3], ImageFormat::Jpeg)
+        .with_extras(JpegStats { actual_quality: 92.5 });
+
+    assert_eq!(
+        output.extras::<JpegStats>(),
+        Some(&JpegStats { actual_quality: 92.5 })
+    );
+    assert!(output.extras::<u32>().is_none());
+
+    let taken = output.take_extras::<JpegStats>();
+    assert_eq!(taken, Some(JpegStats { actual_quality: 92.5 }));
+    assert!(output.extras::<JpegStats>().is_none());
+}
+
+#[test]
+fn encode_output_clone_drops_extras() {
+    let output = EncodeOutput::new(vec![1, 2, 3], ImageFormat::Jpeg)
+        .with_extras(42u32);
+    assert_eq!(output.extras::<u32>(), Some(&42));
+
+    let cloned = output.clone();
+    assert!(cloned.extras::<u32>().is_none());
+    // Data fields are preserved
+    assert_eq!(cloned.data(), &[1, 2, 3]);
+    assert_eq!(cloned.format(), ImageFormat::Jpeg);
+}
+
+#[test]
+fn encode_output_eq_ignores_extras() {
+    let a = EncodeOutput::new(vec![1, 2, 3], ImageFormat::Jpeg).with_extras(42u32);
+    let b = EncodeOutput::new(vec![1, 2, 3], ImageFormat::Jpeg);
+    assert_eq!(a, b);
+}
+
+#[test]
+fn owned_full_frame_extras_roundtrip() {
+    #[derive(Debug, PartialEq)]
+    struct FrameMeta {
+        is_keyframe: bool,
+    }
+
+    let buf = make_rgb8_buffer(2, 2);
+    let mut frame = zc::OwnedFullFrame::new(buf, 100, 0)
+        .with_extras(FrameMeta { is_keyframe: true });
+
+    assert_eq!(
+        frame.extras::<FrameMeta>(),
+        Some(&FrameMeta { is_keyframe: true })
+    );
+    assert!(frame.extras::<u32>().is_none());
+
+    let taken = frame.take_extras::<FrameMeta>();
+    assert_eq!(taken, Some(FrameMeta { is_keyframe: true }));
+    assert!(frame.extras::<FrameMeta>().is_none());
+}
