@@ -1,10 +1,10 @@
-# zencodec-types
+# zencodec
 
 Shared traits and types for the zen\* image codec family.
 
 This crate defines the common interface that all zen\* codecs implement. It contains no codec logic — just traits, types, and format negotiation helpers. `no_std` compatible (requires `alloc`), `forbid(unsafe_code)`.
 
-**Lib name:** `zc` — use `zc::` in imports, `zencodec-types` on crates.io.
+**Lib name:** `zc` — use `zc::` in imports, `zencodec` on crates.io.
 
 **Guides:**
 - [**Using zen\* codecs**](docs/CONSUMING.md) — encoding, decoding, format negotiation, dyn dispatch, animation, streaming

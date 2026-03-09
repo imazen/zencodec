@@ -1,4 +1,4 @@
-//! Minimal PNM (PPM P6 / PGM P5) codec implementing zencodec-types traits.
+//! Minimal PNM (PPM P6 / PGM P5) codec implementing zencodec traits.
 //!
 //! Supports RGB8 and Gray8 only. Used as an integration test to exercise the
 //! full Config → Job → Executor pipeline in both concrete and dyn-dispatch modes.

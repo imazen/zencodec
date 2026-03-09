@@ -1,6 +1,6 @@
 # Implementing a zen* Codec
 
-This guide walks through implementing the `zencodec-types` traits for a new image format. The PNM codec in `tests/pnm/mod.rs` is a complete, minimal reference implementation — read it alongside this guide.
+This guide walks through implementing the `zencodec` traits for a new image format. The PNM codec in `tests/pnm/mod.rs` is a complete, minimal reference implementation — read it alongside this guide.
 
 ## The Three-Layer Pattern
 

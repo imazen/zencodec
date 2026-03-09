@@ -1,4 +1,4 @@
-# zencodec-types
+# zencodec
 
 Shared traits and types for zen* image codecs.
 
@@ -34,10 +34,10 @@ Tiny, stable crate defining the common interface that all zen* codecs implement:
 - **zenpixels pixel types: use but NEVER re-export.** `PixelDescriptor`, `PixelSlice`,
   `PixelSliceMut`, `PixelBuffer`, `PixelFormat`, `ChannelLayout`, `ChannelType`,
   etc. are defined in `zenpixels` and used as the cross-crate interchange format.
-  All zen crates depend on `zenpixels` directly. zencodec-types uses these types
+  All zen crates depend on `zenpixels` directly. zencodec uses these types
   in trait signatures but must not re-export them — callers import from `zenpixels`.
 - **zenpixels color metadata types: re-export is OK.** `ColorContext`,
-  `ColorProfileSource`, `NamedProfile`, and `Cicp` appear in zencodec-types' public
+  `ColorProfileSource`, `NamedProfile`, and `Cicp` appear in zencodec' public
   API return types. Re-exporting avoids forcing callers to add zenpixels as a
   direct dependency just for these types.
 

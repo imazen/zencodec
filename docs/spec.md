@@ -1,4 +1,4 @@
-# zencodec-types API Specification
+# zencodec API Specification
 
 Shared traits and types for zen* image codecs. This is the canonical reference
 for the public API surface.
@@ -13,7 +13,7 @@ for the public API surface.
 `InterleaveFormat`.
 
 **All crates in the zen ecosystem MUST use `zenpixels` types directly.**
-zencodec-types uses them in trait signatures but callers and codec
+zencodec uses them in trait signatures but callers and codec
 implementors should depend on `zenpixels` directly and use `zenpixels::` paths
 in their public APIs.
 

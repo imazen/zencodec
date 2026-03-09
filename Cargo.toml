@@ -1,5 +1,5 @@
 [package]
-name = "zencodec-types"
+name = "zencodec"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.89"
@@ -7,7 +7,7 @@ license = "Apache-2.0 OR MIT"
 description = "Shared traits and types for zen* image codecs"
 categories = ["multimedia::images"]
 keywords = ["image", "codec", "traits"]
-repository = "https://github.com/imazen/zencodec-types"
+repository = "https://github.com/imazen/zencodec"
 exclude = ["CLAUDE.md", "docs/"]
 
 [lib]

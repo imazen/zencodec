@@ -1,4 +1,4 @@
-//! Integration test exercising the full zencodec-types API via a PNM codec.
+//! Integration test exercising the full zencodec API via a PNM codec.
 //!
 //! Tests both concrete (generic) and dyn-dispatch (object-safe) paths.
 //! The PNM codec uses `whereat::At<PnmError>` as its error type to validate

@@ -198,7 +198,7 @@ pub enum ImageFormat {
     Farbfeld,
     Qoi,
     Unknown,
-    /// Format not known to zencodec-types.
+    /// Format not known to zencodec.
     ///
     /// Define an [`ImageFormatDefinition`] as a `static` and reference it here.
     /// The definition carries its own metadata (extensions, MIME types,

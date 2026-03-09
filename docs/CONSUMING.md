@@ -1,6 +1,6 @@
 # Using zen* Codecs
 
-This guide covers encoding and decoding images with any zen* codec through the `zencodec-types` API.
+This guide covers encoding and decoding images with any zen* codec through the `zencodec` API.
 
 ## Dependencies
 
@@ -13,7 +13,7 @@ zenpng = "0.1"
 zenpixels = { version = "0.1", features = ["buffer"] }
 ```
 
-Each codec crate re-exports `zencodec-types` as `zc`, so you don't need to depend on it directly. Import the traits from `zc::encode` and `zc::decode`.
+Each codec crate re-exports `zencodec` as `zc`, so you don't need to depend on it directly. Import the traits from `zc::encode` and `zc::decode`.
 
 For codec-agnostic multi-format dispatch, use `zencodecs` instead of individual codec crates.
 

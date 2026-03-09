@@ -1,4 +1,4 @@
-//! Comprehensive test suite exercising every aspect of zencodec-types.
+//! Comprehensive test suite exercising every aspect of zencodec.
 //!
 //! Uses a mock animation codec (mock_anim) that supports all encoder/decoder
 //! modes including streaming decode, animation encode/decode, push_rows,

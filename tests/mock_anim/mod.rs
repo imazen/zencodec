@@ -1,4 +1,4 @@
-//! Mock animation codec implementing zencodec-types traits.
+//! Mock animation codec implementing zencodec traits.
 //!
 //! Supports RGB8 and RGBA8. Implements:
 //! - One-shot decode (Decode)
