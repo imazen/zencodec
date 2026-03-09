@@ -7,7 +7,6 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use crate::detect::SourceEncodingDetails;
-use crate::gainmap::GainMapMetadata;
 use crate::metadata::Metadata;
 use crate::{ImageFormat, Orientation};
 use zenpixels::{ColorContext, ColorProfileSource};
@@ -345,20 +344,6 @@ pub struct ImageInfo {
     pub source_color: SourceColor,
     /// Embedded non-color metadata (EXIF, XMP).
     pub embedded_metadata: EmbeddedMetadata,
-    /// Whether the image contains an HDR gain map (ISO 21496-1).
-    ///
-    /// When `true`, the image carries a secondary gain map image that
-    /// enables continuous adaptation between SDR and HDR rendering.
-    /// Detected via UltraHDR XMP metadata (JPEG), `tmap` box (AVIF/HEIF),
-    /// or gain map bundle (JPEG XL).
-    pub has_gain_map: bool,
-    /// Gain map metadata parameters (ISO 21496-1).
-    ///
-    /// Present when `has_gain_map` is true and the metadata was successfully
-    /// parsed. Describes the mathematical relationship between the base image
-    /// and the gain map image. The gain map pixel data is a separate image
-    /// accessible via [`DecodeOutput::extras`](crate::decode::DecodeOutput).
-    pub gain_map_metadata: Option<GainMapMetadata>,
     /// Source encoding details (quality estimate, encoder fingerprint, etc.).
     ///
     /// Populated by codecs that can detect how the image was encoded.
@@ -393,8 +378,6 @@ impl ImageInfo {
             orientation: Orientation::Normal,
             source_color: SourceColor::default(),
             embedded_metadata: EmbeddedMetadata::default(),
-            has_gain_map: false,
-            gain_map_metadata: None,
             source_encoding: None,
             warnings: Vec::new(),
         }
@@ -487,21 +470,6 @@ impl ImageInfo {
     /// Set the embedded metadata.
     pub fn with_embedded_metadata(mut self, embedded_metadata: EmbeddedMetadata) -> Self {
         self.embedded_metadata = embedded_metadata;
-        self
-    }
-
-    /// Set whether the image contains an HDR gain map.
-    pub fn with_gain_map(mut self, has: bool) -> Self {
-        self.has_gain_map = has;
-        self
-    }
-
-    /// Set the gain map metadata (ISO 21496-1 parameters).
-    ///
-    /// Also sets `has_gain_map` to `true`.
-    pub fn with_gain_map_metadata(mut self, meta: GainMapMetadata) -> Self {
-        self.gain_map_metadata = Some(meta);
-        self.has_gain_map = true;
         self
     }
 
@@ -625,9 +593,7 @@ impl core::fmt::Debug for ImageInfo {
             .field("frame_count", &self.frame_count)
             .field("orientation", &self.orientation)
             .field("source_color", &self.source_color)
-            .field("embedded_metadata", &self.embedded_metadata)
-            .field("has_gain_map", &self.has_gain_map)
-            .field("gain_map_metadata", &self.gain_map_metadata);
+            .field("embedded_metadata", &self.embedded_metadata);
         if self.source_encoding.is_some() {
             s.field("source_encoding", &"Some(...)");
         }
@@ -650,8 +616,6 @@ impl PartialEq for ImageInfo {
             && self.orientation == other.orientation
             && self.source_color == other.source_color
             && self.embedded_metadata == other.embedded_metadata
-            && self.has_gain_map == other.has_gain_map
-            && self.gain_map_metadata == other.gain_map_metadata
             && self.warnings == other.warnings
     }
 }
@@ -865,28 +829,6 @@ mod tests {
         let cicp = Cicp::new(1, 1, 1, false);
         let s = alloc::format!("{}", cicp);
         assert_eq!(s, "BT.709/sRGB / BT.709 / BT.709 (limited range)");
-    }
-
-    #[test]
-    fn gain_map_metadata_builder() {
-        let meta = crate::GainMapMetadata {
-            gain_map_max: [2.0, 2.0, 2.0],
-            hdr_capacity_max: 2.0,
-            ..crate::GainMapMetadata::default()
-        };
-        let info = ImageInfo::new(100, 100, ImageFormat::Jpeg).with_gain_map_metadata(meta);
-        assert!(info.has_gain_map);
-        assert!(info.gain_map_metadata.is_some());
-        let gm = info.gain_map_metadata.unwrap();
-        assert_eq!(gm.gain_map_max, [2.0, 2.0, 2.0]);
-        assert_eq!(gm.hdr_capacity_max, 2.0);
-    }
-
-    #[test]
-    fn gain_map_metadata_default_none() {
-        let info = ImageInfo::new(100, 100, ImageFormat::Jpeg);
-        assert!(!info.has_gain_map);
-        assert!(info.gain_map_metadata.is_none());
     }
 
     #[test]

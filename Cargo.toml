@@ -14,7 +14,7 @@ exclude = ["CLAUDE.md", "docs/"]
 name = "zc"
 
 [dependencies]
-zenpixels = { path = "../zenpixels/zenpixels", features = ["buffer"] }
+zenpixels = { path = "../zenpixels/zenpixels", features = ["imgref"] }
 enough = "0.4"
 whereat = "0.1.3"
 

@@ -19,7 +19,7 @@ use zc::encode::{
     EncoderConfig, FullFrameEncoder,
 };
 use zc::{
-    CodecErrorExt, FullFrame, GainMapMetadata, ImageFormat, ImageInfo, LimitExceeded, Metadata,
+    CodecErrorExt, FullFrame, ImageFormat, ImageInfo, LimitExceeded, Metadata,
     Orientation, OrientationHint, ResourceLimits, ThreadingPolicy, UnsupportedOperation,
 };
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
@@ -1183,28 +1183,7 @@ fn orientation_hint_all_variants_eq() {
 }
 
 // =========================================================================
-// 21. GainMapMetadata
-// =========================================================================
-
-#[test]
-fn gain_map_as_extras() {
-    let meta = GainMapMetadata {
-        gain_map_max: [3.0; 3],
-        hdr_capacity_max: 3.0,
-        ..GainMapMetadata::default()
-    };
-
-    let buf = make_rgb8_buffer(2, 2);
-    let info = ImageInfo::new(2, 2, ImageFormat::Jpeg);
-    let output = DecodeOutput::new(buf, info).with_extras(meta);
-
-    let recovered = output.extras::<GainMapMetadata>().unwrap();
-    assert_eq!(recovered.gain_map_max, [3.0; 3]);
-    assert!(recovered.is_uniform());
-}
-
-// =========================================================================
-// 22. ImageFormat
+// 21. ImageFormat
 // =========================================================================
 
 #[test]

@@ -43,7 +43,6 @@ mod detect;
 mod error;
 mod extensions;
 mod format;
-mod gainmap;
 /// Codec implementation helpers (not consumer API).
 pub mod helpers;
 mod info;
@@ -65,7 +64,6 @@ mod traits;
 // don't need to add zenpixels as a direct dependency just for these.
 pub use extensions::Extensions;
 pub use format::{ImageFormat, ImageFormatDefinition, ImageFormatRegistry};
-pub use gainmap::GainMapMetadata;
 pub use info::{Cicp, ContentLightLevel, ImageInfo, MasteringDisplay, Resolution, ResolutionUnit};
 pub use limits::{LimitExceeded, ResourceLimits, ThreadingPolicy};
 pub use metadata::Metadata;
