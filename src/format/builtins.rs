@@ -99,9 +99,7 @@ pub static PNG: ImageFormatDefinition = ImageFormatDefinition {
     supports_lossless: true,
     supports_lossy: false,
     magic_bytes_needed: 33,
-    detect: |data| {
-        data.len() >= 8 && data[..8] == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
-    },
+    detect: |data| data.len() >= 8 && data[..8] == [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
 };
 
 pub static GIF: ImageFormatDefinition = ImageFormatDefinition {
