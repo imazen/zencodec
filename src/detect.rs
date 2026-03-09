@@ -9,7 +9,7 @@
 //! # Usage
 //!
 //! ```rust,ignore
-//! use zc::decode::{DecodeOutput, SourceEncodingDetails};
+//! use zencodec::decode::{DecodeOutput, SourceEncodingDetails};
 //!
 //! let output: DecodeOutput = /* decode an image */;
 //!

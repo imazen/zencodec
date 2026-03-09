@@ -18,7 +18,7 @@ use core::any::{Any, TypeId};
 /// # Example
 ///
 /// ```rust
-/// use zc::Extensions;
+/// use zencodec::Extensions;
 ///
 /// let mut ext = Extensions::new();
 /// ext.insert(42u32);

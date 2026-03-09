@@ -60,7 +60,7 @@ pub type SinkError = Box<dyn core::error::Error + Send + Sync>;
 /// # Example implementation
 ///
 /// ```
-/// use zc::decode::DecodeRowSink;
+/// use zencodec::decode::DecodeRowSink;
 /// use zenpixels::{PixelSliceMut, PixelDescriptor};
 ///
 /// struct CollectSink {

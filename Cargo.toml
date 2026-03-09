@@ -11,7 +11,7 @@ repository = "https://github.com/imazen/zencodec"
 exclude = ["CLAUDE.md", "docs/"]
 
 [lib]
-name = "zc"
+name = "zencodec"
 
 [dependencies]
 zenpixels = { path = "../zenpixels/zenpixels", features = ["imgref"] }

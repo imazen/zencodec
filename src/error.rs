@@ -22,7 +22,7 @@ use crate::{LimitExceeded, UnsupportedOperation};
 /// # Example
 ///
 /// ```rust,ignore
-/// use zc::CodecErrorExt;
+/// use zencodec::CodecErrorExt;
 ///
 /// let result = dyn_decoder.decode();
 /// if let Err(ref e) = result {

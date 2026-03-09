@@ -10,9 +10,9 @@ use std::borrow::Cow;
 
 use pnm::{PnmDecoderConfig, PnmEncoderConfig};
 
-use zc::decode::{Decode, DecodeJob, DecoderConfig, DynDecoderConfig};
-use zc::encode::{DynEncoderConfig, EncodeJob, Encoder, EncoderConfig};
-use zc::{ImageFormat, ResourceLimits, UnsupportedOperation};
+use zencodec::decode::{Decode, DecodeJob, DecoderConfig, DynDecoderConfig};
+use zencodec::encode::{DynEncoderConfig, EncodeJob, Encoder, EncoderConfig};
+use zencodec::{ImageFormat, ResourceLimits, UnsupportedOperation};
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
 
 // =========================================================================
@@ -209,7 +209,7 @@ fn dyn_encode_decode_gray8_roundtrip() {
 fn encode_with_any_codec(
     config: &dyn DynEncoderConfig,
     pixels: PixelSlice<'_>,
-) -> Result<Vec<u8>, zc::encode::BoxedError> {
+) -> Result<Vec<u8>, zencodec::encode::BoxedError> {
     let job = config.dyn_job();
     let encoder = job.into_encoder()?;
     Ok(encoder.encode(pixels)?.into_vec())
@@ -218,7 +218,7 @@ fn encode_with_any_codec(
 fn decode_with_any_codec(
     config: &dyn DynDecoderConfig,
     data: &[u8],
-) -> Result<PixelBuffer, zc::decode::BoxedError> {
+) -> Result<PixelBuffer, zencodec::decode::BoxedError> {
     let job = config.dyn_job();
     let decoder = job.into_decoder(Cow::Borrowed(data), &[])?;
     Ok(decoder.decode()?.into_buffer())
@@ -427,7 +427,7 @@ fn find_cause_limit_exceeded_through_dyn_decode() {
     // At<PnmError>::source() delegates to PnmError::source(),
     // which for #[from] LimitExceeded returns Some(&LimitExceeded).
     // find_cause walks: At<PnmError> → PnmError::source() → LimitExceeded
-    let limit = zc::find_cause::<zc::LimitExceeded>(&*err);
+    let limit = zencodec::find_cause::<zencodec::LimitExceeded>(&*err);
     assert!(
         limit.is_some(),
         "find_cause should find LimitExceeded through BoxedError → At<PnmError> chain"
@@ -458,7 +458,7 @@ fn find_cause_unsupported_through_dyn_decode() {
         Ok(_) => panic!("streaming decode should fail"),
     };
 
-    let op = zc::find_cause::<UnsupportedOperation>(&*err);
+    let op = zencodec::find_cause::<UnsupportedOperation>(&*err);
     assert!(
         op.is_some(),
         "find_cause should find UnsupportedOperation through BoxedError → At<PnmError>"
@@ -479,7 +479,7 @@ fn find_cause_unsupported_through_dyn_encode() {
         Ok(_) => panic!("animation encode should fail"),
     };
 
-    let op = zc::find_cause::<UnsupportedOperation>(&*err);
+    let op = zencodec::find_cause::<UnsupportedOperation>(&*err);
     assert!(
         op.is_some(),
         "find_cause should find UnsupportedOperation through BoxedError → At<PnmError>"
@@ -558,7 +558,7 @@ fn find_cause_returns_none_for_absent_type() {
 
     // InvalidData doesn't have LimitExceeded in its source chain
     assert!(
-        zc::find_cause::<zc::LimitExceeded>(&*err).is_none(),
+        zencodec::find_cause::<zencodec::LimitExceeded>(&*err).is_none(),
         "find_cause should return None when cause type is absent"
     );
 }
@@ -570,7 +570,7 @@ fn find_cause_returns_none_for_absent_type() {
 // design constraints and gaps in the current trait.
 // =========================================================================
 
-use zc::decode::{DecodeRowSink, SinkError};
+use zencodec::decode::{DecodeRowSink, SinkError};
 use zenpixels::PixelSliceMut;
 
 fn gcd(mut a: usize, mut b: usize) -> usize {

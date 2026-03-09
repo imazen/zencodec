@@ -19,7 +19,7 @@ use core::fmt;
 /// # Example
 ///
 /// ```
-/// use zc::UnsupportedOperation;
+/// use zencodec::UnsupportedOperation;
 ///
 /// let op = UnsupportedOperation::DecodeInto;
 /// assert_eq!(format!("{op}"), "unsupported operation: decode_into");
@@ -79,7 +79,7 @@ impl core::error::Error for UnsupportedOperation {}
 /// # Example
 ///
 /// ```
-/// use zc::encode::EncodeCapabilities;
+/// use zencodec::encode::EncodeCapabilities;
 ///
 /// static CAPS: EncodeCapabilities = EncodeCapabilities::new()
 ///     .with_icc(true)
@@ -259,8 +259,8 @@ impl EncodeCapabilities {
     /// # Example
     ///
     /// ```
-    /// use zc::UnsupportedOperation;
-    /// use zc::encode::EncodeCapabilities;
+    /// use zencodec::UnsupportedOperation;
+    /// use zencodec::encode::EncodeCapabilities;
     ///
     /// static CAPS: EncodeCapabilities = EncodeCapabilities::new()
     ///     .with_animation(true)
@@ -438,7 +438,7 @@ impl fmt::Debug for EncodeCapabilities {
 /// # Example
 ///
 /// ```
-/// use zc::decode::DecodeCapabilities;
+/// use zencodec::decode::DecodeCapabilities;
 ///
 /// static CAPS: DecodeCapabilities = DecodeCapabilities::new()
 ///     .with_icc(true)
@@ -598,8 +598,8 @@ impl DecodeCapabilities {
     /// # Example
     ///
     /// ```
-    /// use zc::UnsupportedOperation;
-    /// use zc::decode::DecodeCapabilities;
+    /// use zencodec::UnsupportedOperation;
+    /// use zencodec::decode::DecodeCapabilities;
     ///
     /// static CAPS: DecodeCapabilities = DecodeCapabilities::new()
     ///     .with_animation(true)

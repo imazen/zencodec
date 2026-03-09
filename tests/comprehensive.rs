@@ -10,15 +10,15 @@ use std::borrow::Cow;
 
 use mock_anim::{MockDecoderConfig, MockEncoderConfig};
 
-use zc::decode::{
+use zencodec::decode::{
     Decode, DecodeCapabilities, DecodeJob, DecodeOutput, DecodePolicy, DecoderConfig,
     DynDecoderConfig, FullFrameDecoder, OutputInfo, StreamingDecode,
 };
-use zc::encode::{
+use zencodec::encode::{
     DynEncoderConfig, EncodeCapabilities, EncodeJob, EncodeOutput, EncodePolicy, Encoder,
     EncoderConfig, FullFrameEncoder,
 };
-use zc::{
+use zencodec::{
     CodecErrorExt, FullFrame, ImageFormat, ImageInfo, LimitExceeded, Metadata,
     Orientation, OrientationHint, ResourceLimits, ThreadingPolicy, UnsupportedOperation,
 };
@@ -330,13 +330,13 @@ fn animation_render_to_sink() {
         finished: bool,
     }
 
-    impl zc::decode::DecodeRowSink for CollectSink {
+    impl zencodec::decode::DecodeRowSink for CollectSink {
         fn begin(
             &mut self,
             _w: u32,
             _h: u32,
             _desc: PixelDescriptor,
-        ) -> Result<(), zc::decode::SinkError> {
+        ) -> Result<(), zencodec::decode::SinkError> {
             self.began = true;
             Ok(())
         }
@@ -346,7 +346,7 @@ fn animation_render_to_sink() {
             height: u32,
             width: u32,
             descriptor: PixelDescriptor,
-        ) -> Result<zenpixels::PixelSliceMut<'_>, zc::decode::SinkError> {
+        ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
             let bpp = descriptor.bytes_per_pixel();
             let stride = width as usize * bpp;
             self.buf.resize(height as usize * stride, 0);
@@ -355,7 +355,7 @@ fn animation_render_to_sink() {
                     .unwrap(),
             )
         }
-        fn finish(&mut self) -> Result<(), zc::decode::SinkError> {
+        fn finish(&mut self) -> Result<(), zencodec::decode::SinkError> {
             self.finished = true;
             Ok(())
         }
@@ -459,14 +459,14 @@ fn dyn_decode_push_decode() {
     struct TestSink {
         buf: Vec<u8>,
     }
-    impl zc::decode::DecodeRowSink for TestSink {
+    impl zencodec::decode::DecodeRowSink for TestSink {
         fn provide_next_buffer(
             &mut self,
             _y: u32,
             height: u32,
             width: u32,
             descriptor: PixelDescriptor,
-        ) -> Result<zenpixels::PixelSliceMut<'_>, zc::decode::SinkError> {
+        ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
             let bpp = descriptor.bytes_per_pixel();
             let stride = width as usize * bpp;
             self.buf.resize(height as usize * stride, 0);
@@ -1188,7 +1188,7 @@ fn orientation_hint_all_variants_eq() {
 
 #[test]
 fn image_format_detect_all_known() {
-    use zc::ImageFormatRegistry;
+    use zencodec::ImageFormatRegistry;
     let reg = ImageFormatRegistry::common();
 
     // JPEG
@@ -1304,7 +1304,7 @@ fn image_info_comprehensive_builder() {
 
 #[test]
 fn negotiate_same_format_different_metadata() {
-    use zc::decode::negotiate_pixel_format;
+    use zencodec::decode::negotiate_pixel_format;
 
     // Caller wants sRGB, decoder has unknown-transfer — format match wins
     let preferred = &[PixelDescriptor::RGBA8_SRGB];
@@ -1316,7 +1316,7 @@ fn negotiate_same_format_different_metadata() {
 
 #[test]
 fn negotiate_multiple_preferences_multiple_available() {
-    use zc::decode::negotiate_pixel_format;
+    use zencodec::decode::negotiate_pixel_format;
 
     // Caller prefers: RGBA8_SRGB, then GRAY8_SRGB
     // Available: GRAY8_SRGB, RGB8_SRGB
@@ -1329,7 +1329,7 @@ fn negotiate_multiple_preferences_multiple_available() {
 
 #[test]
 fn best_encode_format_no_match_returns_none() {
-    use zc::encode::best_encode_format;
+    use zencodec::encode::best_encode_format;
     let result = best_encode_format(PixelDescriptor::GRAY8_SRGB, &[PixelDescriptor::RGB8_SRGB]);
     assert_eq!(result, None);
 }
@@ -1485,7 +1485,7 @@ fn unsupported_operation_error_has_no_source() {
 
 #[test]
 fn image_format_from_extension() {
-    use zc::ImageFormatRegistry;
+    use zencodec::ImageFormatRegistry;
     let reg = ImageFormatRegistry::common();
 
     assert_eq!(reg.from_extension("jpg"), Some(ImageFormat::Jpeg));
@@ -1502,7 +1502,7 @@ fn image_format_from_extension() {
 
 #[test]
 fn image_format_from_mime_type() {
-    use zc::ImageFormatRegistry;
+    use zencodec::ImageFormatRegistry;
     let reg = ImageFormatRegistry::common();
 
     assert_eq!(reg.from_mime_type("image/jpeg"), Some(ImageFormat::Jpeg));
@@ -1585,14 +1585,14 @@ fn dyn_full_frame_decoder_render_to_sink() {
     struct SimpleSink {
         buf: Vec<u8>,
     }
-    impl zc::decode::DecodeRowSink for SimpleSink {
+    impl zencodec::decode::DecodeRowSink for SimpleSink {
         fn provide_next_buffer(
             &mut self,
             _y: u32,
             height: u32,
             width: u32,
             descriptor: PixelDescriptor,
-        ) -> Result<zenpixels::PixelSliceMut<'_>, zc::decode::SinkError> {
+        ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
             let bpp = descriptor.bytes_per_pixel();
             let stride = width as usize * bpp;
             self.buf.resize(height as usize * stride, 0);
@@ -1671,13 +1671,13 @@ fn push_decoder_sink_error_propagates() {
     let data = encode_single_frame(&buf);
 
     struct FailBeginSink;
-    impl zc::decode::DecodeRowSink for FailBeginSink {
+    impl zencodec::decode::DecodeRowSink for FailBeginSink {
         fn begin(
             &mut self,
             _w: u32,
             _h: u32,
             _desc: PixelDescriptor,
-        ) -> Result<(), zc::decode::SinkError> {
+        ) -> Result<(), zencodec::decode::SinkError> {
             Err("begin failed".into())
         }
         fn provide_next_buffer(
@@ -1686,7 +1686,7 @@ fn push_decoder_sink_error_propagates() {
             _h: u32,
             _w: u32,
             _d: PixelDescriptor,
-        ) -> Result<zenpixels::PixelSliceMut<'_>, zc::decode::SinkError> {
+        ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
             unreachable!()
         }
     }
@@ -1707,14 +1707,14 @@ fn push_decoder_sink_finish_error_propagates() {
     struct FailFinishSink {
         buf: Vec<u8>,
     }
-    impl zc::decode::DecodeRowSink for FailFinishSink {
+    impl zencodec::decode::DecodeRowSink for FailFinishSink {
         fn provide_next_buffer(
             &mut self,
             _y: u32,
             height: u32,
             width: u32,
             descriptor: PixelDescriptor,
-        ) -> Result<zenpixels::PixelSliceMut<'_>, zc::decode::SinkError> {
+        ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
             let bpp = descriptor.bytes_per_pixel();
             let stride = width as usize * bpp;
             self.buf.resize(height as usize * stride, 0);
@@ -1723,7 +1723,7 @@ fn push_decoder_sink_finish_error_propagates() {
                     .unwrap(),
             )
         }
-        fn finish(&mut self) -> Result<(), zc::decode::SinkError> {
+        fn finish(&mut self) -> Result<(), zencodec::decode::SinkError> {
             Err("finish failed".into())
         }
     }
@@ -2029,7 +2029,7 @@ fn owned_full_frame_extras_roundtrip() {
 
     let buf = make_rgb8_buffer(2, 2);
     let mut frame =
-        zc::OwnedFullFrame::new(buf, 100, 0).with_extras(FrameMeta { is_keyframe: true });
+        zencodec::OwnedFullFrame::new(buf, 100, 0).with_extras(FrameMeta { is_keyframe: true });
 
     assert_eq!(
         frame.extras::<FrameMeta>(),
@@ -2099,7 +2099,7 @@ fn decode_job_extensions_through_dyn_job() {
     use mock_anim::MockDecodeExtensions;
 
     let config = MockDecoderConfig;
-    let dyn_config: &dyn zc::decode::DynDecoderConfig = &config;
+    let dyn_config: &dyn zencodec::decode::DynDecoderConfig = &config;
     let mut job = dyn_config.dyn_job();
 
     // Codec-specific setup via extensions

@@ -167,7 +167,7 @@ pub trait FullFrameDecoder: Sized {
     ///
     /// Codecs with native row streaming should write directly into the sink.
     /// Codecs that render to an internal canvas should call
-    /// [`zc::helpers::copy_frame_to_sink()`](crate::helpers::copy_frame_to_sink) as a fallback.
+    /// [`zencodec::helpers::copy_frame_to_sink()`](crate::helpers::copy_frame_to_sink) as a fallback.
     ///
     /// Pass `None` if cancellation is not needed.
     fn render_next_frame_to_sink(
@@ -177,8 +177,8 @@ pub trait FullFrameDecoder: Sized {
     ) -> Result<Option<OutputInfo>, Self::Error>;
 }
 
-/// Deprecated: use [`zc::helpers::copy_frame_to_sink`](crate::helpers::copy_frame_to_sink).
-#[deprecated(since = "0.2.0", note = "use zc::helpers::copy_frame_to_sink instead")]
+/// Deprecated: use [`zencodec::helpers::copy_frame_to_sink`](crate::helpers::copy_frame_to_sink).
+#[deprecated(since = "0.2.0", note = "use zencodec::helpers::copy_frame_to_sink instead")]
 pub fn render_frame_to_sink_via_copy<D: FullFrameDecoder>(
     decoder: &mut D,
     stop: Option<&dyn Stop>,

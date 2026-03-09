@@ -217,7 +217,7 @@ pub trait DecodeJob<'a>: Sized {
     ///
     /// Codecs with native row/strip streaming should write decoded rows
     /// directly into the sink. Codecs that can only do one-shot decode
-    /// should call [`zc::helpers::copy_decode_to_sink()`](crate::helpers::copy_decode_to_sink) as a fallback.
+    /// should call [`zencodec::helpers::copy_decode_to_sink()`](crate::helpers::copy_decode_to_sink) as a fallback.
     fn push_decoder(
         self,
         data: Cow<'a, [u8]>,
@@ -336,11 +336,11 @@ pub trait DecodeJob<'a>: Sized {
 }
 
 // ===========================================================================
-// Deprecated aliases — use zc::helpers:: instead
+// Deprecated aliases — use zencodec::helpers:: instead
 // ===========================================================================
 
-/// Deprecated: use [`zc::helpers::copy_decode_to_sink`](crate::helpers::copy_decode_to_sink).
-#[deprecated(since = "0.2.0", note = "use zc::helpers::copy_decode_to_sink instead")]
+/// Deprecated: use [`zencodec::helpers::copy_decode_to_sink`](crate::helpers::copy_decode_to_sink).
+#[deprecated(since = "0.2.0", note = "use zencodec::helpers::copy_decode_to_sink instead")]
 pub fn push_decoder_via_full_decode<'a, J>(
     job: J,
     data: Cow<'a, [u8]>,

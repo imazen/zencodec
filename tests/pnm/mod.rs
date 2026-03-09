@@ -8,13 +8,13 @@
 
 use std::borrow::Cow;
 
-use zc::decode::{Decode, DecodeCapabilities, DecodeJob, DecoderConfig};
-use zc::encode::{EncodeCapabilities, EncodeJob, EncodeOutput, Encoder, EncoderConfig};
-use zc::{ImageFormat, ImageInfo, Metadata, ResourceLimits, Unsupported, UnsupportedOperation};
+use zencodec::decode::{Decode, DecodeCapabilities, DecodeJob, DecoderConfig};
+use zencodec::encode::{EncodeCapabilities, EncodeJob, EncodeOutput, Encoder, EncoderConfig};
+use zencodec::{ImageFormat, ImageInfo, Metadata, ResourceLimits, Unsupported, UnsupportedOperation};
 
 use enough::{Stop, StopReason};
 use whereat::{At, ErrorAtExt};
-use zc::decode::{DecodeOutput, OutputInfo};
+use zencodec::decode::{DecodeOutput, OutputInfo};
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
 
 // =========================================================================
@@ -30,7 +30,7 @@ pub enum PnmError {
     #[error("cancelled: {0}")]
     Cancelled(StopReason),
     #[error("limit exceeded: {0}")]
-    LimitExceeded(#[from] zc::LimitExceeded),
+    LimitExceeded(#[from] zencodec::LimitExceeded),
 }
 
 /// Manual impl because `StopReason` doesn't implement `Error`,
@@ -279,10 +279,10 @@ impl<'a> DecodeJob<'a> for PnmDecodeJob<'a> {
     fn push_decoder(
         self,
         data: Cow<'a, [u8]>,
-        sink: &mut dyn zc::decode::DecodeRowSink,
+        sink: &mut dyn zencodec::decode::DecodeRowSink,
         preferred: &[PixelDescriptor],
     ) -> Result<OutputInfo, At<PnmError>> {
-        zc::helpers::copy_decode_to_sink(self, data, sink, preferred, |e| {
+        zencodec::helpers::copy_decode_to_sink(self, data, sink, preferred, |e| {
             PnmError::InvalidData(e.to_string()).start_at()
         })
     }

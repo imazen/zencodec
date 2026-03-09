@@ -11,17 +11,17 @@
 
 use std::borrow::Cow;
 
-use zc::decode::{
+use zencodec::decode::{
     DecodeCapabilities, DecodeJob, DecodeOutput, DecoderConfig, FullFrameDecoder, OutputInfo,
     StreamingDecode,
 };
-use zc::encode::{
+use zencodec::encode::{
     EncodeCapabilities, EncodeJob, EncodeOutput, Encoder, EncoderConfig, FullFrameEncoder,
 };
-use zc::{FullFrame, ImageFormat, ImageInfo, Metadata, ResourceLimits, UnsupportedOperation};
+use zencodec::{FullFrame, ImageFormat, ImageInfo, Metadata, ResourceLimits, UnsupportedOperation};
 
 use enough::{Stop, StopReason};
-use zc::decode::{DecodeRowSink, SinkError};
+use zencodec::decode::{DecodeRowSink, SinkError};
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice, PixelSliceMut};
 
 // =========================================================================
@@ -33,7 +33,7 @@ pub enum MockError {
     Unsupported(UnsupportedOperation),
     InvalidData(String),
     Cancelled(StopReason),
-    LimitExceeded(zc::LimitExceeded),
+    LimitExceeded(zencodec::LimitExceeded),
     Sink(SinkError),
 }
 
@@ -72,8 +72,8 @@ impl From<StopReason> for MockError {
     }
 }
 
-impl From<zc::LimitExceeded> for MockError {
-    fn from(e: zc::LimitExceeded) -> Self {
+impl From<zencodec::LimitExceeded> for MockError {
+    fn from(e: zencodec::LimitExceeded) -> Self {
         Self::LimitExceeded(e)
     }
 }
@@ -180,9 +180,9 @@ impl DecoderConfig for MockDecoderConfig {
 pub struct MockDecodeJob<'a> {
     limits: ResourceLimits,
     stop: Option<&'a dyn Stop>,
-    policy: Option<zc::decode::DecodePolicy>,
+    policy: Option<zencodec::decode::DecodePolicy>,
     crop: Option<(u32, u32, u32, u32)>,
-    orientation: Option<zc::OrientationHint>,
+    orientation: Option<zencodec::OrientationHint>,
     start_frame: Option<u32>,
     pub ext: MockDecodeExtensions,
 }
@@ -203,7 +203,7 @@ impl<'a> DecodeJob<'a> for MockDecodeJob<'a> {
         self
     }
 
-    fn with_policy(mut self, policy: zc::decode::DecodePolicy) -> Self {
+    fn with_policy(mut self, policy: zencodec::decode::DecodePolicy) -> Self {
         self.policy = Some(policy);
         self
     }
@@ -213,7 +213,7 @@ impl<'a> DecodeJob<'a> for MockDecodeJob<'a> {
         self
     }
 
-    fn with_orientation(mut self, hint: zc::OrientationHint) -> Self {
+    fn with_orientation(mut self, hint: zencodec::OrientationHint) -> Self {
         self.orientation = Some(hint);
         self
     }
@@ -262,7 +262,7 @@ impl<'a> DecodeJob<'a> for MockDecodeJob<'a> {
         sink: &mut dyn DecodeRowSink,
         preferred: &[PixelDescriptor],
     ) -> Result<OutputInfo, MockError> {
-        zc::helpers::copy_decode_to_sink(self, data, sink, preferred, MockError::Sink)
+        zencodec::helpers::copy_decode_to_sink(self, data, sink, preferred, MockError::Sink)
     }
 
     fn streaming_decoder(
@@ -307,7 +307,7 @@ pub struct MockDec<'a> {
     data: Cow<'a, [u8]>,
 }
 
-impl<'a> zc::decode::Decode for MockDec<'a> {
+impl<'a> zencodec::decode::Decode for MockDec<'a> {
     type Error = MockError;
 
     fn decode(self) -> Result<DecodeOutput, MockError> {
@@ -447,7 +447,7 @@ impl FullFrameDecoder for MockFullFrameDec {
         stop: Option<&dyn Stop>,
         sink: &mut dyn DecodeRowSink,
     ) -> Result<Option<OutputInfo>, MockError> {
-        zc::helpers::copy_frame_to_sink(self, stop, sink)
+        zencodec::helpers::copy_frame_to_sink(self, stop, sink)
     }
 }
 
@@ -575,7 +575,7 @@ pub struct MockEncodeJob<'a> {
     metadata: Option<Metadata>,
     canvas_size: Option<(u32, u32)>,
     loop_count: Option<Option<u32>>,
-    policy: Option<zc::encode::EncodePolicy>,
+    policy: Option<zencodec::encode::EncodePolicy>,
     pub ext: MockEncodeExtensions,
 }
 
@@ -594,7 +594,7 @@ impl<'a> EncodeJob<'a> for MockEncodeJob<'a> {
         self
     }
 
-    fn with_policy(mut self, policy: zc::encode::EncodePolicy) -> Self {
+    fn with_policy(mut self, policy: zencodec::encode::EncodePolicy) -> Self {
         self.policy = Some(policy);
         self
     }

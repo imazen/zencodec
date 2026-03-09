@@ -52,7 +52,7 @@ pub enum ThreadingPolicy {
 /// # Example
 ///
 /// ```
-/// use zc::ResourceLimits;
+/// use zencodec::ResourceLimits;
 ///
 /// let limits = ResourceLimits::none()
 ///     .with_max_pixels(100_000_000)

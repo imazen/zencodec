@@ -21,7 +21,7 @@
 /// # Example
 ///
 /// ```
-/// use zc::decode::DecodePolicy;
+/// use zencodec::decode::DecodePolicy;
 ///
 /// // Start strict, then allow ICC (needed for color management)
 /// let policy = DecodePolicy::strict().with_allow_icc(true);
@@ -202,7 +202,7 @@ impl DecodePolicy {
 /// # Example
 ///
 /// ```
-/// use zc::encode::EncodePolicy;
+/// use zencodec::encode::EncodePolicy;
 ///
 /// // Strip all metadata from output
 /// let policy = EncodePolicy::strip_all();

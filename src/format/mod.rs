@@ -21,7 +21,7 @@ pub(crate) mod builtins;
 /// # Example
 ///
 /// ```rust,ignore
-/// use zc::{ImageFormatDefinition, ImageFormat, ImageFormatRegistry};
+/// use zencodec::{ImageFormatDefinition, ImageFormat, ImageFormatRegistry};
 ///
 /// fn detect_jpeg2000(data: &[u8]) -> bool {
 ///     data.len() >= 12 && data[..4] == [0x00, 0x00, 0x00, 0x0C]
@@ -307,7 +307,7 @@ impl core::fmt::Display for ImageFormat {
 /// # Example
 ///
 /// ```rust,ignore
-/// use zc::{ImageFormatRegistry, ImageFormatDefinition};
+/// use zencodec::{ImageFormatRegistry, ImageFormatDefinition};
 ///
 /// // Default: all built-in formats
 /// let reg = ImageFormatRegistry::common();

@@ -25,7 +25,7 @@ use crate::traits::{Decode, DecodeJob, FullFrameDecoder};
 ///     sink: &mut dyn DecodeRowSink,
 ///     preferred: &[PixelDescriptor],
 /// ) -> Result<OutputInfo, Self::Error> {
-///     zc::helpers::copy_decode_to_sink(self, data, sink, preferred, MyError::from_sink)
+///     zencodec::helpers::copy_decode_to_sink(self, data, sink, preferred, MyError::from_sink)
 /// }
 /// ```
 pub fn copy_decode_to_sink<'a, J>(
@@ -72,7 +72,7 @@ where
 ///     stop: Option<&dyn Stop>,
 ///     sink: &mut dyn DecodeRowSink,
 /// ) -> Result<Option<OutputInfo>, Self::Error> {
-///     zc::helpers::copy_frame_to_sink(self, stop, sink)
+///     zencodec::helpers::copy_frame_to_sink(self, stop, sink)
 /// }
 /// ```
 pub fn copy_frame_to_sink<D: FullFrameDecoder>(
