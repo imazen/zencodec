@@ -243,13 +243,18 @@ pub struct Resolution {
     pub unit: ResolutionUnit,
 }
 
-// Eq: resolution values come from file metadata and are never NaN.
+// Eq: Validated: constructors reject NaN.
 // Required because MetadataView derives Eq.
 impl Eq for Resolution {}
 
 impl Resolution {
     /// Create a resolution with the given DPI (pixels per inch).
+    ///
+    /// # Panics
+    /// Panics if `x` or `y` is NaN.
     pub const fn dpi(x: f32, y: f32) -> Self {
+        assert!(!x.is_nan(), "Resolution x must not be NaN");
+        assert!(!y.is_nan(), "Resolution y must not be NaN");
         Self {
             x,
             y,
@@ -258,7 +263,11 @@ impl Resolution {
     }
 
     /// Create a uniform resolution (same in both axes).
+    ///
+    /// # Panics
+    /// Panics if `value` is NaN.
     pub const fn uniform(value: f32, unit: ResolutionUnit) -> Self {
+        assert!(!value.is_nan(), "Resolution value must not be NaN");
         Self {
             x: value,
             y: value,
@@ -276,21 +285,25 @@ impl Resolution {
 #[non_exhaustive]
 pub struct EmbeddedMetadata {
     /// Embedded EXIF metadata.
-    pub exif: Option<Vec<u8>>,
+    pub exif: Option<Arc<[u8]>>,
     /// Embedded XMP metadata.
-    pub xmp: Option<Vec<u8>>,
+    pub xmp: Option<Arc<[u8]>>,
 }
 
 impl EmbeddedMetadata {
     /// Set the EXIF metadata.
-    pub fn with_exif(mut self, exif: Vec<u8>) -> Self {
-        self.exif = Some(exif);
+    ///
+    /// Accepts `Vec<u8>`, `&[u8]`, or `Arc<[u8]>`.
+    pub fn with_exif(mut self, exif: impl Into<Arc<[u8]>>) -> Self {
+        self.exif = Some(exif.into());
         self
     }
 
     /// Set the XMP metadata.
-    pub fn with_xmp(mut self, xmp: Vec<u8>) -> Self {
-        self.xmp = Some(xmp);
+    ///
+    /// Accepts `Vec<u8>`, `&[u8]`, or `Arc<[u8]>`.
+    pub fn with_xmp(mut self, xmp: impl Into<Arc<[u8]>>) -> Self {
+        self.xmp = Some(xmp.into());
         self
     }
 
@@ -444,14 +457,18 @@ impl ImageInfo {
     }
 
     /// Set the EXIF metadata. Convenience for `embedded_metadata.exif`.
-    pub fn with_exif(mut self, exif: Vec<u8>) -> Self {
-        self.embedded_metadata.exif = Some(exif);
+    ///
+    /// Accepts `Vec<u8>`, `&[u8]`, or `Arc<[u8]>`.
+    pub fn with_exif(mut self, exif: impl Into<Arc<[u8]>>) -> Self {
+        self.embedded_metadata.exif = Some(exif.into());
         self
     }
 
     /// Set the XMP metadata. Convenience for `embedded_metadata.xmp`.
-    pub fn with_xmp(mut self, xmp: Vec<u8>) -> Self {
-        self.embedded_metadata.xmp = Some(xmp);
+    ///
+    /// Accepts `Vec<u8>`, `&[u8]`, or `Arc<[u8]>`.
+    pub fn with_xmp(mut self, xmp: impl Into<Arc<[u8]>>) -> Self {
+        self.embedded_metadata.xmp = Some(xmp.into());
         self
     }
 
