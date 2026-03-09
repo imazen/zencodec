@@ -35,6 +35,8 @@
 
 extern crate alloc;
 
+whereat::define_at_crate_info!();
+
 mod capabilities;
 mod color;
 mod cost;
