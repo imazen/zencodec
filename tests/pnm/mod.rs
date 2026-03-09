@@ -8,9 +8,7 @@
 
 use std::borrow::Cow;
 
-use zc::decode::{
-    Decode, DecodeCapabilities, DecodeJob, DecoderConfig, push_decoder_via_full_decode,
-};
+use zc::decode::{Decode, DecodeCapabilities, DecodeJob, DecoderConfig};
 use zc::encode::{EncodeCapabilities, EncodeJob, EncodeOutput, Encoder, EncoderConfig};
 use zc::{ImageFormat, ImageInfo, Metadata, ResourceLimits, Unsupported, UnsupportedOperation};
 
@@ -284,7 +282,7 @@ impl<'a> DecodeJob<'a> for PnmDecodeJob<'a> {
         sink: &mut dyn zc::decode::DecodeRowSink,
         preferred: &[PixelDescriptor],
     ) -> Result<OutputInfo, At<PnmError>> {
-        push_decoder_via_full_decode(self, data, sink, preferred, |e| {
+        zc::helpers::copy_decode_to_sink(self, data, sink, preferred, |e| {
             PnmError::InvalidData(e.to_string()).start_at()
         })
     }

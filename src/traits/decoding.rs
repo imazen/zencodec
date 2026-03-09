@@ -217,7 +217,7 @@ pub trait DecodeJob<'a>: Sized {
     ///
     /// Codecs with native row/strip streaming should write decoded rows
     /// directly into the sink. Codecs that can only do one-shot decode
-    /// should call [`push_decoder_via_full_decode()`] as a fallback.
+    /// should call [`zc::helpers::copy_decode_to_sink()`](crate::helpers::copy_decode_to_sink) as a fallback.
     fn push_decoder(
         self,
         data: Cow<'a, [u8]>,
@@ -336,31 +336,11 @@ pub trait DecodeJob<'a>: Sized {
 }
 
 // ===========================================================================
-// Fallback helpers
+// Deprecated aliases — use zc::helpers:: instead
 // ===========================================================================
 
-/// Fallback [`push_decoder`](DecodeJob::push_decoder) implementation via
-/// one-shot decode.
-///
-/// Decodes the full image into owned pixels, then copies row-by-row into the
-/// sink. This is correct but wasteful — use it only for codecs that cannot
-/// stream natively.
-///
-/// The `wrap_sink_error` function converts sink errors into the codec's error
-/// type.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// fn push_decoder(
-///     self,
-///     data: Cow<'a, [u8]>,
-///     sink: &mut dyn DecodeRowSink,
-///     preferred: &[PixelDescriptor],
-/// ) -> Result<OutputInfo, Self::Error> {
-///     push_decoder_via_full_decode(self, data, sink, preferred, MyError::from_sink)
-/// }
-/// ```
+/// Deprecated: use [`zc::helpers::copy_decode_to_sink`](crate::helpers::copy_decode_to_sink).
+#[deprecated(since = "0.2.0", note = "use zc::helpers::copy_decode_to_sink instead")]
 pub fn push_decoder_via_full_decode<'a, J>(
     job: J,
     data: Cow<'a, [u8]>,
@@ -371,25 +351,5 @@ pub fn push_decoder_via_full_decode<'a, J>(
 where
     J: DecodeJob<'a>,
 {
-    let dec = job.decoder(data, preferred)?;
-    let output = dec.decode()?;
-    let ps = output.pixels();
-    let desc = ps.descriptor();
-    let w = ps.width();
-    let h = ps.rows();
-
-    sink.begin(w, h, desc).map_err(wrap_sink_error)?;
-
-    let mut dst = sink
-        .provide_next_buffer(0, h, w, desc)
-        .map_err(wrap_sink_error)?;
-    for row in 0..h {
-        dst.row_mut(row).copy_from_slice(ps.row(row));
-    }
-    drop(dst);
-
-    sink.finish().map_err(wrap_sink_error)?;
-
-    let info = output.info();
-    Ok(OutputInfo::full_decode(info.width, info.height, desc))
+    crate::helpers::copy_decode_to_sink(job, data, sink, preferred, wrap_sink_error)
 }

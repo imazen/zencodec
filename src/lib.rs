@@ -44,6 +44,8 @@ mod error;
 mod extensions;
 mod format;
 mod gainmap;
+/// Codec implementation helpers (not consumer API).
+pub mod helpers;
 mod info;
 mod limits;
 mod metadata;
@@ -153,6 +155,7 @@ pub mod encode {
 /// use the `Dyn*` variants for codec-agnostic operation.
 pub mod decode {
     // Traits — config, job, execution
+    #[allow(deprecated)]
     pub use crate::traits::{
         Decode, DecodeJob, DecoderConfig, FullFrameDecoder, StreamingDecode,
         push_decoder_via_full_decode, render_frame_to_sink_via_copy,

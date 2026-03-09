@@ -262,7 +262,7 @@ impl<'a> DecodeJob<'a> for MockDecodeJob<'a> {
         sink: &mut dyn DecodeRowSink,
         preferred: &[PixelDescriptor],
     ) -> Result<OutputInfo, MockError> {
-        zc::decode::push_decoder_via_full_decode(self, data, sink, preferred, MockError::Sink)
+        zc::helpers::copy_decode_to_sink(self, data, sink, preferred, MockError::Sink)
     }
 
     fn streaming_decoder(
@@ -447,7 +447,7 @@ impl FullFrameDecoder for MockFullFrameDec {
         stop: Option<&dyn Stop>,
         sink: &mut dyn DecodeRowSink,
     ) -> Result<Option<OutputInfo>, MockError> {
-        zc::decode::render_frame_to_sink_via_copy(self, stop, sink)
+        zc::helpers::copy_frame_to_sink(self, stop, sink)
     }
 }
 

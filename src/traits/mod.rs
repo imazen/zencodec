@@ -29,7 +29,9 @@ mod encoder;
 mod encoding;
 mod unsupported;
 
+#[allow(deprecated)]
 pub use decoder::{Decode, FullFrameDecoder, StreamingDecode, render_frame_to_sink_via_copy};
+#[allow(deprecated)]
 pub use decoding::{DecodeJob, DecoderConfig, push_decoder_via_full_decode};
 pub use dyn_decoding::{
     DynDecodeJob, DynDecoder, DynDecoderConfig, DynFullFrameDecoder, DynStreamingDecoder,

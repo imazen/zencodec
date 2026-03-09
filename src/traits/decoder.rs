@@ -167,7 +167,7 @@ pub trait FullFrameDecoder: Sized {
     ///
     /// Codecs with native row streaming should write directly into the sink.
     /// Codecs that render to an internal canvas should call
-    /// [`render_frame_to_sink_via_copy()`] as a fallback.
+    /// [`zc::helpers::copy_frame_to_sink()`](crate::helpers::copy_frame_to_sink) as a fallback.
     ///
     /// Pass `None` if cancellation is not needed.
     fn render_next_frame_to_sink(
@@ -177,46 +177,12 @@ pub trait FullFrameDecoder: Sized {
     ) -> Result<Option<OutputInfo>, Self::Error>;
 }
 
-/// Fallback [`render_next_frame_to_sink`](FullFrameDecoder::render_next_frame_to_sink)
-/// via [`render_next_frame`](FullFrameDecoder::render_next_frame) + copy.
-///
-/// Renders the next frame into the decoder's internal canvas, then copies
-/// row-by-row into the sink. Correct but adds one full-frame copy.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// fn render_next_frame_to_sink(
-///     &mut self,
-///     stop: Option<&dyn Stop>,
-///     sink: &mut dyn DecodeRowSink,
-/// ) -> Result<Option<OutputInfo>, Self::Error> {
-///     render_frame_to_sink_via_copy(self, stop, sink)
-/// }
-/// ```
+/// Deprecated: use [`zc::helpers::copy_frame_to_sink`](crate::helpers::copy_frame_to_sink).
+#[deprecated(since = "0.2.0", note = "use zc::helpers::copy_frame_to_sink instead")]
 pub fn render_frame_to_sink_via_copy<D: FullFrameDecoder>(
     decoder: &mut D,
     stop: Option<&dyn Stop>,
     sink: &mut dyn crate::DecodeRowSink,
 ) -> Result<Option<OutputInfo>, D::Error> {
-    let frame = match decoder.render_next_frame(stop)? {
-        Some(f) => f,
-        None => return Ok(None),
-    };
-    let ps = frame.pixels();
-    let desc = ps.descriptor();
-    let w = ps.width();
-    let h = ps.rows();
-
-    sink.begin(w, h, desc).map_err(D::wrap_sink_error)?;
-    let mut dst = sink
-        .provide_next_buffer(0, h, w, desc)
-        .map_err(D::wrap_sink_error)?;
-    for row in 0..h {
-        dst.row_mut(row).copy_from_slice(ps.row(row));
-    }
-    drop(dst);
-    sink.finish().map_err(D::wrap_sink_error)?;
-
-    Ok(Some(OutputInfo::full_decode(w, h, desc)))
+    crate::helpers::copy_frame_to_sink(decoder, stop, sink)
 }
