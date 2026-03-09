@@ -10,13 +10,60 @@
 //! JPEG XL (gain map bundle). The metadata format is interoperable across
 //! all three — ISO 21496-1 standardizes it.
 //!
-//! # Usage
+//! # Data flow
 //!
-//! Codecs that decode gain maps put `(PixelBuffer, GainMapMetadata)` (or a
-//! codec-specific wrapper) in [`DecodeOutput::extras`](crate::decode::DecodeOutput).
-//! Callers retrieve it via downcast. Structured trait methods for gain maps
-//! may be added in a future version after the pattern is proven across
-//! multiple codecs.
+//! Gain map data travels in two channels:
+//!
+//! - **Metadata** ([`GainMapMetadata`]) lives in
+//!   [`ImageInfo::gain_map_metadata`](crate::ImageInfo). It describes the
+//!   reconstruction formula parameters (boost range, gamma, offsets).
+//! - **Pixel data** (the gain map image itself) lives in
+//!   [`DecodeOutput::extras`](crate::decode::DecodeOutput), wrapped in a
+//!   codec-specific type that the caller downcasts.
+//!
+//! Both are needed to render the adaptive output.
+//!
+//! # Checking for a gain map
+//!
+//! ```ignore
+//! let output: DecodeOutput = /* decode an image */;
+//! let info = output.info();
+//!
+//! if info.has_gain_map {
+//!     // Metadata describes the reconstruction parameters
+//!     if let Some(meta) = &info.gain_map_metadata {
+//!         println!("Max boost: {}x (log2 = {})",
+//!             2.0_f32.powf(meta.gain_map_max[0]),
+//!             meta.gain_map_max[0]);
+//!         println!("HDR capacity range: {} .. {} stops",
+//!             meta.hdr_capacity_min, meta.hdr_capacity_max);
+//!     }
+//!
+//!     // Gain map pixel data is in extras (codec-specific type)
+//!     // For JPEG UltraHDR: extras::<zenjpeg::DecodedExtras>()
+//!     // The gain map image is typically grayscale, often at lower
+//!     // resolution than the base image.
+//! }
+//! ```
+//!
+//! # Reconstruction
+//!
+//! Given a display with known HDR headroom (`display_boost`), the
+//! adaptive output is computed per-pixel:
+//!
+//! ```text
+//! weight = clamp((log2(display_boost) - hdr_capacity_min)
+//!                / (hdr_capacity_max - hdr_capacity_min), 0, 1)
+//! recovery = gain_map_pixel / max_value          // normalized 0..1
+//! log_recovery = pow(recovery, 1.0 / gamma)
+//! log_boost = gain_map_min * (1 - log_recovery)
+//!           + gain_map_max * log_recovery
+//! output = (base + offset_sdr) * exp2(log_boost * weight) - offset_hdr
+//! ```
+//!
+//! When `weight = 0` (display can't show HDR), the output equals the
+//! base SDR image. When `weight = 1` (display meets full HDR capacity),
+//! the maximum boost applies. Values in between interpolate smoothly.
 
 /// Gain map metadata per ISO 21496-1.
 ///
