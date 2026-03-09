@@ -358,23 +358,20 @@ In source, the import alias is always `zc` (via `use zencodec_types as zc` or Ca
 ### Breaking change surface
 
 If the crate is renamed to `zencodec`:
-- The `zencodec` **feature flag** used by zenavif, zenwebp, zenjxl, zengif, zenbitmaps, zentiff, heic-decoder-rs, ultrahdr **conflicts** with the new crate name. These crates have `zencodec = ["dep:zencodec-types"]` — if the dep is renamed, the feature name collides with the implicit feature created by `dep:zencodec`.
-- **Recommendation:** Keep the feature name `zencodec` and change the dep to `zencodec = { path = "...", optional = true }` — Cargo's implicit `dep:zencodec` feature replaces the explicit one.
+- Crates with `zencodec = ["dep:zencodec-types"]` just change to `zencodec = { path = "..", optional = true }` — Cargo's implicit feature from the dep name replaces the explicit one. No feature-name conflict.
 - `zenimage` has `pub mod zencodec { pub use zc::*; }` which would conflict with a crate named `zencodec`.
 - `zensquoosh-codecs` imports `zencodec_types::ImageFormat` directly — would need `zencodec::ImageFormat`.
 - `coefficient` imports `zencodec_types::PixelBufferConvertExt` — should switch to `zenpixels_convert` anyway.
 
 ### Crates requiring changes (by effort)
 
-**Trivial** (Cargo.toml path + feature rename only):
-- zentiff, coefficient
+**Trivial** (Cargo.toml path only, feature works as-is):
+- zentiff, zenbitmaps, ultrahdr, zensquoosh-codecs, coefficient
+- zenavif, zenwebp, zenjxl, zengif, heic-decoder-rs (just delete explicit feature def, change dep name)
 
-**Small** (Cargo.toml + a few import lines):
-- zenbitmaps, ultrahdr, zensquoosh-codecs
+**Small** (Cargo.toml + source import renames):
+- zenjpeg, zenpng, zencodecs (update `use zencodec_types` / `package = "zencodec-types"` references)
 
-**Medium** (Cargo.toml + feature collision + source imports):
-- zenjpeg, zenpng, zenavif, zenwebp, zenjxl, zengif, heic-decoder-rs, zencodecs
-
-**Large** (architectural changes):
-- zenimage (module name conflict + type duplication decisions)
+**Medium** (architectural touches):
+- zenimage (`pub mod zencodec` conflicts with crate name — rename module)
 - imageflow4 / imageflow (multiple import sites + adapter layer)
