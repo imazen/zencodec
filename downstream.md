@@ -1,4 +1,4 @@
-# Downstream Users of zencodec-types
+# Downstream Users of zencodec
 
 Audit date: 2026-03-08. Covers all users under `~/work/` and `~/work/zen/`.
 
@@ -44,13 +44,13 @@ Audit date: 2026-03-08. Covers all users under `~/work/` and `~/work/zen/`.
 - `ImageFormat::detect()` doesn't exist (should be `ImageFormatRegistry::common().detect()`)
 
 ### zentiff (`zen/zentiff`) — feature declared, zero implementation
-- `zencodec = ["dep:zencodec-types"]` feature exists but no source file references zencodec-types
+- `zencodec` feature exists but no source file references zencodec
 
 ---
 
 ## Cross-Cutting Issues
 
-These patterns repeat across 3+ codecs. Fixing them in zencodec-types or documenting the expected pattern would help all downstream.
+These patterns repeat across 3+ codecs. Fixing them in zencodec or documenting the expected pattern would help all downstream.
 
 ### 1. `DecodePolicy` / `EncodePolicy` universally ignored
 **Affected:** zenjpeg (partial), zenpng (partial), zenavif, zenwebp, zenjxl, zengif, zenbitmaps, heic-decoder-rs, ultrahdr, imageflow4
@@ -66,7 +66,7 @@ Every codec either uses the default no-op `with_policy()` or only partially impl
 ### 2. `preferred` descriptors ignored or incorrectly negotiated
 **Affected:** zenavif (push_decoder, streaming_decoder), zengif, zenbitmaps, heic-decoder-rs, zenjpeg (partially)
 
-Most codecs either `_` the preferred parameter entirely or reimplement format negotiation with different semantics than `zc::decode::negotiate_pixel_format()`. Common issues:
+Most codecs either `_` the preferred parameter entirely or reimplement format negotiation with different semantics than `zencodec::decode::negotiate_pixel_format()`. Common issues:
 - Preference ordering not respected (zengif checks RGB8 before BGRA8 regardless of caller ranking)
 - Push/streaming paths ignore preferences entirely (zenavif)
 - All 3 zenbitmaps decoders ignore preferences
@@ -315,7 +315,7 @@ Identical adapter code to imageflow4. All findings from imageflow4 apply.
 These crates are low-priority — broken prototypes, minimal usage, or parallel architecture.
 
 ### zenimage (`zen/zenimage`, v0.1.0)
-Uses only `ImageFormat` + `ResourceLimits` bridge from zencodec-types. Reimplements everything else (traits, capabilities, policies, metadata, pixel types, output types). `ResourceLimits` conversion loses information in both directions. `pub mod zencodec { pub use zc::*; }` re-export is dead code. Would need `pub mod zencodec` renamed if crate becomes `zencodec`.
+Uses only `ImageFormat` + `ResourceLimits` bridge from zencodec. Reimplements everything else (traits, capabilities, policies, metadata, pixel types, output types). `ResourceLimits` conversion loses information in both directions. `pub mod zencodec { pub use zencodec::*; }` re-export conflicts with the crate name — needs renaming.
 
 ### zensquoosh-codecs (`zen/zensquoosh/crates/zensquoosh-codecs`, v0.1.0)
 **BROKEN.** Does not compile — calls `decoded.into_rgba8()` etc. which don't exist, imports `zencodec_types::ChannelLayout` which is in `zenpixels`, calls `rgba.into_contiguous_buf()` which doesn't exist on `PixelBuffer`.
@@ -325,40 +325,23 @@ Dev-dep only. Uses `PixelBufferConvertExt` re-export in one example. Should impo
 
 ---
 
-## Rename Migration Notes (zencodec-types -> zencodec)
+## Rename Migration Status (zencodec-types → zencodec)
 
-### Import paths to update
+**Completed:** Repo renamed `imazen/zencodec-types` → `imazen/zencodec`. Folder renamed.
+Lib name changed from `zc` to `zencodec`. Package name was already `zencodec`.
 
-All crates use one of these patterns:
-```toml
-# Cargo.toml — most common
-zencodec-types = { path = "../zencodec-types" }
+### Downstream crates still referencing old paths
 
-# Cargo.toml — with lib rename
-zc = { path = "../../zen/zencodec-types", package = "zencodec-types" }
+All need `path = "../zencodec-types"` → `path = "../zencodec"`:
 
-# Cargo.toml — with version
-zencodec-types = { version = "0.1", path = "../zencodec-types" }
-```
+**Trivial** (Cargo.toml path only):
+- zentiff, zenbitmaps, ultrahdr, zenavif, zenwebp, zenjxl, zengif, heic-decoder-rs
 
-In source, the import alias is always `zc` (via `use zencodec_types as zc` or Cargo rename).
+**Small** (Cargo.toml + source renames):
+- zenpng, zencodecs, zenimage
 
-### Breaking change surface
+**Medium** (multiple import sites):
+- imageflow4 / imageflow
 
-If the crate is renamed to `zencodec`:
-- Crates with `zencodec = ["dep:zencodec-types"]` just change to `zencodec = { path = "..", optional = true }` — Cargo's implicit feature from the dep name replaces the explicit one. No feature-name conflict.
-- `zenimage` has `pub mod zencodec { pub use zc::*; }` which would conflict with a crate named `zencodec`.
-- `zensquoosh-codecs` imports `zencodec_types::ImageFormat` directly — would need `zencodec::ImageFormat`.
-- `coefficient` imports `zencodec_types::PixelBufferConvertExt` — should switch to `zenpixels_convert` anyway.
-
-### Crates requiring changes (by effort)
-
-**Trivial** (Cargo.toml path only, feature works as-is):
-- zentiff, zenbitmaps, ultrahdr
-- zenavif, zenwebp, zenjxl, zengif, heic-decoder-rs (just delete explicit feature def, change dep name)
-
-**Small** (Cargo.toml + source import renames):
-- zenjpeg, zenpng, zencodecs (update `use zencodec_types` / `package = "zencodec-types"` references)
-
-**Medium** (architectural touches):
-- imageflow4 / imageflow (multiple import sites + adapter layer)
+**Done:**
+- zenjpeg (updated path + CI workflows + comments)

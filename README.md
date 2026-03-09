@@ -4,7 +4,7 @@ Shared traits and types for the zen\* image codec family.
 
 This crate defines the common interface that all zen\* codecs implement. It contains no codec logic — just traits, types, and format negotiation helpers. `no_std` compatible (requires `alloc`), `forbid(unsafe_code)`.
 
-**Lib name:** `zc` — use `zc::` in imports, `zencodec` on crates.io.
+Import as `zencodec` — use `zencodec::encode`, `zencodec::decode`, etc.
 
 **Guides:**
 - [**Using zen\* codecs**](docs/CONSUMING.md) — encoding, decoding, format negotiation, dyn dispatch, animation, streaming
@@ -54,8 +54,8 @@ Blanket impls generate the dyn API automatically — codec authors implement the
 ```rust,ignore
 use std::borrow::Cow;
 use zenjpeg::{JpegEncoderConfig, JpegDecoderConfig};
-use zc::encode::{EncoderConfig, EncodeJob, Encoder};
-use zc::decode::{DecoderConfig, DecodeJob, Decode};
+use zencodec::encode::{EncoderConfig, EncodeJob, Encoder};
+use zencodec::decode::{DecoderConfig, DecodeJob, Decode};
 
 // Encode
 let config = JpegEncoderConfig::new().with_generic_quality(85.0);
@@ -82,8 +82,8 @@ let pixels = decoded.into_buffer();
 
 | Module | Contents |
 |--------|----------|
-| `zc::encode` | `EncoderConfig`, `EncodeJob`, `Encoder`, `FullFrameEncoder`, `EncodeOutput`, `EncodeCapabilities`, `EncodePolicy`, dyn dispatch traits |
-| `zc::decode` | `DecoderConfig`, `DecodeJob`, `Decode`, `StreamingDecode`, `FullFrameDecoder`, `DecodeOutput`, `DecodeCapabilities`, `DecodePolicy`, `DecodeRowSink`, dyn dispatch traits, format negotiation |
+| `zencodec::encode` | `EncoderConfig`, `EncodeJob`, `Encoder`, `FullFrameEncoder`, `EncodeOutput`, `EncodeCapabilities`, `EncodePolicy`, dyn dispatch traits |
+| `zencodec::decode` | `DecoderConfig`, `DecodeJob`, `Decode`, `StreamingDecode`, `FullFrameDecoder`, `DecodeOutput`, `DecodeCapabilities`, `DecodePolicy`, `DecodeRowSink`, dyn dispatch traits, format negotiation |
 | root | `ImageFormat`, `ImageInfo`, `Metadata`, `Orientation`, `OrientationHint`, `ResourceLimits`, `UnsupportedOperation` |
 
 ## License
