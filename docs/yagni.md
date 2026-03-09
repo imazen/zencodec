@@ -1,9 +1,10 @@
-# YAGNI Audit — Zero Downstream Usage
+# YAGNI Audit — Not Yet Adopted by Codecs
 
 Audited 2026-03-09 against all crates in `~/work/zen/`.
 
-Items listed here have zero downstream usage but are kept for now.
-They may be useful in the future, or may need a rework before adoption.
+Items listed here are legitimate API surface that codecs or consumers
+should adopt but haven't yet. They are NOT removal candidates — they
+represent the gap between the API design and current codec implementations.
 
 ## Removed (2026-03-09)
 
@@ -18,65 +19,45 @@ They may be useful in the future, or may need a rework before adoption.
 - `ContentLightLevel`, `MasteringDisplay` — replaced with re-exports from zenpixels
 - `ColorContext`, `ColorProfileSource`, `NamedProfile` — removed from root re-exports
 
-## Remaining — entire types
-
-| Type | File | Notes |
-|------|------|-------|
-| `DynStreamingDecoder` | traits/dyn_decoding.rs | No consumer uses streaming via dyn dispatch |
-
-## Remaining — free functions
+## Not yet adopted — format negotiation
 
 | Function | File | Notes |
 |----------|------|-------|
-| `best_encode_format()` | negotiate.rs | |
+| `best_encode_format()` | negotiate.rs | Consumers should use for codec-agnostic format selection |
 | `is_format_available()` | negotiate.rs | |
 
-## Remaining — ImageInfo methods
+## Not yet adopted — ImageInfo builders
 
 | Method | Notes |
 |--------|-------|
-| `display_width()` / `display_height()` | Callers use `width` + `orientation.swaps_dimensions()` directly |
-| `with_source_color()` | Codecs set `source_color` fields individually |
-| `with_embedded_metadata()` | Codecs set fields individually |
+| `with_source_color()` | Codecs set `source_color` fields individually instead |
+| `with_embedded_metadata()` | Codecs set fields individually instead |
 | `with_warning()` / `with_warnings()` | No codec emits warnings yet |
 | `has_warnings()` / `warnings()` | |
-| `with_bit_depth()` / `with_channel_count()` | Codecs set `source_color.bit_depth` directly |
 
-## Remaining — ResourceLimits methods
+## Not yet adopted — ResourceLimits
 
 | Method | Notes |
 |--------|-------|
-| `check_image_info()` | Convenience; codecs use `check_dimensions()` directly |
+| `check_image_info()` | Codecs use `check_dimensions()` directly |
 | `check_output_info()` | |
-| `has_any()` | |
 
-## Remaining — Capabilities methods
+## Not yet adopted — capabilities
 
 | Method | Notes |
 |--------|-------|
-| `EncodeCapabilities::supports()` | Callers check individual flags |
+| `EncodeCapabilities::supports()` | Callers check individual flags; useful for codec-agnostic dispatch |
 | `DecodeCapabilities::supports()` | |
 
-## Remaining — Output methods
+## Not yet adopted — output
 
 | Method | Notes |
 |--------|-------|
-| `DecodeOutput::take_source_encoding_details()` | |
-| `OwnedFullFrame::as_full_frame()` | |
-| `EncodeOutput::with_extension()` | `with_mime_type()` has 1 use (zenjxl) |
+| `DecodeOutput::take_source_encoding_details()` | For re-encode pipelines |
 
-## Remaining — Orientation
-
-| Method | Notes |
-|--------|-------|
-| `Orientation::display_dimensions()` | Callers use `swaps_dimensions()` + manual swap |
-
-## Remaining — Trait methods
+## Not yet adopted — trait methods
 
 | Method | Trait | Notes |
 |--------|-------|-------|
 | `DecodeJob::extensions_mut()` | DecodeJob | |
-| `DecodeJob::dyn_full_frame_decoder()` | DecodeJob | |
-| `DecodeJob::dyn_streaming_decoder()` | DecodeJob | |
 | `EncodeJob::extensions_mut()` | EncodeJob | |
-| `EncodeJob::dyn_full_frame_encoder()` | EncodeJob | |
