@@ -6,7 +6,7 @@
 use alloc::sync::Arc;
 
 use crate::Orientation;
-use crate::info::{Cicp, ContentLightLevel, MasteringDisplay, Resolution};
+use crate::info::{Cicp, ContentLightLevel, MasteringDisplay};
 use zenpixels::{ColorPrimaries, TransferFunction};
 
 /// Owned image metadata for encode/decode roundtrip.
@@ -31,8 +31,6 @@ pub struct Metadata {
     pub mastering_display: Option<MasteringDisplay>,
     /// EXIF orientation.
     pub orientation: Orientation,
-    /// Physical resolution (DPI / pixels-per-cm / pixels-per-meter).
-    pub resolution: Option<Resolution>,
 }
 
 impl Metadata {
@@ -89,12 +87,6 @@ impl Metadata {
         self
     }
 
-    /// Set the physical resolution.
-    pub fn with_resolution(mut self, resolution: Resolution) -> Self {
-        self.resolution = Some(resolution);
-        self
-    }
-
     /// Whether any metadata is present.
     pub fn is_empty(&self) -> bool {
         self.icc_profile.is_none()
@@ -104,7 +96,6 @@ impl Metadata {
             && self.content_light_level.is_none()
             && self.mastering_display.is_none()
             && self.orientation == Orientation::Normal
-            && self.resolution.is_none()
     }
 
     /// Derive the transfer function from CICP metadata.
@@ -138,7 +129,6 @@ impl From<&crate::ImageInfo> for Metadata {
             content_light_level: info.source_color.content_light_level,
             mastering_display: info.source_color.mastering_display,
             orientation: info.orientation,
-            resolution: None,
         }
     }
 }

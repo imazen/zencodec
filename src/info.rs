@@ -9,7 +9,6 @@ use alloc::vec::Vec;
 use crate::detect::SourceEncodingDetails;
 use crate::metadata::Metadata;
 use crate::{ImageFormat, Orientation};
-use zenpixels::{ColorContext, ColorProfileSource};
 use zenpixels::{ColorPrimaries, TransferFunction};
 
 /// Re-export CICP from zenpixels — the canonical definition.
@@ -74,20 +73,6 @@ impl MasteringDisplay {
             max_luminance,
             min_luminance,
         }
-    }
-
-    /// Display primaries as CIE 1931 xy coordinates: `[[Rx, Ry], [Gx, Gy], [Bx, By]]`.
-    pub fn primaries_f64(&self) -> [[f64; 2]; 3] {
-        self.primaries
-            .map(|[x, y]| [x as f64 * 0.00002, y as f64 * 0.00002])
-    }
-
-    /// White point as CIE 1931 xy coordinates: `[x, y]`.
-    pub fn white_point_f64(&self) -> [f64; 2] {
-        [
-            self.white_point[0] as f64 * 0.00002,
-            self.white_point[1] as f64 * 0.00002,
-        ]
     }
 
     /// Maximum display luminance in cd/m² (nits).
@@ -189,90 +174,6 @@ impl SourceColor {
             .unwrap_or(ColorPrimaries::Bt709)
     }
 
-    /// Get the source color profile for CMS integration.
-    pub fn color_profile_source(&self) -> Option<ColorProfileSource<'_>> {
-        if let Some(cicp) = self.cicp {
-            Some(ColorProfileSource::Cicp(cicp))
-        } else {
-            self.icc_profile.as_deref().map(ColorProfileSource::Icc)
-        }
-    }
-
-    /// Build a [`ColorContext`] from the embedded ICC and CICP metadata.
-    pub fn color_context(&self) -> Option<Arc<ColorContext>> {
-        if self.icc_profile.is_some() || self.cicp.is_some() {
-            Some(Arc::new(ColorContext {
-                icc: self.icc_profile.clone(),
-                cicp: self.cicp,
-            }))
-        } else {
-            None
-        }
-    }
-}
-
-/// Physical resolution unit.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[non_exhaustive]
-pub enum ResolutionUnit {
-    /// Pixels per inch (DPI). Used by JPEG (JFIF), TIFF, and EXIF.
-    PixelsPerInch,
-    /// Pixels per centimeter. Used by JPEG (JFIF), TIFF, and PNG (pHYs).
-    PixelsPerCm,
-    /// Pixels per meter. Native unit of PNG pHYs chunks.
-    PixelsPerMeter,
-}
-
-/// Physical resolution of an image.
-///
-/// Maps pixels to physical dimensions for print and display sizing.
-/// Stored in format-specific containers: JFIF APP0 (JPEG), pHYs (PNG),
-/// IFD tags 282/283/296 (TIFF), EXIF tags 282/283/296.
-///
-/// Carried through [`Metadata`](crate::Metadata) so encoders can write
-/// the appropriate format-specific resolution metadata.
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[non_exhaustive]
-pub struct Resolution {
-    /// Horizontal resolution in the given unit.
-    pub x: f32,
-    /// Vertical resolution in the given unit.
-    pub y: f32,
-    /// Unit of measurement.
-    pub unit: ResolutionUnit,
-}
-
-// Eq: Validated: constructors reject NaN.
-// Required because Resolution uses f32.
-impl Eq for Resolution {}
-
-impl Resolution {
-    /// Create a resolution with the given DPI (pixels per inch).
-    ///
-    /// # Panics
-    /// Panics if `x` or `y` is NaN.
-    pub const fn dpi(x: f32, y: f32) -> Self {
-        assert!(!x.is_nan(), "Resolution x must not be NaN");
-        assert!(!y.is_nan(), "Resolution y must not be NaN");
-        Self {
-            x,
-            y,
-            unit: ResolutionUnit::PixelsPerInch,
-        }
-    }
-
-    /// Create a uniform resolution (same in both axes).
-    ///
-    /// # Panics
-    /// Panics if `value` is NaN.
-    pub const fn uniform(value: f32, unit: ResolutionUnit) -> Self {
-        assert!(!value.is_nan(), "Resolution value must not be NaN");
-        Self {
-            x: value,
-            y: value,
-            unit,
-        }
-    }
 }
 
 /// Embedded non-color metadata from the image file.
@@ -560,20 +461,6 @@ impl ImageInfo {
         self.source_color.color_primaries()
     }
 
-    /// Get the source color profile for CMS integration.
-    ///
-    /// Delegates to [`SourceColor::color_profile_source()`].
-    pub fn color_profile_source(&self) -> Option<ColorProfileSource<'_>> {
-        self.source_color.color_profile_source()
-    }
-
-    /// Build a [`ColorContext`] from the embedded ICC and CICP metadata.
-    ///
-    /// Delegates to [`SourceColor::color_context()`].
-    pub fn color_context(&self) -> Option<Arc<ColorContext>> {
-        self.source_color.color_context()
-    }
-
     /// Get embedded metadata for roundtrip encode.
     ///
     /// Clones Arc-backed byte buffers (cheap ref-count bump).
@@ -754,31 +641,6 @@ mod tests {
             info.source_color.mastering_display.unwrap().max_luminance,
             40000000
         );
-    }
-
-    #[test]
-    fn mastering_display_helpers() {
-        // BT.2020 primaries from the spec
-        let mdcv = MasteringDisplay {
-            primaries: [[34000, 16000], [13250, 34500], [7500, 3000]],
-            white_point: [15635, 16450],
-            max_luminance: 10_000_000, // 1000 nits
-            min_luminance: 500,        // 0.05 nits
-        };
-        let p = mdcv.primaries_f64();
-        assert!((p[0][0] - 0.680).abs() < 0.001); // Rx
-        assert!((p[0][1] - 0.320).abs() < 0.001); // Ry
-        assert!((p[1][0] - 0.265).abs() < 0.001); // Gx
-        assert!((p[1][1] - 0.690).abs() < 0.001); // Gy
-        assert!((p[2][0] - 0.150).abs() < 0.001); // Bx
-        assert!((p[2][1] - 0.060).abs() < 0.001); // By
-
-        let wp = mdcv.white_point_f64();
-        assert!((wp[0] - 0.3127).abs() < 0.001); // D65 x
-        assert!((wp[1] - 0.3290).abs() < 0.001); // D65 y
-
-        assert!((mdcv.max_luminance_nits() - 1000.0).abs() < 0.01);
-        assert!((mdcv.min_luminance_nits() - 0.05).abs() < 0.001);
     }
 
     #[test]

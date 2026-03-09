@@ -65,10 +65,6 @@ pub enum ThreadingPolicy {
 /// // Parse-time rejection (before any pixel work)
 /// let info = config.probe_header(data)?;
 /// limits.check_image_info(&info)?;
-///
-/// // Cost-aware rejection (after computing decode cost)
-/// let cost = job.estimated_cost(data)?;
-/// limits.check_decode_cost(&cost)?;
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -291,55 +287,6 @@ impl ResourceLimits {
         self.check_dimensions(info.width, info.height)
     }
 
-    /// Check [`DecodeCost`](crate::decode::DecodeCost) against all applicable limits.
-    ///
-    /// Checks: `max_pixels` against `pixel_count`, `max_memory_bytes` against
-    /// `peak_memory` (falls back to `output_bytes` if peak is unknown).
-    pub fn check_decode_cost(&self, cost: &crate::DecodeCost) -> Result<(), LimitExceeded> {
-        if let Some(max) = self.max_pixels
-            && cost.pixel_count > max
-        {
-            return Err(LimitExceeded::Pixels {
-                actual: cost.pixel_count,
-                max,
-            });
-        }
-        if let Some(max) = self.max_memory_bytes {
-            let memory = cost.peak_memory.unwrap_or(cost.output_bytes);
-            if memory > max {
-                return Err(LimitExceeded::Memory {
-                    actual: memory,
-                    max,
-                });
-            }
-        }
-        Ok(())
-    }
-
-    /// Check [`EncodeCost`](crate::encode::EncodeCost) against all applicable limits.
-    ///
-    /// Checks: `max_pixels` against `pixel_count`, `max_memory_bytes` against
-    /// `peak_memory` (falls back to `input_bytes` if peak is unknown).
-    pub fn check_encode_cost(&self, cost: &crate::EncodeCost) -> Result<(), LimitExceeded> {
-        if let Some(max) = self.max_pixels
-            && cost.pixel_count > max
-        {
-            return Err(LimitExceeded::Pixels {
-                actual: cost.pixel_count,
-                max,
-            });
-        }
-        if let Some(max) = self.max_memory_bytes {
-            let memory = cost.peak_memory.unwrap_or(cost.input_bytes);
-            if memory > max {
-                return Err(LimitExceeded::Memory {
-                    actual: memory,
-                    max,
-                });
-            }
-        }
-        Ok(())
-    }
 }
 
 /// A resource limit was exceeded.
@@ -640,77 +587,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn check_decode_cost_with_peak_memory() {
-        use crate::DecodeCost;
-        let limits = ResourceLimits::none()
-            .with_max_pixels(10_000_000)
-            .with_max_memory(100 * 1024 * 1024);
-
-        let cost = DecodeCost {
-            output_bytes: 30 * 1024 * 1024,
-            pixel_count: 8_000_000,
-            peak_memory: Some(90 * 1024 * 1024),
-        };
-        assert!(limits.check_decode_cost(&cost).is_ok());
-
-        let expensive = DecodeCost {
-            output_bytes: 30 * 1024 * 1024,
-            pixel_count: 8_000_000,
-            peak_memory: Some(200 * 1024 * 1024),
-        };
-        let err = limits.check_decode_cost(&expensive).unwrap_err();
-        assert!(matches!(err, LimitExceeded::Memory { .. }));
-    }
-
-    #[test]
-    fn check_decode_cost_falls_back_to_output_bytes() {
-        use crate::DecodeCost;
-        let limits = ResourceLimits::none().with_max_memory(50 * 1024 * 1024);
-
-        let cost = DecodeCost {
-            output_bytes: 100 * 1024 * 1024,
-            pixel_count: 25_000_000,
-            peak_memory: None,
-        };
-        let err = limits.check_decode_cost(&cost).unwrap_err();
-        assert!(matches!(err, LimitExceeded::Memory { actual, .. } if actual == 100 * 1024 * 1024));
-    }
-
-    #[test]
-    fn check_encode_cost_with_peak_memory() {
-        use crate::EncodeCost;
-        let limits = ResourceLimits::none().with_max_memory(256 * 1024 * 1024);
-
-        let cost = EncodeCost {
-            input_bytes: 30 * 1024 * 1024,
-            pixel_count: 8_000_000,
-            peak_memory: Some(200 * 1024 * 1024),
-        };
-        assert!(limits.check_encode_cost(&cost).is_ok());
-
-        let expensive = EncodeCost {
-            input_bytes: 30 * 1024 * 1024,
-            pixel_count: 8_000_000,
-            peak_memory: Some(500 * 1024 * 1024),
-        };
-        let err = limits.check_encode_cost(&expensive).unwrap_err();
-        assert!(matches!(err, LimitExceeded::Memory { .. }));
-    }
-
-    #[test]
-    fn check_encode_cost_falls_back_to_input_bytes() {
-        use crate::EncodeCost;
-        let limits = ResourceLimits::none().with_max_memory(10 * 1024 * 1024);
-
-        let cost = EncodeCost {
-            input_bytes: 30 * 1024 * 1024,
-            pixel_count: 8_000_000,
-            peak_memory: None,
-        };
-        let err = limits.check_encode_cost(&cost).unwrap_err();
-        assert!(matches!(err, LimitExceeded::Memory { actual, .. } if actual == 30 * 1024 * 1024));
-    }
 
     #[test]
     fn limit_exceeded_display() {

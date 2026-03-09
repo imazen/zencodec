@@ -59,17 +59,13 @@ mod traits;
 // Public root: shared types used by both encode and decode
 // =========================================================================
 
-// Color profile types re-exported from zenpixels for convenience.
-// These appear in our public API (ImageInfo, SourceColor, etc.) so callers
-// don't need to add zenpixels as a direct dependency just for these.
 pub use extensions::Extensions;
 pub use format::{ImageFormat, ImageFormatDefinition, ImageFormatRegistry};
-pub use info::{Cicp, ContentLightLevel, ImageInfo, MasteringDisplay, Resolution, ResolutionUnit};
+pub use info::{Cicp, ContentLightLevel, ImageInfo, MasteringDisplay};
 pub use limits::{LimitExceeded, ResourceLimits, ThreadingPolicy};
 pub use metadata::Metadata;
 pub use orientation::{Orientation, OrientationHint};
 pub use output::{FullFrame, OwnedFullFrame};
-pub use zenpixels::{ColorContext, ColorProfileSource, NamedProfile};
 
 pub use capabilities::UnsupportedOperation;
 pub use detect::SourceEncodingDetails;
@@ -89,7 +85,7 @@ pub use enough::Unstoppable;
 // =========================================================================
 
 pub(crate) use capabilities::{DecodeCapabilities, EncodeCapabilities};
-pub(crate) use cost::{DecodeCost, EncodeCost, OutputInfo};
+pub(crate) use cost::OutputInfo;
 pub(crate) use output::{DecodeOutput, EncodeOutput};
 pub(crate) use policy::{DecodePolicy, EncodePolicy};
 pub(crate) use sink::DecodeRowSink;
@@ -127,7 +123,6 @@ pub mod encode {
 
     // Types
     pub use crate::capabilities::EncodeCapabilities;
-    pub use crate::cost::EncodeCost;
     pub use crate::negotiate::best_encode_format;
     pub use crate::output::EncodeOutput;
     pub use crate::policy::EncodePolicy;
@@ -167,7 +162,7 @@ pub mod decode {
 
     // Types
     pub use crate::capabilities::DecodeCapabilities;
-    pub use crate::cost::{DecodeCost, OutputInfo};
+    pub use crate::cost::OutputInfo;
     pub use crate::output::{DecodeOutput, FullFrame, OwnedFullFrame};
     pub use crate::policy::DecodePolicy;
     pub use crate::sink::{DecodeRowSink, SinkError};

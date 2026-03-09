@@ -305,13 +305,6 @@ impl DecodeOutput {
         self.info.format
     }
 
-    /// Build a [`ColorContext`](crate::ColorContext) from the image's ICC/CICP metadata.
-    ///
-    /// Delegates to [`ImageInfo::color_context()`].
-    pub fn color_context(&self) -> Option<alloc::sync::Arc<crate::ColorContext>> {
-        self.info.color_context()
-    }
-
     /// Get embedded metadata for roundtrip encode.
     pub fn metadata(&self) -> Metadata {
         self.info.metadata()
