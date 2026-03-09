@@ -356,18 +356,22 @@ impl EncodeCapabilities {
 
     /// Set the meaningful effort range `[min, max]`.
     pub const fn with_effort_range(mut self, min: i32, max: i32) -> Self {
+        assert!(min <= max, "effort range: min must be <= max");
         self.effort_range = Some([min, max]);
         self
     }
 
     /// Set the meaningful quality range `[min, max]`.
     pub const fn with_quality_range(mut self, min: f32, max: f32) -> Self {
+        assert!(min <= max, "quality range: min must be <= max");
         self.quality_range = Some([min, max]);
         self
     }
 
     /// Set supported thread count range.
     pub const fn with_threads_supported_range(mut self, min: u16, max: u16) -> Self {
+        assert!(min >= 1, "threads range: min must be >= 1");
+        assert!(min <= max, "threads range: min must be <= max");
         self.threads_supported_range = (min, max);
         self
     }
@@ -674,6 +678,8 @@ impl DecodeCapabilities {
 
     /// Set supported thread count range.
     pub const fn with_threads_supported_range(mut self, min: u16, max: u16) -> Self {
+        assert!(min >= 1, "threads range: min must be >= 1");
+        assert!(min <= max, "threads range: min must be <= max");
         self.threads_supported_range = (min, max);
         self
     }
