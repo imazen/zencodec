@@ -184,8 +184,8 @@ if let Some([min, max]) = caps.quality_range() {
 }
 
 // Advanced encode paths
-if caps.row_level() { /* push_rows() + finish() is supported */ }
-if caps.pull()      { /* encode_from() callback is supported */ }
+if caps.push_rows()   { /* push_rows() + finish() is supported */ }
+if caps.encode_from() { /* encode_from() callback is supported */ }
 if caps.animation() { /* full_frame_encoder() works */ }
 ```
 
@@ -195,7 +195,7 @@ Decode capabilities follow the same pattern:
 let caps = JpegDecoderConfig::capabilities();
 if caps.cheap_probe() { /* probe() is fast, reads header only */ }
 if caps.animation()   { /* full_frame_decoder() works */ }
-if caps.row_level()   { /* streaming_decoder() works */ }
+if caps.streaming()   { /* streaming_decoder() works */ }
 ```
 
 ## Resource Limits
@@ -339,7 +339,7 @@ let output = frame_enc.finish(None)?;
 
 ## Streaming Decode
 
-For codecs that support it (check `capabilities().row_level()`), streaming decode yields scanline batches without buffering the entire image:
+For codecs that support it (check `capabilities().streaming()`), streaming decode yields scanline batches without buffering the entire image:
 
 ```rust
 use zc::decode::StreamingDecode;

@@ -143,9 +143,9 @@ pub struct MockDecoderConfig;
 static MOCK_DECODE_CAPS: DecodeCapabilities = DecodeCapabilities::new()
     .with_cheap_probe(true)
     .with_animation(true)
-    .with_row_level(true)
+    .with_streaming(true)
     .with_native_alpha(true)
-    .with_cancel(true);
+    .with_stop(true);
 
 impl DecoderConfig for MockDecoderConfig {
     type Error = MockError;
@@ -496,9 +496,9 @@ static MOCK_ENCODE_CAPS: EncodeCapabilities = EncodeCapabilities::new()
     .with_lossy(true)
     .with_native_alpha(true)
     .with_animation(true)
-    .with_row_level(true)
-    .with_pull(true)
-    .with_cancel(true)
+    .with_push_rows(true)
+    .with_encode_from(true)
+    .with_stop(true)
     .with_icc(true)
     .with_exif(true)
     .with_effort_range(0, 10)

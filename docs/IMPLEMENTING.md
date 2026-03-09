@@ -214,7 +214,7 @@ The three paths:
 2. **`push_rows()` + `finish()`** — caller pushes strips of rows. For codecs that can flush compressed data incrementally.
 3. **`encode_from()`** — encoder pulls rows from a callback. For codecs that need specific strip heights or ordering.
 
-Set the corresponding capability flags (`with_row_level(true)`, `with_pull(true)`) if you implement paths 2 or 3.
+Set the corresponding capability flags (`with_push_rows(true)`, `with_encode_from(true)`) if you implement paths 2 or 3.
 
 ## Implement Decoding
 
@@ -521,7 +521,7 @@ impl StreamingDecode for MyStreamDecoder {
 }
 ```
 
-Set `with_row_level(true)` on your decode capabilities.
+Set `with_streaming(true)` on your decode capabilities.
 
 ## Checklist
 

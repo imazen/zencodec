@@ -85,7 +85,7 @@ impl core::error::Error for UnsupportedOperation {}
 ///     .with_icc(true)
 ///     .with_exif(true)
 ///     .with_xmp(true)
-///     .with_cancel(true)
+///     .with_stop(true)
 ///     .with_native_gray(true);
 ///
 /// assert!(CAPS.icc());
@@ -99,10 +99,10 @@ pub struct EncodeCapabilities {
     xmp: bool,
     cicp: bool,
     // Operation support
-    cancel: bool,
+    stop: bool,
     animation: bool,
-    row_level: bool,
-    pull: bool,
+    push_rows: bool,
+    encode_from: bool,
     // Format capabilities
     lossy: bool,
     lossless: bool,
@@ -138,10 +138,10 @@ impl EncodeCapabilities {
             exif: false,
             xmp: false,
             cicp: false,
-            cancel: false,
+            stop: false,
             animation: false,
-            row_level: false,
-            pull: false,
+            push_rows: false,
+            encode_from: false,
             lossy: false,
             lossless: false,
             hdr: false,
@@ -176,20 +176,20 @@ impl EncodeCapabilities {
         self.cicp
     }
     /// Whether `with_stop` on encode jobs is respected (not a no-op).
-    pub const fn cancel(&self) -> bool {
-        self.cancel
+    pub const fn stop(&self) -> bool {
+        self.stop
     }
     /// Whether the codec supports encoding animation (multiple frames).
     pub const fn animation(&self) -> bool {
         self.animation
     }
     /// Whether `push_rows()` / `finish()` work (row-level encode).
-    pub const fn row_level(&self) -> bool {
-        self.row_level
+    pub const fn push_rows(&self) -> bool {
+        self.push_rows
     }
     /// Whether `encode_from()` works (pull-from-source encode).
-    pub const fn pull(&self) -> bool {
-        self.pull
+    pub const fn encode_from(&self) -> bool {
+        self.encode_from
     }
     /// Whether the codec supports lossy encoding.
     pub const fn lossy(&self) -> bool {
@@ -264,7 +264,7 @@ impl EncodeCapabilities {
     ///
     /// static CAPS: EncodeCapabilities = EncodeCapabilities::new()
     ///     .with_animation(true)
-    ///     .with_row_level(true);
+    ///     .with_push_rows(true);
     ///
     /// assert!(CAPS.supports(UnsupportedOperation::AnimationEncode));
     /// assert!(CAPS.supports(UnsupportedOperation::RowLevelEncode));
@@ -273,8 +273,8 @@ impl EncodeCapabilities {
     /// ```
     pub const fn supports(&self, op: UnsupportedOperation) -> bool {
         match op {
-            UnsupportedOperation::RowLevelEncode => self.row_level,
-            UnsupportedOperation::PullEncode => self.pull,
+            UnsupportedOperation::RowLevelEncode => self.push_rows,
+            UnsupportedOperation::PullEncode => self.encode_from,
             UnsupportedOperation::AnimationEncode => self.animation,
             UnsupportedOperation::DecodeInto
             | UnsupportedOperation::RowLevelDecode
@@ -305,9 +305,9 @@ impl EncodeCapabilities {
         self.cicp = v;
         self
     }
-    /// Set whether cooperative cancellation is supported.
-    pub const fn with_cancel(mut self, v: bool) -> Self {
-        self.cancel = v;
+    /// Set whether cooperative cancellation via [`Stop`](enough::Stop) is supported.
+    pub const fn with_stop(mut self, v: bool) -> Self {
+        self.stop = v;
         self
     }
     /// Set whether animation encoding is supported.
@@ -316,13 +316,13 @@ impl EncodeCapabilities {
         self
     }
     /// Set whether row-level (`push_rows`/`finish`) encoding is supported.
-    pub const fn with_row_level(mut self, v: bool) -> Self {
-        self.row_level = v;
+    pub const fn with_push_rows(mut self, v: bool) -> Self {
+        self.push_rows = v;
         self
     }
     /// Set whether pull-from-source (`encode_from`) encoding is supported.
-    pub const fn with_pull(mut self, v: bool) -> Self {
-        self.pull = v;
+    pub const fn with_encode_from(mut self, v: bool) -> Self {
+        self.encode_from = v;
         self
     }
     /// Set whether lossy encoding is supported.
@@ -401,7 +401,7 @@ impl fmt::Debug for EncodeCapabilities {
             .field("exif", &self.exif)
             .field("xmp", &self.xmp)
             .field("cicp", &self.cicp)
-            .field("cancel", &self.cancel)
+            .field("stop", &self.stop)
             .field("animation", &self.animation)
             .field("lossy", &self.lossy)
             .field("lossless", &self.lossless)
@@ -410,8 +410,8 @@ impl fmt::Debug for EncodeCapabilities {
             .field("native_16bit", &self.native_16bit)
             .field("native_f32", &self.native_f32)
             .field("native_alpha", &self.native_alpha)
-            .field("row_level", &self.row_level)
-            .field("pull", &self.pull)
+            .field("push_rows", &self.push_rows)
+            .field("encode_from", &self.encode_from)
             .field("enforces_max_pixels", &self.enforces_max_pixels)
             .field("enforces_max_memory", &self.enforces_max_memory)
             .field("threads_supported_range", &self.threads_supported_range);
@@ -443,7 +443,7 @@ impl fmt::Debug for EncodeCapabilities {
 /// static CAPS: DecodeCapabilities = DecodeCapabilities::new()
 ///     .with_icc(true)
 ///     .with_exif(true)
-///     .with_cancel(true)
+///     .with_stop(true)
 ///     .with_cheap_probe(true);
 ///
 /// assert!(CAPS.icc());
@@ -457,11 +457,11 @@ pub struct DecodeCapabilities {
     xmp: bool,
     cicp: bool,
     // Operation support
-    cancel: bool,
+    stop: bool,
     animation: bool,
     cheap_probe: bool,
     decode_into: bool,
-    row_level: bool,
+    streaming: bool,
     // Format capabilities
     hdr: bool,
     native_gray: bool,
@@ -493,11 +493,11 @@ impl DecodeCapabilities {
             exif: false,
             xmp: false,
             cicp: false,
-            cancel: false,
+            stop: false,
             animation: false,
             cheap_probe: false,
             decode_into: false,
-            row_level: false,
+            streaming: false,
             hdr: false,
             native_gray: false,
             native_16bit: false,
@@ -529,8 +529,8 @@ impl DecodeCapabilities {
         self.cicp
     }
     /// Whether `with_stop` on decode jobs is respected (not a no-op).
-    pub const fn cancel(&self) -> bool {
-        self.cancel
+    pub const fn stop(&self) -> bool {
+        self.stop
     }
     /// Whether the codec supports decoding animation (multiple frames).
     pub const fn animation(&self) -> bool {
@@ -544,9 +544,9 @@ impl DecodeCapabilities {
     pub const fn decode_into(&self) -> bool {
         self.decode_into
     }
-    /// Whether streaming row-level decode works.
-    pub const fn row_level(&self) -> bool {
-        self.row_level
+    /// Whether `StreamingDecode` / `streaming_decoder()` is implemented.
+    pub const fn streaming(&self) -> bool {
+        self.streaming
     }
     /// Whether the codec supports HDR content.
     pub const fn hdr(&self) -> bool {
@@ -613,7 +613,7 @@ impl DecodeCapabilities {
     pub const fn supports(&self, op: UnsupportedOperation) -> bool {
         match op {
             UnsupportedOperation::DecodeInto => self.decode_into,
-            UnsupportedOperation::RowLevelDecode => self.row_level,
+            UnsupportedOperation::RowLevelDecode => self.streaming,
             UnsupportedOperation::AnimationDecode => self.animation,
             UnsupportedOperation::RowLevelEncode
             | UnsupportedOperation::PullEncode
@@ -644,9 +644,9 @@ impl DecodeCapabilities {
         self.cicp = v;
         self
     }
-    /// Set whether cooperative cancellation is supported.
-    pub const fn with_cancel(mut self, v: bool) -> Self {
-        self.cancel = v;
+    /// Set whether cooperative cancellation via [`Stop`](enough::Stop) is supported.
+    pub const fn with_stop(mut self, v: bool) -> Self {
+        self.stop = v;
         self
     }
     /// Set whether animation decoding is supported.
@@ -664,9 +664,9 @@ impl DecodeCapabilities {
         self.decode_into = v;
         self
     }
-    /// Set whether streaming row-level decode is supported.
-    pub const fn with_row_level(mut self, v: bool) -> Self {
-        self.row_level = v;
+    /// Set whether `StreamingDecode` / `streaming_decoder()` is supported.
+    pub const fn with_streaming(mut self, v: bool) -> Self {
+        self.streaming = v;
         self
     }
     /// Set whether HDR content is supported.
@@ -726,11 +726,11 @@ impl fmt::Debug for DecodeCapabilities {
             .field("exif", &self.exif)
             .field("xmp", &self.xmp)
             .field("cicp", &self.cicp)
-            .field("cancel", &self.cancel)
+            .field("stop", &self.stop)
             .field("animation", &self.animation)
             .field("cheap_probe", &self.cheap_probe)
             .field("decode_into", &self.decode_into)
-            .field("row_level", &self.row_level)
+            .field("streaming", &self.streaming)
             .field("hdr", &self.hdr)
             .field("native_gray", &self.native_gray)
             .field("native_16bit", &self.native_16bit)
@@ -755,10 +755,10 @@ mod tests {
         assert!(!caps.exif());
         assert!(!caps.xmp());
         assert!(!caps.cicp());
-        assert!(!caps.cancel());
+        assert!(!caps.stop());
         assert!(!caps.animation());
-        assert!(!caps.row_level());
-        assert!(!caps.pull());
+        assert!(!caps.push_rows());
+        assert!(!caps.encode_from());
         assert!(!caps.lossy());
         assert!(!caps.lossless());
         assert!(!caps.hdr());
@@ -780,11 +780,11 @@ mod tests {
         assert!(!caps.exif());
         assert!(!caps.xmp());
         assert!(!caps.cicp());
-        assert!(!caps.cancel());
+        assert!(!caps.stop());
         assert!(!caps.animation());
         assert!(!caps.cheap_probe());
         assert!(!caps.decode_into());
-        assert!(!caps.row_level());
+        assert!(!caps.streaming());
         assert!(!caps.hdr());
         assert!(!caps.native_gray());
         assert!(!caps.native_16bit());
@@ -800,7 +800,7 @@ mod tests {
     fn encode_builder() {
         let caps = EncodeCapabilities::new()
             .with_icc(true)
-            .with_cancel(true)
+            .with_stop(true)
             .with_native_gray(true)
             .with_animation(true)
             .with_native_16bit(true)
@@ -808,7 +808,7 @@ mod tests {
             .with_threads_supported_range(1, 8);
         assert!(caps.icc());
         assert!(!caps.exif());
-        assert!(caps.cancel());
+        assert!(caps.stop());
         assert!(caps.native_gray());
         assert!(caps.animation());
         assert!(caps.native_16bit());
@@ -822,13 +822,13 @@ mod tests {
         let caps = DecodeCapabilities::new()
             .with_icc(true)
             .with_cheap_probe(true)
-            .with_cancel(true)
+            .with_stop(true)
             .with_animation(true)
             .with_enforces_max_input_bytes(true)
             .with_threads_supported_range(1, 4);
         assert!(caps.icc());
         assert!(caps.cheap_probe());
-        assert!(caps.cancel());
+        assert!(caps.stop());
         assert!(caps.animation());
         assert!(caps.enforces_max_input_bytes());
         assert_eq!(caps.threads_supported_range(), (1, 4));
@@ -840,7 +840,7 @@ mod tests {
             .with_icc(true)
             .with_exif(true)
             .with_xmp(true)
-            .with_cancel(true)
+            .with_stop(true)
             .with_animation(true)
             .with_lossless(true)
             .with_cicp(true)
@@ -848,7 +848,7 @@ mod tests {
             .with_quality_range(0.0, 100.0)
             .with_threads_supported_range(1, 16);
         assert!(CAPS.icc());
-        assert!(CAPS.cancel());
+        assert!(CAPS.stop());
         assert!(!CAPS.native_gray());
         assert!(CAPS.animation());
         assert!(CAPS.lossless());
@@ -863,7 +863,7 @@ mod tests {
         static CAPS: DecodeCapabilities = DecodeCapabilities::new()
             .with_icc(true)
             .with_cheap_probe(true)
-            .with_cancel(true)
+            .with_stop(true)
             .with_animation(true)
             .with_enforces_max_pixels(true)
             .with_enforces_max_input_bytes(true);
@@ -886,8 +886,8 @@ mod tests {
     #[test]
     fn encode_supports() {
         let caps = EncodeCapabilities::new()
-            .with_row_level(true)
-            .with_pull(true)
+            .with_push_rows(true)
+            .with_encode_from(true)
             .with_animation(true);
         assert!(caps.supports(UnsupportedOperation::RowLevelEncode));
         assert!(caps.supports(UnsupportedOperation::PullEncode));
@@ -902,7 +902,7 @@ mod tests {
     fn decode_supports() {
         let caps = DecodeCapabilities::new()
             .with_decode_into(true)
-            .with_row_level(true)
+            .with_streaming(true)
             .with_animation(true);
         assert!(caps.supports(UnsupportedOperation::DecodeInto));
         assert!(caps.supports(UnsupportedOperation::RowLevelDecode));

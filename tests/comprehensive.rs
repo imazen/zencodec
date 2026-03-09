@@ -544,8 +544,8 @@ fn dyn_encode_job_set_methods() {
 
     assert_eq!(dyn_config.format(), ImageFormat::Pnm);
     assert!(dyn_config.capabilities().animation());
-    assert!(dyn_config.capabilities().row_level());
-    assert!(dyn_config.capabilities().pull());
+    assert!(dyn_config.capabilities().push_rows());
+    assert!(dyn_config.capabilities().encode_from());
 
     let meta = Metadata::none();
 
@@ -1362,8 +1362,8 @@ fn best_encode_format_no_match_returns_none() {
 #[test]
 fn encode_caps_does_not_support_decode_ops() {
     let caps = EncodeCapabilities::new()
-        .with_row_level(true)
-        .with_pull(true)
+        .with_push_rows(true)
+        .with_encode_from(true)
         .with_animation(true);
 
     // Encode ops: supported
@@ -1382,7 +1382,7 @@ fn encode_caps_does_not_support_decode_ops() {
 fn decode_caps_does_not_support_encode_ops() {
     let caps = DecodeCapabilities::new()
         .with_decode_into(true)
-        .with_row_level(true)
+        .with_streaming(true)
         .with_animation(true);
 
     // Decode ops: supported
