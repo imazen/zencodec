@@ -3,7 +3,7 @@
 //! [`MetadataView`] borrows from [`ImageInfo`] or user-provided slices.
 //! [`Metadata`] owns its byte buffers for cross-boundary transfer.
 
-use alloc::vec::Vec;
+use alloc::sync::Arc;
 
 use crate::Orientation;
 use crate::info::{Cicp, ContentLightLevel, MasteringDisplay, Resolution};
@@ -71,11 +71,11 @@ impl Default for MetadataView<'_> {
 #[non_exhaustive]
 pub struct Metadata {
     /// ICC color profile.
-    pub icc_profile: Option<Vec<u8>>,
+    pub icc_profile: Option<Arc<[u8]>>,
     /// EXIF metadata.
-    pub exif: Option<Vec<u8>>,
+    pub exif: Option<Arc<[u8]>>,
     /// XMP metadata.
-    pub xmp: Option<Vec<u8>>,
+    pub xmp: Option<Arc<[u8]>>,
     /// CICP color description.
     pub cicp: Option<Cicp>,
     /// Content Light Level Info for HDR content.
@@ -95,20 +95,26 @@ impl Metadata {
     }
 
     /// Set the ICC color profile.
-    pub fn with_icc(mut self, icc: Vec<u8>) -> Self {
-        self.icc_profile = Some(icc);
+    ///
+    /// Accepts `Vec<u8>`, `&[u8]`, or `Arc<[u8]>`.
+    pub fn with_icc(mut self, icc: impl Into<Arc<[u8]>>) -> Self {
+        self.icc_profile = Some(icc.into());
         self
     }
 
     /// Set the EXIF metadata.
-    pub fn with_exif(mut self, exif: Vec<u8>) -> Self {
-        self.exif = Some(exif);
+    ///
+    /// Accepts `Vec<u8>`, `&[u8]`, or `Arc<[u8]>`.
+    pub fn with_exif(mut self, exif: impl Into<Arc<[u8]>>) -> Self {
+        self.exif = Some(exif.into());
         self
     }
 
     /// Set the XMP metadata.
-    pub fn with_xmp(mut self, xmp: Vec<u8>) -> Self {
-        self.xmp = Some(xmp);
+    ///
+    /// Accepts `Vec<u8>`, `&[u8]`, or `Arc<[u8]>`.
+    pub fn with_xmp(mut self, xmp: impl Into<Arc<[u8]>>) -> Self {
+        self.xmp = Some(xmp.into());
         self
     }
 
@@ -172,9 +178,9 @@ impl Metadata {
 impl From<MetadataView<'_>> for Metadata {
     fn from(view: MetadataView<'_>) -> Self {
         Self {
-            icc_profile: view.icc_profile.map(|s| s.to_vec()),
-            exif: view.exif.map(|s| s.to_vec()),
-            xmp: view.xmp.map(|s| s.to_vec()),
+            icc_profile: view.icc_profile.map(Arc::from),
+            exif: view.exif.map(Arc::from),
+            xmp: view.xmp.map(Arc::from),
             cicp: view.cicp,
             content_light_level: view.content_light_level,
             mastering_display: view.mastering_display,
@@ -187,7 +193,7 @@ impl From<MetadataView<'_>> for Metadata {
 impl From<&crate::ImageInfo> for Metadata {
     fn from(info: &crate::ImageInfo) -> Self {
         Self {
-            icc_profile: info.source_color.icc_profile.as_deref().map(|s| s.to_vec()),
+            icc_profile: info.source_color.icc_profile.clone(),
             exif: info.embedded_metadata.exif.clone(),
             xmp: info.embedded_metadata.xmp.clone(),
             cicp: info.source_color.cicp,
