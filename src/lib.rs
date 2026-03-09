@@ -41,6 +41,7 @@ mod capabilities;
 mod cost;
 mod detect;
 mod error;
+mod extensions;
 mod format;
 mod gainmap;
 mod info;
@@ -60,6 +61,7 @@ mod traits;
 // Color profile types re-exported from zenpixels for convenience.
 // These appear in our public API (ImageInfo, SourceColor, etc.) so callers
 // don't need to add zenpixels as a direct dependency just for these.
+pub use extensions::Extensions;
 pub use format::{ImageFormat, ImageFormatDefinition, ImageFormatRegistry};
 pub use gainmap::GainMapMetadata;
 pub use info::{Cicp, ContentLightLevel, ImageInfo, MasteringDisplay, Resolution, ResolutionUnit};

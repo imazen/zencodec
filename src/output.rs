@@ -1,11 +1,11 @@
 //! Encode and decode output types.
 
 use alloc::boxed::Box;
-use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::any::Any;
 
 use crate::detect::SourceEncodingDetails;
+use crate::extensions::Extensions;
 use crate::{ImageFormat, ImageInfo, Metadata};
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
 
@@ -23,7 +23,7 @@ pub struct EncodeOutput {
     format: ImageFormat,
     mime_type: &'static str,
     extension: &'static str,
-    extras: Option<Arc<dyn Any + Send + Sync>>,
+    extensions: Extensions,
 }
 
 impl EncodeOutput {
@@ -39,7 +39,7 @@ impl EncodeOutput {
             mime_type: format.mime_type(),
             extension: format.extension(),
             format,
-            extras: None,
+            extensions: Extensions::new(),
         }
     }
 
@@ -102,26 +102,36 @@ impl EncodeOutput {
         self.extension
     }
 
-    /// Attach format-specific extras (e.g., encoding statistics, codec-specific metadata).
+    /// Attach a typed extension value (e.g., encoding statistics, codec-specific metadata).
+    ///
+    /// Multiple independently-typed values can be stored. Inserting a value of a type
+    /// that already exists replaces the previous value.
     pub fn with_extras<T: Any + Send + Sync + 'static>(mut self, extras: T) -> Self {
-        self.extras = Some(Arc::new(extras));
+        self.extensions.insert(extras);
         self
     }
 
-    /// Borrow typed extras if present and the type matches.
+    /// Borrow a typed extension value if present.
     pub fn extras<T: Any + Send + Sync + 'static>(&self) -> Option<&T> {
-        self.extras.as_ref()?.downcast_ref()
+        self.extensions.get()
     }
 
-    /// Take typed extras, consuming them from this output.
+    /// Remove and return a typed extension value.
     ///
-    /// Returns `Some(T)` only when this is the sole reference to the extras
-    /// (i.e. no clones are holding an `Arc` to the same value). Returns
-    /// `None` if the type doesn't match or other references exist.
+    /// Returns `Some(T)` only when this is the sole `Arc` reference to the value.
+    /// Returns `None` if the type is not present or other references exist (e.g. after clone).
     pub fn take_extras<T: Any + Send + Sync + 'static>(&mut self) -> Option<T> {
-        let arc = self.extras.take()?;
-        let arc_t: Arc<T> = arc.downcast().ok()?;
-        Arc::try_unwrap(arc_t).ok()
+        self.extensions.remove()
+    }
+
+    /// Access the full extension map.
+    pub fn extensions(&self) -> &Extensions {
+        &self.extensions
+    }
+
+    /// Mutable access to the full extension map.
+    pub fn extensions_mut(&mut self) -> &mut Extensions {
+        &mut self.extensions
     }
 }
 
@@ -132,7 +142,7 @@ impl Clone for EncodeOutput {
             format: self.format,
             mime_type: self.mime_type,
             extension: self.extension,
-            extras: self.extras.clone(),
+            extensions: self.extensions.clone(),
         }
     }
 }
@@ -144,7 +154,7 @@ impl core::fmt::Debug for EncodeOutput {
             .field("format", &self.format)
             .field("mime_type", &self.mime_type)
             .field("extension", &self.extension)
-            .field("has_extras", &self.extras.is_some())
+            .field("extensions", &self.extensions)
             .finish()
     }
 }
@@ -176,7 +186,7 @@ pub struct DecodeOutput {
     pixels: PixelBuffer,
     info: ImageInfo,
     source_encoding: Option<Box<dyn SourceEncodingDetails>>,
-    extras: Option<Arc<dyn Any + Send + Sync>>,
+    extensions: Extensions,
 }
 
 impl DecodeOutput {
@@ -189,7 +199,7 @@ impl DecodeOutput {
             pixels,
             info,
             source_encoding: None,
-            extras: None,
+            extensions: Extensions::new(),
         }
     }
 
@@ -223,26 +233,36 @@ impl DecodeOutput {
         self.source_encoding.take()
     }
 
-    /// Attach format-specific extras (e.g., JPEG gain maps, MPF data).
+    /// Attach a typed extension value (e.g., JPEG gain maps, MPF data).
+    ///
+    /// Multiple independently-typed values can be stored. Inserting a value of a type
+    /// that already exists replaces the previous value.
     pub fn with_extras<T: Any + Send + Sync + 'static>(mut self, extras: T) -> Self {
-        self.extras = Some(Arc::new(extras));
+        self.extensions.insert(extras);
         self
     }
 
-    /// Borrow typed extras if present and the type matches.
+    /// Borrow a typed extension value if present.
     pub fn extras<T: Any + Send + Sync + 'static>(&self) -> Option<&T> {
-        self.extras.as_ref()?.downcast_ref()
+        self.extensions.get()
     }
 
-    /// Take typed extras, consuming them from this output.
+    /// Remove and return a typed extension value.
     ///
-    /// Returns `Some(T)` only when this is the sole reference to the extras
-    /// (i.e. no clones are holding an `Arc` to the same value). Returns
-    /// `None` if the type doesn't match or other references exist.
+    /// Returns `Some(T)` only when this is the sole `Arc` reference to the value.
+    /// Returns `None` if the type is not present or other references exist.
     pub fn take_extras<T: Any + Send + Sync + 'static>(&mut self) -> Option<T> {
-        let arc = self.extras.take()?;
-        let arc_t: Arc<T> = arc.downcast().ok()?;
-        Arc::try_unwrap(arc_t).ok()
+        self.extensions.remove()
+    }
+
+    /// Access the full extension map.
+    pub fn extensions(&self) -> &Extensions {
+        &self.extensions
+    }
+
+    /// Mutable access to the full extension map.
+    pub fn extensions_mut(&mut self) -> &mut Extensions {
+        &mut self.extensions
     }
 
     /// Borrow the pixel data as a [`PixelSlice`].
@@ -377,7 +397,7 @@ impl<'a> FullFrame<'a> {
             pixels,
             duration_ms: self.duration_ms,
             frame_index: self.frame_index,
-            extras: None,
+            extensions: Extensions::new(),
         }
     }
 }
@@ -401,7 +421,7 @@ pub struct OwnedFullFrame {
     pixels: PixelBuffer,
     duration_ms: u32,
     frame_index: u32,
-    extras: Option<Arc<dyn Any + Send + Sync>>,
+    extensions: Extensions,
 }
 
 impl OwnedFullFrame {
@@ -411,7 +431,7 @@ impl OwnedFullFrame {
             pixels,
             duration_ms,
             frame_index,
-            extras: None,
+            extensions: Extensions::new(),
         }
     }
 
@@ -440,26 +460,35 @@ impl OwnedFullFrame {
         FullFrame::new(self.pixels.as_slice(), self.duration_ms, self.frame_index)
     }
 
-    /// Attach format-specific extras (e.g., per-frame codec metadata).
+    /// Attach a typed extension value (e.g., per-frame codec metadata).
+    ///
+    /// Multiple independently-typed values can be stored.
     pub fn with_extras<T: Any + Send + Sync + 'static>(mut self, extras: T) -> Self {
-        self.extras = Some(Arc::new(extras));
+        self.extensions.insert(extras);
         self
     }
 
-    /// Borrow typed extras if present and the type matches.
+    /// Borrow a typed extension value if present.
     pub fn extras<T: Any + Send + Sync + 'static>(&self) -> Option<&T> {
-        self.extras.as_ref()?.downcast_ref()
+        self.extensions.get()
     }
 
-    /// Take typed extras, consuming them from this frame.
+    /// Remove and return a typed extension value.
     ///
-    /// Returns `Some(T)` only when this is the sole reference to the extras
-    /// (i.e. no clones are holding an `Arc` to the same value). Returns
-    /// `None` if the type doesn't match or other references exist.
+    /// Returns `Some(T)` only when this is the sole `Arc` reference to the value.
+    /// Returns `None` if the type is not present or other references exist.
     pub fn take_extras<T: Any + Send + Sync + 'static>(&mut self) -> Option<T> {
-        let arc = self.extras.take()?;
-        let arc_t: Arc<T> = arc.downcast().ok()?;
-        Arc::try_unwrap(arc_t).ok()
+        self.extensions.remove()
+    }
+
+    /// Access the full extension map.
+    pub fn extensions(&self) -> &Extensions {
+        &self.extensions
+    }
+
+    /// Mutable access to the full extension map.
+    pub fn extensions_mut(&mut self) -> &mut Extensions {
+        &mut self.extensions
     }
 }
 
@@ -469,7 +498,7 @@ impl core::fmt::Debug for OwnedFullFrame {
             .field("pixels", &self.pixels)
             .field("duration_ms", &self.duration_ms)
             .field("frame_index", &self.frame_index)
-            .field("has_extras", &self.extras.is_some())
+            .field("extensions", &self.extensions)
             .finish()
     }
 }
