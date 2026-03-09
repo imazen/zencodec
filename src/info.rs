@@ -6,11 +6,11 @@
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use crate::color::{ColorContext, ColorProfileSource};
 use crate::detect::SourceEncodingDetails;
 use crate::gainmap::GainMapMetadata;
-use crate::metadata::MetadataView;
+use crate::metadata::Metadata;
 use crate::{ImageFormat, Orientation};
+use zenpixels::{ColorContext, ColorProfileSource};
 use zenpixels::{ColorPrimaries, TransferFunction};
 
 /// Re-export CICP from zenpixels — the canonical definition.
@@ -230,7 +230,7 @@ pub enum ResolutionUnit {
 /// Stored in format-specific containers: JFIF APP0 (JPEG), pHYs (PNG),
 /// IFD tags 282/283/296 (TIFF), EXIF tags 282/283/296.
 ///
-/// Carried through [`MetadataView`] / [`Metadata`](crate::Metadata) so encoders can write
+/// Carried through [`Metadata`](crate::Metadata) so encoders can write
 /// the appropriate format-specific resolution metadata.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
@@ -244,7 +244,7 @@ pub struct Resolution {
 }
 
 // Eq: Validated: constructors reject NaN.
-// Required because MetadataView derives Eq.
+// Required because Resolution uses f32.
 impl Eq for Resolution {}
 
 impl Resolution {
@@ -606,18 +606,11 @@ impl ImageInfo {
         self.source_color.color_context()
     }
 
-    /// Borrow embedded metadata for roundtrip encode.
-    pub fn metadata(&self) -> MetadataView<'_> {
-        MetadataView {
-            icc_profile: self.source_color.icc_profile.as_deref(),
-            exif: self.embedded_metadata.exif.as_deref(),
-            xmp: self.embedded_metadata.xmp.as_deref(),
-            cicp: self.source_color.cicp,
-            content_light_level: self.source_color.content_light_level,
-            mastering_display: self.source_color.mastering_display,
-            orientation: self.orientation,
-            resolution: None,
-        }
+    /// Get embedded metadata for roundtrip encode.
+    ///
+    /// Clones Arc-backed byte buffers (cheap ref-count bump).
+    pub fn metadata(&self) -> Metadata {
+        Metadata::from(self)
     }
 }
 

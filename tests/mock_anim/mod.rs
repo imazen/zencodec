@@ -18,7 +18,7 @@ use zc::decode::{
 use zc::encode::{
     EncodeCapabilities, EncodeJob, EncodeOutput, Encoder, EncoderConfig, FullFrameEncoder,
 };
-use zc::{FullFrame, ImageFormat, ImageInfo, MetadataView, ResourceLimits, UnsupportedOperation};
+use zc::{FullFrame, ImageFormat, ImageInfo, Metadata, ResourceLimits, UnsupportedOperation};
 
 use enough::{Stop, StopReason};
 use zc::decode::{DecodeRowSink, SinkError};
@@ -170,7 +170,6 @@ impl DecoderConfig for MockDecoderConfig {
             stop: None,
             policy: None,
             crop: None,
-            scale: None,
             orientation: None,
             start_frame: None,
             ext: MockDecodeExtensions::default(),
@@ -183,7 +182,6 @@ pub struct MockDecodeJob<'a> {
     stop: Option<&'a dyn Stop>,
     policy: Option<zc::decode::DecodePolicy>,
     crop: Option<(u32, u32, u32, u32)>,
-    scale: Option<(u32, u32)>,
     orientation: Option<zc::OrientationHint>,
     start_frame: Option<u32>,
     pub ext: MockDecodeExtensions,
@@ -212,11 +210,6 @@ impl<'a> DecodeJob<'a> for MockDecodeJob<'a> {
 
     fn with_crop_hint(mut self, x: u32, y: u32, width: u32, height: u32) -> Self {
         self.crop = Some((x, y, width, height));
-        self
-    }
-
-    fn with_scale_hint(mut self, max_width: u32, max_height: u32) -> Self {
-        self.scale = Some((max_width, max_height));
         self
     }
 
@@ -579,7 +572,7 @@ impl EncoderConfig for MockEncoderConfig {
 pub struct MockEncodeJob<'a> {
     limits: ResourceLimits,
     stop: Option<&'a dyn Stop>,
-    metadata: Option<&'a MetadataView<'a>>,
+    metadata: Option<Metadata>,
     canvas_size: Option<(u32, u32)>,
     loop_count: Option<Option<u32>>,
     policy: Option<zc::encode::EncodePolicy>,
@@ -606,8 +599,8 @@ impl<'a> EncodeJob<'a> for MockEncodeJob<'a> {
         self
     }
 
-    fn with_metadata(mut self, meta: &'a MetadataView<'a>) -> Self {
-        self.metadata = Some(meta);
+    fn with_metadata(mut self, meta: &Metadata) -> Self {
+        self.metadata = Some(meta.clone());
         self
     }
 

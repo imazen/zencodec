@@ -22,7 +22,7 @@ use alloc::boxed::Box;
 use core::any::Any;
 
 use crate::format::ImageFormat;
-use crate::{EncodeCapabilities, EncodeOutput, MetadataView, ResourceLimits};
+use crate::{EncodeCapabilities, EncodeOutput, Metadata, ResourceLimits};
 use enough::Stop;
 use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 
@@ -220,7 +220,7 @@ pub trait DynEncodeJob<'a> {
     fn set_policy(&mut self, policy: crate::EncodePolicy);
 
     /// Set metadata (ICC, EXIF, XMP) to embed.
-    fn set_metadata(&mut self, meta: &'a MetadataView<'a>);
+    fn set_metadata(&mut self, meta: &Metadata);
 
     /// Set animation canvas dimensions.
     fn set_canvas_size(&mut self, width: u32, height: u32);
@@ -281,7 +281,7 @@ where
         self.put(job.with_policy(policy));
     }
 
-    fn set_metadata(&mut self, meta: &'a MetadataView<'a>) {
+    fn set_metadata(&mut self, meta: &Metadata) {
         let job = self.take();
         self.put(job.with_metadata(meta));
     }

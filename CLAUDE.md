@@ -15,7 +15,7 @@ Tiny, stable crate defining the common interface that all zen* codecs implement:
 - **Encode animation**: `EncodeJob` → `FullFrameEncoder` (push frames one at a time)
 - **Decode**: `DecoderConfig` → `DecodeJob` → `Decode` (one-shot), `StreamingDecode` (scanline batches), or `FullFrameDecoder` (animation)
 - **Dyn dispatch**: `DynEncoderConfig` / `DynDecoderConfig` for codec-agnostic pipelines
-- **Metadata**: `ImageInfo`, `Metadata`, `MetadataView`, `OutputInfo`, `Orientation`
+- **Metadata**: `ImageInfo`, `Metadata`, `OutputInfo`, `Orientation`
 - **Format detection**: `ImageFormat::from_magic()`, `ImageFormatRegistry`
 - **Capabilities**: `EncodeCapabilities` / `DecodeCapabilities` (const-constructible flag structs)
 - **Errors**: `UnsupportedOperation`, `CodecErrorExt` (error chain inspection)

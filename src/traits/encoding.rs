@@ -3,7 +3,7 @@
 use alloc::boxed::Box;
 
 use crate::format::ImageFormat;
-use crate::{EncodeCapabilities, MetadataView, ResourceLimits};
+use crate::{EncodeCapabilities, Metadata, ResourceLimits};
 use enough::Stop;
 use zenpixels::PixelDescriptor;
 
@@ -153,7 +153,7 @@ pub trait EncodeJob<'a>: Sized {
     /// Set metadata (ICC, EXIF, XMP) to embed in the output.
     ///
     /// The codec embeds what the format supports, silently skips the rest.
-    fn with_metadata(self, meta: &'a MetadataView<'a>) -> Self;
+    fn with_metadata(self, meta: &Metadata) -> Self;
 
     /// Set animation canvas dimensions.
     ///

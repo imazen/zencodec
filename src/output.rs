@@ -6,7 +6,7 @@ use alloc::vec::Vec;
 use core::any::Any;
 
 use crate::detect::SourceEncodingDetails;
-use crate::{ImageFormat, ImageInfo, MetadataView};
+use crate::{ImageFormat, ImageInfo, Metadata};
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
 
 /// Output from an encode operation.
@@ -292,8 +292,8 @@ impl DecodeOutput {
         self.info.color_context()
     }
 
-    /// Borrow embedded metadata for roundtrip encode.
-    pub fn metadata(&self) -> MetadataView<'_> {
+    /// Get embedded metadata for roundtrip encode.
+    pub fn metadata(&self) -> Metadata {
         self.info.metadata()
     }
 }

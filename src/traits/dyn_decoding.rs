@@ -212,9 +212,6 @@ pub trait DynDecodeJob<'a> {
     /// Hint: crop to this region in source coordinates.
     fn set_crop_hint(&mut self, x: u32, y: u32, width: u32, height: u32);
 
-    /// Hint: target output dimensions for prescaling.
-    fn set_scale_hint(&mut self, max_width: u32, max_height: u32);
-
     /// Set orientation handling strategy.
     fn set_orientation(&mut self, hint: OrientationHint);
 
@@ -317,11 +314,6 @@ where
     fn set_crop_hint(&mut self, x: u32, y: u32, width: u32, height: u32) {
         let job = self.take();
         self.put(job.with_crop_hint(x, y, width, height));
-    }
-
-    fn set_scale_hint(&mut self, max_width: u32, max_height: u32) {
-        let job = self.take();
-        self.put(job.with_scale_hint(max_width, max_height));
     }
 
     fn set_orientation(&mut self, hint: OrientationHint) {

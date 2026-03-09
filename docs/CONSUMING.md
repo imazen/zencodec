@@ -224,7 +224,7 @@ For animation:
 ```rust
 let limits = ResourceLimits::none()
     .with_max_frames(1000)
-    .with_max_duration(30_000); // 30 seconds total
+    .with_max_animation_ms(30_000); // 30 seconds total
 ```
 
 ## Cancellation
@@ -254,15 +254,15 @@ Policies control security-relevant behavior on a per-job basis:
 use zc::encode::EncodePolicy;
 use zc::decode::DecodePolicy;
 
-// Strip all metadata, deterministic output
-let enc_policy = EncodePolicy::strict();
+// Strip all metadata
+let enc_policy = EncodePolicy::strip_all();
 let job = enc_config.job().with_policy(enc_policy);
 
 // Or fine-grained control:
 let enc_policy = EncodePolicy::none()
     .with_embed_icc(true)     // keep ICC
     .with_embed_exif(false)   // strip EXIF
-    .with_deterministic(true);
+    .with_embed_xmp(false);   // strip XMP
 
 // Decode: restrict what the decoder processes
 let dec_policy = DecodePolicy::strict(); // minimal attack surface
@@ -281,7 +281,7 @@ Decode captures metadata. Pass it through to encode for lossless metadata roundt
 ```rust
 // Decode
 let dec_output = decoder.decode()?;
-let metadata = dec_output.metadata(); // borrows MetadataView
+let metadata = dec_output.metadata(); // returns Metadata (Arc-backed, cheap clone)
 
 // Re-encode with same metadata
 let job = enc_config.job()
@@ -290,7 +290,7 @@ let encoder = job.encoder()?;
 let output = encoder.encode(dec_output.pixels())?;
 ```
 
-`MetadataView` carries ICC profile, EXIF, XMP, CICP, orientation, HDR metadata (content light level, mastering display), and gain map metadata. The encoder embeds what it supports and what the policy allows.
+`Metadata` carries ICC profile, EXIF, XMP, CICP, orientation, HDR metadata (content light level, mastering display), and resolution. The encoder embeds what it supports and what the policy allows.
 
 Color management is not the codec's job. Decoders return native pixels with ICC/CICP metadata attached. Encoders accept pixels as-is and embed the provided metadata. If you need color space conversion, handle it between decode and encode using a CMS.
 

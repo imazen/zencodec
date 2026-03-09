@@ -88,7 +88,7 @@ pub struct ResourceLimits {
     /// Maximum number of animation frames.
     pub max_frames: Option<u32>,
     /// Maximum total animation duration in milliseconds.
-    pub max_duration_ms: Option<u64>,
+    pub max_animation_ms: Option<u64>,
     /// Threading policy for the codec.
     ///
     /// Defaults to [`ThreadingPolicy::Unlimited`].
@@ -105,7 +105,7 @@ impl Default for ResourceLimits {
             max_height: None,
             max_input_bytes: None,
             max_frames: None,
-            max_duration_ms: None,
+            max_animation_ms: None,
             threading: ThreadingPolicy::Unlimited,
         }
     }
@@ -160,8 +160,8 @@ impl ResourceLimits {
     }
 
     /// Set maximum total animation duration in milliseconds.
-    pub fn with_max_duration(mut self, ms: u64) -> Self {
-        self.max_duration_ms = Some(ms);
+    pub fn with_max_animation_ms(mut self, ms: u64) -> Self {
+        self.max_animation_ms = Some(ms);
         self
     }
 
@@ -185,7 +185,7 @@ impl ResourceLimits {
             || self.max_height.is_some()
             || self.max_input_bytes.is_some()
             || self.max_frames.is_some()
-            || self.max_duration_ms.is_some()
+            || self.max_animation_ms.is_some()
             || self.threading != ThreadingPolicy::Unlimited
     }
 
@@ -258,9 +258,9 @@ impl ResourceLimits {
         Ok(())
     }
 
-    /// Check animation duration against `max_duration_ms`.
-    pub fn check_duration(&self, ms: u64) -> Result<(), LimitExceeded> {
-        if let Some(max) = self.max_duration_ms
+    /// Check animation duration against `max_animation_ms`.
+    pub fn check_animation_ms(&self, ms: u64) -> Result<(), LimitExceeded> {
+        if let Some(max) = self.max_animation_ms
             && ms > max
         {
             return Err(LimitExceeded::Duration { actual: ms, max });
@@ -402,7 +402,7 @@ pub enum LimitExceeded {
         /// Maximum allowed.
         max: u32,
     },
-    /// Animation duration exceeded `max_duration_ms`.
+    /// Animation duration exceeded `max_animation_ms`.
     Duration {
         /// Actual duration in milliseconds.
         actual: u64,
@@ -465,10 +465,10 @@ mod tests {
     fn animation_limits() {
         let limits = ResourceLimits::none()
             .with_max_frames(100)
-            .with_max_duration(30_000);
+            .with_max_animation_ms(30_000);
         assert!(limits.has_any());
         assert_eq!(limits.max_frames, Some(100));
-        assert_eq!(limits.max_duration_ms, Some(30_000));
+        assert_eq!(limits.max_animation_ms, Some(30_000));
     }
 
     #[test]
@@ -476,7 +476,7 @@ mod tests {
         let limits = ResourceLimits::none().with_max_frames(10);
         assert!(limits.has_any());
 
-        let limits = ResourceLimits::none().with_max_duration(5000);
+        let limits = ResourceLimits::none().with_max_animation_ms(5000);
         assert!(limits.has_any());
     }
 
@@ -607,10 +607,10 @@ mod tests {
     }
 
     #[test]
-    fn check_duration_pass_and_fail() {
-        let limits = ResourceLimits::none().with_max_duration(30_000);
-        assert!(limits.check_duration(15_000).is_ok());
-        let err = limits.check_duration(60_000).unwrap_err();
+    fn check_animation_ms_pass_and_fail() {
+        let limits = ResourceLimits::none().with_max_animation_ms(30_000);
+        assert!(limits.check_animation_ms(15_000).is_ok());
+        let err = limits.check_animation_ms(60_000).unwrap_err();
         assert!(matches!(err, LimitExceeded::Duration { .. }));
     }
 

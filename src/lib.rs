@@ -11,7 +11,7 @@
 //! # Shared types (root)
 //!
 //! - [`ImageFormat`] — format detection from magic bytes
-//! - [`ImageInfo`] / [`MetadataView`] / [`Orientation`] / [`OrientationHint`] — image metadata
+//! - [`ImageInfo`] / [`Metadata`] / [`Orientation`] / [`OrientationHint`] — image metadata
 //! - [`ResourceLimits`] / [`ThreadingPolicy`] — resource limit and threading configuration
 //! - [`UnsupportedOperation`] / [`CodecErrorExt`] — standard unsupported operation reporting and error chain inspection
 //!
@@ -38,7 +38,6 @@ extern crate alloc;
 whereat::define_at_crate_info!();
 
 mod capabilities;
-mod color;
 mod cost;
 mod detect;
 mod error;
@@ -58,14 +57,17 @@ mod traits;
 // Public root: shared types used by both encode and decode
 // =========================================================================
 
-pub use color::{ColorContext, ColorProfileSource, NamedProfile};
+// Color profile types re-exported from zenpixels for convenience.
+// These appear in our public API (ImageInfo, SourceColor, etc.) so callers
+// don't need to add zenpixels as a direct dependency just for these.
 pub use format::{ImageFormat, ImageFormatDefinition, ImageFormatRegistry};
 pub use gainmap::GainMapMetadata;
 pub use info::{Cicp, ContentLightLevel, ImageInfo, MasteringDisplay, Resolution, ResolutionUnit};
 pub use limits::{LimitExceeded, ResourceLimits, ThreadingPolicy};
-pub use metadata::{Metadata, MetadataView};
+pub use metadata::Metadata;
 pub use orientation::{Orientation, OrientationHint};
 pub use output::{FullFrame, OwnedFullFrame};
+pub use zenpixels::{ColorContext, ColorProfileSource, NamedProfile};
 
 pub use capabilities::UnsupportedOperation;
 pub use detect::SourceEncodingDetails;

@@ -38,7 +38,7 @@ ENCODE:  EncoderConfig → EncodeJob<'a> → Encoder / FullFrameEncoder
 DECODE:  DecoderConfig → DecodeJob<'a> → Decode / StreamingDecode / FullFrameDecoder
 ```
 
-Config lives in a struct and gets shared across threads. A web server keeps one `JpegEncoderConfig` at quality 85 for all requests. Job borrows stack-local data (cancellation token, resource limits, metadata view). Executor borrows pixels or bytes and consumes itself to produce output.
+Config lives in a struct and gets shared across threads. A web server keeps one `JpegEncoderConfig` at quality 85 for all requests. Job borrows stack-local data (cancellation token, resource limits, metadata). Executor borrows pixels or bytes and consumes itself to produce output.
 
 Each layer also has object-safe `Dyn*` variants for codec-agnostic dispatch:
 
@@ -84,7 +84,7 @@ let pixels = decoded.into_buffer();
 |--------|----------|
 | `zc::encode` | `EncoderConfig`, `EncodeJob`, `Encoder`, `FullFrameEncoder`, `EncodeOutput`, `EncodeCapabilities`, `EncodePolicy`, dyn dispatch traits |
 | `zc::decode` | `DecoderConfig`, `DecodeJob`, `Decode`, `StreamingDecode`, `FullFrameDecoder`, `DecodeOutput`, `DecodeCapabilities`, `DecodePolicy`, `DecodeRowSink`, dyn dispatch traits, format negotiation |
-| root | `ImageFormat`, `ImageInfo`, `MetadataView`, `Metadata`, `Orientation`, `OrientationHint`, `ResourceLimits`, `UnsupportedOperation` |
+| root | `ImageFormat`, `ImageInfo`, `Metadata`, `Orientation`, `OrientationHint`, `ResourceLimits`, `UnsupportedOperation` |
 
 ## License
 

@@ -193,9 +193,11 @@ impl DecodePolicy {
     }
 }
 
-/// Encode security policy.
+/// Encode metadata policy.
 ///
-/// Controls what an encoder is allowed to embed or produce.
+/// Controls which metadata an encoder embeds in the output.
+/// All fields default to `None`, meaning the codec uses its own default.
+/// `Some(true)` explicitly allows embedding; `Some(false)` explicitly strips.
 ///
 /// # Example
 ///
@@ -203,8 +205,11 @@ impl DecodePolicy {
 /// use zc::encode::EncodePolicy;
 ///
 /// // Strip all metadata from output
+/// let policy = EncodePolicy::strip_all();
+///
+/// // Or fine-grained: keep ICC, strip EXIF/XMP
 /// let policy = EncodePolicy::none()
-///     .with_embed_icc(false)
+///     .with_embed_icc(true)
 ///     .with_embed_exif(false)
 ///     .with_embed_xmp(false);
 /// ```
@@ -217,10 +222,6 @@ pub struct EncodePolicy {
     pub embed_exif: Option<bool>,
     /// Embed XMP metadata in the output.
     pub embed_xmp: Option<bool>,
-    /// Allow multi-frame / animated output.
-    pub allow_animation: Option<bool>,
-    /// Produce deterministic output (no timestamps, random seeds, etc.).
-    pub deterministic: Option<bool>,
 }
 
 impl EncodePolicy {
@@ -230,30 +231,24 @@ impl EncodePolicy {
             embed_icc: None,
             embed_exif: None,
             embed_xmp: None,
-            allow_animation: None,
-            deterministic: None,
         }
     }
 
-    /// Strip everything, deterministic output.
-    pub const fn strict() -> Self {
+    /// Strip all metadata from output.
+    pub const fn strip_all() -> Self {
         Self {
             embed_icc: Some(false),
             embed_exif: Some(false),
             embed_xmp: Some(false),
-            allow_animation: Some(false),
-            deterministic: Some(true),
         }
     }
 
-    /// Allow everything.
-    pub const fn permissive() -> Self {
+    /// Preserve all metadata in output.
+    pub const fn preserve_all() -> Self {
         Self {
             embed_icc: Some(true),
             embed_exif: Some(true),
             embed_xmp: Some(true),
-            allow_animation: Some(true),
-            deterministic: Some(false),
         }
     }
 
@@ -272,18 +267,6 @@ impl EncodePolicy {
     /// Override XMP embedding.
     pub const fn with_embed_xmp(mut self, v: bool) -> Self {
         self.embed_xmp = Some(v);
-        self
-    }
-
-    /// Override animation output.
-    pub const fn with_allow_animation(mut self, v: bool) -> Self {
-        self.allow_animation = Some(v);
-        self
-    }
-
-    /// Override deterministic output.
-    pub const fn with_deterministic(mut self, v: bool) -> Self {
-        self.deterministic = Some(v);
         self
     }
 
@@ -306,22 +289,6 @@ impl EncodePolicy {
     /// Resolve XMP embedding flag.
     pub const fn resolve_xmp(&self, default: bool) -> bool {
         match self.embed_xmp {
-            Some(v) => v,
-            None => default,
-        }
-    }
-
-    /// Resolve animation flag.
-    pub const fn resolve_animation(&self, default: bool) -> bool {
-        match self.allow_animation {
-            Some(v) => v,
-            None => default,
-        }
-    }
-
-    /// Resolve deterministic flag.
-    pub const fn resolve_deterministic(&self, default: bool) -> bool {
-        match self.deterministic {
             Some(v) => v,
             None => default,
         }
@@ -384,42 +351,45 @@ mod tests {
         assert_eq!(p.embed_icc, None);
         assert_eq!(p.embed_exif, None);
         assert_eq!(p.embed_xmp, None);
-        assert_eq!(p.allow_animation, None);
-        assert_eq!(p.deterministic, None);
     }
 
     #[test]
-    fn encode_strict_strips_all() {
-        let p = EncodePolicy::strict();
+    fn encode_strip_all() {
+        let p = EncodePolicy::strip_all();
         assert_eq!(p.embed_icc, Some(false));
         assert_eq!(p.embed_exif, Some(false));
         assert_eq!(p.embed_xmp, Some(false));
-        assert_eq!(p.allow_animation, Some(false));
-        assert_eq!(p.deterministic, Some(true));
+    }
+
+    #[test]
+    fn encode_preserve_all() {
+        let p = EncodePolicy::preserve_all();
+        assert_eq!(p.embed_icc, Some(true));
+        assert_eq!(p.embed_exif, Some(true));
+        assert_eq!(p.embed_xmp, Some(true));
     }
 
     #[test]
     fn encode_builder_overrides() {
-        let p = EncodePolicy::strict().with_embed_icc(true);
+        let p = EncodePolicy::strip_all().with_embed_icc(true);
         assert_eq!(p.embed_icc, Some(true));
-        assert_eq!(p.embed_exif, Some(false)); // still strict
+        assert_eq!(p.embed_exif, Some(false)); // still stripped
     }
 
     #[test]
     fn encode_resolve_with_default() {
         let p = EncodePolicy::none();
         assert!(p.resolve_icc(true));
-        assert!(!p.resolve_deterministic(false));
+        assert!(!p.resolve_icc(false));
 
-        let p = EncodePolicy::strict();
+        let p = EncodePolicy::strip_all();
         assert!(!p.resolve_icc(true));
-        assert!(p.resolve_deterministic(false));
     }
 
     #[test]
     fn static_construction() {
         static _DECODE: DecodePolicy = DecodePolicy::strict().with_allow_icc(true);
-        static _ENCODE: EncodePolicy = EncodePolicy::strict().with_embed_icc(true);
+        static _ENCODE: EncodePolicy = EncodePolicy::strip_all().with_embed_icc(true);
     }
 
     #[test]

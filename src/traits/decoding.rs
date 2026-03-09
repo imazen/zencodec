@@ -140,13 +140,6 @@ pub trait DecodeJob<'a>: Sized {
         self
     }
 
-    /// Hint: target output dimensions for prescaling.
-    ///
-    /// Some codecs decode at reduced resolution cheaply (JPEG 1/2/4/8).
-    fn with_scale_hint(self, _max_width: u32, _max_height: u32) -> Self {
-        self
-    }
-
     /// Set orientation handling strategy.
     ///
     /// See [`OrientationHint`] for the available strategies.
@@ -270,7 +263,7 @@ pub trait DecodeJob<'a>: Sized {
     ///
     /// ```rust,ignore
     /// let decode = config.job()
-    ///     .with_scale_hint(800, 600)
+    ///     .with_crop_hint(0, 0, 800, 600)
     ///     .dyn_decoder(data, &[PixelDescriptor::rgb8()])?;
     ///
     /// let output: DecodeOutput = decode.decode()?;

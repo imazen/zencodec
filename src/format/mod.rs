@@ -28,26 +28,27 @@ pub(crate) mod builtins;
 ///         && &data[4..8] == b"jP  "
 /// }
 ///
-/// static JPEG2000: ImageFormatDefinition = ImageFormatDefinition {
-///     name: "jpeg2000",
-///     image_format: None,
-///     display_name: "JPEG 2000",
-///     preferred_extension: "jp2",
-///     extensions: &["jp2", "j2k", "jpx"],
-///     preferred_mime_type: "image/jp2",
-///     mime_types: &["image/jp2", "image/jpx"],
-///     supports_alpha: true,
-///     supports_animation: false,
-///     supports_lossless: true,
-///     supports_lossy: true,
-///     magic_bytes_needed: 12,
-///     detect: detect_jpeg2000,
-/// };
+/// static JPEG2000: ImageFormatDefinition = ImageFormatDefinition::new(
+///     "jpeg2000",
+///     None,
+///     "JPEG 2000",
+///     "jp2",
+///     &["jp2", "j2k", "jpx"],
+///     "image/jp2",
+///     &["image/jp2", "image/jpx"],
+///     true,  // alpha
+///     false, // animation
+///     true,  // lossless
+///     true,  // lossy
+///     12,
+///     detect_jpeg2000,
+/// );
 ///
 /// // Build a registry with custom + common formats
 /// let registry = ImageFormatRegistry::from_vec(vec![&JPEG2000]);
 /// let fmt = registry.detect(data);
 /// ```
+#[non_exhaustive]
 pub struct ImageFormatDefinition {
     /// Unique lowercase format identifier (e.g. `"jpeg2000"`, `"dds"`).
     ///
@@ -103,6 +104,43 @@ pub struct ImageFormatDefinition {
 }
 
 impl ImageFormatDefinition {
+    /// Create a new format definition.
+    ///
+    /// All fields are required. For built-in formats, set `image_format` to the
+    /// corresponding [`ImageFormat`] variant. For custom formats, set it to `None`.
+    #[allow(clippy::too_many_arguments)]
+    pub const fn new(
+        name: &'static str,
+        image_format: Option<ImageFormat>,
+        display_name: &'static str,
+        preferred_extension: &'static str,
+        extensions: &'static [&'static str],
+        preferred_mime_type: &'static str,
+        mime_types: &'static [&'static str],
+        supports_alpha: bool,
+        supports_animation: bool,
+        supports_lossless: bool,
+        supports_lossy: bool,
+        magic_bytes_needed: usize,
+        detect: fn(&[u8]) -> bool,
+    ) -> Self {
+        Self {
+            name,
+            image_format,
+            display_name,
+            preferred_extension,
+            extensions,
+            preferred_mime_type,
+            mime_types,
+            supports_alpha,
+            supports_animation,
+            supports_lossless,
+            supports_lossy,
+            magic_bytes_needed,
+            detect,
+        }
+    }
+
     /// Convert this definition to the corresponding [`ImageFormat`].
     ///
     /// Returns the built-in variant if `image_format` is `Some`, otherwise

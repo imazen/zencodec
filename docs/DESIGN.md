@@ -15,7 +15,7 @@ DECODE:  DecoderConfig → DecodeJob<'a> → Decode / StreamingDecode / FullFram
 keeps one `JpegEncoderConfig` at quality 85 and shares it across request threads.
 
 **Job** borrows per-operation temporaries: cancellation token (`&dyn Stop`),
-`ResourceLimits`, `MetadataView`. This is where limits are checked and headers
+`ResourceLimits`, `Metadata`. This is where limits are checked and headers
 parsed. The job is where you bind everything that's stack-local.
 
 **Executor** borrows pixels or file bytes. It consumes itself to produce output —
@@ -241,17 +241,17 @@ named constants cover common cases: `Cicp::SRGB`, `Cicp::BT2100_PQ`,
 `Cicp::BT2100_HLG`. CICP and ICC coexist: CICP for machine-readable color
 space identification, ICC for full profile precision.
 
-## Metadata flows through MetadataView
+## Metadata flows through Metadata
 
-`ImageInfo::metadata()` borrows a `MetadataView<'a>`. Pass to
+`ImageInfo::metadata()` returns a `Metadata`. Pass to
 `EncodeJob::with_metadata()` for lossless metadata roundtrip.
 
-`MetadataView` carries ICC, EXIF, XMP, CICP, HDR metadata (content light level,
-mastering display), orientation, and resolution. The encoder embeds what it
-supports and what the policy allows, silently skipping the rest.
+`Metadata` carries ICC, EXIF, XMP, CICP, HDR metadata (content light level,
+mastering display), orientation, and resolution. Byte buffers use `Arc<[u8]>`
+so cloning is a cheap ref-count bump. The encoder embeds what it supports
+and what the policy allows, silently skipping the rest.
 
-`Metadata` (owned) exists for cross-boundary transfer when the borrow can't be
-maintained. `From<MetadataView<'_>>` and `From<&ImageInfo>` conversions.
+`From<&ImageInfo>` converts decoded info into `Metadata` for re-encoding.
 
 ## Policies control security-relevant behavior
 

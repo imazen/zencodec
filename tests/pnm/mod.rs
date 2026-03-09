@@ -12,7 +12,7 @@ use zc::decode::{
     Decode, DecodeCapabilities, DecodeJob, DecoderConfig, push_decoder_via_full_decode,
 };
 use zc::encode::{EncodeCapabilities, EncodeJob, EncodeOutput, Encoder, EncoderConfig};
-use zc::{ImageFormat, ImageInfo, MetadataView, ResourceLimits, Unsupported, UnsupportedOperation};
+use zc::{ImageFormat, ImageInfo, Metadata, ResourceLimits, Unsupported, UnsupportedOperation};
 
 use enough::{Stop, StopReason};
 use whereat::{At, ErrorAtExt};
@@ -61,7 +61,7 @@ impl PnmEncoderConfig {
 pub struct PnmEncodeJob<'a> {
     limits: ResourceLimits,
     stop: Option<&'a dyn Stop>,
-    metadata: Option<&'a MetadataView<'a>>,
+    metadata: Option<Metadata>,
 }
 
 /// The actual PPM/PGM encoder.
@@ -114,8 +114,8 @@ impl<'a> EncodeJob<'a> for PnmEncodeJob<'a> {
         self
     }
 
-    fn with_metadata(mut self, meta: &'a MetadataView<'a>) -> Self {
-        self.metadata = Some(meta);
+    fn with_metadata(mut self, meta: &Metadata) -> Self {
+        self.metadata = Some(meta.clone());
         self
     }
 

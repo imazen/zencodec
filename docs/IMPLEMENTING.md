@@ -14,7 +14,7 @@ Layer 3: Executor   (borrows pixel data or file bytes, consumes self)
 
 **Config** is a settings struct. A web server keeps one at quality 85 and shares it across request threads. It must be `Clone + Send + Sync`.
 
-**Job** borrows stack-local data that only lives for one encode/decode call: a cancellation token (`&dyn Stop`), `ResourceLimits`, `MetadataView`. The job is where you validate limits and parse headers.
+**Job** borrows stack-local data that only lives for one encode/decode call: a cancellation token (`&dyn Stop`), `ResourceLimits`, `Metadata`. The job is where you validate limits and parse headers.
 
 **Executor** borrows the actual pixels or file bytes. It consumes itself to produce output — single-shot by design. This prevents use-after-encode/decode bugs at the type level.
 
@@ -120,14 +120,14 @@ The `with_*` / getter pairs follow a pattern: if your codec doesn't support a kn
 
 ```rust
 use zc::encode::EncodeJob;
-use zc::{MetadataView, ResourceLimits};
+use zc::{Metadata, ResourceLimits};
 use enough::Stop;
 
 pub struct MyEncodeJob<'a> {
     config: &'a MyEncoderConfig,
     limits: ResourceLimits,
     stop: Option<&'a dyn Stop>,
-    metadata: Option<&'a MetadataView<'a>>,
+    metadata: Option<Metadata>,
 }
 
 impl<'a> EncodeJob<'a> for MyEncodeJob<'a> {
@@ -145,8 +145,8 @@ impl<'a> EncodeJob<'a> for MyEncodeJob<'a> {
         self
     }
 
-    fn with_metadata(mut self, meta: &'a MetadataView<'a>) -> Self {
-        self.metadata = Some(meta);
+    fn with_metadata(mut self, meta: &Metadata) -> Self {
+        self.metadata = Some(meta.clone());
         self
     }
 
@@ -473,13 +473,13 @@ let info = ImageInfo::new(w, h, ImageFormat::Jpeg)
     .with_orientation(Orientation::Rotate90);
 ```
 
-Encoders receive metadata via `MetadataView` on the job. Check policy flags before embedding:
+Encoders receive metadata via `Metadata` on the job. Check policy flags before embedding:
 
 ```rust
 fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, MyError> {
     if let Some(meta) = self.job.metadata {
         if self.job.policy.resolve_icc(true) {
-            if let Some(icc) = meta.icc_profile {
+            if let Some(icc) = &meta.icc_profile {
                 embed_icc(icc);
             }
         }

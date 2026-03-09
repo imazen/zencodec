@@ -86,7 +86,7 @@ trait EncodeJob<'a>: Sized {
     fn with_stop(self, stop: &'a dyn Stop) -> Self;
     fn with_limits(self, limits: ResourceLimits) -> Self;
     fn with_policy(self, policy: EncodePolicy) -> Self;         // default: self
-    fn with_metadata(self, meta: &'a MetadataView<'a>) -> Self;
+    fn with_metadata(self, meta: &Metadata) -> Self;
     fn with_canvas_size(self, width: u32, height: u32) -> Self; // default: self
     fn with_loop_count(self, count: Option<u32>) -> Self;       // default: self
 
@@ -190,7 +190,6 @@ trait DecodeJob<'a>: Sized {
 
     // Decode hints (optional, decoder may ignore)
     fn with_crop_hint(self, x: u32, y: u32, width: u32, height: u32) -> Self;  // default: self
-    fn with_scale_hint(self, max_width: u32, max_height: u32) -> Self;          // default: self
     fn with_orientation(self, hint: OrientationHint) -> Self;                   // default: self
     fn with_start_frame_index(self, index: u32) -> Self;                        // default: self
 
@@ -303,7 +302,7 @@ trait DynEncodeJob<'a> {
     fn set_stop(&mut self, stop: &'a dyn Stop);
     fn set_limits(&mut self, limits: ResourceLimits);
     fn set_policy(&mut self, policy: EncodePolicy);
-    fn set_metadata(&mut self, meta: &'a MetadataView<'a>);
+    fn set_metadata(&mut self, meta: &Metadata);
     fn set_canvas_size(&mut self, width: u32, height: u32);
     fn set_loop_count(&mut self, count: Option<u32>);
     fn extensions(&self) -> Option<&dyn Any>;
@@ -351,7 +350,6 @@ trait DynDecodeJob<'a> {
     fn probe(&self, data: &[u8]) -> Result<ImageInfo, BoxedError>;
     fn probe_full(&self, data: &[u8]) -> Result<ImageInfo, BoxedError>;
     fn set_crop_hint(&mut self, x: u32, y: u32, width: u32, height: u32);
-    fn set_scale_hint(&mut self, max_width: u32, max_height: u32);
     fn set_orientation(&mut self, hint: OrientationHint);
     fn set_start_frame_index(&mut self, index: u32);
     fn extensions(&self) -> Option<&dyn Any>;
@@ -431,7 +429,7 @@ Builder pattern: `ImageInfo::new(w, h, format).with_alpha(true).with_cicp(...)`.
 
 Key methods: `display_width()`, `display_height()` (orientation-corrected),
 `transfer_function()`, `color_primaries()`, `color_profile_source()`,
-`color_context()`, `metadata() -> MetadataView<'_>`,
+`color_context()`, `metadata() -> Metadata`,
 `source_encoding_details() -> Option<&dyn SourceEncodingDetails>`.
 
 `PartialEq` skips `source_encoding` (trait objects aren't comparable).
@@ -447,18 +445,14 @@ Source color description. Fields: `cicp: Option<Cicp>`,
 
 Non-color metadata blobs. Fields: `exif: Option<Vec<u8>>`, `xmp: Option<Vec<u8>>`.
 
-### `MetadataView<'a>`
-
-Borrowed metadata for encoding. Fields: `icc_profile`, `exif`, `xmp` (borrowed slices),
-`cicp`, `content_light_level`, `mastering_display` (Copy), `orientation`, `resolution`.
-
-Methods: builder pattern (`with_icc()`, etc.), `transfer_function()`,
-`color_primaries()`, `color_profile_source()`, `is_empty()`.
-
 ### `Metadata`
 
-Owned metadata for cross-boundary transfer. Same fields as `MetadataView` but owned.
-`From<MetadataView<'_>>`, `From<&ImageInfo>`. Methods: `as_view()`, `is_empty()`.
+Owned metadata for encode/decode roundtrip. Fields: `icc_profile`, `exif`, `xmp`
+(`Option<Arc<[u8]>>`), `cicp`, `content_light_level`, `mastering_display` (Copy),
+`orientation`, `resolution`. `#[non_exhaustive]`.
+
+Methods: builder pattern (`with_icc()`, etc.), `transfer_function()`,
+`color_primaries()`, `is_empty()`. `From<&ImageInfo>` conversion.
 
 ### `OutputInfo`
 
@@ -589,7 +583,7 @@ enum UnsupportedOperation {
 ### `ResourceLimits` (`Copy + Clone + Debug + PartialEq + Eq`)
 
 Fields: `max_pixels`, `max_memory_bytes`, `max_output_bytes`, `max_width`,
-`max_height`, `max_input_bytes`, `max_frames`, `max_duration_ms`,
+`max_height`, `max_input_bytes`, `max_frames`, `max_animation_ms`,
 `threading: ThreadingPolicy`.
 
 Validation methods: `check_dimensions()`, `check_memory()`, `check_image_info()`,
@@ -624,10 +618,10 @@ what features to allow.
 **`DecodePolicy` flags:** `allow_icc`, `allow_exif`, `allow_xmp`, `allow_progressive`,
 `allow_animation`, `allow_truncated`, `strict`.
 
-**`EncodePolicy` flags:** `embed_icc`, `embed_exif`, `embed_xmp`, `allow_animation`,
-`deterministic`.
+**`EncodePolicy` flags:** `embed_icc`, `embed_exif`, `embed_xmp`.
 
-Constructors: `none()`, `strict()`, `permissive()`.
+`DecodePolicy` constructors: `none()`, `strict()`, `permissive()`.
+`EncodePolicy` constructors: `none()`, `strip_all()`, `preserve_all()`.
 
 ---
 

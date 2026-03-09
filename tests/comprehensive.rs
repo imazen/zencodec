@@ -426,7 +426,6 @@ fn dyn_decode_job_set_methods() {
     // Exercise all set_ methods
     job.set_limits(ResourceLimits::none().with_max_pixels(1_000_000));
     job.set_crop_hint(0, 0, 4, 2);
-    job.set_scale_hint(100, 100);
     job.set_orientation(OrientationHint::Correct);
     job.set_start_frame_index(0);
     job.set_policy(DecodePolicy::permissive());
@@ -549,12 +548,11 @@ fn dyn_encode_job_set_methods() {
     assert!(dyn_config.capabilities().pull());
 
     let meta = Metadata::none();
-    let view = meta.as_view();
 
     let mut job = dyn_config.dyn_job();
     job.set_limits(ResourceLimits::none());
-    job.set_policy(EncodePolicy::permissive());
-    job.set_metadata(&view);
+    job.set_policy(EncodePolicy::preserve_all());
+    job.set_metadata(&meta);
     job.set_canvas_size(4, 4);
     job.set_loop_count(Some(0));
 
@@ -734,7 +732,7 @@ fn decode_policy_on_job() {
 #[test]
 fn encode_policy_on_job() {
     let config = MockEncoderConfig::new();
-    let job = config.job().with_policy(EncodePolicy::strict());
+    let job = config.job().with_policy(EncodePolicy::strip_all());
     let enc = job.encoder().unwrap();
     let buf = make_rgb8_buffer(2, 2);
     let output = enc.encode(buf.as_slice()).unwrap();
@@ -742,7 +740,7 @@ fn encode_policy_on_job() {
 }
 
 // =========================================================================
-// 12. Metadata roundtrip through MetadataView
+// 12. Metadata roundtrip through Metadata
 // =========================================================================
 
 #[test]
@@ -756,20 +754,14 @@ fn metadata_roundtrip_via_encode_job() {
         .with_exif(exif.clone())
         .with_xmp(xmp.clone());
 
-    let view = meta.as_view();
-    // Accessor methods
-    assert_eq!(view.icc_profile(), Some(icc.as_slice()));
-    assert_eq!(view.exif(), Some(exif.as_slice()));
-    assert_eq!(view.xmp(), Some(xmp.as_slice()));
-    // Public fields (same data, both work)
-    assert_eq!(view.icc_profile, Some(icc.as_slice()));
-    assert_eq!(view.exif, Some(exif.as_slice()));
-    assert_eq!(view.xmp, Some(xmp.as_slice()));
-    assert!(!view.is_empty());
+    assert_eq!(meta.icc_profile.as_deref(), Some(icc.as_slice()));
+    assert_eq!(meta.exif.as_deref(), Some(exif.as_slice()));
+    assert_eq!(meta.xmp.as_deref(), Some(xmp.as_slice()));
+    assert!(!meta.is_empty());
 
     // Pass metadata through the encode job
     let config = MockEncoderConfig::new();
-    let job = config.job().with_metadata(&view);
+    let job = config.job().with_metadata(&meta);
     let enc = job.encoder().unwrap();
     let buf = make_rgb8_buffer(2, 2);
     let _output = enc.encode(buf.as_slice()).unwrap();
@@ -777,13 +769,12 @@ fn metadata_roundtrip_via_encode_job() {
 }
 
 #[test]
-fn metadata_owned_from_view() {
+fn metadata_clone_roundtrip() {
     let icc = vec![10u8; 16];
     let meta = Metadata::none().with_icc(icc.clone());
-    let view = meta.as_view();
 
-    let owned = Metadata::from(view);
-    assert_eq!(owned.as_view().icc_profile(), Some(icc.as_slice()));
+    let cloned = meta.clone();
+    assert_eq!(cloned.icc_profile.as_deref(), Some(icc.as_slice()));
 }
 
 #[test]
@@ -792,10 +783,10 @@ fn metadata_from_image_info() {
         .with_icc_profile(vec![1, 2, 3])
         .with_exif(vec![4, 5, 6]);
 
-    let view = info.metadata();
-    assert_eq!(view.icc_profile(), Some([1u8, 2, 3].as_slice()));
-    assert_eq!(view.exif(), Some([4u8, 5, 6].as_slice()));
-    assert!(view.xmp().is_none());
+    let meta = info.metadata();
+    assert_eq!(meta.icc_profile.as_deref(), Some([1u8, 2, 3].as_slice()));
+    assert_eq!(meta.exif.as_deref(), Some([4u8, 5, 6].as_slice()));
+    assert!(meta.xmp.is_none());
 }
 
 // =========================================================================
@@ -1451,12 +1442,10 @@ fn decode_policy_all_resolvers() {
 
 #[test]
 fn encode_policy_all_resolvers() {
-    let p = EncodePolicy::strict();
+    let p = EncodePolicy::strip_all();
     assert!(!p.resolve_icc(true));
     assert!(!p.resolve_exif(true));
     assert!(!p.resolve_xmp(true));
-    assert!(!p.resolve_animation(true));
-    assert!(p.resolve_deterministic(false));
 }
 
 #[test]
@@ -1472,13 +1461,11 @@ fn decode_policy_permissive_all_resolvers() {
 }
 
 #[test]
-fn encode_policy_permissive_all_resolvers() {
-    let p = EncodePolicy::permissive();
+fn encode_policy_preserve_all_resolvers() {
+    let p = EncodePolicy::preserve_all();
     assert!(p.resolve_icc(false));
     assert!(p.resolve_exif(false));
     assert!(p.resolve_xmp(false));
-    assert!(p.resolve_animation(false));
-    assert!(!p.resolve_deterministic(true));
 }
 
 // =========================================================================
