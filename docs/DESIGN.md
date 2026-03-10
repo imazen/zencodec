@@ -392,11 +392,9 @@ separate types from ICC and CICP. They describe display characteristics, not
 color space.
 
 Three HDR workflows exist:
-1. Gain map preservation (carry the data through encode/decode)
+1. Gain map preservation (carry the data through encode/decode — handled by codec crates directly)
 2. HDR reconstruction from gain map (needs PQ EOTF)
 3. HDR→SDR+GainMap creation (subjective, deferred)
-
-`GainMapMetadata` (ISO 21496-1) is included for workflow 1.
 
 ## What got renamed and why
 

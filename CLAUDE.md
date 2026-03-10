@@ -19,7 +19,7 @@ Tiny, stable crate defining the common interface that all zen* codecs implement:
 - **Format detection**: `ImageFormat::from_magic()`, `ImageFormatRegistry`
 - **Capabilities**: `EncodeCapabilities` / `DecodeCapabilities` (const-constructible flag structs)
 - **Errors**: `UnsupportedOperation`, `CodecErrorExt` (error chain inspection)
-- **Re-exports**: `enough` (cooperative cancellation), `ColorContext`/`ColorProfileSource`/`Cicp` (from zenpixels)
+- **Re-exports**: `enough` (cooperative cancellation), `Cicp`/`ContentLightLevel`/`MasteringDisplay` (from zenpixels)
 
 ## Design Rules
 
@@ -36,9 +36,9 @@ Tiny, stable crate defining the common interface that all zen* codecs implement:
   etc. are defined in `zenpixels` and used as the cross-crate interchange format.
   All zen crates depend on `zenpixels` directly. zencodec uses these types
   in trait signatures but must not re-export them — callers import from `zenpixels`.
-- **zenpixels color metadata types: re-export is OK.** `ColorContext`,
-  `ColorProfileSource`, `NamedProfile`, and `Cicp` appear in zencodec' public
-  API return types. Re-exporting avoids forcing callers to add zenpixels as a
+- **zenpixels color metadata types: re-export is OK.** `Cicp`,
+  `ContentLightLevel`, and `MasteringDisplay` appear in zencodec's public
+  API types. Re-exporting avoids forcing callers to add zenpixels as a
   direct dependency just for these types.
 
 ## Key Design Decisions

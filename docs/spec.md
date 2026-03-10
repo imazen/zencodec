@@ -421,15 +421,15 @@ Image metadata from probing or decoding. `#[non_exhaustive]`, `Clone + Debug + P
 Fields: `width`, `height`, `format: ImageFormat`, `has_alpha`, `has_animation`,
 `frame_count: Option<u32>`, `orientation: Orientation`,
 `source_color: SourceColor`, `embedded_metadata: EmbeddedMetadata`,
-`has_gain_map`, `gain_map_metadata: Option<GainMapMetadata>`,
+`has_gain_map`,
 `source_encoding: Option<Arc<dyn SourceEncodingDetails>>`,
 `warnings: Vec<String>`.
 
 Builder pattern: `ImageInfo::new(w, h, format).with_alpha(true).with_cicp(...)`.
 
 Key methods: `display_width()`, `display_height()` (orientation-corrected),
-`transfer_function()`, `color_primaries()`, `color_profile_source()`,
-`color_context()`, `metadata() -> Metadata`,
+`transfer_function()`, `color_primaries()`,
+`metadata() -> Metadata`,
 `source_encoding_details() -> Option<&dyn SourceEncodingDetails>`.
 
 `PartialEq` skips `source_encoding` (trait objects aren't comparable).
@@ -449,7 +449,7 @@ Non-color metadata blobs. Fields: `exif: Option<Vec<u8>>`, `xmp: Option<Vec<u8>>
 
 Owned metadata for encode/decode roundtrip. Fields: `icc_profile`, `exif`, `xmp`
 (`Option<Arc<[u8]>>`), `cicp`, `content_light_level`, `mastering_display` (Copy),
-`orientation`, `resolution`. `#[non_exhaustive]`.
+`orientation`. `#[non_exhaustive]`.
 
 Methods: builder pattern (`with_icc()`, etc.), `transfer_function()`,
 `color_primaries()`, `is_empty()`. `From<&ImageInfo>` conversion.
@@ -468,11 +468,7 @@ ITU-T H.273 color description. Re-exported from `zenpixels`. Constants:
 
 ### `ContentLightLevel` / `MasteringDisplay`
 
-HDR metadata types (CEA-861.3 / SMPTE ST 2086).
-
-### `Resolution` / `ResolutionUnit`
-
-Physical resolution (DPI / pixels-per-cm / pixels-per-meter).
+HDR metadata types (CEA-861.3 / SMPTE ST 2086). Re-exported from `zenpixels`.
 
 ### `Orientation` / `OrientationHint`
 
@@ -504,7 +500,7 @@ Fields: `pixels: PixelBuffer`, `info: ImageInfo`,
 `extras: Option<Box<dyn Any + Send>>`.
 
 Methods: `pixels()`, `into_buffer()`, `info()`, `width()`, `height()`,
-`has_alpha()`, `descriptor()`, `format()`, `color_context()`, `metadata()`,
+`has_alpha()`, `descriptor()`, `format()`, `metadata()`,
 `with_source_encoding_details<T>()`, `source_encoding_details()`,
 `take_source_encoding_details()`,
 `with_extras<T>()`, `extras<T>()`, `take_extras<T>()`.
@@ -625,31 +621,10 @@ what features to allow.
 
 ---
 
-## Cost estimation
-
-### `DecodeCost` / `EncodeCost`
-
-Resource cost estimates for pre-decode/pre-encode budget checks.
-
-`DecodeCost`: `output_bytes`, `pixel_count`, `peak_memory: Option<u64>`.
-Constructor: `from_output_info(&OutputInfo)`.
-
-`EncodeCost`: `input_bytes`, `pixel_count`, `peak_memory: Option<u64>`.
-Constructor: `for_input(width, height, descriptor)`.
-
----
-
 ## Color types
 
-### `ColorContext` / `ColorProfileSource` / `NamedProfile`
-
-Color context for pipeline tracking (ICC profile bytes + CICP parameters).
-Re-exported from `zenpixels`.
-
-### `GainMapMetadata`
-
-HDR gain map metadata (ISO 21496-1). Fields: per-channel gain map parameters,
-HDR capacity range, base/alternate rendition flags.
+`Cicp`, `ContentLightLevel`, and `MasteringDisplay` are re-exported from `zenpixels`.
+See `zenpixels` documentation for field details.
 
 ---
 
