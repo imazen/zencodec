@@ -47,8 +47,8 @@ pub struct GainMapChannel {
 impl Default for GainMapChannel {
     fn default() -> Self {
         Self {
-            min: 0.0,                // log2(1.0) = 0
-            max: 0.0,                // log2(1.0) = 0
+            min: 0.0, // log2(1.0) = 0
+            max: 0.0, // log2(1.0) = 0
             gamma: 1.0,
             base_offset: 1.0 / 64.0, // ISO 21496-1 default
             alternate_offset: 1.0 / 64.0,
@@ -369,33 +369,17 @@ impl UFraction {
 #[non_exhaustive]
 pub enum GainMapParseError {
     /// Data is too short to contain the expected fields.
-    TruncatedData {
-        expected: usize,
-        actual: usize,
-    },
+    TruncatedData { expected: usize, actual: usize },
     /// Unsupported metadata version.
-    UnsupportedVersion {
-        version: u8,
-    },
+    UnsupportedVersion { version: u8 },
     /// A fraction has a zero denominator.
-    ZeroDenominator {
-        field: &'static str,
-    },
+    ZeroDenominator { field: &'static str },
     /// Gamma must be > 0 and finite.
-    InvalidGamma {
-        channel: usize,
-        value: f64,
-    },
+    InvalidGamma { channel: usize, value: f64 },
     /// Channel min exceeds max.
-    MinExceedsMax {
-        channel: usize,
-        min: f64,
-        max: f64,
-    },
+    MinExceedsMax { channel: usize, min: f64, max: f64 },
     /// A value is NaN or infinity.
-    NonFiniteValue {
-        field: &'static str,
-    },
+    NonFiniteValue { field: &'static str },
 }
 
 impl core::fmt::Display for GainMapParseError {
@@ -527,18 +511,9 @@ pub fn serialize_iso21496(params: &GainMapParams) -> Vec<u8> {
 
     // Per-channel
     for ch in params.channels.iter().take(num_channels) {
-        write_fraction(
-            &mut data,
-            Fraction::from_f64(ch.min, FRACTION_DENOM),
-        );
-        write_fraction(
-            &mut data,
-            Fraction::from_f64(ch.max, FRACTION_DENOM),
-        );
-        write_ufraction(
-            &mut data,
-            UFraction::from_f64(ch.gamma, FRACTION_DENOM),
-        );
+        write_fraction(&mut data, Fraction::from_f64(ch.min, FRACTION_DENOM));
+        write_fraction(&mut data, Fraction::from_f64(ch.max, FRACTION_DENOM));
+        write_ufraction(&mut data, UFraction::from_f64(ch.gamma, FRACTION_DENOM));
         write_fraction(
             &mut data,
             Fraction::from_f64(ch.base_offset, FRACTION_DENOM),
@@ -809,10 +784,7 @@ mod tests {
         let err = p.validate().unwrap_err();
         assert!(matches!(
             err,
-            GainMapParseError::InvalidGamma {
-                channel: 0,
-                ..
-            }
+            GainMapParseError::InvalidGamma { channel: 0, .. }
         ));
     }
 
@@ -823,10 +795,7 @@ mod tests {
         let err = p.validate().unwrap_err();
         assert!(matches!(
             err,
-            GainMapParseError::InvalidGamma {
-                channel: 2,
-                ..
-            }
+            GainMapParseError::InvalidGamma { channel: 2, .. }
         ));
     }
 
@@ -838,10 +807,7 @@ mod tests {
         let err = p.validate().unwrap_err();
         assert!(matches!(
             err,
-            GainMapParseError::MinExceedsMax {
-                channel: 1,
-                ..
-            }
+            GainMapParseError::MinExceedsMax { channel: 1, .. }
         ));
     }
 
@@ -916,10 +882,7 @@ mod tests {
             .with_alternate_cicp(Cicp::BT2100_PQ)
             .with_alternate_icc(alloc::vec![1, 2, 3]);
         assert_eq!(info.alternate_cicp, Some(Cicp::BT2100_PQ));
-        assert_eq!(
-            info.alternate_icc.as_deref(),
-            Some([1, 2, 3].as_slice())
-        );
+        assert_eq!(info.alternate_icc.as_deref(), Some([1, 2, 3].as_slice()));
     }
 
     // --- Fraction ---
@@ -1132,10 +1095,7 @@ mod tests {
         blob[1] = 0;
         blob[2] = 1; // minimum_version = 1 (unsupported)
         let err = parse_iso21496(&blob).unwrap_err();
-        assert!(matches!(
-            err,
-            GainMapParseError::UnsupportedVersion { .. }
-        ));
+        assert!(matches!(err, GainMapParseError::UnsupportedVersion { .. }));
     }
 
     #[test]
@@ -1346,16 +1306,32 @@ mod tests {
         let single = GainMapParams::default();
         assert!(single.is_single_channel());
         let blob_single = serialize_iso21496(&single);
-        assert_eq!(blob_single[5] & 0x80, 0x00, "single channel: bit 7 must be clear");
-        assert_eq!(blob_single[5] & 0x40, 0x40, "use_base_color_space: bit 6 must be set");
+        assert_eq!(
+            blob_single[5] & 0x80,
+            0x00,
+            "single channel: bit 7 must be clear"
+        );
+        assert_eq!(
+            blob_single[5] & 0x40,
+            0x40,
+            "use_base_color_space: bit 6 must be set"
+        );
 
         // Multi channel: bit 7 set
         let mut multi = GainMapParams::default();
         multi.channels[1].max = 5.0;
         assert!(!multi.is_single_channel());
         let blob_multi = serialize_iso21496(&multi);
-        assert_eq!(blob_multi[5] & 0x80, 0x80, "multi channel: bit 7 must be set");
-        assert_eq!(blob_multi[5] & 0x40, 0x40, "use_base_color_space: bit 6 must be set");
+        assert_eq!(
+            blob_multi[5] & 0x80,
+            0x80,
+            "multi channel: bit 7 must be set"
+        );
+        assert_eq!(
+            blob_multi[5] & 0x40,
+            0x40,
+            "use_base_color_space: bit 6 must be set"
+        );
 
         // use_base_color_space=false: bit 6 clear
         let no_base_cs = GainMapParams {
@@ -1363,7 +1339,11 @@ mod tests {
             ..Default::default()
         };
         let blob_no_base = serialize_iso21496(&no_base_cs);
-        assert_eq!(blob_no_base[5] & 0x40, 0x00, "use_base_color_space=false: bit 6 must be clear");
+        assert_eq!(
+            blob_no_base[5] & 0x40,
+            0x00,
+            "use_base_color_space=false: bit 6 must be clear"
+        );
     }
 
     #[test]
@@ -1413,9 +1393,7 @@ mod tests {
                 min: 5.0,
                 max: 1.0,
             },
-            GainMapParseError::NonFiniteValue {
-                field: "headroom",
-            },
+            GainMapParseError::NonFiniteValue { field: "headroom" },
         ];
 
         for err in &variants {
