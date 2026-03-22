@@ -43,6 +43,8 @@ mod detect;
 mod error;
 mod extensions;
 mod format;
+/// Cross-codec gain map types (ISO 21496-1).
+pub mod gainmap;
 /// Codec implementation helpers (not consumer API).
 pub mod helpers;
 mod info;
@@ -61,6 +63,9 @@ mod traits;
 
 pub use extensions::Extensions;
 pub use format::{ImageFormat, ImageFormatDefinition, ImageFormatRegistry};
+pub use gainmap::{
+    GainMapChannel, GainMapDirection, GainMapInfo, GainMapParams, GainMapPresence,
+};
 pub use info::{
     Cicp, ContentLightLevel, ImageInfo, ImageSequence, MasteringDisplay, Resolution,
     ResolutionUnit, Supplements,

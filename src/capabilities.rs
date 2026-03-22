@@ -110,6 +110,7 @@ pub struct EncodeCapabilities {
     lossy: bool,
     lossless: bool,
     hdr: bool,
+    gain_map: bool,
     native_gray: bool,
     native_16bit: bool,
     native_f32: bool,
@@ -148,6 +149,7 @@ impl EncodeCapabilities {
             lossy: false,
             lossless: false,
             hdr: false,
+            gain_map: false,
             native_gray: false,
             native_16bit: false,
             native_f32: false,
@@ -205,6 +207,10 @@ impl EncodeCapabilities {
     /// Whether the codec supports HDR content.
     pub const fn hdr(&self) -> bool {
         self.hdr
+    }
+    /// Whether the codec supports gain map (HDR/SDR) embedding.
+    pub const fn gain_map(&self) -> bool {
+        self.gain_map
     }
     /// Whether the codec supports grayscale natively.
     pub const fn native_gray(&self) -> bool {
@@ -344,6 +350,11 @@ impl EncodeCapabilities {
         self.hdr = v;
         self
     }
+    /// Set whether gain map (HDR/SDR) embedding is supported.
+    pub const fn with_gain_map(mut self, v: bool) -> Self {
+        self.gain_map = v;
+        self
+    }
     /// Set whether native grayscale encoding is supported.
     pub const fn with_native_gray(mut self, v: bool) -> Self {
         self.native_gray = v;
@@ -410,6 +421,7 @@ impl fmt::Debug for EncodeCapabilities {
             .field("lossy", &self.lossy)
             .field("lossless", &self.lossless)
             .field("hdr", &self.hdr)
+            .field("gain_map", &self.gain_map)
             .field("native_gray", &self.native_gray)
             .field("native_16bit", &self.native_16bit)
             .field("native_f32", &self.native_f32)
@@ -469,6 +481,7 @@ pub struct DecodeCapabilities {
     streaming: bool,
     // Format capabilities
     hdr: bool,
+    gain_map: bool,
     native_gray: bool,
     native_16bit: bool,
     native_f32: bool,
@@ -505,6 +518,7 @@ impl DecodeCapabilities {
             decode_into: false,
             streaming: false,
             hdr: false,
+            gain_map: false,
             native_gray: false,
             native_16bit: false,
             native_f32: false,
@@ -564,6 +578,10 @@ impl DecodeCapabilities {
     /// Whether the codec supports HDR content.
     pub const fn hdr(&self) -> bool {
         self.hdr
+    }
+    /// Whether the codec supports gain map (HDR/SDR) extraction.
+    pub const fn gain_map(&self) -> bool {
+        self.gain_map
     }
     /// Whether the codec supports grayscale natively.
     pub const fn native_gray(&self) -> bool {
@@ -693,6 +711,11 @@ impl DecodeCapabilities {
         self.hdr = v;
         self
     }
+    /// Set whether gain map (HDR/SDR) extraction is supported.
+    pub const fn with_gain_map(mut self, v: bool) -> Self {
+        self.gain_map = v;
+        self
+    }
     /// Set whether native grayscale decoding is supported.
     pub const fn with_native_gray(mut self, v: bool) -> Self {
         self.native_gray = v;
@@ -752,6 +775,7 @@ impl fmt::Debug for DecodeCapabilities {
             .field("decode_into", &self.decode_into)
             .field("streaming", &self.streaming)
             .field("hdr", &self.hdr)
+            .field("gain_map", &self.gain_map)
             .field("native_gray", &self.native_gray)
             .field("native_16bit", &self.native_16bit)
             .field("native_f32", &self.native_f32)

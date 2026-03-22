@@ -1,0 +1,1202 @@
+//! Cross-codec gain map types (ISO 21496-1).
+//!
+//! Canonical representation for gain map metadata used by JPEG (UltraHDR),
+//! AVIF (tmap), JXL (jhgm), and HEIF. All gains and headroom values are
+//! stored in **log2 domain** to match the ISO 21496-1 wire format and avoid
+//! domain confusion between codecs.
+//!
+//! # Domain conventions
+//!
+//! | Field | Domain | Example |
+//! |-------|--------|---------|
+//! | `channels[i].min` | log2 | −1.0 means ½× brightness |
+//! | `channels[i].max` | log2 | 2.0 means 4× brightness |
+//! | `channels[i].gamma` | linear | 1.0 = linear gain map encoding |
+//! | `channels[i].base_offset` | linear | 1/64 default |
+//! | `channels[i].alternate_offset` | linear | 1/64 default |
+//! | `base_hdr_headroom` | log2 | 0.0 = SDR (1:1) |
+//! | `alternate_hdr_headroom` | log2 | 1.3 ≈ 2.46× peak brightness |
+
+use alloc::boxed::Box;
+use alloc::sync::Arc;
+use alloc::vec::Vec;
+
+use crate::info::Cicp;
+
+// =========================================================================
+// Core types
+// =========================================================================
+
+/// Per-channel gain map parameters.
+///
+/// Gains (`min`, `max`) are in log2 domain. Gamma and offsets are in linear domain.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GainMapChannel {
+    /// Log2 of minimum gain (can be negative, e.g., −1.0 = half brightness).
+    pub min: f64,
+    /// Log2 of maximum gain (typically ≥ min).
+    pub max: f64,
+    /// Gamma applied to gain map values. Linear domain, must be > 0.
+    pub gamma: f64,
+    /// Offset added to base image values before gain application. Linear domain.
+    pub base_offset: f64,
+    /// Offset added to alternate image values before gain application. Linear domain.
+    pub alternate_offset: f64,
+}
+
+impl Default for GainMapChannel {
+    fn default() -> Self {
+        Self {
+            min: 0.0,                // log2(1.0) = 0
+            max: 0.0,                // log2(1.0) = 0
+            gamma: 1.0,
+            base_offset: 1.0 / 64.0, // ISO 21496-1 default
+            alternate_offset: 1.0 / 64.0,
+        }
+    }
+}
+
+impl GainMapChannel {
+    /// Minimum gain in linear domain: 2^min.
+    pub fn linear_min(&self) -> f64 {
+        2.0f64.powf(self.min)
+    }
+
+    /// Maximum gain in linear domain: 2^max.
+    pub fn linear_max(&self) -> f64 {
+        2.0f64.powf(self.max)
+    }
+}
+
+/// ISO 21496-1 gain map parameters. Canonical cross-codec representation.
+///
+/// Gains and headroom are in **log2 domain**. Gamma and offsets are in linear
+/// domain. This matches the ISO 21496-1 wire format directly, avoiding the
+/// domain confusion that occurs when converting between log2 and linear
+/// representations.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct GainMapParams {
+    /// Per-channel parameters. `[0]` = R (or all channels if single-channel),
+    /// `[1]` = G, `[2]` = B.
+    pub channels: [GainMapChannel; 3],
+    /// Log2 of base image HDR headroom. 0.0 = SDR (peak luminance ratio 1:1).
+    pub base_hdr_headroom: f64,
+    /// Log2 of alternate image HDR headroom.
+    pub alternate_hdr_headroom: f64,
+    /// Whether the gain map is encoded in the base image's color space.
+    pub use_base_color_space: bool,
+}
+
+impl Default for GainMapParams {
+    fn default() -> Self {
+        Self {
+            channels: [GainMapChannel::default(); 3],
+            base_hdr_headroom: 0.0,
+            alternate_hdr_headroom: 0.0,
+            use_base_color_space: true,
+        }
+    }
+}
+
+impl GainMapParams {
+    /// Whether all three channels have identical parameters.
+    pub fn is_single_channel(&self) -> bool {
+        self.channels[0] == self.channels[1] && self.channels[1] == self.channels[2]
+    }
+
+    /// Derive direction from headroom comparison.
+    ///
+    /// The image with greater headroom is the HDR rendition.
+    pub fn direction(&self) -> GainMapDirection {
+        if self.base_hdr_headroom > self.alternate_hdr_headroom {
+            GainMapDirection::BaseIsHdr
+        } else {
+            GainMapDirection::BaseIsSdr
+        }
+    }
+
+    /// Base HDR headroom in linear domain: 2^base_hdr_headroom.
+    pub fn linear_base_headroom(&self) -> f64 {
+        2.0f64.powf(self.base_hdr_headroom)
+    }
+
+    /// Alternate HDR headroom in linear domain: 2^alternate_hdr_headroom.
+    pub fn linear_alternate_headroom(&self) -> f64 {
+        2.0f64.powf(self.alternate_hdr_headroom)
+    }
+
+    /// Validate parameters for correctness.
+    ///
+    /// Checks for NaN/infinity, positive gamma, and min ≤ max per channel.
+    pub fn validate(&self) -> Result<(), GainMapParseError> {
+        if !self.base_hdr_headroom.is_finite() {
+            return Err(GainMapParseError::NonFiniteValue {
+                field: "base_hdr_headroom",
+            });
+        }
+        if !self.alternate_hdr_headroom.is_finite() {
+            return Err(GainMapParseError::NonFiniteValue {
+                field: "alternate_hdr_headroom",
+            });
+        }
+        for (i, ch) in self.channels.iter().enumerate() {
+            if !ch.min.is_finite() {
+                return Err(GainMapParseError::NonFiniteValue {
+                    field: "channel min",
+                });
+            }
+            if !ch.max.is_finite() {
+                return Err(GainMapParseError::NonFiniteValue {
+                    field: "channel max",
+                });
+            }
+            if !ch.gamma.is_finite() || ch.gamma <= 0.0 {
+                return Err(GainMapParseError::InvalidGamma {
+                    channel: i,
+                    value: ch.gamma,
+                });
+            }
+            if !ch.base_offset.is_finite() {
+                return Err(GainMapParseError::NonFiniteValue {
+                    field: "base_offset",
+                });
+            }
+            if !ch.alternate_offset.is_finite() {
+                return Err(GainMapParseError::NonFiniteValue {
+                    field: "alternate_offset",
+                });
+            }
+            if ch.min > ch.max {
+                return Err(GainMapParseError::MinExceedsMax {
+                    channel: i,
+                    min: ch.min,
+                    max: ch.max,
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Whether the base image is SDR or HDR. Derived from headroom comparison.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GainMapDirection {
+    /// Base image is SDR, alternate is HDR. Typical for JPEG and AVIF.
+    BaseIsSdr,
+    /// Base image is HDR, alternate is SDR. Typical for JXL.
+    BaseIsHdr,
+}
+
+/// Complete gain map description: parameters + image properties + alternate color.
+///
+/// Returned from probing when a gain map is detected. Contains enough
+/// information to describe the gain map without carrying pixel data.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct GainMapInfo {
+    /// ISO 21496-1 gain map parameters.
+    pub params: GainMapParams,
+    /// Gain map image width in pixels.
+    pub width: u32,
+    /// Gain map image height in pixels.
+    pub height: u32,
+    /// Number of gain map channels: 1 (luminance) or 3 (per-channel RGB).
+    pub channels: u8,
+    /// CICP color description of the alternate (typically HDR) rendition.
+    pub alternate_cicp: Option<Cicp>,
+    /// ICC profile of the alternate rendition.
+    pub alternate_icc: Option<Arc<[u8]>>,
+}
+
+impl GainMapInfo {
+    /// Create with required fields. Optional fields default to `None`.
+    pub fn new(params: GainMapParams, width: u32, height: u32, channels: u8) -> Self {
+        Self {
+            params,
+            width,
+            height,
+            channels,
+            alternate_cicp: None,
+            alternate_icc: None,
+        }
+    }
+
+    /// Set the alternate rendition's CICP color description.
+    pub fn with_alternate_cicp(mut self, cicp: Cicp) -> Self {
+        self.alternate_cicp = Some(cicp);
+        self
+    }
+
+    /// Set the alternate rendition's ICC profile.
+    pub fn with_alternate_icc(mut self, icc: impl Into<Arc<[u8]>>) -> Self {
+        self.alternate_icc = Some(icc.into());
+        self
+    }
+}
+
+/// Gain map detection state during probe.
+///
+/// Three-state presence indicator:
+/// - `Unknown` — can't determine from bytes probed (gain map may be beyond probe window)
+/// - `Absent` — definitively no gain map in this file
+/// - `Available` — gain map found and metadata parsed
+#[derive(Clone, Debug, Default, PartialEq)]
+#[non_exhaustive]
+pub enum GainMapPresence {
+    /// Cannot determine gain map presence from bytes probed so far.
+    #[default]
+    Unknown,
+    /// File definitively has no gain map.
+    Absent,
+    /// Gain map present, metadata parsed.
+    Available(Box<GainMapInfo>),
+}
+
+impl GainMapPresence {
+    /// Whether a gain map is definitely present.
+    pub fn is_present(&self) -> bool {
+        matches!(self, Self::Available(_))
+    }
+
+    /// Whether a gain map is definitively absent.
+    pub fn is_absent(&self) -> bool {
+        matches!(self, Self::Absent)
+    }
+
+    /// Whether gain map presence is unknown.
+    pub fn is_unknown(&self) -> bool {
+        matches!(self, Self::Unknown)
+    }
+
+    /// Reference to the gain map info, if available.
+    pub fn info(&self) -> Option<&GainMapInfo> {
+        match self {
+            Self::Available(info) => Some(info),
+            _ => None,
+        }
+    }
+
+    /// Consume and return the gain map info, if available.
+    pub fn into_info(self) -> Option<Box<GainMapInfo>> {
+        match self {
+            Self::Available(info) => Some(info),
+            _ => None,
+        }
+    }
+}
+
+// =========================================================================
+// ISO 21496-1 fractions
+// =========================================================================
+
+/// Signed rational fraction for ISO 21496-1 binary format.
+///
+/// Used for gain map min/max and offsets where negative values are valid.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Fraction {
+    /// Signed numerator.
+    pub numerator: i32,
+    /// Unsigned denominator (0 is invalid).
+    pub denominator: u32,
+}
+
+impl Fraction {
+    /// Convert to f64. Returns 0.0 if denominator is zero.
+    pub fn to_f64(self) -> f64 {
+        if self.denominator == 0 {
+            0.0
+        } else {
+            self.numerator as f64 / self.denominator as f64
+        }
+    }
+
+    /// Create from f64 with the specified denominator.
+    pub fn from_f64(value: f64, denominator: u32) -> Self {
+        Self {
+            numerator: (value * denominator as f64).round() as i32,
+            denominator,
+        }
+    }
+
+    /// Whether this fraction has a valid (non-zero) denominator.
+    pub fn is_valid(&self) -> bool {
+        self.denominator != 0
+    }
+}
+
+/// Unsigned rational fraction for ISO 21496-1 binary format.
+///
+/// Used for HDR headroom and gamma where values are always non-negative.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct UFraction {
+    /// Unsigned numerator.
+    pub numerator: u32,
+    /// Unsigned denominator (0 is invalid).
+    pub denominator: u32,
+}
+
+impl UFraction {
+    /// Convert to f64. Returns 0.0 if denominator is zero.
+    pub fn to_f64(self) -> f64 {
+        if self.denominator == 0 {
+            0.0
+        } else {
+            self.numerator as f64 / self.denominator as f64
+        }
+    }
+
+    /// Create from f64 with the specified denominator. Clamps negative values to 0.
+    pub fn from_f64(value: f64, denominator: u32) -> Self {
+        Self {
+            numerator: (value.max(0.0) * denominator as f64).round() as u32,
+            denominator,
+        }
+    }
+
+    /// Whether this fraction has a valid (non-zero) denominator.
+    pub fn is_valid(&self) -> bool {
+        self.denominator != 0
+    }
+}
+
+// =========================================================================
+// ISO 21496-1 parser/serializer
+// =========================================================================
+
+/// Errors from ISO 21496-1 parsing or validation.
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub enum GainMapParseError {
+    /// Data is too short to contain the expected fields.
+    TruncatedData {
+        expected: usize,
+        actual: usize,
+    },
+    /// Unsupported metadata version.
+    UnsupportedVersion {
+        version: u8,
+    },
+    /// A fraction has a zero denominator.
+    ZeroDenominator {
+        field: &'static str,
+    },
+    /// Gamma must be > 0 and finite.
+    InvalidGamma {
+        channel: usize,
+        value: f64,
+    },
+    /// Channel min exceeds max.
+    MinExceedsMax {
+        channel: usize,
+        min: f64,
+        max: f64,
+    },
+    /// A value is NaN or infinity.
+    NonFiniteValue {
+        field: &'static str,
+    },
+}
+
+impl core::fmt::Display for GainMapParseError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::TruncatedData { expected, actual } => {
+                write!(
+                    f,
+                    "ISO 21496-1: data truncated (need {expected} bytes, got {actual})"
+                )
+            }
+            Self::UnsupportedVersion { version } => {
+                write!(f, "ISO 21496-1: unsupported version {version}")
+            }
+            Self::ZeroDenominator { field } => {
+                write!(f, "ISO 21496-1: zero denominator in {field}")
+            }
+            Self::InvalidGamma { channel, value } => {
+                write!(f, "ISO 21496-1: invalid gamma {value} on channel {channel}")
+            }
+            Self::MinExceedsMax { channel, min, max } => {
+                write!(
+                    f,
+                    "ISO 21496-1: channel {channel} min ({min}) > max ({max})"
+                )
+            }
+            Self::NonFiniteValue { field } => {
+                write!(f, "ISO 21496-1: non-finite value in {field}")
+            }
+        }
+    }
+}
+
+impl core::error::Error for GainMapParseError {}
+
+/// Default denominator for fraction serialization (~6 decimal digits precision).
+const FRACTION_DENOM: u32 = 1_000_000;
+
+/// Parse ISO 21496-1 binary metadata into [`GainMapParams`].
+///
+/// The binary format stores gains and headroom as rational fractions in log2
+/// domain, which maps directly to `GainMapParams` fields.
+pub fn parse_iso21496(data: &[u8]) -> Result<GainMapParams, GainMapParseError> {
+    let mut offset = 0;
+
+    // Header (6 bytes)
+    let version = read_u8(data, &mut offset)?;
+    if version != 0 {
+        return Err(GainMapParseError::UnsupportedVersion { version });
+    }
+    let minimum_version = read_u16_be(data, &mut offset)?;
+    if minimum_version > 0 {
+        return Err(GainMapParseError::UnsupportedVersion {
+            version: minimum_version as u8,
+        });
+    }
+    let _writer_version = read_u16_be(data, &mut offset)?;
+    let flags = read_u8(data, &mut offset)?;
+    let is_multichannel = (flags & 0x80) != 0;
+    let use_base_color_space = (flags & 0x40) != 0;
+
+    // Headroom (unsigned fractions, already log2 domain)
+    let base_headroom = read_ufraction(data, &mut offset, "base_hdr_headroom")?;
+    let alt_headroom = read_ufraction(data, &mut offset, "alternate_hdr_headroom")?;
+
+    // Per-channel data
+    let num_channels = if is_multichannel { 3 } else { 1 };
+    let mut channels = [GainMapChannel::default(); 3];
+
+    for ch in channels.iter_mut().take(num_channels) {
+        let min_frac = read_fraction(data, &mut offset, "gain_map_min")?;
+        let max_frac = read_fraction(data, &mut offset, "gain_map_max")?;
+        let gamma_frac = read_ufraction(data, &mut offset, "gamma")?;
+        let base_offset_frac = read_fraction(data, &mut offset, "base_offset")?;
+        let alt_offset_frac = read_fraction(data, &mut offset, "alternate_offset")?;
+
+        *ch = GainMapChannel {
+            min: min_frac.to_f64(),
+            max: max_frac.to_f64(),
+            gamma: gamma_frac.to_f64(),
+            base_offset: base_offset_frac.to_f64(),
+            alternate_offset: alt_offset_frac.to_f64(),
+        };
+    }
+
+    // Single-channel: replicate to all three
+    if !is_multichannel {
+        channels[1] = channels[0];
+        channels[2] = channels[0];
+    }
+
+    Ok(GainMapParams {
+        channels,
+        base_hdr_headroom: base_headroom.to_f64(),
+        alternate_hdr_headroom: alt_headroom.to_f64(),
+        use_base_color_space,
+    })
+}
+
+/// Serialize [`GainMapParams`] to ISO 21496-1 binary format.
+pub fn serialize_iso21496(params: &GainMapParams) -> Vec<u8> {
+    let is_multichannel = !params.is_single_channel();
+    let num_channels: usize = if is_multichannel { 3 } else { 1 };
+    let size = 6 + 16 + num_channels * 40;
+    let mut data = Vec::with_capacity(size);
+
+    // Header
+    data.push(0u8); // version
+    data.extend_from_slice(&0u16.to_be_bytes()); // minimum_version
+    data.extend_from_slice(&0u16.to_be_bytes()); // writer_version
+    let mut flags = 0u8;
+    if is_multichannel {
+        flags |= 0x80;
+    }
+    if params.use_base_color_space {
+        flags |= 0x40;
+    }
+    data.push(flags);
+
+    // Headroom (log2 → unsigned fraction)
+    write_ufraction(
+        &mut data,
+        UFraction::from_f64(params.base_hdr_headroom, FRACTION_DENOM),
+    );
+    write_ufraction(
+        &mut data,
+        UFraction::from_f64(params.alternate_hdr_headroom, FRACTION_DENOM),
+    );
+
+    // Per-channel
+    for ch in params.channels.iter().take(num_channels) {
+        write_fraction(
+            &mut data,
+            Fraction::from_f64(ch.min, FRACTION_DENOM),
+        );
+        write_fraction(
+            &mut data,
+            Fraction::from_f64(ch.max, FRACTION_DENOM),
+        );
+        write_ufraction(
+            &mut data,
+            UFraction::from_f64(ch.gamma, FRACTION_DENOM),
+        );
+        write_fraction(
+            &mut data,
+            Fraction::from_f64(ch.base_offset, FRACTION_DENOM),
+        );
+        write_fraction(
+            &mut data,
+            Fraction::from_f64(ch.alternate_offset, FRACTION_DENOM),
+        );
+    }
+
+    data
+}
+
+// =========================================================================
+// Internal helpers
+// =========================================================================
+
+fn read_u8(data: &[u8], offset: &mut usize) -> Result<u8, GainMapParseError> {
+    if *offset >= data.len() {
+        return Err(GainMapParseError::TruncatedData {
+            expected: *offset + 1,
+            actual: data.len(),
+        });
+    }
+    let v = data[*offset];
+    *offset += 1;
+    Ok(v)
+}
+
+fn read_u16_be(data: &[u8], offset: &mut usize) -> Result<u16, GainMapParseError> {
+    if *offset + 2 > data.len() {
+        return Err(GainMapParseError::TruncatedData {
+            expected: *offset + 2,
+            actual: data.len(),
+        });
+    }
+    let v = u16::from_be_bytes([data[*offset], data[*offset + 1]]);
+    *offset += 2;
+    Ok(v)
+}
+
+fn read_i32_be(data: &[u8], offset: &mut usize) -> Result<i32, GainMapParseError> {
+    if *offset + 4 > data.len() {
+        return Err(GainMapParseError::TruncatedData {
+            expected: *offset + 4,
+            actual: data.len(),
+        });
+    }
+    let v = i32::from_be_bytes([
+        data[*offset],
+        data[*offset + 1],
+        data[*offset + 2],
+        data[*offset + 3],
+    ]);
+    *offset += 4;
+    Ok(v)
+}
+
+fn read_u32_be(data: &[u8], offset: &mut usize) -> Result<u32, GainMapParseError> {
+    if *offset + 4 > data.len() {
+        return Err(GainMapParseError::TruncatedData {
+            expected: *offset + 4,
+            actual: data.len(),
+        });
+    }
+    let v = u32::from_be_bytes([
+        data[*offset],
+        data[*offset + 1],
+        data[*offset + 2],
+        data[*offset + 3],
+    ]);
+    *offset += 4;
+    Ok(v)
+}
+
+fn read_fraction(
+    data: &[u8],
+    offset: &mut usize,
+    field: &'static str,
+) -> Result<Fraction, GainMapParseError> {
+    let n = read_i32_be(data, offset)?;
+    let d = read_u32_be(data, offset)?;
+    if d == 0 {
+        return Err(GainMapParseError::ZeroDenominator { field });
+    }
+    Ok(Fraction {
+        numerator: n,
+        denominator: d,
+    })
+}
+
+fn read_ufraction(
+    data: &[u8],
+    offset: &mut usize,
+    field: &'static str,
+) -> Result<UFraction, GainMapParseError> {
+    let n = read_u32_be(data, offset)?;
+    let d = read_u32_be(data, offset)?;
+    if d == 0 {
+        return Err(GainMapParseError::ZeroDenominator { field });
+    }
+    Ok(UFraction {
+        numerator: n,
+        denominator: d,
+    })
+}
+
+fn write_fraction(data: &mut Vec<u8>, frac: Fraction) {
+    data.extend_from_slice(&frac.numerator.to_be_bytes());
+    data.extend_from_slice(&frac.denominator.to_be_bytes());
+}
+
+fn write_ufraction(data: &mut Vec<u8>, frac: UFraction) {
+    data.extend_from_slice(&frac.numerator.to_be_bytes());
+    data.extend_from_slice(&frac.denominator.to_be_bytes());
+}
+
+// =========================================================================
+// Tests
+// =========================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- GainMapChannel ---
+
+    #[test]
+    fn channel_default() {
+        let ch = GainMapChannel::default();
+        assert_eq!(ch.min, 0.0);
+        assert_eq!(ch.max, 0.0);
+        assert_eq!(ch.gamma, 1.0);
+        assert_eq!(ch.base_offset, 1.0 / 64.0);
+        assert_eq!(ch.alternate_offset, 1.0 / 64.0);
+    }
+
+    #[test]
+    fn channel_copy() {
+        let ch = GainMapChannel {
+            min: -1.0,
+            max: 2.0,
+            gamma: 1.0,
+            base_offset: 0.0,
+            alternate_offset: 0.0,
+        };
+        let ch2 = ch; // Copy
+        assert_eq!(ch, ch2);
+    }
+
+    #[test]
+    fn channel_linear_helpers() {
+        let ch = GainMapChannel {
+            min: 0.0,
+            max: 2.0,
+            gamma: 1.0,
+            base_offset: 0.0,
+            alternate_offset: 0.0,
+        };
+        assert!((ch.linear_min() - 1.0).abs() < 1e-10); // 2^0 = 1
+        assert!((ch.linear_max() - 4.0).abs() < 1e-10); // 2^2 = 4
+    }
+
+    #[test]
+    fn channel_linear_negative() {
+        let ch = GainMapChannel {
+            min: -1.0,
+            max: 0.0,
+            gamma: 1.0,
+            base_offset: 0.0,
+            alternate_offset: 0.0,
+        };
+        assert!((ch.linear_min() - 0.5).abs() < 1e-10); // 2^-1 = 0.5
+        assert!((ch.linear_max() - 1.0).abs() < 1e-10); // 2^0 = 1
+    }
+
+    // --- GainMapParams ---
+
+    #[test]
+    fn params_default() {
+        let p = GainMapParams::default();
+        assert!(p.is_single_channel());
+        assert_eq!(p.base_hdr_headroom, 0.0);
+        assert_eq!(p.alternate_hdr_headroom, 0.0);
+        assert!(p.use_base_color_space);
+        assert_eq!(p.direction(), GainMapDirection::BaseIsSdr);
+    }
+
+    #[test]
+    fn params_direction_sdr_base() {
+        let p = GainMapParams {
+            base_hdr_headroom: 0.0,
+            alternate_hdr_headroom: 1.3,
+            ..Default::default()
+        };
+        assert_eq!(p.direction(), GainMapDirection::BaseIsSdr);
+    }
+
+    #[test]
+    fn params_direction_hdr_base() {
+        let p = GainMapParams {
+            base_hdr_headroom: 5.0,
+            alternate_hdr_headroom: 0.0,
+            ..Default::default()
+        };
+        assert_eq!(p.direction(), GainMapDirection::BaseIsHdr);
+    }
+
+    #[test]
+    fn params_direction_equal_headroom() {
+        let p = GainMapParams {
+            base_hdr_headroom: 1.0,
+            alternate_hdr_headroom: 1.0,
+            ..Default::default()
+        };
+        // Equal headroom defaults to BaseIsSdr
+        assert_eq!(p.direction(), GainMapDirection::BaseIsSdr);
+    }
+
+    #[test]
+    fn params_is_single_channel() {
+        let mut p = GainMapParams::default();
+        assert!(p.is_single_channel());
+
+        p.channels[1].max = 3.0;
+        assert!(!p.is_single_channel());
+    }
+
+    #[test]
+    fn params_linear_headroom() {
+        let p = GainMapParams {
+            base_hdr_headroom: 0.0,
+            alternate_hdr_headroom: 1.3,
+            ..Default::default()
+        };
+        assert!((p.linear_base_headroom() - 1.0).abs() < 1e-10);
+        assert!((p.linear_alternate_headroom() - 2.0f64.powf(1.3)).abs() < 1e-10);
+    }
+
+    #[test]
+    fn params_validate_ok() {
+        let p = GainMapParams::default();
+        assert!(p.validate().is_ok());
+    }
+
+    #[test]
+    fn params_validate_nan_headroom() {
+        let p = GainMapParams {
+            base_hdr_headroom: f64::NAN,
+            ..Default::default()
+        };
+        assert!(p.validate().is_err());
+    }
+
+    #[test]
+    fn params_validate_inf_headroom() {
+        let p = GainMapParams {
+            alternate_hdr_headroom: f64::INFINITY,
+            ..Default::default()
+        };
+        assert!(p.validate().is_err());
+    }
+
+    #[test]
+    fn params_validate_zero_gamma() {
+        let mut p = GainMapParams::default();
+        p.channels[0].gamma = 0.0;
+        let err = p.validate().unwrap_err();
+        assert!(matches!(
+            err,
+            GainMapParseError::InvalidGamma {
+                channel: 0,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn params_validate_negative_gamma() {
+        let mut p = GainMapParams::default();
+        p.channels[2].gamma = -0.5;
+        let err = p.validate().unwrap_err();
+        assert!(matches!(
+            err,
+            GainMapParseError::InvalidGamma {
+                channel: 2,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn params_validate_min_exceeds_max() {
+        let mut p = GainMapParams::default();
+        p.channels[1].min = 3.0;
+        p.channels[1].max = 1.0;
+        let err = p.validate().unwrap_err();
+        assert!(matches!(
+            err,
+            GainMapParseError::MinExceedsMax {
+                channel: 1,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn params_validate_nan_channel() {
+        let mut p = GainMapParams::default();
+        p.channels[0].min = f64::NAN;
+        assert!(p.validate().is_err());
+    }
+
+    #[test]
+    fn params_validate_inf_offset() {
+        let mut p = GainMapParams::default();
+        p.channels[0].base_offset = f64::INFINITY;
+        assert!(p.validate().is_err());
+    }
+
+    // --- GainMapPresence ---
+
+    #[test]
+    fn presence_default_is_unknown() {
+        let p = GainMapPresence::default();
+        assert!(p.is_unknown());
+        assert!(!p.is_present());
+        assert!(!p.is_absent());
+        assert!(p.info().is_none());
+    }
+
+    #[test]
+    fn presence_absent() {
+        let p = GainMapPresence::Absent;
+        assert!(p.is_absent());
+        assert!(!p.is_present());
+        assert!(!p.is_unknown());
+        assert!(p.info().is_none());
+    }
+
+    #[test]
+    fn presence_available() {
+        let info = GainMapInfo::new(GainMapParams::default(), 128, 128, 1);
+        let p = GainMapPresence::Available(Box::new(info));
+        assert!(p.is_present());
+        assert!(!p.is_absent());
+        assert!(!p.is_unknown());
+
+        let i = p.info().unwrap();
+        assert_eq!(i.width, 128);
+        assert_eq!(i.height, 128);
+        assert_eq!(i.channels, 1);
+    }
+
+    #[test]
+    fn presence_into_info() {
+        let info = GainMapInfo::new(GainMapParams::default(), 64, 64, 3);
+        let p = GainMapPresence::Available(Box::new(info));
+        let i = p.into_info().unwrap();
+        assert_eq!(i.width, 64);
+        assert_eq!(i.channels, 3);
+    }
+
+    #[test]
+    fn presence_into_info_none() {
+        assert!(GainMapPresence::Unknown.into_info().is_none());
+        assert!(GainMapPresence::Absent.into_info().is_none());
+    }
+
+    // --- GainMapInfo ---
+
+    #[test]
+    fn info_builder() {
+        let info = GainMapInfo::new(GainMapParams::default(), 256, 256, 1)
+            .with_alternate_cicp(Cicp::BT2100_PQ)
+            .with_alternate_icc(alloc::vec![1, 2, 3]);
+        assert_eq!(info.alternate_cicp, Some(Cicp::BT2100_PQ));
+        assert_eq!(
+            info.alternate_icc.as_deref(),
+            Some([1, 2, 3].as_slice())
+        );
+    }
+
+    // --- Fraction ---
+
+    #[test]
+    fn fraction_roundtrip() {
+        let f = Fraction::from_f64(1.5, 1_000_000);
+        assert!((f.to_f64() - 1.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn fraction_negative() {
+        let f = Fraction::from_f64(-0.256907, 1_000_000);
+        assert!((f.to_f64() - (-0.256907)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn fraction_zero_denom() {
+        let f = Fraction {
+            numerator: 42,
+            denominator: 0,
+        };
+        assert_eq!(f.to_f64(), 0.0);
+        assert!(!f.is_valid());
+    }
+
+    #[test]
+    fn fraction_default() {
+        let f = Fraction::default();
+        assert_eq!(f.numerator, 0);
+        assert_eq!(f.denominator, 0);
+        assert!(!f.is_valid());
+    }
+
+    // --- UFraction ---
+
+    #[test]
+    fn ufraction_roundtrip() {
+        let f = UFraction::from_f64(1.3, 1_000_000);
+        assert!((f.to_f64() - 1.3).abs() < 1e-6);
+    }
+
+    #[test]
+    fn ufraction_clamps_negative() {
+        let f = UFraction::from_f64(-5.0, 1_000_000);
+        assert_eq!(f.numerator, 0);
+        assert_eq!(f.to_f64(), 0.0);
+    }
+
+    #[test]
+    fn ufraction_zero_denom() {
+        let f = UFraction {
+            numerator: 42,
+            denominator: 0,
+        };
+        assert_eq!(f.to_f64(), 0.0);
+        assert!(!f.is_valid());
+    }
+
+    // --- parse_iso21496 ---
+
+    #[test]
+    fn parse_roundtrip_single_channel() {
+        let original = GainMapParams {
+            channels: [GainMapChannel {
+                min: -0.5,
+                max: 2.0,
+                gamma: 1.0,
+                base_offset: 1.0 / 64.0,
+                alternate_offset: 1.0 / 64.0,
+            }; 3],
+            base_hdr_headroom: 0.0,
+            alternate_hdr_headroom: 1.3,
+            use_base_color_space: true,
+        };
+
+        let blob = serialize_iso21496(&original);
+        assert_eq!(blob.len(), 62); // 6 + 16 + 1*40
+
+        let parsed = parse_iso21496(&blob).unwrap();
+        assert!(parsed.is_single_channel());
+        assert!((parsed.base_hdr_headroom - 0.0).abs() < 1e-6);
+        assert!((parsed.alternate_hdr_headroom - 1.3).abs() < 1e-6);
+        assert!((parsed.channels[0].min - (-0.5)).abs() < 1e-6);
+        assert!((parsed.channels[0].max - 2.0).abs() < 1e-6);
+        assert!((parsed.channels[0].gamma - 1.0).abs() < 1e-6);
+        assert!(parsed.use_base_color_space);
+    }
+
+    #[test]
+    fn parse_roundtrip_multi_channel() {
+        let original = GainMapParams {
+            channels: [
+                GainMapChannel {
+                    min: -0.3,
+                    max: 2.0,
+                    gamma: 1.0,
+                    base_offset: 0.01,
+                    alternate_offset: 0.02,
+                },
+                GainMapChannel {
+                    min: -0.1,
+                    max: 1.5,
+                    gamma: 0.8,
+                    base_offset: 0.01,
+                    alternate_offset: 0.02,
+                },
+                GainMapChannel {
+                    min: -0.5,
+                    max: 2.5,
+                    gamma: 1.2,
+                    base_offset: 0.01,
+                    alternate_offset: 0.02,
+                },
+            ],
+            base_hdr_headroom: 0.0,
+            alternate_hdr_headroom: 1.3,
+            use_base_color_space: false,
+        };
+
+        let blob = serialize_iso21496(&original);
+        assert_eq!(blob.len(), 142); // 6 + 16 + 3*40
+
+        let parsed = parse_iso21496(&blob).unwrap();
+        assert!(!parsed.is_single_channel());
+        assert!(!parsed.use_base_color_space);
+
+        for i in 0..3 {
+            assert!(
+                (parsed.channels[i].min - original.channels[i].min).abs() < 1e-6,
+                "channel {i} min"
+            );
+            assert!(
+                (parsed.channels[i].max - original.channels[i].max).abs() < 1e-6,
+                "channel {i} max"
+            );
+            assert!(
+                (parsed.channels[i].gamma - original.channels[i].gamma).abs() < 1e-6,
+                "channel {i} gamma"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_known_blob() {
+        // Construct a known ISO 21496-1 binary blob manually.
+        // Single channel, use_base_color_space=true, base=SDR, alt headroom=13/10=1.3
+        let mut blob = Vec::new();
+        // Header
+        blob.push(0); // version
+        blob.extend_from_slice(&0u16.to_be_bytes()); // min version
+        blob.extend_from_slice(&0u16.to_be_bytes()); // writer version
+        blob.push(0x40); // flags: single channel, use_base_color_space
+        // Headroom
+        blob.extend_from_slice(&0u32.to_be_bytes()); // base_headroom_n = 0
+        blob.extend_from_slice(&1u32.to_be_bytes()); // base_headroom_d = 1
+        blob.extend_from_slice(&13u32.to_be_bytes()); // alt_headroom_n = 13
+        blob.extend_from_slice(&10u32.to_be_bytes()); // alt_headroom_d = 10
+        // Channel 0
+        blob.extend_from_slice(&0i32.to_be_bytes()); // min_n = 0
+        blob.extend_from_slice(&1u32.to_be_bytes()); // min_d = 1
+        blob.extend_from_slice(&2i32.to_be_bytes()); // max_n = 2
+        blob.extend_from_slice(&1u32.to_be_bytes()); // max_d = 1
+        blob.extend_from_slice(&1u32.to_be_bytes()); // gamma_n = 1
+        blob.extend_from_slice(&1u32.to_be_bytes()); // gamma_d = 1
+        blob.extend_from_slice(&1i32.to_be_bytes()); // base_offset_n = 1
+        blob.extend_from_slice(&64u32.to_be_bytes()); // base_offset_d = 64
+        blob.extend_from_slice(&1i32.to_be_bytes()); // alt_offset_n = 1
+        blob.extend_from_slice(&64u32.to_be_bytes()); // alt_offset_d = 64
+
+        let params = parse_iso21496(&blob).unwrap();
+        assert_eq!(params.base_hdr_headroom, 0.0);
+        assert!((params.alternate_hdr_headroom - 1.3).abs() < 1e-10);
+        assert_eq!(params.channels[0].min, 0.0);
+        assert_eq!(params.channels[0].max, 2.0);
+        assert_eq!(params.channels[0].gamma, 1.0);
+        assert_eq!(params.channels[0].base_offset, 1.0 / 64.0);
+        assert!(params.is_single_channel());
+        assert!(params.use_base_color_space);
+        assert_eq!(params.direction(), GainMapDirection::BaseIsSdr);
+
+        // The alternate headroom in linear domain should be 2^1.3 ≈ 2.462
+        assert!((params.linear_alternate_headroom() - 2.0f64.powf(1.3)).abs() < 1e-10);
+    }
+
+    #[test]
+    fn parse_truncated() {
+        assert!(parse_iso21496(&[]).is_err());
+        assert!(parse_iso21496(&[0]).is_err());
+        assert!(parse_iso21496(&[0; 5]).is_err());
+        // 6 bytes header OK, but not enough for headroom
+        assert!(parse_iso21496(&[0, 0, 0, 0, 0, 0x40]).is_err());
+    }
+
+    #[test]
+    fn parse_wrong_version() {
+        let mut blob = alloc::vec![0u8; 62];
+        blob[0] = 1; // unsupported version
+        let err = parse_iso21496(&blob).unwrap_err();
+        assert!(matches!(
+            err,
+            GainMapParseError::UnsupportedVersion { version: 1 }
+        ));
+    }
+
+    #[test]
+    fn parse_wrong_min_version() {
+        let mut blob = alloc::vec![0u8; 62];
+        blob[0] = 0; // version OK
+        blob[1] = 0;
+        blob[2] = 1; // minimum_version = 1 (unsupported)
+        let err = parse_iso21496(&blob).unwrap_err();
+        assert!(matches!(
+            err,
+            GainMapParseError::UnsupportedVersion { .. }
+        ));
+    }
+
+    #[test]
+    fn parse_zero_denominator() {
+        // Build a blob with zero denominator in base_headroom
+        let mut blob = Vec::new();
+        blob.push(0); // version
+        blob.extend_from_slice(&0u16.to_be_bytes());
+        blob.extend_from_slice(&0u16.to_be_bytes());
+        blob.push(0x40); // flags
+        blob.extend_from_slice(&0u32.to_be_bytes()); // base_headroom_n
+        blob.extend_from_slice(&0u32.to_be_bytes()); // base_headroom_d = 0 !
+        // pad to avoid truncation error before we hit zero-denom
+        blob.extend_from_slice(&[0; 100]);
+
+        let err = parse_iso21496(&blob).unwrap_err();
+        assert!(matches!(err, GainMapParseError::ZeroDenominator { .. }));
+    }
+
+    // --- serialize_iso21496 ---
+
+    #[test]
+    fn serialize_single_channel_size() {
+        let p = GainMapParams::default();
+        assert!(p.is_single_channel());
+        assert_eq!(serialize_iso21496(&p).len(), 62);
+    }
+
+    #[test]
+    fn serialize_multi_channel_size() {
+        let mut p = GainMapParams::default();
+        p.channels[1].max = 3.0; // make multichannel
+        assert!(!p.is_single_channel());
+        assert_eq!(serialize_iso21496(&p).len(), 142);
+    }
+
+    // --- GainMapParseError ---
+
+    #[test]
+    fn error_display() {
+        let e = GainMapParseError::TruncatedData {
+            expected: 62,
+            actual: 10,
+        };
+        let s = alloc::format!("{e}");
+        assert!(s.contains("truncated"));
+        assert!(s.contains("62"));
+    }
+
+    #[test]
+    fn error_is_error() {
+        let e = GainMapParseError::UnsupportedVersion { version: 1 };
+        let _: &dyn core::error::Error = &e;
+    }
+
+    // --- GainMapDirection ---
+
+    #[test]
+    fn direction_copy() {
+        let d = GainMapDirection::BaseIsSdr;
+        let d2 = d;
+        assert_eq!(d, d2);
+    }
+}

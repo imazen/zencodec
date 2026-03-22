@@ -7,6 +7,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use crate::detect::SourceEncodingDetails;
+use crate::gainmap::GainMapPresence;
 use crate::metadata::Metadata;
 use crate::{ImageFormat, Orientation};
 use zenpixels::{ColorPrimaries, TransferFunction};
@@ -360,6 +361,12 @@ pub struct ImageInfo {
     ///
     /// Pyramids, gain maps, depth maps, and other auxiliary data.
     pub supplements: Supplements,
+    /// Gain map detection state.
+    ///
+    /// Three-state: `Unknown` (not yet probed), `Absent` (definitively none),
+    /// or `Available` (metadata parsed). When `Available`, the gain map
+    /// image pixels are NOT included — only the metadata and dimensions.
+    pub gain_map: GainMapPresence,
     /// EXIF orientation (1-8).
     ///
     /// When a codec applies orientation during decode (rotating the pixel
@@ -413,6 +420,7 @@ impl ImageInfo {
             has_alpha: false,
             sequence: ImageSequence::Single,
             supplements: Supplements::default(),
+            gain_map: GainMapPresence::default(),
             orientation: Orientation::Normal,
             resolution: None,
             source_color: SourceColor::default(),
@@ -437,6 +445,12 @@ impl ImageInfo {
     /// Set supplemental content flags.
     pub fn with_supplements(mut self, supplements: Supplements) -> Self {
         self.supplements = supplements;
+        self
+    }
+
+    /// Set gain map detection state.
+    pub fn with_gain_map(mut self, gain_map: GainMapPresence) -> Self {
+        self.gain_map = gain_map;
         self
     }
 
@@ -649,6 +663,7 @@ impl core::fmt::Debug for ImageInfo {
             .field("has_alpha", &self.has_alpha)
             .field("sequence", &self.sequence)
             .field("supplements", &self.supplements)
+            .field("gain_map", &self.gain_map)
             .field("orientation", &self.orientation)
             .field("source_color", &self.source_color)
             .field("embedded_metadata", &self.embedded_metadata);
@@ -671,6 +686,7 @@ impl PartialEq for ImageInfo {
             && self.has_alpha == other.has_alpha
             && self.sequence == other.sequence
             && self.supplements == other.supplements
+            && self.gain_map == other.gain_map
             && self.orientation == other.orientation
             && self.source_color == other.source_color
             && self.embedded_metadata == other.embedded_metadata
