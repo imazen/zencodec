@@ -24,16 +24,15 @@ use super::encoder::{Encoder, FullFrameEncoder};
 /// no-op implementations. Use the corresponding getter to check if the
 /// codec accepted a value.
 ///
-/// The `job()` method creates a per-operation [`EncodeJob`] that borrows
-/// temporary data (stop tokens, metadata, resource limits).
+/// The `job()` method consumes the config and creates a per-operation
+/// [`EncodeJob`] that owns it. Clone the config first if you need to
+/// reuse it: `config.clone().job()`.
 pub trait EncoderConfig: Clone + Send + Sync {
     /// The codec-specific error type.
     type Error: core::error::Error + Send + Sync + 'static;
 
-    /// Per-operation job type.
-    type Job<'a>: EncodeJob<'a, Error = Self::Error>
-    where
-        Self: 'a;
+    /// Per-operation job type. Parameterized by the stop token lifetime.
+    type Job<'a>: EncodeJob<'a, Error = Self::Error>;
 
     /// The image format this encoder produces.
     fn format() -> ImageFormat;
@@ -108,8 +107,12 @@ pub trait EncoderConfig: Clone + Send + Sync {
         None
     }
 
-    /// Create a per-operation job.
-    fn job(&self) -> Self::Job<'_>;
+    /// Create a per-operation job, consuming the config.
+    ///
+    /// The job owns the config. The `'a` on `Job<'a>` is for the stop
+    /// token set via [`EncodeJob::with_stop`]. Without a stop token,
+    /// the job (and its encoder) can be `'static`.
+    fn job(self) -> Self::Job<'static>;
 }
 
 // ===========================================================================

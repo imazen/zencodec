@@ -362,7 +362,11 @@ pub trait DynEncoderConfig: Send + Sync {
     fn capabilities(&self) -> &'static EncodeCapabilities;
 
     /// Create a dyn-dispatched encode job.
-    fn dyn_job(&self) -> Box<dyn DynEncodeJob<'_> + '_>;
+    ///
+    /// The job owns its config (cloned). The `'static` bound means
+    /// the job can outlive the config reference — the only remaining
+    /// lifetime dependency is the stop token (set via `set_stop`).
+    fn dyn_job(&self) -> Box<dyn DynEncodeJob<'static> + 'static>;
 }
 
 impl<C> DynEncoderConfig for C
@@ -387,7 +391,7 @@ where
         C::capabilities()
     }
 
-    fn dyn_job(&self) -> Box<dyn DynEncodeJob<'_> + '_> {
-        Box::new(EncodeJobShim(Some(EncoderConfig::job(self))))
+    fn dyn_job(&self) -> Box<dyn DynEncodeJob<'static> + 'static> {
+        Box::new(EncodeJobShim(Some(self.clone().job())))
     }
 }
