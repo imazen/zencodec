@@ -31,8 +31,8 @@ pub trait EncoderConfig: Clone + Send + Sync {
     /// The codec-specific error type.
     type Error: core::error::Error + Send + Sync + 'static;
 
-    /// Per-operation job type. Parameterized by the stop token lifetime.
-    type Job<'a>: EncodeJob<'a, Error = Self::Error>;
+    /// Per-operation job type. Owns all configuration including stop token.
+    type Job: EncodeJob<Error = Self::Error>;
 
     /// The image format this encoder produces.
     fn format() -> ImageFormat;
@@ -116,7 +116,7 @@ pub trait EncoderConfig: Clone + Send + Sync {
     /// let job = config.job().with_stop(&stop); // 'a = lifetime of stop
     /// let job = config.job();                  // 'a = 'static (no stop)
     /// ```
-    fn job<'a>(self) -> Self::Job<'a>;
+    fn job(self) -> Self::Job;
 }
 
 // ===========================================================================
@@ -129,12 +129,12 @@ pub trait EncoderConfig: Clone + Send + Sync {
 /// cancellation for a single encode operation. Produces either an `Enc`
 /// (single image via per-format traits) or a `FullFrameEnc` (animation
 /// via full-frame encoder).
-pub trait EncodeJob<'a>: Sized {
+pub trait EncodeJob: Sized {
     /// The codec-specific error type.
     type Error: core::error::Error + Send + Sync + 'static;
 
     /// Single-image encoder type (implements [`Encoder`]).
-    type Enc: Sized;
+    type Enc: Sized + 'static;
 
     /// Full-frame animation encoder type (implements [`FullFrameEncoder`]).
     ///
@@ -145,7 +145,11 @@ pub trait EncodeJob<'a>: Sized {
     type FullFrameEnc: Sized + Send + 'static;
 
     /// Set cooperative cancellation token.
-    fn with_stop(self, stop: &'a dyn Stop) -> Self;
+    ///
+    /// [`StopToken`](almost_enough::StopToken) is `Clone + Send + Sync + 'static` —
+    /// an owned, type-erased stop. Convert any `Stop + Clone + 'static` with
+    /// `stop.into_token()` or `StopToken::new(stop)`.
+    fn with_stop(self, stop: crate::StopToken) -> Self;
 
     /// Override resource limits for this operation.
     fn with_limits(self, limits: ResourceLimits) -> Self;
@@ -257,9 +261,8 @@ pub trait EncodeJob<'a>: Sized {
     /// // No generics from here on
     /// let output = encode.encode(pixels)?;
     /// ```
-    fn dyn_encoder(self) -> Result<Box<dyn DynEncoder + 'a>, BoxedError>
+    fn dyn_encoder(self) -> Result<Box<dyn DynEncoder>, BoxedError>
     where
-        Self: 'a,
         Self::Enc: Encoder,
     {
         let enc = self.encoder().map_err(|e| Box::new(e) as BoxedError)?;
@@ -283,7 +286,6 @@ pub trait EncodeJob<'a>: Sized {
     /// ```
     fn dyn_full_frame_encoder(self) -> Result<Box<dyn DynFullFrameEncoder>, BoxedError>
     where
-        Self: 'a,
         Self::FullFrameEnc: FullFrameEncoder + Send,
     {
         let enc = self

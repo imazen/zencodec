@@ -15,9 +15,8 @@ name = "zencodec"
 
 [dependencies]
 zenpixels = { path = "../zenpixels/zenpixels", features = ["imgref"] }
-enough = "0.4"
+enough = "0.4.2"
 whereat = "0.1.3"
 
 [dev-dependencies]
 thiserror = "2"
-almost-enough = "0.4"

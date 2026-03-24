@@ -24,6 +24,7 @@ use core::any::Any;
 use crate::format::ImageFormat;
 use crate::{EncodeCapabilities, EncodeOutput, Metadata, ResourceLimits};
 use enough::Stop;
+use crate::StopToken;
 use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 
 use super::BoxedError;
@@ -209,9 +210,9 @@ impl<F: FullFrameEncoder + Send + 'static> DynFullFrameEncoder for FullFrameEnco
 /// [`DynEncoderConfig::dyn_job`]. Use the `set_*` methods to configure,
 /// then call [`into_encoder`](DynEncodeJob::into_encoder) or
 /// [`into_full_frame_encoder`](DynEncodeJob::into_full_frame_encoder).
-pub trait DynEncodeJob<'a> {
+pub trait DynEncodeJob {
     /// Set cooperative cancellation token.
-    fn set_stop(&mut self, stop: &'a dyn Stop);
+    fn set_stop(&mut self, stop: StopToken);
 
     /// Override resource limits.
     fn set_limits(&mut self, limits: ResourceLimits);
@@ -239,7 +240,7 @@ pub trait DynEncodeJob<'a> {
     fn extensions_mut(&mut self) -> Option<&mut dyn Any>;
 
     /// Create the single-image encoder (consumes this job).
-    fn into_encoder(self: Box<Self>) -> Result<Box<dyn DynEncoder + 'a>, BoxedError>;
+    fn into_encoder(self: Box<Self>) -> Result<Box<dyn DynEncoder>, BoxedError>;
 
     /// Create the full-frame animation encoder (consumes this job).
     ///
@@ -260,13 +261,13 @@ impl<J> EncodeJobShim<J> {
     }
 }
 
-impl<'a, J> DynEncodeJob<'a> for EncodeJobShim<J>
+impl<'a, J> DynEncodeJob for EncodeJobShim<J>
 where
-    J: EncodeJob<'a> + 'a,
+    J: EncodeJob,
     J::Enc: Encoder,
     J::FullFrameEnc: FullFrameEncoder,
 {
-    fn set_stop(&mut self, stop: &'a dyn Stop) {
+    fn set_stop(&mut self, stop: StopToken) {
         let job = self.take();
         self.put(job.with_stop(stop));
     }
@@ -304,7 +305,7 @@ where
         self.0.as_mut().and_then(|j| j.extensions_mut())
     }
 
-    fn into_encoder(mut self: Box<Self>) -> Result<Box<dyn DynEncoder + 'a>, BoxedError> {
+    fn into_encoder(mut self: Box<Self>) -> Result<Box<dyn DynEncoder>, BoxedError> {
         let job = self.take();
         let enc = job.encoder().map_err(|e| Box::new(e) as BoxedError)?;
         Ok(Box::new(EncoderShim(enc)))
@@ -366,14 +367,14 @@ pub trait DynEncoderConfig: Send + Sync {
     /// The job owns its config (cloned). The `'static` bound means
     /// the job can outlive the config reference — the only remaining
     /// lifetime dependency is the stop token (set via `set_stop`).
-    fn dyn_job(&self) -> Box<dyn DynEncodeJob<'static> + 'static>;
+    fn dyn_job(&self) -> Box<dyn DynEncodeJob + 'static>;
 }
 
 impl<C> DynEncoderConfig for C
 where
     C: EncoderConfig + 'static,
-    for<'a> <C::Job<'a> as EncodeJob<'a>>::Enc: Encoder,
-    for<'a> <C::Job<'a> as EncodeJob<'a>>::FullFrameEnc: FullFrameEncoder,
+    <C::Job as EncodeJob>::Enc: Encoder,
+    <C::Job as EncodeJob>::FullFrameEnc: FullFrameEncoder,
 {
     fn as_any(&self) -> &dyn Any {
         self
@@ -391,7 +392,7 @@ where
         C::capabilities()
     }
 
-    fn dyn_job(&self) -> Box<dyn DynEncodeJob<'static> + 'static> {
-        Box::new(EncodeJobShim(Some(self.clone().job::<'static>())))
+    fn dyn_job(&self) -> Box<dyn DynEncodeJob + 'static> {
+        Box::new(EncodeJobShim(Some(self.clone().job())))
     }
 }

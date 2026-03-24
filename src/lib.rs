@@ -84,6 +84,32 @@ pub use traits::Unsupported;
 //
 pub use enough;
 pub use enough::Unstoppable;
+/// Owned, clonable, type-erased stop token.
+///
+/// Wraps `Arc<dyn Stop>` — `Clone` is a cheap Arc increment.
+/// Use `StopToken::new(stop)` to convert any `Stop + 'static`.
+/// `Unstoppable` converts to a no-op token.
+#[derive(Clone)]
+pub struct StopToken(alloc::sync::Arc<dyn enough::Stop>);
+
+impl StopToken {
+    /// Create a new stop token from any `Stop + 'static`.
+    pub fn new(stop: impl enough::Stop + 'static) -> Self {
+        Self(alloc::sync::Arc::new(stop))
+    }
+}
+
+impl enough::Stop for StopToken {
+    #[inline]
+    fn check(&self) -> Result<(), enough::StopReason> {
+        self.0.check()
+    }
+
+    #[inline]
+    fn may_stop(&self) -> bool {
+        self.0.may_stop()
+    }
+}
 
 // =========================================================================
 // pub(crate) re-exports — keep internal `use crate::Foo` paths working
