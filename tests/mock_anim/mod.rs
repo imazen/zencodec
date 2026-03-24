@@ -520,7 +520,7 @@ static MOCK_ENCODE_CAPS: EncodeCapabilities = EncodeCapabilities::new()
 
 impl EncoderConfig for MockEncoderConfig {
     type Error = MockError;
-    type Job<'a> = MockEncodeJob<'a>;
+    type Job = MockEncodeJob;
 
     fn format() -> ImageFormat {
         ImageFormat::Pnm
@@ -570,7 +570,7 @@ impl EncoderConfig for MockEncoderConfig {
         self.alpha_quality
     }
 
-    fn job(self) -> MockEncodeJob<'static> {
+    fn job(self) -> MockEncodeJob {
         MockEncodeJob {
             limits: ResourceLimits::none(),
             stop: None,
@@ -583,9 +583,9 @@ impl EncoderConfig for MockEncoderConfig {
     }
 }
 
-pub struct MockEncodeJob<'a> {
+pub struct MockEncodeJob {
     limits: ResourceLimits,
-    stop: Option<&'a dyn Stop>,
+    stop: Option<zencodec::StopToken>,
     metadata: Option<Metadata>,
     canvas_size: Option<(u32, u32)>,
     loop_count: Option<Option<u32>>,
@@ -593,12 +593,12 @@ pub struct MockEncodeJob<'a> {
     pub ext: MockEncodeExtensions,
 }
 
-impl<'a> EncodeJob<'a> for MockEncodeJob<'a> {
+impl EncodeJob for MockEncodeJob {
     type Error = MockError;
     type Enc = MockEnc;
     type FullFrameEnc = MockFullFrameEnc;
 
-    fn with_stop(mut self, stop: &'a dyn Stop) -> Self {
+    fn with_stop(mut self, stop: zencodec::StopToken) -> Self {
         self.stop = Some(stop);
         self
     }

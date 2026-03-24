@@ -58,9 +58,9 @@ impl PnmEncoderConfig {
 }
 
 /// Per-operation encode job.
-pub struct PnmEncodeJob<'a> {
+pub struct PnmEncodeJob {
     limits: ResourceLimits,
-    stop: Option<&'a dyn Stop>,
+    stop: Option<zencodec::StopToken>,
     metadata: Option<Metadata>,
 }
 
@@ -76,7 +76,7 @@ static PNM_ENCODE_CAPS: EncodeCapabilities = EncodeCapabilities::new()
 
 impl EncoderConfig for PnmEncoderConfig {
     type Error = At<PnmError>;
-    type Job<'a> = PnmEncodeJob<'a>;
+    type Job = PnmEncodeJob;
 
     fn format() -> ImageFormat {
         ImageFormat::Pnm
@@ -90,7 +90,7 @@ impl EncoderConfig for PnmEncoderConfig {
         &PNM_ENCODE_CAPS
     }
 
-    fn job(self) -> PnmEncodeJob<'static> {
+    fn job(self) -> PnmEncodeJob {
         PnmEncodeJob {
             limits: ResourceLimits::none(),
             stop: None,
@@ -99,12 +99,12 @@ impl EncoderConfig for PnmEncoderConfig {
     }
 }
 
-impl<'a> EncodeJob<'a> for PnmEncodeJob<'a> {
+impl EncodeJob for PnmEncodeJob {
     type Error = At<PnmError>;
     type Enc = PnmEnc;
     type FullFrameEnc = (); // no animation
 
-    fn with_stop(mut self, stop: &'a dyn Stop) -> Self {
+    fn with_stop(mut self, stop: zencodec::StopToken) -> Self {
         self.stop = Some(stop);
         self
     }
@@ -121,8 +121,7 @@ impl<'a> EncodeJob<'a> for PnmEncodeJob<'a> {
 
     fn encoder(self) -> Result<PnmEnc, At<PnmError>> {
         let stop: Option<Box<dyn Fn() -> Result<(), StopReason> + Send>> = self.stop.map(|s| {
-            let _ = s.check();
-            Box::new(|| Ok(())) as Box<dyn Fn() -> Result<(), StopReason> + Send>
+            Box::new(move || s.check()) as Box<dyn Fn() -> Result<(), StopReason> + Send>
         });
         Ok(PnmEnc { stop })
     }

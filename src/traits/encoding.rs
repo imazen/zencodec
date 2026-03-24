@@ -4,7 +4,6 @@ use alloc::boxed::Box;
 
 use crate::format::ImageFormat;
 use crate::{EncodeCapabilities, Metadata, ResourceLimits};
-use enough::Stop;
 use zenpixels::PixelDescriptor;
 
 use super::BoxedError;
