@@ -24,7 +24,7 @@ Audit date: 2026-03-08. Covers all users under `~/work/` and `~/work/zen/`.
 | Crate | Path | Version | Role |
 |-------|------|---------|------|
 | zencodecs | `zen/zencodecs` | 0.1.0 | Umbrella crate, dispatches to codec crates via traits |
-| zcimg | `zen/zencodecs/zcimg` | 0.1.0 | CLI tool using zencodecs (**BROKEN: does not compile**) |
+| zcimg | `zen/zencodecs/zcimg` | 0.1.0 | CLI tool using zencodecs (own code compiles; blocked by zenavif dep) |
 
 ### Consumer Crates
 
@@ -38,10 +38,8 @@ Audit date: 2026-03-08. Covers all users under `~/work/` and `~/work/zen/`.
 ## Broken Crates (will not compile)
 
 ### zcimg (`zen/zencodecs/zcimg`)
-- `ImageMetadata` imported but doesn't exist (should be `MetadataView`)
-- `encoded.bytes()` called but method is `.data()` or `.into_vec()`
-- `decoded.into_rgba8()` / `into_rgb8()` / `into_gray8()` don't exist on `DecodeOutput`
-- `ImageFormat::detect()` doesn't exist (should be `ImageFormatRegistry::common().detect()`)
+- **API mismatches fixed** (as of 2026-03-25): now uses `ImageFormatRegistry::common()`, `.data()`, etc.
+- Does not compile due to upstream zenavif dependency errors (ravif crate resolution), not zcimg's own code.
 
 ### zentiff (`zen/zentiff`) — feature declared, zero implementation
 - `zencodec` feature exists but no source file references zencodec
@@ -280,7 +278,7 @@ Cancellation tokens accepted but not propagated to long-running inner loops.
 
 | # | Finding | Severity |
 |---|---------|----------|
-| 1 | **zcimg subcrate does not compile** (4+ API mismatches) | High |
+| 1 | ~~zcimg API mismatches~~ Fixed. Blocked by zenavif dep errors (not zcimg code) | Low |
 | 2 | AVIF decode doesn't forward limits to job (inconsistent with other codecs) | Medium |
 | 3 | UltraHDR RGB->RGBA encode: per-pixel `extend_from_slice`, 16MB alloc for 1MP | Medium (perf) |
 | 4 | `encode_rgba8` scans every pixel for alpha (no opaque fast path) | Low (perf) |
@@ -327,21 +325,7 @@ Dev-dep only. Uses `PixelBufferConvertExt` re-export in one example. Should impo
 
 ## Rename Migration Status (zencodec-types → zencodec)
 
-**Completed:** Repo renamed `imazen/zencodec-types` → `imazen/zencodec`. Folder renamed.
+**COMPLETED** (verified 2026-03-25). Repo renamed `imazen/zencodec-types` → `imazen/zencodec`. Folder renamed.
 Lib name changed from `zc` to `zencodec`. Package name was already `zencodec`.
 
-### Downstream crates still referencing old paths
-
-All need `path = "../zencodec-types"` → `path = "../zencodec"`:
-
-**Trivial** (Cargo.toml path only):
-- zentiff, zenbitmaps, ultrahdr, zenavif, zenwebp, zenjxl, zengif, heic-decoder-rs
-
-**Small** (Cargo.toml + source renames):
-- zenpng, zencodecs, zenimage
-
-**Medium** (multiple import sites):
-- imageflow4 / imageflow
-
-**Done:**
-- zenjpeg (updated path + CI workflows + comments)
+All downstream crates now reference `zencodec` by crates.io version (0.1.0 or 0.1.1). No references to `zencodec-types` or `path = "../zencodec-types"` remain anywhere under `~/work/`.
