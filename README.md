@@ -21,6 +21,9 @@ Import as `zencodec` — use `zencodec::encode`, `zencodec::decode`, etc.
 | `zenavif` | AVIF | [imazen/zenavif](https://github.com/imazen/zenavif) |
 | `zenjxl` | JPEG XL | [imazen/zenjxl](https://github.com/imazen/zenjxl) |
 | `zenbitmaps` | PNM/BMP/Farbfeld | [imazen/zenbitmaps](https://github.com/imazen/zenbitmaps) |
+| `heic-decoder-rs` | HEIC/HEIF | [imazen/heic-decoder-rs](https://github.com/imazen/heic-decoder-rs) |
+| `zentiff` | TIFF (experimental) | [imazen/zentiff](https://github.com/imazen/zentiff) |
+| `zenpdf` | PDF (experimental) | [imazen/zenpdf](https://github.com/imazen/zenpdf) |
 | `zencodecs` | Multi-format dispatch | [imazen/zencodecs](https://github.com/imazen/zencodecs) |
 
 ## Architecture
