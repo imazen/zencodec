@@ -22,3 +22,4 @@ whereat = "0.1.4"
 [dev-dependencies]
 thiserror = "2"
 walkdir = "2.5.0"
+rayon = "1.10.0"
