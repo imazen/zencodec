@@ -62,7 +62,10 @@ impl<E: core::error::Error + Send + Sync + 'static> AnimationFrameDecoder for Un
         unreachable!("Unsupported: full frame decode stub should never be constructed")
     }
 
-    fn render_next_frame(&mut self, _stop: Option<&dyn Stop>) -> Result<Option<AnimationFrame<'_>>, E> {
+    fn render_next_frame(
+        &mut self,
+        _stop: Option<&dyn Stop>,
+    ) -> Result<Option<AnimationFrame<'_>>, E> {
         unreachable!("Unsupported: full frame decode stub should never be constructed")
     }
 

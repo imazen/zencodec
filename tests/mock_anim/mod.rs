@@ -12,11 +12,11 @@
 use std::borrow::Cow;
 
 use zencodec::decode::{
-    DecodeCapabilities, DecodeJob, DecodeOutput, DecoderConfig, AnimationFrameDecoder, OutputInfo,
+    AnimationFrameDecoder, DecodeCapabilities, DecodeJob, DecodeOutput, DecoderConfig, OutputInfo,
     StreamingDecode,
 };
 use zencodec::encode::{
-    EncodeCapabilities, EncodeJob, EncodeOutput, Encoder, EncoderConfig, AnimationFrameEncoder,
+    AnimationFrameEncoder, EncodeCapabilities, EncodeJob, EncodeOutput, Encoder, EncoderConfig,
 };
 use zencodec::{
     AnimationFrame, ImageFormat, ImageInfo, ImageSequence, Metadata, ResourceLimits,

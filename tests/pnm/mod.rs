@@ -120,9 +120,9 @@ impl EncodeJob for PnmEncodeJob {
     }
 
     fn encoder(self) -> Result<PnmEnc, At<PnmError>> {
-        let stop: Option<Box<dyn Fn() -> Result<(), StopReason> + Send>> = self.stop.map(|s| {
-            Box::new(move || s.check()) as Box<dyn Fn() -> Result<(), StopReason> + Send>
-        });
+        let stop: Option<Box<dyn Fn() -> Result<(), StopReason> + Send>> = self
+            .stop
+            .map(|s| Box::new(move || s.check()) as Box<dyn Fn() -> Result<(), StopReason> + Send>);
         Ok(PnmEnc { stop })
     }
 

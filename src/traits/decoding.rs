@@ -9,10 +9,10 @@ use crate::{DecodeCapabilities, ImageInfo, OutputInfo, ResourceLimits, StopToken
 use zenpixels::PixelDescriptor;
 
 use super::BoxedError;
-use super::decoder::{Decode, AnimationFrameDecoder, StreamingDecode};
+use super::decoder::{AnimationFrameDecoder, Decode, StreamingDecode};
 use super::dyn_decoding::{
-    DecoderShim, DynDecoder, DynAnimationFrameDecoder, DynStreamingDecoder, AnimationFrameDecoderShim,
-    StreamingDecoderShim,
+    AnimationFrameDecoderShim, DecoderShim, DynAnimationFrameDecoder, DynDecoder,
+    DynStreamingDecoder, StreamingDecoderShim,
 };
 
 // ===========================================================================

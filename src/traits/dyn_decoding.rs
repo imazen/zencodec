@@ -19,7 +19,7 @@ use enough::Stop;
 use zenpixels::{PixelDescriptor, PixelSlice};
 
 use super::BoxedError;
-use super::decoder::{Decode, AnimationFrameDecoder, StreamingDecode};
+use super::decoder::{AnimationFrameDecoder, Decode, StreamingDecode};
 use super::decoding::{DecodeJob, DecoderConfig};
 
 // ===========================================================================
@@ -104,7 +104,9 @@ impl core::fmt::Debug for dyn DynAnimationFrameDecoder + '_ {
 
 pub(super) struct AnimationFrameDecoderShim<F>(pub(super) F);
 
-impl<F: AnimationFrameDecoder + Send + 'static> DynAnimationFrameDecoder for AnimationFrameDecoderShim<F> {
+impl<F: AnimationFrameDecoder + Send + 'static> DynAnimationFrameDecoder
+    for AnimationFrameDecoderShim<F>
+{
     fn as_any(&self) -> &dyn Any {
         &self.0
     }

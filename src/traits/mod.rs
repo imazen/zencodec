@@ -30,14 +30,14 @@ mod encoding;
 mod unsupported;
 
 #[allow(deprecated)]
-pub use decoder::{Decode, AnimationFrameDecoder, StreamingDecode, render_frame_to_sink_via_copy};
+pub use decoder::{AnimationFrameDecoder, Decode, StreamingDecode, render_frame_to_sink_via_copy};
 #[allow(deprecated)]
 pub use decoding::{DecodeJob, DecoderConfig, push_decoder_via_full_decode};
 pub use dyn_decoding::{
-    DynDecodeJob, DynDecoder, DynDecoderConfig, DynAnimationFrameDecoder, DynStreamingDecoder,
+    DynAnimationFrameDecoder, DynDecodeJob, DynDecoder, DynDecoderConfig, DynStreamingDecoder,
 };
-pub use dyn_encoding::{DynEncodeJob, DynEncoder, DynEncoderConfig, DynAnimationFrameEncoder};
-pub use encoder::{Encoder, AnimationFrameEncoder};
+pub use dyn_encoding::{DynAnimationFrameEncoder, DynEncodeJob, DynEncoder, DynEncoderConfig};
+pub use encoder::{AnimationFrameEncoder, Encoder};
 pub use encoding::{EncodeJob, EncoderConfig};
 pub use unsupported::Unsupported;
 

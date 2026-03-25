@@ -21,14 +21,14 @@
 use alloc::boxed::Box;
 use core::any::Any;
 
+use crate::StopToken;
 use crate::format::ImageFormat;
 use crate::{EncodeCapabilities, EncodeOutput, Metadata, ResourceLimits};
 use enough::Stop;
-use crate::StopToken;
 use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 
 use super::BoxedError;
-use super::encoder::{Encoder, AnimationFrameEncoder};
+use super::encoder::{AnimationFrameEncoder, Encoder};
 use super::encoding::{EncodeJob, EncoderConfig};
 
 // ===========================================================================
@@ -171,7 +171,9 @@ impl core::fmt::Debug for dyn DynAnimationFrameEncoder + '_ {
 
 pub(super) struct AnimationFrameEncoderShim<F>(pub(super) F);
 
-impl<F: AnimationFrameEncoder + Send + 'static> DynAnimationFrameEncoder for AnimationFrameEncoderShim<F> {
+impl<F: AnimationFrameEncoder + Send + 'static> DynAnimationFrameEncoder
+    for AnimationFrameEncoderShim<F>
+{
     fn as_any(&self) -> &dyn Any {
         &self.0
     }
@@ -245,8 +247,9 @@ pub trait DynEncodeJob {
     /// Create the full-frame animation encoder (consumes this job).
     ///
     /// The returned encoder is `'static` — it owns its configuration.
-    fn into_animation_frame_encoder(self: Box<Self>)
-    -> Result<Box<dyn DynAnimationFrameEncoder>, BoxedError>;
+    fn into_animation_frame_encoder(
+        self: Box<Self>,
+    ) -> Result<Box<dyn DynAnimationFrameEncoder>, BoxedError>;
 }
 
 struct EncodeJobShim<J>(Option<J>);

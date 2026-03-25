@@ -82,14 +82,14 @@ pub use traits::Unsupported;
 // Crate-level re-exports (qualified access, not individual types)
 // =========================================================================
 //
-pub use enough;
-pub use enough::Unstoppable;
 /// Owned, clonable, type-erased stop token.
 ///
 /// Re-exported from [`almost_enough::StopToken`]. Wraps any `Stop` in an
 /// enum that avoids vtable dispatch for `Stopper`/`SyncStopper`/`Unstoppable`,
 /// collapses nested tokens, and is `Clone + Send + Sync + 'static`.
 pub use almost_enough::StopToken;
+pub use enough;
+pub use enough::Unstoppable;
 
 // StopToken is Option<Arc<dyn Stop + Send + Sync>> — a fat pointer.
 #[cfg(target_pointer_width = "64")]
@@ -132,11 +132,11 @@ pub(crate) use sink::DecodeRowSink;
 /// use the `Dyn*` variants for codec-agnostic operation.
 pub mod encode {
     // Traits — config, job, execution
-    pub use crate::traits::{EncodeJob, Encoder, EncoderConfig, AnimationFrameEncoder};
+    pub use crate::traits::{AnimationFrameEncoder, EncodeJob, Encoder, EncoderConfig};
 
     // Object-safe dyn dispatch
     pub use crate::traits::{
-        BoxedError, DynEncodeJob, DynEncoder, DynEncoderConfig, DynAnimationFrameEncoder,
+        BoxedError, DynAnimationFrameEncoder, DynEncodeJob, DynEncoder, DynEncoderConfig,
     };
 
     // Types
@@ -168,20 +168,20 @@ pub mod decode {
     // Traits — config, job, execution
     #[allow(deprecated)]
     pub use crate::traits::{
-        Decode, DecodeJob, DecoderConfig, AnimationFrameDecoder, StreamingDecode,
+        AnimationFrameDecoder, Decode, DecodeJob, DecoderConfig, StreamingDecode,
         push_decoder_via_full_decode, render_frame_to_sink_via_copy,
     };
 
     // Object-safe dyn dispatch
     pub use crate::traits::{
-        BoxedError, DynDecodeJob, DynDecoder, DynDecoderConfig, DynAnimationFrameDecoder,
+        BoxedError, DynAnimationFrameDecoder, DynDecodeJob, DynDecoder, DynDecoderConfig,
         DynStreamingDecoder,
     };
 
     // Types
     pub use crate::capabilities::DecodeCapabilities;
     pub use crate::cost::OutputInfo;
-    pub use crate::output::{DecodeOutput, AnimationFrame, OwnedAnimationFrame};
+    pub use crate::output::{AnimationFrame, DecodeOutput, OwnedAnimationFrame};
     pub use crate::policy::DecodePolicy;
     pub use crate::sink::{DecodeRowSink, SinkError};
 

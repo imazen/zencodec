@@ -11,7 +11,7 @@ use zenpixels::PixelDescriptor;
 
 use crate::cost::OutputInfo;
 use crate::sink::SinkError;
-use crate::traits::{Decode, DecodeJob, AnimationFrameDecoder};
+use crate::traits::{AnimationFrameDecoder, Decode, DecodeJob};
 
 /// Implement `push_decoder` by doing a full decode and copying rows to the sink.
 ///
