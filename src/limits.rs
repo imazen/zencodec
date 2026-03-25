@@ -91,6 +91,9 @@ pub struct ResourceLimits {
     pub threading: ThreadingPolicy,
 }
 
+// All primitives, no pointers — same size on all platforms.
+const _: () = assert!(core::mem::size_of::<ResourceLimits>() == 112);
+
 impl Default for ResourceLimits {
     fn default() -> Self {
         Self {

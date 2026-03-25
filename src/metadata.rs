@@ -33,6 +33,13 @@ pub struct Metadata {
     pub orientation: Orientation,
 }
 
+// Metadata contains 3× Option<Arc<[u8]>> (fat pointers), so size varies by
+// pointer width. Catch unexpected growth from new fields or alignment changes.
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(core::mem::size_of::<Metadata>() == 104);
+#[cfg(target_pointer_width = "32")]
+const _: () = assert!(core::mem::size_of::<Metadata>() <= 72);
+
 impl Metadata {
     /// Create empty metadata.
     pub fn none() -> Self {

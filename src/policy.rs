@@ -53,6 +53,9 @@ pub struct DecodePolicy {
     pub strict: Option<bool>,
 }
 
+// All Option<bool>, no pointers — same size on all platforms.
+const _: () = assert!(core::mem::size_of::<DecodePolicy>() == 7);
+
 impl DecodePolicy {
     /// No preferences — codec uses its own defaults.
     pub const fn none() -> Self {
@@ -223,6 +226,8 @@ pub struct EncodePolicy {
     /// Embed XMP metadata in the output.
     pub embed_xmp: Option<bool>,
 }
+
+const _: () = assert!(core::mem::size_of::<EncodePolicy>() == 3);
 
 impl EncodePolicy {
     /// No preferences — codec uses its own defaults.

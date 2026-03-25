@@ -26,6 +26,11 @@ pub struct EncodeOutput {
     extensions: Extensions,
 }
 
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(core::mem::size_of::<EncodeOutput>() == 96);
+#[cfg(target_pointer_width = "32")]
+const _: () = assert!(core::mem::size_of::<EncodeOutput>() <= 64);
+
 impl EncodeOutput {
     /// Create a new encode output.
     ///
@@ -188,6 +193,11 @@ pub struct DecodeOutput {
     source_encoding: Option<Box<dyn SourceEncodingDetails>>,
     extensions: Extensions,
 }
+
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(core::mem::size_of::<DecodeOutput>() == 352);
+#[cfg(target_pointer_width = "32")]
+const _: () = assert!(core::mem::size_of::<DecodeOutput>() <= 224);
 
 impl DecodeOutput {
     /// Create a new decode output from a [`PixelBuffer`].
