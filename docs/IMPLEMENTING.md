@@ -229,7 +229,7 @@ static MY_DECODE_CAPS: DecodeCapabilities = DecodeCapabilities::new()
 
 impl DecoderConfig for MyDecoderConfig {
     type Error = MyError;
-    type Job = MyDecodeJob;
+    type Job<'a> = MyDecodeJob;
 
     fn format() -> ImageFormat { ImageFormat::Jpeg }
 
@@ -240,7 +240,7 @@ impl DecoderConfig for MyDecoderConfig {
 
     fn capabilities() -> &'static DecodeCapabilities { &MY_DECODE_CAPS }
 
-    fn job(self) -> MyDecodeJob {
+    fn job<'a>(self) -> Self::Job<'a> {
         MyDecodeJob { config: self, limits: ResourceLimits::none(), stop: None }
     }
 }

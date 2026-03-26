@@ -161,13 +161,13 @@ Codecs without animation set `type AnimationFrameEnc = ()` (unit implements
 ```rust
 trait DecoderConfig: Clone + Send + Sync {
     type Error: core::error::Error + Send + Sync + 'static;
-    type Job: for<'a> DecodeJob<'a, Error = Self::Error> + 'static;
+    type Job<'a>: DecodeJob<'a, Error = Self::Error> + 'static;
 
     fn formats() -> &'static [ImageFormat]; // may return multiple
     fn supported_descriptors() -> &'static [PixelDescriptor];
     fn capabilities() -> &'static DecodeCapabilities;  // default: EMPTY
 
-    fn job(self) -> Self::Job;
+    fn job<'a>(self) -> Self::Job<'a>;
 }
 ```
 
