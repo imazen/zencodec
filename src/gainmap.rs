@@ -287,6 +287,75 @@ impl GainMapPresence {
 }
 
 // =========================================================================
+// Gain map source (raw, pre-decode)
+// =========================================================================
+
+/// Raw gain map data extracted from container — not yet pixel-decoded.
+///
+/// Produced by codecs when gain map extraction is opted in. The caller
+/// decodes the raw bitstream through the normal codec path (with limits,
+/// cancellation, streaming). This avoids hidden nested decodes inside
+/// the primary decoder.
+///
+/// # Recursion safety
+///
+/// The `depth` field tracks nesting level. Callers MUST reject
+/// `depth >= MAX_DEPTH` (typically 1) to prevent infinite recursion —
+/// a JXL gain map is a bare JXL codestream, and a JPEG UltraHDR gain
+/// map is a full JPEG that could itself contain MPF references.
+///
+/// # Ownership
+///
+/// The `data` field is owned (`Vec<u8>`) for storage in
+/// [`DecodeOutput`](crate::decode::DecodeOutput) extensions.
+/// Codecs that can provide zero-copy access to the gain map bitstream
+/// should offer a codec-specific API returning `&[u8]` for callers
+/// that decode immediately without storing.
+///
+/// # Codec behavior
+///
+/// | Container | `format` | `data` contents |
+/// |-----------|----------|-----------------|
+/// | AVIF | `Avif` | Raw AV1 bitstream (OBUs) |
+/// | JXL | `Jxl` | Bare JXL codestream (no container boxes) |
+/// | JPEG (UltraHDR) | `Jpeg` | Complete JPEG file (MPF secondary image) |
+/// | HEIC | — | Not produced — HEIC parser decodes gain map internally, use [`DecodedGainMap`] |
+#[derive(Clone, Debug)]
+pub struct GainMapSource {
+    /// Raw encoded bitstream of the gain map image.
+    pub data: alloc::vec::Vec<u8>,
+    /// Codec format needed to decode `data`.
+    pub format: crate::ImageFormat,
+    /// ISO 21496-1 gain map metadata (parsed from container).
+    pub metadata: GainMapInfo,
+    /// Nesting depth. 0 = gain map of a primary image.
+    /// Callers should reject `depth >= 1` to prevent recursion.
+    pub depth: u8,
+}
+
+// Decoded gain map (post-decode)
+// =========================================================================
+
+/// Decoded gain map image — cross-codec normalized type.
+///
+/// Produced either by:
+/// - Decoding a [`GainMapSource`] through the normal codec path
+/// - Codecs that decode the gain map internally (HEIC)
+///
+/// Stored in [`DecodeOutput`](crate::decode::DecodeOutput) extensions
+/// via `output.with_extras(decoded_gain_map)`.
+///
+/// Gain map decode is opt-in — this is only present when the caller
+/// explicitly requested gain map extraction.
+#[derive(Debug)]
+pub struct DecodedGainMap {
+    /// Gain map image pixels.
+    pub pixels: zenpixels::PixelBuffer,
+    /// ISO 21496-1 gain map metadata.
+    pub metadata: GainMapInfo,
+}
+
+// =========================================================================
 // ISO 21496-1 fractions
 // =========================================================================
 
