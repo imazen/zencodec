@@ -163,6 +163,15 @@ pub trait DecodeJob<'a>: Sized {
         self
     }
 
+    /// Opt in to supplementary gain map extraction.
+    ///
+    /// When true, codecs that support gain maps (AVIF tmap, JXL jhgm,
+    /// JPEG UltraHDR) extract and attach gain map data to decode output
+    /// extras. Typically set after probing reveals a gain map is present.
+    fn with_extract_gain_map(self, _extract: bool) -> Self {
+        self
+    }
+
     /// Access codec-specific extensions for this job.
     ///
     /// Returns a reference to a `'static` extension type stored inside

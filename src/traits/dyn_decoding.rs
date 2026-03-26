@@ -220,6 +220,9 @@ pub trait DynDecodeJob<'a> {
     /// Hint: start decoding from a specific frame (0-based).
     fn set_start_frame_index(&mut self, index: u32);
 
+    /// Opt in to supplementary gain map extraction.
+    fn set_extract_gain_map(&mut self, extract: bool);
+
     /// Access codec-specific extensions for this job.
     ///
     /// Returns a reference to a `'static` extension type stored inside the
@@ -328,6 +331,11 @@ where
     fn set_start_frame_index(&mut self, index: u32) {
         let job = self.take();
         self.put(job.with_start_frame_index(index));
+    }
+
+    fn set_extract_gain_map(&mut self, extract: bool) {
+        let job = self.take();
+        self.put(job.with_extract_gain_map(extract));
     }
 
     fn extensions(&self) -> Option<&dyn Any> {
