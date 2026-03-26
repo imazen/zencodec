@@ -233,21 +233,6 @@ pub struct SourceColor {
     pub content_light_level: Option<ContentLightLevel>,
     /// Mastering Display Color Volume (SMPTE ST 2086) for HDR content.
     pub mastering_display: Option<MasteringDisplay>,
-
-    /// Source gamma from PNG gAMA chunk (scaled by 100000, e.g. 45455 = 1/2.2).
-    ///
-    /// `None` if not present. When present without an ICC profile, the caller
-    /// should synthesize a gamma+primaries ICC profile for color management.
-    pub source_gamma: Option<u32>,
-
-    /// CIE 1931 chromaticity coordinates from PNG cHRM chunk (scaled by 100000).
-    ///
-    /// `[wx, wy, rx, ry, gx, gy, bx, by]` — white point + RGB primaries.
-    /// `None` if not present.
-    pub chromaticities: Option<[u32; 8]>,
-
-    /// sRGB rendering intent from PNG sRGB chunk (0-3).
-    pub srgb_intent: Option<u8>,
 }
 
 impl SourceColor {
@@ -284,25 +269,6 @@ impl SourceColor {
     /// Set the Mastering Display Color Volume.
     pub fn with_mastering_display(mut self, mdcv: MasteringDisplay) -> Self {
         self.mastering_display = Some(mdcv);
-        self
-    }
-
-    /// Set the source gamma (PNG gAMA, scaled by 100000).
-    pub fn with_source_gamma(mut self, gamma: u32) -> Self {
-        self.source_gamma = Some(gamma);
-        self
-    }
-
-    /// Set chromaticities (PNG cHRM, scaled by 100000).
-    /// `[wx, wy, rx, ry, gx, gy, bx, by]`
-    pub fn with_chromaticities(mut self, chrm: [u32; 8]) -> Self {
-        self.chromaticities = Some(chrm);
-        self
-    }
-
-    /// Set sRGB rendering intent.
-    pub fn with_srgb_intent(mut self, intent: u8) -> Self {
-        self.srgb_intent = Some(intent);
         self
     }
 
@@ -452,8 +418,7 @@ pub struct ImageInfo {
 
 // ImageInfo contains Arc, Vec, trait objects — heavily pointer-dependent.
 #[cfg(target_pointer_width = "64")]
-// TODO: update size assertion after gAMA/cHRM/sRGB fields stabilize
-// const _: () = assert!(core::mem::size_of::<ImageInfo>() == ???);
+const _: () = assert!(core::mem::size_of::<ImageInfo>() == 248);
 
 impl ImageInfo {
     /// Create a new `ImageInfo` with the given dimensions and format.

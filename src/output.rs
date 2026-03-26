@@ -193,8 +193,7 @@ pub struct DecodeOutput {
 }
 
 #[cfg(target_pointer_width = "64")]
-// TODO: update size assertion after gAMA/cHRM/sRGB fields stabilize
-// const _: () = assert!(core::mem::size_of::<DecodeOutput>() == ???);
+const _: () = assert!(core::mem::size_of::<DecodeOutput>() == 352);
 
 impl DecodeOutput {
     /// Create a new decode output from a [`PixelBuffer`].
