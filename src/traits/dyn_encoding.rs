@@ -44,7 +44,7 @@ use super::encoding::{EncodeJob, EncoderConfig};
 /// are not guaranteed `'static`. Attach codec-specific output data via
 /// [`EncodeOutput::with_extras`](crate::EncodeOutput::with_extras) instead
 /// of downcasting.
-pub trait DynEncoder {
+pub trait DynEncoder: Send {
     /// Suggested strip height for optimal row-level encoding.
     fn preferred_strip_height(&self) -> u32;
 
@@ -85,7 +85,7 @@ impl core::fmt::Debug for dyn DynEncoder + '_ {
 
 pub(super) struct EncoderShim<E>(pub(super) E);
 
-impl<E: Encoder> DynEncoder for EncoderShim<E> {
+impl<E: Encoder + Send> DynEncoder for EncoderShim<E> {
     fn preferred_strip_height(&self) -> u32 {
         self.0.preferred_strip_height()
     }
@@ -267,7 +267,7 @@ impl<J> EncodeJobShim<J> {
 impl<J> DynEncodeJob for EncodeJobShim<J>
 where
     J: EncodeJob,
-    J::Enc: Encoder,
+    J::Enc: Encoder + Send,
     J::AnimationFrameEnc: AnimationFrameEncoder,
 {
     fn set_stop(&mut self, stop: StopToken) {
@@ -376,7 +376,7 @@ pub trait DynEncoderConfig: Send + Sync {
 impl<C> DynEncoderConfig for C
 where
     C: EncoderConfig + 'static,
-    <C::Job as EncodeJob>::Enc: Encoder,
+    <C::Job as EncodeJob>::Enc: Encoder + Send,
     <C::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
 {
     fn as_any(&self) -> &dyn Any {
