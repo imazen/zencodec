@@ -279,12 +279,140 @@ impl SourceColor {
             .unwrap_or(TransferFunction::Unknown)
     }
 
+    /// Whether this source is sRGB (no color transform needed).
+    ///
+    /// Checks CICP metadata, ICC profile description, and defaults.
+    /// When true, applying a CMS transform from this profile to sRGB
+    /// would be an identity operation — skip it to avoid rounding errors.
+    pub fn is_srgb(&self) -> bool {
+        // 1. Check CICP: primaries=1 (BT.709/sRGB) + transfer=13 (sRGB)
+        if let Some(cicp) = self.cicp {
+            return cicp.color_primaries == 1 && cicp.transfer_characteristics == 13;
+        }
+
+        // 2. Check ICC profile description for "sRGB" substring.
+        // Camera vendors embed sRGB profiles with different bytes but
+        // descriptions like "sRGB IEC61966-2.1", "sRGB", "sRGB built-in".
+        if let Some(ref icc) = self.icc_profile {
+            return icc_profile_is_srgb(icc);
+        }
+
+        // 3. No color info — assume sRGB (the web default).
+        true
+    }
+
     /// Derive the color primaries from CICP metadata.
     pub fn color_primaries(&self) -> ColorPrimaries {
         self.cicp
             .map(|c| c.color_primaries_enum())
             .unwrap_or(ColorPrimaries::Bt709)
     }
+}
+
+/// Check if an ICC profile represents sRGB by examining its description tag.
+///
+/// Parses the ICC 'desc' tag (textDescription or mluc) and checks if it
+/// contains "sRGB" (case-insensitive). This catches the vast majority of
+/// sRGB profiles from camera vendors (Canon, Sony, Nikon, etc.) which embed
+/// sRGB profiles with vendor-specific creation dates but standard descriptions.
+fn icc_profile_is_srgb(icc_bytes: &[u8]) -> bool {
+    if icc_bytes.len() < 132 {
+        return false;
+    }
+
+    // Parse tag table to find 'desc' tag.
+    let tag_count =
+        u32::from_be_bytes([icc_bytes[128], icc_bytes[129], icc_bytes[130], icc_bytes[131]])
+            as usize;
+
+    for i in 0..tag_count.min(50) {
+        let off = 132 + i * 12;
+        if off + 12 > icc_bytes.len() {
+            break;
+        }
+        if &icc_bytes[off..off + 4] != b"desc" {
+            continue;
+        }
+
+        let tag_off = u32::from_be_bytes([
+            icc_bytes[off + 4],
+            icc_bytes[off + 5],
+            icc_bytes[off + 6],
+            icc_bytes[off + 7],
+        ]) as usize;
+        let tag_len = u32::from_be_bytes([
+            icc_bytes[off + 8],
+            icc_bytes[off + 9],
+            icc_bytes[off + 10],
+            icc_bytes[off + 11],
+        ]) as usize;
+
+        if tag_off + tag_len > icc_bytes.len() || tag_len < 12 {
+            break;
+        }
+
+        let tag_type = &icc_bytes[tag_off..tag_off + 4];
+
+        // 'desc' type (textDescription): ASCII string at offset 12
+        if tag_type == b"desc" {
+            let str_len = u32::from_be_bytes([
+                icc_bytes[tag_off + 8],
+                icc_bytes[tag_off + 9],
+                icc_bytes[tag_off + 10],
+                icc_bytes[tag_off + 11],
+            ]) as usize;
+            let str_start = tag_off + 12;
+            let str_end = (str_start + str_len.saturating_sub(1)).min(icc_bytes.len());
+            if str_start < str_end {
+                let desc = core::str::from_utf8(&icc_bytes[str_start..str_end]).unwrap_or("");
+                let lower = desc.to_ascii_lowercase();
+                if lower.contains("srgb") || lower.contains("s r g b") {
+                    return true;
+                }
+            }
+        }
+        // 'mluc' type (multiLocalizedUnicode): UTF-16BE string
+        else if tag_type == b"mluc" && tag_off + 24 <= icc_bytes.len() {
+            let rec_count = u32::from_be_bytes([
+                icc_bytes[tag_off + 8],
+                icc_bytes[tag_off + 9],
+                icc_bytes[tag_off + 10],
+                icc_bytes[tag_off + 11],
+            ]) as usize;
+            if rec_count > 0 {
+                let str_len = u32::from_be_bytes([
+                    icc_bytes[tag_off + 16],
+                    icc_bytes[tag_off + 17],
+                    icc_bytes[tag_off + 18],
+                    icc_bytes[tag_off + 19],
+                ]) as usize;
+                let str_off = u32::from_be_bytes([
+                    icc_bytes[tag_off + 20],
+                    icc_bytes[tag_off + 21],
+                    icc_bytes[tag_off + 22],
+                    icc_bytes[tag_off + 23],
+                ]) as usize;
+                let abs_start = tag_off + str_off;
+                let abs_end = (abs_start + str_len).min(icc_bytes.len());
+                if abs_start + 1 < abs_end {
+                    // Check UTF-16BE for "sRGB" pattern
+                    let u16s: alloc::vec::Vec<u16> = icc_bytes[abs_start..abs_end]
+                        .chunks_exact(2)
+                        .map(|c| u16::from_be_bytes([c[0], c[1]]))
+                        .collect();
+                    let desc = alloc::string::String::from_utf16_lossy(&u16s);
+                    let lower = desc.to_ascii_lowercase();
+                    if lower.contains("srgb") || lower.contains("s r g b") {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        break; // only check first 'desc' tag
+    }
+
+    false
 }
 
 /// Embedded non-color metadata from the image file.
