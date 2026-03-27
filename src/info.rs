@@ -314,8 +314,11 @@ impl SourceColor {
 /// Parses the ICC 'desc' tag (textDescription or mluc) and checks if it
 /// contains "sRGB" (case-insensitive). This catches the vast majority of
 /// sRGB profiles from camera vendors (Canon, Sony, Nikon, etc.) which embed
+///
+/// Note: this is a loose heuristic. Some vendor profiles say "sRGB" but have
+/// slightly calibrated primaries/TRC. Use for v2-compat mode only.
 /// sRGB profiles with vendor-specific creation dates but standard descriptions.
-fn icc_profile_is_srgb(icc_bytes: &[u8]) -> bool {
+pub fn icc_profile_is_srgb(icc_bytes: &[u8]) -> bool {
     if icc_bytes.len() < 132 {
         return false;
     }

@@ -66,7 +66,7 @@ pub use format::{ImageFormat, ImageFormatDefinition, ImageFormatRegistry};
 pub use gainmap::{GainMapChannel, GainMapDirection, GainMapInfo, GainMapParams, GainMapPresence};
 pub use info::{
     Cicp, ContentLightLevel, ImageInfo, ImageSequence, MasteringDisplay, Resolution,
-    ResolutionUnit, Supplements,
+    ResolutionUnit, Supplements, icc_profile_is_srgb,
 };
 pub use limits::{LimitExceeded, ResourceLimits, ThreadingPolicy};
 pub use metadata::Metadata;
