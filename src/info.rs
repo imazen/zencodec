@@ -205,7 +205,7 @@ pub use zenpixels::{ContentLightLevel, MasteringDisplay};
 /// (content light level, mastering display).
 ///
 /// These describe the *source* color space — not the current pixel
-/// data's color space (which is tracked by [`PixelDescriptor`]).
+/// data's color space (which is tracked by [`zenpixels::PixelDescriptor`]).
 #[derive(Clone, Debug, Default, PartialEq)]
 #[non_exhaustive]
 pub struct SourceColor {
@@ -403,8 +403,7 @@ pub struct ImageInfo {
     /// Populated by codecs that can detect how the image was encoded.
     /// Use [`source_encoding_details()`](ImageInfo::source_encoding_details)
     /// for the generic interface and
-    /// [`codec_details::<T>()`](dyn crate::SourceEncodingDetails::codec_details)
-    /// for codec-specific fields.
+    /// `codec_details::<T>()` for codec-specific fields.
     ///
     /// Skipped by `PartialEq` (trait objects aren't comparable).
     pub source_encoding: Option<Arc<dyn SourceEncodingDetails>>,
@@ -594,8 +593,7 @@ impl ImageInfo {
     /// Source encoding details, if available.
     ///
     /// Returns the generic interface for querying source quality and losslessness.
-    /// Downcast to the codec-specific type via
-    /// [`codec_details::<T>()`](dyn SourceEncodingDetails::codec_details).
+    /// Downcast to the codec-specific type via `codec_details::<T>()`.
     pub fn source_encoding_details(&self) -> Option<&dyn SourceEncodingDetails> {
         self.source_encoding.as_deref()
     }
@@ -650,7 +648,7 @@ impl ImageInfo {
     ///
     /// Delegates to [`SourceColor::transfer_function()`].
     ///
-    /// Use this to resolve a [`PixelDescriptor`]'s unknown transfer function:
+    /// Use this to resolve a [`zenpixels::PixelDescriptor`]'s unknown transfer function:
     ///
     /// ```ignore
     /// let desc = pixels.descriptor().with_transfer(info.transfer_function());
@@ -711,6 +709,7 @@ impl PartialEq for ImageInfo {
             && self.gain_map == other.gain_map
             && self.orientation == other.orientation
             && self.source_color == other.source_color
+            && self.resolution == other.resolution
             && self.embedded_metadata == other.embedded_metadata
             && self.warnings == other.warnings
     }
