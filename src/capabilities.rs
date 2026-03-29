@@ -94,6 +94,7 @@ impl core::error::Error for UnsupportedOperation {}
 /// assert!(CAPS.icc());
 /// assert!(CAPS.native_gray());
 /// ```
+#[derive(Clone, PartialEq)]
 #[non_exhaustive]
 pub struct EncodeCapabilities {
     // Metadata embedding
@@ -465,6 +466,7 @@ impl fmt::Debug for EncodeCapabilities {
 /// assert!(CAPS.icc());
 /// assert!(CAPS.cheap_probe());
 /// ```
+#[derive(Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct DecodeCapabilities {
     // Metadata extraction

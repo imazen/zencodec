@@ -14,7 +14,7 @@ use zenpixels::{ColorPrimaries, TransferFunction};
 /// Byte buffers (ICC, EXIF, XMP) use `Arc<[u8]>` so cloning is a cheap
 /// ref-count bump. Construct via [`Metadata::none()`] + builders,
 /// or extract from decoded info via `From<&ImageInfo>`.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 #[non_exhaustive]
 pub struct Metadata {
     /// ICC color profile.

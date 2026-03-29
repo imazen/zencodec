@@ -465,7 +465,7 @@ impl UFraction {
 // =========================================================================
 
 /// Errors from ISO 21496-1 parsing or validation.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum GainMapParseError {
     /// Data is too short to contain the expected fields.
