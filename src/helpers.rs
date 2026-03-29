@@ -222,11 +222,52 @@ pub fn icc_profile_is_srgb(icc_bytes: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zenpixels::{Cicp, ColorPrimaries, TransferFunction};
+    use alloc::sync::Arc;
+    use zenpixels::{AlphaMode, Cicp, ColorPrimaries, SignalRange, TransferFunction};
+
+    // ── Priority 4: no metadata → sRGB assumption ──────────────────────
 
     #[test]
     fn no_metadata_assumes_srgb() {
         let sc = SourceColor::default();
+        let desc = descriptor_for_decoded_pixels(PixelFormat::Rgb8, &sc, None);
+        assert_eq!(desc.transfer, TransferFunction::Srgb);
+        assert_eq!(desc.primaries, ColorPrimaries::Bt709);
+    }
+
+    #[test]
+    fn no_metadata_gray_assumes_srgb() {
+        let sc = SourceColor::default();
+        let desc = descriptor_for_decoded_pixels(PixelFormat::Gray8, &sc, None);
+        assert_eq!(desc.transfer, TransferFunction::Srgb);
+        assert_eq!(desc.primaries, ColorPrimaries::Bt709);
+        assert_eq!(desc.pixel_format(), PixelFormat::Gray8);
+    }
+
+    #[test]
+    fn no_metadata_rgba_assumes_srgb() {
+        let sc = SourceColor::default();
+        let desc = descriptor_for_decoded_pixels(PixelFormat::Rgba8, &sc, None);
+        assert_eq!(desc.transfer, TransferFunction::Srgb);
+        assert_eq!(desc.primaries, ColorPrimaries::Bt709);
+        assert_eq!(desc.pixel_format(), PixelFormat::Rgba8);
+        assert_eq!(desc.alpha(), Some(AlphaMode::Straight));
+    }
+
+    #[test]
+    fn no_metadata_f32_assumes_srgb() {
+        let sc = SourceColor::default();
+        let desc = descriptor_for_decoded_pixels(PixelFormat::RgbF32, &sc, None);
+        assert_eq!(desc.transfer, TransferFunction::Srgb);
+        assert_eq!(desc.primaries, ColorPrimaries::Bt709);
+        assert_eq!(desc.pixel_format(), PixelFormat::RgbF32);
+    }
+
+    // ── Priority 2: CICP metadata ──────────────────────────────────────
+
+    #[test]
+    fn cicp_srgb_sets_srgb_descriptor() {
+        let sc = SourceColor::default().with_cicp(Cicp::SRGB);
         let desc = descriptor_for_decoded_pixels(PixelFormat::Rgb8, &sc, None);
         assert_eq!(desc.transfer, TransferFunction::Srgb);
         assert_eq!(desc.primaries, ColorPrimaries::Bt709);
@@ -249,7 +290,90 @@ mod tests {
     }
 
     #[test]
-    fn corrected_to_overrides_source() {
+    fn cicp_hlg_sets_descriptor() {
+        let sc = SourceColor::default().with_cicp(Cicp::BT2100_HLG);
+        let desc = descriptor_for_decoded_pixels(PixelFormat::RgbF32, &sc, None);
+        assert_eq!(desc.transfer, TransferFunction::Hlg);
+        assert_eq!(desc.primaries, ColorPrimaries::Bt2020);
+    }
+
+    #[test]
+    fn cicp_takes_precedence_over_icc() {
+        // When both CICP and ICC are present, CICP wins (per AVIF/HEIF spec).
+        let fake_icc: Arc<[u8]> = Arc::from(alloc::vec![0u8; 64].into_boxed_slice());
+        let sc = SourceColor::default()
+            .with_cicp(Cicp::DISPLAY_P3)
+            .with_icc_profile(fake_icc);
+        let desc = descriptor_for_decoded_pixels(PixelFormat::Rgb8, &sc, None);
+        assert_eq!(desc.transfer, TransferFunction::Srgb);
+        assert_eq!(desc.primaries, ColorPrimaries::DisplayP3);
+    }
+
+    #[test]
+    fn cicp_preserves_pixel_format() {
+        let sc = SourceColor::default().with_cicp(Cicp::DISPLAY_P3);
+        for fmt in [
+            PixelFormat::Rgb8,
+            PixelFormat::Rgba8,
+            PixelFormat::Gray8,
+            PixelFormat::RgbF32,
+            PixelFormat::Bgra8,
+        ] {
+            let desc = descriptor_for_decoded_pixels(fmt, &sc, None);
+            assert_eq!(desc.pixel_format(), fmt, "format mismatch for {fmt:?}");
+        }
+    }
+
+    // ── Priority 3: ICC profile ────────────────────────────────────────
+
+    #[test]
+    fn unknown_icc_yields_unknown_descriptor() {
+        let fake_icc: Arc<[u8]> = Arc::from(alloc::vec![0u8; 64].into_boxed_slice());
+        let sc = SourceColor::default().with_icc_profile(fake_icc);
+        let desc = descriptor_for_decoded_pixels(PixelFormat::Rgb8, &sc, None);
+        assert_eq!(desc.transfer, TransferFunction::Unknown);
+        assert_eq!(desc.primaries, ColorPrimaries::Unknown);
+    }
+
+    #[test]
+    fn unknown_icc_preserves_format_and_alpha() {
+        let fake_icc: Arc<[u8]> = Arc::from(alloc::vec![99u8; 128].into_boxed_slice());
+        let sc = SourceColor::default().with_icc_profile(fake_icc);
+
+        let desc = descriptor_for_decoded_pixels(PixelFormat::Rgba8, &sc, None);
+        assert_eq!(desc.pixel_format(), PixelFormat::Rgba8);
+        assert_eq!(desc.alpha(), Some(AlphaMode::Straight));
+        assert_eq!(desc.signal_range, SignalRange::Full);
+
+        let desc = descriptor_for_decoded_pixels(PixelFormat::Rgb8, &sc, None);
+        assert_eq!(desc.pixel_format(), PixelFormat::Rgb8);
+        assert!(desc.alpha().is_none());
+    }
+
+    #[test]
+    fn unknown_icc_gray_preserves_format() {
+        let fake_icc: Arc<[u8]> = Arc::from(alloc::vec![42u8; 96].into_boxed_slice());
+        let sc = SourceColor::default().with_icc_profile(fake_icc);
+        let desc = descriptor_for_decoded_pixels(PixelFormat::Gray8, &sc, None);
+        assert_eq!(desc.pixel_format(), PixelFormat::Gray8);
+        assert_eq!(desc.transfer, TransferFunction::Unknown);
+        assert_eq!(desc.primaries, ColorPrimaries::Unknown);
+    }
+
+    #[test]
+    fn empty_icc_yields_unknown() {
+        // Edge case: zero-length ICC profile is definitely not a known sRGB profile.
+        let empty_icc: Arc<[u8]> = Arc::from(alloc::vec![].into_boxed_slice());
+        let sc = SourceColor::default().with_icc_profile(empty_icc);
+        let desc = descriptor_for_decoded_pixels(PixelFormat::Rgb8, &sc, None);
+        assert_eq!(desc.transfer, TransferFunction::Unknown);
+        assert_eq!(desc.primaries, ColorPrimaries::Unknown);
+    }
+
+    // ── Priority 1: corrected_to overrides everything ──────────────────
+
+    #[test]
+    fn corrected_to_overrides_source_cicp() {
         let sc = SourceColor::default().with_cicp(Cicp::DISPLAY_P3);
         let desc = descriptor_for_decoded_pixels(PixelFormat::Rgb8, &sc, Some(&Cicp::SRGB));
         assert_eq!(desc.transfer, TransferFunction::Srgb);
@@ -257,12 +381,102 @@ mod tests {
     }
 
     #[test]
-    fn unknown_icc_yields_unknown_descriptor() {
-        let fake_icc: alloc::sync::Arc<[u8]> =
-            alloc::sync::Arc::from(alloc::vec![0u8; 64].into_boxed_slice());
+    fn corrected_to_overrides_unknown_icc() {
+        let fake_icc: Arc<[u8]> = Arc::from(alloc::vec![0u8; 64].into_boxed_slice());
         let sc = SourceColor::default().with_icc_profile(fake_icc);
-        let desc = descriptor_for_decoded_pixels(PixelFormat::Rgb8, &sc, None);
-        assert_eq!(desc.transfer, TransferFunction::Unknown);
-        assert_eq!(desc.primaries, ColorPrimaries::Unknown);
+        let desc = descriptor_for_decoded_pixels(PixelFormat::Rgb8, &sc, Some(&Cicp::SRGB));
+        // corrected_to wins over unknown ICC → sRGB
+        assert_eq!(desc.transfer, TransferFunction::Srgb);
+        assert_eq!(desc.primaries, ColorPrimaries::Bt709);
+    }
+
+    #[test]
+    fn corrected_to_overrides_no_metadata() {
+        let sc = SourceColor::default();
+        let desc = descriptor_for_decoded_pixels(PixelFormat::Rgb8, &sc, Some(&Cicp::SRGB));
+        assert_eq!(desc.transfer, TransferFunction::Srgb);
+        assert_eq!(desc.primaries, ColorPrimaries::Bt709);
+    }
+
+    #[test]
+    fn corrected_to_p3_target() {
+        // Unusual but valid: color-corrected to P3 instead of sRGB.
+        let sc = SourceColor::default().with_cicp(Cicp::SRGB);
+        let desc =
+            descriptor_for_decoded_pixels(PixelFormat::Rgb8, &sc, Some(&Cicp::DISPLAY_P3));
+        assert_eq!(desc.transfer, TransferFunction::Srgb);
+        assert_eq!(desc.primaries, ColorPrimaries::DisplayP3);
+    }
+
+    #[test]
+    fn corrected_to_preserves_format() {
+        let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ);
+        let desc =
+            descriptor_for_decoded_pixels(PixelFormat::Bgra8, &sc, Some(&Cicp::SRGB));
+        assert_eq!(desc.pixel_format(), PixelFormat::Bgra8);
+        assert_eq!(desc.transfer, TransferFunction::Srgb);
+    }
+
+    // ── icc_profile_is_srgb ────────────────────────────────────────────
+
+    #[test]
+    fn srgb_hash_rejects_empty() {
+        assert!(!icc_profile_is_srgb(&[]));
+    }
+
+    #[test]
+    fn srgb_hash_rejects_garbage() {
+        assert!(!icc_profile_is_srgb(&[0u8; 100]));
+        assert!(!icc_profile_is_srgb(&[0xFF; 3144])); // same size as HP/Lino sRGB
+    }
+
+    #[test]
+    fn srgb_hash_rejects_short() {
+        assert!(!icc_profile_is_srgb(&[1, 2, 3, 4]));
+    }
+
+    #[test]
+    fn fnv1a_deterministic() {
+        // Same input always produces same hash.
+        let data = b"sRGB IEC61966-2.1";
+        assert_eq!(fnv1a_64(data), fnv1a_64(data));
+    }
+
+    #[test]
+    fn fnv1a_distinct_inputs() {
+        assert_ne!(fnv1a_64(b"abc"), fnv1a_64(b"abd"));
+    }
+
+    #[test]
+    fn known_srgb_hashes_sorted() {
+        // Redundant with the const assertion, but exercises at runtime too.
+        for i in 1..KNOWN_SRGB_HASHES.len() {
+            assert!(
+                KNOWN_SRGB_HASHES[i - 1] < KNOWN_SRGB_HASHES[i],
+                "hash table not sorted at index {i}"
+            );
+        }
+    }
+
+    // ── Signal range ───────────────────────────────────────────────────
+
+    #[test]
+    fn all_paths_produce_full_range() {
+        // All decode paths should produce full-range descriptors.
+        let cases: &[(SourceColor, Option<&Cicp>)] = &[
+            (SourceColor::default(), None),
+            (SourceColor::default().with_cicp(Cicp::SRGB), None),
+            (SourceColor::default().with_cicp(Cicp::DISPLAY_P3), None),
+            (SourceColor::default().with_cicp(Cicp::BT2100_PQ), None),
+            (SourceColor::default(), Some(&Cicp::SRGB)),
+        ];
+        for (sc, corrected) in cases {
+            let desc = descriptor_for_decoded_pixels(PixelFormat::Rgb8, sc, *corrected);
+            assert_eq!(
+                desc.signal_range,
+                SignalRange::Full,
+                "non-full range for {sc:?} corrected={corrected:?}"
+            );
+        }
     }
 }
