@@ -229,7 +229,7 @@ impl DecodeOutput {
     ///
     /// Returns the codec's probe result with both generic quality
     /// (via [`SourceEncodingDetails::source_generic_quality()`]) and
-    /// codec-specific fields (via [`codec_details()`](dyn SourceEncodingDetails::codec_details)).
+    /// codec-specific fields (via `codec_details::<T>()`).
     pub fn source_encoding_details(&self) -> Option<&dyn SourceEncodingDetails> {
         self.source_encoding.as_deref()
     }

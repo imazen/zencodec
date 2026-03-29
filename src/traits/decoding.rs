@@ -179,7 +179,7 @@ pub trait DecodeJob<'a>: Sized {
     /// Access codec-specific extensions for this job.
     ///
     /// Returns a reference to a `'static` extension type stored inside
-    /// the job. Callers downcast via [`Any::downcast_ref`] to the codec's
+    /// the job. Callers downcast via `Any::downcast_ref` to the codec's
     /// extension type. Returns `None` if the codec has no extensions.
     fn extensions(&self) -> Option<&dyn core::any::Any> {
         None
@@ -209,7 +209,7 @@ pub trait DecodeJob<'a>: Sized {
 
     /// Create a one-shot decoder bound to `data`.
     ///
-    /// The decoder stores the [`Cow`] and borrows from it via [`Deref`].
+    /// The decoder stores the [`Cow`] and borrows from it via [`core::ops::Deref`].
     /// Pass `Cow::Borrowed(&slice)` for zero-copy slice access, or
     /// `Cow::Owned(vec)` to donate a buffer (avoids a copy in codecs
     /// that need owned data internally).

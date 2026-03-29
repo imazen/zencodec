@@ -37,8 +37,8 @@ use core::any::Any;
 ///
 /// # Downcasting
 ///
-/// Use [`codec_details()`](dyn SourceEncodingDetails::codec_details) to
-/// access the concrete probe type for codec-specific fields:
+/// Use `codec_details::<T>()` to access the concrete probe type for
+/// codec-specific fields:
 ///
 /// ```rust,ignore
 /// if let Some(jpeg) = details.codec_details::<zenjpeg::detect::JpegProbe>() {

@@ -301,8 +301,8 @@ impl core::fmt::Display for ImageFormat {
 /// A collection of [`ImageFormatDefinition`]s with lookup methods.
 ///
 /// Use [`common()`](ImageFormatRegistry::common) for the default registry
-/// containing all built-in formats. Use [`with()`](ImageFormatRegistry::with)
-/// to add custom formats.
+/// containing all built-in formats. Use [`from_vec()`](ImageFormatRegistry::from_vec)
+/// or [`from_static()`](ImageFormatRegistry::from_static) for custom registries.
 ///
 /// # Example
 ///

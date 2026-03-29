@@ -189,7 +189,7 @@ pub trait EncodeJob: Sized {
     /// Access codec-specific extensions for this job.
     ///
     /// Returns a reference to a `'static` extension type stored inside
-    /// the job. Callers downcast via [`Any::downcast_ref`] to the codec's
+    /// the job. Callers downcast via `Any::downcast_ref` to the codec's
     /// extension type. Returns `None` if the codec has no extensions.
     ///
     /// The extension type must be `'static` (no borrowed data), but the
