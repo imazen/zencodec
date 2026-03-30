@@ -404,9 +404,7 @@ pub static HDR: ImageFormatDefinition = ImageFormatDefinition {
     supports_lossy: true,
     magic_bytes_needed: 11,
     detect: |data| {
-        data.len() >= 10
-            && (data.starts_with(b"#?RADIANCE")
-                || data.starts_with(b"#?RGBE"))
+        data.len() >= 10 && (data.starts_with(b"#?RADIANCE") || data.starts_with(b"#?RGBE"))
     },
 };
 
@@ -434,6 +432,6 @@ pub static TGA: ImageFormatDefinition = ImageFormatDefinition {
 /// Order matters: JPEG first (most common), AVIF before HEIC
 /// (for ambiguous mif1/msf1 containers, AVIF takes priority).
 pub static ALL: &[&ImageFormatDefinition] = &[
-    &JPEG, &PNG, &GIF, &WEBP, &AVIF, &JXL, &HEIC, &BMP, &FARBFELD, &PNM, &TIFF, &ICO, &QOI,
-    &PDF, &EXR, &HDR, &TGA,
+    &JPEG, &PNG, &GIF, &WEBP, &AVIF, &JXL, &HEIC, &BMP, &FARBFELD, &PNM, &TIFF, &ICO, &QOI, &PDF,
+    &EXR, &HDR, &TGA,
 ];

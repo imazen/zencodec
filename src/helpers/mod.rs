@@ -19,8 +19,7 @@ use crate::traits::{AnimationFrameDecoder, Decode, DecodeJob};
 
 mod icc;
 pub use icc::{
-    IccMatchTolerance, descriptor_for_decoded_pixels, icc_profile_is_srgb,
-    identify_well_known_icc,
+    IccMatchTolerance, descriptor_for_decoded_pixels, icc_profile_is_srgb, identify_well_known_icc,
 };
 
 /// Implement `push_decoder` by doing a full decode and copying rows to the sink.

@@ -2,6 +2,37 @@
 
 All notable changes to zencodec are documented here.
 
+## [0.1.10] - 2026-03-30
+
+### Added
+
+- `descriptor_for_decoded_pixels()`: derives accurate `PixelDescriptor` from source
+  color metadata (CICP, ICC profile, or sRGB default) instead of hardcoding sRGB.
+  Codecs should use this when building `DecodeOutput` or `OutputInfo`.
+- `identify_well_known_icc()`: hash-based ICC profile identification against 45
+  known profiles (sRGB, Display P3, BT.2020, BT.709) from Compact-ICC, skcms/Google,
+  ICC.org, colord, Ghostscript, HP, Facebook, Kodak, and libvips. ~100ns per lookup.
+- `IccMatchTolerance` enum: `Exact` (±1 u16), `Precise` (±3), `Approximate` (±13),
+  `Intent` (±56). Every table entry stores measured max u16 TRC error verified against
+  its authoritative EOTF for all 65536 input values.
+- `icc_profile_is_srgb()`: convenience sRGB detection using `Intent` tolerance.
+- `ImageFormat::Pdf`, `ImageFormat::Exr`, `ImageFormat::Hdr`, `ImageFormat::Tga`
+  format variants and definitions.
+- 65 regression tests for ICC identification and descriptor derivation covering
+  all format scenarios (JPEG, PNG, WebP, AVIF, JXL, HEIC, GIF, BMP, TIFF).
+- `scripts/fetch-profiles.sh` and `scripts/mega_test.rs` for reproducible TRC
+  verification against ICC profiles stored in R2.
+
+### Changed
+
+- Split `helpers.rs` into `helpers/mod.rs` + `helpers/icc.rs` submodule.
+  All public re-exports preserved — no breaking change.
+
+### Fixed
+
+- Removed Artifex esRGB from sRGB identification (it's linear scRGB, not sRGB).
+- TGA format detection hardened to match zenbitmaps footer-based probing.
+
 ## [0.1.6] - 2026-03-28
 
 ### Fixed
