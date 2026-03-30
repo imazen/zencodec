@@ -117,10 +117,10 @@ pub fn copy_frame_to_sink<D: AnimationFrameDecoder>(
 ///    target during decode. The descriptor reflects the target.
 /// 2. If `source_color` has CICP metadata, the descriptor uses the CICP
 ///    transfer function and primaries (pixels are in the source color space).
-/// 3. If `source_color` has an ICC profile, the hash is checked against 22
-///    known sRGB profiles. A match yields sRGB; a miss yields `Unknown`
-///    transfer and primaries (honest: the pixels are in an ICC-described
-///    space that doesn't map to a known CICP).
+/// 3. If `source_color` has an ICC profile, the hash is checked against 45
+///    well-known profiles (sRGB, P3, BT.2020, BT.709) using
+///    [`identify_well_known_icc`] with [`Intent`](IccMatchTolerance::Intent)
+///    tolerance. Unrecognized profiles yield `Unknown` transfer/primaries.
 /// 4. No color metadata at all: assumes sRGB (legacy format convention).
 pub fn descriptor_for_decoded_pixels(
     format: PixelFormat,
@@ -827,11 +827,78 @@ mod tests {
         assert_eq!(desc.primaries, ColorPrimaries::Bt709);
     }
 
+    // ── Hash table integrity ──────────────────────────────────────────
+
+    #[test]
+    fn no_duplicate_hashes() {
+        let mut seen = alloc::collections::BTreeSet::new();
+        for entry in KNOWN_ICC_PROFILES {
+            assert!(
+                seen.insert(entry.0),
+                "duplicate hash 0x{:016x}",
+                entry.0
+            );
+        }
+    }
+
+    #[test]
+    fn all_errors_within_intent_tolerance() {
+        for entry in KNOWN_ICC_PROFILES {
+            assert!(
+                entry.3 <= IccMatchTolerance::Intent as u8,
+                "entry 0x{:016x} has err={} exceeding Intent({})",
+                entry.0,
+                entry.3,
+                IccMatchTolerance::Intent as u8,
+            );
+        }
+    }
+
+    #[test]
+    fn all_cicp_codes_valid() {
+        for entry in KNOWN_ICC_PROFILES {
+            let (_, cp, tc, _) = *entry;
+            // CP must be 1 (BT.709), 9 (BT.2020), or 12 (P3)
+            assert!(
+                matches!(cp, 1 | 9 | 12),
+                "entry 0x{:016x} has invalid CP={}",
+                entry.0,
+                cp
+            );
+            // TC must be 1 (BT.709) or 13 (sRGB)
+            assert!(
+                matches!(tc, 1 | 13),
+                "entry 0x{:016x} has invalid TC={}",
+                entry.0,
+                tc
+            );
+        }
+    }
+
+    #[test]
+    fn zero_filled_data_no_false_positive() {
+        // ICC profiles often have zero padding. Verify no zero-filled
+        // buffer at any profile-typical size matches a table entry.
+        for len in [410, 456, 480, 524, 548, 656, 736, 790, 2576, 3024, 3144, 6184, 20420] {
+            let zeros = alloc::vec![0u8; len];
+            assert!(
+                identify_well_known_icc(&zeros, IccMatchTolerance::Intent).is_none(),
+                "zeros({len}) falsely matched a profile"
+            );
+        }
+    }
+
+    #[test]
+    fn tolerance_ordering() {
+        assert!(IccMatchTolerance::Exact < IccMatchTolerance::Precise);
+        assert!(IccMatchTolerance::Precise < IccMatchTolerance::Approximate);
+        assert!(IccMatchTolerance::Approximate < IccMatchTolerance::Intent);
+    }
+
     // ── Signal range ───────────────────────────────────────────────────
 
     #[test]
     fn all_paths_produce_full_range() {
-        // All decode paths should produce full-range descriptors.
         let cases: &[(SourceColor, Option<&Cicp>)] = &[
             (SourceColor::default(), None),
             (SourceColor::default().with_cicp(Cicp::SRGB), None),
