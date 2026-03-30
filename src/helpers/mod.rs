@@ -17,7 +17,9 @@ use crate::cost::OutputInfo;
 use crate::sink::SinkError;
 use crate::traits::{AnimationFrameDecoder, Decode, DecodeJob};
 
+mod exif;
 mod icc;
+pub use exif::parse_exif_orientation;
 pub use icc::{
     IccMatchTolerance, descriptor_for_decoded_pixels, icc_profile_is_srgb, identify_well_known_icc,
 };
