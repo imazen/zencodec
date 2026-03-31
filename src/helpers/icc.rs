@@ -554,10 +554,12 @@ mod tests {
     use ColorPrimaries as CP;
     use TransferFunction as TF;
 
+    type FormatScenario = (&'static str, PixelFormat, SourceColor, Option<Cicp>, TF, CP);
+
     #[test]
     fn format_scenarios() {
         // (name, pixel_format, source_color, corrected_to, expected_tf, expected_cp)
-        let cases: &[(&str, PixelFormat, SourceColor, Option<Cicp>, TF, CP)] = &[
+        let cases: &[FormatScenario] = &[
             // JPEG
             (
                 "jpeg_no_icc",

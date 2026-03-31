@@ -190,7 +190,6 @@ fn rd32(data: &[u8], offset: usize, big_endian: bool) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloc::vec;
     use alloc::vec::Vec;
 
     /// Build a minimal TIFF with one IFD entry for orientation.
