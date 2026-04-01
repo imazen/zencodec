@@ -272,16 +272,20 @@ pub trait DynDecodeJob<'a> {
 struct DecodeJobShim<J>(Option<J>);
 
 impl<J> DecodeJobShim<J> {
-    fn take(&mut self) -> J {
-        self.0.take().expect("job already consumed")
+    fn take(&mut self) -> Result<J, BoxedError> {
+        self.0
+            .take()
+            .ok_or_else(|| "DecodeJobShim: job already consumed (double take)".into())
     }
 
     fn put(&mut self, job: J) {
         self.0 = Some(job);
     }
 
-    fn as_ref(&self) -> &J {
-        self.0.as_ref().expect("job already consumed")
+    fn as_ref(&self) -> Result<&J, BoxedError> {
+        self.0
+            .as_ref()
+            .ok_or_else(|| "DecodeJobShim: job already consumed (double take)".into())
     }
 }
 
@@ -292,50 +296,57 @@ where
     J::AnimationFrameDec: Send,
 {
     fn set_stop(&mut self, stop: StopToken) {
-        let job = self.take();
-        self.put(job.with_stop(stop));
+        if let Ok(job) = self.take() {
+            self.put(job.with_stop(stop));
+        }
     }
 
     fn set_limits(&mut self, limits: ResourceLimits) {
-        let job = self.take();
-        self.put(job.with_limits(limits));
+        if let Ok(job) = self.take() {
+            self.put(job.with_limits(limits));
+        }
     }
 
     fn set_policy(&mut self, policy: crate::DecodePolicy) {
-        let job = self.take();
-        self.put(job.with_policy(policy));
+        if let Ok(job) = self.take() {
+            self.put(job.with_policy(policy));
+        }
     }
 
     fn probe(&self, data: &[u8]) -> Result<ImageInfo, BoxedError> {
-        self.as_ref()
+        self.as_ref()?
             .probe(data)
             .map_err(|e| Box::new(e) as BoxedError)
     }
 
     fn probe_full(&self, data: &[u8]) -> Result<ImageInfo, BoxedError> {
-        self.as_ref()
+        self.as_ref()?
             .probe_full(data)
             .map_err(|e| Box::new(e) as BoxedError)
     }
 
     fn set_crop_hint(&mut self, x: u32, y: u32, width: u32, height: u32) {
-        let job = self.take();
-        self.put(job.with_crop_hint(x, y, width, height));
+        if let Ok(job) = self.take() {
+            self.put(job.with_crop_hint(x, y, width, height));
+        }
     }
 
     fn set_orientation(&mut self, hint: OrientationHint) {
-        let job = self.take();
-        self.put(job.with_orientation(hint));
+        if let Ok(job) = self.take() {
+            self.put(job.with_orientation(hint));
+        }
     }
 
     fn set_start_frame_index(&mut self, index: u32) {
-        let job = self.take();
-        self.put(job.with_start_frame_index(index));
+        if let Ok(job) = self.take() {
+            self.put(job.with_start_frame_index(index));
+        }
     }
 
     fn set_extract_gain_map(&mut self, extract: bool) {
-        let job = self.take();
-        self.put(job.with_extract_gain_map(extract));
+        if let Ok(job) = self.take() {
+            self.put(job.with_extract_gain_map(extract));
+        }
     }
 
     fn extensions(&self) -> Option<&dyn Any> {
@@ -347,7 +358,7 @@ where
     }
 
     fn output_info(&self, data: &[u8]) -> Result<OutputInfo, BoxedError> {
-        self.as_ref()
+        self.as_ref()?
             .output_info(data)
             .map_err(|e| Box::new(e) as BoxedError)
     }
@@ -357,7 +368,7 @@ where
         data: Cow<'a, [u8]>,
         preferred: &[PixelDescriptor],
     ) -> Result<Box<dyn DynDecoder + 'a>, BoxedError> {
-        let job = self.take();
+        let job = self.take()?;
         let dec = job
             .decoder(data, preferred)
             .map_err(|e| Box::new(e) as BoxedError)?;
@@ -370,7 +381,7 @@ where
         sink: &mut dyn crate::DecodeRowSink,
         preferred: &[PixelDescriptor],
     ) -> Result<OutputInfo, BoxedError> {
-        let job = self.take();
+        let job = self.take()?;
         job.push_decoder(data, sink, preferred)
             .map_err(|e| Box::new(e) as BoxedError)
     }
@@ -380,7 +391,7 @@ where
         data: Cow<'a, [u8]>,
         preferred: &[PixelDescriptor],
     ) -> Result<Box<dyn DynStreamingDecoder + 'a>, BoxedError> {
-        let job = self.take();
+        let job = self.take()?;
         let dec = job
             .streaming_decoder(data, preferred)
             .map_err(|e| Box::new(e) as BoxedError)?;
@@ -392,7 +403,7 @@ where
         data: Cow<'a, [u8]>,
         preferred: &[PixelDescriptor],
     ) -> Result<Box<dyn DynAnimationFrameDecoder>, BoxedError> {
-        let job = self.take();
+        let job = self.take()?;
         let dec = job
             .animation_frame_decoder(data, preferred)
             .map_err(|e| Box::new(e) as BoxedError)?;

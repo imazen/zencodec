@@ -255,8 +255,10 @@ pub trait DynEncodeJob {
 struct EncodeJobShim<J>(Option<J>);
 
 impl<J> EncodeJobShim<J> {
-    fn take(&mut self) -> J {
-        self.0.take().expect("job already consumed")
+    fn take(&mut self) -> Result<J, BoxedError> {
+        self.0
+            .take()
+            .ok_or_else(|| "EncodeJobShim: job already consumed (double take)".into())
     }
 
     fn put(&mut self, job: J) {
@@ -271,33 +273,39 @@ where
     J::AnimationFrameEnc: AnimationFrameEncoder,
 {
     fn set_stop(&mut self, stop: StopToken) {
-        let job = self.take();
-        self.put(job.with_stop(stop));
+        if let Ok(job) = self.take() {
+            self.put(job.with_stop(stop));
+        }
     }
 
     fn set_limits(&mut self, limits: ResourceLimits) {
-        let job = self.take();
-        self.put(job.with_limits(limits));
+        if let Ok(job) = self.take() {
+            self.put(job.with_limits(limits));
+        }
     }
 
     fn set_policy(&mut self, policy: crate::EncodePolicy) {
-        let job = self.take();
-        self.put(job.with_policy(policy));
+        if let Ok(job) = self.take() {
+            self.put(job.with_policy(policy));
+        }
     }
 
     fn set_metadata(&mut self, meta: Metadata) {
-        let job = self.take();
-        self.put(job.with_metadata(meta));
+        if let Ok(job) = self.take() {
+            self.put(job.with_metadata(meta));
+        }
     }
 
     fn set_canvas_size(&mut self, width: u32, height: u32) {
-        let job = self.take();
-        self.put(job.with_canvas_size(width, height));
+        if let Ok(job) = self.take() {
+            self.put(job.with_canvas_size(width, height));
+        }
     }
 
     fn set_loop_count(&mut self, count: Option<u32>) {
-        let job = self.take();
-        self.put(job.with_loop_count(count));
+        if let Ok(job) = self.take() {
+            self.put(job.with_loop_count(count));
+        }
     }
 
     fn extensions(&self) -> Option<&dyn Any> {
@@ -309,7 +317,7 @@ where
     }
 
     fn into_encoder(mut self: Box<Self>) -> Result<Box<dyn DynEncoder>, BoxedError> {
-        let job = self.take();
+        let job = self.take()?;
         let enc = job.encoder().map_err(|e| Box::new(e) as BoxedError)?;
         Ok(Box::new(EncoderShim(enc)))
     }
@@ -317,7 +325,7 @@ where
     fn into_animation_frame_encoder(
         mut self: Box<Self>,
     ) -> Result<Box<dyn DynAnimationFrameEncoder>, BoxedError> {
-        let job = self.take();
+        let job = self.take()?;
         let enc = job
             .animation_frame_encoder()
             .map_err(|e| Box::new(e) as BoxedError)?;

@@ -13,9 +13,28 @@ fn has_ftyp(data: &[u8]) -> bool {
 }
 
 fn scan_compat_brands(data: &[u8], target: &[&[u8; 4]]) -> bool {
-    let box_size = u32::from_be_bytes([data[0], data[1], data[2], data[3]]) as usize;
-    let end = box_size.min(data.len());
-    let mut offset = 16;
+    let box_size_u32 = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
+    let end = match box_size_u32 {
+        // box_size == 0 means the box extends to the end of the data
+        0 => data.len(),
+        // box_size == 1 means the real size is a 64-bit value at offset 8
+        1 => {
+            if data.len() < 16 {
+                return false;
+            }
+            let extended = u64::from_be_bytes([
+                data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15],
+            ]);
+            // Clamp to data length (we only scan what we have)
+            (extended as usize).min(data.len())
+        }
+        size => (size as usize).min(data.len()),
+    };
+    // For box_size == 1, compatible brands start after the 16-byte header
+    // (8 bytes extended size overlaps the major_brand/minor_version area,
+    // so brands start at offset 24). For normal boxes, brands start at 16.
+    let brands_start = if box_size_u32 == 1 { 24 } else { 16 };
+    let mut offset = brands_start;
     while offset + 4 <= end {
         let compat = &data[offset..offset + 4];
         if target.iter().any(|b| compat[..4] == b[..]) {
