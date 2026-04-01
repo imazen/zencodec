@@ -390,6 +390,55 @@ impl DecodedGainMap {
 // ISO 21496-1 fractions
 // =========================================================================
 
+/// Convert a float to an unsigned fraction using continued fractions.
+///
+/// Ported from libultrahdr's `floatToUnsignedFractionImpl`. Produces canonical
+/// compact fractions (e.g. `1/64` instead of `15625/1000000`) that match
+/// what browsers and reference decoders expect.
+fn float_to_unsigned_fraction(
+    v: f32,
+    max_numerator: u32,
+    numerator: &mut u32,
+    denominator: &mut u32,
+) -> bool {
+    let v = v as f64;
+    if v.is_nan() || v < 0.0 || v > max_numerator as f64 {
+        return false;
+    }
+    let max_d: u64 = if v <= 1.0 {
+        u32::MAX as u64
+    } else {
+        (max_numerator as f64 / v).floor() as u64
+    };
+    *denominator = 1;
+    let mut previous_d: u32 = 0;
+    let mut current_v = v - v.floor();
+    const MAX_ITER: usize = 39;
+    for _ in 0..MAX_ITER {
+        let num_double = (*denominator as f64) * v;
+        if num_double > max_numerator as f64 {
+            return false;
+        }
+        *numerator = num_double.round() as u32;
+        if (num_double - (*numerator as f64)).abs() == 0.0 {
+            return true;
+        }
+        current_v = 1.0 / current_v;
+        let new_d = previous_d as f64 + current_v.floor() * (*denominator as f64);
+        if new_d > max_d as f64 {
+            return true;
+        }
+        previous_d = *denominator;
+        if new_d > u32::MAX as f64 {
+            return false;
+        }
+        *denominator = new_d as u32;
+        current_v -= current_v.floor();
+    }
+    *numerator = ((*denominator as f64) * v).round() as u32;
+    true
+}
+
 /// Signed rational fraction for ISO 21496-1 binary format.
 ///
 /// Used for gain map min/max and offsets where negative values are valid.
@@ -411,10 +460,32 @@ impl Fraction {
         }
     }
 
-    /// Create from f64 with the specified denominator.
-    pub fn from_f64(value: f64, denominator: u32) -> Self {
+    /// Create from f64 using continued fractions for canonical encoding.
+    ///
+    /// The `_denominator` parameter is ignored — the continued fraction
+    /// algorithm finds the optimal denominator automatically. This parameter
+    /// exists only for backward compatibility and will be removed in a
+    /// future version.
+    pub fn from_f64(value: f64, _denominator: u32) -> Self {
+        let mut numerator = 0u32;
+        let mut denominator = 1u32;
+        if !float_to_unsigned_fraction(
+            value.abs() as f32,
+            i32::MAX as u32,
+            &mut numerator,
+            &mut denominator,
+        ) {
+            return Self {
+                numerator: 0,
+                denominator: 1,
+            };
+        }
         Self {
-            numerator: (value * denominator as f64).round() as i32,
+            numerator: if value < 0.0 {
+                -(numerator as i32)
+            } else {
+                numerator as i32
+            },
             denominator,
         }
     }
@@ -446,10 +517,24 @@ impl UFraction {
         }
     }
 
-    /// Create from f64 with the specified denominator. Clamps negative values to 0.
-    pub fn from_f64(value: f64, denominator: u32) -> Self {
+    /// Create from f64 using continued fractions for canonical encoding.
+    ///
+    /// The `_denominator` parameter is ignored — the continued fraction
+    /// algorithm finds the optimal denominator automatically. This parameter
+    /// exists only for backward compatibility and will be removed in a
+    /// future version. Clamps negative values to 0.
+    pub fn from_f64(value: f64, _denominator: u32) -> Self {
+        let value = value.max(0.0) as f32;
+        let mut numerator = 0u32;
+        let mut denominator = 1u32;
+        if !float_to_unsigned_fraction(value, u32::MAX, &mut numerator, &mut denominator) {
+            return Self {
+                numerator: 0,
+                denominator: 1,
+            };
+        }
         Self {
-            numerator: (value.max(0.0) * denominator as f64).round() as u32,
+            numerator,
             denominator,
         }
     }
@@ -515,7 +600,9 @@ impl core::fmt::Display for GainMapParseError {
 
 impl core::error::Error for GainMapParseError {}
 
-/// Default denominator for fraction serialization (~6 decimal digits precision).
+/// Legacy denominator constant. No longer used by the continued fraction
+/// algorithm but kept as the ignored parameter value at call sites until
+/// the `from_f64` signature is cleaned up.
 const FRACTION_DENOM: u32 = 1_000_000;
 
 /// Parse ISO 21496-1 binary metadata into [`GainMapParams`].
@@ -1460,10 +1547,10 @@ mod tests {
 
     #[test]
     fn fraction_edge_cases() {
-        // Zero
+        // Zero — continued fractions produce 0/1
         let f = Fraction::from_f64(0.0, 1_000_000);
         assert_eq!(f.numerator, 0);
-        assert_eq!(f.denominator, 1_000_000);
+        assert_eq!(f.denominator, 1);
         assert!((f.to_f64()).abs() < 1e-10);
         assert!(f.is_valid());
 
@@ -1472,27 +1559,40 @@ mod tests {
         assert_eq!(f_neg0.numerator, 0);
         assert!((f_neg0.to_f64()).abs() < 1e-10);
 
-        // f64::MAX should saturate i32 (overflow wraps via `as i32`)
+        // f64::MAX — continued fractions return fallback 0/1
         let f_max = Fraction::from_f64(f64::MAX, 1_000_000);
-        // The result of (f64::MAX * 1_000_000).round() as i32 is undefined/saturated,
-        // but the function should not panic.
         let _ = f_max.to_f64();
+
+        // Canonical denominators for common values
+        let f = Fraction::from_f64(0.015625, 1_000_000);
+        assert_eq!((f.numerator, f.denominator), (1, 64));
+
+        let f = Fraction::from_f64(4.0, 1_000_000);
+        assert_eq!((f.numerator, f.denominator), (4, 1));
+
+        let f = Fraction::from_f64(-1.0, 1_000_000);
+        assert_eq!((f.numerator, f.denominator), (-1, 1));
     }
 
     #[test]
     fn ufraction_edge_cases() {
-        // Zero
+        // Zero — continued fractions produce 0/1
         let f = UFraction::from_f64(0.0, 1_000_000);
         assert_eq!(f.numerator, 0);
-        assert_eq!(f.denominator, 1_000_000);
+        assert_eq!(f.denominator, 1);
         assert!((f.to_f64()).abs() < 1e-10);
         assert!(f.is_valid());
 
-        // f64::MAX should saturate u32 (overflow wraps via `as u32`)
+        // f64::MAX — continued fractions return fallback 0/1
         let f_max = UFraction::from_f64(f64::MAX, 1_000_000);
-        // The result of (f64::MAX * 1_000_000).round() as u32 is undefined/saturated,
-        // but the function should not panic.
         let _ = f_max.to_f64();
+
+        // Canonical denominators
+        let f = UFraction::from_f64(0.015625, 1_000_000);
+        assert_eq!((f.numerator, f.denominator), (1, 64));
+
+        let f = UFraction::from_f64(4.0, 1_000_000);
+        assert_eq!((f.numerator, f.denominator), (4, 1));
     }
 
     #[test]
