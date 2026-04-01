@@ -50,13 +50,17 @@ pub trait EncoderConfig: Clone + Send + Sync {
         &EncodeCapabilities::EMPTY
     }
 
-    /// Set encoding quality on a calibrated 0.0–100.0 scale.
+    /// Set encoding quality on a calibrated 0.0--100.0 scale.
     ///
     /// "Generic" because this is the codec-agnostic quality knob. Individual
     /// codecs may also have format-specific quality methods on their config types.
     ///
-    /// Default no-op. Check [`generic_quality()`](EncoderConfig::generic_quality)
-    /// for the current value.
+    /// # Note
+    ///
+    /// The default implementation is a no-op. Not all codecs support quality
+    /// tuning. Use [`generic_quality()`](EncoderConfig::generic_quality) after
+    /// calling this to verify the codec accepted the value -- it returns `None`
+    /// if the codec does not support quality settings.
     fn with_generic_quality(self, _quality: f32) -> Self {
         self
     }
@@ -67,21 +71,39 @@ pub trait EncoderConfig: Clone + Send + Sync {
     /// codecs may also have format-specific effort/speed methods.
     ///
     /// Each codec maps this to its internal effort/speed scale.
-    /// Default no-op.
+    ///
+    /// # Note
+    ///
+    /// The default implementation is a no-op. Not all codecs support effort
+    /// tuning. Use [`generic_effort()`](EncoderConfig::generic_effort) after
+    /// calling this to verify the codec accepted the value -- it returns `None`
+    /// if the codec does not support effort settings.
     fn with_generic_effort(self, _effort: i32) -> Self {
         self
     }
 
     /// Enable or disable lossless encoding.
     ///
-    /// Default no-op. When lossless is enabled, quality is ignored.
+    /// When lossless is enabled, quality is ignored.
+    ///
+    /// # Note
+    ///
+    /// The default implementation is a no-op. Not all codecs support lossless
+    /// mode. Use [`is_lossless()`](EncoderConfig::is_lossless) after calling
+    /// this to verify the codec accepted the value -- it returns `None` if the
+    /// codec does not support lossless encoding.
     fn with_lossless(self, _lossless: bool) -> Self {
         self
     }
 
-    /// Set independent alpha channel quality on a calibrated 0.0–100.0 scale.
+    /// Set independent alpha channel quality on a calibrated 0.0--100.0 scale.
     ///
-    /// Default no-op.
+    /// # Note
+    ///
+    /// The default implementation is a no-op. Not all codecs support separate
+    /// alpha quality. Use [`alpha_quality()`](EncoderConfig::alpha_quality) after
+    /// calling this to verify the codec accepted the value -- it returns `None`
+    /// if the codec does not support alpha quality settings.
     fn with_alpha_quality(self, _quality: f32) -> Self {
         self
     }
