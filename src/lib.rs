@@ -63,7 +63,9 @@ mod traits;
 
 pub use extensions::Extensions;
 pub use format::{ImageFormat, ImageFormatDefinition, ImageFormatRegistry};
-pub use gainmap::{GainMapChannel, GainMapDirection, GainMapInfo, GainMapParams, GainMapPresence};
+pub use gainmap::{
+    GainMapChannel, GainMapDirection, GainMapInfo, GainMapParams, GainMapPresence, Iso21496Format,
+};
 pub use info::{
     Cicp, ContentLightLevel, ImageInfo, ImageSequence, MasteringDisplay, Resolution,
     ResolutionUnit, SourceColor, Supplements,

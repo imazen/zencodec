@@ -24,6 +24,35 @@ use alloc::vec::Vec;
 use crate::info::Cicp;
 
 // =========================================================================
+// Wire format
+// =========================================================================
+
+/// Wire format variant for ISO 21496-1 binary metadata.
+///
+/// The `GainMapMetadata` payload (flags + fractions) is identical in all contexts.
+/// The difference is whether the payload is prefixed with a `version(u8)` byte:
+///
+/// | Context | Envelope | Use this variant |
+/// |---------|----------|-----------------|
+/// | JPEG APP2 | `min_ver(u16) + writer_ver(u16) + payload` | [`Iso21496Format::JpegApp2`] |
+/// | JXL `jhgm` | `min_ver(u16) + writer_ver(u16) + payload` | [`Iso21496Format::JpegApp2`] |
+/// | AVIF `tmap` | `version(u8) + min_ver(u16) + writer_ver(u16) + payload` | [`Iso21496Format::AvifTmap`] |
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Iso21496Format {
+    /// JPEG APP2 and JXL `jhgm` format: no version byte prefix.
+    ///
+    /// The payload starts with `minimum_version(u16)`. Used by libultrahdr
+    /// for JPEG and by libjxl for the `gain_map_metadata` field in `jhgm` boxes.
+    JpegApp2,
+    /// AVIF `tmap` item format: includes `version(u8)` prefix.
+    ///
+    /// The `ToneMapImage` box wraps `GainMapMetadata` with a version byte.
+    /// Used by libavif for the `tmap` derived image item payload.
+    AvifTmap,
+}
+
+// =========================================================================
 // Core types
 // =========================================================================
 
@@ -86,6 +115,13 @@ pub struct GainMapParams {
     pub alternate_hdr_headroom: f64,
     /// Whether the gain map is encoded in the base image's color space.
     pub use_base_color_space: bool,
+    /// ISO 21496-1 backward direction flag (bit 2 of flags byte).
+    ///
+    /// When `true`, the base and alternate roles are reversed: the base
+    /// image is the HDR rendition and the alternate is SDR. This is the
+    /// authoritative encoder signal — [`direction()`](Self::direction)
+    /// derives the same information from headroom comparison as a fallback.
+    pub backward_direction: bool,
 }
 
 impl Default for GainMapParams {
@@ -95,6 +131,7 @@ impl Default for GainMapParams {
             base_hdr_headroom: 0.0,
             alternate_hdr_headroom: 0.0,
             use_base_color_space: true,
+            backward_direction: false,
         }
     }
 }
@@ -462,11 +499,10 @@ impl Fraction {
 
     /// Create from f64 using continued fractions for canonical encoding.
     ///
-    /// The `_denominator` parameter is ignored — the continued fraction
-    /// algorithm finds the optimal denominator automatically. This parameter
-    /// exists only for backward compatibility and will be removed in a
-    /// future version.
-    pub fn from_f64(value: f64, _denominator: u32) -> Self {
+    /// Finds the best rational approximation, matching the algorithm used by
+    /// libultrahdr and canonical ISO 21496-1 encoders. Produces compact
+    /// fractions (e.g. `1/64` instead of `15625/1000000`).
+    pub fn from_f64(value: f64) -> Self {
         let mut numerator = 0u32;
         let mut denominator = 1u32;
         if !float_to_unsigned_fraction(
@@ -488,6 +524,15 @@ impl Fraction {
             },
             denominator,
         }
+    }
+
+    /// Backward-compatible alias for [`from_f64`](Self::from_f64).
+    ///
+    /// The `_denominator` parameter is ignored — the continued fraction
+    /// algorithm finds the optimal denominator automatically.
+    #[deprecated(since = "0.1.12", note = "Use `Fraction::from_f64(value)` instead")]
+    pub fn from_f64_with_denom(value: f64, _denominator: u32) -> Self {
+        Self::from_f64(value)
     }
 
     /// Whether this fraction has a valid (non-zero) denominator.
@@ -519,11 +564,9 @@ impl UFraction {
 
     /// Create from f64 using continued fractions for canonical encoding.
     ///
-    /// The `_denominator` parameter is ignored — the continued fraction
-    /// algorithm finds the optimal denominator automatically. This parameter
-    /// exists only for backward compatibility and will be removed in a
-    /// future version. Clamps negative values to 0.
-    pub fn from_f64(value: f64, _denominator: u32) -> Self {
+    /// Finds the best rational approximation, matching the algorithm used by
+    /// libultrahdr and canonical ISO 21496-1 encoders. Clamps negative values to 0.
+    pub fn from_f64(value: f64) -> Self {
         let value = value.max(0.0) as f32;
         let mut numerator = 0u32;
         let mut denominator = 1u32;
@@ -537,6 +580,15 @@ impl UFraction {
             numerator,
             denominator,
         }
+    }
+
+    /// Backward-compatible alias for [`from_f64`](Self::from_f64).
+    ///
+    /// The `_denominator` parameter is ignored — the continued fraction
+    /// algorithm finds the optimal denominator automatically.
+    #[deprecated(since = "0.1.12", note = "Use `UFraction::from_f64(value)` instead")]
+    pub fn from_f64_with_denom(value: f64, _denominator: u32) -> Self {
+        Self::from_f64(value)
     }
 
     /// Whether this fraction has a valid (non-zero) denominator.
@@ -600,48 +652,191 @@ impl core::fmt::Display for GainMapParseError {
 
 impl core::error::Error for GainMapParseError {}
 
-/// Legacy denominator constant. No longer used by the continued fraction
-/// algorithm but kept as the ignored parameter value at call sites until
-/// the `from_f64` signature is cleaned up.
-const FRACTION_DENOM: u32 = 1_000_000;
+/// Flag bit: multichannel gain map (bit 7 of flags byte).
+const FLAG_MULTI_CHANNEL: u8 = 0x80;
 
-/// Parse ISO 21496-1 binary metadata into [`GainMapParams`].
+/// Flag bit: gain map uses base image colour space (bit 6 of flags byte).
+const FLAG_USE_BASE_COLOUR_SPACE: u8 = 0x40;
+
+/// Flag bit: backward direction — base is HDR, alternate is SDR (bit 2).
+const FLAG_BACKWARD_DIRECTION: u8 = 0x04;
+
+/// Flag bit: common denominator encoding (bit 3).
+/// When set, a single shared denominator precedes all numerators.
+const FLAG_COMMON_DENOMINATOR: u8 = 0x08;
+
+/// Header size for AVIF tmap: version (1) + minimum_version (2) + writer_version (2) + flags (1).
+const AVIF_HEADER_SIZE: usize = 6;
+
+/// Header size for JPEG APP2 / JXL jhgm: minimum_version (2) + writer_version (2) + flags (1).
+const JPEG_HEADER_SIZE: usize = 5;
+
+/// Size of one fraction pair (numerator + denominator = 8 bytes).
+const FRACTION_SIZE: usize = 8;
+
+/// Parse ISO 21496-1 binary metadata from AVIF `tmap` item payload.
 ///
-/// The binary format stores gains and headroom as rational fractions in log2
-/// domain, which maps directly to `GainMapParams` fields.
+/// This format includes a `version(u8)` prefix byte before the common header.
+/// For JPEG APP2 or JXL `jhgm` (no version byte), use [`parse_iso21496_jpeg`].
+///
+/// Handles both full and common-denominator compact encodings.
 pub fn parse_iso21496(data: &[u8]) -> Result<GainMapParams, GainMapParseError> {
+    parse_iso21496_avif(data)
+}
+
+/// Parse ISO 21496-1 binary metadata without version byte prefix.
+///
+/// Used for JPEG APP2 and JXL `jhgm` formats where the containing marker
+/// or box type already identifies the format.
+///
+/// Handles both full and common-denominator compact encodings.
+pub fn parse_iso21496_jpeg(data: &[u8]) -> Result<GainMapParams, GainMapParseError> {
+    parse_iso21496_no_version(data)
+}
+
+/// Serialize [`GainMapParams`] to ISO 21496-1 binary format (AVIF `tmap`).
+///
+/// Includes the `version(u8)` prefix byte. For JPEG APP2 or JXL `jhgm`,
+/// use [`serialize_iso21496_jpeg`].
+pub fn serialize_iso21496(params: &GainMapParams) -> Vec<u8> {
+    serialize_iso21496_avif(params)
+}
+
+/// Serialize [`GainMapParams`] without version byte prefix (JPEG APP2 / JXL `jhgm`).
+pub fn serialize_iso21496_jpeg(params: &GainMapParams) -> Vec<u8> {
+    serialize_iso21496_no_version(params)
+}
+
+/// Parse ISO 21496-1 binary gain map metadata with explicit format selection.
+///
+/// The `format` parameter selects the wire format variant:
+/// - [`Iso21496Format::AvifTmap`]: expects `version(u8)` prefix (AVIF `tmap` item payload)
+/// - [`Iso21496Format::JpegApp2`]: no version prefix (JPEG APP2, JXL `jhgm`)
+///
+/// Both variants handle the common-denominator compact encoding (flag bit 3)
+/// used by libultrahdr.
+pub fn parse_iso21496_fmt(
+    data: &[u8],
+    format: Iso21496Format,
+) -> Result<GainMapParams, GainMapParseError> {
+    match format {
+        Iso21496Format::AvifTmap => parse_iso21496_avif(data),
+        Iso21496Format::JpegApp2 => parse_iso21496_no_version(data),
+    }
+}
+
+/// Serialize [`GainMapParams`] to ISO 21496-1 binary format with explicit format selection.
+///
+/// The `format` parameter selects the wire format variant:
+/// - [`Iso21496Format::AvifTmap`]: includes `version(u8)` prefix
+/// - [`Iso21496Format::JpegApp2`]: no version prefix (also correct for JXL `jhgm`)
+///
+/// Always writes the full (non-compact) format for maximum compatibility.
+pub fn serialize_iso21496_fmt(params: &GainMapParams, format: Iso21496Format) -> Vec<u8> {
+    match format {
+        Iso21496Format::AvifTmap => serialize_iso21496_avif(params),
+        Iso21496Format::JpegApp2 => serialize_iso21496_no_version(params),
+    }
+}
+
+// -- Internal format-specific entry points --
+
+/// Parse ISO 21496-1 from AVIF `tmap` item payload (with version byte prefix).
+fn parse_iso21496_avif(data: &[u8]) -> Result<GainMapParams, GainMapParseError> {
+    if data.len() < AVIF_HEADER_SIZE {
+        return Err(GainMapParseError::TruncatedData {
+            expected: AVIF_HEADER_SIZE,
+            actual: data.len(),
+        });
+    }
+
     let mut offset = 0;
 
-    // Header (6 bytes)
+    // version (u8) — must be 0
     let version = read_u8(data, &mut offset)?;
     if version != 0 {
         return Err(GainMapParseError::UnsupportedVersion { version });
     }
-    let minimum_version = read_u16_be(data, &mut offset)?;
+
+    parse_common_header_and_payload(data, &mut offset)
+}
+
+/// Parse ISO 21496-1 without version byte prefix (JPEG APP2 / JXL jhgm).
+fn parse_iso21496_no_version(data: &[u8]) -> Result<GainMapParams, GainMapParseError> {
+    if data.len() < JPEG_HEADER_SIZE {
+        return Err(GainMapParseError::TruncatedData {
+            expected: JPEG_HEADER_SIZE,
+            actual: data.len(),
+        });
+    }
+
+    let mut offset = 0;
+    parse_common_header_and_payload(data, &mut offset)
+}
+
+/// Parse the common header (min_version + writer_version + flags) and payload.
+/// Shared between AVIF and JPEG/JXL variants.
+fn parse_common_header_and_payload(
+    data: &[u8],
+    offset: &mut usize,
+) -> Result<GainMapParams, GainMapParseError> {
+    // minimum_version (u16 BE) — must be 0
+    let minimum_version = read_u16_be(data, offset)?;
     if minimum_version > 0 {
         return Err(GainMapParseError::UnsupportedVersion {
             version: minimum_version as u8,
         });
     }
-    let _writer_version = read_u16_be(data, &mut offset)?;
-    let flags = read_u8(data, &mut offset)?;
-    let is_multichannel = (flags & 0x80) != 0;
-    let use_base_color_space = (flags & 0x40) != 0;
 
-    // Headroom (unsigned fractions, already log2 domain)
-    let base_headroom = read_ufraction(data, &mut offset, "base_hdr_headroom")?;
-    let alt_headroom = read_ufraction(data, &mut offset, "alternate_hdr_headroom")?;
+    // writer_version (u16 BE) — informational
+    let _writer_version = read_u16_be(data, offset)?;
 
-    // Per-channel data
-    let num_channels = if is_multichannel { 3 } else { 1 };
+    // flags (u8)
+    let flags = read_u8(data, offset)?;
+    let is_multichannel = (flags & FLAG_MULTI_CHANNEL) != 0;
+    let use_base_color_space = (flags & FLAG_USE_BASE_COLOUR_SPACE) != 0;
+    let backward_direction = (flags & FLAG_BACKWARD_DIRECTION) != 0;
+    let common_denominator = (flags & FLAG_COMMON_DENOMINATOR) != 0;
+
+    let num_channels: usize = if is_multichannel { 3 } else { 1 };
+
+    if common_denominator {
+        parse_payload_common_denom(
+            data,
+            offset,
+            num_channels,
+            use_base_color_space,
+            backward_direction,
+        )
+    } else {
+        parse_payload_full(
+            data,
+            offset,
+            num_channels,
+            use_base_color_space,
+            backward_direction,
+        )
+    }
+}
+
+/// Parse the standard (full) payload: each value has its own denominator.
+fn parse_payload_full(
+    data: &[u8],
+    offset: &mut usize,
+    num_channels: usize,
+    use_base_color_space: bool,
+    backward_direction: bool,
+) -> Result<GainMapParams, GainMapParseError> {
+    let base_headroom = read_ufraction(data, offset, "base_hdr_headroom")?;
+    let alt_headroom = read_ufraction(data, offset, "alternate_hdr_headroom")?;
+
     let mut channels = [GainMapChannel::default(); 3];
-
     for ch in channels.iter_mut().take(num_channels) {
-        let min_frac = read_fraction(data, &mut offset, "gain_map_min")?;
-        let max_frac = read_fraction(data, &mut offset, "gain_map_max")?;
-        let gamma_frac = read_ufraction(data, &mut offset, "gamma")?;
-        let base_offset_frac = read_fraction(data, &mut offset, "base_offset")?;
-        let alt_offset_frac = read_fraction(data, &mut offset, "alternate_offset")?;
+        let min_frac = read_fraction(data, offset, "gain_map_min")?;
+        let max_frac = read_fraction(data, offset, "gain_map_max")?;
+        let gamma_frac = read_ufraction(data, offset, "gamma")?;
+        let base_offset_frac = read_fraction(data, offset, "base_offset")?;
+        let alt_offset_frac = read_fraction(data, offset, "alternate_offset")?;
 
         *ch = GainMapChannel {
             min: min_frac.to_f64(),
@@ -653,7 +848,7 @@ pub fn parse_iso21496(data: &[u8]) -> Result<GainMapParams, GainMapParseError> {
     }
 
     // Single-channel: replicate to all three
-    if !is_multichannel {
+    if num_channels == 1 {
         channels[1] = channels[0];
         channels[2] = channels[0];
     }
@@ -663,159 +858,80 @@ pub fn parse_iso21496(data: &[u8]) -> Result<GainMapParams, GainMapParseError> {
         base_hdr_headroom: base_headroom.to_f64(),
         alternate_hdr_headroom: alt_headroom.to_f64(),
         use_base_color_space,
+        backward_direction,
     })
 }
 
-/// Serialize [`GainMapParams`] to ISO 21496-1 binary format.
-pub fn serialize_iso21496(params: &GainMapParams) -> Vec<u8> {
-    let is_multichannel = !params.is_single_channel();
-    let num_channels: usize = if is_multichannel { 3 } else { 1 };
-    let size = 6 + 16 + num_channels * 40;
-    let mut data = Vec::with_capacity(size);
-
-    // Header
-    data.push(0u8); // version
-    data.extend_from_slice(&0u16.to_be_bytes()); // minimum_version
-    data.extend_from_slice(&0u16.to_be_bytes()); // writer_version
-    let mut flags = 0u8;
-    if is_multichannel {
-        flags |= 0x80;
-    }
-    if params.use_base_color_space {
-        flags |= 0x40;
-    }
-    data.push(flags);
-
-    // Headroom (log2 → unsigned fraction)
-    write_ufraction(
-        &mut data,
-        UFraction::from_f64(params.base_hdr_headroom, FRACTION_DENOM),
-    );
-    write_ufraction(
-        &mut data,
-        UFraction::from_f64(params.alternate_hdr_headroom, FRACTION_DENOM),
-    );
-
-    // Per-channel
-    for ch in params.channels.iter().take(num_channels) {
-        write_fraction(&mut data, Fraction::from_f64(ch.min, FRACTION_DENOM));
-        write_fraction(&mut data, Fraction::from_f64(ch.max, FRACTION_DENOM));
-        write_ufraction(&mut data, UFraction::from_f64(ch.gamma, FRACTION_DENOM));
-        write_fraction(
-            &mut data,
-            Fraction::from_f64(ch.base_offset, FRACTION_DENOM),
-        );
-        write_fraction(
-            &mut data,
-            Fraction::from_f64(ch.alternate_offset, FRACTION_DENOM),
-        );
-    }
-
-    data
-}
-
-/// Serialize [`GainMapParams`] to ISO 21496-1 binary format for JPEG APP2.
+/// Parse the compact payload: one shared denominator for all fractions.
 ///
-/// The JPEG APP2 variant omits the version byte prefix that
-/// [`serialize_iso21496`] includes for AVIF `tmap` / JXL `jhgm` boxes.
-/// The APP2 URN namespace (`urn:iso:std:iso:ts:21496:-1`) already identifies
-/// the format, so the version byte is redundant.
-///
-/// This matches the wire format used by libultrahdr.
-pub fn serialize_iso21496_jpeg(params: &GainMapParams) -> Vec<u8> {
-    let is_multichannel = !params.is_single_channel();
-    let num_channels: usize = if is_multichannel { 3 } else { 1 };
-    let size = 5 + 16 + num_channels * 40;
-    let mut data = Vec::with_capacity(size);
-
-    // No version byte — JPEG APP2 URN identifies the format.
-    data.extend_from_slice(&0u16.to_be_bytes()); // minimum_version
-    data.extend_from_slice(&0u16.to_be_bytes()); // writer_version
-    let mut flags = 0u8;
-    if is_multichannel {
-        flags |= 0x80;
-    }
-    if params.use_base_color_space {
-        flags |= 0x40;
-    }
-    data.push(flags);
-
-    // Payload is identical to the box format
-    write_ufraction(
-        &mut data,
-        UFraction::from_f64(params.base_hdr_headroom, FRACTION_DENOM),
-    );
-    write_ufraction(
-        &mut data,
-        UFraction::from_f64(params.alternate_hdr_headroom, FRACTION_DENOM),
-    );
-
-    for ch in params.channels.iter().take(num_channels) {
-        write_fraction(&mut data, Fraction::from_f64(ch.min, FRACTION_DENOM));
-        write_fraction(&mut data, Fraction::from_f64(ch.max, FRACTION_DENOM));
-        write_ufraction(&mut data, UFraction::from_f64(ch.gamma, FRACTION_DENOM));
-        write_fraction(
-            &mut data,
-            Fraction::from_f64(ch.base_offset, FRACTION_DENOM),
-        );
-        write_fraction(
-            &mut data,
-            Fraction::from_f64(ch.alternate_offset, FRACTION_DENOM),
-        );
-    }
-
-    data
-}
-
-/// Parse ISO 21496-1 binary metadata from JPEG APP2 payload.
-///
-/// The JPEG APP2 variant has no version byte prefix — it starts directly
-/// with `minimum_version(u16)`. See [`parse_iso21496`] for the AVIF/JXL
-/// variant that includes the version byte.
-pub fn parse_iso21496_jpeg(data: &[u8]) -> Result<GainMapParams, GainMapParseError> {
-    if data.len() < 5 {
-        return Err(GainMapParseError::TruncatedData {
-            expected: 5,
-            actual: data.len(),
+/// Layout: `common_denom(u32)`, then numerator-only values with the shared
+/// denominator applied to all of them. Used by libultrahdr when all fractions
+/// happen to share the same denominator.
+fn parse_payload_common_denom(
+    data: &[u8],
+    offset: &mut usize,
+    num_channels: usize,
+    use_base_color_space: bool,
+    backward_direction: bool,
+) -> Result<GainMapParams, GainMapParseError> {
+    let common_d = read_u32_be(data, offset)?;
+    if common_d == 0 {
+        return Err(GainMapParseError::ZeroDenominator {
+            field: "common_denominator",
         });
     }
 
-    let mut offset = 0;
+    // Headroom (numerators only, unsigned)
+    let base_headroom_n = read_u32_be(data, offset)?;
+    let alt_headroom_n = read_u32_be(data, offset)?;
 
-    let minimum_version = read_u16_be(data, &mut offset)?;
-    if minimum_version > 0 {
-        return Err(GainMapParseError::UnsupportedVersion {
-            version: minimum_version as u8,
-        });
-    }
-    let _writer_version = read_u16_be(data, &mut offset)?;
-    let flags = read_u8(data, &mut offset)?;
-    let is_multichannel = (flags & 0x80) != 0;
-    let use_base_color_space = (flags & 0x40) != 0;
+    let base_headroom = UFraction {
+        numerator: base_headroom_n,
+        denominator: common_d,
+    };
+    let alt_headroom = UFraction {
+        numerator: alt_headroom_n,
+        denominator: common_d,
+    };
 
-    let num_channels = if is_multichannel { 3 } else { 1 };
     let mut channels = [GainMapChannel::default(); 3];
-
-    let base_headroom = read_ufraction(data, &mut offset, "base_hdr_headroom")?;
-    let alt_headroom = read_ufraction(data, &mut offset, "alternate_hdr_headroom")?;
-
     for ch in channels.iter_mut().take(num_channels) {
-        let min_frac = read_fraction(data, &mut offset, "gain_map_min")?;
-        let max_frac = read_fraction(data, &mut offset, "gain_map_max")?;
-        let gamma_frac = read_ufraction(data, &mut offset, "gamma")?;
-        let base_offset_frac = read_fraction(data, &mut offset, "base_offset")?;
-        let alt_offset_frac = read_fraction(data, &mut offset, "alternate_offset")?;
+        let min_n = read_i32_be(data, offset)?;
+        let max_n = read_i32_be(data, offset)?;
+        let gamma_n = read_u32_be(data, offset)?;
+        let base_off_n = read_i32_be(data, offset)?;
+        let alt_off_n = read_i32_be(data, offset)?;
 
         *ch = GainMapChannel {
-            min: min_frac.to_f64(),
-            max: max_frac.to_f64(),
-            gamma: gamma_frac.to_f64(),
-            base_offset: base_offset_frac.to_f64(),
-            alternate_offset: alt_offset_frac.to_f64(),
+            min: Fraction {
+                numerator: min_n,
+                denominator: common_d,
+            }
+            .to_f64(),
+            max: Fraction {
+                numerator: max_n,
+                denominator: common_d,
+            }
+            .to_f64(),
+            gamma: UFraction {
+                numerator: gamma_n,
+                denominator: common_d,
+            }
+            .to_f64(),
+            base_offset: Fraction {
+                numerator: base_off_n,
+                denominator: common_d,
+            }
+            .to_f64(),
+            alternate_offset: Fraction {
+                numerator: alt_off_n,
+                denominator: common_d,
+            }
+            .to_f64(),
         };
     }
 
-    if !is_multichannel {
+    if num_channels == 1 {
         channels[1] = channels[0];
         channels[2] = channels[0];
     }
@@ -825,7 +941,70 @@ pub fn parse_iso21496_jpeg(data: &[u8]) -> Result<GainMapParams, GainMapParseErr
         base_hdr_headroom: base_headroom.to_f64(),
         alternate_hdr_headroom: alt_headroom.to_f64(),
         use_base_color_space,
+        backward_direction,
     })
+}
+
+// -- Serializers (always write full format, no common denominator) --
+
+fn build_flags(params: &GainMapParams) -> u8 {
+    let mut flags = 0u8;
+    if !params.is_single_channel() {
+        flags |= FLAG_MULTI_CHANNEL;
+    }
+    if params.use_base_color_space {
+        flags |= FLAG_USE_BASE_COLOUR_SPACE;
+    }
+    if params.backward_direction {
+        flags |= FLAG_BACKWARD_DIRECTION;
+    }
+    // Never set FLAG_COMMON_DENOMINATOR — always write full format.
+    flags
+}
+
+fn write_payload(data: &mut Vec<u8>, params: &GainMapParams) {
+    let num_channels: usize = if params.is_single_channel() { 1 } else { 3 };
+
+    write_ufraction(data, UFraction::from_f64(params.base_hdr_headroom));
+    write_ufraction(data, UFraction::from_f64(params.alternate_hdr_headroom));
+
+    for ch in params.channels.iter().take(num_channels) {
+        write_fraction(data, Fraction::from_f64(ch.min));
+        write_fraction(data, Fraction::from_f64(ch.max));
+        write_ufraction(data, UFraction::from_f64(ch.gamma));
+        write_fraction(data, Fraction::from_f64(ch.base_offset));
+        write_fraction(data, Fraction::from_f64(ch.alternate_offset));
+    }
+}
+
+/// Serialize with AVIF `tmap` version byte prefix.
+fn serialize_iso21496_avif(params: &GainMapParams) -> Vec<u8> {
+    let num_channels: usize = if params.is_single_channel() { 1 } else { 3 };
+    let size = AVIF_HEADER_SIZE + 2 * FRACTION_SIZE + num_channels * 5 * FRACTION_SIZE;
+    let mut data = Vec::with_capacity(size);
+
+    data.push(0u8); // version
+    data.extend_from_slice(&0u16.to_be_bytes()); // minimum_version
+    data.extend_from_slice(&0u16.to_be_bytes()); // writer_version
+    data.push(build_flags(params));
+
+    write_payload(&mut data, params);
+    data
+}
+
+/// Serialize without version byte prefix (JPEG APP2 / JXL jhgm).
+fn serialize_iso21496_no_version(params: &GainMapParams) -> Vec<u8> {
+    let num_channels: usize = if params.is_single_channel() { 1 } else { 3 };
+    let size = JPEG_HEADER_SIZE + 2 * FRACTION_SIZE + num_channels * 5 * FRACTION_SIZE;
+    let mut data = Vec::with_capacity(size);
+
+    // No version byte.
+    data.extend_from_slice(&0u16.to_be_bytes()); // minimum_version
+    data.extend_from_slice(&0u16.to_be_bytes()); // writer_version
+    data.push(build_flags(params));
+
+    write_payload(&mut data, params);
+    data
 }
 
 // =========================================================================
@@ -1190,13 +1369,13 @@ mod tests {
 
     #[test]
     fn fraction_roundtrip() {
-        let f = Fraction::from_f64(1.5, 1_000_000);
+        let f = Fraction::from_f64(1.5);
         assert!((f.to_f64() - 1.5).abs() < 1e-6);
     }
 
     #[test]
     fn fraction_negative() {
-        let f = Fraction::from_f64(-0.256907, 1_000_000);
+        let f = Fraction::from_f64(-0.256907);
         assert!((f.to_f64() - (-0.256907)).abs() < 1e-6);
     }
 
@@ -1222,13 +1401,13 @@ mod tests {
 
     #[test]
     fn ufraction_roundtrip() {
-        let f = UFraction::from_f64(1.3, 1_000_000);
+        let f = UFraction::from_f64(1.3);
         assert!((f.to_f64() - 1.3).abs() < 1e-6);
     }
 
     #[test]
     fn ufraction_clamps_negative() {
-        let f = UFraction::from_f64(-5.0, 1_000_000);
+        let f = UFraction::from_f64(-5.0);
         assert_eq!(f.numerator, 0);
         assert_eq!(f.to_f64(), 0.0);
     }
@@ -1258,6 +1437,7 @@ mod tests {
             base_hdr_headroom: 0.0,
             alternate_hdr_headroom: 1.3,
             use_base_color_space: true,
+            backward_direction: false,
         };
 
         let blob = serialize_iso21496(&original);
@@ -1302,6 +1482,7 @@ mod tests {
             base_hdr_headroom: 0.0,
             alternate_hdr_headroom: 1.3,
             use_base_color_space: false,
+            backward_direction: false,
         };
 
         let blob = serialize_iso21496(&original);
@@ -1508,6 +1689,7 @@ mod tests {
             base_hdr_headroom: 0.0,
             alternate_hdr_headroom: 2.0,
             use_base_color_space: false,
+            backward_direction: false,
         };
         assert!(!p.is_single_channel());
         assert_eq!(p.direction(), GainMapDirection::BaseIsSdr);
@@ -1548,50 +1730,50 @@ mod tests {
     #[test]
     fn fraction_edge_cases() {
         // Zero — continued fractions produce 0/1
-        let f = Fraction::from_f64(0.0, 1_000_000);
+        let f = Fraction::from_f64(0.0);
         assert_eq!(f.numerator, 0);
         assert_eq!(f.denominator, 1);
         assert!((f.to_f64()).abs() < 1e-10);
         assert!(f.is_valid());
 
         // Negative zero
-        let f_neg0 = Fraction::from_f64(-0.0, 1_000_000);
+        let f_neg0 = Fraction::from_f64(-0.0);
         assert_eq!(f_neg0.numerator, 0);
         assert!((f_neg0.to_f64()).abs() < 1e-10);
 
         // f64::MAX — continued fractions return fallback 0/1
-        let f_max = Fraction::from_f64(f64::MAX, 1_000_000);
+        let f_max = Fraction::from_f64(f64::MAX);
         let _ = f_max.to_f64();
 
         // Canonical denominators for common values
-        let f = Fraction::from_f64(0.015625, 1_000_000);
+        let f = Fraction::from_f64(0.015625);
         assert_eq!((f.numerator, f.denominator), (1, 64));
 
-        let f = Fraction::from_f64(4.0, 1_000_000);
+        let f = Fraction::from_f64(4.0);
         assert_eq!((f.numerator, f.denominator), (4, 1));
 
-        let f = Fraction::from_f64(-1.0, 1_000_000);
+        let f = Fraction::from_f64(-1.0);
         assert_eq!((f.numerator, f.denominator), (-1, 1));
     }
 
     #[test]
     fn ufraction_edge_cases() {
         // Zero — continued fractions produce 0/1
-        let f = UFraction::from_f64(0.0, 1_000_000);
+        let f = UFraction::from_f64(0.0);
         assert_eq!(f.numerator, 0);
         assert_eq!(f.denominator, 1);
         assert!((f.to_f64()).abs() < 1e-10);
         assert!(f.is_valid());
 
         // f64::MAX — continued fractions return fallback 0/1
-        let f_max = UFraction::from_f64(f64::MAX, 1_000_000);
+        let f_max = UFraction::from_f64(f64::MAX);
         let _ = f_max.to_f64();
 
         // Canonical denominators
-        let f = UFraction::from_f64(0.015625, 1_000_000);
+        let f = UFraction::from_f64(0.015625);
         assert_eq!((f.numerator, f.denominator), (1, 64));
 
-        let f = UFraction::from_f64(4.0, 1_000_000);
+        let f = UFraction::from_f64(4.0);
         assert_eq!((f.numerator, f.denominator), (4, 1));
     }
 
@@ -1714,5 +1896,245 @@ mod tests {
             let msg = alloc::format!("{err}");
             assert!(!msg.is_empty(), "Display for {err:?} should be non-empty");
         }
+    }
+
+    // --- Iso21496Format and format-aware API ---
+
+    #[test]
+    fn format_enum_debug_and_eq() {
+        assert_eq!(Iso21496Format::AvifTmap, Iso21496Format::AvifTmap);
+        assert_ne!(Iso21496Format::AvifTmap, Iso21496Format::JpegApp2);
+        let _ = alloc::format!("{:?}", Iso21496Format::JpegApp2);
+    }
+
+    #[test]
+    fn roundtrip_avif_format() {
+        let p = GainMapParams::default();
+        let blob = serialize_iso21496_fmt(&p, Iso21496Format::AvifTmap);
+        assert_eq!(blob.len(), 62); // 6-byte header + 16 headroom + 40 channel
+        let parsed = parse_iso21496_fmt(&blob, Iso21496Format::AvifTmap).unwrap();
+        assert!(parsed.is_single_channel());
+        assert!(parsed.use_base_color_space);
+        assert!(!parsed.backward_direction);
+    }
+
+    #[test]
+    fn roundtrip_jpeg_format() {
+        let p = GainMapParams::default();
+        let blob = serialize_iso21496_fmt(&p, Iso21496Format::JpegApp2);
+        assert_eq!(blob.len(), 61); // 5-byte header + 16 headroom + 40 channel
+        let parsed = parse_iso21496_fmt(&blob, Iso21496Format::JpegApp2).unwrap();
+        assert!(parsed.is_single_channel());
+        assert!(parsed.use_base_color_space);
+        assert!(!parsed.backward_direction);
+    }
+
+    #[test]
+    fn old_api_matches_format_api() {
+        let p = GainMapParams {
+            alternate_hdr_headroom: 1.3,
+            ..Default::default()
+        };
+        // Old API should produce identical bytes to format-aware API
+        assert_eq!(
+            serialize_iso21496(&p),
+            serialize_iso21496_fmt(&p, Iso21496Format::AvifTmap)
+        );
+        assert_eq!(
+            serialize_iso21496_jpeg(&p),
+            serialize_iso21496_fmt(&p, Iso21496Format::JpegApp2)
+        );
+    }
+
+    // --- backward_direction flag ---
+
+    #[test]
+    fn backward_direction_roundtrip_avif() {
+        let p = GainMapParams {
+            backward_direction: true,
+            ..Default::default()
+        };
+        let blob = serialize_iso21496(&p);
+        // flags byte is at offset 5 (after version + min_ver + writer_ver)
+        assert_ne!(blob[5] & 0x04, 0, "backward_direction bit must be set");
+
+        let parsed = parse_iso21496(&blob).unwrap();
+        assert!(parsed.backward_direction);
+    }
+
+    #[test]
+    fn backward_direction_roundtrip_jpeg() {
+        let p = GainMapParams {
+            backward_direction: true,
+            ..Default::default()
+        };
+        let blob = serialize_iso21496_jpeg(&p);
+        // flags byte is at offset 4 (after min_ver + writer_ver)
+        assert_ne!(blob[4] & 0x04, 0, "backward_direction bit must be set");
+
+        let parsed = parse_iso21496_jpeg(&blob).unwrap();
+        assert!(parsed.backward_direction);
+    }
+
+    #[test]
+    fn backward_direction_false_by_default() {
+        let p = GainMapParams::default();
+        let blob = serialize_iso21496(&p);
+        assert_eq!(blob[5] & 0x04, 0, "backward_direction bit must be clear");
+
+        let parsed = parse_iso21496(&blob).unwrap();
+        assert!(!parsed.backward_direction);
+    }
+
+    // --- common_denominator compact format parsing ---
+
+    #[test]
+    fn parse_common_denominator_single_channel() {
+        // Build a compact-format blob (no version byte = JPEG/JXL format)
+        // with FLAG_COMMON_DENOMINATOR set.
+        let mut blob = Vec::new();
+        blob.extend_from_slice(&0u16.to_be_bytes()); // minimum_version
+        blob.extend_from_slice(&0u16.to_be_bytes()); // writer_version
+        // flags: single channel, use_base_colour_space, common_denominator
+        blob.push(0x40 | 0x08);
+
+        let common_d: u32 = 64;
+        blob.extend_from_slice(&common_d.to_be_bytes()); // common denominator
+
+        // Headroom numerators only
+        blob.extend_from_slice(&0u32.to_be_bytes()); // base_headroom_n = 0
+        blob.extend_from_slice(&83u32.to_be_bytes()); // alt_headroom_n = 83 (83/64 ≈ 1.297)
+
+        // Channel 0 numerators only (min, max, gamma, base_offset, alt_offset)
+        blob.extend_from_slice(&(-32i32).to_be_bytes()); // min_n = -32 (-32/64 = -0.5)
+        blob.extend_from_slice(&128i32.to_be_bytes()); // max_n = 128 (128/64 = 2.0)
+        blob.extend_from_slice(&64u32.to_be_bytes()); // gamma_n = 64 (64/64 = 1.0)
+        blob.extend_from_slice(&1i32.to_be_bytes()); // base_offset_n = 1 (1/64)
+        blob.extend_from_slice(&1i32.to_be_bytes()); // alt_offset_n = 1 (1/64)
+
+        let params = parse_iso21496_jpeg(&blob).unwrap();
+        assert!((params.base_hdr_headroom - 0.0).abs() < 1e-6);
+        assert!((params.alternate_hdr_headroom - 83.0 / 64.0).abs() < 1e-6);
+        assert!((params.channels[0].min - (-0.5)).abs() < 1e-6);
+        assert!((params.channels[0].max - 2.0).abs() < 1e-6);
+        assert!((params.channels[0].gamma - 1.0).abs() < 1e-6);
+        assert!((params.channels[0].base_offset - 1.0 / 64.0).abs() < 1e-10);
+        assert!(params.is_single_channel());
+        assert!(params.use_base_color_space);
+        assert!(!params.backward_direction);
+    }
+
+    #[test]
+    fn parse_common_denominator_multi_channel() {
+        let mut blob = Vec::new();
+        blob.extend_from_slice(&0u16.to_be_bytes()); // minimum_version
+        blob.extend_from_slice(&0u16.to_be_bytes()); // writer_version
+        // flags: multichannel + common_denominator
+        blob.push(0x80 | 0x40 | 0x08);
+
+        let common_d: u32 = 100;
+        blob.extend_from_slice(&common_d.to_be_bytes());
+
+        // Headroom
+        blob.extend_from_slice(&0u32.to_be_bytes()); // base = 0
+        blob.extend_from_slice(&200u32.to_be_bytes()); // alt = 200/100 = 2.0
+
+        // 3 channels × 5 numerators each
+        for ch_idx in 0..3u32 {
+            let offset = (ch_idx as i32) * 10;
+            blob.extend_from_slice(&(-50i32 + offset).to_be_bytes()); // min
+            blob.extend_from_slice(&(200i32 + offset).to_be_bytes()); // max
+            blob.extend_from_slice(&(100u32 + ch_idx).to_be_bytes()); // gamma
+            blob.extend_from_slice(&1i32.to_be_bytes()); // base_offset
+            blob.extend_from_slice(&2i32.to_be_bytes()); // alt_offset
+        }
+
+        let params = parse_iso21496_jpeg(&blob).unwrap();
+        assert!(!params.is_single_channel());
+        assert!((params.alternate_hdr_headroom - 2.0).abs() < 1e-6);
+        // Channel 0: min = -50/100 = -0.5
+        assert!((params.channels[0].min - (-0.5)).abs() < 1e-6);
+        // Channel 1: min = -40/100 = -0.4
+        assert!((params.channels[1].min - (-0.4)).abs() < 1e-6);
+        // Channel 2: min = -30/100 = -0.3
+        assert!((params.channels[2].min - (-0.3)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn parse_common_denominator_zero_rejected() {
+        let mut blob = Vec::new();
+        blob.extend_from_slice(&0u16.to_be_bytes());
+        blob.extend_from_slice(&0u16.to_be_bytes());
+        blob.push(0x40 | 0x08); // common_denominator flag
+        blob.extend_from_slice(&0u32.to_be_bytes()); // common_d = 0 (invalid!)
+        blob.extend_from_slice(&[0; 100]); // pad
+
+        let err = parse_iso21496_jpeg(&blob).unwrap_err();
+        assert!(matches!(err, GainMapParseError::ZeroDenominator { .. }));
+    }
+
+    #[test]
+    fn parse_common_denominator_with_backward_direction() {
+        let mut blob = Vec::new();
+        blob.extend_from_slice(&0u16.to_be_bytes());
+        blob.extend_from_slice(&0u16.to_be_bytes());
+        // common_denominator + backward_direction + use_base_colour_space
+        blob.push(0x40 | 0x08 | 0x04);
+
+        let common_d: u32 = 1;
+        blob.extend_from_slice(&common_d.to_be_bytes());
+        blob.extend_from_slice(&0u32.to_be_bytes()); // base headroom
+        blob.extend_from_slice(&1u32.to_be_bytes()); // alt headroom
+
+        // Single channel, 5 numerators
+        blob.extend_from_slice(&0i32.to_be_bytes()); // min
+        blob.extend_from_slice(&2i32.to_be_bytes()); // max
+        blob.extend_from_slice(&1u32.to_be_bytes()); // gamma
+        blob.extend_from_slice(&0i32.to_be_bytes()); // base_offset
+        blob.extend_from_slice(&0i32.to_be_bytes()); // alt_offset
+
+        let params = parse_iso21496_jpeg(&blob).unwrap();
+        assert!(params.backward_direction);
+        assert!(params.use_base_color_space);
+        assert!((params.alternate_hdr_headroom - 1.0).abs() < 1e-6);
+        assert!((params.channels[0].max - 2.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn parse_common_denom_avif_format() {
+        // AVIF tmap with version byte + common denominator
+        let mut blob = Vec::new();
+        blob.push(0); // version
+        blob.extend_from_slice(&0u16.to_be_bytes());
+        blob.extend_from_slice(&0u16.to_be_bytes());
+        blob.push(0x40 | 0x08); // use_base_colour_space + common_denominator
+
+        let common_d: u32 = 10;
+        blob.extend_from_slice(&common_d.to_be_bytes());
+        blob.extend_from_slice(&0u32.to_be_bytes()); // base headroom
+        blob.extend_from_slice(&13u32.to_be_bytes()); // alt headroom = 13/10 = 1.3
+
+        blob.extend_from_slice(&0i32.to_be_bytes()); // min
+        blob.extend_from_slice(&20i32.to_be_bytes()); // max = 20/10 = 2.0
+        blob.extend_from_slice(&10u32.to_be_bytes()); // gamma = 10/10 = 1.0
+        blob.extend_from_slice(&0i32.to_be_bytes()); // base_offset
+        blob.extend_from_slice(&0i32.to_be_bytes()); // alt_offset
+
+        let params = parse_iso21496(&blob).unwrap();
+        assert!((params.alternate_hdr_headroom - 1.3).abs() < 1e-6);
+        assert!((params.channels[0].max - 2.0).abs() < 1e-6);
+    }
+
+    // --- Verify backward compat wrappers match ---
+
+    #[test]
+    fn jpeg_format_size_one_less_than_avif() {
+        let p = GainMapParams::default();
+        let avif_blob = serialize_iso21496(&p);
+        let jpeg_blob = serialize_iso21496_jpeg(&p);
+        assert_eq!(avif_blob.len(), jpeg_blob.len() + 1);
+        // The AVIF blob starts with version=0, then matches JPEG blob
+        assert_eq!(avif_blob[0], 0);
+        assert_eq!(&avif_blob[1..], &jpeg_blob[..]);
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "zencodec"
-version = "0.1.11"
+version = "0.1.12"
 edition = "2024"
 rust-version = "1.93"
 license = "Apache-2.0 OR MIT"
@@ -17,7 +17,7 @@ name = "zencodec"
 zenpixels = { version = "0.2.2" }
 almost-enough = { version = "0.4.3", default-features = false, features = ["alloc"] }
 enough = "0.4.3"
-whereat = "0.1.5"
+whereat = { version = "0.1.5"}
 
 [dev-dependencies]
 thiserror = "2"
