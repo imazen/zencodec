@@ -114,8 +114,13 @@ pub trait DecodeJob<'a>: Sized {
 
     /// Set decode security policy (controls metadata extraction, parsing strictness, etc.).
     ///
-    /// Default no-op. Codecs that support policy check the flags in
-    /// [`DecodePolicy`](crate::decode::DecodePolicy) to decide what to extract and accept.
+    /// # Note
+    ///
+    /// The default implementation is a no-op that returns `self` unchanged.
+    /// Not all codecs implement policy support. Check the codec's documentation
+    /// or [`DecodeCapabilities`](crate::DecodeCapabilities) to determine whether
+    /// the codec honors policy settings. Calling this on a codec that does not
+    /// implement it will silently have no effect.
     fn with_policy(self, _policy: crate::DecodePolicy) -> Self {
         self
     }

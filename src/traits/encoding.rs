@@ -150,8 +150,13 @@ pub trait EncodeJob: Sized {
 
     /// Set encode security policy (controls metadata embedding, etc.).
     ///
-    /// Default no-op. Codecs that support policy check the flags in
-    /// [`EncodePolicy`](crate::encode::EncodePolicy) to decide what to embed.
+    /// # Note
+    ///
+    /// The default implementation is a no-op that returns `self` unchanged.
+    /// Not all codecs implement policy support. Check the codec's documentation
+    /// or [`EncodeCapabilities`](crate::EncodeCapabilities) to determine whether
+    /// the codec honors policy settings. Calling this on a codec that does not
+    /// implement it will silently have no effect.
     fn with_policy(self, _policy: crate::EncodePolicy) -> Self {
         self
     }
