@@ -201,6 +201,10 @@ pub enum ImageFormat {
     Exr,
     Hdr,
     Tga,
+    Jp2,
+    Dng,
+    Raw,
+    Svg,
     Unknown,
     /// Format not known to zencodec.
     ///
@@ -235,6 +239,10 @@ impl ImageFormat {
             ImageFormat::Exr => Some(&builtins::EXR),
             ImageFormat::Hdr => Some(&builtins::HDR),
             ImageFormat::Tga => Some(&builtins::TGA),
+            ImageFormat::Jp2 => Some(&builtins::JP2),
+            ImageFormat::Dng => Some(&builtins::DNG),
+            ImageFormat::Raw => Some(&builtins::RAW),
+            ImageFormat::Svg => Some(&builtins::SVG),
             ImageFormat::Custom(def) => Some(def),
             ImageFormat::Unknown => None,
         }
@@ -1121,7 +1129,7 @@ mod tests {
     #[test]
     fn registry_formats_list() {
         let reg = ImageFormatRegistry::common();
-        assert_eq!(reg.formats().len(), 17);
+        assert_eq!(reg.formats().len(), 21);
         assert_eq!(reg.formats()[0].name, "jpeg");
     }
 
@@ -1250,5 +1258,188 @@ mod tests {
         let data = build_ftyp(100, b"mif1", &[b"avif"]);
         assert_eq!(data.len(), 20); // only 20 bytes actually built
         assert_eq!(reg().detect(&data), Some(ImageFormat::Avif));
+    }
+
+    // --- DNG / RAW / SVG detection ---
+
+    /// Build a minimal LE TIFF with a single IFD0 entry.
+    fn build_tiff_le(tag: u16) -> Vec<u8> {
+        let mut d = vec![0u8; 22];
+        d[0] = b'I';
+        d[1] = b'I';
+        d[2] = 42;
+        d[3] = 0; // LE TIFF
+        d[4..8].copy_from_slice(&8u32.to_le_bytes()); // IFD0 at offset 8
+        d[8..10].copy_from_slice(&1u16.to_le_bytes()); // 1 entry
+        d[10..12].copy_from_slice(&tag.to_le_bytes()); // tag
+        // rest is padding (type, count, value)
+        d
+    }
+
+    #[test]
+    fn detect_dng_by_version_tag() {
+        let data = build_tiff_le(0xC612);
+        assert_eq!(reg().detect(&data), Some(ImageFormat::Dng));
+    }
+
+    #[test]
+    fn detect_dng_apple_signature() {
+        let mut data = vec![0u8; 24];
+        data[0] = b'M';
+        data[1] = b'M';
+        data[2] = 0;
+        data[3] = 42; // BE TIFF
+        data[4..8].copy_from_slice(&16u32.to_be_bytes()); // IFD far away
+        data[8..16].copy_from_slice(b"APPLEDNG");
+        assert_eq!(reg().detect(&data), Some(ImageFormat::Dng));
+    }
+
+    #[test]
+    fn detect_tiff_not_dng() {
+        // Plain TIFF with a low tag — should be TIFF, not DNG or RAW
+        let data = build_tiff_le(0x0100); // ImageWidth tag
+        assert_eq!(reg().detect(&data), Some(ImageFormat::Tiff));
+    }
+
+    #[test]
+    fn detect_raw_cr2() {
+        let mut d = vec![0u8; 22];
+        d[0] = b'I';
+        d[1] = b'I';
+        d[2] = 42;
+        d[3] = 0;
+        d[4..8].copy_from_slice(&16u32.to_le_bytes()); // IFD past sig
+        d[8] = b'C';
+        d[9] = b'R'; // CR2 signature at bytes 8-9
+        d[16..18].copy_from_slice(&0u16.to_le_bytes()); // 0 entries
+        assert_eq!(reg().detect(&d), Some(ImageFormat::Raw));
+    }
+
+    #[test]
+    fn detect_raw_cr3() {
+        let mut d = vec![0u8; 16];
+        d[0..4].copy_from_slice(&16u32.to_be_bytes());
+        d[4..8].copy_from_slice(b"ftyp");
+        d[8..12].copy_from_slice(b"crx ");
+        assert_eq!(reg().detect(&d), Some(ImageFormat::Raw));
+    }
+
+    #[test]
+    fn detect_raw_raf() {
+        assert_eq!(
+            reg().detect(b"FUJIFILM\x00\x00\x00\x00"),
+            Some(ImageFormat::Raw)
+        );
+    }
+
+    #[test]
+    fn detect_raw_rw2() {
+        assert_eq!(
+            reg().detect(&[b'I', b'I', 0x55, 0x00, 0, 0, 0, 0]),
+            Some(ImageFormat::Raw)
+        );
+    }
+
+    #[test]
+    fn detect_raw_orf() {
+        assert_eq!(
+            reg().detect(&[b'I', b'I', 0x52, 0x4F, 0, 0, 0, 0]),
+            Some(ImageFormat::Raw)
+        );
+    }
+
+    #[test]
+    fn detect_svg_tag() {
+        assert_eq!(reg().detect(b"<svg xmlns="), Some(ImageFormat::Svg));
+    }
+
+    #[test]
+    fn detect_svg_xml_decl() {
+        assert_eq!(
+            reg().detect(b"<?xml version=\"1.0\"?><svg"),
+            Some(ImageFormat::Svg)
+        );
+    }
+
+    #[test]
+    fn detect_svg_with_bom() {
+        let mut d = vec![0xEF, 0xBB, 0xBF]; // UTF-8 BOM
+        d.extend_from_slice(b"<svg>");
+        assert_eq!(reg().detect(&d), Some(ImageFormat::Svg));
+    }
+
+    #[test]
+    fn detect_svg_doctype() {
+        assert_eq!(
+            reg().detect(b"<!DOCTYPE svg PUBLIC"),
+            Some(ImageFormat::Svg)
+        );
+    }
+
+    #[test]
+    fn detect_svg_not_xml() {
+        // Random XML is not SVG
+        assert_eq!(reg().detect(b"<?xml version=\"1.0\"?><html>"), None);
+    }
+
+    #[test]
+    fn detect_jp2_container() {
+        assert_eq!(
+            reg().detect(b"\x00\x00\x00\x0C\x6A\x50\x20\x20\x0D\x0A\x87\x0A"),
+            Some(ImageFormat::Jp2)
+        );
+    }
+
+    #[test]
+    fn detect_j2k_codestream() {
+        assert_eq!(
+            reg().detect(&[0xFF, 0x4F, 0xFF, 0x51]),
+            Some(ImageFormat::Jp2)
+        );
+    }
+
+    #[test]
+    fn from_extension_new_formats() {
+        assert_eq!(reg().from_extension("dng"), Some(ImageFormat::Dng));
+        assert_eq!(reg().from_extension("cr2"), Some(ImageFormat::Raw));
+        assert_eq!(reg().from_extension("cr3"), Some(ImageFormat::Raw));
+        assert_eq!(reg().from_extension("nef"), Some(ImageFormat::Raw));
+        assert_eq!(reg().from_extension("arw"), Some(ImageFormat::Raw));
+        assert_eq!(reg().from_extension("raf"), Some(ImageFormat::Raw));
+        assert_eq!(reg().from_extension("svg"), Some(ImageFormat::Svg));
+        assert_eq!(reg().from_extension("svgz"), Some(ImageFormat::Svg));
+        assert_eq!(reg().from_extension("jp2"), Some(ImageFormat::Jp2));
+        assert_eq!(reg().from_extension("j2k"), Some(ImageFormat::Jp2));
+    }
+
+    #[test]
+    fn new_format_metadata() {
+        assert_eq!(ImageFormat::Dng.mime_type(), "image/x-adobe-dng");
+        assert_eq!(ImageFormat::Raw.mime_type(), "image/x-raw");
+        assert_eq!(ImageFormat::Svg.mime_type(), "image/svg+xml");
+        assert_eq!(ImageFormat::Jp2.mime_type(), "image/jp2");
+
+        assert_eq!(alloc::format!("{}", ImageFormat::Dng), "Digital Negative");
+        assert_eq!(alloc::format!("{}", ImageFormat::Raw), "Camera RAW");
+        assert_eq!(alloc::format!("{}", ImageFormat::Svg), "SVG");
+        assert_eq!(alloc::format!("{}", ImageFormat::Jp2), "JPEG 2000");
+    }
+
+    #[test]
+    fn new_format_capabilities() {
+        assert!(!ImageFormat::Dng.supports_animation());
+        assert!(ImageFormat::Dng.supports_lossless());
+        assert!(ImageFormat::Dng.supports_lossy());
+
+        assert!(ImageFormat::Svg.supports_alpha());
+        assert!(ImageFormat::Svg.supports_lossless());
+        assert!(!ImageFormat::Svg.supports_lossy());
+    }
+
+    #[test]
+    fn dng_before_tiff_priority() {
+        // DNG has TIFF magic + DNGVersion tag → must detect as DNG, not TIFF
+        let data = build_tiff_le(0xC612);
+        assert_eq!(reg().detect(&data), Some(ImageFormat::Dng));
     }
 }

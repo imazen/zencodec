@@ -427,6 +427,34 @@ pub static HDR: ImageFormatDefinition = ImageFormatDefinition {
     },
 };
 
+pub static JP2: ImageFormatDefinition = ImageFormatDefinition {
+    name: "jp2",
+    image_format: Some(ImageFormat::Jp2),
+    display_name: "JPEG 2000",
+    preferred_extension: "jp2",
+    extensions: &["jp2", "j2k", "j2c", "jpf", "jpx"],
+    preferred_mime_type: "image/jp2",
+    mime_types: &["image/jp2", "image/jpx", "image/x-jp2"],
+    supports_alpha: true,
+    supports_animation: false,
+    supports_lossless: true,
+    supports_lossy: true,
+    magic_bytes_needed: 12,
+    detect: |data| {
+        // JP2 container: 00 00 00 0C 6A 50 20 20
+        let jp2 = data.len() >= 8
+            && data[..4] == [0x00, 0x00, 0x00, 0x0C]
+            && data[4..8] == [0x6A, 0x50, 0x20, 0x20];
+        // Raw J2K codestream: FF 4F FF 51 (SOC + SIZ markers)
+        let j2k = data.len() >= 4
+            && data[0] == 0xFF
+            && data[1] == 0x4F
+            && data[2] == 0xFF
+            && data[3] == 0x51;
+        jp2 || j2k
+    },
+};
+
 pub static TGA: ImageFormatDefinition = ImageFormatDefinition {
     name: "tga",
     image_format: Some(ImageFormat::Tga),
@@ -446,11 +474,219 @@ pub static TGA: ImageFormatDefinition = ImageFormatDefinition {
     detect: detect_tga,
 };
 
+// ------- DNG / RAW / SVG detection helpers -------
+
+/// Check for TIFF header (II\x2a\x00 or MM\x00\x2a).
+fn is_tiff_header(data: &[u8]) -> bool {
+    data.len() >= 4
+        && ((data[0] == b'I' && data[1] == b'I' && data[2] == 42 && data[3] == 0)
+            || (data[0] == b'M' && data[1] == b'M' && data[2] == 0 && data[3] == 42))
+}
+
+/// Check if a TIFF file contains the DNGVersion tag (0xC612) in IFD0,
+/// or has an "APPLEDNG" signature at bytes 8-15.
+fn detect_dng(data: &[u8]) -> bool {
+    if !is_tiff_header(data) {
+        return false;
+    }
+    // Apple APPLEDNG signature
+    if data.len() >= 16 && &data[8..16] == b"APPLEDNG" {
+        return true;
+    }
+    // Scan IFD0 for DNGVersion tag (0xC612)
+    has_ifd0_tag(data, 0xC612)
+}
+
+/// Check for camera RAW formats that are NOT DNG.
+///
+/// Matches: TIFF-based RAW (CR2/NEF/ARW/etc. without DNG tag), Canon CR3
+/// (BMFF), Fuji RAF, Panasonic RW2, Olympus ORF variant.
+fn detect_raw(data: &[u8]) -> bool {
+    if data.len() < 4 {
+        return false;
+    }
+    // TIFF-based RAW: valid TIFF header but no DNG tag
+    if is_tiff_header(data)
+        && !has_ifd0_tag(data, 0xC612)
+        && !(data.len() >= 16 && &data[8..16] == b"APPLEDNG")
+    {
+        // Distinguish from plain TIFF: check for known RAW maker tags.
+        // CR2 has tag 0xC5D8/0xC5D9 or "CR" at byte 8-9.
+        // NEF/ARW/PEF: have maker note IFDs, but those are deep — for
+        // quick detection, check if the file has SubIFD tags (0x014A)
+        // which plain TIFFs rarely use but RAW files always need.
+        //
+        // Conservative: only claim RAW if we see SubIFD or known signatures.
+        if data.len() >= 10 && data[8] == b'C' && data[9] == b'R' {
+            return true; // CR2
+        }
+        if has_ifd0_tag(data, 0x014A) {
+            return true; // SubIFDs → almost certainly RAW
+        }
+        return false;
+    }
+    // Olympus ORF (TIFF variant with magic 4952 4F00)
+    if data[0] == b'I' && data[1] == b'I' && data[2] == 0x52 && data[3] == 0x4F {
+        return true;
+    }
+    // Fuji RAF
+    if data.len() >= 8 && &data[..8] == b"FUJIFILM" {
+        return true;
+    }
+    // Panasonic RW2
+    if data[0] == b'I' && data[1] == b'I' && data[2] == 0x55 && data[3] == 0x00 {
+        return true;
+    }
+    // Canon CR3 (ISO BMFF with "crx " major brand)
+    if data.len() >= 12 && &data[4..8] == b"ftyp" && &data[8..12] == b"crx " {
+        return true;
+    }
+    false
+}
+
+/// Scan IFD0 of a TIFF file for a specific tag.
+fn has_ifd0_tag(data: &[u8], target_tag: u16) -> bool {
+    if data.len() < 8 {
+        return false;
+    }
+    let big_endian = data[0] == b'M';
+    let ifd_offset = if big_endian {
+        u32::from_be_bytes([data[4], data[5], data[6], data[7]]) as usize
+    } else {
+        u32::from_le_bytes([data[4], data[5], data[6], data[7]]) as usize
+    };
+    if ifd_offset + 2 > data.len() {
+        return false;
+    }
+    let entry_count = if big_endian {
+        u16::from_be_bytes([data[ifd_offset], data[ifd_offset + 1]]) as usize
+    } else {
+        u16::from_le_bytes([data[ifd_offset], data[ifd_offset + 1]]) as usize
+    };
+    let entries_start = ifd_offset + 2;
+    for i in 0..entry_count {
+        let off = entries_start + i * 12;
+        if off + 2 > data.len() {
+            break;
+        }
+        let tag = if big_endian {
+            u16::from_be_bytes([data[off], data[off + 1]])
+        } else {
+            u16::from_le_bytes([data[off], data[off + 1]])
+        };
+        if tag == target_tag {
+            return true;
+        }
+        // Tags are sorted in valid TIFF
+        if tag > target_tag {
+            break;
+        }
+    }
+    false
+}
+
+/// Detect SVG or SVGZ from byte content.
+fn detect_svg(data: &[u8]) -> bool {
+    // SVGZ: gzip magic
+    if data.len() >= 2 && data[0] == 0x1f && data[1] == 0x8b {
+        // Could be any gzip file — check is imprecise but acceptable
+        // since SVG is low in the priority order.
+        return false; // Too many false positives; require uncompressed SVG
+    }
+    // Plain SVG: scan for <svg near the start
+    let search_len = data.len().min(1024);
+    let search = &data[..search_len];
+    // Skip BOM
+    let start = if search.len() >= 3 && search[0] == 0xEF && search[1] == 0xBB && search[2] == 0xBF
+    {
+        3
+    } else {
+        0
+    };
+    // Skip whitespace
+    let mut i = start;
+    while i < search.len() && search[i].is_ascii_whitespace() {
+        i += 1;
+    }
+    let trimmed = &search[i..];
+    starts_with_ascii_ci(trimmed, b"<svg")
+        || starts_with_ascii_ci(trimmed, b"<!doctype svg")
+        || (starts_with_ascii_ci(trimmed, b"<?xml") && contains_svg_tag(trimmed))
+}
+
+fn starts_with_ascii_ci(data: &[u8], prefix: &[u8]) -> bool {
+    data.len() >= prefix.len()
+        && data[..prefix.len()]
+            .iter()
+            .zip(prefix)
+            .all(|(a, b)| a.eq_ignore_ascii_case(b))
+}
+
+fn contains_svg_tag(data: &[u8]) -> bool {
+    data.windows(4).any(|w| starts_with_ascii_ci(w, b"<svg"))
+}
+
+// ------- DNG / RAW / SVG definitions -------
+
+pub static DNG: ImageFormatDefinition = ImageFormatDefinition {
+    name: "dng",
+    image_format: Some(ImageFormat::Dng),
+    display_name: "Digital Negative",
+    preferred_extension: "dng",
+    extensions: &["dng"],
+    preferred_mime_type: "image/x-adobe-dng",
+    mime_types: &["image/x-adobe-dng", "image/x-dng"],
+    supports_alpha: false,
+    supports_animation: false,
+    supports_lossless: true,
+    supports_lossy: true,
+    magic_bytes_needed: 1024,
+    detect: detect_dng,
+};
+
+pub static RAW: ImageFormatDefinition = ImageFormatDefinition {
+    name: "raw",
+    image_format: Some(ImageFormat::Raw),
+    display_name: "Camera RAW",
+    preferred_extension: "raw",
+    extensions: &[
+        "cr2", "cr3", "nef", "nrw", "arw", "srf", "sr2", "rw2", "pef", "orf", "erf", "raf", "3fr",
+        "iiq", "dcr", "kdc", "mrw", "rwl", "srw",
+    ],
+    preferred_mime_type: "image/x-raw",
+    mime_types: &["image/x-raw", "image/x-dcraw"],
+    supports_alpha: false,
+    supports_animation: false,
+    supports_lossless: true,
+    supports_lossy: true,
+    magic_bytes_needed: 1024,
+    detect: detect_raw,
+};
+
+pub static SVG: ImageFormatDefinition = ImageFormatDefinition {
+    name: "svg",
+    image_format: Some(ImageFormat::Svg),
+    display_name: "SVG",
+    preferred_extension: "svg",
+    extensions: &["svg", "svgz"],
+    preferred_mime_type: "image/svg+xml",
+    mime_types: &["image/svg+xml"],
+    supports_alpha: true,
+    supports_animation: false,
+    supports_lossless: true,
+    supports_lossy: false,
+    magic_bytes_needed: 1024,
+    detect: detect_svg,
+};
+
 /// All built-in definitions in detection priority order.
 ///
-/// Order matters: JPEG first (most common), AVIF before HEIC
-/// (for ambiguous mif1/msf1 containers, AVIF takes priority).
+/// Order matters:
+/// - JPEG first (most common)
+/// - AVIF before HEIC (ambiguous mif1/msf1 containers → AVIF wins)
+/// - DNG before RAW before TIFF (share TIFF magic bytes; most specific first)
+/// - SVG last among magic-detected formats (XML heuristic, lower confidence)
 pub static ALL: &[&ImageFormatDefinition] = &[
-    &JPEG, &PNG, &GIF, &WEBP, &AVIF, &JXL, &HEIC, &BMP, &FARBFELD, &PNM, &TIFF, &ICO, &QOI, &PDF,
-    &EXR, &HDR, &TGA,
+    &JPEG, &PNG, &GIF, &WEBP, &AVIF, &JXL, &HEIC, &BMP, &FARBFELD, &PNM, &DNG, &RAW, &TIFF, &ICO,
+    &QOI, &PDF, &EXR, &HDR, &JP2, &TGA, &SVG,
 ];
