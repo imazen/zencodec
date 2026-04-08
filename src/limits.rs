@@ -85,6 +85,12 @@ pub struct ResourceLimits {
     pub max_frames: Option<u32>,
     /// Maximum total animation duration in milliseconds.
     pub max_animation_ms: Option<u64>,
+    /// Maximum total pixels across all frames (width × height × frame_count).
+    ///
+    /// Unlike `max_pixels` which limits a single frame, this limits the
+    /// cumulative decoded pixel count. Prevents resource exhaustion from
+    /// animations with many large frames.
+    pub max_total_pixels: Option<u64>,
     /// Threading policy for the codec.
     ///
     /// Defaults to [`ThreadingPolicy::Unlimited`].
@@ -94,7 +100,7 @@ pub struct ResourceLimits {
 // All primitives, no pointers — but Option<u64> niche optimization and
 // enum discriminant alignment can differ between 32-bit and 64-bit.
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(core::mem::size_of::<ResourceLimits>() == 112);
+const _: () = assert!(core::mem::size_of::<ResourceLimits>() == 128);
 
 impl Default for ResourceLimits {
     fn default() -> Self {
@@ -107,6 +113,7 @@ impl Default for ResourceLimits {
             max_input_bytes: None,
             max_frames: None,
             max_animation_ms: None,
+            max_total_pixels: None,
             threading: ThreadingPolicy::Unlimited,
         }
     }
@@ -166,6 +173,12 @@ impl ResourceLimits {
         self
     }
 
+    /// Set maximum total pixels across all frames.
+    pub fn with_max_total_pixels(mut self, max: u64) -> Self {
+        self.max_total_pixels = Some(max);
+        self
+    }
+
     /// Set threading policy.
     pub fn with_threading(mut self, policy: ThreadingPolicy) -> Self {
         self.threading = policy;
@@ -187,6 +200,7 @@ impl ResourceLimits {
             || self.max_input_bytes.is_some()
             || self.max_frames.is_some()
             || self.max_animation_ms.is_some()
+            || self.max_total_pixels.is_some()
             || self.threading != ThreadingPolicy::Unlimited
     }
 
@@ -269,11 +283,22 @@ impl ResourceLimits {
         Ok(())
     }
 
+    /// Check total pixels across all frames against `max_total_pixels`.
+    pub fn check_total_pixels(&self, total: u64) -> Result<(), LimitExceeded> {
+        if let Some(max) = self.max_total_pixels
+            && total > max
+        {
+            return Err(LimitExceeded::TotalPixels { actual: total, max });
+        }
+        Ok(())
+    }
+
     /// Check [`ImageInfo`](crate::ImageInfo) from `probe_header()` against all
     /// applicable limits. This is the fastest rejection point — call it
     /// immediately after probing, before any pixel work.
     ///
-    /// Checks: `max_width`, `max_height`, `max_pixels`, `max_frames`.
+    /// Checks: `max_width`, `max_height`, `max_pixels`, `max_frames`,
+    /// `max_total_pixels`.
     pub fn check_image_info(&self, info: &crate::ImageInfo) -> Result<(), LimitExceeded> {
         self.check_dimensions(info.width, info.height)?;
         if let Some(max) = self.max_frames
@@ -281,6 +306,14 @@ impl ResourceLimits {
             && count > max
         {
             return Err(LimitExceeded::Frames { actual: count, max });
+        }
+        if let Some(max) = self.max_total_pixels
+            && let Some(count) = info.frame_count()
+        {
+            let total = info.width as u64 * info.height as u64 * count as u64;
+            if total > max {
+                return Err(LimitExceeded::TotalPixels { actual: total, max });
+            }
         }
         Ok(())
     }
@@ -360,6 +393,13 @@ pub enum LimitExceeded {
         /// Maximum allowed.
         max: u64,
     },
+    /// Total pixels across all frames exceeded `max_total_pixels`.
+    TotalPixels {
+        /// Actual total pixel count (width × height × frames).
+        actual: u64,
+        /// Maximum allowed.
+        max: u64,
+    },
 }
 
 impl core::fmt::Display for LimitExceeded {
@@ -384,6 +424,9 @@ impl core::fmt::Display for LimitExceeded {
             }
             Self::Duration { actual, max } => {
                 write!(f, "duration {actual}ms exceeds limit {max}ms")
+            }
+            Self::TotalPixels { actual, max } => {
+                write!(f, "total pixels {actual} exceeds limit {max}")
             }
         }
     }
@@ -636,5 +679,101 @@ mod tests {
             max: 4096,
         };
         assert_error(&err);
+    }
+
+    #[test]
+    fn total_pixels_builder_and_has_any() {
+        let limits = ResourceLimits::none().with_max_total_pixels(100_000_000);
+        assert!(limits.has_any());
+        assert_eq!(limits.max_total_pixels, Some(100_000_000));
+    }
+
+    #[test]
+    fn check_total_pixels_pass_and_fail() {
+        let limits = ResourceLimits::none().with_max_total_pixels(50_000_000);
+        assert!(limits.check_total_pixels(50_000_000).is_ok());
+        let err = limits.check_total_pixels(50_000_001).unwrap_err();
+        assert_eq!(
+            err,
+            LimitExceeded::TotalPixels {
+                actual: 50_000_001,
+                max: 50_000_000
+            }
+        );
+    }
+
+    #[test]
+    fn check_total_pixels_no_limit() {
+        let limits = ResourceLimits::none();
+        assert!(limits.check_total_pixels(u64::MAX).is_ok());
+    }
+
+    #[test]
+    fn check_image_info_total_pixels() {
+        use crate::{ImageFormat, ImageInfo};
+        // 1000×1000 × 200 frames = 200M pixels, limit 100M
+        let limits = ResourceLimits::none().with_max_total_pixels(100_000_000);
+        let info = ImageInfo::new(1000, 1000, ImageFormat::Gif).with_sequence(
+            crate::ImageSequence::Animation {
+                frame_count: Some(200),
+                loop_count: None,
+                random_access: false,
+            },
+        );
+        let err = limits.check_image_info(&info).unwrap_err();
+        assert_eq!(
+            err,
+            LimitExceeded::TotalPixels {
+                actual: 200_000_000,
+                max: 100_000_000
+            }
+        );
+    }
+
+    #[test]
+    fn check_image_info_total_pixels_pass() {
+        use crate::{ImageFormat, ImageInfo};
+        let limits = ResourceLimits::none().with_max_total_pixels(100_000_000);
+        let info = ImageInfo::new(1000, 1000, ImageFormat::Gif).with_sequence(
+            crate::ImageSequence::Animation {
+                frame_count: Some(100),
+                loop_count: None,
+                random_access: false,
+            },
+        );
+        assert!(limits.check_image_info(&info).is_ok());
+    }
+
+    #[test]
+    fn check_image_info_total_pixels_still_image() {
+        use crate::{ImageFormat, ImageInfo};
+        // Still image: frame_count() returns Some(1), so total = w*h*1
+        let limits = ResourceLimits::none().with_max_total_pixels(1_000_000);
+        let info = ImageInfo::new(1000, 1000, ImageFormat::Jpeg);
+        assert!(limits.check_image_info(&info).is_ok());
+
+        // Just over: 1001×1000×1 = 1_001_000 > 1_000_000
+        let info = ImageInfo::new(1001, 1000, ImageFormat::Jpeg);
+        let err = limits.check_image_info(&info).unwrap_err();
+        assert_eq!(
+            err,
+            LimitExceeded::TotalPixels {
+                actual: 1_001_000,
+                max: 1_000_000
+            }
+        );
+    }
+
+    #[test]
+    fn total_pixels_display() {
+        use alloc::format;
+        let err = LimitExceeded::TotalPixels {
+            actual: 200_000_000,
+            max: 100_000_000,
+        };
+        assert_eq!(
+            format!("{err}"),
+            "total pixels 200000000 exceeds limit 100000000"
+        );
     }
 }
