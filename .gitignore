@@ -46,3 +46,4 @@ Thumbs.db
 .vscode/
 *.iml
 copter-report/
+.superwork/
