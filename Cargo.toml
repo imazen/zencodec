@@ -8,7 +8,7 @@ description = "Shared traits and types for zen* image codecs"
 categories = ["multimedia::images"]
 keywords = ["image", "codec", "traits"]
 repository = "https://github.com/imazen/zencodec"
-exclude = ["CLAUDE.md", "docs/"]
+exclude = ["CLAUDE.md", "CONTEXT-HANDOFF.md", "FEEDBACK.md", ".claude/", ".superwork/", ".zenbench/", "copter-report/", ".github/", "Cross.toml", "justfile", "Cargo.toml.original.txt", "docs/", "fuzz/"]
 
 [lib]
 name = "zencodec"
