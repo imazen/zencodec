@@ -292,7 +292,7 @@ impl SourceColor {
     ///
     /// When true, a colorimetric CMS transform to an SDR destination will
     /// clip highlights — tone mapping is required first.
-    pub fn is_hdr(&self) -> bool {
+    pub fn has_hdr_transfer(&self) -> bool {
         if let Some(c) = self.cicp
             && matches!(c.transfer_characteristics, 16 | 18)
         {
@@ -957,7 +957,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // SourceColor + ColorAuthority + is_hdr() tests
+    // SourceColor + ColorAuthority + has_hdr_transfer() tests
     // -----------------------------------------------------------------------
 
     /// Build a minimal ICC profile with a cicp tag (reuse icc.rs helper logic).
@@ -1010,88 +1010,88 @@ mod tests {
         assert_eq!(info.source_color.color_authority, ColorAuthority::Cicp);
     }
 
-    // --- is_hdr() from CICP ---
+    // --- has_hdr_transfer() from CICP ---
 
     #[test]
-    fn is_hdr_cicp_pq() {
+    fn has_hdr_transfer_cicp_pq() {
         let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ);
-        assert!(sc.is_hdr());
+        assert!(sc.has_hdr_transfer());
     }
 
     #[test]
-    fn is_hdr_cicp_hlg() {
+    fn has_hdr_transfer_cicp_hlg() {
         let sc = SourceColor::default().with_cicp(Cicp::BT2100_HLG);
-        assert!(sc.is_hdr());
+        assert!(sc.has_hdr_transfer());
     }
 
     #[test]
-    fn is_hdr_cicp_srgb_is_false() {
+    fn has_hdr_transfer_cicp_srgb_is_false() {
         let sc = SourceColor::default().with_cicp(Cicp::SRGB);
-        assert!(!sc.is_hdr());
+        assert!(!sc.has_hdr_transfer());
     }
 
     #[test]
-    fn is_hdr_cicp_p3_is_false() {
+    fn has_hdr_transfer_cicp_p3_is_false() {
         let sc = SourceColor::default().with_cicp(Cicp::DISPLAY_P3);
-        assert!(!sc.is_hdr());
+        assert!(!sc.has_hdr_transfer());
     }
 
     #[test]
-    fn is_hdr_cicp_bt709_is_false() {
+    fn has_hdr_transfer_cicp_bt709_is_false() {
         let sc = SourceColor::default().with_cicp(Cicp::new(1, 1, 0, true));
-        assert!(!sc.is_hdr());
+        assert!(!sc.has_hdr_transfer());
     }
 
     #[test]
-    fn is_hdr_cicp_linear_is_false() {
+    fn has_hdr_transfer_cicp_linear_is_false() {
         let sc = SourceColor::default().with_cicp(Cicp::new(1, 8, 0, true));
-        assert!(!sc.is_hdr());
+        assert!(!sc.has_hdr_transfer());
     }
 
-    // --- is_hdr() from ICC cicp tag ---
+    // --- has_hdr_transfer() from ICC cicp tag ---
 
     #[test]
-    fn is_hdr_icc_pq_tag() {
+    fn has_hdr_transfer_icc_pq_tag() {
         let icc = build_icc_with_cicp(9, 16, 0, true);
         let sc = SourceColor::default().with_icc_profile(icc);
-        assert!(sc.is_hdr());
+        assert!(sc.has_hdr_transfer());
     }
 
     #[test]
-    fn is_hdr_icc_hlg_tag() {
+    fn has_hdr_transfer_icc_hlg_tag() {
         let icc = build_icc_with_cicp(9, 18, 0, false);
         let sc = SourceColor::default().with_icc_profile(icc);
-        assert!(sc.is_hdr());
+        assert!(sc.has_hdr_transfer());
     }
 
     #[test]
-    fn is_hdr_icc_srgb_tag_is_false() {
+    fn has_hdr_transfer_icc_srgb_tag_is_false() {
         let icc = build_icc_with_cicp(1, 13, 0, true);
         let sc = SourceColor::default().with_icc_profile(icc);
-        assert!(!sc.is_hdr());
+        assert!(!sc.has_hdr_transfer());
     }
 
     #[test]
-    fn is_hdr_icc_no_cicp_tag_is_false() {
+    fn has_hdr_transfer_icc_no_cicp_tag_is_false() {
         let icc = build_icc_no_cicp();
         let sc = SourceColor::default().with_icc_profile(icc);
-        assert!(!sc.is_hdr());
+        assert!(!sc.has_hdr_transfer());
     }
 
-    // --- is_hdr() priority: CICP checked before ICC ---
+    // --- has_hdr_transfer() priority: CICP checked before ICC ---
 
     #[test]
-    fn is_hdr_cicp_wins_over_icc() {
+    fn has_hdr_transfer_cicp_wins_over_icc() {
         // CICP says PQ, ICC says sRGB → CICP checked first → HDR
         let icc = build_icc_with_cicp(1, 13, 0, true);
         let sc = SourceColor::default()
             .with_cicp(Cicp::BT2100_PQ)
             .with_icc_profile(icc);
-        assert!(sc.is_hdr());
+        assert!(sc.has_hdr_transfer());
     }
 
     #[test]
-    fn is_hdr_cicp_sdr_but_icc_hdr_still_detects() {
+    fn has_hdr_transfer_cicp_sdr_but_icc_hdr_still_detects() {
         // CICP says sRGB (tc=13) → first check doesn't match (not PQ/HLG).
         // Falls through to ICC check → finds PQ cicp tag → HDR.
         // Conservative: if ANY signal says HDR, we report HDR.
@@ -1099,38 +1099,38 @@ mod tests {
         let sc = SourceColor::default()
             .with_cicp(Cicp::SRGB)
             .with_icc_profile(icc);
-        assert!(sc.is_hdr());
+        assert!(sc.has_hdr_transfer());
     }
 
     #[test]
-    fn is_hdr_cicp_pq_short_circuits_before_icc() {
+    fn has_hdr_transfer_cicp_pq_short_circuits_before_icc() {
         // CICP says PQ → first check matches → returns true immediately.
         // Even garbage ICC doesn't prevent detection.
         let sc = SourceColor::default()
             .with_cicp(Cicp::BT2100_PQ)
             .with_icc_profile(alloc::vec![0xFF; 10]);
-        assert!(sc.is_hdr());
+        assert!(sc.has_hdr_transfer());
     }
 
-    // --- is_hdr() with no metadata ---
+    // --- has_hdr_transfer() with no metadata ---
 
     #[test]
-    fn is_hdr_no_metadata_is_false() {
+    fn has_hdr_transfer_no_metadata_is_false() {
         let sc = SourceColor::default();
-        assert!(!sc.is_hdr());
+        assert!(!sc.has_hdr_transfer());
     }
 
-    // --- is_hdr() edge cases ---
+    // --- has_hdr_transfer() edge cases ---
 
     #[test]
-    fn is_hdr_empty_icc_is_false() {
+    fn has_hdr_transfer_empty_icc_is_false() {
         let sc = SourceColor::default().with_icc_profile(alloc::vec![]);
-        assert!(!sc.is_hdr());
+        assert!(!sc.has_hdr_transfer());
     }
 
     #[test]
-    fn is_hdr_garbage_icc_is_false() {
+    fn has_hdr_transfer_garbage_icc_is_false() {
         let sc = SourceColor::default().with_icc_profile(alloc::vec![0xFF; 200]);
-        assert!(!sc.is_hdr());
+        assert!(!sc.has_hdr_transfer());
     }
 }
