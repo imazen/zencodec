@@ -23,3 +23,7 @@ whereat = { version = "0.1.5"}
 thiserror = "2"
 walkdir = "2.5.0"
 rayon = "1.10.0"
+
+[patch.crates-io]
+# ColorAuthority not yet published to crates.io; remove when zenpixels > 0.2.2 is released.
+zenpixels = { path = "../zenpixels/zenpixels" }

@@ -10,7 +10,7 @@ use crate::detect::SourceEncodingDetails;
 use crate::gainmap::GainMapPresence;
 use crate::metadata::Metadata;
 use crate::{ImageFormat, Orientation};
-use zenpixels::{ColorPrimaries, TransferFunction};
+use zenpixels::{ColorAuthority, ColorPrimaries, TransferFunction};
 
 // Re-export color types from zenpixels — the canonical definitions.
 pub use zenpixels::Cicp;
@@ -211,15 +211,21 @@ pub use zenpixels::{ContentLightLevel, MasteringDisplay};
 pub struct SourceColor {
     /// CICP color description (ITU-T H.273).
     ///
-    /// When present, describes the color space without requiring an ICC
-    /// profile. Both CICP and ICC may be present — CICP takes precedence
-    /// per AVIF/HEIF specs, but callers should use ICC when CICP is absent.
+    /// When present, describes the color space using code points for primaries,
+    /// transfer function, and matrix coefficients. Both CICP and ICC may be
+    /// present — which takes precedence depends on the format (see
+    /// [`color_authority`](Self::color_authority)).
     pub cicp: Option<Cicp>,
     /// Embedded ICC color profile.
     ///
     /// Stored as `Arc<[u8]>` for cheap sharing across pipeline stages
     /// and pixel slices. Accepts `Vec<u8>` via [`with_icc_profile()`](Self::with_icc_profile).
     pub icc_profile: Option<Arc<[u8]>>,
+    /// Which color field is authoritative for CMS transforms.
+    ///
+    /// Set by the codec during decode based on the format's spec.
+    /// See [`ColorAuthority`] for per-format guidance.
+    pub color_authority: ColorAuthority,
     /// Bits per channel (e.g. 8, 10, 12, 16, 32).
     ///
     /// `None` if unknown (e.g. from a header-only probe that doesn't
@@ -270,6 +276,34 @@ impl SourceColor {
     pub fn with_mastering_display(mut self, mdcv: MasteringDisplay) -> Self {
         self.mastering_display = Some(mdcv);
         self
+    }
+
+    /// Set which color metadata is authoritative for CMS transforms.
+    pub fn with_color_authority(mut self, authority: ColorAuthority) -> Self {
+        self.color_authority = authority;
+        self
+    }
+
+    /// Whether this content uses an HDR transfer function (PQ or HLG).
+    ///
+    /// Checks CICP first (cheap), then falls back to inspecting the ICC
+    /// profile's cicp tag via lightweight tag table scan. Does NOT require
+    /// a full ICC profile parse.
+    ///
+    /// When true, a colorimetric CMS transform to an SDR destination will
+    /// clip highlights — tone mapping is required first.
+    pub fn is_hdr(&self) -> bool {
+        if let Some(c) = self.cicp
+            && matches!(c.transfer_characteristics, 16 | 18)
+        {
+            return true;
+        }
+        if let Some(ref icc) = self.icc_profile
+            && let Some((_, tc, _, _)) = crate::icc::icc_extract_cicp(icc)
+        {
+            return matches!(tc, 16 | 18);
+        }
+        false
     }
 
     /// Derive the transfer function from CICP metadata.
@@ -541,6 +575,12 @@ impl ImageInfo {
     /// Accepts `Vec<u8>`, `&[u8]`, or `Arc<[u8]>`.
     pub fn with_icc_profile(mut self, icc: impl Into<Arc<[u8]>>) -> Self {
         self.source_color.icc_profile = Some(icc.into());
+        self
+    }
+
+    /// Set which color metadata is authoritative. Convenience for `source_color.color_authority`.
+    pub fn with_color_authority(mut self, authority: ColorAuthority) -> Self {
+        self.source_color.color_authority = authority;
         self
     }
 
