@@ -2,7 +2,7 @@
 name = "zencodec"
 version = "0.1.13"
 edition = "2024"
-rust-version = "1.93"
+rust-version = "1.88"
 license = "Apache-2.0 OR MIT"
 description = "Shared traits and types for zen* image codecs"
 categories = ["multimedia::images"]
@@ -15,8 +15,8 @@ name = "zencodec"
 
 [dependencies]
 zenpixels = { version = "0.2.2" }
-almost-enough = { version = "0.4.3", default-features = false, features = ["alloc"] }
-enough = "0.4.3"
+almost-enough = { version = "0.4.4", default-features = false, features = ["alloc"] }
+enough = "0.4.4"
 whereat = { version = "0.1.5"}
 
 [dev-dependencies]
