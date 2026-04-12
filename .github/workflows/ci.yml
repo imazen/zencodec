@@ -215,12 +215,18 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Patch zenpixels to git ref with lowered MSRV
+      - name: Patch path deps to git refs
         shell: bash
         run: |
-          # zenpixels on crates.io still declares rust-version 1.93;
-          # patch to git main (which has lowered MSRV) until next publish.
-          printf '\n[patch.crates-io]\nzenpixels = { git = "https://github.com/imazen/zenpixels" }\n' >> Cargo.toml
+          sed \
+            -e 's|path = "\.\./zenpixels/zenpixels"|git = "https://github.com/imazen/zenpixels"|g' \
+            -e 's|path = "\.\./zenpixels/zenpixels-convert"|git = "https://github.com/imazen/zenpixels"|g' \
+            Cargo.toml > Cargo.toml.ci && \
+            mv Cargo.toml.ci Cargo.toml
+          # Add [patch.crates-io] only if not already present
+          if ! grep -q '\[patch.crates-io\]' Cargo.toml; then
+            printf '\n[patch.crates-io]\nzenpixels = { git = "https://github.com/imazen/zenpixels" }\n' >> Cargo.toml
+          fi
           rm -f Cargo.lock
 
       - name: Check MSRV
