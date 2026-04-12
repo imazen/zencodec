@@ -47,6 +47,8 @@ mod format;
 pub mod gainmap;
 /// Codec implementation helpers (not consumer API).
 pub mod helpers;
+/// Lightweight ICC profile inspection (tag extraction, no full parse).
+pub mod icc;
 mod info;
 mod limits;
 mod metadata;
@@ -66,6 +68,7 @@ pub use format::{ImageFormat, ImageFormatDefinition, ImageFormatRegistry};
 pub use gainmap::{
     GainMapChannel, GainMapDirection, GainMapInfo, GainMapParams, GainMapPresence, Iso21496Format,
 };
+pub use icc::icc_extract_cicp;
 pub use info::{
     Cicp, ContentLightLevel, ImageInfo, ImageSequence, MasteringDisplay, Resolution,
     ResolutionUnit, SourceColor, Supplements,
@@ -74,6 +77,7 @@ pub use limits::{LimitExceeded, ResourceLimits, ThreadingPolicy};
 pub use metadata::Metadata;
 pub use orientation::{Orientation, OrientationHint};
 pub use output::{AnimationFrame, OwnedAnimationFrame};
+pub use zenpixels::ColorAuthority;
 
 pub use capabilities::UnsupportedOperation;
 pub use detect::SourceEncodingDetails;
