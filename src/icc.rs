@@ -364,14 +364,28 @@ pub(crate) mod tests {
     /// widely embedded profiles in web images (Chrome, Firefox, imagemagick).
     /// All 44 profiles are v2.1 or v4.2 (pre-cicp), so our extractor must
     /// return None for every one. Also verify moxcms agrees.
+    ///
+    /// Clones the repo to a temp dir so this works on any platform with git.
     #[test]
     fn compact_icc_profiles_no_cicp() {
         extern crate std;
-        let profile_dir = std::path::Path::new("/mnt/v/input/compact-icc-profiles");
+        use std::process::Command;
+
+        let tmp = std::env::temp_dir().join("zencodec-compact-icc-profiles");
+        let profile_dir = tmp.join("profiles");
+
         if !profile_dir.exists() {
-            // Skip if corpus not available (CI or other machines)
-            return;
+            let status = Command::new("git")
+                .args(["clone", "--depth", "1",
+                       "https://github.com/saucecontrol/Compact-ICC-Profiles.git"])
+                .arg(&tmp)
+                .status();
+            match status {
+                Ok(s) if s.success() => {}
+                _ => return, // git not available or network error — skip
+            }
         }
+
         let mut count = 0;
         for entry in std::fs::read_dir(&profile_dir).unwrap() {
             let entry: std::fs::DirEntry = entry.unwrap();
