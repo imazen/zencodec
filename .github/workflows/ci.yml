@@ -209,12 +209,13 @@ jobs:
       - name: Patch path deps to git refs
         shell: bash
         run: |
+          # MSRV job needs zenpixels with lowered MSRV; update branch ref after merge to main
           sed \
-            -e 's|path = "\.\./zenpixels/zenpixels"|git = "https://github.com/imazen/zenpixels"|g' \
-            -e 's|path = "\.\./zenpixels/zenpixels-convert"|git = "https://github.com/imazen/zenpixels"|g' \
+            -e 's|path = "\.\./zenpixels/zenpixels"|git = "https://github.com/imazen/zenpixels", branch = "feat/lower-msrv"|g' \
+            -e 's|path = "\.\./zenpixels/zenpixels-convert"|git = "https://github.com/imazen/zenpixels", branch = "feat/lower-msrv"|g' \
             Cargo.toml > Cargo.toml.ci && \
             mv Cargo.toml.ci Cargo.toml
-          printf '\n[patch.crates-io]\nzenpixels = { git = "https://github.com/imazen/zenpixels" }\nzenpixels-convert = { git = "https://github.com/imazen/zenpixels" }\n' >> Cargo.toml
+          printf '\n[patch.crates-io]\nzenpixels = { git = "https://github.com/imazen/zenpixels", branch = "feat/lower-msrv" }\nzenpixels-convert = { git = "https://github.com/imazen/zenpixels", branch = "feat/lower-msrv" }\n' >> Cargo.toml
           rm -f Cargo.lock
 
       - name: Check MSRV
