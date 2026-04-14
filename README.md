@@ -2,7 +2,7 @@
 
 zencodec is the shared trait crate that defines the common API for all zen\* image codecs.
 
-zencodec contains no pixel encoding or decoding logic — that lives in the individual codec crates. It does include shared metadata parsing needed for nearly every image format: ICC profile identification (45 known profiles including sRGB, Display P3, and BT.2020 variants), EXIF orientation extraction, ISO 21496-1 gain map parsing and serialization, and format detection via magic bytes. `no_std` compatible (requires `alloc`), `forbid(unsafe_code)`.
+zencodec contains no pixel encoding or decoding logic — that lives in the individual codec crates. It does include shared metadata parsing needed for nearly every image format: pixel-descriptor derivation from CICP/ICC metadata (with identification delegated to `zenpixels::icc`, covering 163 RGB + 18 grayscale web-corpus profiles), EXIF orientation extraction, ISO 21496-1 gain map parsing and serialization, and format detection via magic bytes. `no_std` compatible (requires `alloc`), `forbid(unsafe_code)`.
 
 Import as `zencodec` — use `zencodec::encode`, `zencodec::decode`, etc.
 
@@ -97,7 +97,7 @@ zencodec has no feature flags. The full API is always available.
 
 ## MSRV
 
-Rust 1.93+, 2024 edition.
+Rust 1.88+, 2024 edition.
 
 ## Image tech I maintain
 

@@ -18,12 +18,14 @@ All notable changes to zencodec are documented here.
   substitution). `descriptor_for_decoded_pixels` will drop its
   `IccMatchTolerance` parameter — it is currently a placebo.
 
+## [0.1.16] - 2026-04-14
+
 ### Changed
 
 - Bump `zenpixels` to 0.2.7 with the `icc` feature enabled. All ICC
   identification now delegates to `zenpixels::icc`, which ships a superset
   of the web-corpus table (163 RGB + 18 grayscale profiles vs. our 118+14,
-  with intent-safety masks cross-validated against moxcms and lcms2).
+  with intent-safety masks cross-validated against moxcms and lcms2) (9bdb797).
 - `icc_extract_cicp` → deprecated shim around `zenpixels::icc::extract_cicp`.
 - `helpers::identify_well_known_icc`, `helpers::icc_profile_is_srgb` →
   deprecated shims around `zenpixels::icc::{identify_common, is_common_srgb}`.
@@ -41,6 +43,62 @@ All notable changes to zencodec are documented here.
   in `zenpixels/justfile`.
 - `examples/verify_via_moxcms.rs`, `examples/gen_moxcms_profiles.rs` —
   superseded by `zenpixels/scripts/icc-gen`.
+
+## [0.1.15] — unreleased (skipped)
+
+In-tree version bump only. Contained the zenpixels 0.2.2 → 0.2.6 bump
+(d00efca) and a minor clippy fix (31cca1f). Shipped as part of 0.1.16.
+
+## [0.1.14] - 2026-04-12 — YANKED
+
+Yanked because the `zenpixels 0.3.0` dependency bump was premature —
+zenpixels 0.3.0 was not yet released on crates.io. Superseded by 0.1.16,
+which tracks `zenpixels 0.2.7`.
+
+### Added
+
+- `icc_extract_cicp()` lightweight CICP-tag extractor for ICC v4.4+
+  profiles (1176ec1). Cross-validated against moxcms (0f853c5) and the
+  saucecontrol/Compact-ICC-Profiles corpus (c514fc1).
+- `ColorAuthority` re-export from zenpixels; `SourceColor` now tracks
+  whether ICC or CICP is authoritative for CMS transforms (1176ec1).
+- Normalized ICC hash table with 132 web-corpus-verified profiles (12c20d2).
+
+### Changed
+
+- MSRV lowered from 1.93 to 1.88 (PR #9, 1938d25).
+
+## [0.1.13] - 2026-04-07
+
+### Added
+
+- `ImageFormat::Jp2`, `Dng`, `Raw`, `Svg` format detection (02dd783).
+- `ResourceLimits::max_total_pixels` — cap for the sum of all frame
+  pixel counts across an animation (86dffb6). `max_pixels` remains
+  per-frame; docs clarified (0d430a6).
+
+## [0.1.12] - 2026-04-01
+
+### Added
+
+- `serialize_iso21496_jpeg` / `parse_iso21496_jpeg` — ISO 21496-1 gain
+  map payloads embedded as JPEG APP2 segments (3e2437f).
+
+### Changed
+
+- ISO 21496-1 gain map API renamed for spec accuracy: continued-fraction
+  encoding for rationals (966e1b2), standardized flag and field names
+  (745851b, 5af86f3). Back-compat shims kept for one release with
+  `#[deprecated]` attributes (bf6c7fa).
+- Bump `zenpixels` / `zenpixels-convert` 0.2.0 → 0.2.2 (5fbf5ee).
+- Bump `archmage`, `magetypes`, `enough`, `whereat`, `linear-srgb`
+  and related patches (2f3f1fb).
+
+### Fixed
+
+- ISOBMFF `box_size` handling and silent no-op documentation; assorted
+  panic removals from untrusted input paths (PR #7, f4383c3).
+- Clippy warnings: unused import, `type_complexity` (cc152b8).
 
 ## [0.1.11] - 2026-03-30
 
