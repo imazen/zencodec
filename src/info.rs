@@ -319,6 +319,44 @@ impl SourceColor {
             .map(|c| c.color_primaries_enum())
             .unwrap_or(ColorPrimaries::Bt709)
     }
+
+    /// Build a [`ColorContext`] that carries only the authoritative color
+    /// field.
+    ///
+    /// When [`color_authority`](Self::color_authority) is `Cicp` and CICP
+    /// is present, the ICC profile is dropped — the CMS will work from
+    /// CICP directly. When authority is `Icc` and ICC is present, CICP is
+    /// dropped. When the authoritative field is absent, the other is kept
+    /// as a fallback.
+    ///
+    /// This ensures [`ColorContext::as_profile_source()`] returns the
+    /// authoritative source without needing a separate authority parameter.
+    pub fn to_color_context(&self) -> zenpixels::ColorContext {
+        match self.color_authority {
+            ColorAuthority::Cicp if self.cicp.is_some() => {
+                zenpixels::ColorContext::from_cicp(self.cicp.unwrap())
+            }
+            ColorAuthority::Icc if self.icc_profile.is_some() => {
+                zenpixels::ColorContext::from_icc(self.icc_profile.clone().unwrap())
+            }
+            _ => {
+                // Authoritative field absent — keep whatever we have.
+                #[allow(deprecated)]
+                if let (Some(icc), Some(cicp)) = (&self.icc_profile, self.cicp) {
+                    zenpixels::ColorContext::from_icc_and_cicp(icc.clone(), cicp)
+                } else if let Some(icc) = &self.icc_profile {
+                    zenpixels::ColorContext::from_icc(icc.clone())
+                } else if let Some(cicp) = self.cicp {
+                    zenpixels::ColorContext::from_cicp(cicp)
+                } else {
+                    zenpixels::ColorContext {
+                        icc: None,
+                        cicp: None,
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Embedded non-color metadata from the image file.
@@ -1305,5 +1343,97 @@ mod tests {
         // has_hdr_transfer still detects HDR via ICC cicp tag.
         assert!(sc.has_hdr_transfer());
         assert!(sc.cicp.is_none()); // the mismatch
+    }
+
+    // -----------------------------------------------------------------------
+    // to_color_context — drop-dupe authority enforcement
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn to_color_context_cicp_authoritative_drops_icc() {
+        let sc = SourceColor::default()
+            .with_icc_profile(alloc::vec![1, 2, 3])
+            .with_cicp(Cicp::DISPLAY_P3)
+            .with_color_authority(ColorAuthority::Cicp);
+        let ctx = sc.to_color_context();
+        assert!(
+            ctx.icc.is_none(),
+            "ICC should be dropped when CICP is authoritative"
+        );
+        assert_eq!(ctx.cicp, Some(Cicp::DISPLAY_P3));
+    }
+
+    #[test]
+    fn to_color_context_icc_authoritative_drops_cicp() {
+        let icc = alloc::vec![10, 20, 30];
+        let sc = SourceColor::default()
+            .with_icc_profile(icc.clone())
+            .with_cicp(Cicp::SRGB)
+            .with_color_authority(ColorAuthority::Icc);
+        let ctx = sc.to_color_context();
+        assert!(
+            ctx.cicp.is_none(),
+            "CICP should be dropped when ICC is authoritative"
+        );
+        assert_eq!(ctx.icc.as_deref(), Some(icc.as_slice()));
+    }
+
+    #[test]
+    fn to_color_context_cicp_authoritative_no_cicp_keeps_icc_fallback() {
+        let icc = alloc::vec![10, 20, 30];
+        let sc = SourceColor::default()
+            .with_icc_profile(icc.clone())
+            .with_color_authority(ColorAuthority::Cicp);
+        let ctx = sc.to_color_context();
+        // CICP was authoritative but absent — fall back to ICC.
+        assert_eq!(ctx.icc.as_deref(), Some(icc.as_slice()));
+        assert!(ctx.cicp.is_none());
+    }
+
+    #[test]
+    fn to_color_context_icc_authoritative_no_icc_keeps_cicp_fallback() {
+        let sc = SourceColor::default()
+            .with_cicp(Cicp::BT2100_PQ)
+            .with_color_authority(ColorAuthority::Icc);
+        let ctx = sc.to_color_context();
+        // ICC was authoritative but absent — fall back to CICP.
+        assert!(ctx.icc.is_none());
+        assert_eq!(ctx.cicp, Some(Cicp::BT2100_PQ));
+    }
+
+    #[test]
+    fn to_color_context_neither_field_present() {
+        let sc = SourceColor::default();
+        let ctx = sc.to_color_context();
+        assert!(ctx.icc.is_none());
+        assert!(ctx.cicp.is_none());
+    }
+
+    #[test]
+    fn to_color_context_as_profile_source_returns_authoritative() {
+        // CICP authoritative → as_profile_source should return CICP.
+        let sc = SourceColor::default()
+            .with_icc_profile(alloc::vec![1, 2, 3])
+            .with_cicp(Cicp::SRGB)
+            .with_color_authority(ColorAuthority::Cicp);
+        let ctx = sc.to_color_context();
+        let src = ctx.as_profile_source().unwrap();
+        assert!(
+            matches!(src, zenpixels::ColorProfileSource::Cicp(_)),
+            "CICP authoritative should produce Cicp source, got {src:?}"
+        );
+
+        // ICC authoritative → as_profile_source should return ICC.
+        let icc = alloc::vec![10, 20, 30];
+        let sc = SourceColor::default()
+            .with_icc_profile(icc)
+            .with_cicp(Cicp::SRGB)
+            .with_color_authority(ColorAuthority::Icc);
+        let ctx = sc.to_color_context();
+        let src = ctx.as_profile_source().unwrap();
+        assert!(
+            matches!(src, zenpixels::ColorProfileSource::Icc(_)),
+            "ICC authoritative should produce Icc source, got {src:?}"
+        );
     }
 }
