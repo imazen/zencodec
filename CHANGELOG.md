@@ -32,6 +32,16 @@ All notable changes to zencodec are documented here.
   utility that consults `ColorProfileSource` and `HdrPolicy` together
   rather than inspecting raw CICP/ICC fields.
 
+## [0.1.18] - 2026-04-15
+
+### Fixed
+
+- Re-export `helpers::descriptor_for_decoded_pixels_v2` alongside v1.
+  0.1.17 added the v2 function as `pub fn` inside the private `icc`
+  submodule but only re-exported v1 from `helpers/mod.rs`, leaving v2
+  inaccessible to downstream crates. Callers migrating off the
+  deprecated v1 path can now reach v2 via `zencodec::helpers`.
+
 ## [0.1.17] - 2026-04-15
 
 Authority-aware color resolution. New `descriptor_for_decoded_pixels_v2`
