@@ -24,6 +24,15 @@ All notable changes to zencodec are documented here.
   (deprecated since 0.1.12). Callers should use `parse_iso21496_fmt` /
   `serialize_iso21496_fmt` with an explicit `Iso21496Format` (AvifTmap
   vs. JpegApp2) to avoid the format ambiguity that motivated the rename.
+- Remove `SourceColor::has_hdr_transfer()` — moves to a pipeline-level
+  utility that consults `ColorProfileSource` and `HdrPolicy` together
+  rather than inspecting raw CICP/ICC fields.
+
+### Added
+
+- `SourceColor::to_color_context()` — authority-aware conversion that
+  drops the non-authoritative field so `ColorContext::as_profile_source()`
+  returns the right source without a separate authority parameter (17afe6c).
 
 ## [0.1.16] - 2026-04-14
 
