@@ -64,10 +64,10 @@ impl Metadata {
     /// also override the parsed one.
     pub fn with_exif(mut self, exif: impl Into<Arc<[u8]>>) -> Self {
         let bytes: Arc<[u8]> = exif.into();
-        if self.orientation == Orientation::Identity {
-            if let Some(o) = parse_exif_orientation(&bytes) {
-                self.orientation = o;
-            }
+        if self.orientation == Orientation::Identity
+            && let Some(o) = parse_exif_orientation(&bytes)
+        {
+            self.orientation = o;
         }
         self.exif = Some(bytes);
         self
