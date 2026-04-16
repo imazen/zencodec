@@ -6,27 +6,109 @@
 
 /// Threading policy for codec operations.
 ///
-/// # Threading model
+/// Two variants: [`Sequential`](Self::Sequential) (no parallelism) and
+/// [`Parallel`](Self::Parallel) (use rayon, the default). Codecs call
+/// [`is_parallel()`](Self::is_parallel) and that's their only decision.
 ///
-/// There are two kinds of threading in zen codecs:
+/// # How threading works
 ///
-/// - **Rayon-based** (zenjpeg, jxl-encoder, zenjxl-decoder, zenpng): use rayon's
-///   work-stealing pool via `par_iter()` / `rayon::join()`. Thread count is
-///   controlled by the **caller** via `pool.install(|| encode(...))` — the codec
-///   adapts automatically via `rayon::current_num_threads()`.
+/// Zen codecs use [rayon](https://docs.rs/rayon) for parallelism. Rayon's
+/// work-stealing scheduler distributes `par_iter()` / `join()` work across
+/// a thread pool. The key design rule:
 ///
-/// - **Native-threaded** (rav1d-safe, zenrav1e): spawn OS threads internally.
-///   Thread count is set via codec-specific config (e.g., `with_threads(n)`),
-///   not through this policy.
+/// **Codecs never create thread pools. The caller owns the pool.**
 ///
-/// # What codecs should do
+/// By default, rayon's global pool (sized to the number of CPU cores) is
+/// used. This is almost always what you want — multiple concurrent
+/// encode/decode operations share the same pool, and rayon's work-stealing
+/// automatically balances load across them.
 ///
-/// Call [`is_parallel()`](Self::is_parallel) to decide whether to use parallel
-/// code paths. That's the only decision: `par_iter()` vs `iter()`, or
-/// multi-threaded vs single-threaded for native-threaded codecs.
+/// # Controlling thread count
 ///
-/// Don't create rayon `ThreadPool`s inside codec code — use the ambient pool.
-/// The caller controls pool sizing externally.
+/// Thread count is controlled externally via [`rayon::ThreadPool::install()`]:
+///
+/// ```ignore
+/// use rayon::ThreadPoolBuilder;
+///
+/// // 4-thread pool for this server
+/// let pool = ThreadPoolBuilder::new().num_threads(4).build().unwrap();
+///
+/// // All rayon work inside this closure uses the 4-thread pool
+/// pool.install(|| {
+///     let output = encoder.encode(pixels)?;
+///     Ok(output)
+/// });
+/// ```
+///
+/// Inside `install()`, `rayon::current_num_threads()` returns the pool's
+/// thread count. Codecs that size their work chunks (e.g., MCU row batches
+/// in JPEG) adapt automatically.
+///
+/// # Server pattern: shared pool across concurrent requests
+///
+/// For servers processing many images concurrently, use **one shared pool**
+/// for all encode/decode work. Rayon's work-stealing means idle threads
+/// from a finished encode immediately help with in-progress encodes:
+///
+/// ```ignore
+/// use std::sync::LazyLock;
+/// use rayon::{ThreadPool, ThreadPoolBuilder};
+///
+/// static ENCODE_POOL: LazyLock<ThreadPool> = LazyLock::new(|| {
+///     ThreadPoolBuilder::new()
+///         .num_threads(num_cpus::get())
+///         .build()
+///         .unwrap()
+/// });
+///
+/// // Every request uses the same pool
+/// fn handle_request(data: &[u8]) -> Vec<u8> {
+///     ENCODE_POOL.install(|| {
+///         let decoded = decoder.decode(data).unwrap();
+///         encoder.encode(decoded).unwrap().into_vec()
+///     })
+/// }
+/// ```
+///
+/// Don't create a pool per request or per encode — that defeats
+/// work-stealing and creates OS thread overhead.
+///
+/// # Sequential mode
+///
+/// `ThreadingPolicy::Sequential` tells codecs to skip `par_iter()`
+/// entirely and use `iter()`. No rayon calls, zero overhead. Use this
+/// for deterministic output, single-threaded benchmarks, or
+/// environments where threading is undesirable (WASM, embedded).
+///
+/// # Native-threaded codecs (rav1d, zenrav1e)
+///
+/// Some codecs spawn OS threads internally instead of using rayon (the
+/// AV1 decoder/encoder inherited this from dav1d/rav1e). These codecs
+/// interpret `Sequential` as "1 thread" and `Parallel` as "use your
+/// default thread count." The `pool.install()` pattern has no effect
+/// on these codecs — they manage their own threads. Control their
+/// thread count via codec-specific config (e.g.,
+/// `AvifEncoderConfig::with_threads(4)`).
+///
+/// # For codec implementors
+///
+/// Check [`is_parallel()`](Self::is_parallel) once, then use `par_iter()`
+/// or `iter()` accordingly:
+///
+/// ```ignore
+/// let threading = limits.threading;
+/// if threading.is_parallel() {
+///     rows.par_chunks_mut(chunk_size).for_each(|chunk| process(chunk));
+/// } else {
+///     rows.chunks_mut(chunk_size).for_each(|chunk| process(chunk));
+/// }
+/// ```
+///
+/// Do **not** create `ThreadPool`s inside codec code. Use the ambient
+/// pool — the caller controls which pool that is via `install()`.
+/// Codecs that need to size work batches should call
+/// `rayon::current_num_threads()` at the point of splitting, not at
+/// configuration time.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ThreadingPolicy {
