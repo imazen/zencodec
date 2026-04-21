@@ -4,41 +4,53 @@ All notable changes to zencodec are documented here.
 
 ## [Unreleased]
 
+## [0.1.20] - 2026-04-21
+
 ### Added
 
 - `ISO_21496_1_URN` public constant — the 28-byte `urn:iso:std:iso:ts:21496:-1\0`
   namespace string that prefixes gain-map payloads in JPEG APP2 (and any other
-  URN-namespaced container).
+  URN-namespaced container) (945b694).
 - `ISO_21496_1_PRIMARY_APP2_BODY` public constant — the full 32-byte JPEG
   APP2 body (URN + `min_version=0, writer_version=0`) that the primary image
   of a canonical Ultra HDR JPEG carries to advertise ISO 21496-1 awareness.
   Goes directly inside an APP2 segment after the `FF E2` marker + length
-  header. Detected by exact bytes match.
+  header; detected by exact bytes match (945b694).
 - `Iso21496Format::JxlJhgm` variant — canonical name for the bare ISO 21496-1
-  payload (no version byte, no URN). Identical bytes to the deprecated
-  `JpegApp2` variant; the new name matches the sibling `AvifTmap` convention
-  of naming each variant for the container that consumes those exact bytes.
-- `Iso21496Format::JpegApp2BodyWithUrn` variant — produces and accepts the full
-  JPEG APP2 body: URN + bare payload. Does NOT include the JPEG `FF E2`
-  marker or `u16 BE` length word (those remain the caller's JPEG-syntax
+  payload (no version byte, no URN). Produces identical bytes to the
+  deprecated `JpegApp2` variant; naming parallels `AvifTmap` (each variant
+  named for the container that consumes those exact bytes) (945b694).
+- `Iso21496Format::JpegApp2BodyWithUrn` variant — produces and accepts the
+  full JPEG APP2 body: URN + bare payload. Does NOT include the JPEG `FF E2`
+  marker or `u16 BE` length word (those remain the caller's JPEG syntax
   responsibility). Handled by `parse_iso21496_fmt` / `serialize_iso21496_fmt`
-  without separate `_with_urn` helpers.
+  with no separate `_with_urn` helpers (945b694).
+- `Iso21496Format` discriminants pinned with explicit `= 0..3` values plus a
+  `const _: () = assert!(...)` block, so accidental reorders/removals trip at
+  compile time instead of silently shifting `as u8` results (945b694).
 - `GainMapParseError::UrnMismatch` variant, returned when parsing under
   `Iso21496Format::JpegApp2BodyWithUrn` and the input does not begin with
-  `ISO_21496_1_URN`.
+  `ISO_21496_1_URN` (945b694).
 - `gainmap::serialize_iso21496_fmt_into(params, format, &mut Vec<u8>)` —
-  append-to-buffer partner for `serialize_iso21496_fmt`. Lets callers
-  embed the payload inside a larger output buffer without an intermediate
-  `Vec` (e.g., building a JPEG APP2 marker + length + body in one alloc).
+  append-to-buffer partner for `serialize_iso21496_fmt`. Lets callers embed
+  the payload inside a larger output buffer without an intermediate `Vec`
+  (e.g., building a JPEG APP2 marker + length + body in one alloc) (945b694).
 
 ### Deprecated
 
-- `Iso21496Format::JpegApp2` — misleading name. The bytes it produces are
-  the bare ISO 21496-1 payload (no URN), not a standalone JPEG APP2 body.
-  Use `JxlJhgm` for the same bytes under a clearer name, or `JpegApp2BodyWithUrn`
-  for the full JPEG APP2 body that includes the URN prefix. The variant is
-  kept as an alias on the same discriminant for source compatibility with
-  0.1.12–0.1.19.
+- `Iso21496Format::JpegApp2` — misleading name. The bytes it produces are the
+  bare ISO 21496-1 payload (no URN), not a standalone JPEG APP2 body. Use
+  `JxlJhgm` for the same bytes under a clearer name, or `JpegApp2BodyWithUrn`
+  for the full APP2 body including the URN prefix. Kept at its original
+  discriminant `0` so existing `as u8` casts keep working; it and `JxlJhgm`
+  are distinct variants that happen to serialize to identical bytes (Rust
+  does not allow two variants to share a discriminant) (945b694).
+
+### Fixed
+
+- Formatting of the `ISO_21496_1_PRIMARY_APP2_BODY` constant declaration
+  collapsed onto one line and a stray trailing blank line after a private
+  helper removed, so `cargo fmt --check` is clean (41f7162).
 
 ## [0.1.19] - 2026-04-16
 
