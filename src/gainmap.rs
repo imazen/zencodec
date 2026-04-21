@@ -215,8 +215,7 @@ pub const ISO_21496_1_URN: &[u8; 28] = b"urn:iso:std:iso:ts:21496:-1\0";
 ///     // primary-image signal: full metadata lives on the MPF secondary
 /// }
 /// ```
-pub const ISO_21496_1_PRIMARY_APP2_BODY: &[u8; 32] =
-    b"urn:iso:std:iso:ts:21496:-1\0\0\0\0\0";
+pub const ISO_21496_1_PRIMARY_APP2_BODY: &[u8; 32] = b"urn:iso:std:iso:ts:21496:-1\0\0\0\0\0";
 
 // =========================================================================
 // Core types
@@ -1275,7 +1274,6 @@ fn serialize_iso21496_no_version_into(params: &GainMapParams, out: &mut Vec<u8>)
     out.push(build_flags(params));
     write_payload(out, params);
 }
-
 
 // =========================================================================
 // Internal helpers
