@@ -66,7 +66,8 @@ mod traits;
 pub use extensions::Extensions;
 pub use format::{ImageFormat, ImageFormatDefinition, ImageFormatRegistry};
 pub use gainmap::{
-    GainMapChannel, GainMapDirection, GainMapInfo, GainMapParams, GainMapPresence, Iso21496Format,
+    GainMapChannel, GainMapDirection, GainMapInfo, GainMapParams, GainMapPresence,
+    ISO_21496_1_PRIMARY_APP2_BODY, ISO_21496_1_URN, Iso21496Format,
 };
 #[allow(deprecated)]
 pub use icc::icc_extract_cicp;

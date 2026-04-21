@@ -4,6 +4,42 @@ All notable changes to zencodec are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- `ISO_21496_1_URN` public constant — the 28-byte `urn:iso:std:iso:ts:21496:-1\0`
+  namespace string that prefixes gain-map payloads in JPEG APP2 (and any other
+  URN-namespaced container).
+- `ISO_21496_1_PRIMARY_APP2_BODY` public constant — the full 32-byte JPEG
+  APP2 body (URN + `min_version=0, writer_version=0`) that the primary image
+  of a canonical Ultra HDR JPEG carries to advertise ISO 21496-1 awareness.
+  Goes directly inside an APP2 segment after the `FF E2` marker + length
+  header. Detected by exact bytes match.
+- `Iso21496Format::JxlJhgm` variant — canonical name for the bare ISO 21496-1
+  payload (no version byte, no URN). Identical bytes to the deprecated
+  `JpegApp2` variant; the new name matches the sibling `AvifTmap` convention
+  of naming each variant for the container that consumes those exact bytes.
+- `Iso21496Format::JpegApp2BodyWithUrn` variant — produces and accepts the full
+  JPEG APP2 body: URN + bare payload. Does NOT include the JPEG `FF E2`
+  marker or `u16 BE` length word (those remain the caller's JPEG-syntax
+  responsibility). Handled by `parse_iso21496_fmt` / `serialize_iso21496_fmt`
+  without separate `_with_urn` helpers.
+- `GainMapParseError::UrnMismatch` variant, returned when parsing under
+  `Iso21496Format::JpegApp2BodyWithUrn` and the input does not begin with
+  `ISO_21496_1_URN`.
+- `gainmap::serialize_iso21496_fmt_into(params, format, &mut Vec<u8>)` —
+  append-to-buffer partner for `serialize_iso21496_fmt`. Lets callers
+  embed the payload inside a larger output buffer without an intermediate
+  `Vec` (e.g., building a JPEG APP2 marker + length + body in one alloc).
+
+### Deprecated
+
+- `Iso21496Format::JpegApp2` — misleading name. The bytes it produces are
+  the bare ISO 21496-1 payload (no URN), not a standalone JPEG APP2 body.
+  Use `JxlJhgm` for the same bytes under a clearer name, or `JpegApp2BodyWithUrn`
+  for the full JPEG APP2 body that includes the URN prefix. The variant is
+  kept as an alias on the same discriminant for source compatibility with
+  0.1.12–0.1.19.
+
 ## [0.1.19] - 2026-04-16
 
 ### Added

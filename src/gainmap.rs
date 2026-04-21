@@ -29,17 +29,21 @@ use crate::info::Cicp;
 
 /// Wire format variant for ISO 21496-1 binary gain map metadata.
 ///
-/// Selects the **innermost payload shape** handed to / returned from
-/// [`parse_iso21496_fmt`] and [`serialize_iso21496_fmt`]. It is NOT the full
-/// container envelope — every caller adds format-specific framing on top.
+/// Selects the shape of the bytes handed to / returned from
+/// [`parse_iso21496_fmt`] and [`serialize_iso21496_fmt`]. Covers the
+/// ISO-defined parts of the wire format only — the URN namespace prefix
+/// for URN-namespaced containers, plus the payload. **Does not include
+/// any codec-specific outer envelope** (JPEG `FF E2` marker + `u16 BE`
+/// length, ISOBMFF box headers, the JXL `jhgm` bundle wrapper, etc.) —
+/// every caller adds that framing on top.
 ///
-/// # How each container uses the payload
+/// # How each container uses the bytes
 ///
 /// | Context | Zencodec produces/consumes | Framing the caller adds on top |
 /// |---------|----------------------------|--------------------------------|
-/// | JPEG APP2 (secondary) | [`JpegApp2`] bytes | `FF E2` + length + `"urn:iso:std:iso:ts:21496:-1\0"` URN + these bytes |
+/// | JPEG APP2 (secondary) | [`JpegApp2BodyWithUrn`] bytes — URN + payload | `FF E2` marker + `u16 BE` length (length counts itself + these bytes) |
 /// | AVIF `tmap` item | [`AvifTmap`] bytes — this *is* the tmap item payload | ISOBMFF item framing (`iinf` / `iloc` / `iref`) pointing at these bytes |
-/// | JXL `jhgm` box | [`JpegApp2`] bytes go into the bundle's `gain_map_metadata` field only | A whole `JxlGainMapBundle` (`jhgm_version u8` + `gain_map_metadata_size u16 BE` + **payload** + color encoding + alt ICC + JXL codestream), then the ISOBMFF `jhgm` box around the bundle |
+/// | JXL `jhgm` box | [`JpegApp2`] bytes go into the bundle's `gain_map_metadata` field only — **no URN** | A whole `JxlGainMapBundle` (`jhgm_version u8` + `gain_map_metadata_size u16 BE` + **payload** + color encoding + alt ICC + JXL codestream), then the ISOBMFF `jhgm` box around the bundle |
 ///
 /// **Note on JXL:** `jhgm` is *not* just "an ISOBMFF box around the ISO
 /// payload". It's a structured bundle with its own header and trailing
@@ -77,21 +81,21 @@ use crate::info::Cicp;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Iso21496Format {
-    /// Payload without a version-byte prefix.
+    /// **Semantically equivalent to** [`JxlJhgm`](Self::JxlJhgm) — produces and
+    /// accepts identical bytes, but is a distinct variant with a different
+    /// discriminant. **Deprecated**: use [`JxlJhgm`](Self::JxlJhgm) for the bare
+    /// payload, or [`JpegApp2BodyWithUrn`](Self::JpegApp2BodyWithUrn) for the
+    /// full JPEG APP2 body.
     ///
-    /// Layout: `min_ver(u16 BE) + writer_ver(u16 BE) + flags(u8) + <fraction payload>`.
-    ///
-    /// This is what goes:
-    /// - *inside* a JPEG APP2 marker, after the
-    ///   `"urn:iso:std:iso:ts:21496:-1\0"` URN (28 bytes) — libultrahdr
-    ///   emits this form on the secondary (gain map) JPEG's APP2;
-    /// - in the `gain_map_metadata` field of libjxl's `JxlGainMapBundle`
-    ///   (see the enum-level note on JXL above — the bundle envelope
-    ///   lives above this payload).
-    ///
-    /// The variant is named `JpegApp2` because JPEG is the most common
-    /// reader — the bytes are payload-identical for JXL.
-    JpegApp2,
+    /// The original name was misleading: the bytes are NOT what a JPEG APP2
+    /// segment contains on the wire (they lack the required URN prefix).
+    /// Kept for source compatibility with 0.1.12–0.1.19 at the original
+    /// discriminant `0`.
+    #[deprecated(
+        since = "0.1.20",
+        note = "Misleading name — these bytes lack the URN and are not a standalone JPEG APP2 body. Use `JxlJhgm` for the same bytes, or `JpegApp2BodyWithUrn` for the full APP2 body including the URN."
+    )]
+    JpegApp2 = 0,
     /// Payload with an AVIF `tmap` version byte prefix.
     ///
     /// Layout: `version(u8=0) + min_ver(u16 BE) + writer_ver(u16 BE) + flags(u8) + <fraction payload>`.
@@ -102,8 +106,117 @@ pub enum Iso21496Format {
     /// in `libavif/src/write.c:1027-1039` (encoder) and
     /// `libavif/src/read.c:2202-2211` (decoder). Currently always 0;
     /// both libavif and zencodec reject any other value on parse.
-    AvifTmap,
+    AvifTmap = 1,
+    /// Bare ISO 21496-1 payload with no outer prefix.
+    ///
+    /// Layout: `min_ver(u16 BE) + writer_ver(u16 BE) + flags(u8) + <fraction payload>`.
+    ///
+    /// Canonical consumer: the `gain_map_metadata` field of libjxl's
+    /// `JxlGainMapBundle` (the `jhgm` bundle envelope lives above this
+    /// payload — see the enum-level note on JXL). The same byte shape
+    /// also sits inside a JPEG APP2 segment *after* the 28-byte URN
+    /// prefix has been stripped — use
+    /// [`JpegApp2BodyWithUrn`](Self::JpegApp2BodyWithUrn) to round-trip the full
+    /// APP2 body including the URN in one call.
+    JxlJhgm = 2,
+    /// Full JPEG APP2 body: URN + [`JxlJhgm`](Self::JxlJhgm) payload.
+    ///
+    /// Layout: `"urn:iso:std:iso:ts:21496:-1\0"` (28 bytes, see
+    /// [`ISO_21496_1_URN`]) followed immediately by the
+    /// [`JxlJhgm`](Self::JxlJhgm) bytes.
+    ///
+    /// These are the bytes that sit directly inside a JPEG APP2 segment
+    /// **after** the segment's `FF E2` marker + `u16 BE` length header.
+    /// **This variant does NOT include the `FF E2` marker or the length
+    /// word** — the caller (zenjpeg) emits those as part of its JPEG
+    /// syntax, same as for every other APP segment. Use this variant
+    /// when you want zencodec to produce or parse the full APP2 body in
+    /// one call without separately handling the URN.
+    ///
+    /// AVIF and JXL do not use this variant: their containers identify
+    /// the gain-map payload via the item/box type system (`tmap`,
+    /// `jhgm`), not a string URN.
+    JpegApp2BodyWithUrn = 3,
 }
+
+#[allow(deprecated)]
+const _: () = {
+    assert!(Iso21496Format::JpegApp2 as u8 == 0);
+    assert!(Iso21496Format::AvifTmap as u8 == 1);
+    assert!(Iso21496Format::JxlJhgm as u8 == 2);
+    assert!(Iso21496Format::JpegApp2BodyWithUrn as u8 == 3);
+};
+
+// =========================================================================
+// ISO 21496-1 URN and primary-image signal payload
+// =========================================================================
+
+/// ISO 21496-1 namespace URN. 28 bytes including the trailing NUL byte:
+/// `b"urn:iso:std:iso:ts:21496:-1\0"`.
+///
+/// Defined by ISO/IEC 21496-1. Containers that namespace the gain-map
+/// payload behind a string identifier prefix these exact 28 bytes before
+/// the [`Iso21496Format::JxlJhgm`] payload — most notably a JPEG APP2
+/// segment. libultrahdr writes the same byte sequence
+/// (`libultrahdr/lib/src/jpegr.cpp:69`, `kIsoNameSpace`).
+///
+/// AVIF's `tmap` item and JXL's `jhgm` bundle do **not** use this URN;
+/// they identify the payload via their container's item/box type system.
+///
+/// Use [`Iso21496Format::JpegApp2BodyWithUrn`] with
+/// [`serialize_iso21496_fmt`] / [`parse_iso21496_fmt`] to (de)serialize a
+/// URN-prefixed payload in one call. This constant is exposed for callers
+/// that need the raw URN bytes directly (detection, length accounting).
+pub const ISO_21496_1_URN: &[u8; 28] = b"urn:iso:std:iso:ts:21496:-1\0";
+
+/// The complete JPEG APP2 body (URN + version-only tail) placed on the
+/// **primary** image of a canonical Ultra HDR JPEG to advertise ISO
+/// 21496-1 awareness.
+///
+/// Byte layout (32 bytes total):
+/// - `[0..28]`: [`ISO_21496_1_URN`]
+/// - `[28..32]`: `minimum_version=0u16 BE` + `writer_version=0u16 BE` —
+///   the bare `GainMapVersion` structure from ISO 21496-1 clause C.2.2,
+///   with no flags byte and no per-channel data
+///
+/// These bytes go directly inside a JPEG APP2 segment, after the `FF E2`
+/// marker + `u16 BE` length header. The caller (zenjpeg) is responsible
+/// for emitting the marker/length envelope. Byte-identical to what
+/// libultrahdr writes at `libultrahdr/lib/src/jpegr.cpp:1266-1268` and
+/// documents at `jpegr.cpp:1073-1077`.
+///
+/// Full gain-map parameters live on the *secondary* (gain map) image's
+/// APP2 segment and are linked from the primary via MPF (see
+/// `zenjpeg::container::mpf`). The primary here is just the "I am ISO
+/// 21496-1 aware" signal.
+///
+/// ## Version field semantics
+///
+/// - `minimum_version` is the spec version required to parse the
+///   payload. Only `0` is defined today; libultrahdr, libavif, and
+///   zencodec all reject anything `> 0` as unsupported.
+/// - `writer_version` is informational (MUST be `>= minimum_version`).
+///   Future writers may bump it to advertise backward-compatible
+///   extension fields appended after the known layout. libultrahdr,
+///   libavif, and zencodec all write `0` and ignore it on parse today.
+///
+/// ## Detection, not parsing
+///
+/// The 4-byte version-only tail is shorter than the minimum valid
+/// [`Iso21496Format::JxlJhgm`] parse input (which requires at least the
+/// flags byte and one channel), so feeding the full 32 bytes to
+/// [`parse_iso21496_fmt`] under [`Iso21496Format::JpegApp2BodyWithUrn`]
+/// returns [`GainMapParseError::TruncatedData`] — by design. Callers
+/// detect the signal by **exact bytes match**, not by parsing. Typical
+/// use:
+///
+/// ```ignore
+/// if app2_segment_body == ISO_21496_1_PRIMARY_APP2_BODY {
+///     // primary-image signal: full metadata lives on the MPF secondary
+/// }
+/// ```
+pub const ISO_21496_1_PRIMARY_APP2_BODY: &[u8; 32] =
+    b"urn:iso:std:iso:ts:21496:-1\0\0\0\0\0";
 
 // =========================================================================
 // Core types
@@ -683,6 +796,8 @@ pub enum GainMapParseError {
     MinExceedsMax { channel: usize, min: f64, max: f64 },
     /// A value is NaN or infinity.
     NonFiniteValue { field: &'static str },
+    /// Input to [`parse_iso21496_with_urn`] did not begin with the ISO 21496-1 URN.
+    UrnMismatch,
 }
 
 impl core::fmt::Display for GainMapParseError {
@@ -711,6 +826,12 @@ impl core::fmt::Display for GainMapParseError {
             }
             Self::NonFiniteValue { field } => {
                 write!(f, "ISO 21496-1: non-finite value in {field}")
+            }
+            Self::UrnMismatch => {
+                write!(
+                    f,
+                    "ISO 21496-1: input does not begin with the ISO 21496-1 URN"
+                )
             }
         }
     }
@@ -743,7 +864,7 @@ const FRACTION_SIZE: usize = 8;
 /// Parse ISO 21496-1 binary gain map metadata (JpegApp2 format).
 ///
 /// This is a convenience alias for
-/// `parse_iso21496_fmt(data, Iso21496Format::JpegApp2)`.
+/// `parse_iso21496_fmt(data, Iso21496Format::JxlJhgm)`.
 ///
 /// **Note:** In 0.1.11 this function used the AVIF tmap format (version byte
 /// prefix). It now uses the JpegApp2 format (no version byte). Use
@@ -760,7 +881,7 @@ pub fn parse_iso21496(data: &[u8]) -> Result<GainMapParams, GainMapParseError> {
 /// Serialize [`GainMapParams`] to ISO 21496-1 binary format (JpegApp2 format).
 ///
 /// This is a convenience alias for
-/// `serialize_iso21496_fmt(params, Iso21496Format::JpegApp2)`.
+/// `serialize_iso21496_fmt(params, Iso21496Format::JxlJhgm)`.
 ///
 /// **Note:** In 0.1.11 this function used the AVIF tmap format (version byte
 /// prefix). It now uses the JpegApp2 format (no version byte). Use
@@ -771,66 +892,119 @@ pub fn parse_iso21496(data: &[u8]) -> Result<GainMapParams, GainMapParseError> {
     note = "use `serialize_iso21496_fmt` with an explicit `Iso21496Format`"
 )]
 pub fn serialize_iso21496(params: &GainMapParams) -> Vec<u8> {
-    serialize_iso21496_no_version(params)
+    serialize_iso21496_fmt(params, Iso21496Format::JxlJhgm)
 }
 
 /// Parse ISO 21496-1 binary gain map metadata with explicit format selection.
 ///
 /// The `format` parameter selects the wire format variant:
-/// - [`Iso21496Format::AvifTmap`]: expects `version(u8)` prefix (AVIF `tmap` item payload)
-/// - [`Iso21496Format::JpegApp2`]: no version prefix (JPEG APP2, JXL `jhgm`)
+/// - [`Iso21496Format::JxlJhgm`]: no prefix (bare payload — JXL `jhgm`
+///   `gain_map_metadata` field, or a JPEG APP2 body after the URN is
+///   stripped by the caller)
+/// - [`Iso21496Format::JpegApp2BodyWithUrn`]: URN + bare payload (full JPEG APP2
+///   body after the `FF E2 + u16 BE length` header is stripped by the caller)
+/// - [`Iso21496Format::AvifTmap`]: `version(u8=0)` prefix + payload (AVIF
+///   `tmap` item payload)
 ///
-/// Both variants handle the common-denominator compact encoding (flag bit 3)
+/// All variants handle the common-denominator compact encoding (flag bit 3)
 /// used by libultrahdr.
 ///
 /// # Input expectations
 ///
-/// - **JPEG APP2 callers:** pass the bytes *after* stripping the JPEG
-///   segment header (`FF E2` + length) and the
-///   `"urn:iso:std:iso:ts:21496:-1\0"` URN (28 bytes). This function does
-///   NOT look for or validate the URN. libultrahdr strips the URN the same
-///   way at `lib/src/jpegr.cpp:1368-1370`.
+/// - **JPEG APP2 callers:** strip the JPEG segment header (`FF E2` + `u16 BE`
+///   length) and pass the rest as [`Iso21496Format::JpegApp2BodyWithUrn`]. If you
+///   have already stripped the URN yourself, pass [`Iso21496Format::JxlJhgm`].
 /// - **AVIF callers:** pass the raw `tmap` item payload — the version byte
 ///   is the first byte and is consumed here.
-/// - **JXL callers:** pass the bytes inside the `jhgm` box (no outer
-///   framing).
+/// - **JXL callers:** pass the bytes inside the `jhgm` bundle's
+///   `gain_map_metadata` field as [`Iso21496Format::JxlJhgm`] (no URN, no
+///   version byte).
+///
+/// For `JpegApp2BodyWithUrn`, returns [`GainMapParseError::UrnMismatch`] if the
+/// input does not begin with [`ISO_21496_1_URN`]. Does **not** include the
+/// JPEG `FF E2` marker or `u16 BE` length — those are JPEG syntax that the
+/// caller emits/parses as part of its APP segment handling.
 pub fn parse_iso21496_fmt(
     data: &[u8],
     format: Iso21496Format,
 ) -> Result<GainMapParams, GainMapParseError> {
+    #[allow(deprecated)]
     match format {
         Iso21496Format::AvifTmap => parse_iso21496_avif(data),
-        Iso21496Format::JpegApp2 => parse_iso21496_no_version(data),
+        Iso21496Format::JxlJhgm | Iso21496Format::JpegApp2 => parse_iso21496_no_version(data),
+        Iso21496Format::JpegApp2BodyWithUrn => {
+            if data.len() < ISO_21496_1_URN.len()
+                || &data[..ISO_21496_1_URN.len()] != ISO_21496_1_URN
+            {
+                return Err(GainMapParseError::UrnMismatch);
+            }
+            parse_iso21496_no_version(&data[ISO_21496_1_URN.len()..])
+        }
     }
 }
 
 /// Serialize [`GainMapParams`] to ISO 21496-1 binary format with explicit format selection.
 ///
 /// The `format` parameter selects the wire format variant:
-/// - [`Iso21496Format::AvifTmap`]: includes `version(u8)` prefix
-/// - [`Iso21496Format::JpegApp2`]: no version prefix (also correct for JXL `jhgm`)
+/// - [`Iso21496Format::JxlJhgm`]: bare payload (no prefix) — suitable for JXL
+///   `jhgm` `gain_map_metadata` and for callers writing the URN themselves
+/// - [`Iso21496Format::JpegApp2BodyWithUrn`]: full JPEG APP2 body — URN + payload
+/// - [`Iso21496Format::AvifTmap`]: `version(u8=0)` prefix + payload
 ///
 /// Always writes the full (non-compact) format for maximum compatibility —
 /// i.e. the `FLAG_COMMON_DENOMINATOR` bit is never set even when all
 /// denominators happen to match. Output is slightly larger than a
 /// libultrahdr-encoded file in that case (5 × u32 extra per channel) but
-/// byte-for-byte compatible on parse. See
-/// [`Iso21496Format`] for the expected downstream framing.
+/// byte-for-byte compatible on parse.
 ///
 /// # Output
 ///
-/// - **JPEG APP2 callers:** wrap the returned bytes as
-///   `FF E2 + length(u16 BE) + "urn:iso:std:iso:ts:21496:-1\0" + <bytes>`.
-///   Length counts itself + URN + payload (matches libultrahdr
-///   `lib/src/jpegr.cpp:1256`).
-/// - **AVIF callers:** the returned bytes *are* the `tmap` item payload;
-///   surround with the ISOBMFF item envelope.
-/// - **JXL callers:** the returned bytes *are* the `jhgm` box payload;
-///   surround with the ISOBMFF box envelope.
+/// - **JPEG APP2 callers:** use [`Iso21496Format::JpegApp2BodyWithUrn`] and wrap
+///   the returned bytes as `FF E2 + length(u16 BE) + <bytes>`. Length counts
+///   itself + the returned bytes (matches libultrahdr `lib/src/jpegr.cpp:1256`).
+///   The URN is already included in the returned bytes.
+/// - **AVIF callers:** the [`Iso21496Format::AvifTmap`] bytes *are* the `tmap`
+///   item payload; surround with the ISOBMFF item envelope.
+/// - **JXL callers:** the [`Iso21496Format::JxlJhgm`] bytes *are* the `jhgm`
+///   bundle's `gain_map_metadata` field; surround with the bundle envelope
+///   and ISOBMFF box.
+///
+/// The JPEG `FF E2` marker and `u16 BE` length are **not** emitted — those
+/// are JPEG syntax that the caller writes as part of its APP segment handling.
 pub fn serialize_iso21496_fmt(params: &GainMapParams, format: Iso21496Format) -> Vec<u8> {
+    let mut out = Vec::with_capacity(serialized_size(params, format));
+    serialize_iso21496_fmt_into(params, format, &mut out);
+    out
+}
+
+/// Append the serialized ISO 21496-1 payload for `format` to `out`.
+///
+/// Same wire format as [`serialize_iso21496_fmt`] but writes into a
+/// caller-provided buffer instead of returning a new `Vec`. Useful when
+/// embedding the payload inside a larger output buffer (e.g., building
+/// a JPEG APP2 segment alongside its `FF E2` marker and `u16 BE` length
+/// header in one allocation).
+///
+/// Existing contents of `out` are preserved; the payload is appended.
+/// Callers that want to reserve capacity up-front can size the buffer
+/// to match the return of [`serialize_iso21496_fmt`]`(..).len()` for
+/// the same inputs, or just let `Vec` grow — the implementation never
+/// truncates or overwrites bytes already in `out`.
+pub fn serialize_iso21496_fmt_into(
+    params: &GainMapParams,
+    format: Iso21496Format,
+    out: &mut Vec<u8>,
+) {
+    #[allow(deprecated)]
     match format {
-        Iso21496Format::AvifTmap => serialize_iso21496_avif(params),
-        Iso21496Format::JpegApp2 => serialize_iso21496_no_version(params),
+        Iso21496Format::AvifTmap => serialize_iso21496_avif_into(params, out),
+        Iso21496Format::JxlJhgm | Iso21496Format::JpegApp2 => {
+            serialize_iso21496_no_version_into(params, out)
+        }
+        Iso21496Format::JpegApp2BodyWithUrn => {
+            out.extend_from_slice(ISO_21496_1_URN);
+            serialize_iso21496_no_version_into(params, out);
+        }
     }
 }
 
@@ -1072,35 +1246,36 @@ fn write_payload(data: &mut Vec<u8>, params: &GainMapParams) {
     }
 }
 
-/// Serialize with AVIF `tmap` version byte prefix.
-fn serialize_iso21496_avif(params: &GainMapParams) -> Vec<u8> {
+/// Exact serialized size of `params` under `format`. Used by the public
+/// entry points to allocate once.
+fn serialized_size(params: &GainMapParams, format: Iso21496Format) -> usize {
     let num_channels: usize = if params.is_single_channel() { 1 } else { 3 };
-    let size = AVIF_HEADER_SIZE + 2 * FRACTION_SIZE + num_channels * 5 * FRACTION_SIZE;
-    let mut data = Vec::with_capacity(size);
-
-    data.push(0u8); // version
-    data.extend_from_slice(&0u16.to_be_bytes()); // minimum_version
-    data.extend_from_slice(&0u16.to_be_bytes()); // writer_version
-    data.push(build_flags(params));
-
-    write_payload(&mut data, params);
-    data
+    #[allow(deprecated)]
+    let header = match format {
+        Iso21496Format::AvifTmap => AVIF_HEADER_SIZE,
+        Iso21496Format::JxlJhgm | Iso21496Format::JpegApp2 => JPEG_HEADER_SIZE,
+        Iso21496Format::JpegApp2BodyWithUrn => ISO_21496_1_URN.len() + JPEG_HEADER_SIZE,
+    };
+    header + 2 * FRACTION_SIZE + num_channels * 5 * FRACTION_SIZE
 }
 
-/// Serialize without version byte prefix (JPEG APP2 / JXL jhgm).
-fn serialize_iso21496_no_version(params: &GainMapParams) -> Vec<u8> {
-    let num_channels: usize = if params.is_single_channel() { 1 } else { 3 };
-    let size = JPEG_HEADER_SIZE + 2 * FRACTION_SIZE + num_channels * 5 * FRACTION_SIZE;
-    let mut data = Vec::with_capacity(size);
-
-    // No version byte.
-    data.extend_from_slice(&0u16.to_be_bytes()); // minimum_version
-    data.extend_from_slice(&0u16.to_be_bytes()); // writer_version
-    data.push(build_flags(params));
-
-    write_payload(&mut data, params);
-    data
+/// Append AVIF `tmap` serialization (with version byte prefix) to `out`.
+fn serialize_iso21496_avif_into(params: &GainMapParams, out: &mut Vec<u8>) {
+    out.push(0u8); // version
+    out.extend_from_slice(&0u16.to_be_bytes()); // minimum_version
+    out.extend_from_slice(&0u16.to_be_bytes()); // writer_version
+    out.push(build_flags(params));
+    write_payload(out, params);
 }
+
+/// Append JPEG APP2 / JXL jhgm serialization (no version byte prefix) to `out`.
+fn serialize_iso21496_no_version_into(params: &GainMapParams, out: &mut Vec<u8>) {
+    out.extend_from_slice(&0u16.to_be_bytes()); // minimum_version
+    out.extend_from_slice(&0u16.to_be_bytes()); // writer_version
+    out.push(build_flags(params));
+    write_payload(out, params);
+}
+
 
 // =========================================================================
 // Internal helpers
@@ -1535,10 +1710,10 @@ mod tests {
             backward_direction: false,
         };
 
-        let blob = serialize_iso21496_fmt(&original, Iso21496Format::JpegApp2);
+        let blob = serialize_iso21496_fmt(&original, Iso21496Format::JxlJhgm);
         assert_eq!(blob.len(), 61); // 5 + 16 + 1*40
 
-        let parsed = parse_iso21496_fmt(&blob, Iso21496Format::JpegApp2).unwrap();
+        let parsed = parse_iso21496_fmt(&blob, Iso21496Format::JxlJhgm).unwrap();
         assert!(parsed.is_single_channel());
         assert!((parsed.base_hdr_headroom - 0.0).abs() < 1e-6);
         assert!((parsed.alternate_hdr_headroom - 1.3).abs() < 1e-6);
@@ -1580,10 +1755,10 @@ mod tests {
             backward_direction: false,
         };
 
-        let blob = serialize_iso21496_fmt(&original, Iso21496Format::JpegApp2);
+        let blob = serialize_iso21496_fmt(&original, Iso21496Format::JxlJhgm);
         assert_eq!(blob.len(), 141); // 5 + 16 + 3*40
 
-        let parsed = parse_iso21496_fmt(&blob, Iso21496Format::JpegApp2).unwrap();
+        let parsed = parse_iso21496_fmt(&blob, Iso21496Format::JxlJhgm).unwrap();
         assert!(!parsed.is_single_channel());
         assert!(!parsed.use_base_color_space);
 
@@ -1629,7 +1804,7 @@ mod tests {
         blob.extend_from_slice(&1i32.to_be_bytes()); // alt_offset_n = 1
         blob.extend_from_slice(&64u32.to_be_bytes()); // alt_offset_d = 64
 
-        let params = parse_iso21496_fmt(&blob, Iso21496Format::JpegApp2).unwrap();
+        let params = parse_iso21496_fmt(&blob, Iso21496Format::JxlJhgm).unwrap();
         assert_eq!(params.base_hdr_headroom, 0.0);
         assert!((params.alternate_hdr_headroom - 1.3).abs() < 1e-10);
         assert_eq!(params.channels[0].min, 0.0);
@@ -1646,11 +1821,11 @@ mod tests {
 
     #[test]
     fn parse_truncated() {
-        assert!(parse_iso21496_fmt(&[], Iso21496Format::JpegApp2).is_err());
-        assert!(parse_iso21496_fmt(&[0], Iso21496Format::JpegApp2).is_err());
-        assert!(parse_iso21496_fmt(&[0; 4], Iso21496Format::JpegApp2).is_err());
+        assert!(parse_iso21496_fmt(&[], Iso21496Format::JxlJhgm).is_err());
+        assert!(parse_iso21496_fmt(&[0], Iso21496Format::JxlJhgm).is_err());
+        assert!(parse_iso21496_fmt(&[0; 4], Iso21496Format::JxlJhgm).is_err());
         // 5 bytes header OK, but not enough for headroom
-        assert!(parse_iso21496_fmt(&[0, 0, 0, 0, 0x40], Iso21496Format::JpegApp2).is_err());
+        assert!(parse_iso21496_fmt(&[0, 0, 0, 0, 0x40], Iso21496Format::JxlJhgm).is_err());
     }
 
     #[test]
@@ -1658,7 +1833,7 @@ mod tests {
         let mut blob = alloc::vec![0u8; 61];
         blob[0] = 0;
         blob[1] = 1; // minimum_version = 1 (unsupported)
-        let err = parse_iso21496_fmt(&blob, Iso21496Format::JpegApp2).unwrap_err();
+        let err = parse_iso21496_fmt(&blob, Iso21496Format::JxlJhgm).unwrap_err();
         assert!(matches!(err, GainMapParseError::UnsupportedVersion { .. }));
     }
 
@@ -1674,7 +1849,7 @@ mod tests {
         // pad to avoid truncation error before we hit zero-denom
         blob.extend_from_slice(&[0; 100]);
 
-        let err = parse_iso21496_fmt(&blob, Iso21496Format::JpegApp2).unwrap_err();
+        let err = parse_iso21496_fmt(&blob, Iso21496Format::JxlJhgm).unwrap_err();
         assert!(matches!(err, GainMapParseError::ZeroDenominator { .. }));
     }
 
@@ -1713,7 +1888,7 @@ mod tests {
         let p = GainMapParams::default();
         assert!(p.is_single_channel());
         assert_eq!(
-            serialize_iso21496_fmt(&p, Iso21496Format::JpegApp2).len(),
+            serialize_iso21496_fmt(&p, Iso21496Format::JxlJhgm).len(),
             61
         ); // 5 + 16 + 40
     }
@@ -1724,7 +1899,7 @@ mod tests {
         p.channels[1].max = 3.0; // make multichannel
         assert!(!p.is_single_channel());
         assert_eq!(
-            serialize_iso21496_fmt(&p, Iso21496Format::JpegApp2).len(),
+            serialize_iso21496_fmt(&p, Iso21496Format::JxlJhgm).len(),
             141
         ); // 5 + 16 + 3*40
     }
@@ -1895,8 +2070,8 @@ mod tests {
     #[test]
     fn parse_iso21496_default_params_roundtrip() {
         let defaults = GainMapParams::default();
-        let blob = serialize_iso21496_fmt(&defaults, Iso21496Format::JpegApp2);
-        let parsed = parse_iso21496_fmt(&blob, Iso21496Format::JpegApp2).unwrap();
+        let blob = serialize_iso21496_fmt(&defaults, Iso21496Format::JxlJhgm);
+        let parsed = parse_iso21496_fmt(&blob, Iso21496Format::JxlJhgm).unwrap();
 
         assert!(parsed.is_single_channel());
         assert!(parsed.use_base_color_space);
@@ -1916,7 +2091,7 @@ mod tests {
         // Single channel with use_base_color_space=true: bit 7 clear, bit 6 set → 0x40
         let single = GainMapParams::default();
         assert!(single.is_single_channel());
-        let blob_single = serialize_iso21496_fmt(&single, Iso21496Format::JpegApp2);
+        let blob_single = serialize_iso21496_fmt(&single, Iso21496Format::JxlJhgm);
         assert_eq!(
             blob_single[4] & 0x80,
             0x00,
@@ -1932,7 +2107,7 @@ mod tests {
         let mut multi = GainMapParams::default();
         multi.channels[1].max = 5.0;
         assert!(!multi.is_single_channel());
-        let blob_multi = serialize_iso21496_fmt(&multi, Iso21496Format::JpegApp2);
+        let blob_multi = serialize_iso21496_fmt(&multi, Iso21496Format::JxlJhgm);
         assert_eq!(
             blob_multi[4] & 0x80,
             0x80,
@@ -1949,7 +2124,7 @@ mod tests {
             use_base_color_space: false,
             ..Default::default()
         };
-        let blob_no_base = serialize_iso21496_fmt(&no_base_cs, Iso21496Format::JpegApp2);
+        let blob_no_base = serialize_iso21496_fmt(&no_base_cs, Iso21496Format::JxlJhgm);
         assert_eq!(
             blob_no_base[4] & 0x40,
             0x00,
@@ -2005,6 +2180,7 @@ mod tests {
                 max: 1.0,
             },
             GainMapParseError::NonFiniteValue { field: "headroom" },
+            GainMapParseError::UrnMismatch,
         ];
 
         for err in &variants {
@@ -2018,8 +2194,8 @@ mod tests {
     #[test]
     fn format_enum_debug_and_eq() {
         assert_eq!(Iso21496Format::AvifTmap, Iso21496Format::AvifTmap);
-        assert_ne!(Iso21496Format::AvifTmap, Iso21496Format::JpegApp2);
-        let _ = alloc::format!("{:?}", Iso21496Format::JpegApp2);
+        assert_ne!(Iso21496Format::AvifTmap, Iso21496Format::JxlJhgm);
+        let _ = alloc::format!("{:?}", Iso21496Format::JxlJhgm);
     }
 
     #[test]
@@ -2036,9 +2212,9 @@ mod tests {
     #[test]
     fn roundtrip_jpeg_format() {
         let p = GainMapParams::default();
-        let blob = serialize_iso21496_fmt(&p, Iso21496Format::JpegApp2);
+        let blob = serialize_iso21496_fmt(&p, Iso21496Format::JxlJhgm);
         assert_eq!(blob.len(), 61); // 5-byte header + 16 headroom + 40 channel
-        let parsed = parse_iso21496_fmt(&blob, Iso21496Format::JpegApp2).unwrap();
+        let parsed = parse_iso21496_fmt(&blob, Iso21496Format::JxlJhgm).unwrap();
         assert!(parsed.is_single_channel());
         assert!(parsed.use_base_color_space);
         assert!(!parsed.backward_direction);
@@ -2052,14 +2228,14 @@ mod tests {
         };
         // Unsuffixed API produces JpegApp2 format (no version byte)
         assert_eq!(
-            serialize_iso21496_fmt(&p, Iso21496Format::JpegApp2),
-            serialize_iso21496_fmt(&p, Iso21496Format::JpegApp2)
+            serialize_iso21496_fmt(&p, Iso21496Format::JxlJhgm),
+            serialize_iso21496_fmt(&p, Iso21496Format::JxlJhgm)
         );
         // AVIF format is one byte longer (version byte prefix)
         let avif = serialize_iso21496_fmt(&p, Iso21496Format::AvifTmap);
         assert_eq!(
             avif.len(),
-            serialize_iso21496_fmt(&p, Iso21496Format::JpegApp2).len() + 1
+            serialize_iso21496_fmt(&p, Iso21496Format::JxlJhgm).len() + 1
         );
     }
 
@@ -2071,11 +2247,11 @@ mod tests {
             backward_direction: true,
             ..Default::default()
         };
-        let blob = serialize_iso21496_fmt(&p, Iso21496Format::JpegApp2);
+        let blob = serialize_iso21496_fmt(&p, Iso21496Format::JxlJhgm);
         // flags byte at offset 4 (after min_ver + writer_ver)
         assert_ne!(blob[4] & 0x04, 0, "backward_direction bit must be set");
 
-        let parsed = parse_iso21496_fmt(&blob, Iso21496Format::JpegApp2).unwrap();
+        let parsed = parse_iso21496_fmt(&blob, Iso21496Format::JxlJhgm).unwrap();
         assert!(parsed.backward_direction);
     }
 
@@ -2096,10 +2272,10 @@ mod tests {
     #[test]
     fn backward_direction_false_by_default() {
         let p = GainMapParams::default();
-        let blob = serialize_iso21496_fmt(&p, Iso21496Format::JpegApp2);
+        let blob = serialize_iso21496_fmt(&p, Iso21496Format::JxlJhgm);
         assert_eq!(blob[4] & 0x04, 0, "backward_direction bit must be clear");
 
-        let parsed = parse_iso21496_fmt(&blob, Iso21496Format::JpegApp2).unwrap();
+        let parsed = parse_iso21496_fmt(&blob, Iso21496Format::JxlJhgm).unwrap();
         assert!(!parsed.backward_direction);
     }
 
@@ -2129,7 +2305,7 @@ mod tests {
         blob.extend_from_slice(&1i32.to_be_bytes()); // base_offset_n = 1 (1/64)
         blob.extend_from_slice(&1i32.to_be_bytes()); // alt_offset_n = 1 (1/64)
 
-        let params = parse_iso21496_fmt(&blob, Iso21496Format::JpegApp2).unwrap();
+        let params = parse_iso21496_fmt(&blob, Iso21496Format::JxlJhgm).unwrap();
         assert!((params.base_hdr_headroom - 0.0).abs() < 1e-6);
         assert!((params.alternate_hdr_headroom - 83.0 / 64.0).abs() < 1e-6);
         assert!((params.channels[0].min - (-0.5)).abs() < 1e-6);
@@ -2166,7 +2342,7 @@ mod tests {
             blob.extend_from_slice(&2i32.to_be_bytes()); // alt_offset
         }
 
-        let params = parse_iso21496_fmt(&blob, Iso21496Format::JpegApp2).unwrap();
+        let params = parse_iso21496_fmt(&blob, Iso21496Format::JxlJhgm).unwrap();
         assert!(!params.is_single_channel());
         assert!((params.alternate_hdr_headroom - 2.0).abs() < 1e-6);
         // Channel 0: min = -50/100 = -0.5
@@ -2186,7 +2362,7 @@ mod tests {
         blob.extend_from_slice(&0u32.to_be_bytes()); // common_d = 0 (invalid!)
         blob.extend_from_slice(&[0; 100]); // pad
 
-        let err = parse_iso21496_fmt(&blob, Iso21496Format::JpegApp2).unwrap_err();
+        let err = parse_iso21496_fmt(&blob, Iso21496Format::JxlJhgm).unwrap_err();
         assert!(matches!(err, GainMapParseError::ZeroDenominator { .. }));
     }
 
@@ -2210,7 +2386,7 @@ mod tests {
         blob.extend_from_slice(&0i32.to_be_bytes()); // base_offset
         blob.extend_from_slice(&0i32.to_be_bytes()); // alt_offset
 
-        let params = parse_iso21496_fmt(&blob, Iso21496Format::JpegApp2).unwrap();
+        let params = parse_iso21496_fmt(&blob, Iso21496Format::JxlJhgm).unwrap();
         assert!(params.backward_direction);
         assert!(params.use_base_color_space);
         assert!((params.alternate_hdr_headroom - 1.0).abs() < 1e-6);
@@ -2248,7 +2424,7 @@ mod tests {
     fn avif_format_has_version_byte_prefix() {
         let p = GainMapParams::default();
         let avif_blob = serialize_iso21496_fmt(&p, Iso21496Format::AvifTmap);
-        let jpeg_blob = serialize_iso21496_fmt(&p, Iso21496Format::JpegApp2);
+        let jpeg_blob = serialize_iso21496_fmt(&p, Iso21496Format::JxlJhgm);
         assert_eq!(avif_blob.len(), jpeg_blob.len() + 1);
         // The AVIF blob starts with version=0, then matches the standard format
         assert_eq!(avif_blob[0], 0);
@@ -2281,7 +2457,7 @@ mod tests {
         // Asserts: JpegApp2 output does NOT include the FF E2 APP2 marker
         // prefix. Caller is responsible for adding it when splicing into a
         // JPEG bitstream.
-        let blob = serialize_iso21496_fmt(&framing_test_params(), Iso21496Format::JpegApp2);
+        let blob = serialize_iso21496_fmt(&framing_test_params(), Iso21496Format::JxlJhgm);
         assert!(blob.len() >= 5, "blob too short to have a header");
         // First 4 bytes = min_version(u16=0) + writer_version(u16=0).
         assert_eq!(
@@ -2302,7 +2478,7 @@ mod tests {
         // APP2 marker must prepend the URN (libultrahdr writes
         // `isoNameSpaceLength = 28` bytes including null terminator; see
         // libultrahdr/lib/src/jpegr.cpp:1129, 1264).
-        let blob = serialize_iso21496_fmt(&framing_test_params(), Iso21496Format::JpegApp2);
+        let blob = serialize_iso21496_fmt(&framing_test_params(), Iso21496Format::JxlJhgm);
         let urn = b"urn:iso:std:iso:ts:21496:-1";
         assert!(
             !blob.windows(urn.len()).any(|w| w == urn),
@@ -2317,7 +2493,7 @@ mod tests {
         // count reflects actual fractions, not zero-value shortcuts.
         let p = framing_test_params();
         let avif = serialize_iso21496_fmt(&p, Iso21496Format::AvifTmap);
-        let jpeg = serialize_iso21496_fmt(&p, Iso21496Format::JpegApp2);
+        let jpeg = serialize_iso21496_fmt(&p, Iso21496Format::JxlJhgm);
         assert_eq!(avif.len(), jpeg.len() + 1, "avif = one extra leading byte");
         assert_eq!(avif[0], 0, "avif leading byte is version = 0");
         assert_eq!(
@@ -2347,11 +2523,11 @@ mod tests {
         // calling parse gets a clear UnsupportedVersion error (the 'u' byte
         // of the URN is 0x75 → min_version u16 reads as 0x7572, which is
         // rejected by our minimum_version > 0 check).
-        let payload = serialize_iso21496_fmt(&framing_test_params(), Iso21496Format::JpegApp2);
+        let payload = serialize_iso21496_fmt(&framing_test_params(), Iso21496Format::JxlJhgm);
         let mut with_urn = Vec::with_capacity(28 + payload.len());
         with_urn.extend_from_slice(b"urn:iso:std:iso:ts:21496:-1\0");
         with_urn.extend_from_slice(&payload);
-        let err = parse_iso21496_fmt(&with_urn, Iso21496Format::JpegApp2)
+        let err = parse_iso21496_fmt(&with_urn, Iso21496Format::JxlJhgm)
             .expect_err("URN-prefixed input must not parse as JpegApp2");
         assert!(
             matches!(err, GainMapParseError::UnsupportedVersion { .. }),
@@ -2365,14 +2541,14 @@ mod tests {
         // JPEG APP2 segment header. (With those 4 bytes in front, the first
         // byte 0xFF becomes min_version MSB → min_version u16 = 0xFF??,
         // rejected.)
-        let payload = serialize_iso21496_fmt(&framing_test_params(), Iso21496Format::JpegApp2);
+        let payload = serialize_iso21496_fmt(&framing_test_params(), Iso21496Format::JxlJhgm);
         let mut with_marker = Vec::with_capacity(4 + payload.len());
         with_marker.push(0xFF);
         with_marker.push(0xE2);
         let len = (2 + payload.len()) as u16;
         with_marker.extend_from_slice(&len.to_be_bytes());
         with_marker.extend_from_slice(&payload);
-        let err = parse_iso21496_fmt(&with_marker, Iso21496Format::JpegApp2)
+        let err = parse_iso21496_fmt(&with_marker, Iso21496Format::JxlJhgm)
             .expect_err("APP2-marker-prefixed input must not parse as JpegApp2");
         assert!(
             matches!(err, GainMapParseError::UnsupportedVersion { .. }),
@@ -2402,7 +2578,7 @@ mod tests {
         // tests above, this is a sanity check against accidentally growing
         // the output contract.
         let p = framing_test_params();
-        let jpeg = serialize_iso21496_fmt(&p, Iso21496Format::JpegApp2);
+        let jpeg = serialize_iso21496_fmt(&p, Iso21496Format::JxlJhgm);
         let avif = serialize_iso21496_fmt(&p, Iso21496Format::AvifTmap);
 
         // No JPEG SOI / APP2 / EOI markers.
@@ -2430,5 +2606,152 @@ mod tests {
                 core::str::from_utf8(needle).unwrap()
             );
         }
+    }
+
+    // --- URN + version signal ---
+
+    #[test]
+    fn urn_constant_shape() {
+        assert_eq!(ISO_21496_1_URN.len(), 28);
+        assert_eq!(ISO_21496_1_URN[27], 0, "URN must end with NUL");
+        assert_eq!(
+            &ISO_21496_1_URN[..27],
+            b"urn:iso:std:iso:ts:21496:-1",
+            "URN must be the ISO 21496-1 namespace string"
+        );
+    }
+
+    #[test]
+    fn primary_app2_body_shape() {
+        assert_eq!(ISO_21496_1_PRIMARY_APP2_BODY.len(), 32);
+        assert_eq!(
+            &ISO_21496_1_PRIMARY_APP2_BODY[..ISO_21496_1_URN.len()],
+            ISO_21496_1_URN
+        );
+        assert_eq!(
+            &ISO_21496_1_PRIMARY_APP2_BODY[ISO_21496_1_URN.len()..],
+            &[0u8, 0, 0, 0],
+            "primary-image version tail must be min_ver=0, writer_ver=0 (4 zero bytes)"
+        );
+    }
+
+    #[test]
+    fn primary_app2_body_is_not_parseable_as_full_metadata() {
+        // The 4-byte tail after the URN is the `GainMapVersion` structure
+        // alone — no flags byte, no channel data. Parsing under
+        // JpegApp2BodyWithUrn must fail with TruncatedData, which is how
+        // callers distinguish the primary-image signal from a full
+        // parameter payload.
+        let err = parse_iso21496_fmt(
+            ISO_21496_1_PRIMARY_APP2_BODY,
+            Iso21496Format::JpegApp2BodyWithUrn,
+        )
+        .expect_err("primary signal must not parse as full metadata");
+        assert!(
+            matches!(err, GainMapParseError::TruncatedData { .. }),
+            "expected TruncatedData, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn serialize_iso21496_fmt_into_appends_without_truncating_existing_content() {
+        let p = GainMapParams {
+            alternate_hdr_headroom: 1.3,
+            ..Default::default()
+        };
+        let prefix = [0xDE, 0xAD, 0xBE, 0xEF];
+        let mut buf = prefix.to_vec();
+        serialize_iso21496_fmt_into(&p, Iso21496Format::JxlJhgm, &mut buf);
+
+        assert_eq!(&buf[..prefix.len()], &prefix);
+        let standalone = serialize_iso21496_fmt(&p, Iso21496Format::JxlJhgm);
+        assert_eq!(&buf[prefix.len()..], &standalone[..]);
+    }
+
+    #[test]
+    fn jpeg_app2_with_urn_serialize_starts_with_urn_then_jxl_jhgm_bytes() {
+        let p = GainMapParams {
+            alternate_hdr_headroom: 1.3,
+            ..Default::default()
+        };
+        let with_urn = serialize_iso21496_fmt(&p, Iso21496Format::JpegApp2BodyWithUrn);
+        let bare = serialize_iso21496_fmt(&p, Iso21496Format::JxlJhgm);
+
+        assert_eq!(with_urn.len(), ISO_21496_1_URN.len() + bare.len());
+        assert_eq!(&with_urn[..ISO_21496_1_URN.len()], ISO_21496_1_URN);
+        assert_eq!(&with_urn[ISO_21496_1_URN.len()..], &bare[..]);
+    }
+
+    #[test]
+    fn roundtrip_jpeg_app2_with_urn() {
+        let original = GainMapParams {
+            alternate_hdr_headroom: 2.0,
+            ..Default::default()
+        };
+        let bytes = serialize_iso21496_fmt(&original, Iso21496Format::JpegApp2BodyWithUrn);
+        let parsed = parse_iso21496_fmt(&bytes, Iso21496Format::JpegApp2BodyWithUrn).unwrap();
+        assert!((parsed.alternate_hdr_headroom - original.alternate_hdr_headroom).abs() < 1e-5);
+    }
+
+    #[test]
+    fn parse_jpeg_app2_with_urn_rejects_missing_urn() {
+        // Valid bare JxlJhgm bytes without the URN prefix — must not parse
+        // under JpegApp2BodyWithUrn.
+        let bare = serialize_iso21496_fmt(&GainMapParams::default(), Iso21496Format::JxlJhgm);
+        let err = parse_iso21496_fmt(&bare, Iso21496Format::JpegApp2BodyWithUrn).unwrap_err();
+        assert!(matches!(err, GainMapParseError::UrnMismatch));
+    }
+
+    #[test]
+    fn parse_jpeg_app2_with_urn_rejects_wrong_urn() {
+        // ICC_PROFILE-style identifier that happens to be 28 bytes — same
+        // length as the ISO URN but different content.
+        let fake = b"NOT:iso:std:iso:ts:21496:-1\0";
+        assert_eq!(fake.len(), ISO_21496_1_URN.len());
+        let mut data = fake.to_vec();
+        data.extend_from_slice(&serialize_iso21496_fmt(
+            &GainMapParams::default(),
+            Iso21496Format::JxlJhgm,
+        ));
+        let err = parse_iso21496_fmt(&data, Iso21496Format::JpegApp2BodyWithUrn).unwrap_err();
+        assert!(matches!(err, GainMapParseError::UrnMismatch));
+    }
+
+    #[test]
+    fn parse_jpeg_app2_with_urn_rejects_short_input() {
+        assert!(matches!(
+            parse_iso21496_fmt(&[], Iso21496Format::JpegApp2BodyWithUrn),
+            Err(GainMapParseError::UrnMismatch)
+        ));
+        assert!(matches!(
+            parse_iso21496_fmt(&ISO_21496_1_URN[..10], Iso21496Format::JpegApp2BodyWithUrn),
+            Err(GainMapParseError::UrnMismatch)
+        ));
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn deprecated_jpeg_app2_produces_same_bytes_as_jxl_jhgm() {
+        let p = GainMapParams {
+            alternate_hdr_headroom: 1.5,
+            ..Default::default()
+        };
+        let jxl_bytes = serialize_iso21496_fmt(&p, Iso21496Format::JxlJhgm);
+        let old_bytes = serialize_iso21496_fmt(&p, Iso21496Format::JpegApp2);
+        assert_eq!(jxl_bytes, old_bytes);
+
+        let parsed_jxl = parse_iso21496_fmt(&jxl_bytes, Iso21496Format::JxlJhgm).unwrap();
+        let parsed_old = parse_iso21496_fmt(&jxl_bytes, Iso21496Format::JpegApp2).unwrap();
+        assert_eq!(parsed_jxl, parsed_old);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn iso21496_format_discriminants_are_pinned() {
+        assert_eq!(Iso21496Format::JpegApp2 as u8, 0);
+        assert_eq!(Iso21496Format::AvifTmap as u8, 1);
+        assert_eq!(Iso21496Format::JxlJhgm as u8, 2);
+        assert_eq!(Iso21496Format::JpegApp2BodyWithUrn as u8, 3);
+        assert_ne!(Iso21496Format::JpegApp2, Iso21496Format::JxlJhgm);
     }
 }
