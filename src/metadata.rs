@@ -153,51 +153,17 @@ impl From<&crate::ImageInfo> for Metadata {
 
 /// Parse the EXIF Orientation tag (0x0112) from a TIFF/EXIF blob.
 ///
+/// Delegates to the canonical implementation in
+/// [`helpers::parse_exif_orientation`](crate::helpers::parse_exif_orientation),
+/// which performs full bounds-checking, supports both `SHORT` and `LONG`
+/// TIFF types, validates the TIFF magic, and caps IFD entry count to
+/// prevent DoS from malformed data.
+///
 /// Handles both little-endian (`II*\0`) and big-endian (`MM\0*`) byte
-/// orders. Walks IFD0 and returns the first Orientation entry found.
-/// Returns `None` if the blob is malformed or no Orientation tag exists.
+/// orders. Returns `None` if the blob is malformed or no Orientation
+/// tag exists.
 fn parse_exif_orientation(blob: &[u8]) -> Option<Orientation> {
-    if blob.len() < 8 {
-        return None;
-    }
-    let little_endian = match &blob[0..4] {
-        [b'I', b'I', 0x2a, 0x00] => true,
-        [b'M', b'M', 0x00, 0x2a] => false,
-        _ => return None,
-    };
-    let read_u16 = |offset: usize| -> Option<u16> {
-        let bytes = blob.get(offset..offset + 2)?;
-        Some(if little_endian {
-            u16::from_le_bytes([bytes[0], bytes[1]])
-        } else {
-            u16::from_be_bytes([bytes[0], bytes[1]])
-        })
-    };
-    let read_u32 = |offset: usize| -> Option<u32> {
-        let bytes = blob.get(offset..offset + 4)?;
-        Some(if little_endian {
-            u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
-        } else {
-            u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
-        })
-    };
-
-    let ifd0_offset = read_u32(4)? as usize;
-    let entry_count = read_u16(ifd0_offset)? as usize;
-    let entries_start = ifd0_offset.checked_add(2)?;
-
-    for i in 0..entry_count {
-        let entry_offset = entries_start.checked_add(i.checked_mul(12)?)?;
-        let tag = read_u16(entry_offset)?;
-        if tag == 0x0112 {
-            // Orientation tag: type SHORT (3), count 1, value inline at +8.
-            let value = read_u16(entry_offset + 8)?;
-            if value > 0 && value <= 8 {
-                return Orientation::from_exif(value as u8);
-            }
-        }
-    }
-    None
+    crate::helpers::parse_exif_orientation(blob)
 }
 
 #[cfg(test)]
@@ -370,6 +336,45 @@ mod tests {
         let blob = build_minimal_exif_with_orientation(8, false);
         let meta = Metadata::none().with_exif(blob);
         assert_eq!(meta.orientation, Orientation::Rotate270);
+    }
+
+    /// Build TIFF with the orientation tag stored as TIFF_LONG (type 4)
+    /// instead of SHORT (type 3). The previous loose parser in this file
+    /// only read u16 at +8 regardless of type, so for big-endian LONG it
+    /// would read the high zero bytes and miss the value. The delegated
+    /// helper handles both types correctly.
+    fn build_exif_with_long_orientation(value: u32, big_endian: bool) -> alloc::vec::Vec<u8> {
+        let mut v = alloc::vec::Vec::new();
+        if big_endian {
+            v.extend_from_slice(b"MM\x00\x2a");
+            v.extend_from_slice(&8u32.to_be_bytes());
+            v.extend_from_slice(&1u16.to_be_bytes());
+            v.extend_from_slice(&0x0112u16.to_be_bytes());
+            v.extend_from_slice(&4u16.to_be_bytes()); // type = LONG
+            v.extend_from_slice(&1u32.to_be_bytes());
+            v.extend_from_slice(&value.to_be_bytes());
+        } else {
+            v.extend_from_slice(b"II\x2a\x00");
+            v.extend_from_slice(&8u32.to_le_bytes());
+            v.extend_from_slice(&1u16.to_le_bytes());
+            v.extend_from_slice(&0x0112u16.to_le_bytes());
+            v.extend_from_slice(&4u16.to_le_bytes()); // type = LONG
+            v.extend_from_slice(&1u32.to_le_bytes());
+            v.extend_from_slice(&value.to_le_bytes());
+        }
+        v
+    }
+
+    #[test]
+    fn parse_exif_orientation_accepts_long_type_be() {
+        let blob = build_exif_with_long_orientation(6, true);
+        assert_eq!(parse_exif_orientation(&blob), Some(Orientation::Rotate90));
+    }
+
+    #[test]
+    fn parse_exif_orientation_accepts_long_type_le() {
+        let blob = build_exif_with_long_orientation(8, false);
+        assert_eq!(parse_exif_orientation(&blob), Some(Orientation::Rotate270));
     }
 
     #[test]
