@@ -261,8 +261,25 @@ impl<J> EncodeJobShim<J> {
             .ok_or_else(|| "EncodeJobShim: job already consumed (double take)".into())
     }
 
-    fn put(&mut self, job: J) {
-        self.0 = Some(job);
+    /// Apply `f` to the inner job if it has not been consumed.
+    ///
+    /// `DynEncodeJob` setters return `()` for ergonomics and backwards
+    /// compatibility, so a setter call after the inner job has been
+    /// consumed by an `into_*` method has no return path. We
+    /// `debug_assert!` here so the misuse fires in tests and dev builds;
+    /// in release the call still silently no-ops, but any subsequent
+    /// `into_*` call will return the "job already consumed" error so the
+    /// problem surfaces at the next observable boundary.
+    fn try_apply<F: FnOnce(J) -> J>(&mut self, f: F) {
+        match self.0.take() {
+            Some(job) => self.0 = Some(f(job)),
+            None => {
+                debug_assert!(
+                    false,
+                    "DynEncodeJob setter called after the inner job was consumed by an into_* method; the call has no effect"
+                );
+            }
+        }
     }
 }
 
@@ -273,39 +290,27 @@ where
     J::AnimationFrameEnc: AnimationFrameEncoder,
 {
     fn set_stop(&mut self, stop: StopToken) {
-        if let Ok(job) = self.take() {
-            self.put(job.with_stop(stop));
-        }
+        self.try_apply(|job| job.with_stop(stop));
     }
 
     fn set_limits(&mut self, limits: ResourceLimits) {
-        if let Ok(job) = self.take() {
-            self.put(job.with_limits(limits));
-        }
+        self.try_apply(|job| job.with_limits(limits));
     }
 
     fn set_policy(&mut self, policy: crate::EncodePolicy) {
-        if let Ok(job) = self.take() {
-            self.put(job.with_policy(policy));
-        }
+        self.try_apply(|job| job.with_policy(policy));
     }
 
     fn set_metadata(&mut self, meta: Metadata) {
-        if let Ok(job) = self.take() {
-            self.put(job.with_metadata(meta));
-        }
+        self.try_apply(|job| job.with_metadata(meta));
     }
 
     fn set_canvas_size(&mut self, width: u32, height: u32) {
-        if let Ok(job) = self.take() {
-            self.put(job.with_canvas_size(width, height));
-        }
+        self.try_apply(|job| job.with_canvas_size(width, height));
     }
 
     fn set_loop_count(&mut self, count: Option<u32>) {
-        if let Ok(job) = self.take() {
-            self.put(job.with_loop_count(count));
-        }
+        self.try_apply(|job| job.with_loop_count(count));
     }
 
     fn extensions(&self) -> Option<&dyn Any> {

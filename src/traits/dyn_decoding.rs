@@ -278,14 +278,31 @@ impl<J> DecodeJobShim<J> {
             .ok_or_else(|| "DecodeJobShim: job already consumed (double take)".into())
     }
 
-    fn put(&mut self, job: J) {
-        self.0 = Some(job);
-    }
-
     fn as_ref(&self) -> Result<&J, BoxedError> {
         self.0
             .as_ref()
             .ok_or_else(|| "DecodeJobShim: job already consumed (double take)".into())
+    }
+
+    /// Apply `f` to the inner job if it has not been consumed.
+    ///
+    /// `DynDecodeJob` setters return `()` for ergonomics and backwards
+    /// compatibility, so a setter call after the inner job has been
+    /// consumed by an `into_*` method has no return path. We
+    /// `debug_assert!` here so the misuse fires in tests and dev builds;
+    /// in release the call still silently no-ops, but any subsequent
+    /// `into_*` call will return the "job already consumed" error so the
+    /// problem surfaces at the next observable boundary.
+    fn try_apply<F: FnOnce(J) -> J>(&mut self, f: F) {
+        match self.0.take() {
+            Some(job) => self.0 = Some(f(job)),
+            None => {
+                debug_assert!(
+                    false,
+                    "DynDecodeJob setter called after the inner job was consumed by an into_* method; the call has no effect"
+                );
+            }
+        }
     }
 }
 
@@ -296,21 +313,15 @@ where
     J::AnimationFrameDec: Send,
 {
     fn set_stop(&mut self, stop: StopToken) {
-        if let Ok(job) = self.take() {
-            self.put(job.with_stop(stop));
-        }
+        self.try_apply(|job| job.with_stop(stop));
     }
 
     fn set_limits(&mut self, limits: ResourceLimits) {
-        if let Ok(job) = self.take() {
-            self.put(job.with_limits(limits));
-        }
+        self.try_apply(|job| job.with_limits(limits));
     }
 
     fn set_policy(&mut self, policy: crate::DecodePolicy) {
-        if let Ok(job) = self.take() {
-            self.put(job.with_policy(policy));
-        }
+        self.try_apply(|job| job.with_policy(policy));
     }
 
     fn probe(&self, data: &[u8]) -> Result<ImageInfo, BoxedError> {
@@ -326,27 +337,19 @@ where
     }
 
     fn set_crop_hint(&mut self, x: u32, y: u32, width: u32, height: u32) {
-        if let Ok(job) = self.take() {
-            self.put(job.with_crop_hint(x, y, width, height));
-        }
+        self.try_apply(|job| job.with_crop_hint(x, y, width, height));
     }
 
     fn set_orientation(&mut self, hint: OrientationHint) {
-        if let Ok(job) = self.take() {
-            self.put(job.with_orientation(hint));
-        }
+        self.try_apply(|job| job.with_orientation(hint));
     }
 
     fn set_start_frame_index(&mut self, index: u32) {
-        if let Ok(job) = self.take() {
-            self.put(job.with_start_frame_index(index));
-        }
+        self.try_apply(|job| job.with_start_frame_index(index));
     }
 
     fn set_extract_gain_map(&mut self, extract: bool) {
-        if let Ok(job) = self.take() {
-            self.put(job.with_extract_gain_map(extract));
-        }
+        self.try_apply(|job| job.with_extract_gain_map(extract));
     }
 
     fn extensions(&self) -> Option<&dyn Any> {

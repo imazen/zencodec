@@ -4,6 +4,35 @@ All notable changes to zencodec are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- `ResourceLimits::for_untrusted_input()` (with `safe_default()` alias) — a
+  safer starting point than `ResourceLimits::default()` for services
+  accepting bytes from the network or end users. Caps: 100 MP per frame,
+  200 MP across an animation, 16384×16384 max dims, 1 GiB memory, 256 MiB
+  input, 65536 frames, 1 hour duration. `ResourceLimits::default()`
+  continues to mean "no limits" for backwards compatibility (bc2790d).
+
+### Changed
+
+- `metadata::parse_exif_orientation` now delegates to the canonical
+  `helpers::parse_exif_orientation`. The previous local implementation was
+  a looser duplicate that read the orientation value as `u16` regardless
+  of TIFF type, missing `TIFF_LONG` (type 4) values for big-endian inputs
+  and lacking the IFD entry-count cap and tag-sort early-exit DoS
+  protections present in the helper (141238f).
+- `DynDecodeJob` and `DynEncodeJob` shim setters now `debug_assert!` when
+  called after the inner job has been consumed by an `into_*` method,
+  catching the (structurally unreachable) misuse path loudly in tests and
+  dev builds. Release behaviour is unchanged (silent no-op). Trait
+  signatures are unchanged (a5b782e).
+
+### Documentation
+
+- Module-level docs in `policy.rs` now recommend `DecodePolicy::strict()`
+  as the starting point for untrusted input, paired with
+  `ResourceLimits::for_untrusted_input` (468073d).
+
 ## [0.1.20] - 2026-04-21
 
 ### Added
