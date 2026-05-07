@@ -271,6 +271,63 @@ impl ResourceLimits {
         Self::default()
     }
 
+    /// Safer default caps for processing **untrusted input**.
+    ///
+    /// [`ResourceLimits::default()`] has every field `None` (no limits) for
+    /// backwards compatibility — that is fine for trusted, controlled input
+    /// but is **resource-management DoS by default** when feeding bytes
+    /// from the network or end users. Prefer this helper when limits are
+    /// not explicitly tuned by the caller.
+    ///
+    /// Caps applied (chosen conservatively for typical web image workloads):
+    /// - `max_pixels`: 100 MP per frame (covers e.g. 12000 × 8000 stills)
+    /// - `max_total_pixels`: 200 MP across all frames of an animation
+    /// - `max_width` / `max_height`: 16384 each (typical decoder hardware ceiling)
+    /// - `max_memory_bytes`: 1 GiB
+    /// - `max_input_bytes`: 256 MiB
+    /// - `max_frames`: 65 536
+    /// - `max_animation_ms`: 1 hour
+    ///
+    /// Threading is left at the default ([`ThreadingPolicy::Parallel`]).
+    ///
+    /// These are intentionally **generous** — large enough that legitimate
+    /// inputs are not rejected, small enough that an adversarial input
+    /// cannot consume the whole machine. Tighten further for your specific
+    /// workload (e.g. a thumbnail server may want `max_pixels = 4_000_000`).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use zencodec::ResourceLimits;
+    ///
+    /// // Recommended starting point for a public image-decode service.
+    /// let limits = ResourceLimits::for_untrusted_input();
+    /// assert!(limits.max_pixels.is_some());
+    /// assert!(limits.max_input_bytes.is_some());
+    /// ```
+    pub fn for_untrusted_input() -> Self {
+        Self {
+            max_pixels: Some(100_000_000),
+            max_total_pixels: Some(200_000_000),
+            max_width: Some(16384),
+            max_height: Some(16384),
+            max_memory_bytes: Some(1024 * 1024 * 1024),
+            max_input_bytes: Some(256 * 1024 * 1024),
+            max_output_bytes: None,
+            max_frames: Some(65_536),
+            max_animation_ms: Some(60 * 60 * 1000),
+            threading: ThreadingPolicy::Parallel,
+        }
+    }
+
+    /// Alias for [`for_untrusted_input`](Self::for_untrusted_input).
+    ///
+    /// Provided for callers who prefer the `safe_default` naming convention
+    /// (mirrors the pattern used in some other crates).
+    pub fn safe_default() -> Self {
+        Self::for_untrusted_input()
+    }
+
     /// Set maximum total pixels.
     pub fn with_max_pixels(mut self, max: u64) -> Self {
         self.max_pixels = Some(max);
@@ -938,6 +995,76 @@ mod tests {
                 max: 1_000_000
             }
         );
+    }
+
+    #[test]
+    fn for_untrusted_input_has_caps() {
+        let limits = ResourceLimits::for_untrusted_input();
+        assert!(limits.has_any());
+        assert!(limits.max_pixels.is_some());
+        assert!(limits.max_total_pixels.is_some());
+        assert!(limits.max_width.is_some());
+        assert!(limits.max_height.is_some());
+        assert!(limits.max_memory_bytes.is_some());
+        assert!(limits.max_input_bytes.is_some());
+        assert!(limits.max_frames.is_some());
+        assert!(limits.max_animation_ms.is_some());
+    }
+
+    #[test]
+    fn for_untrusted_input_rejects_oversized_image() {
+        use crate::{ImageFormat, ImageInfo};
+        let limits = ResourceLimits::for_untrusted_input();
+        // 30000×30000 = 900 MP, far above the 100 MP per-frame cap.
+        let info = ImageInfo::new(30000, 30000, ImageFormat::Jpeg);
+        let err = limits.check_image_info(&info).unwrap_err();
+        // Width is the first cap we trip (16384 < 30000).
+        assert!(matches!(err, LimitExceeded::Width { .. }));
+
+        // Smaller width but still huge pixel count.
+        let info = ImageInfo::new(10000, 12000, ImageFormat::Jpeg);
+        let err = limits.check_image_info(&info).unwrap_err();
+        assert!(matches!(err, LimitExceeded::Pixels { .. }));
+    }
+
+    #[test]
+    fn for_untrusted_input_accepts_typical_image() {
+        use crate::{ImageFormat, ImageInfo};
+        let limits = ResourceLimits::for_untrusted_input();
+        // 4K image — should pass.
+        let info = ImageInfo::new(3840, 2160, ImageFormat::Jpeg);
+        assert!(limits.check_image_info(&info).is_ok());
+        // 12 MP photo — should pass.
+        let info = ImageInfo::new(4000, 3000, ImageFormat::Jpeg);
+        assert!(limits.check_image_info(&info).is_ok());
+    }
+
+    #[test]
+    fn for_untrusted_input_rejects_oversized_input() {
+        let limits = ResourceLimits::for_untrusted_input();
+        // 1 GiB input is definitely too big.
+        assert!(limits.check_input_size(1024 * 1024 * 1024).is_err());
+        // 16 MiB input is fine.
+        assert!(limits.check_input_size(16 * 1024 * 1024).is_ok());
+    }
+
+    #[test]
+    fn safe_default_alias_matches_for_untrusted_input() {
+        assert_eq!(
+            ResourceLimits::safe_default(),
+            ResourceLimits::for_untrusted_input()
+        );
+    }
+
+    #[test]
+    fn default_remains_no_limits_for_backwards_compat() {
+        // Per the crate's stability guarantee, ResourceLimits::default()
+        // continues to mean "no limits" — switching to safer caps is
+        // opt-in via for_untrusted_input().
+        let limits = ResourceLimits::default();
+        assert!(!limits.has_any());
+        assert!(limits.max_pixels.is_none());
+        assert!(limits.max_input_bytes.is_none());
     }
 
     #[test]

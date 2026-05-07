@@ -4,19 +4,47 @@
 //! All fields default to `None`, meaning the codec uses its own default.
 //! `Some(true)` explicitly allows; `Some(false)` explicitly denies.
 //!
+//! # Choosing a starting point
+//!
+//! For **untrusted input** (network bytes, user uploads, third-party data),
+//! prefer [`DecodePolicy::strict()`] as the starting point and selectively
+//! re-enable features the application actually needs. This is the
+//! recommended default for any service that processes bytes it did not
+//! produce itself. Pair this with
+//! [`ResourceLimits::for_untrusted_input`](crate::ResourceLimits::for_untrusted_input)
+//! for resource caps.
+//!
+//! For **trusted input** (your own pipeline, internal tools), use
+//! [`DecodePolicy::none()`] (all defaults) or [`DecodePolicy::permissive()`]
+//! to keep all features available.
+//!
 //! # Named levels
 //!
+//! - [`DecodePolicy::strict()`] — **recommended for untrusted input.**
+//!   Minimal attack surface: no ICC/EXIF/XMP extraction, no progressive,
+//!   no animation, strict spec parsing, no truncated input.
 //! - [`DecodePolicy::none()`] / [`EncodePolicy::none()`] — all defaults
-//! - [`DecodePolicy::strict()`] — minimal attack surface (no metadata, no progressive, no animation)
-//! - [`DecodePolicy::permissive()`] — allow everything
+//!   (each codec picks its own behavior).
+//! - [`DecodePolicy::permissive()`] — allow everything (use only for
+//!   trusted input).
 //!
-//! Individual flags can be overridden after constructing a named level.
+//! Individual flags can be overridden after constructing a named level
+//! — e.g. `DecodePolicy::strict().with_allow_icc(true)` for strict-but-with-color.
 
 /// Decode security policy.
 ///
 /// Controls what features a decoder is permitted to use when processing
 /// untrusted input. Codecs check these flags and skip or reject
 /// accordingly; unrecognized flags are ignored.
+///
+/// # Recommended: start strict for untrusted input
+///
+/// When decoding bytes from the network, end users, or any third-party
+/// source, use [`DecodePolicy::strict()`] as the starting point and
+/// selectively enable the features the application actually needs.
+/// `DecodePolicy::default()` returns [`DecodePolicy::none()`] (all
+/// `None` — each codec's own default applies) for backwards compatibility,
+/// but this is **not** the safest choice for untrusted input.
 ///
 /// # Example
 ///
