@@ -6,6 +6,12 @@ All notable changes to zencodec are documented here.
 
 ### Added
 
+- `ThreadingPolicy::resolve_thread_count()` — cross-codec shared helper that
+  translates a [`ThreadingPolicy`] to the integer thread count that
+  native-threaded encoder libraries (rav1e/ravif, dav1d/rav1d, libwebp, etc.)
+  accept. Returns `1` for `Sequential`, `0` (auto) for `Parallel` and every
+  other variant. Replaces hand-written `policy_to_threads` helpers in
+  individual codec crates (Cluster B Class 1 dedup).
 - `ResourceLimits::for_untrusted_input()` (with `safe_default()` alias) — a
   safer starting point than `ResourceLimits::default()` for services
   accepting bytes from the network or end users. Caps: 100 MP per frame,

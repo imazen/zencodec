@@ -177,6 +177,38 @@ impl ThreadingPolicy {
             _ => true,
         }
     }
+
+    /// Resolve this policy to a concrete thread count for native-threaded
+    /// codecs (rav1e/ravif, dav1d/rav1d, libwebp, etc.).
+    ///
+    /// Returns:
+    /// - `1` for [`Sequential`](Self::Sequential) (and deprecated
+    ///   [`SingleThread`](Self::SingleThread), `LimitOrSingle { max_threads: 1 }`).
+    /// - `0` for [`Parallel`](Self::Parallel) and every other variant, meaning
+    ///   "auto — let the library pick based on available parallelism." This is
+    ///   the safe default for the `#[non_exhaustive]` deprecated arms; the
+    ///   construction sites emit warnings and should be fixed there.
+    ///
+    /// This is the cross-codec shared helper for translating a
+    /// [`ThreadingPolicy`] to the integer thread count that native-threaded
+    /// encoder libraries accept. Rayon-based codecs (zenjpeg, jxl-encoder,
+    /// zenjxl-decoder, zenpng) should use [`is_parallel()`](Self::is_parallel)
+    /// instead — they control thread count via the ambient rayon pool.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use zencodec::ThreadingPolicy;
+    /// assert_eq!(ThreadingPolicy::Sequential.resolve_thread_count(), 1);
+    /// assert_eq!(ThreadingPolicy::Parallel.resolve_thread_count(), 0);
+    /// ```
+    pub fn resolve_thread_count(self) -> u32 {
+        match self {
+            Self::Sequential | Self::SingleThread => 1,
+            Self::LimitOrSingle { max_threads } if max_threads <= 1 => 1,
+            _ => 0,
+        }
+    }
 }
 
 /// Resource limits for encode/decode operations.
@@ -722,6 +754,44 @@ mod tests {
         let limits = ResourceLimits::none()
             .with_threading(ThreadingPolicy::LimitOrSingle { max_threads: 1 });
         assert!(!limits.threading().is_parallel());
+    }
+
+    #[test]
+    fn resolve_thread_count_sequential_is_1() {
+        assert_eq!(ThreadingPolicy::Sequential.resolve_thread_count(), 1);
+    }
+
+    #[test]
+    fn resolve_thread_count_parallel_is_0() {
+        assert_eq!(ThreadingPolicy::Parallel.resolve_thread_count(), 0);
+    }
+
+    #[allow(deprecated)]
+    #[test]
+    fn resolve_thread_count_legacy_arms_default_auto() {
+        // SingleThread → 1 (alias for Sequential)
+        assert_eq!(ThreadingPolicy::SingleThread.resolve_thread_count(), 1);
+        // LimitOrSingle { 1 } → 1 (effective single-thread)
+        assert_eq!(
+            ThreadingPolicy::LimitOrSingle { max_threads: 1 }.resolve_thread_count(),
+            1
+        );
+        // LimitOrSingle { >1 } → 0 (auto)
+        assert_eq!(
+            ThreadingPolicy::LimitOrSingle { max_threads: 8 }.resolve_thread_count(),
+            0
+        );
+        // LimitOrAny → 0 (auto)
+        assert_eq!(
+            ThreadingPolicy::LimitOrAny {
+                preferred_max_threads: 16
+            }
+            .resolve_thread_count(),
+            0
+        );
+        // Balanced / Unlimited → 0 (auto)
+        assert_eq!(ThreadingPolicy::Balanced.resolve_thread_count(), 0);
+        assert_eq!(ThreadingPolicy::Unlimited.resolve_thread_count(), 0);
     }
 
     #[allow(deprecated)]
