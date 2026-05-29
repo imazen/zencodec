@@ -4,8 +4,73 @@ All notable changes to zencodec are documented here.
 
 ## [Unreleased]
 
+## [0.1.21] - 2026-05-29
+
 ### Added
 
+- **Field-level metadata retention** — `Metadata::filtered(&MetadataPolicy)`,
+  the shared filter for re-encode / recompress pipelines: keep what a
+  downstream image needs, strip the rest, without callers hand-parsing EXIF.
+  - `MetadataPolicy`: `PreserveExact` (keep all, incl. a redundant sRGB ICC),
+    `Preserve` (keep all but drop a redundant sRGB ICC), `Web` (**default** —
+    ICC non-sRGB + EXIF orientation/rights + CICP/HDR; drop the rest of EXIF
+    and all XMP), `ColorAndRotation` (only what places pixels: ICC non-sRGB +
+    CICP/HDR + orientation), and `Custom(MetadataFields)`.
+  - `MetadataFields` (`#[non_exhaustive]`, `with_*` builders): `icc:
+    IccRetention` (`#[non_exhaustive]`; `Drop` / `KeepNonSrgb` / `Keep` —
+    three-way sRGB handling), `exif: ExifPolicy`, and `xmp` / `cicp` / `hdr:
+    Retention`.
+  - `exif::Retention` (`#[non_exhaustive]`; `Keep` / `Discard`, query via
+    `keeps`/`discards`) — explicit per-field intent, no `bool`-direction
+    ambiguity.
+  - Every disposition type (`MetadataPolicy`, `IccRetention`, `Retention`) and
+    every record (`Metadata`, `MetadataFields`, `ExifPolicy`) is
+    `#[non_exhaustive]` with builder construction, so new policies, ICC modes,
+    EXIF categories, retention fields, and `Metadata` fields land additively —
+    the surface never needs a semver-major break (see the module's *Forward
+    compatibility* docs).
+- **Structured EXIF** (`zencodec::exif`) — `Exif<'a>` parses a TIFF/EXIF blob
+  into a borrowing IFD tree (zero-copy; thumbnails/values are never copied),
+  `Exif::filtered(&ExifPolicy)` prunes by category, and `Exif::to_bytes`
+  re-serializes a valid TIFF with recomputed offsets. `ExifPolicy`
+  (`#[non_exhaustive]`, `with_*` builders) has seven categories: `orientation`,
+  `rights`, `thumbnail`, `gps`, `datetime`, `camera`, `other` — so e.g.
+  "drop only the thumbnail" or "strip GPS" is one field. `exif::retain` is the
+  `Cow` entry point: borrows the source unchanged when nothing is dropped
+  (so `Metadata::filtered` is a cheap `Arc` clone), allocates only on a real
+  rewrite. Bounds-checked, no panics on untrusted input; preserves byte order
+  and `Exif\0\0` framing. (`helpers::parse_exif_orientation` now delegates
+  here.)
+  - Hardened (adversarial review + 80M+ fuzz executions across four targets):
+    the serializer **deduplicates aliased out-of-line values** so a malformed
+    IFD pointing many entries at one blob can't amplify the rewrite ~1000×
+    (DoS); Copyright/Artist accessors read both **ASCII (type 2) and UTF-8
+    (type 129)** per Exif 2.32 / CIPA DC-008 (a UTF-8-typed field was previously
+    dropped as unknown), expose raw bytes (`copyright_bytes` / `artist_bytes`)
+    alongside the lossy-UTF-8 text view, and a pruning rewrite preserves field
+    bytes **and TIFF type** verbatim (never transcoded — neither corrupted nor
+    "corrected"); EXIF categories were corrected per the spec's tag tables —
+    the Exif-IFD creator/owner *name* tags (CameraOwnerName 0xA430, Photographer
+    0xA437, ImageEditor 0xA438) are attribution (`rights`, kept by a copyright
+    policy — they were previously stripped as "other"), and firmware / editing-
+    software / unique-ID tags are device identity (`camera`); the thumbnail
+    length tag is read as SHORT *or* LONG (real cameras use SHORT — was silently
+    dropping valid thumbnails);
+    structural sub-IFD pointers too short to hold an offset are preserved
+    (peek-before-remove) instead of dropping the sub-IFD; and `retain` passes a
+    >4 GiB blob through untouched rather than risk `u32` offset truncation.
+  - Robust error model: `Exif::parse` returns `None` on structural failure but
+    **gracefully skips** an individual unreadable / unknown-type / out-of-bounds
+    entry (and salvages a truncated entry table) — one bad or future-typed
+    entry no longer discards the whole IFD; `retain` **fails safe** (drops EXIF
+    it can't parse under a stripping policy rather than leaking it through); and
+    `to_bytes` is **canonical** (a byte-exact fixpoint), so filtering is
+    idempotent (a fuzz-found non-idempotence, now a regression seed).
+  - Test infrastructure: differential tests against `kamadak-exif`
+    (`tests/exif_differential.rs`), four libFuzzer targets (`fuzz/` — parse,
+    roundtrip, filter, and `Metadata::filtered`), a stable regression harness
+    with a committed crash seed (`tests/fuzz_regression.rs`), and a zero-copy
+    benchmark over 1 KiB–1 MiB thumbnails (`benches/exif_filter.rs`).
 - `ThreadingPolicy::resolve_thread_count()` — cross-codec shared helper that
   translates a [`ThreadingPolicy`] to the integer thread count that
   native-threaded encoder libraries (rav1e/ravif, dav1d/rav1d, libwebp, etc.)
