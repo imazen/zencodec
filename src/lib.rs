@@ -41,6 +41,8 @@ mod capabilities;
 mod cost;
 mod detect;
 mod error;
+/// Structured EXIF/TIFF parsing, pruning, and serialization.
+pub mod exif;
 mod extensions;
 mod format;
 /// Cross-codec gain map types (ISO 21496-1).
@@ -63,6 +65,7 @@ mod traits;
 // Public root: shared types used by both encode and decode
 // =========================================================================
 
+pub use exif::{ByteOrder, Exif, ExifPolicy, Retention};
 pub use extensions::Extensions;
 pub use format::{ImageFormat, ImageFormatDefinition, ImageFormatRegistry};
 pub use gainmap::{
@@ -76,7 +79,7 @@ pub use info::{
     ResolutionUnit, SourceColor, Supplements,
 };
 pub use limits::{LimitExceeded, ResourceLimits, ThreadingPolicy};
-pub use metadata::Metadata;
+pub use metadata::{IccRetention, Metadata, MetadataFields, MetadataPolicy};
 pub use orientation::{Orientation, OrientationHint};
 pub use output::{AnimationFrame, OwnedAnimationFrame};
 pub use zenpixels::ColorAuthority;
