@@ -1,0 +1,42 @@
+[package]
+name = "zencodec-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.zencodec]
+path = ".."
+
+[[bin]]
+name = "exif_parse"
+path = "fuzz_targets/exif_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "exif_roundtrip"
+path = "fuzz_targets/exif_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "exif_filter"
+path = "fuzz_targets/exif_filter.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "metadata_filtered"
+path = "fuzz_targets/metadata_filtered.rs"
+test = false
+doc = false
+bench = false

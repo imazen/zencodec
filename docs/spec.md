@@ -459,7 +459,97 @@ Owned metadata for encode/decode roundtrip. Fields: `icc_profile`, `exif`, `xmp`
 `orientation`. `#[non_exhaustive]`.
 
 Methods: builder pattern (`with_icc()`, etc.), `transfer_function()`,
-`color_primaries()`, `is_empty()`. `From<&ImageInfo>` conversion.
+`color_primaries()`, `is_empty()`, `filtered(&MetadataPolicy) -> Metadata`.
+`From<&ImageInfo>` conversion.
+
+### `MetadataPolicy` / `MetadataFields` / `IccRetention`
+
+Field-level retention policy for `Metadata::filtered()` — the shared metadata
+filter for re-encode / recompress pipelines.
+
+`MetadataPolicy` (`#[non_exhaustive]`, `Default = Web`):
+- `PreserveExact` — keep everything, byte-faithfully (incl. a redundant sRGB ICC).
+- `Preserve` — keep everything, but drop a redundant sRGB ICC.
+- `Web` (default) — ICC (unless redundant sRGB) + EXIF orientation/rights +
+  CICP/HDR; drop the rest of EXIF (GPS, timestamps, camera, thumbnail) and XMP.
+- `ColorAndRotation` — only what places pixels: ICC (non-sRGB) + CICP/HDR +
+  EXIF orientation. Drops attribution, XMP, other EXIF.
+- `Custom(MetadataFields)` — explicit per-field control.
+
+`MetadataFields` (`Copy`, `#[non_exhaustive]`, `with_*` builders + `KEEP_ALL` /
+`DISCARD_ALL` consts): `icc: IccRetention`, `exif: ExifPolicy`, and `xmp` /
+`cicp` / `hdr: Retention`. `MetadataPolicy::fields()` resolves a policy.
+
+`IccRetention`: `Drop` / `KeepNonSrgb` (drop only a redundant sRGB,
+`zenpixels::icc::is_common_srgb`) / `Keep` (byte-faithful).
+
+CICP / HDR are color *signaling* (dropping them changes displayed pixels), so
+the presets keep them; only a `Custom` policy can drop them. Gain maps are not
+part of `Metadata` (they live at the encode-request layer) and are unaffected.
+
+### `exif::Exif` / `ExifPolicy` / `Retention`
+
+Structured EXIF model (`zencodec::exif`). `Exif<'a>` (`parse` → `filtered` →
+`to_bytes`) borrows the source — entry values and the thumbnail are never
+copied. Accessors: `orientation()`, `copyright()` / `artist()` (lossy-UTF-8
+text *view*), `copyright_bytes()` / `artist_bytes()` (raw field bytes),
+`has_thumbnail()`, `has_gps()`. `to_bytes()` re-serializes a valid TIFF with
+recomputed offsets, preserving byte order and `Exif\0\0` framing.
+
+Encoding: per Exif 2.32 / CIPA DC-008 (Table 6), Copyright/Artist may be ASCII
+(type 2, 7-bit) **or UTF-8 (type 129)** — UTF-8 is the conformant Unicode form;
+non-ASCII bytes stuffed into a type-2 field are the non-conformant-but-common
+case. zencodec reads both, never generates or transcodes them — `copyright` /
+`artist` give a lossy-UTF-8 display view, `*_bytes` give the exact bytes, and a
+pruning rewrite preserves the value bytes **and TIFF type** verbatim (a field is
+neither corrupted nor "corrected").
+
+`ExifPolicy` (`Copy`, `#[non_exhaustive]`, `with_*` builders) — seven keep/drop
+categories of `Retention`: `orientation`, `rights` (copyright + artist),
+`thumbnail`, `gps`, `datetime`, `camera`, `other`. Consts: `KEEP_ALL`,
+`DISCARD_ALL`, `ATTRIBUTED_ORIENTATION`, `ORIENTATION_ONLY`.
+
+`Retention` (`Keep` / `Discard`) — explicit per-field intent.
+
+`exif::retain(&[u8], &ExifPolicy) -> Option<Cow<[u8]>>` — `Cow::Borrowed` when
+nothing is dropped (so `Metadata::filtered` is a cheap `Arc` clone),
+`Cow::Owned` on a rewrite, `None` when all EXIF is discarded.
+
+`helpers::parse_exif_orientation` is a lightweight orientation accessor that
+delegates here. Limitation: a partial rewrite relocates `MakerNote`, whose
+maker-specific internal offsets aren't fixed up — keep all EXIF (no prune) for
+byte-exact MakerNote.
+
+Hardening: bounds-checked, no panics on untrusted input (32M+ fuzz executions);
+the serializer dedups aliased out-of-line values to prevent rewrite
+memory-amplification; ASCII accessors require the ASCII TIFF type; thumbnail
+length is read as SHORT or LONG; `retain` passes >4 GiB blobs through untouched.
+Validated by differential tests vs `kamadak-exif`, three libFuzzer targets, and
+a 1 KiB–1 MiB-thumbnail zero-copy benchmark.
+
+#### Planned (not implemented): EXIF write / edit path
+
+The model is **read + filter** today; there is **no public write API**. When a
+real consumer needs to *set* fields — e.g. a pipeline injecting Orientation or
+stamping a Copyright on every processed image — the planned shape is:
+
+- `exif::Builder` (construct from scratch) + `Exif::edit()` (edit a parsed blob),
+  each terminating in `build() -> Vec<u8>` and reusing the existing canonical
+  serializer. Mechanism: relax `Entry.value` to `Cow<'a, [u8]>` so parsed
+  entries stay borrowed (zero-copy) while injected ones are owned — or a
+  separate `Builder` that copies entries (editing allocates anyway).
+- Setters pick the TIFF type per spec: **ASCII (type 2) when the string is pure
+  7-bit, else UTF-8 (type 129)**, NUL-terminated, count incl. NUL — never stuff
+  non-ASCII into a type-2 field.
+- Interop caveat: type 129 has thin reader support (ExifTool yes; kamadak /
+  Pillow / most no), so the default is ASCII-when-possible; for broad
+  readability of a copyright, also writing XMP `dc:rights` (universally UTF-8)
+  is the most portable option and a likely companion feature.
+- Reconcile the `Metadata::orientation` field with any Orientation entry the
+  builder writes into the EXIF blob (keep them consistent).
+
+This is additive (semver-minor) when it lands; it is deliberately deferred until
+a concrete consumer exists.
 
 ### `OutputInfo`
 

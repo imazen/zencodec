@@ -1,6 +1,6 @@
 [package]
 name = "zencodec"
-version = "0.1.20"
+version = "0.1.21"
 edition = "2024"
 rust-version = "1.88"
 license = "Apache-2.0 OR MIT"
@@ -21,13 +21,24 @@ include = [
 name = "zencodec"
 
 [dependencies]
+# Published manifest uses crates.io versions (CI + `cargo publish` build the
+# real artifact). Local development builds against the in-tree zen sources via
+# a gitignored `.cargo/config.toml` `paths` override — see CONTRIBUTING note.
 zenpixels = { version = "0.2.10", features = ["icc"] }
 almost-enough = { version = "0.4.4", default-features = false, features = ["alloc"] }
 enough = "0.4.4"
-whereat = { version = "0.1.5"}
+whereat = { version = "0.1.5" }
 
 [dev-dependencies]
+# Differential-test oracle for the EXIF parser (tests/exif_differential.rs).
+# Pure-Rust, BSD-2-Clause; only built for tests, never shipped.
+kamadak-exif = "0.6.1"
+zenbench = "0.1.8"
 thiserror = "2"
 walkdir = "2.5.0"
 rayon = "1.10.0"
 moxcms = { version = "0.8.1", features = ["options"] }
+
+[[bench]]
+name = "exif_filter"
+harness = false
