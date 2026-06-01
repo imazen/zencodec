@@ -8,6 +8,16 @@ All notable changes to zencodec are documented here.
 
 ### Added
 
+- **Color-signaling production policy** (`zencodec::color`) — `resolve_color_emit`
+  reconciles a `SourceColor` against a target's `EncodeCapabilities` under a
+  `ColorPolicy` (`Compatibility`/`Balanced`/`Compact`/`Verbatim`/`Custom`) and
+  returns a `ColorPlan { cicp, icc: IccDisposition }`: derive CICP from an ICC and
+  drop the redundant profile only where CICP is the format's authority and safe
+  as the sole carrier (`EncodeCapabilities::{cicp_is_format_authority,
+  cicp_safe_sole_carrier}` — JXL today), else keep/synthesize the ICC; grayscale
+  and CMYK suppress CICP. `IccRetention` gains `DropIfCicpRepresentable` /
+  `DropIfCicpSafeSoleCarrier`. Deliberately minimal surface (HDR/gain-map
+  dispositions + warnings notes deferred; `ColorPlan` is `#[non_exhaustive]`).
 - **Field-level metadata retention** — `Metadata::filtered(&MetadataPolicy)`,
   the shared filter for re-encode / recompress pipelines: keep what a
   downstream image needs, strip the rest, without callers hand-parsing EXIF.

@@ -102,6 +102,9 @@ pub struct EncodeCapabilities {
     exif: bool,
     xmp: bool,
     cicp: bool,
+    // CICP reliability (distinct from `cicp` = "has a CICP carrier")
+    cicp_is_format_authority: bool,
+    cicp_safe_sole_carrier: bool,
     // Operation support
     stop: bool,
     animation: bool,
@@ -143,6 +146,8 @@ impl EncodeCapabilities {
             exif: false,
             xmp: false,
             cicp: false,
+            cicp_is_format_authority: false,
+            cicp_safe_sole_carrier: false,
             stop: false,
             animation: false,
             push_rows: false,
@@ -180,6 +185,29 @@ impl EncodeCapabilities {
     /// Whether the encoder embeds CICP color description from `with_metadata`.
     pub const fn cicp(&self) -> bool {
         self.cicp
+    }
+    /// Whether a conformant decoder of this format honors CICP as the
+    /// authoritative color signal (so CICP *can* carry the color description).
+    ///
+    /// True for formats whose native path is CICP-equivalent (JXL codestream
+    /// enum, AVIF/HEIC `nclx`). Distinct from [`cicp`](Self::cicp) (= "has a CICP
+    /// carrier slot") and from [`cicp_safe_sole_carrier`](Self::cicp_safe_sole_carrier)
+    /// (= "safe to ship CICP-only"). Gates whether CICP is emitted under
+    /// `ColorPolicy::Auto`/`Balanced`.
+    pub const fn cicp_is_format_authority(&self) -> bool {
+        self.cicp_is_format_authority
+    }
+    /// Whether it is safe in practice to ship CICP as the *sole* color carrier
+    /// and drop a redundant ICC profile for this format.
+    ///
+    /// Stricter than [`cicp_is_format_authority`](Self::cicp_is_format_authority):
+    /// a format can be CICP-authoritative yet still need an ICC kept for
+    /// real-world tool compatibility. As of 2026 this is true only for JXL
+    /// (matches libjxl's `want_icc=false` default); AVIF/HEIC/PNG keep the ICC
+    /// because non-browser pipelines mishandle CICP-only files. Gates whether a
+    /// redundant ICC is dropped under `ColorPolicy::Balanced`.
+    pub const fn cicp_safe_sole_carrier(&self) -> bool {
+        self.cicp_safe_sole_carrier
     }
     /// Whether `with_stop` on encode jobs is respected (not a no-op).
     pub const fn stop(&self) -> bool {
@@ -309,6 +337,18 @@ impl EncodeCapabilities {
     /// Set whether the encoder embeds XMP data.
     pub const fn with_xmp(mut self, v: bool) -> Self {
         self.xmp = v;
+        self
+    }
+    /// Set whether a conformant decoder honors this format's CICP as authority.
+    /// See [`cicp_is_format_authority`](Self::cicp_is_format_authority).
+    pub const fn with_cicp_is_format_authority(mut self, v: bool) -> Self {
+        self.cicp_is_format_authority = v;
+        self
+    }
+    /// Set whether CICP is safe as the sole color carrier (drop redundant ICC).
+    /// See [`cicp_safe_sole_carrier`](Self::cicp_safe_sole_carrier).
+    pub const fn with_cicp_safe_sole_carrier(mut self, v: bool) -> Self {
+        self.cicp_safe_sole_carrier = v;
         self
     }
     /// Set whether the encoder embeds CICP color description.
