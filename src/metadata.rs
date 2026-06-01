@@ -229,7 +229,12 @@ impl Metadata {
         // ICC — three-way; only KeepNonSrgb drops a redundant sRGB profile.
         out.icc_profile = match f.icc {
             IccRetention::Drop => None,
-            IccRetention::Keep => self.icc_profile.clone(),
+            // Target-blind retention keeps the profile; the CICP-conditional
+            // drop is resolved against a concrete target in
+            // `color::resolve_color_emit`, which `filtered` does not see.
+            IccRetention::Keep
+            | IccRetention::DropIfCicpRepresentable
+            | IccRetention::DropIfCicpSafeSoleCarrier => self.icc_profile.clone(),
             IccRetention::KeepNonSrgb => self
                 .icc_profile
                 .as_ref()
@@ -285,6 +290,19 @@ pub enum IccRetention {
     KeepNonSrgb,
     /// Keep the profile as-is, even a redundant sRGB one (byte-faithful).
     Keep,
+    /// Drop the profile when it maps to a CICP expressible as code points
+    /// (sRGB / Display-P3 / BT.2020 / BT.2100…) — i.e. CICP fully describes the
+    /// color. **Target-aware**: only takes effect in
+    /// [`color::resolve_color_emit`](crate::color::resolve_color_emit), where the
+    /// target's CICP carrier is known. In the target-blind [`Metadata::filtered`]
+    /// path it conservatively keeps the profile.
+    DropIfCicpRepresentable,
+    /// Drop the profile only when the target format's CICP is safe as the sole
+    /// color carrier ([`EncodeCapabilities::cicp_safe_sole_carrier`](crate::encode::EncodeCapabilities::cicp_safe_sole_carrier)
+    /// — JXL today) and CICP represents the color. Like
+    /// [`DropIfCicpRepresentable`](Self::DropIfCicpRepresentable), this is
+    /// target-aware and keeps the profile in [`Metadata::filtered`].
+    DropIfCicpSafeSoleCarrier,
 }
 
 /// Per-field metadata retention for [`MetadataPolicy::Custom`].

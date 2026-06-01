@@ -102,6 +102,9 @@ pub struct EncodeCapabilities {
     exif: bool,
     xmp: bool,
     cicp: bool,
+    // CICP carrier quality (distinct from `cicp` = "has a CICP carrier slot")
+    cicp_is_valid_carrier: bool,
+    cicp_safe_sole_carrier: bool,
     // Operation support
     stop: bool,
     animation: bool,
@@ -143,6 +146,8 @@ impl EncodeCapabilities {
             exif: false,
             xmp: false,
             cicp: false,
+            cicp_is_valid_carrier: false,
+            cicp_safe_sole_carrier: false,
             stop: false,
             animation: false,
             push_rows: false,
@@ -180,6 +185,27 @@ impl EncodeCapabilities {
     /// Whether the encoder embeds CICP color description from `with_metadata`.
     pub const fn cicp(&self) -> bool {
         self.cicp
+    }
+    /// Whether this format has a standardized, real-world-honored CICP carrier —
+    /// so CICP can be emitted as a color signal by default.
+    ///
+    /// True for JXL codestream enum, AVIF/HEIC `nclx`, and PNG `cICP`. Distinct
+    /// from [`cicp`](Self::cicp) (= "has a CICP carrier slot at all") and from
+    /// [`cicp_safe_sole_carrier`](Self::cicp_safe_sole_carrier) (= "safe to ship
+    /// CICP *only* and drop the ICC"). Gates CICP emission under
+    /// [`CicpEmission::WhereValidCarrier`](crate::color::CicpEmission::WhereValidCarrier).
+    pub const fn cicp_is_valid_carrier(&self) -> bool {
+        self.cicp_is_valid_carrier
+    }
+    /// Whether it is safe in practice to ship CICP as the *sole* color carrier
+    /// and drop a redundant ICC profile for this format.
+    ///
+    /// Stricter than [`cicp_is_valid_carrier`](Self::cicp_is_valid_carrier): a
+    /// format can have a valid CICP carrier yet still need an ICC kept for
+    /// real-world tool compatibility. As of 2026 this is true only for JXL
+    /// (matches libjxl's `want_icc=false` default); AVIF/HEIC/PNG keep the ICC.
+    pub const fn cicp_safe_sole_carrier(&self) -> bool {
+        self.cicp_safe_sole_carrier
     }
     /// Whether `with_stop` on encode jobs is respected (not a no-op).
     pub const fn stop(&self) -> bool {
@@ -314,6 +340,18 @@ impl EncodeCapabilities {
     /// Set whether the encoder embeds CICP color description.
     pub const fn with_cicp(mut self, v: bool) -> Self {
         self.cicp = v;
+        self
+    }
+    /// Set whether this format has a standardized CICP carrier.
+    /// See [`cicp_is_valid_carrier`](Self::cicp_is_valid_carrier).
+    pub const fn with_cicp_is_valid_carrier(mut self, v: bool) -> Self {
+        self.cicp_is_valid_carrier = v;
+        self
+    }
+    /// Set whether CICP is safe as the sole color carrier (drop redundant ICC).
+    /// See [`cicp_safe_sole_carrier`](Self::cicp_safe_sole_carrier).
+    pub const fn with_cicp_safe_sole_carrier(mut self, v: bool) -> Self {
+        self.cicp_safe_sole_carrier = v;
         self
     }
     /// Set whether cooperative cancellation via [`Stop`](enough::Stop) is supported.

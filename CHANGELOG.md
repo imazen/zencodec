@@ -4,6 +4,29 @@ All notable changes to zencodec are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Cross-codec color-emission policy** (`zencodec::color`) —
+  `resolve_color_emit(&SourceColor, &EncodeCapabilities, ColorPolicy) -> ColorPlan`,
+  a pure `no_std` decision of which color carriers (ICC vs CICP) to write for a
+  target, with no CMS and no codec dependencies.
+  - `ColorPolicy { Compatibility, Balanced (default), Compact, Verbatim, Custom(ColorFields) }`;
+    `ColorPlan { cicp: Option<Cicp>, icc: IccDisposition }`;
+    `IccDisposition { KeepSource, SynthesizeFrom(Cicp), Drop }`. Handles the
+    grayscale/CMYK terminal states and never emits a redundant `SynthesizeFrom(sRGB)`.
+  - `ColorFields::new` makes `ColorPolicy::Custom` constructible downstream.
+  - `EncodeCapabilities` gains `cicp_is_valid_carrier` (standardized carrier —
+    JXL/AVIF/HEIC `nclx`, PNG `cICP`) and `cicp_safe_sole_carrier` (safe CICP-only,
+    JXL) (+ `with_*`); `IccRetention` gains `DropIfCicpRepresentable`,
+    `DropIfCicpSafeSoleCarrier`. The plan lowers to `zenpixels_convert`'s
+    `finalize_for_output_with` (`icc_profile_for_primaries` materializes a
+    `SynthesizeFrom` from a `const fn` table — no CMS, never a silent drop).
+  - `helpers::set_exif_orientation` rewrites a blob's EXIF orientation tag inline
+    (offset-preserving) so a baked-upright pixel buffer and its embedded tag can't
+    disagree (the double-rotation hazard). Applied by the pipeline, not by the
+    color resolver.
+  - Design + rejected alternatives: `docs/color-emit-model.md`.
+
 ## [0.1.21] - 2026-05-29
 
 ### Added

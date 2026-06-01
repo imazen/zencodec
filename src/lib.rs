@@ -38,6 +38,9 @@ extern crate alloc;
 whereat::define_at_crate_info!();
 
 mod capabilities;
+/// Cross-codec color-signaling emission policy (ICC vs CICP). See
+/// `docs/color-emit-model.md`.
+pub mod color;
 mod cost;
 mod detect;
 mod error;
@@ -65,6 +68,9 @@ mod traits;
 // Public root: shared types used by both encode and decode
 // =========================================================================
 
+pub use color::{
+    CicpEmission, ColorFields, ColorPlan, ColorPolicy, IccDisposition, resolve_color_emit,
+};
 pub use exif::{ByteOrder, Exif, ExifPolicy, Retention};
 pub use extensions::Extensions;
 pub use format::{ImageFormat, ImageFormatDefinition, ImageFormatRegistry};

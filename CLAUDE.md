@@ -66,4 +66,30 @@ Tiny, stable crate defining the common interface that all zen* codecs implement:
 
 ## Known Issues
 
-(none)
+Three bugs verified during the cross-codec color/metadata scenario-matrix
+research (2026-06-01). The first is in this crate; the other two are recorded
+here as cross-repo findings (do NOT edit those repos from here — flag to the
+owner). Full design context: [`docs/color-emit-model.md`](docs/color-emit-model.md).
+
+1. **Double-rotation hazard (this crate, `src/metadata.rs`).** When a decoder
+   bakes orientation upright it sets `Metadata::orientation = Identity`, but the
+   EXIF blob still carries the `Orientation` tag (e.g. `6`). `Metadata::filtered`
+   keeps that tag, so the field says `Identity` while the blob says `Rotate90` —
+   they disagree, and a consumer that re-applies the EXIF tag rotates twice. The
+   test at `src/metadata.rs:816` currently locks in keeping the stale tag. The
+   byte-level fix now exists — `helpers::set_exif_orientation(blob, 1)` rewrites
+   the inline tag offset-preservingly. **Still TODO:** the pipeline (the layer
+   that bakes orientation) must actually call it on the emitted blob, and the
+   `metadata.rs:816` test should be updated to expect a rewritten tag, not a
+   stale one. This is a pipeline-applied fix, not a `Metadata::filtered` change.
+
+2. **AVIF descriptor-CICP override (zenavif, `src/codec.rs:824-831`).**
+   `apply_descriptor_color` overrides a metadata-set CICP unconditionally,
+   ignoring a CICP explicitly provided via `Metadata`. It should check for a
+   caller-supplied CICP before overriding from the pixel descriptor.
+
+3. **Missing signal-range conversion kernels (zenpixels-convert).** No
+   `Narrow <-> Full` range conversion kernels exist, so a range mismatch refuses
+   zero-copy but can relabel without rescaling — a black-crush risk. Needs
+   `ConvertStep::{Expand,Contract}NarrowToFull`. Until then, range must be
+   preserved verbatim, never relabeled.
