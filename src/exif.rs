@@ -105,6 +105,10 @@ struct Entry<'a> {
     count: u32,
     /// Resolved value bytes (`count × type_size`), in source byte order.
     value: &'a [u8],
+    /// Byte offset of `value` within the TIFF (post-prefix): `e + 8` for an
+    /// inline value, or the out-of-line pointer. Lets an in-place tag rewrite
+    /// (e.g. [`set_orientation`]) reuse this parse instead of re-walking the IFD.
+    value_offset: usize,
 }
 
 /// A parsed EXIF/TIFF tree borrowing from the source bytes.
@@ -187,17 +191,18 @@ fn resolve_entry(tiff: &[u8], e: usize, order: ByteOrder) -> Option<Entry<'_>> {
     let cnt = rd32(tiff, e + 4, order)?;
     let tsize = type_size(kind)?;
     let byte_len = (cnt as usize).checked_mul(tsize)?;
-    let value = if byte_len <= 4 {
-        tiff.get(e + 8..e + 8 + byte_len)?
+    let (value, value_offset) = if byte_len <= 4 {
+        (tiff.get(e + 8..e + 8 + byte_len)?, e + 8)
     } else {
         let voff = rd32(tiff, e + 8, order)? as usize;
-        tiff.get(voff..voff.checked_add(byte_len)?)?
+        (tiff.get(voff..voff.checked_add(byte_len)?)?, voff)
     };
     Some(Entry {
         tag,
         kind,
         count: cnt,
         value,
+        value_offset,
     })
 }
 
@@ -631,6 +636,40 @@ fn read_uint(e: &Entry<'_>, order: ByteOrder) -> Option<u32> {
     }
 }
 
+/// Rewrite the IFD0 Orientation tag (0x0112) to `value` in place, returning a
+/// new blob — or `None` if the blob is malformed or carries no SHORT/LONG
+/// Orientation tag.
+///
+/// Reuses [`Exif::parse`] to locate the tag's inline value (via the entry's
+/// recorded [`value_offset`](Entry::value_offset)) rather than re-walking the
+/// IFD, then overwrites those bytes — offset-preserving, so the rest of the blob
+/// (offsets, thumbnail, all other tags) is byte-identical. Orientation is always
+/// inline (a 1-element SHORT/LONG fits the 4-byte value field).
+pub(crate) fn set_orientation(data: &[u8], value: Orientation) -> Option<Vec<u8>> {
+    let exif = Exif::parse(data)?;
+    let entry = exif.ifd0.iter().find(|e| e.tag == TAG_ORIENTATION)?;
+    let size = match entry.kind {
+        TIFF_SHORT => 2usize,
+        TIFF_LONG => 4,
+        _ => return None, // non-integer orientation carrier — leave untouched
+    };
+    // `value_offset` is relative to the TIFF; account for the optional prefix.
+    let base = if exif.had_prefix {
+        EXIF_PREFIX.len()
+    } else {
+        0
+    };
+    let off = base.checked_add(entry.value_offset)?;
+    let v = u32::from(value as u8);
+    let mut out = data.to_vec();
+    let dst = out.get_mut(off..off.checked_add(size)?)?;
+    match exif.order {
+        ByteOrder::Big => dst.copy_from_slice(&v.to_be_bytes()[4 - size..]),
+        ByteOrder::Little => dst.copy_from_slice(&v.to_le_bytes()[..size]),
+    }
+    Some(out)
+}
+
 /// The raw bytes of a string-typed entry — ASCII (type 2) or UTF-8 (type 129,
 /// Exif 2.32) — up to (not incl.) the first NUL. `None` if the tag is absent,
 /// not a string type (a wrong-type field is ignored, not reinterpreted), or
@@ -877,6 +916,7 @@ mod tests {
             kind,
             count,
             value,
+            value_offset: 0, // synthetic entries; only the rewrite path needs a real offset
         }
     }
 

@@ -66,4 +66,27 @@ Tiny, stable crate defining the common interface that all zen* codecs implement:
 
 ## Known Issues
 
-(none)
+Three bugs verified during the cross-codec color/metadata scenario-matrix
+research (2026-06-01). The first is in this crate; the other two are recorded
+here as cross-repo findings (do NOT edit those repos from here — flag to the
+owner). Full design context: [`docs/color-emit-model.md`](docs/color-emit-model.md).
+
+1. **Double-rotation hazard — FIXED (this crate, `src/metadata.rs`).** When a
+   decoder bakes orientation upright it sets `Metadata::orientation = Identity`
+   while the EXIF blob still carries the original `Orientation` tag (e.g. `6`); a
+   consumer that re-applied the tag would rotate twice. `Metadata::filtered` now
+   reconciles them — it rewrites the embedded tag to match the authoritative
+   `orientation` field via `helpers::set_exif_orientation` (offset-preserving,
+   fires only on a mismatch so the matched case keeps the zero-copy `Arc` clone).
+   Regression: `filtered_reconciles_baked_orientation_tag`.
+
+2. **AVIF descriptor-CICP override (zenavif, `src/codec.rs:824-831`).**
+   `apply_descriptor_color` overrides a metadata-set CICP unconditionally,
+   ignoring a CICP explicitly provided via `Metadata`. It should check for a
+   caller-supplied CICP before overriding from the pixel descriptor.
+
+3. **Missing signal-range conversion kernels (zenpixels-convert).** No
+   `Narrow <-> Full` range conversion kernels exist, so a range mismatch refuses
+   zero-copy but can relabel without rescaling — a black-crush risk. Needs
+   `ConvertStep::{Expand,Contract}NarrowToFull`. Until then, range must be
+   preserved verbatim, never relabeled.

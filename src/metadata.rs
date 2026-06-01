@@ -175,7 +175,12 @@ impl Metadata {
     ///   it isn't a redundant sRGB ([`zenpixels::icc::is_common_srgb`]), or drop.
     /// - **EXIF** is pruned by category via [`ExifPolicy`]. The source blob
     ///   passes through unchanged (zero-copy `Arc` clone) when no category is
-    ///   dropped, and is rewritten — offsets recomputed — only when pruning.
+    ///   dropped and the embedded orientation already matches the field, and is
+    ///   rewritten — offsets recomputed — only when pruning.
+    /// - **Orientation** is reconciled: the embedded EXIF orientation tag is
+    ///   rewritten to match the authoritative [`orientation`](Metadata::orientation)
+    ///   field, so a baked-upright image (field `Identity`, blob still rotated)
+    ///   cannot be double-rotated by a consumer that re-applies the tag.
     /// - **CICP** and **HDR** light-level/mastering are color *signaling* (they
     ///   change how pixels display); the presets keep them, a
     ///   [`Custom`](MetadataPolicy::Custom) policy can drop them.
@@ -229,7 +234,12 @@ impl Metadata {
         // ICC — three-way; only KeepNonSrgb drops a redundant sRGB profile.
         out.icc_profile = match f.icc {
             IccRetention::Drop => None,
-            IccRetention::Keep => self.icc_profile.clone(),
+            // Target-blind retention keeps the profile; the CICP-conditional
+            // drop is resolved against a concrete target in
+            // `color::resolve_color_emit`, which `filtered` does not see.
+            IccRetention::Keep
+            | IccRetention::DropIfCicpRepresentable
+            | IccRetention::DropIfCicpSafeSoleCarrier => self.icc_profile.clone(),
             IccRetention::KeepNonSrgb => self
                 .icc_profile
                 .as_ref()
@@ -266,6 +276,23 @@ impl Metadata {
                 alloc::borrow::Cow::Borrowed(_) => Some(src.clone()),
                 alloc::borrow::Cow::Owned(v) => Some(Arc::from(v)),
             });
+
+        // Reconcile the embedded EXIF orientation tag with the authoritative
+        // `out.orientation` field. A decoder that bakes orientation upright sets
+        // the field to Identity while the source blob still carries the original
+        // tag (e.g. Rotate90); left alone, a consumer that re-applies the EXIF tag
+        // would rotate twice. Rewriting the tag to match closes that. Only fires
+        // on a mismatch, so the matched/common case keeps the zero-copy `Arc`
+        // clone above; absent or tag-less blobs are left untouched.
+        let want = out.orientation;
+        let reconciled = out
+            .exif
+            .as_deref()
+            .filter(|e| parse_exif_orientation(e) != Some(want))
+            .and_then(|e| crate::helpers::set_exif_orientation(e, want));
+        if let Some(v) = reconciled {
+            out.exif = Some(Arc::from(v));
+        }
         out
     }
 }
@@ -285,6 +312,19 @@ pub enum IccRetention {
     KeepNonSrgb,
     /// Keep the profile as-is, even a redundant sRGB one (byte-faithful).
     Keep,
+    /// Drop the profile when it maps to a CICP expressible as code points
+    /// (sRGB / Display-P3 / BT.2020 / BT.2100…) — i.e. CICP fully describes the
+    /// color. **Target-aware**: only takes effect in
+    /// [`color::resolve_color_emit`](crate::color::resolve_color_emit), where the
+    /// target's CICP carrier is known. In the target-blind [`Metadata::filtered`]
+    /// path it conservatively keeps the profile.
+    DropIfCicpRepresentable,
+    /// Drop the profile only when the target format's CICP is safe as the sole
+    /// color carrier ([`EncodeCapabilities::cicp_safe_sole_carrier`](crate::encode::EncodeCapabilities::cicp_safe_sole_carrier)
+    /// — JXL today) and CICP represents the color. Like
+    /// [`DropIfCicpRepresentable`](Self::DropIfCicpRepresentable), this is
+    /// target-aware and keeps the profile in [`Metadata::filtered`].
+    DropIfCicpSafeSoleCarrier,
 }
 
 /// Per-field metadata retention for [`MetadataPolicy::Custom`].
@@ -849,6 +889,32 @@ mod tests {
         assert!(ex.copyright().is_none()); // rights dropped
         assert!(!has_tag(e, 0x010F)); // camera dropped
         assert_eq!(out.cicp, Some(Cicp::SRGB));
+    }
+
+    #[test]
+    fn filtered_reconciles_baked_orientation_tag() {
+        // Simulate a decoder that baked orientation upright: the structured field
+        // is Identity, but the source EXIF blob still carries Rotate90 (6).
+        let blob = src_exif(6, "(c) Owner", false);
+        let meta = Metadata::none()
+            .with_exif(blob) // parses 6 → field = Rotate90
+            .with_orientation(Orientation::Identity); // baked: field reset to Identity
+        assert_eq!(meta.orientation, Orientation::Identity);
+        // The unfiltered blob still says Rotate90 — the divergence.
+        assert_eq!(
+            parse_exif_orientation(meta.exif.as_deref().unwrap()),
+            Some(Orientation::Rotate90)
+        );
+
+        // filtered() rewrites the embedded tag to match the authoritative field,
+        // so the emitted metadata is self-consistent (no double-rotation).
+        let out = meta.filtered(&MetadataPolicy::PreserveExact);
+        assert_eq!(out.orientation, Orientation::Identity);
+        assert_eq!(
+            parse_exif_orientation(out.exif.as_deref().unwrap()),
+            Some(Orientation::Identity),
+            "baked-upright blob must be rewritten to Identity, not left at Rotate90"
+        );
     }
 
     #[test]

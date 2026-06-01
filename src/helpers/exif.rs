@@ -32,6 +32,28 @@ pub fn parse_exif_orientation(data: &[u8]) -> Option<Orientation> {
     crate::exif::Exif::parse(data)?.orientation()
 }
 
+/// Rewrite the EXIF Orientation tag (0x0112) in a TIFF/EXIF blob to `value`,
+/// returning a new blob.
+///
+/// The orientation value is stored inline (SHORT or LONG), so the canonical
+/// [`crate::exif::Exif`] parser locates it and the byte is overwritten in place
+/// — no TIFF offsets are recomputed, so the rest of the blob is byte-identical.
+/// Accepts raw TIFF bytes or a JPEG APP1 `Exif\0\0`-prefixed blob, both byte
+/// orders.
+///
+/// Returns `None` if the blob is malformed or carries no Orientation tag — the
+/// caller should then leave the blob unchanged. This is the byte-level half of
+/// closing the double-rotation hazard: when a decoder bakes orientation upright,
+/// the structured field says `Identity` but the embedded blob still says e.g.
+/// `Rotate90`; rewriting the tag to `1` keeps them in agreement.
+///
+/// Reuses the same IFD walker as [`parse_exif_orientation`] rather than a second
+/// hand-rolled scanner, so the two can't diverge on prefix/byte-order/type/bounds
+/// handling.
+pub fn set_exif_orientation(data: &[u8], value: Orientation) -> Option<alloc::vec::Vec<u8>> {
+    crate::exif::set_orientation(data, value)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -115,5 +137,51 @@ mod tests {
         // Orientation value out of range (9) → no valid orientation.
         assert_eq!(parse_exif_orientation(&tiff(false, 9, 3)), None);
         assert_eq!(parse_exif_orientation(&tiff(false, 0, 3)), None);
+    }
+
+    #[test]
+    fn set_orientation_roundtrips_all_orders_and_types() {
+        for be in [false, true] {
+            for &type_id in &[3u16, 4] {
+                // Start at Rotate90 (6), rewrite to Identity (1), read back.
+                let blob = tiff(be, 6, type_id);
+                assert_eq!(parse_exif_orientation(&blob), Some(Orientation::Rotate90));
+                let rewritten =
+                    set_exif_orientation(&blob, Orientation::Identity).expect("tag present");
+                assert_eq!(rewritten.len(), blob.len()); // offsets unchanged
+                assert_eq!(
+                    parse_exif_orientation(&rewritten),
+                    Some(Orientation::Identity)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn set_orientation_with_exif_prefix() {
+        let mut blob = b"Exif\0\0".to_vec();
+        blob.extend_from_slice(&tiff(false, 6, 3));
+        let out = set_exif_orientation(&blob, Orientation::Rotate180).expect("tag present");
+        assert_eq!(parse_exif_orientation(&out), Some(Orientation::Rotate180));
+    }
+
+    #[test]
+    fn set_orientation_absent_tag_or_garbage_is_none() {
+        // No 0x0112 entry: a minimal IFD with a different tag.
+        let mut v = b"II".to_vec();
+        v.extend_from_slice(&42u16.to_le_bytes());
+        v.extend_from_slice(&8u32.to_le_bytes());
+        v.extend_from_slice(&1u16.to_le_bytes()); // 1 entry
+        v.extend_from_slice(&0x010Fu16.to_le_bytes()); // Make tag, not orientation
+        v.extend_from_slice(&3u16.to_le_bytes());
+        v.extend_from_slice(&1u32.to_le_bytes());
+        v.extend_from_slice(&[0, 0, 0, 0]);
+        v.extend_from_slice(&0u32.to_le_bytes());
+        assert_eq!(set_exif_orientation(&v, Orientation::Identity), None);
+        assert_eq!(
+            set_exif_orientation(b"garbage", Orientation::Identity),
+            None
+        );
+        assert_eq!(set_exif_orientation(&[], Orientation::Identity), None);
     }
 }

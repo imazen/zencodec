@@ -224,21 +224,35 @@ impl DecodePolicy {
     }
 }
 
-/// Encode metadata policy.
+/// Coarse, best-effort per-channel embed gate handed to a codec via
+/// [`EncodeJob::with_policy`](crate::encode::EncodeJob::with_policy).
 ///
-/// Controls which metadata an encoder embeds in the output.
-/// All fields default to `None`, meaning the codec uses its own default.
-/// `Some(true)` explicitly allows embedding; `Some(false)` explicitly strips.
+/// Each channel is a tri-state toggle: `None` keeps the codec's own default,
+/// `Some(true)` requests embedding, `Some(false)` requests stripping. It is a
+/// whole-channel switch only — it cannot express field-level retention.
+///
+/// **Not the primary retention mechanism, and best-effort:** the
+/// [`with_policy`](crate::encode::EncodeJob::with_policy) default is a no-op, so
+/// a codec that does not implement it silently ignores this gate. For reliable,
+/// field-level control over *what metadata content the output carries* (which
+/// EXIF tags, a redundant sRGB ICC, XMP, CICP/HDR signaling), use
+/// [`MetadataPolicy`](crate::MetadataPolicy) +
+/// [`Metadata::filtered`](crate::Metadata::filtered) to prune the record before
+/// [`with_metadata`](crate::encode::EncodeJob::with_metadata). That runs in this
+/// crate, not the codec, so it is always honored. Where both apply the more
+/// restrictive wins: a channel dropped by `filtered` cannot be re-added here,
+/// and `Some(false)` is a final veto over a channel the record still carries.
 ///
 /// # Example
 ///
 /// ```
 /// use zencodec::encode::EncodePolicy;
 ///
-/// // Strip all metadata from output
+/// // Coarse: ask the codec to strip every metadata channel.
 /// let policy = EncodePolicy::strip_all();
 ///
-/// // Or fine-grained: keep ICC, strip EXIF/XMP
+/// // Per-channel: keep ICC, strip EXIF/XMP (honored only by codecs that
+/// // implement `with_policy`).
 /// let policy = EncodePolicy::none()
 ///     .with_embed_icc(true)
 ///     .with_embed_exif(false)

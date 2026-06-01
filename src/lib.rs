@@ -38,6 +38,9 @@ extern crate alloc;
 whereat::define_at_crate_info!();
 
 mod capabilities;
+/// Cross-codec color-signaling emission policy (ICC vs CICP). See
+/// `docs/color-emit-model.md`.
+pub mod color;
 mod cost;
 mod detect;
 mod error;
@@ -65,7 +68,13 @@ mod traits;
 // Public root: shared types used by both encode and decode
 // =========================================================================
 
-pub use exif::{ByteOrder, Exif, ExifPolicy, Retention};
+pub use color::{
+    CicpEmission, ColorEmitFields, ColorEmitPlan, ColorEmitPolicy, IccDisposition, resolve_color_emit,
+};
+// `ByteOrder` is intentionally NOT re-exported at the root: it is a TIFF/EXIF
+// header detail used only within the `exif` module, and the bare name is too
+// generic for the crate root. Reach it as `exif::ByteOrder`.
+pub use exif::{Exif, ExifPolicy, Retention};
 pub use extensions::Extensions;
 pub use format::{ImageFormat, ImageFormatDefinition, ImageFormatRegistry};
 pub use gainmap::{
