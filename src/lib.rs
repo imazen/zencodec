@@ -38,6 +38,8 @@ extern crate alloc;
 whereat::define_at_crate_info!();
 
 mod capabilities;
+/// Color-signaling production policy (how ICC vs CICP are emitted on encode).
+pub mod color;
 mod cost;
 mod detect;
 mod error;
@@ -65,6 +67,10 @@ mod traits;
 // Public root: shared types used by both encode and decode
 // =========================================================================
 
+pub use color::{
+    CicpEmission, ColorFields, ColorNote, ColorPlan, ColorPolicy, GainMapDisposition,
+    HdrStaticDisposition, IccDisposition, RenderingIntent, resolve_color_emit,
+};
 pub use exif::{ByteOrder, Exif, ExifPolicy, Retention};
 pub use extensions::Extensions;
 pub use format::{ImageFormat, ImageFormatDefinition, ImageFormatRegistry};
