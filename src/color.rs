@@ -1,51 +1,9 @@
-//! Color-signaling production policy: how an image's color *description*
-//! (ICC profile vs CICP code points) is emitted when encoding or transcoding.
+//! Internal: color-signaling emission policy (ICC profile vs CICP code points).
 //!
-//! This is orthogonal to which *pixels* are written. Containers differ in which
-//! color carriers they have and in how reliably real-world decoders honor each
-//! one, so emitting "the right" color description is a per-target decision.
-//!
-//! # The obvious knob: [`ColorEmitPolicy`]
-//!
-//! Pick an intent — the same meaning whether encoding from pixels or transcoding
-//! from another file:
-//!
-//! - [`Compatibility`](ColorEmitPolicy::Compatibility) — always embed an ICC; add CICP where reliable.
-//! - [`Balanced`](ColorEmitPolicy::Balanced) (**default**) — emit CICP where the format has a
-//!   standardized CICP carrier, drop a redundant ICC only where CICP is safe as the sole carrier
-//!   (JXL today) or the ICC is plain sRGB.
-//! - [`Compact`](ColorEmitPolicy::Compact) — smallest: prefer CICP wherever the format carries it, drop the ICC.
-//! - [`Verbatim`](ColorEmitPolicy::Verbatim) — carry the source's signals unchanged.
-//! - [`Custom`](ColorEmitPolicy::Custom) — explicit [`ColorEmitFields`] for power users.
-//!
-//! # The resolver: [`resolve_color_emit`]
-//!
-//! [`resolve_color_emit`] reconciles a [`SourceColor`] against a target's
-//! [`EncodeCapabilities`] under a [`ColorEmitPolicy`] and returns a [`ColorEmitPlan`] —
-//! a pure description of what to emit. This crate is `no_std` and carries no
-//! CMS, so the plan only describes intent ([`IccDisposition::SynthesizeFrom`],
-//! etc.); the bytes are materialized one layer up.
-//!
-//! # Lowering the plan
-//!
-//! A codec (or the pipeline) lowers a [`ColorEmitPlan`] to the bytes it writes — for
-//! the pixel-encode path, through `zenpixels_convert`'s atomic
-//! `finalize_for_output_with` (which guarantees pixels and embedded color cannot
-//! diverge):
-//!
-//! - [`ColorEmitPlan::cicp`] → the format's native CICP carrier (JXL enum color,
-//!   AVIF/HEIC `nclx`, PNG `cICP`).
-//! - [`IccDisposition::KeepSource`] → re-embed the source ICC bytes
-//!   (`OutputProfile::SameAsOrigin`).
-//! - [`IccDisposition::SynthesizeFrom`]`(cicp)` → fetch a bundled profile via
-//!   `zenpixels_convert::icc_profile_for_primaries` (a `const fn` table — **no CMS**;
-//!   it returns `None` for BT.709/sRGB, so the assumed default is never embedded).
-//! - [`IccDisposition::Drop`] → emit no ICC.
-//!
-//! Orientation/EXIF reconciliation is separate: when a pipeline bakes orientation
-//! upright it rewrites the source EXIF orientation tag with
-//! [`helpers::set_exif_orientation`](crate::helpers::set_exif_orientation) so the
-//! tag and the pixels can't disagree (the double-rotation hazard).
+//! This module is private — its types (`ColorEmitPolicy`, `ColorEmitFields`,
+//! `ColorEmitPlan`, `IccDisposition`, `CicpEmission`) and `resolve_color_emit`
+//! are re-exported at the crate root. The public overview lives on
+//! `ColorEmitPolicy`; the full per-format design is in `docs/color-emit-model.md`.
 
 use zenpixels::icc;
 use zenpixels::{Cicp, ColorModel};
@@ -54,9 +12,54 @@ use crate::capabilities::EncodeCapabilities;
 use crate::info::SourceColor;
 use crate::metadata::IccRetention;
 
-/// How color description is emitted on encode — the obvious, intent-named knob.
+/// How an image's color *description* (ICC profile vs CICP code points) is
+/// emitted when encoding or transcoding — the obvious, intent-named knob.
 ///
-/// See the [module docs](self) for the per-format behavior table.
+/// This is orthogonal to which *pixels* are written. Containers differ in which
+/// color carriers they have and in how reliably real-world decoders honor each
+/// one, so emitting "the right" color description is a per-target decision.
+///
+/// # Presets
+///
+/// Pick an intent — the same meaning whether encoding from pixels or transcoding
+/// from another file:
+///
+/// - [`Compatibility`](ColorEmitPolicy::Compatibility) — always embed an ICC; add CICP where reliable.
+/// - [`Balanced`](ColorEmitPolicy::Balanced) (**default**) — emit CICP where the format has a
+///   standardized CICP carrier, drop a redundant ICC only where CICP is safe as the sole carrier
+///   (JXL today) or the ICC is plain sRGB.
+/// - [`Compact`](ColorEmitPolicy::Compact) — smallest: prefer CICP wherever the format carries it, drop the ICC.
+/// - [`Verbatim`](ColorEmitPolicy::Verbatim) — carry the source's signals unchanged.
+/// - [`Custom`](ColorEmitPolicy::Custom) — explicit [`ColorEmitFields`] for power users.
+///
+/// # The resolver: [`resolve_color_emit`]
+///
+/// [`resolve_color_emit`] reconciles a [`SourceColor`] against a target's
+/// [`EncodeCapabilities`] under a `ColorEmitPolicy` and returns a [`ColorEmitPlan`] —
+/// a pure description of what to emit. This crate is `no_std` and carries no
+/// CMS, so the plan only describes intent ([`IccDisposition::SynthesizeFrom`],
+/// etc.); the bytes are materialized one layer up.
+///
+/// # Lowering the plan
+///
+/// A codec (or the pipeline) lowers a [`ColorEmitPlan`] to the bytes it writes — for
+/// the pixel-encode path, through `zenpixels_convert`'s atomic
+/// `finalize_for_output_with` (which guarantees pixels and embedded color cannot
+/// diverge):
+///
+/// - [`ColorEmitPlan::cicp`] → the format's native CICP carrier (JXL enum color,
+///   AVIF/HEIC `nclx`, PNG `cICP`).
+/// - [`IccDisposition::KeepSource`] → re-embed the source ICC bytes
+///   (`OutputProfile::SameAsOrigin`).
+/// - [`IccDisposition::SynthesizeFrom`]`(cicp)` → fetch a bundled profile via
+///   `zenpixels_convert::icc_profile_for_primaries` (a `const fn` table — **no CMS**;
+///   it returns `None` for BT.709/sRGB, so the assumed default is never embedded).
+/// - [`IccDisposition::Drop`] → emit no ICC.
+///
+/// Orientation/EXIF reconciliation is separate: when a pipeline bakes orientation
+/// upright it rewrites the source EXIF orientation tag with
+/// [`helpers::set_exif_orientation`](crate::helpers::set_exif_orientation) so the
+/// tag and the pixels can't disagree (the double-rotation hazard).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ColorEmitPolicy {
@@ -436,7 +439,10 @@ mod tests {
     #[test]
     fn custom_policy_is_constructible() {
         // ColorEmitFields::new makes ColorEmitPolicy::Custom reachable from downstream.
-        let policy = ColorEmitPolicy::Custom(ColorEmitFields::new(IccRetention::Keep, CicpEmission::Never));
+        let policy = ColorEmitPolicy::Custom(ColorEmitFields::new(
+            IccRetention::Keep,
+            CicpEmission::Never,
+        ));
         let p3 = src_cicp(Cicp::DISPLAY_P3).with_icc_profile(alloc::vec![0u8; 132]);
         let plan = resolve_color_emit(&p3, &caps_avif(), policy);
         assert_eq!(plan.cicp, None); // CicpEmission::Never

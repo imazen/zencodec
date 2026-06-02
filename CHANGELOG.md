@@ -6,25 +6,37 @@ All notable changes to zencodec are documented here.
 
 ### Added
 
-- **Cross-codec color-emission policy** (`zencodec::color`) —
-  `resolve_color_emit(&SourceColor, &EncodeCapabilities, ColorPolicy) -> ColorPlan`,
+- **Cross-codec color-emission policy** —
+  `resolve_color_emit(&SourceColor, &EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan`,
   a pure `no_std` decision of which color carriers (ICC vs CICP) to write for a
-  target, with no CMS and no codec dependencies.
-  - `ColorPolicy { Compatibility, Balanced (default), Compact, Verbatim, Custom(ColorFields) }`;
-    `ColorPlan { cicp: Option<Cicp>, icc: IccDisposition }`;
+  target, with no CMS and no codec dependencies. The `color` module is private;
+  the types are re-exported at the crate root (`zencodec::ColorEmitPolicy`, …).
+  - `ColorEmitPolicy { Compatibility, Balanced (default), Compact, Verbatim, Custom(ColorEmitFields) }`;
+    `ColorEmitPlan { cicp: Option<Cicp>, icc: IccDisposition }`;
     `IccDisposition { KeepSource, SynthesizeFrom(Cicp), Drop }`. Handles the
     grayscale/CMYK terminal states and never emits a redundant `SynthesizeFrom(sRGB)`.
-  - `ColorFields::new` makes `ColorPolicy::Custom` constructible downstream.
+    (Names carry the emit direction so they can't be confused with the decode-side
+    `SourceColor`.)
+  - `ColorEmitFields::new` makes `ColorEmitPolicy::Custom` constructible downstream.
   - `EncodeCapabilities` gains `cicp_is_valid_carrier` (standardized carrier —
     JXL/AVIF/HEIC `nclx`, PNG `cICP`) and `cicp_safe_sole_carrier` (safe CICP-only,
     JXL) (+ `with_*`); `IccRetention` gains `DropIfCicpRepresentable`,
     `DropIfCicpSafeSoleCarrier`. The plan lowers to `zenpixels_convert`'s
     `finalize_for_output_with` (`icc_profile_for_primaries` materializes a
     `SynthesizeFrom` from a `const fn` table — no CMS, never a silent drop).
+  - `EncodePolicy` now bundles the output-emission policy: `color:
+    Option<ColorEmitPolicy>` and `metadata: Option<MetadataPolicy>` (+ `with_color`,
+    `with_metadata_policy`, `resolve_color`, `resolve_metadata`), so encode and
+    transcode select the color carrier and metadata retention through one object —
+    the codec reads `color`, the pipeline applies `metadata` via `Metadata::filtered`.
+    Its docs reframe the legacy `embed_*` flags as a coarse best-effort codec gate.
+    `MetadataPolicy` is now `Copy` so it can be bundled by value.
   - `helpers::set_exif_orientation` rewrites a blob's EXIF orientation tag inline
     (offset-preserving) so a baked-upright pixel buffer and its embedded tag can't
     disagree (the double-rotation hazard). Applied by the pipeline, not by the
     color resolver.
+  - `exif::ByteOrder` is module-scoped (a TIFF/EXIF header detail), not re-exported
+    at the crate root.
   - Design + rejected alternatives: `docs/color-emit-model.md`.
 
 ## [0.1.21] - 2026-05-29

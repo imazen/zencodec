@@ -6,7 +6,7 @@
 //!
 //! # Submodules
 //!
-//! - [`icc`]: ICC profile identification and pixel descriptor derivation.
+//! - `icc`: ICC profile identification and pixel descriptor derivation.
 
 use alloc::borrow::Cow;
 

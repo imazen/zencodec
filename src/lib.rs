@@ -40,7 +40,7 @@ whereat::define_at_crate_info!();
 mod capabilities;
 /// Cross-codec color-signaling emission policy (ICC vs CICP). See
 /// `docs/color-emit-model.md`.
-pub mod color;
+mod color;
 mod cost;
 mod detect;
 mod error;
@@ -53,7 +53,7 @@ pub mod gainmap;
 /// Codec implementation helpers (not consumer API).
 pub mod helpers;
 /// Lightweight ICC profile inspection (tag extraction, no full parse).
-pub mod icc;
+mod icc;
 mod info;
 mod limits;
 mod metadata;
@@ -69,7 +69,8 @@ mod traits;
 // =========================================================================
 
 pub use color::{
-    CicpEmission, ColorEmitFields, ColorEmitPlan, ColorEmitPolicy, IccDisposition, resolve_color_emit,
+    CicpEmission, ColorEmitFields, ColorEmitPlan, ColorEmitPolicy, IccDisposition,
+    resolve_color_emit,
 };
 // `ByteOrder` is intentionally NOT re-exported at the root: it is a TIFF/EXIF
 // header detail used only within the `exif` module, and the bare name is too

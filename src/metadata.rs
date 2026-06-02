@@ -417,7 +417,10 @@ impl MetadataFields {
 }
 
 /// Field-level metadata retention policy applied by [`Metadata::filtered`].
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+///
+/// `Copy` (all variants, including `Custom(MetadataFields)`, are `Copy`) so it
+/// can be bundled by value into [`EncodePolicy`](crate::encode::EncodePolicy).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum MetadataPolicy {
     /// Keep everything the source carried, byte-faithfully — including a
