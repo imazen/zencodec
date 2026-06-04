@@ -6,6 +6,18 @@ All notable changes to zencodec are documented here.
 
 ### Added
 
+- **Fidelity API** (`encode::{Fidelity, LossyTarget, NearLosslessBudget,
+  QualityMetric, FidelityMatch}`) — a generic lossy / near-lossless / lossless
+  encode-quality abstraction for [#12](https://github.com/imazen/zencodec/issues/12).
+  `Fidelity` is a sum type (lossy with a
+  `LossyTarget`, near-lossless within a per-channel `NearLosslessBudget`, or
+  lossless). `EncoderConfig` gains `with_fidelity` (infallible, best-effort),
+  `try_target_fidelity` (fail-fast, returns `FidelityMatch`),
+  `resolved_target_fidelity`, and `with_alpha_fidelity`/`alpha_fidelity` (lossy
+  color + lossless alpha). `EncodeCapabilities` gains `near_lossless`,
+  `supports_distance`, `supports_metric_target`, `supports_size_target`. Default
+  impls bridge to the legacy `with_generic_quality`/`with_lossless` scalars, so
+  the change is additive and non-breaking. Design: `docs/near-lossless-design.md`.
 - **`exif_author` fuzz target** — drives the EXIF *write* API
   (`Exif::new` / edit-after-parse + `set_orientation` / `set_copyright` /
   `set_artist`) and asserts authored output always parses, reads back the

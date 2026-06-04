@@ -113,6 +113,10 @@ pub struct EncodeCapabilities {
     // Format capabilities
     lossy: bool,
     lossless: bool,
+    near_lossless: bool,
+    supports_distance: bool,
+    supports_metric_target: bool,
+    supports_size_target: bool,
     hdr: bool,
     gain_map: bool,
     native_gray: bool,
@@ -154,6 +158,10 @@ impl EncodeCapabilities {
             encode_from: false,
             lossy: false,
             lossless: false,
+            near_lossless: false,
+            supports_distance: false,
+            supports_metric_target: false,
+            supports_size_target: false,
             hdr: false,
             gain_map: false,
             native_gray: false,
@@ -234,6 +242,28 @@ impl EncodeCapabilities {
     /// Whether the codec supports mathematically lossless encoding.
     pub const fn lossless(&self) -> bool {
         self.lossless
+    }
+    /// Whether the codec honors an ε-bounded near-lossless path
+    /// ([`Fidelity::NearLossless`](crate::encode::Fidelity::NearLossless) with a
+    /// non-exact budget). True for WebP and PNG.
+    pub const fn near_lossless(&self) -> bool {
+        self.near_lossless
+    }
+    /// Whether the codec can target a butteraugli
+    /// [`Distance`](crate::encode::LossyTarget::Distance) (single-pass-able).
+    pub const fn supports_distance(&self) -> bool {
+        self.supports_distance
+    }
+    /// Whether the codec can converge to a
+    /// [`Metric`](crate::encode::LossyTarget::Metric) score (iterative).
+    pub const fn supports_metric_target(&self) -> bool {
+        self.supports_metric_target
+    }
+    /// Whether the codec can converge to a
+    /// [`TargetBytes`](crate::encode::LossyTarget::TargetBytes) /
+    /// [`Bitrate`](crate::encode::LossyTarget::Bitrate) budget (iterative).
+    pub const fn supports_size_target(&self) -> bool {
+        self.supports_size_target
     }
     /// Whether the codec supports HDR content.
     pub const fn hdr(&self) -> bool {
@@ -386,6 +416,26 @@ impl EncodeCapabilities {
     /// Set whether lossless encoding is supported.
     pub const fn with_lossless(mut self, v: bool) -> Self {
         self.lossless = v;
+        self
+    }
+    /// Set whether an ε-bounded near-lossless path is honored.
+    pub const fn with_near_lossless(mut self, v: bool) -> Self {
+        self.near_lossless = v;
+        self
+    }
+    /// Set whether a butteraugli distance target is supported.
+    pub const fn with_supports_distance(mut self, v: bool) -> Self {
+        self.supports_distance = v;
+        self
+    }
+    /// Set whether metric-score convergence is supported.
+    pub const fn with_supports_metric_target(mut self, v: bool) -> Self {
+        self.supports_metric_target = v;
+        self
+    }
+    /// Set whether size/bitrate convergence is supported.
+    pub const fn with_supports_size_target(mut self, v: bool) -> Self {
+        self.supports_size_target = v;
         self
     }
     /// Set whether HDR content is supported.

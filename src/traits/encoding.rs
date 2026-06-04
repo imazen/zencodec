@@ -2,6 +2,7 @@
 
 use alloc::boxed::Box;
 
+use crate::fidelity::{Fidelity, FidelityMatch, LossyTarget};
 use crate::format::ImageFormat;
 use crate::{EncodeCapabilities, Metadata, ResourceLimits};
 use zenpixels::PixelDescriptor;
@@ -125,6 +126,82 @@ pub trait EncoderConfig: Clone + Send + Sync {
 
     /// Current alpha quality value, or `None` if unsupported.
     fn alpha_quality(&self) -> Option<f32> {
+        None
+    }
+
+    // -----------------------------------------------------------------------
+    // Fidelity (lossy target / near-lossless budget / lossless)
+    // -----------------------------------------------------------------------
+
+    /// Set the encode [`Fidelity`] — a lossy [`LossyTarget`], a near-lossless
+    /// [`NearLosslessBudget`](crate::encode::NearLosslessBudget), or lossless.
+    ///
+    /// Infallible and **best-effort**: the codec does what it can and silently
+    /// substitutes the rest. To learn up-front *how* (or whether) the request
+    /// was honored, use [`try_target_fidelity`](Self::try_target_fidelity); to
+    /// read what it resolved to afterwards, use
+    /// [`resolved_target_fidelity`](Self::resolved_target_fidelity).
+    ///
+    /// The default bridges to the legacy quality/lossless setters so codecs that
+    /// have not implemented this yet still behave sensibly (a near-lossless
+    /// budget promotes to exact lossless; non-`Quality` lossy targets fall back
+    /// to default-quality lossy). Codecs override to honor budgets and targets.
+    fn with_fidelity(self, fidelity: Fidelity) -> Self {
+        match fidelity {
+            Fidelity::Lossy(LossyTarget::Quality(q)) => {
+                self.with_lossless(false).with_generic_quality(q)
+            }
+            Fidelity::Lossy(_) => self.with_lossless(false),
+            Fidelity::NearLossless(_) | Fidelity::Lossless => self.with_lossless(true),
+        }
+    }
+
+    /// Set fidelity, fail-fast, reporting how the codec resolved the request.
+    ///
+    /// Unlike [`with_fidelity`](Self::with_fidelity) this tells you immediately
+    /// whether the target was honored exactly, approximated (rounded up/down or
+    /// metric-translated), promoted to lossless, or is unsupported even
+    /// approximately. A codec may quietly give you *better* fidelity than asked,
+    /// never *worse* — a downgrade across the lossy/lossless fence reports
+    /// [`FidelityMatch::Unsupported`](crate::encode::FidelityMatch::Unsupported).
+    ///
+    /// This is a cheap up-front resolution — no encoding. For iterative targets
+    /// (`Metric`/`TargetBytes`/`Bitrate`) it confirms the codec will *attempt*
+    /// convergence; the *achieved* value is an encode output.
+    ///
+    /// The default applies via [`with_fidelity`](Self::with_fidelity) and
+    /// classifies the common cases; codecs override for fully precise reporting.
+    fn try_target_fidelity(&mut self, fidelity: Fidelity) -> FidelityMatch {
+        *self = self.clone().with_fidelity(fidelity);
+        crate::fidelity::classify_fidelity_match(fidelity, self.resolved_target_fidelity())
+    }
+
+    /// The fidelity the codec actually resolved to, or `None` if it has no
+    /// fidelity control.
+    ///
+    /// The default derives from [`is_lossless`](Self::is_lossless) and
+    /// [`generic_quality`](Self::generic_quality), so codecs that only implement
+    /// the legacy getters still report a `Fidelity`.
+    fn resolved_target_fidelity(&self) -> Option<Fidelity> {
+        if self.is_lossless() == Some(true) {
+            return Some(Fidelity::Lossless);
+        }
+        self.generic_quality().map(Fidelity::quality)
+    }
+
+    /// Set an independent [`Fidelity`] for the alpha plane, or `None` to follow
+    /// the color fidelity / codec default.
+    ///
+    /// Expresses lossy-color with lossless-alpha (which WebP and AVIF support)
+    /// — something a single color fidelity cannot. Default: no-op (follow
+    /// color). Verify with [`alpha_fidelity`](Self::alpha_fidelity).
+    fn with_alpha_fidelity(self, _alpha: Option<Fidelity>) -> Self {
+        self
+    }
+
+    /// The resolved alpha-plane fidelity, or `None` if alpha follows color / the
+    /// codec has no independent alpha fidelity.
+    fn alpha_fidelity(&self) -> Option<Fidelity> {
         None
     }
 

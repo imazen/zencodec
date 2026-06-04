@@ -6,33 +6,33 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1097 lines (supported surface) | zencodec.features.txt 0 added (features: none) | zencodec.internal.txt 56 lines (56 hidden + 0 excluded-feature)
+# files: zencodec.txt 1154 lines (supported surface) | zencodec.features.txt 0 added (features: none) | zencodec.internal.txt 63 lines (63 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 7
-#   pub types (struct/enum/trait/alias)       111
-#   pub consts/statics                        165
+#   pub types (struct/enum/trait/alias)       116
+#   pub consts/statics                        185
 #   free functions                             33
-#   inherent methods                          420
-#   struct fields                             190
-#   enum variants                             127
+#   inherent methods                          427
+#   struct fields                             192
+#   enum variants                             145
 #   re-exports                                  8
-#   trait roster entries (type × trait)       250
+#   trait roster entries (type × trait)       276
 #   conditional trait impls (verbatim)          2
-#   auto-trait-complete types                  48
+#   auto-trait-complete types                  53
 #   auto-trait exceptions                       5
 #
 # per-module pub lines:
-#   (root)                          600
+#   (root)                          617
 #   decode                          163
-#   encode                          102
+#   encode                          137
 #   exif                             65
 #   gainmap                         117
 #   helpers                          13
 #   icc                               1
 
-## items (1031 lines)
+## items (1083 lines)
 
 pub mod zencodec
 pub use Cicp
@@ -292,6 +292,35 @@ pub fn decode::negotiate_pixel_format(&[zenpixels::descriptor::PixelDescriptor],
 pub type decode::BoxedError = alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)> [also: encode]
 pub type decode::SinkError = alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>
 pub mod encode
+#[non_exhaustive] pub enum encode::Fidelity
+pub encode::Fidelity::Lossless
+pub encode::Fidelity::Lossy(encode::LossyTarget)
+pub encode::Fidelity::NearLossless(encode::NearLosslessBudget)
+pub const fn encode::Fidelity::is_lossless(self) -> bool
+pub const fn encode::Fidelity::near_lossless(encode::NearLosslessBudget) -> Self
+pub const fn encode::Fidelity::quality(f32) -> Self
+#[non_exhaustive] pub enum encode::FidelityMatch
+pub encode::FidelityMatch::Lossless
+pub encode::FidelityMatch::MetricTranslated(encode::Fidelity)
+pub encode::FidelityMatch::Supported
+pub encode::FidelityMatch::TargetLowered(encode::Fidelity)
+pub encode::FidelityMatch::TargetRaised(encode::Fidelity)
+pub encode::FidelityMatch::Unsupported
+pub const fn encode::FidelityMatch::is_honored(self) -> bool
+pub const fn encode::FidelityMatch::resolved(self) -> core::option::Option<encode::Fidelity>
+#[non_exhaustive] pub enum encode::LossyTarget
+pub encode::LossyTarget::Bitrate(f32)
+pub encode::LossyTarget::Distance(f32)
+pub encode::LossyTarget::Metric
+pub encode::LossyTarget::Metric::metric: encode::QualityMetric
+pub encode::LossyTarget::Metric::target: f32
+pub encode::LossyTarget::Quality(f32)
+pub encode::LossyTarget::TargetBytes(u64)
+#[non_exhaustive] pub enum encode::QualityMetric
+pub encode::QualityMetric::Butteraugli
+pub encode::QualityMetric::Dssim
+pub encode::QualityMetric::Psnr
+pub encode::QualityMetric::Ssimulacra2
 #[non_exhaustive] pub struct encode::EncodeCapabilities
 pub const encode::EncodeCapabilities::EMPTY: Self
 pub const fn encode::EncodeCapabilities::animation(&self) -> bool
@@ -312,11 +341,15 @@ pub const fn encode::EncodeCapabilities::native_16bit(&self) -> bool
 pub const fn encode::EncodeCapabilities::native_alpha(&self) -> bool
 pub const fn encode::EncodeCapabilities::native_f32(&self) -> bool
 pub const fn encode::EncodeCapabilities::native_gray(&self) -> bool
+pub const fn encode::EncodeCapabilities::near_lossless(&self) -> bool
 pub const fn encode::EncodeCapabilities::new() -> Self
 pub const fn encode::EncodeCapabilities::push_rows(&self) -> bool
 pub const fn encode::EncodeCapabilities::quality_range(&self) -> core::option::Option<[f32; 2]>
 pub const fn encode::EncodeCapabilities::stop(&self) -> bool
 pub const fn encode::EncodeCapabilities::supports(&self, UnsupportedOperation) -> bool
+pub const fn encode::EncodeCapabilities::supports_distance(&self) -> bool
+pub const fn encode::EncodeCapabilities::supports_metric_target(&self) -> bool
+pub const fn encode::EncodeCapabilities::supports_size_target(&self) -> bool
 pub const fn encode::EncodeCapabilities::threads_supported_range(&self) -> (u16, u16)
 pub const fn encode::EncodeCapabilities::with_animation(self, bool) -> Self
 pub const fn encode::EncodeCapabilities::with_cicp(self, bool) -> Self
@@ -336,9 +369,13 @@ pub const fn encode::EncodeCapabilities::with_native_16bit(self, bool) -> Self
 pub const fn encode::EncodeCapabilities::with_native_alpha(self, bool) -> Self
 pub const fn encode::EncodeCapabilities::with_native_f32(self, bool) -> Self
 pub const fn encode::EncodeCapabilities::with_native_gray(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_near_lossless(self, bool) -> Self
 pub const fn encode::EncodeCapabilities::with_push_rows(self, bool) -> Self
 pub const fn encode::EncodeCapabilities::with_quality_range(self, f32, f32) -> Self
 pub const fn encode::EncodeCapabilities::with_stop(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_supports_distance(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_supports_metric_target(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_supports_size_target(self, bool) -> Self
 pub const fn encode::EncodeCapabilities::with_threads_supported_range(self, u16, u16) -> Self
 pub const fn encode::EncodeCapabilities::with_xmp(self, bool) -> Self
 pub const fn encode::EncodeCapabilities::xmp(&self) -> bool
@@ -374,6 +411,16 @@ pub const fn encode::EncodePolicy::with_color(self, ColorEmitPolicy) -> Self
 pub const fn encode::EncodePolicy::with_embed_exif(self, bool) -> Self
 pub const fn encode::EncodePolicy::with_embed_icc(self, bool) -> Self
 pub const fn encode::EncodePolicy::with_embed_xmp(self, bool) -> Self
+pub struct encode::NearLosslessBudget(_)
+pub const encode::NearLosslessBudget::DEFAULT: Self
+pub const encode::NearLosslessBudget::EXACT: Self
+pub const encode::NearLosslessBudget::MAX: Self
+pub fn encode::NearLosslessBudget::as_fraction(self) -> f32
+pub const fn encode::NearLosslessBudget::from_16bit_steps(u16) -> Self
+pub const fn encode::NearLosslessBudget::from_8bit_steps(u8) -> Self
+pub fn encode::NearLosslessBudget::from_fraction(f32) -> Self
+pub const fn encode::NearLosslessBudget::is_exact(self) -> bool
+pub const fn encode::NearLosslessBudget::max_error_at_depth(self, u32) -> u32
 pub trait encode::AnimationFrameEncoder: core::marker::Sized
 pub type encode::AnimationFrameEncoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn encode::AnimationFrameEncoder::finish(self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, Self::Error>
@@ -443,6 +490,7 @@ pub fn encode::Encoder::reject(UnsupportedOperation) -> Self::Error
 pub trait encode::EncoderConfig: core::clone::Clone + core::marker::Send + core::marker::Sync
 pub type encode::EncoderConfig::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub type encode::EncoderConfig::Job: encode::EncodeJob<Error = Self::Error>
+pub fn encode::EncoderConfig::alpha_fidelity(&self) -> core::option::Option<encode::Fidelity>
 pub fn encode::EncoderConfig::alpha_quality(&self) -> core::option::Option<f32>
 pub fn encode::EncoderConfig::capabilities() -> &'static encode::EncodeCapabilities
 pub fn encode::EncoderConfig::format() -> ImageFormat
@@ -450,8 +498,12 @@ pub fn encode::EncoderConfig::generic_effort(&self) -> core::option::Option<i32>
 pub fn encode::EncoderConfig::generic_quality(&self) -> core::option::Option<f32>
 pub fn encode::EncoderConfig::is_lossless(&self) -> core::option::Option<bool>
 pub fn encode::EncoderConfig::job(self) -> Self::Job
+pub fn encode::EncoderConfig::resolved_target_fidelity(&self) -> core::option::Option<encode::Fidelity>
 pub fn encode::EncoderConfig::supported_descriptors() -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub fn encode::EncoderConfig::try_target_fidelity(&mut self, encode::Fidelity) -> encode::FidelityMatch
+pub fn encode::EncoderConfig::with_alpha_fidelity(self, core::option::Option<encode::Fidelity>) -> Self
 pub fn encode::EncoderConfig::with_alpha_quality(self, f32) -> Self
+pub fn encode::EncoderConfig::with_fidelity(self, encode::Fidelity) -> Self
 pub fn encode::EncoderConfig::with_generic_effort(self, i32) -> Self
 pub fn encode::EncoderConfig::with_generic_quality(self, f32) -> Self
 pub fn encode::EncoderConfig::with_lossless(self, bool) -> Self
@@ -1066,7 +1118,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (58 types)
+## trait impls (63 types)
 
 (): encode::AnimationFrameEncoder
 (dyn core::error::Error + 'static): CodecErrorExt
@@ -1108,6 +1160,11 @@ decode::OutputInfo: Clone, Debug, Eq, PartialEq
 encode::EncodeCapabilities: Clone, Debug, Default, PartialEq
 encode::EncodeOutput: AsRef<[u8]>, Clone, Debug, Eq, PartialEq
 encode::EncodePolicy: Clone, Copy, Debug, Default, Eq, PartialEq
+encode::Fidelity: Clone, Copy, Debug, PartialEq
+encode::FidelityMatch: Clone, Copy, Debug, PartialEq
+encode::LossyTarget: Clone, Copy, Debug, PartialEq
+encode::NearLosslessBudget: Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd
+encode::QualityMetric: Clone, Copy, Debug, Eq, Hash, PartialEq
 exif::ByteOrder: Clone, Copy, Debug, Eq, PartialEq
 exif::Exif<'a>: Clone, Debug, Default, Eq, PartialEq
 exif::ExifPolicy: Clone, Copy, Debug, Eq, PartialEq
@@ -1131,7 +1188,7 @@ impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static,
 
 ## auto traits
 
-48 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+53 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 Extensions: !RefUnwindSafe !UnwindSafe
 ImageInfo: !RefUnwindSafe !UnwindSafe
 OwnedAnimationFrame: !RefUnwindSafe !UnwindSafe
