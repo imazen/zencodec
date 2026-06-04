@@ -144,6 +144,11 @@ impl EncodeJob for MyEncodeJob {
         self
     }
 
+    // `with_metadata` is the storage primitive every codec implements. It is
+    // marked `#[deprecated]` *for callers* (to push them toward an explicit
+    // retention policy) — implementing it here does NOT warn. The framework
+    // provides `with_metadata_policy(meta, policy)`, which filters via
+    // `Metadata::filtered` and then calls this; you store whatever it hands you.
     fn with_metadata(mut self, meta: Metadata) -> Self {
         self.metadata = Some(meta);
         self

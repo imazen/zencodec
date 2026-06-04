@@ -10,7 +10,7 @@
 //! ```rust,ignore
 //! fn save(config: &dyn DynEncoderConfig, data: &[u8], w: u32, h: u32) -> Result<Vec<u8>, BoxedError> {
 //!     let mut job = config.dyn_job();
-//!     job.set_metadata(meta);
+//!     job.set_metadata_policy(meta, MetadataPolicy::Web);
 //!     job.set_limits(limits);
 //!     let encoder = job.into_encoder()?;
 //!     let output = encoder.encode_srgba8(data, true, w, h, w)?;
@@ -222,7 +222,14 @@ pub trait DynEncodeJob {
     /// Set encode security policy.
     fn set_policy(&mut self, policy: crate::EncodePolicy);
 
-    /// Set metadata (ICC, EXIF, XMP) to embed.
+    /// Set metadata to embed, filtered by an explicit retention policy (blessed
+    /// path; mirrors [`EncodeJob::with_metadata_policy`](crate::encode::EncodeJob::with_metadata_policy)).
+    fn set_metadata_policy(&mut self, meta: Metadata, policy: crate::MetadataPolicy);
+
+    /// Set metadata (ICC, EXIF, XMP) to embed, without a retention policy. Prefer
+    /// [`set_metadata_policy`](Self::set_metadata_policy) so retention is explicit.
+    #[deprecated(note = "embeds metadata without an explicit retention policy; use \
+                set_metadata_policy(meta, policy)")]
     fn set_metadata(&mut self, meta: Metadata);
 
     /// Set animation canvas dimensions.
@@ -301,6 +308,11 @@ where
         self.try_apply(|job| job.with_policy(policy));
     }
 
+    fn set_metadata_policy(&mut self, meta: Metadata, policy: crate::MetadataPolicy) {
+        self.try_apply(|job| job.with_metadata_policy(meta, policy));
+    }
+
+    #[allow(deprecated)]
     fn set_metadata(&mut self, meta: Metadata) {
         self.try_apply(|job| job.with_metadata(meta));
     }

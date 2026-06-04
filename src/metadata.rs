@@ -34,7 +34,7 @@
 use alloc::sync::Arc;
 
 use crate::Orientation;
-use crate::exif::{Exif, ExifPolicy, Retention, TextEncoding};
+use crate::exif::{Exif, ExifPolicy, Retention};
 use crate::info::{Cicp, ContentLightLevel, MasteringDisplay};
 use zenpixels::{ColorPrimaries, TransferFunction};
 
@@ -60,25 +60,12 @@ pub struct Metadata {
     pub mastering_display: Option<MasteringDisplay>,
     /// EXIF orientation.
     pub orientation: Orientation,
-    /// Embed-time retention policy: how [`for_embedding`](Self::for_embedding)
-    /// (and [`filtered`](Self::filtered) by default) prunes this metadata before
-    /// a codec writes it. Defaults to [`MetadataPolicy::Web`] — privacy-safe:
-    /// GPS, timestamps, camera/device identity, the thumbnail, and XMP are
-    /// dropped, orientation + rights + color signaling kept. Set
-    /// [`PreserveExact`](MetadataPolicy::PreserveExact) via
-    /// [`with_policy`](Self::with_policy) to embed the carried bytes verbatim.
-    ///
-    /// This field carries *intent* only — the carried `exif`/`xmp`/`icc_profile`
-    /// bytes are untouched until [`for_embedding`](Self::for_embedding) applies
-    /// the policy, so inspection/round-trip via an external EXIF library still
-    /// sees the original bytes.
-    pub policy: MetadataPolicy,
 }
 
 // Metadata contains 3× Option<Arc<[u8]>> (fat pointers), so size varies by
 // pointer width. Catch unexpected growth from new fields or alignment changes.
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(core::mem::size_of::<Metadata>() == 120);
+const _: () = assert!(core::mem::size_of::<Metadata>() == 104);
 
 impl Metadata {
     /// Create empty metadata.
@@ -124,14 +111,14 @@ impl Metadata {
     /// is replaced with a fresh blob carrying just this field.
     #[must_use]
     pub fn with_copyright(self, copyright: &str) -> Self {
-        self.set_exif_string(copyright, |e, t| e.set_copyright(t, TextEncoding::Ascii))
+        self.set_exif_string(copyright, |e, t| e.set_copyright(t))
     }
 
     /// Set the EXIF Artist tag. See [`with_copyright`](Self::with_copyright) for
     /// encoding and merge semantics.
     #[must_use]
     pub fn with_artist(self, artist: &str) -> Self {
-        self.set_exif_string(artist, |e, t| e.set_artist(t, TextEncoding::Ascii))
+        self.set_exif_string(artist, |e, t| e.set_artist(t))
     }
 
     /// Shared helper for [`with_copyright`]/[`with_artist`]: parse the existing
@@ -182,40 +169,6 @@ impl Metadata {
     pub fn with_orientation(mut self, orientation: Orientation) -> Self {
         self.orientation = orientation;
         self
-    }
-
-    /// Set the embed-time retention [`policy`](Self::policy).
-    ///
-    /// Defaults to [`MetadataPolicy::Web`] (privacy-safe). Use
-    /// [`PreserveExact`](MetadataPolicy::PreserveExact) to embed the carried
-    /// metadata verbatim, or any other [`MetadataPolicy`] for finer control.
-    #[must_use]
-    pub fn with_policy(mut self, policy: MetadataPolicy) -> Self {
-        self.policy = policy;
-        self
-    }
-
-    /// The metadata a codec should actually embed: `self` pruned by its own
-    /// [`policy`](Self::policy) — equivalent to
-    /// [`self.filtered(&self.policy)`](Self::filtered).
-    ///
-    /// This is the zencodec filtering hook a codec calls inside its
-    /// `EncodeJob::with_metadata` so embedding honors the caller's privacy intent
-    /// without the codec implementing any EXIF logic of its own:
-    ///
-    /// ```ignore
-    /// fn with_metadata(mut self, meta: Metadata) -> Self {
-    ///     self.metadata = Some(meta.for_embedding()); // honors meta.policy
-    ///     self
-    /// }
-    /// ```
-    ///
-    /// The returned metadata carries [`MetadataPolicy::PreserveExact`], so it is
-    /// already final — embedding it (or calling `for_embedding` again) never
-    /// strips twice.
-    #[must_use]
-    pub fn for_embedding(&self) -> Metadata {
-        self.filtered(&self.policy)
     }
 
     /// Whether any metadata is present.
@@ -377,9 +330,6 @@ impl Metadata {
         if let Some(v) = reconciled {
             out.exif = Some(Arc::from(v));
         }
-        // The result is already pruned to `policy`; mark it final so a later
-        // `for_embedding` / re-filter is a no-op rather than stripping again.
-        out.policy = MetadataPolicy::PreserveExact;
         out
     }
 }
@@ -507,7 +457,35 @@ impl MetadataFields {
 ///
 /// `Copy` (all variants, including `Custom(MetadataFields)`, are `Copy`) so it
 /// can be bundled by value into [`EncodePolicy`](crate::encode::EncodePolicy).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+///
+/// **No `Default`.** Metadata retention is a privacy decision, so callers must
+/// name a policy explicitly — there is no implicit fallback. [`Web`](Self::Web)
+/// is the recommended privacy-safe choice for publishing.
+///
+/// # Delivery exceptions
+///
+/// Each variant's per-channel promise holds in the common case; these are the
+/// edges where it does not, by design:
+///
+/// - **Unparseable or > 4 GiB EXIF under a *partial* policy ([`Web`](Self::Web),
+///   [`ColorAndRotation`](Self::ColorAndRotation), or any [`Custom`](Self::Custom)
+///   that drops an EXIF category) → the *whole* EXIF blob is dropped (fail-safe:
+///   an unverifiable strip must not leak).** So the "keep EXIF orientation tag +
+///   rights" part of those policies is *not* delivered for such a blob. The
+///   authoritative [`orientation`](Metadata::orientation) **field** is separate
+///   and is always preserved; only EXIF-blob-carried data (rights/copyright,
+///   the embedded tag) is lost. [`PreserveExact`](Self::PreserveExact) /
+///   [`Preserve`](Self::Preserve) keep EXIF byte-faithfully (no parse, so an
+///   unparseable/oversize blob passes through unchanged).
+/// - **[`Custom`](Self::Custom) keeping `camera` *through a prune*:** the rewrite
+///   relocates `MakerNote` (0x927C) without fixing its maker-specific internal
+///   offsets, and an uncompressed (StripOffsets) thumbnail is dropped on any
+///   rewrite — see the [`exif`](crate::exif) module limitations. (The presets
+///   sidestep this: `Web`/`ColorAndRotation` drop `camera`; `Preserve*` never
+///   rewrite.)
+/// - **CICP/HDR vs the pixels and any gain map** is the caller's responsibility —
+///   `filtered` cannot see the gain map; see [`Metadata::filtered`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum MetadataPolicy {
     /// Keep everything the source carried, byte-faithfully — including a
@@ -515,11 +493,10 @@ pub enum MetadataPolicy {
     PreserveExact,
     /// Keep everything, but drop a redundant sRGB ICC profile.
     Preserve,
-    /// **Default.** The web-publish set: keep the ICC profile (unless a
-    /// redundant sRGB), EXIF orientation + rights (copyright/artist), and
-    /// CICP / HDR color signaling. Drop the rest of EXIF (GPS, timestamps,
+    /// The web-publish set (recommended for publishing): keep the ICC profile
+    /// (unless a redundant sRGB), EXIF orientation + rights (copyright/artist),
+    /// and CICP / HDR color signaling. Drop the rest of EXIF (GPS, timestamps,
     /// camera/device identity, thumbnail) and all XMP.
-    #[default]
     Web,
     /// Keep only what places pixels on screen: the ICC profile (unless a
     /// redundant sRGB), CICP / HDR color signaling, and EXIF orientation.
@@ -568,11 +545,6 @@ impl From<&crate::ImageInfo> for Metadata {
             content_light_level: info.source_color.content_light_level,
             mastering_display: info.source_color.mastering_display,
             orientation: info.orientation,
-            // Decoded metadata defaults to the privacy-safe Web policy: the raw
-            // bytes are carried for inspection, but `for_embedding` will strip
-            // GPS/camera/timestamps/thumbnail/XMP unless the caller overrides
-            // via `with_policy` (e.g. `PreserveExact` for a verbatim transcode).
-            policy: MetadataPolicy::default(),
         }
     }
 }
@@ -866,11 +838,6 @@ mod tests {
     }
 
     #[test]
-    fn policy_default_is_web() {
-        assert_eq!(MetadataPolicy::default(), MetadataPolicy::Web);
-    }
-
-    #[test]
     fn policy_fields_resolution() {
         assert_eq!(
             MetadataPolicy::PreserveExact.fields(),
@@ -984,65 +951,6 @@ mod tests {
         assert!(ex.copyright().is_none()); // rights dropped
         assert!(!has_tag(e, 0x010F)); // camera dropped
         assert_eq!(out.cicp, Some(Cicp::SRGB));
-    }
-
-    // ── Embed-time policy carried on Metadata (for_embedding) ────────────────
-
-    #[test]
-    fn default_policy_is_web() {
-        // Privacy-safe default: a freshly built Metadata wants Web filtering.
-        assert_eq!(Metadata::none().policy, MetadataPolicy::Web);
-        assert_eq!(Metadata::default().policy, MetadataPolicy::Web);
-    }
-
-    #[test]
-    fn with_policy_sets_policy() {
-        let m = Metadata::none().with_policy(MetadataPolicy::PreserveExact);
-        assert_eq!(m.policy, MetadataPolicy::PreserveExact);
-    }
-
-    #[test]
-    fn for_embedding_applies_carried_web_policy_by_default() {
-        // The codec-facing hook: with the default Web policy, for_embedding
-        // strips camera identity while keeping orientation + rights.
-        let src = src_exif(6, "(c) Me", false);
-        let meta = Metadata::none().with_exif(src);
-        assert_eq!(meta.policy, MetadataPolicy::Web);
-        let embed = meta.for_embedding();
-        let e = embed.exif.as_deref().expect("EXIF");
-        let ex = Exif::parse(e).expect("parses");
-        assert_eq!(ex.orientation(), Some(Orientation::Rotate90));
-        assert_eq!(ex.copyright().unwrap(), "(c) Me");
-        assert!(
-            !has_tag(e, 0x010F),
-            "camera (Make) must be stripped by default"
-        );
-    }
-
-    #[test]
-    fn for_embedding_preserve_exact_is_verbatim() {
-        let src = src_exif(6, "(c) Me", false);
-        let meta = Metadata::none()
-            .with_exif(src.clone())
-            .with_policy(MetadataPolicy::PreserveExact);
-        let embed = meta.for_embedding();
-        assert_eq!(embed.exif.as_deref(), Some(src.as_slice()), "verbatim");
-        assert!(
-            has_tag(embed.exif.as_deref().unwrap(), 0x010F),
-            "camera kept"
-        );
-    }
-
-    #[test]
-    fn for_embedding_output_is_marked_final_no_double_strip() {
-        let src = src_exif(6, "(c) Me", false);
-        let once = Metadata::none().with_exif(src).for_embedding(); // Web-filtered
-        assert_eq!(once.policy, MetadataPolicy::PreserveExact);
-        // Re-embedding the already-filtered metadata is a no-op, not a re-strip.
-        let twice = once.for_embedding();
-        assert_eq!(twice.exif, once.exif);
-        let ex = Exif::parse(twice.exif.as_deref().unwrap()).unwrap();
-        assert_eq!(ex.copyright().unwrap(), "(c) Me");
     }
 
     // ── with_copyright / with_artist sugar (build/merge an EXIF blob) ─────────

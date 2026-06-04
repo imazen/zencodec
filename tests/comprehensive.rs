@@ -20,7 +20,8 @@ use zencodec::encode::{
 };
 use zencodec::{
     AnimationFrame, CodecErrorExt, ImageFormat, ImageInfo, ImageSequence, LimitExceeded, Metadata,
-    Orientation, OrientationHint, ResourceLimits, ThreadingPolicy, UnsupportedOperation,
+    MetadataFields, MetadataPolicy, Orientation, OrientationHint, ResourceLimits, ThreadingPolicy,
+    UnsupportedOperation,
 };
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
 
@@ -558,7 +559,7 @@ fn dyn_encode_job_set_methods() {
     let mut job = dyn_config.dyn_job();
     job.set_limits(ResourceLimits::none());
     job.set_policy(EncodePolicy::preserve_all());
-    job.set_metadata(meta);
+    job.set_metadata_policy(meta, MetadataPolicy::PreserveExact);
     job.set_canvas_size(4, 4);
     job.set_loop_count(Some(0));
 
@@ -767,11 +768,67 @@ fn metadata_roundtrip_via_encode_job() {
 
     // Pass metadata through the encode job
     let config = MockEncoderConfig::new();
-    let job = config.job().with_metadata(meta);
+    let job = config
+        .job()
+        .with_metadata_policy(meta, MetadataPolicy::PreserveExact);
     let enc = job.encoder().unwrap();
     let buf = make_rgb8_buffer(2, 2);
     let _output = enc.encode(buf.as_slice()).unwrap();
     // Mock doesn't embed metadata, but we verified the path compiles and runs
+}
+
+/// `with_metadata` / `set_metadata` are deprecated (they embed without an
+/// explicit retention policy), but deprecation is a compile-time nudge, not
+/// removal — the path must keep working for callers who opt in with
+/// `#[allow(deprecated)]`. This guards against accidentally deleting it.
+#[test]
+#[allow(deprecated)]
+fn deprecated_with_metadata_still_works() {
+    let meta = Metadata::none().with_exif(vec![1, 2, 3, 4]);
+
+    let config = MockEncoderConfig::new();
+    let job = config.clone().job().with_metadata(meta.clone());
+    let enc = job.encoder().unwrap();
+    let buf = make_rgb8_buffer(2, 2);
+    assert!(!enc.encode(buf.as_slice()).unwrap().is_empty());
+
+    let dyn_config: &dyn DynEncoderConfig = &config;
+    let mut job = dyn_config.dyn_job();
+    job.set_canvas_size(2, 2);
+    job.set_metadata(meta);
+    let enc = job.into_encoder().unwrap();
+    assert!(!enc.encode(buf.as_slice()).unwrap().is_empty());
+}
+
+/// `with_metadata_policy` filters the record *before* the codec sees it: a
+/// discard policy must yield empty metadata, `PreserveExact` must pass bytes
+/// through untouched. Asserts on `Metadata::filtered` directly (the exact
+/// transform `with_metadata_policy` applies), since the mock doesn't surface
+/// what it received.
+#[test]
+fn metadata_policy_filters_before_codec() {
+    let meta = Metadata::none()
+        .with_icc(vec![1u8; 8])
+        .with_exif(vec![2u8; 8])
+        .with_xmp(b"<x/>".to_vec());
+
+    // Discard-all policy => nothing survives.
+    let stripped = meta.filtered(&MetadataPolicy::Custom(MetadataFields::DISCARD_ALL));
+    assert!(stripped.is_empty(), "discard policy must strip everything");
+
+    // PreserveExact => byte-identical passthrough.
+    let kept = meta.filtered(&MetadataPolicy::PreserveExact);
+    assert_eq!(kept.icc_profile.as_deref(), Some([1u8; 8].as_slice()));
+    assert_eq!(kept.exif.as_deref(), Some([2u8; 8].as_slice()));
+    assert_eq!(kept.xmp.as_deref(), Some(b"<x/>".as_slice()));
+
+    // The job builder accepts the policy and runs end to end.
+    let job = MockEncoderConfig::new()
+        .job()
+        .with_metadata_policy(meta, MetadataPolicy::Web);
+    let enc = job.encoder().unwrap();
+    let buf = make_rgb8_buffer(2, 2);
+    assert!(!enc.encode(buf.as_slice()).unwrap().is_empty());
 }
 
 #[test]

@@ -170,19 +170,19 @@ impl EncodeCapabilities {
 
     // --- Getters ---
 
-    /// Whether the encoder embeds ICC color profiles from `with_metadata`.
+    /// Whether the encoder embeds ICC color profiles from the supplied [`Metadata`](crate::Metadata).
     pub const fn icc(&self) -> bool {
         self.icc
     }
-    /// Whether the encoder embeds EXIF data from `with_metadata`.
+    /// Whether the encoder embeds EXIF data from the supplied [`Metadata`](crate::Metadata).
     pub const fn exif(&self) -> bool {
         self.exif
     }
-    /// Whether the encoder embeds XMP data from `with_metadata`.
+    /// Whether the encoder embeds XMP data from the supplied [`Metadata`](crate::Metadata).
     pub const fn xmp(&self) -> bool {
         self.xmp
     }
-    /// Whether the encoder embeds CICP color description from `with_metadata`.
+    /// Whether the encoder embeds CICP color description from the supplied [`Metadata`](crate::Metadata).
     pub const fn cicp(&self) -> bool {
         self.cicp
     }

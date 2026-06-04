@@ -99,8 +99,9 @@ piece**, tracked separately.
 - **`EmitFacts { Fresh | Decoded | Passthrough }` + `PixelFidelity`** — nothing in
   the pipeline produces a `ColorOrigin`/fidelity: decode attaches no color to the
   buffer; provenance lives in `ImageInfo.source_color` and the carrier is a flat
-  `Metadata`. A codec `Encoder` only ever sees `with_metadata(Metadata)`, so it
-  could only ever build `Fresh` — the scenario machinery was dead code. The
+  `Metadata`. A codec `Encoder` only ever sees a flat `Metadata` (via the
+  `with_metadata_policy` → `with_metadata` path), so it could only ever build
+  `Fresh` — the scenario machinery was dead code. The
   `PixelDescriptor` already *is* the current gamut, so deriving `Reauthored` was
   redundant. `resolve_color_emit(&SourceColor, …)` takes the type that flows.
 - **`TranscodeEncoder` trait in zencodec** — a generic "output codec transcodes

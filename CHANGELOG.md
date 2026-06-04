@@ -24,13 +24,12 @@ All notable changes to zencodec are documented here.
     `DropIfCicpSafeSoleCarrier`. The plan lowers to `zenpixels_convert`'s
     `finalize_for_output_with` (`icc_profile_for_primaries` materializes a
     `SynthesizeFrom` from a `const fn` table — no CMS, never a silent drop).
-  - `EncodePolicy` now bundles the output-emission policy: `color:
-    Option<ColorEmitPolicy>` and `metadata: Option<MetadataPolicy>` (+ `with_color`,
-    `with_metadata_policy`, `resolve_color`, `resolve_metadata`), so encode and
-    transcode select the color carrier and metadata retention through one object —
-    the codec reads `color`, the pipeline applies `metadata` via `Metadata::filtered`.
-    Its docs reframe the legacy `embed_*` flags as a coarse best-effort codec gate.
-    `MetadataPolicy` is now `Copy` so it can be bundled by value.
+  - `EncodePolicy` carries the color-carrier emission policy: `color:
+    Option<ColorEmitPolicy>` (+ `with_color`, `resolve_color`), so encode and
+    transcode select the ICC-vs-CICP carrier through it. Its docs reframe the
+    legacy `embed_*` flags as a coarse best-effort codec gate, and point at
+    `EncodeJob::with_metadata_policy` for reliable field-level retention.
+    `MetadataPolicy` is now `Copy`.
   - `helpers::set_exif_orientation` rewrites a blob's EXIF orientation tag inline
     (offset-preserving) so a baked-upright pixel buffer and its embedded tag can't
     disagree (the double-rotation hazard). Applied by the pipeline, not by the
@@ -52,20 +51,22 @@ All notable changes to zencodec are documented here.
   are named constants (no bare hex), and the `ExifPolicy` timestamps category is
   `datetimes` (plural — it covers DateTime / Original / Digitized / OffsetTime* /
   SubSecTime*). (f4b9f1b)
-- **Embed-time metadata policy carried on `Metadata` (privacy by default)** —
-  `Metadata` gains `policy: MetadataPolicy` (default `Web`) and `with_policy()`;
-  `Metadata::for_embedding()` returns `self.filtered(&self.policy)` — the hook a
-  codec calls inside its existing `EncodeJob::with_metadata` so embedding honors
-  the caller's policy with no EXIF logic in the codec and no trait/signature
-  change. The carried bytes stay untouched until then (bring-your-own-EXIF-library
-  round-trips still see originals); `From<&ImageInfo>` defaults to `Web` so a
-  forgotten filter strips rather than leaks; `filtered()`'s output is marked
-  `PreserveExact` so `for_embedding` can't double-strip. `EncodePolicy::strip_all`
-  / `preserve_all` now carry a real `MetadataPolicy` through the reliable
-  `resolve_metadata` channel (`Custom(DISCARD_ALL)` / `PreserveExact`) instead of
-  relying on the advisory `embed_*` flags that no-op on codecs without
-  `with_policy`. `Metadata` is `#[non_exhaustive]`, so the new field is additive
-  (`size_of` 104 → 120 on 64-bit). (b832cdc)
+- **Explicit metadata-retention policy at embed time (compile-time enforced)** —
+  retention is a *transient* choice made when handing metadata to the encoder, not
+  state stored on `Metadata`. New blessed entry points:
+  `EncodeJob::with_metadata_policy(meta, MetadataPolicy)` and
+  `DynEncodeJob::set_metadata_policy(meta, MetadataPolicy)` filter the record via
+  `Metadata::filtered` *before* it reaches the codec, so a codec only ever embeds
+  what the policy kept. The pre-existing `EncodeJob::with_metadata` /
+  `DynEncodeJob::set_metadata` are now `#[deprecated]`: they propagate metadata
+  without a retention choice, so the compiler **warns at every such call site** —
+  a compile-time nudge toward `with_metadata_policy`, **not** a semver break
+  (existing code still compiles, and codecs still *implement* `with_metadata` as
+  the primitive the wrapper routes through; deprecation warns callers, not
+  implementors). `MetadataPolicy` has **no `Default`** — callers name a policy
+  explicitly (`Web` recommended, privacy-safe). No field was added to `Metadata`
+  (`size_of` stays 104 on 64-bit) and its bytes stay untouched until embed, so
+  bring-your-own-EXIF-library round-trips still see the originals. (73c5799)
 - **EXIF privacy hardening for partial-strip policies** — `MakerNote` (0x927C) is
   dropped whenever `gps` **or** `camera` is stripped (it can embed GPS/serials and
   can't be selectively scrubbed); `SubIFDs` (0x014A, an unmodeled sub-IFD pointer)
@@ -75,10 +76,14 @@ All notable changes to zencodec are documented here.
   **safe** for a >4 GiB blob under a stripping policy (drop, not pass-through). The
   `Web`/`ColorAndRotation` presets were already safe — these close gaps for
   hand-rolled `Custom` policies. (d8a2fae)
-- **From-scratch EXIF construction** — `Exif::new()` (+ `Default`) starts an empty
-  little-endian tree, completing the `parse`/`new` → edit → `to_bytes` flow so you
-  can build a blob with no source: `Exif::new()` → `set_copyright(…)` →
-  `to_bytes()` (raw TIFF; the codec adds the APP1 `Exif\0\0` framing). (b7acd9f)
+- **From-scratch EXIF construction** — `Exif::new(TextEncoding)` (+ `Default`,
+  which uses `Ascii`) starts an empty little-endian tree, completing the
+  `parse`/`new` → edit → `to_bytes` flow so you can build a blob with no source:
+  `Exif::new(TextEncoding::Ascii)` → `set_copyright(…)` → `to_bytes()` (raw TIFF;
+  the codec adds the APP1 `Exif\0\0` framing). The `TextEncoding` is required — the
+  Exif 2.x ASCII (type 2) vs Exif 3.0 UTF-8 (type 129) choice is a blob property
+  used by `set_copyright`/`set_artist` (type 129 is read by almost nothing, so it
+  can't be a silent default). (b7acd9f, 73c5799)
 - **`Metadata::with_copyright(&str)` / `with_artist(&str)`** — one-liner rights
   stamping that builds an EXIF blob if there is none and merges into a parseable
   existing one (keeping other tags), replacing an unparseable one. Written ASCII

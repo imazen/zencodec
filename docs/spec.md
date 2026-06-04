@@ -86,7 +86,11 @@ trait EncodeJob: Sized {
     fn with_stop(self, stop: StopToken) -> Self;
     fn with_limits(self, limits: ResourceLimits) -> Self;
     fn with_policy(self, policy: EncodePolicy) -> Self;         // default: self
-    fn with_metadata(self, meta: Metadata) -> Self;
+    // Blessed metadata path: filters via Metadata::filtered(&policy) before the
+    // codec sees the record, then routes through with_metadata. (default provided)
+    fn with_metadata_policy(self, meta: Metadata, policy: MetadataPolicy) -> Self;
+    #[deprecated] // embeds without a retention policy; use with_metadata_policy.
+    fn with_metadata(self, meta: Metadata) -> Self; // primitive — codecs impl this
     fn with_canvas_size(self, width: u32, height: u32) -> Self; // default: self
     fn with_loop_count(self, count: Option<u32>) -> Self;       // default: self
 
@@ -302,6 +306,8 @@ trait DynEncodeJob {
     fn set_stop(&mut self, stop: StopToken);
     fn set_limits(&mut self, limits: ResourceLimits);
     fn set_policy(&mut self, policy: EncodePolicy);
+    fn set_metadata_policy(&mut self, meta: Metadata, policy: MetadataPolicy); // blessed
+    #[deprecated] // use set_metadata_policy
     fn set_metadata(&mut self, meta: Metadata);
     fn set_canvas_size(&mut self, width: u32, height: u32);
     fn set_loop_count(&mut self, count: Option<u32>);
@@ -456,32 +462,36 @@ Non-color metadata blobs. Fields: `exif: Option<Vec<u8>>`, `xmp: Option<Vec<u8>>
 
 Owned metadata for encode/decode roundtrip. Fields: `icc_profile`, `exif`, `xmp`
 (`Option<Arc<[u8]>>`), `cicp`, `content_light_level`, `mastering_display` (Copy),
-`orientation`, and `policy: MetadataPolicy`. `#[non_exhaustive]`.
+and `orientation`. `#[non_exhaustive]`. Carries no retention state — a policy is
+chosen *transiently* at embed time (see below), not stored here.
 
-Methods: builder pattern (`with_icc()`, `with_policy()`, etc.),
+Methods: builder pattern (`with_icc()`, `with_exif()`, `with_xmp()`, etc.),
 `with_copyright(&str)` / `with_artist(&str)` (build-or-merge the rights tag into
-the EXIF blob, ASCII),`transfer_function()`, `color_primaries()`, `is_empty()`,
-`filtered(&MetadataPolicy) -> Metadata`, `for_embedding() -> Metadata`.
-`From<&ImageInfo>` conversion.
+the EXIF blob, ASCII), `transfer_function()`, `color_primaries()`, `is_empty()`,
+`filtered(&MetadataPolicy) -> Metadata`. `From<&ImageInfo>` conversion.
 
-**Embed-time policy (privacy by default).** `policy` carries *intent only* — the
-raw `exif`/`xmp`/`icc_profile` bytes are untouched (so an inspect / bring-your-own
-EXIF-library round-trip still sees the originals) until a codec materializes them.
-`Metadata::for_embedding()` returns `self.filtered(&self.policy)` — the metadata a
-codec should actually embed — and is the hook a codec calls inside its existing
-`EncodeJob::with_metadata` so embedding honors the caller's policy with no EXIF
-logic in the codec (works for every codec; no trait/signature change). `policy`
-defaults to `Web` (`Metadata::default()` and `From<&ImageInfo>`), so a forgotten
-filter strips rather than leaks; opt into verbatim embedding with
-`with_policy(MetadataPolicy::PreserveExact)`. `filtered()`'s output is marked
-`PreserveExact`, so `for_embedding()` is idempotent (never double-strips).
+**Embed-time policy (explicit privacy decision, compile-time enforced).**
+Retention is decided when metadata is handed to the encoder, via
+`EncodeJob::with_metadata_policy(meta, policy)` (or
+`DynEncodeJob::set_metadata_policy`), which applies `meta.filtered(&policy)`
+*before* the record reaches the codec — so a codec only ever embeds what the
+policy kept. The plain `with_metadata` / `set_metadata` are `#[deprecated]`:
+they embed without a retention choice, so the compiler **warns at the call site**
+(a nudge, not a semver break — they still work, and codecs still *implement*
+`with_metadata` as the primitive `with_metadata_policy` routes through;
+deprecation warns callers, not implementors). The raw `exif`/`xmp`/`icc_profile`
+bytes stay untouched until that filter runs, so an inspect / bring-your-own
+EXIF-library round-trip still sees the originals. `MetadataPolicy` has **no
+`Default`** — name one explicitly; `Web` is the recommended privacy-safe choice,
+`PreserveExact` embeds verbatim.
 
 ### `MetadataPolicy` / `MetadataFields` / `IccRetention`
 
 Field-level retention policy for `Metadata::filtered()` — the shared metadata
 filter for re-encode / recompress pipelines.
 
-`MetadataPolicy` (`#[non_exhaustive]`, `Default = Web`):
+`MetadataPolicy` (`#[non_exhaustive]`, **no `Default`** — retention is a privacy
+decision the caller must make explicitly; `Web` is the recommended choice):
 - `PreserveExact` — keep everything, byte-faithfully (incl. a redundant sRGB ICC).
 - `Preserve` — keep everything, but drop a redundant sRGB ICC.
 - `Web` (default) — ICC (unless redundant sRGB) + EXIF orientation/rights +
@@ -506,13 +516,17 @@ part of `Metadata` (they live at the encode-request layer) and are unaffected.
 Structured EXIF model (`zencodec::exif`). `Exif<'a>` (`parse` **or** `new` →
 `filtered` / edit → `to_bytes`) borrows the source — entry values and the
 thumbnail are never copied (entry values are `Cow`, borrowed on parse, owned when
-injected by an edit). `Exif::new()` (and `Default`) starts an empty little-endian
-tree for building from scratch — e.g. stamp a Copyright on an image that had no
-EXIF: `new()` → `set_copyright(…)` → `to_bytes()` (raw TIFF; the codec adds the
-APP1 `Exif\0\0` framing). Read accessors: `orientation()`, `copyright()` / `artist()` (lossy-UTF-8
+injected by an edit). `Exif::new(TextEncoding)` (and `Default`, which uses `Ascii`)
+starts an empty little-endian tree for building from scratch — e.g. stamp a
+Copyright on an image that had no EXIF: `Exif::new(TextEncoding::Ascii)` →
+`set_copyright(…)` → `to_bytes()` (raw TIFF; the codec adds the APP1 `Exif\0\0`
+framing). The `TextEncoding` is **required** at `new` — it's the Exif 2.x ASCII
+(type 2) vs Exif 3.0 UTF-8 (type 129) compat choice, a blob property used by all
+string writes (type 129 is read by almost nothing today, so it can't be a silent
+default). Read accessors: `orientation()`, `copyright()` / `artist()` (lossy-UTF-8
 text *view*, borrowing `&self`), `copyright_bytes()` / `artist_bytes()` (raw
-field bytes), `has_thumbnail()`, `has_gps()`. Edit accessors: `set_copyright(&str,
-TextEncoding)` / `set_artist(&str, TextEncoding)` insert-or-replace the IFD0 tag
+field bytes), `has_thumbnail()`, `has_gps()`. Edit accessors: `set_copyright(&str)`
+/ `set_artist(&str)` insert-or-replace the IFD0 tag using the blob's `TextEncoding`
 (materialized on the next `to_bytes`). `to_bytes()` re-serializes a valid TIFF
 with recomputed offsets, preserving byte order and `Exif\0\0` framing; it is a
 byte-exact fixpoint, so filtering and editing stay idempotent.
@@ -850,10 +864,15 @@ what features to allow.
 **`DecodePolicy` flags:** `allow_icc`, `allow_exif`, `allow_xmp`, `allow_progressive`,
 `allow_animation`, `allow_truncated`, `strict`.
 
-**`EncodePolicy` flags:** `embed_icc`, `embed_exif`, `embed_xmp`.
+**`EncodePolicy` fields:** `color: Option<ColorEmitPolicy>` (ICC-vs-CICP carrier,
+read by the codec via `resolve_color`) plus the coarse, best-effort per-channel
+embed gates `embed_icc`, `embed_exif`, `embed_xmp`. The embed gates are *not* the
+reliable retention control — for field-level privacy use
+`EncodeJob::with_metadata_policy`.
 
 `DecodePolicy` constructors: `none()`, `strict()`, `permissive()`.
-`EncodePolicy` constructors: `none()`, `strip_all()`, `preserve_all()`.
+`EncodePolicy` constructors: `none()`, `strip_all()`, `preserve_all()`;
+builder `with_color()`.
 
 ---
 

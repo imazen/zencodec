@@ -241,13 +241,18 @@ space identification, ICC for full profile precision.
 
 ## Metadata flows through Metadata
 
-`ImageInfo::metadata()` returns a `Metadata`. Pass to
-`EncodeJob::with_metadata()` for lossless metadata roundtrip.
+`ImageInfo::metadata()` returns a `Metadata`. Pass it to
+`EncodeJob::with_metadata_policy(meta, policy)`, choosing retention explicitly
+(`MetadataPolicy::PreserveExact` for a lossless roundtrip, `Web` for a
+privacy-safe strip). The filter runs before the codec sees the record. The plain
+`with_metadata` is the storage primitive codecs implement; it is `#[deprecated]`
+for callers, so omitting a policy raises a compile-time warning instead of
+silently propagating metadata.
 
 `Metadata` carries ICC, EXIF, XMP, CICP, HDR metadata (content light level,
-mastering display), orientation, and resolution. Byte buffers use `Arc<[u8]>`
-so cloning is a cheap ref-count bump. The encoder embeds what it supports
-and what the policy allows, silently skipping the rest.
+mastering display), and orientation. Byte buffers use `Arc<[u8]>` so cloning is
+a cheap ref-count bump. The encoder embeds what it supports, silently skipping
+the rest.
 
 `From<&ImageInfo>` converts decoded info into `Metadata` for re-encoding.
 

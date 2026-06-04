@@ -236,6 +236,12 @@ pub struct Exif<'a> {
     gps_ifd: Option<Vec<Entry<'a>>>,
     ifd1: Option<Vec<Entry<'a>>>,
     thumbnail: Option<&'a [u8]>,
+    /// Field type used when *writing* a string tag ([`set_copyright`](Self::set_copyright)
+    /// / [`set_artist`](Self::set_artist)) — the Exif 2.x-vs-3.0 compatibility
+    /// choice. Set by [`new`](Self::new); parsing defaults it to
+    /// [`TextEncoding::Ascii`] (it is not stored in the TIFF, so it does not
+    /// survive a parse round-trip).
+    text_encoding: TextEncoding,
 }
 
 /// TIFF/Exif type size in bytes, or `None` for an unknown type.
@@ -337,28 +343,36 @@ fn take_pointer(entries: &mut Vec<Entry<'_>>, tag: u16, order: ByteOrder) -> Opt
 }
 
 impl<'a> Default for Exif<'a> {
-    /// An empty EXIF tree — see [`Exif::new`].
+    /// An empty EXIF tree with the compatible [`TextEncoding::Ascii`] default —
+    /// see [`Exif::new`].
     fn default() -> Self {
-        Self::new()
+        Self::new(TextEncoding::Ascii)
     }
 }
 
 impl<'a> Exif<'a> {
     /// Start an empty EXIF tree to build from scratch — e.g. to stamp a
     /// Copyright on an image that carried no EXIF. Little-endian, no `Exif\0\0`
-    /// prefix. Set fields with [`set_copyright`](Self::set_copyright) /
-    /// [`set_artist`](Self::set_artist), then serialize with
-    /// [`to_bytes`](Self::to_bytes) (which yields a raw TIFF — the JPEG/codec
-    /// layer adds the APP1 `Exif\0\0` framing).
+    /// prefix.
+    ///
+    /// `text_encoding` is the **required** Exif 2.x-vs-3.0 compatibility choice
+    /// for any string field this blob writes, because it can't be defaulted
+    /// safely: [`TextEncoding::Utf8`] (type 129) is unreadable by most tools, so
+    /// pick [`TextEncoding::Ascii`] (UTF-8 bytes in a type-2 field — the
+    /// compatible de-facto form) unless every consumer is known to handle
+    /// type 129. ([`Exif::default()`](Default) uses `Ascii`.) Set fields with
+    /// [`set_copyright`](Self::set_copyright) / [`set_artist`](Self::set_artist),
+    /// then [`to_bytes`](Self::to_bytes) (a raw TIFF — the JPEG/codec layer adds
+    /// the APP1 `Exif\0\0` framing).
     ///
     /// ```
     /// use zencodec::exif::{Exif, TextEncoding};
-    /// let mut exif = Exif::new();
-    /// exif.set_copyright("© 2026 Lilith", TextEncoding::Utf8);
+    /// let mut exif = Exif::new(TextEncoding::Ascii); // compatible default
+    /// exif.set_copyright("© 2026 Lilith");
     /// let blob = exif.to_bytes();
     /// assert_eq!(Exif::parse(&blob).unwrap().copyright().unwrap(), "© 2026 Lilith");
     /// ```
-    pub fn new() -> Self {
+    pub fn new(text_encoding: TextEncoding) -> Self {
         Exif {
             order: ByteOrder::Little,
             had_prefix: false,
@@ -367,6 +381,7 @@ impl<'a> Exif<'a> {
             gps_ifd: None,
             ifd1: None,
             thumbnail: None,
+            text_encoding,
         }
     }
 
@@ -441,6 +456,9 @@ impl<'a> Exif<'a> {
             gps_ifd,
             ifd1,
             thumbnail,
+            // Not stored in the TIFF; edits to a parsed blob default to the
+            // compatible ASCII (type-2) form unless rebuilt via `Exif::new`.
+            text_encoding: TextEncoding::Ascii,
         })
     }
 
@@ -522,27 +540,25 @@ impl<'a> Exif<'a> {
 
     /// Set (insert or replace) the IFD0 Copyright tag (0x8298) to `text`.
     ///
-    /// `encoding` selects the TIFF field type — [`TextEncoding::Ascii`] (Exif
-    /// 2.x, type 2; the compatible default) or [`TextEncoding::Utf8`] (Exif 3.0,
-    /// type 129). The value is written NUL-terminated with the count including
-    /// the NUL (TIFF string convention). An existing Copyright entry is replaced
-    /// in place (keeping IFD order); otherwise a new entry is appended. The
-    /// change is materialized on the next [`to_bytes`](Self::to_bytes); the
-    /// injected value is owned, so the returned blob is independent of the source.
+    /// The TIFF field type is this blob's [`text_encoding`](Self::new) (Exif 2.x
+    /// ASCII type 2, or Exif 3.0 UTF-8 type 129) — chosen once at [`new`](Self::new),
+    /// or [`TextEncoding::Ascii`] for a parsed blob. The value is written
+    /// NUL-terminated (count includes the NUL); an existing Copyright entry is
+    /// replaced in place (keeping IFD order), otherwise a new one is appended.
+    /// Materialized on the next [`to_bytes`](Self::to_bytes); the injected value
+    /// is owned, so the output is independent of any source.
     ///
     /// To *remove* the field instead, [`filtered`](Self::filtered) with a policy
-    /// that discards [`rights`](ExifPolicy::rights).
-    ///
-    /// `text` is written as-is (its UTF-8 bytes); an embedded NUL would truncate
-    /// the field when later read, matching the TIFF NUL-terminated convention.
-    pub fn set_copyright(&mut self, text: &str, encoding: TextEncoding) {
-        set_ifd0_string(&mut self.ifd0, TAG_COPYRIGHT, text, encoding);
+    /// that discards [`rights`](ExifPolicy::rights). `text` is written as-is (its
+    /// UTF-8 bytes); an embedded NUL truncates the field when later read.
+    pub fn set_copyright(&mut self, text: &str) {
+        set_ifd0_string(&mut self.ifd0, TAG_COPYRIGHT, text, self.text_encoding);
     }
 
     /// Set (insert or replace) the IFD0 Artist tag (0x013B) to `text`. See
     /// [`set_copyright`](Self::set_copyright) for encoding and replace semantics.
-    pub fn set_artist(&mut self, text: &str, encoding: TextEncoding) {
-        set_ifd0_string(&mut self.ifd0, TAG_ARTIST, text, encoding);
+    pub fn set_artist(&mut self, text: &str) {
+        set_ifd0_string(&mut self.ifd0, TAG_ARTIST, text, self.text_encoding);
     }
 
     /// Prune the tree by `policy`, returning a new borrowing view. Surviving
@@ -592,6 +608,7 @@ impl<'a> Exif<'a> {
             gps_ifd,
             ifd1,
             thumbnail,
+            text_encoding: self.text_encoding,
         }
     }
 
@@ -1165,6 +1182,7 @@ mod tests {
             gps_ifd: Some(vec![e(0x0001, TIFF_ASCII, 2, b"N\0")]), // GPSLatitudeRef
             ifd1: Some(vec![]),
             thumbnail: Some(&[0xFF, 0xD8, 0xFF, 0xD9]),
+            text_encoding: TextEncoding::Ascii,
         };
         exif.to_bytes()
     }
@@ -1293,6 +1311,7 @@ mod tests {
             gps_ifd: None,
             ifd1: None,
             thumbnail: None,
+            text_encoding: TextEncoding::Ascii,
         };
         let pruned = exif.filtered(&ExifPolicy {
             camera: Retention::Discard,
@@ -1506,6 +1525,7 @@ mod tests {
             gps_ifd: None,
             ifd1: Some(vec![]),
             thumbnail: Some(&big),
+            text_encoding: TextEncoding::Ascii,
         };
         let bytes = exif.to_bytes();
         let y = Exif::parse(&bytes).expect("parses");
@@ -1645,6 +1665,7 @@ mod tests {
             gps_ifd: None,
             ifd1: None,
             thumbnail: None,
+            text_encoding: TextEncoding::Ascii,
         };
         let b1 = x.to_bytes();
         let b2 = Exif::parse(&b1).expect("re-parses").to_bytes();
@@ -1702,6 +1723,7 @@ mod tests {
             gps_ifd: None,
             ifd1: None,
             thumbnail: None,
+            text_encoding: TextEncoding::Ascii,
         };
         // Web keeps orientation + rights, drops camera/device.
         let out = exif
@@ -1736,7 +1758,7 @@ mod tests {
         let blob = orientation_only();
         let mut x = Exif::parse(&blob).unwrap();
         assert!(x.copyright().is_none());
-        x.set_copyright("(c) 2026 Lilith", TextEncoding::Ascii);
+        x.set_copyright("(c) 2026 Lilith");
         let out = x.to_bytes();
         let y = Exif::parse(&out).unwrap();
         assert_eq!(y.copyright().unwrap(), "(c) 2026 Lilith");
@@ -1749,9 +1771,9 @@ mod tests {
     /// Set a Copyright as Exif 3.0 UTF-8 (type 129); the declared type survives.
     #[test]
     fn set_copyright_utf8_writes_type129() {
-        let blob = orientation_only();
-        let mut x = Exif::parse(&blob).unwrap();
-        x.set_copyright("© 2026 Lilith", TextEncoding::Utf8);
+        // Exif 3.0 / type-129 blob (the explicit opt-in).
+        let mut x = Exif::new(TextEncoding::Utf8);
+        x.set_copyright("© 2026 Lilith");
         let out = x.to_bytes();
         let y = Exif::parse(&out).unwrap();
         assert_eq!(y.copyright().unwrap(), "© 2026 Lilith");
@@ -1765,7 +1787,7 @@ mod tests {
         let src = sample(ByteOrder::Little, false); // has "(c) Me"
         let mut x = Exif::parse(&src).unwrap();
         assert_eq!(x.copyright().unwrap(), "(c) Me");
-        x.set_copyright("(c) New Owner", TextEncoding::Ascii);
+        x.set_copyright("(c) New Owner");
         let out = x.to_bytes();
         let y = Exif::parse(&out).unwrap();
         assert_eq!(y.copyright().unwrap(), "(c) New Owner");
@@ -1780,7 +1802,7 @@ mod tests {
     fn set_copyright_ascii_carries_utf8_bytes_defacto() {
         let blob = orientation_only();
         let mut x = Exif::parse(&blob).unwrap();
-        x.set_copyright("© Лилит", TextEncoding::Ascii); // non-ASCII into type 2
+        x.set_copyright("© Лилит"); // non-ASCII into type 2
         let out = x.to_bytes();
         let y = Exif::parse(&out).unwrap();
         assert_eq!(y.copyright_bytes(), Some("© Лилит".as_bytes()));
@@ -1794,7 +1816,7 @@ mod tests {
     fn set_artist_round_trips_and_is_rights() {
         let blob = orientation_only();
         let mut x = Exif::parse(&blob).unwrap();
-        x.set_artist("Lilith", TextEncoding::Ascii);
+        x.set_artist("Lilith");
         let out = x.to_bytes();
         let y = Exif::parse(&out).unwrap();
         assert_eq!(y.artist().unwrap(), "Lilith");
@@ -1814,7 +1836,7 @@ mod tests {
         let src = sample(ByteOrder::Little, false);
         let mut x = Exif::parse(&src).unwrap();
         let long = "Copyright 2026 Lilith River — all rights reserved worldwide.";
-        x.set_copyright(long, TextEncoding::Ascii); // long → out-of-line
+        x.set_copyright(long); // long → out-of-line
         let out = x
             .filtered(&ExifPolicy::KEEP_ALL.with_gps(Retention::Discard))
             .to_bytes();
@@ -1830,7 +1852,7 @@ mod tests {
     fn edited_to_bytes_is_canonical_fixpoint() {
         let blob = orientation_only();
         let mut x = Exif::parse(&blob).unwrap();
-        x.set_copyright("(c) Me", TextEncoding::Utf8);
+        x.set_copyright("(c) Me");
         let b1 = x.to_bytes();
         let b2 = Exif::parse(&b1).unwrap().to_bytes();
         assert_eq!(b1, b2, "edited output must be a canonical fixpoint");
@@ -1854,6 +1876,7 @@ mod tests {
             gps_ifd: None,
             ifd1: None,
             thumbnail: None,
+            text_encoding: TextEncoding::Ascii,
         };
         // Keep camera, drop GPS → MakerNote must be gone (could carry location).
         let stripped = exif
@@ -1890,6 +1913,7 @@ mod tests {
             gps_ifd: None,
             ifd1: None,
             thumbnail: None,
+            text_encoding: TextEncoding::Ascii,
         };
         let out = exif
             .filtered(&ExifPolicy::KEEP_ALL.with_gps(Retention::Discard))
@@ -1916,6 +1940,7 @@ mod tests {
             gps_ifd: None,
             ifd1: Some(vec![e(TAG_MAKE, TIFF_ASCII, 4, b"Cam\0")]), // camera tag in IFD1
             thumbnail: Some(&[0xFF, 0xD8, 0xFF, 0xD9]),
+            text_encoding: TextEncoding::Ascii,
         };
         let out = exif
             .filtered(&ExifPolicy::KEEP_ALL.with_camera(Retention::Discard))
@@ -1933,9 +1958,9 @@ mod tests {
     /// Build a fresh EXIF from nothing: new → set_copyright → to_bytes → parse.
     #[test]
     fn new_from_scratch_copyright_round_trips() {
-        let mut exif = Exif::new();
+        let mut exif = Exif::new(TextEncoding::Ascii);
         assert!(exif.copyright().is_none());
-        exif.set_copyright("(c) 2026 Lilith", TextEncoding::Ascii);
+        exif.set_copyright("(c) 2026 Lilith");
         let blob = exif.to_bytes();
         let y = Exif::parse(&blob).expect("fresh blob parses");
         assert_eq!(y.copyright().unwrap(), "(c) 2026 Lilith");

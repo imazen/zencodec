@@ -183,13 +183,35 @@ pub trait EncodeJob: Sized {
         self
     }
 
-    /// Set metadata (ICC, EXIF, XMP) to embed in the output.
+    /// Set metadata to embed, **filtered by an explicit retention policy** — the
+    /// blessed path. Metadata retention is a privacy decision, so the policy is
+    /// required: [`MetadataPolicy::Web`](crate::MetadataPolicy::Web) is the
+    /// privacy-safe choice (strips GPS/camera/timestamps/thumbnail/XMP, keeps
+    /// orientation + rights + color signaling);
+    /// [`PreserveExact`](crate::MetadataPolicy::PreserveExact) embeds verbatim.
     ///
-    /// Takes ownership — callers that need to reuse the metadata should
-    /// `.clone()` before passing. The `Arc<[u8]>` fields inside `Metadata`
-    /// make cloning cheap (ref-count bump, no byte copying).
+    /// A *provided* method (no codec change): it filters via
+    /// [`Metadata::filtered`](crate::Metadata::filtered) — which also reconciles
+    /// the embedded EXIF orientation tag — then hands the result to the codec's
+    /// [`with_metadata`](Self::with_metadata). The codec embeds what its format
+    /// supports and skips the rest.
+    #[must_use]
+    fn with_metadata_policy(self, meta: Metadata, policy: crate::MetadataPolicy) -> Self {
+        #[allow(deprecated)]
+        self.with_metadata(meta.filtered(&policy))
+    }
+
+    /// Set metadata (ICC, EXIF, XMP) to embed in the output, **without choosing a
+    /// retention policy**. Codecs implement this (store the bytes); callers should
+    /// prefer [`with_metadata_policy`](Self::with_metadata_policy) so the
+    /// privacy/retention decision is explicit.
     ///
-    /// The codec embeds what the format supports, silently skips the rest.
+    /// Takes ownership — callers that need to reuse the metadata should `.clone()`
+    /// first (the `Arc<[u8]>` fields make cloning a cheap ref-count bump). The
+    /// codec embeds what the format supports and silently skips the rest.
+    #[deprecated(note = "embeds metadata without an explicit retention policy; use \
+                with_metadata_policy(meta, policy) — e.g. MetadataPolicy::Web \
+                (privacy-safe) or MetadataPolicy::PreserveExact")]
     fn with_metadata(self, meta: Metadata) -> Self;
 
     /// Set animation canvas dimensions.
@@ -280,7 +302,7 @@ pub trait EncodeJob: Sized {
     ///
     /// // Erase the codec type
     /// let encode = config.job()
-    ///     .with_metadata(meta)
+    ///     .with_metadata_policy(meta, MetadataPolicy::Web)
     ///     .dyn_encoder()?;
     ///
     /// // No generics from here on
