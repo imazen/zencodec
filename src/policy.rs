@@ -302,7 +302,13 @@ impl EncodePolicy {
     pub const fn strip_all() -> Self {
         Self {
             color: None,
-            metadata: None,
+            // Carry a real discard policy through the reliable metadata channel
+            // (`Metadata::filtered` / `resolve_metadata`), not only the advisory
+            // `embed_*` flags — the latter silently no-op on codecs that don't
+            // implement `with_policy`, so a strip via flags alone could leak.
+            metadata: Some(crate::MetadataPolicy::Custom(
+                crate::MetadataFields::DISCARD_ALL,
+            )),
             embed_icc: Some(false),
             embed_exif: Some(false),
             embed_xmp: Some(false),
@@ -313,7 +319,7 @@ impl EncodePolicy {
     pub const fn preserve_all() -> Self {
         Self {
             color: None,
-            metadata: None,
+            metadata: Some(crate::MetadataPolicy::PreserveExact),
             embed_icc: Some(true),
             embed_exif: Some(true),
             embed_xmp: Some(true),
@@ -458,6 +464,13 @@ mod tests {
         assert_eq!(p.embed_icc, Some(false));
         assert_eq!(p.embed_exif, Some(false));
         assert_eq!(p.embed_xmp, Some(false));
+        // Reliable channel: strip_all carries a real discard policy, so a
+        // pipeline applying `resolve_metadata` actually strips even when the
+        // advisory embed_* flags are a no-op on the codec.
+        assert_eq!(
+            p.resolve_metadata(crate::MetadataPolicy::Web),
+            crate::MetadataPolicy::Custom(crate::MetadataFields::DISCARD_ALL)
+        );
     }
 
     #[test]
@@ -466,6 +479,10 @@ mod tests {
         assert_eq!(p.embed_icc, Some(true));
         assert_eq!(p.embed_exif, Some(true));
         assert_eq!(p.embed_xmp, Some(true));
+        assert_eq!(
+            p.resolve_metadata(crate::MetadataPolicy::Web),
+            crate::MetadataPolicy::PreserveExact
+        );
     }
 
     #[test]
