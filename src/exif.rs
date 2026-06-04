@@ -56,6 +56,10 @@ const TAG_GPS_IFD: u16 = 0x8825;
 const TAG_INTEROP_IFD: u16 = 0xA005;
 const TAG_THUMB_OFFSET: u16 = 0x0201; // JPEGInterchangeFormat
 const TAG_THUMB_LENGTH: u16 = 0x0202; // JPEGInterchangeFormatLength
+// SubIFDs (TIFF/DNG) — an array of offsets to nested IFDs (alt/full-res images
+// with their own EXIF/GPS). NOT modeled here, so its offsets can't be fixed up
+// on a rewrite; dropped during filtering rather than left dangling.
+const TAG_SUBIFDS: u16 = 0x014A;
 
 // Exif sub-IFD: capture timestamps (the `datetimes` category).
 const TAG_DATETIME_ORIGINAL: u16 = 0x9003;
@@ -511,7 +515,18 @@ impl<'a> Exif<'a> {
     /// Prune the tree by `policy`, returning a new borrowing view. Surviving
     /// entries still borrow the original source (no payload copy).
     pub fn filtered(&self, policy: &ExifPolicy) -> Exif<'a> {
-        let keep = |e: &&Entry<'a>| policy.keeps(classify(e.tag));
+        let keep = |e: &&Entry<'a>| match e.tag {
+            // Unmodeled sub-IFD pointer (only Exif/GPS/Interop are modeled). Its
+            // offset can't be recomputed on a rewrite, so keeping it would emit a
+            // dangling offset / orphaned sub-IFD — drop it instead.
+            TAG_SUBIFDS => false,
+            // MakerNote is opaque and routinely embeds GPS coordinates + serials;
+            // it can only be dropped wholesale. Strip it whenever EITHER camera or
+            // GPS is being removed — otherwise a gps-strip could still leak the
+            // location carried inside the maker block.
+            TAG_MAKER_NOTE => policy.camera.keeps() && policy.gps.keeps(),
+            tag => policy.keeps(classify(tag)),
+        };
         let ifd0 = self.ifd0.iter().filter(keep).cloned().collect();
         let exif_ifd = self
             .exif_ifd
@@ -522,8 +537,18 @@ impl<'a> Exif<'a> {
             Retention::Keep => self.gps_ifd.clone(),
             Retention::Discard => None,
         };
+        // IFD1 (thumbnail directory) carries its own Make/Model/DateTime/etc.;
+        // run it through the same per-category filter as IFD0 so "keep thumbnail,
+        // drop camera/datetimes" doesn't leak those via the thumbnail dir. The
+        // IFD1 wrapper is kept (possibly empty) to hold the thumbnail pointers
+        // that `to_bytes` synthesizes.
         let (ifd1, thumbnail) = match policy.thumbnail {
-            Retention::Keep => (self.ifd1.clone(), self.thumbnail),
+            Retention::Keep => (
+                self.ifd1
+                    .as_ref()
+                    .map(|d| d.iter().filter(keep).cloned().collect::<Vec<_>>()),
+                self.thumbnail,
+            ),
             Retention::Discard => (None, None),
         };
         Exif {
@@ -1033,6 +1058,9 @@ impl ExifPolicy {
 ///   camera data a lenient viewer might still read. (Orientation is unaffected:
 ///   it's carried separately on [`Metadata`](crate::Metadata).) A
 ///   keep-everything policy never reaches this path.
+/// - **Oversize (> 4 GiB) under a stripping policy → `None` (fail-safe).** Such a
+///   blob can't be safely rewritten (offsets are `u32`), so it is dropped rather
+///   than passed through unfiltered — same reasoning as the unparseable case.
 pub fn retain<'a>(src: &'a [u8], policy: &ExifPolicy) -> Option<Cow<'a, [u8]>> {
     if policy.discards_everything() {
         return None;
@@ -1041,12 +1069,13 @@ pub fn retain<'a>(src: &'a [u8], policy: &ExifPolicy) -> Option<Cow<'a, [u8]>> {
         return Some(Cow::Borrowed(src));
     }
     // A valid TIFF is ≤ 4 GiB (offsets are `u32`); a larger blob can't be
-    // rewritten without risking offset truncation, and rewriting one is
-    // pathological anyway. Pass it through untouched rather than risk a corrupt
-    // output. (Rewrites are bounded by the source size — `ext_size` dedups
-    // aliased values — so a parseable in-range blob is always safe.)
+    // rewritten without risking offset truncation. We've already returned for
+    // keep-everything above, so reaching here means a stripping policy — fail
+    // SAFE (drop) rather than pass the original through unfiltered, which would
+    // leak exactly the GPS/camera data the policy asked to remove. (Matches the
+    // unparseable-input fail-safe below; a >4 GiB EXIF blob is itself anomalous.)
     if src.len() > u32::MAX as usize {
-        return Some(Cow::Borrowed(src));
+        return None;
     }
     match Exif::parse(src) {
         Some(exif) => {
@@ -1772,5 +1801,97 @@ mod tests {
         let b1 = x.to_bytes();
         let b2 = Exif::parse(&b1).unwrap().to_bytes();
         assert_eq!(b1, b2, "edited output must be a canonical fixpoint");
+    }
+
+    // ── Privacy hardening (MakerNote / SubIFDs / IFD1) ───────────────────────
+
+    /// MakerNote (0x927C) is opaque and can embed GPS/serials; it must drop when
+    /// GPS is stripped even if the `camera` category is kept (it can't be
+    /// selectively scrubbed), and stay when both camera and gps are kept.
+    #[test]
+    fn makernote_dropped_when_gps_stripped_even_if_camera_kept() {
+        let exif = Exif {
+            order: ByteOrder::Little,
+            had_prefix: false,
+            ifd0: vec![
+                e(TAG_ORIENTATION, TIFF_SHORT, 1, &[6, 0]),
+                e(TAG_MAKER_NOTE, TIFF_UNDEFINED, 8, b"MAKER\0\0\0"),
+            ],
+            exif_ifd: None,
+            gps_ifd: None,
+            ifd1: None,
+            thumbnail: None,
+        };
+        // Keep camera, drop GPS → MakerNote must be gone (could carry location).
+        let stripped = exif
+            .filtered(&ExifPolicy::KEEP_ALL.with_gps(Retention::Discard))
+            .to_bytes();
+        assert!(
+            !stripped
+                .windows(2)
+                .any(|w| w == TAG_MAKER_NOTE.to_le_bytes()),
+            "MakerNote must be stripped when GPS is dropped"
+        );
+        // Both camera and gps kept (drop only `other`) → MakerNote survives.
+        let kept = exif
+            .filtered(&ExifPolicy::KEEP_ALL.with_other(Retention::Discard))
+            .to_bytes();
+        assert!(
+            kept.windows(2).any(|w| w == TAG_MAKER_NOTE.to_le_bytes()),
+            "MakerNote kept when both camera and gps are kept"
+        );
+    }
+
+    /// An unmodeled SubIFDs pointer (0x014A) is dropped on a rewrite rather than
+    /// left as a dangling offset; the rest of IFD0 survives.
+    #[test]
+    fn subifds_pointer_dropped_on_rewrite() {
+        let exif = Exif {
+            order: ByteOrder::Little,
+            had_prefix: false,
+            ifd0: vec![
+                e(TAG_ORIENTATION, TIFF_SHORT, 1, &[6, 0]),
+                e(TAG_SUBIFDS, TIFF_LONG, 1, &[0x40, 0, 0, 0]),
+            ],
+            exif_ifd: None,
+            gps_ifd: None,
+            ifd1: None,
+            thumbnail: None,
+        };
+        let out = exif
+            .filtered(&ExifPolicy::KEEP_ALL.with_gps(Retention::Discard))
+            .to_bytes();
+        assert!(
+            !out.windows(2).any(|w| w == TAG_SUBIFDS.to_le_bytes()),
+            "SubIFDs pointer must be dropped on rewrite (would dangle)"
+        );
+        assert_eq!(
+            Exif::parse(&out).unwrap().orientation(),
+            Some(Orientation::Rotate90)
+        );
+    }
+
+    /// IFD1 (thumbnail dir) entries obey categories: keep the thumbnail image but
+    /// drop camera → the thumbnail survives while IFD1's Make is stripped.
+    #[test]
+    fn ifd1_entries_filtered_by_category() {
+        let exif = Exif {
+            order: ByteOrder::Little,
+            had_prefix: false,
+            ifd0: vec![e(TAG_ORIENTATION, TIFF_SHORT, 1, &[6, 0])],
+            exif_ifd: None,
+            gps_ifd: None,
+            ifd1: Some(vec![e(TAG_MAKE, TIFF_ASCII, 4, b"Cam\0")]), // camera tag in IFD1
+            thumbnail: Some(&[0xFF, 0xD8, 0xFF, 0xD9]),
+        };
+        let out = exif
+            .filtered(&ExifPolicy::KEEP_ALL.with_camera(Retention::Discard))
+            .to_bytes();
+        let y = Exif::parse(&out).unwrap();
+        assert!(y.has_thumbnail(), "thumbnail image must be kept");
+        assert!(
+            !out.windows(2).any(|w| w == TAG_MAKE.to_le_bytes()),
+            "IFD1 camera tag (Make) must be stripped"
+        );
     }
 }
