@@ -4,7 +4,7 @@
 //! values *borrow* the source bytes (zero-copy — a multi-KB thumbnail is never
 //! copied during parsing or pruning). [`Exif::filtered`] prunes the tree by
 //! [`ExifPolicy`] category, and [`Exif::to_bytes`] re-serializes a valid TIFF,
-//! recomputing all offsets. [`retain`] is the `Cow` convenience used by
+//! recomputing all offsets. [`retain`](crate::exif::retain) is the `Cow` convenience used by
 //! [`Metadata::filtered`](crate::Metadata::filtered): it borrows the source
 //! unchanged when nothing is dropped and allocates only on a real rewrite.
 //!
@@ -21,7 +21,7 @@
 //!   out-of-bounds entry is *skipped*, and a truncated entry table salvages the
 //!   entries read so far — one malformed (or future-typed) entry never discards
 //!   the rest of the IFD's metadata. Skipped entries are dropped on a rewrite.
-//! - **Fail-safe filtering.** [`retain`] drops EXIF it can't parse under a
+//! - **Fail-safe filtering.** [`retain`](crate::exif::retain) drops EXIF it can't parse under a
 //!   stripping policy (rather than passing it through and risking a leak); see
 //!   its docs.
 //!
