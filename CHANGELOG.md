@@ -38,6 +38,20 @@ All notable changes to zencodec are documented here.
   - `exif::ByteOrder` is module-scoped (a TIFF/EXIF header detail), not re-exported
     at the crate root.
   - Design + rejected alternatives: `docs/color-emit-model.md`.
+- **EXIF string-field editing** — `Exif::set_copyright` / `set_artist` set (insert
+  or replace) the IFD0 rights tags, materialized through the existing canonical
+  `Exif::to_bytes` (offsets recomputed, byte-exact fixpoint preserved). The new
+  `exif::TextEncoding` (re-exported at the crate root) lets the caller pick the
+  TIFF field type explicitly: `Ascii` (Exif 2.x, type 2 — carries UTF-8 bytes
+  de-facto, most compatible) or `Utf8` (Exif 3.0 / CIPA DC-008-2023, type 129 —
+  spec-conformant Unicode, thinly read). Explicit over auto-upgrade because
+  auto-promoting non-ASCII to type 129 would silently produce strings most
+  readers can't parse. `Entry` value bytes are now `Cow` so parsed entries stay
+  zero-copy while edited ones are owned; the `copyright()` / `artist()` /
+  `*_bytes()` accessors now borrow `&self`. EXIF tag/type numbers in the parser
+  are named constants (no bare hex), and the `ExifPolicy` timestamps category is
+  `datetimes` (plural — it covers DateTime / Original / Digitized / OffsetTime* /
+  SubSecTime*). (f4b9f1b)
 
 ## [0.1.21] - 2026-05-29
 
@@ -69,7 +83,7 @@ All notable changes to zencodec are documented here.
   `Exif::filtered(&ExifPolicy)` prunes by category, and `Exif::to_bytes`
   re-serializes a valid TIFF with recomputed offsets. `ExifPolicy`
   (`#[non_exhaustive]`, `with_*` builders) has seven categories: `orientation`,
-  `rights`, `thumbnail`, `gps`, `datetime`, `camera`, `other` — so e.g.
+  `rights`, `thumbnail`, `gps`, `datetimes`, `camera`, `other` — so e.g.
   "drop only the thumbnail" or "strip GPS" is one field. `exif::retain` is the
   `Cow` entry point: borrows the source unchanged when nothing is dropped
   (so `Metadata::filtered` is a cheap `Arc` clone), allocates only on a real
@@ -80,7 +94,7 @@ All notable changes to zencodec are documented here.
     the serializer **deduplicates aliased out-of-line values** so a malformed
     IFD pointing many entries at one blob can't amplify the rewrite ~1000×
     (DoS); Copyright/Artist accessors read both **ASCII (type 2) and UTF-8
-    (type 129)** per Exif 2.32 / CIPA DC-008 (a UTF-8-typed field was previously
+    (type 129, Exif 3.0)** per CIPA DC-008 (a UTF-8-typed field was previously
     dropped as unknown), expose raw bytes (`copyright_bytes` / `artist_bytes`)
     alongside the lossy-UTF-8 text view, and a pruning rewrite preserves field
     bytes **and TIFF type** verbatim (never transcoded — neither corrupted nor

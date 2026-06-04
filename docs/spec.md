@@ -489,24 +489,35 @@ part of `Metadata` (they live at the encode-request layer) and are unaffected.
 
 ### `exif::Exif` / `ExifPolicy` / `Retention`
 
-Structured EXIF model (`zencodec::exif`). `Exif<'a>` (`parse` → `filtered` →
-`to_bytes`) borrows the source — entry values and the thumbnail are never
-copied. Accessors: `orientation()`, `copyright()` / `artist()` (lossy-UTF-8
-text *view*), `copyright_bytes()` / `artist_bytes()` (raw field bytes),
-`has_thumbnail()`, `has_gps()`. `to_bytes()` re-serializes a valid TIFF with
-recomputed offsets, preserving byte order and `Exif\0\0` framing.
+Structured EXIF model (`zencodec::exif`). `Exif<'a>` (`parse` → `filtered` /
+edit → `to_bytes`) borrows the source — entry values and the thumbnail are never
+copied (entry values are `Cow`, borrowed on parse, owned when injected by an
+edit). Read accessors: `orientation()`, `copyright()` / `artist()` (lossy-UTF-8
+text *view*, borrowing `&self`), `copyright_bytes()` / `artist_bytes()` (raw
+field bytes), `has_thumbnail()`, `has_gps()`. Edit accessors: `set_copyright(&str,
+TextEncoding)` / `set_artist(&str, TextEncoding)` insert-or-replace the IFD0 tag
+(materialized on the next `to_bytes`). `to_bytes()` re-serializes a valid TIFF
+with recomputed offsets, preserving byte order and `Exif\0\0` framing; it is a
+byte-exact fixpoint, so filtering and editing stay idempotent.
 
-Encoding: per Exif 2.32 / CIPA DC-008 (Table 6), Copyright/Artist may be ASCII
-(type 2, 7-bit) **or UTF-8 (type 129)** — UTF-8 is the conformant Unicode form;
-non-ASCII bytes stuffed into a type-2 field are the non-conformant-but-common
-case. zencodec reads both, never generates or transcodes them — `copyright` /
-`artist` give a lossy-UTF-8 display view, `*_bytes` give the exact bytes, and a
-pruning rewrite preserves the value bytes **and TIFF type** verbatim (a field is
-neither corrupted nor "corrected").
+`TextEncoding` (`#[non_exhaustive]`) — the EXIF text convention a write uses:
+`Ascii` (Exif 2.x, TIFF type 2; carries UTF-8 bytes de-facto — most compatible,
+the recommended default) or `Utf8` (Exif 3.0 / CIPA DC-008-2023, TIFF type 129;
+spec-conformant Unicode, thin reader support). Both write the same UTF-8 bytes,
+NUL-terminated; they differ only in the declared TIFF type. Re-exported at the
+crate root.
+
+Encoding (read side): Copyright/Artist may be ASCII (type 2, 7-bit) **or UTF-8
+(type 129, Exif 3.0)**; non-ASCII bytes stuffed into a type-2 field are the
+non-conformant-but-common case. zencodec reads both — `copyright` / `artist`
+give a lossy-UTF-8 display view, `*_bytes` give the exact bytes. A pruning
+rewrite **never transcodes**: it preserves the value bytes **and TIFF type**
+verbatim (a field is neither corrupted nor "corrected"). Writing is the only
+path that mints new bytes, and the caller picks the type via `TextEncoding`.
 
 `ExifPolicy` (`Copy`, `#[non_exhaustive]`, `with_*` builders) — seven keep/drop
 categories of `Retention`: `orientation`, `rights` (copyright + artist),
-`thumbnail`, `gps`, `datetime`, `camera`, `other`. Consts: `KEEP_ALL`,
+`thumbnail`, `gps`, `datetimes`, `camera`, `other`. Consts: `KEEP_ALL`,
 `DISCARD_ALL`, `ATTRIBUTED_ORIENTATION`, `ORIENTATION_ONLY`.
 
 `Retention` (`Keep` / `Discard`) — explicit per-field intent.
@@ -527,29 +538,32 @@ length is read as SHORT or LONG; `retain` passes >4 GiB blobs through untouched.
 Validated by differential tests vs `kamadak-exif`, three libFuzzer targets, and
 a 1 KiB–1 MiB-thumbnail zero-copy benchmark.
 
-#### Planned (not implemented): EXIF write / edit path
+#### EXIF write / edit path
 
-The model is **read + filter** today; there is **no public write API**. When a
-real consumer needs to *set* fields — e.g. a pipeline injecting Orientation or
-stamping a Copyright on every processed image — the planned shape is:
+Editing a parsed blob is supported for the string rights fields: `set_copyright`
+/ `set_artist` insert-or-replace the IFD0 tag, then `to_bytes` re-serializes
+through the canonical serializer (offsets recomputed, fixpoint preserved).
+Mechanism: `Entry.value` is `Cow<'a, [u8]>`, so parsed entries stay borrowed
+(zero-copy) while injected ones are owned.
 
-- `exif::Builder` (construct from scratch) + `Exif::edit()` (edit a parsed blob),
-  each terminating in `build() -> Vec<u8>` and reusing the existing canonical
-  serializer. Mechanism: relax `Entry.value` to `Cow<'a, [u8]>` so parsed
-  entries stay borrowed (zero-copy) while injected ones are owned — or a
-  separate `Builder` that copies entries (editing allocates anyway).
-- Setters pick the TIFF type per spec: **ASCII (type 2) when the string is pure
-  7-bit, else UTF-8 (type 129)**, NUL-terminated, count incl. NUL — never stuff
-  non-ASCII into a type-2 field.
-- Interop caveat: type 129 has thin reader support (ExifTool yes; kamadak /
-  Pillow / most no), so the default is ASCII-when-possible; for broad
-  readability of a copyright, also writing XMP `dc:rights` (universally UTF-8)
-  is the most portable option and a likely companion feature.
-- Reconcile the `Metadata::orientation` field with any Orientation entry the
-  builder writes into the EXIF blob (keep them consistent).
+The caller picks the TIFF type explicitly via `TextEncoding` (`Ascii` = type 2,
+`Utf8` = type 129) rather than the writer auto-upgrading to type 129 for
+non-ASCII. This is deliberate: type 129 has thin reader support (ExifTool reads
+it; kamadak / Pillow / most do not), so an auto-upgrade would silently produce
+copyright strings most tools can't read. `Ascii` writes the string's UTF-8 bytes
+into the type-2 field (the de-facto interchange form — maximally compatible);
+`Utf8` is the spec-conformant choice when the consumer is known to handle it.
+Both are NUL-terminated with the count including the NUL.
 
-This is additive (semver-minor) when it lands; it is deliberately deferred until
-a concrete consumer exists.
+Still planned (additive, semver-minor; deferred until a concrete consumer):
+
+- `exif::Builder` to construct a blob from scratch (today editing starts from a
+  parsed `Exif`), and setters for non-string fields.
+- For broad copyright readability, also writing XMP `dc:rights` (universally
+  UTF-8) is the most portable option and a likely companion feature.
+- Orientation editing already exists as a byte-level, offset-preserving rewrite
+  (`helpers::set_exif_orientation`), used by the pipeline to reconcile a
+  baked-upright buffer's `Metadata::orientation` with its embedded tag.
 
 ### `OutputInfo`
 

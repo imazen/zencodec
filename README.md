@@ -100,7 +100,7 @@ let policy = MetadataPolicy::Custom(
 let no_thumb = decoded_meta.filtered(&policy);
 ```
 
-`MetadataFields` encapsulates EXIF in an `ExifPolicy` with seven keep/discard categories — `orientation`, `rights`, `thumbnail`, `gps`, `datetime`, `camera`, `other` — and three-way ICC handling (`IccRetention::{Drop, KeepNonSrgb, Keep}`). EXIF passes through byte-unchanged (zero-copy) when no category is dropped, and is rewritten — offsets recomputed — only when pruning. CICP/HDR are color *signaling* (dropping them changes displayed pixels), so the presets keep them; a `Custom` policy can drop them. The structured parser is public as [`zencodec::exif::Exif`](https://docs.rs/zencodec) (`parse` → `filtered` → `to_bytes`) for direct EXIF work.
+`MetadataFields` encapsulates EXIF in an `ExifPolicy` with seven keep/discard categories — `orientation`, `rights`, `thumbnail`, `gps`, `datetimes`, `camera`, `other` — and three-way ICC handling (`IccRetention::{Drop, KeepNonSrgb, Keep}`). EXIF passes through byte-unchanged (zero-copy) when no category is dropped, and is rewritten — offsets recomputed — only when pruning. CICP/HDR are color *signaling* (dropping them changes displayed pixels), so the presets keep them; a `Custom` policy can drop them. The structured parser/editor is public as [`zencodec::exif::Exif`](https://docs.rs/zencodec) (`parse` → `filtered`/edit → `to_bytes`) for direct EXIF work — including setting Copyright/Artist (`set_copyright` / `set_artist`, with a `TextEncoding` choice of Exif 2.x ASCII or Exif 3.0 UTF-8).
 
 ## What's in this crate
 
