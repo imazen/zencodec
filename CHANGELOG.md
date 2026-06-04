@@ -75,6 +75,15 @@ All notable changes to zencodec are documented here.
   **safe** for a >4 GiB blob under a stripping policy (drop, not pass-through). The
   `Web`/`ColorAndRotation` presets were already safe — these close gaps for
   hand-rolled `Custom` policies. (d8a2fae)
+- **From-scratch EXIF construction** — `Exif::new()` (+ `Default`) starts an empty
+  little-endian tree, completing the `parse`/`new` → edit → `to_bytes` flow so you
+  can build a blob with no source: `Exif::new()` → `set_copyright(…)` →
+  `to_bytes()` (raw TIFF; the codec adds the APP1 `Exif\0\0` framing). (b7acd9f)
+- **`Metadata::with_copyright(&str)` / `with_artist(&str)`** — one-liner rights
+  stamping that builds an EXIF blob if there is none and merges into a parseable
+  existing one (keeping other tags), replacing an unparseable one. Written ASCII
+  (Exif 2.x, most compatible); for UTF-8/Exif 3.0 or other tags, build via
+  `exif::Exif` + `with_exif`. (1051288)
 
 ## [0.1.21] - 2026-05-29
 

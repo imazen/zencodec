@@ -104,6 +104,8 @@ let no_thumb = decoded_meta.filtered(&policy);
 
 **Privacy by default.** `Metadata` carries its intended `policy` (default `Web`), and `Metadata::for_embedding()` returns `self.filtered(&self.policy)` — the metadata a codec embeds. A codec opts in by calling it inside its existing `with_metadata` (no trait change), so a forgotten filter strips GPS/camera/timestamps/thumbnail rather than leaking them; set `with_policy(MetadataPolicy::PreserveExact)` for a verbatim transcode. The carried bytes stay untouched until embed, so you can still pull `metadata.exif` out, edit it with any EXIF library, and put it back via `with_exif`.
 
+To **stamp** rights in one line — `Metadata::none().with_copyright("© 2026 You")` builds (or merges into) the EXIF blob; or build it directly with `Exif::new().set_copyright(…)` → `to_bytes()` for full control over the field type (Exif 2.x ASCII vs Exif 3.0 UTF-8).
+
 ## What's in this crate
 
 | Module | Contents |

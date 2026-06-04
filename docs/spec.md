@@ -459,7 +459,8 @@ Owned metadata for encode/decode roundtrip. Fields: `icc_profile`, `exif`, `xmp`
 `orientation`, and `policy: MetadataPolicy`. `#[non_exhaustive]`.
 
 Methods: builder pattern (`with_icc()`, `with_policy()`, etc.),
-`transfer_function()`, `color_primaries()`, `is_empty()`,
+`with_copyright(&str)` / `with_artist(&str)` (build-or-merge the rights tag into
+the EXIF blob, ASCII),`transfer_function()`, `color_primaries()`, `is_empty()`,
 `filtered(&MetadataPolicy) -> Metadata`, `for_embedding() -> Metadata`.
 `From<&ImageInfo>` conversion.
 
@@ -502,10 +503,13 @@ part of `Metadata` (they live at the encode-request layer) and are unaffected.
 
 ### `exif::Exif` / `ExifPolicy` / `Retention`
 
-Structured EXIF model (`zencodec::exif`). `Exif<'a>` (`parse` → `filtered` /
-edit → `to_bytes`) borrows the source — entry values and the thumbnail are never
-copied (entry values are `Cow`, borrowed on parse, owned when injected by an
-edit). Read accessors: `orientation()`, `copyright()` / `artist()` (lossy-UTF-8
+Structured EXIF model (`zencodec::exif`). `Exif<'a>` (`parse` **or** `new` →
+`filtered` / edit → `to_bytes`) borrows the source — entry values and the
+thumbnail are never copied (entry values are `Cow`, borrowed on parse, owned when
+injected by an edit). `Exif::new()` (and `Default`) starts an empty little-endian
+tree for building from scratch — e.g. stamp a Copyright on an image that had no
+EXIF: `new()` → `set_copyright(…)` → `to_bytes()` (raw TIFF; the codec adds the
+APP1 `Exif\0\0` framing). Read accessors: `orientation()`, `copyright()` / `artist()` (lossy-UTF-8
 text *view*, borrowing `&self`), `copyright_bytes()` / `artist_bytes()` (raw
 field bytes), `has_thumbnail()`, `has_gps()`. Edit accessors: `set_copyright(&str,
 TextEncoding)` / `set_artist(&str, TextEncoding)` insert-or-replace the IFD0 tag
