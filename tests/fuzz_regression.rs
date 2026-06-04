@@ -61,7 +61,7 @@ fn run_filter(data: &[u8]) {
         .with_rights(ret(cfg & 0x02 != 0))
         .with_thumbnail(ret(cfg & 0x04 != 0))
         .with_gps(ret(cfg & 0x08 != 0))
-        .with_datetime(ret(cfg & 0x10 != 0))
+        .with_datetimes(ret(cfg & 0x10 != 0))
         .with_camera(ret(cfg & 0x20 != 0))
         .with_other(ret(cfg & 0x40 != 0));
     if let Some(x) = Exif::parse(rest) {

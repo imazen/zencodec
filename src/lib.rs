@@ -75,7 +75,7 @@ pub use color::{
 // `ByteOrder` is intentionally NOT re-exported at the root: it is a TIFF/EXIF
 // header detail used only within the `exif` module, and the bare name is too
 // generic for the crate root. Reach it as `exif::ByteOrder`.
-pub use exif::{Exif, ExifPolicy, Retention};
+pub use exif::{Exif, ExifPolicy, Retention, TextEncoding};
 pub use extensions::Extensions;
 pub use format::{ImageFormat, ImageFormatDefinition, ImageFormatRegistry};
 pub use gainmap::{

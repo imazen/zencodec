@@ -36,21 +36,78 @@ use alloc::borrow::Cow;
 use alloc::vec::Vec;
 use zenpixels::Orientation;
 
+// ── TIFF/EXIF tag numbers (canonical, no bare hex in the logic below) ────────
+// Names follow TIFF 6.0 / EXIF (CIPA DC-008). Tag values are stable across spec
+// revisions; the comment notes the revision that introduced the less-common ones.
+
+// IFD0 / TIFF baseline.
+const TAG_MAKE: u16 = 0x010F;
+const TAG_MODEL: u16 = 0x0110;
 const TAG_ORIENTATION: u16 = 0x0112;
-const TAG_COPYRIGHT: u16 = 0x8298;
+const TAG_SOFTWARE: u16 = 0x0131;
+const TAG_DATETIME: u16 = 0x0132; // a.k.a. ModifyDate
 const TAG_ARTIST: u16 = 0x013B;
+const TAG_HOST_COMPUTER: u16 = 0x013C;
+const TAG_COPYRIGHT: u16 = 0x8298;
+
+// Structural pointers + JPEG thumbnail (modeled as tree edges, not entries).
 const TAG_EXIF_IFD: u16 = 0x8769;
 const TAG_GPS_IFD: u16 = 0x8825;
 const TAG_INTEROP_IFD: u16 = 0xA005;
 const TAG_THUMB_OFFSET: u16 = 0x0201; // JPEGInterchangeFormat
 const TAG_THUMB_LENGTH: u16 = 0x0202; // JPEGInterchangeFormatLength
 
+// Exif sub-IFD: capture timestamps (the `datetimes` category).
+const TAG_DATETIME_ORIGINAL: u16 = 0x9003;
+const TAG_DATETIME_DIGITIZED: u16 = 0x9004;
+const TAG_OFFSET_TIME: u16 = 0x9010; // Exif 2.31+
+const TAG_OFFSET_TIME_ORIGINAL: u16 = 0x9011; // Exif 2.31+
+const TAG_OFFSET_TIME_DIGITIZED: u16 = 0x9012; // Exif 2.31+
+const TAG_SUBSEC_TIME: u16 = 0x9290;
+const TAG_SUBSEC_TIME_ORIGINAL: u16 = 0x9291;
+const TAG_SUBSEC_TIME_DIGITIZED: u16 = 0x9292;
+
+// Exif sub-IFD: device / capture identity (the `camera` category).
+const TAG_MAKER_NOTE: u16 = 0x927C;
+const TAG_IMAGE_UNIQUE_ID: u16 = 0xA420;
+const TAG_BODY_SERIAL_NUMBER: u16 = 0xA431;
+const TAG_LENS_SPECIFICATION: u16 = 0xA432;
+const TAG_LENS_MAKE: u16 = 0xA433;
+const TAG_LENS_MODEL: u16 = 0xA434;
+const TAG_LENS_SERIAL_NUMBER: u16 = 0xA435;
+
+// Creator / rights-holder *name* tags (the `rights` category, alongside
+// Copyright + Artist). CameraOwnerName is Exif 2.3+; Photographer / ImageEditor
+// are Exif 3.0 (CIPA DC-008-2023).
+const TAG_CAMERA_OWNER_NAME: u16 = 0xA430;
+const TAG_PHOTOGRAPHER: u16 = 0xA437; // Exif 3.0
+const TAG_IMAGE_EDITOR: u16 = 0xA438; // Exif 3.0
+
+// Exif 3.0 software-identity tags (the `camera` category).
+const TAG_CAMERA_FIRMWARE: u16 = 0xA439; // Exif 3.0
+const TAG_RAW_DEVELOPING_SOFTWARE: u16 = 0xA43A; // Exif 3.0
+const TAG_IMAGE_EDITING_SOFTWARE: u16 = 0xA43B; // Exif 3.0
+const TAG_METADATA_EDITING_SOFTWARE: u16 = 0xA43C; // Exif 3.0
+
+// ── TIFF field types (TIFF 6.0 §2; type 129 is Exif 3.0) ─────────────────────
+const TIFF_BYTE: u16 = 1;
 const TIFF_ASCII: u16 = 2;
 const TIFF_SHORT: u16 = 3;
 const TIFF_LONG: u16 = 4;
-/// Exif 2.32 type 129 = UTF-8 string (8-bit bytes, NUL-terminated, count
-/// includes the NUL). The spec-conformant way to store Unicode in an IFD field.
+const TIFF_RATIONAL: u16 = 5;
+const TIFF_SBYTE: u16 = 6;
+const TIFF_UNDEFINED: u16 = 7;
+const TIFF_SSHORT: u16 = 8;
+const TIFF_SLONG: u16 = 9;
+const TIFF_SRATIONAL: u16 = 10;
+const TIFF_FLOAT: u16 = 11;
+const TIFF_DOUBLE: u16 = 12;
+const TIFF_IFD: u16 = 13;
+/// Exif 3.0 (CIPA DC-008-2023) type 129 = UTF-8 string (8-bit bytes,
+/// NUL-terminated, count includes the NUL). The spec-conformant way to store
+/// Unicode in an IFD field — see [`TextEncoding`].
 const TIFF_UTF8: u16 = 129;
+
 const TIFF_HEADER_SIZE: usize = 8;
 const MAX_IFD_ENTRIES: u16 = 1000;
 const EXIF_PREFIX: &[u8] = b"Exif\0\0";
@@ -64,13 +121,39 @@ pub enum ByteOrder {
     Big,
 }
 
+/// Which EXIF text convention a string field ([`Copyright`](Exif::set_copyright),
+/// [`Artist`](Exif::set_artist)) is written with. EXIF has two ways to carry
+/// text and a writer must pick one — there is no universally-read Unicode field.
+///
+/// Both variants write the **same UTF-8 bytes** (the `&str` you pass), NUL-
+/// terminated; they differ only in the declared TIFF field type. For pure-ASCII
+/// text the two outputs are identical except for that type tag.
+///
+/// `#[non_exhaustive]`: a future text convention can be added without a breaking
+/// change. The variants are still constructible by name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum TextEncoding {
+    /// **Exif 2.x** — TIFF `ASCII` (type 2). The spec says 7-bit ASCII, but the
+    /// de-facto real-world convention (and what this writes) is UTF-8 bytes
+    /// carried in the ASCII field — non-conformant for non-ASCII, yet read
+    /// correctly by essentially every tool (kamadak-exif, Pillow, ExifTool, …).
+    /// The most compatible choice, so the recommended default.
+    Ascii,
+    /// **Exif 3.0** (CIPA DC-008-2023) — TIFF `UTF-8` (type 129). The spec-
+    /// conformant Unicode type, but reader support is still thin (ExifTool reads
+    /// it; many libraries do not). Prefer [`Ascii`](Self::Ascii) unless the
+    /// consumer is known to understand type 129.
+    Utf8,
+}
+
 /// EXIF category an IFD0/Exif-IFD entry belongs to. GPS and thumbnail are
 /// modeled structurally (whole sub-IFD), not per-entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Category {
     Orientation,
     Rights,
-    Datetime,
+    Datetimes,
     Camera,
     Other,
 }
@@ -80,34 +163,62 @@ fn classify(tag: u16) -> Category {
         TAG_ORIENTATION => Category::Orientation,
         // Attribution / rights-holder. Copyright (the rights *notice*), Artist
         // (creator), plus the Exif-IFD creator/owner *name* tags
-        // (CameraOwnerName 0xA430, Photographer 0xA437, ImageEditor 0xA438) —
-        // the spec says Artist mirrors one of these, so they're the same
-        // "who made / holds rights" class a copyright-preserving policy keeps.
-        TAG_COPYRIGHT | TAG_ARTIST | 0xA430 | 0xA437 | 0xA438 => Category::Rights,
+        // (CameraOwnerName, Photographer, ImageEditor) — the spec says Artist
+        // mirrors one of these, so they're the same "who made / holds rights"
+        // class a copyright-preserving policy keeps.
+        TAG_COPYRIGHT
+        | TAG_ARTIST
+        | TAG_CAMERA_OWNER_NAME
+        | TAG_PHOTOGRAPHER
+        | TAG_IMAGE_EDITOR => Category::Rights,
         // DateTime, DateTimeOriginal/Digitized, sub-sec + offset-time variants.
-        0x0132 | 0x9003 | 0x9004 | 0x9010 | 0x9011 | 0x9012 | 0x9290 | 0x9291 | 0x9292 => {
-            Category::Datetime
-        }
+        TAG_DATETIME
+        | TAG_DATETIME_ORIGINAL
+        | TAG_DATETIME_DIGITIZED
+        | TAG_OFFSET_TIME
+        | TAG_OFFSET_TIME_ORIGINAL
+        | TAG_OFFSET_TIME_DIGITIZED
+        | TAG_SUBSEC_TIME
+        | TAG_SUBSEC_TIME_ORIGINAL
+        | TAG_SUBSEC_TIME_DIGITIZED => Category::Datetimes,
         // Device / software identity: Make, Model, Software, HostComputer,
         // MakerNote, body/lens serials + lens make/model, ImageUniqueID, and the
         // firmware / developing / editing software tags.
-        0x010F | 0x0110 | 0x0131 | 0x013C | 0x927C | 0xA420 | 0xA431 | 0xA432 | 0xA433 | 0xA434
-        | 0xA435 | 0xA439 | 0xA43A | 0xA43B | 0xA43C => Category::Camera,
+        TAG_MAKE
+        | TAG_MODEL
+        | TAG_SOFTWARE
+        | TAG_HOST_COMPUTER
+        | TAG_MAKER_NOTE
+        | TAG_IMAGE_UNIQUE_ID
+        | TAG_BODY_SERIAL_NUMBER
+        | TAG_LENS_SPECIFICATION
+        | TAG_LENS_MAKE
+        | TAG_LENS_MODEL
+        | TAG_LENS_SERIAL_NUMBER
+        | TAG_CAMERA_FIRMWARE
+        | TAG_RAW_DEVELOPING_SOFTWARE
+        | TAG_IMAGE_EDITING_SOFTWARE
+        | TAG_METADATA_EDITING_SOFTWARE => Category::Camera,
         _ => Category::Other,
     }
 }
 
-/// One IFD entry, borrowing its value bytes from the source blob.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// One IFD entry. Value bytes are [`Cow`]: **borrowed** from the source blob on
+/// [`parse`](Exif::parse) (zero-copy — a multi-KB thumbnail is never copied) and
+/// **owned** for an entry injected by an edit ([`set_copyright`](Exif::set_copyright)).
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Entry<'a> {
     tag: u16,
     kind: u16,
     count: u32,
     /// Resolved value bytes (`count × type_size`), in source byte order.
-    value: &'a [u8],
+    value: Cow<'a, [u8]>,
     /// Byte offset of `value` within the TIFF (post-prefix): `e + 8` for an
     /// inline value, or the out-of-line pointer. Lets an in-place tag rewrite
     /// (e.g. [`set_orientation`]) reuse this parse instead of re-walking the IFD.
+    /// Meaningful only for a parsed (borrowed) entry; `0` for an injected one
+    /// (which is always re-serialized by [`to_bytes`](Exif::to_bytes), never
+    /// rewritten in place).
     value_offset: usize,
 }
 
@@ -126,10 +237,10 @@ pub struct Exif<'a> {
 /// TIFF/Exif type size in bytes, or `None` for an unknown type.
 fn type_size(kind: u16) -> Option<usize> {
     Some(match kind {
-        1 | 2 | 6 | 7 | 129 => 1, // BYTE, ASCII, SBYTE, UNDEFINED, UTF-8 (Exif 2.32)
-        3 | 8 => 2,               // SHORT, SSHORT
-        4 | 9 | 11 | 13 => 4,     // LONG, SLONG, FLOAT, IFD
-        5 | 10 | 12 => 8,         // RATIONAL, SRATIONAL, DOUBLE
+        TIFF_BYTE | TIFF_ASCII | TIFF_SBYTE | TIFF_UNDEFINED | TIFF_UTF8 => 1,
+        TIFF_SHORT | TIFF_SSHORT => 2,
+        TIFF_LONG | TIFF_SLONG | TIFF_FLOAT | TIFF_IFD => 4,
+        TIFF_RATIONAL | TIFF_SRATIONAL | TIFF_DOUBLE => 8,
         _ => return None,
     })
 }
@@ -201,7 +312,7 @@ fn resolve_entry(tiff: &[u8], e: usize, order: ByteOrder) -> Option<Entry<'_>> {
         tag,
         kind,
         count: cnt,
-        value,
+        value: Cow::Borrowed(value),
         value_offset,
     })
 }
@@ -315,13 +426,13 @@ impl<'a> Exif<'a> {
     /// then editor copyright); this returns the first segment. A second segment,
     /// if present, is preserved byte-for-byte on a rewrite but not surfaced
     /// separately.
-    pub fn copyright(&self) -> Option<Cow<'a, str>> {
+    pub fn copyright(&self) -> Option<Cow<'_, str>> {
         ascii_value(&self.ifd0, TAG_COPYRIGHT)
     }
 
     /// The Artist tag (0x013B) as text — a **lossy view** of
     /// [`artist_bytes`](Self::artist_bytes). See the [encoding note](#encoding).
-    pub fn artist(&self) -> Option<Cow<'a, str>> {
+    pub fn artist(&self) -> Option<Cow<'_, str>> {
         ascii_value(&self.ifd0, TAG_ARTIST)
     }
 
@@ -330,18 +441,21 @@ impl<'a> Exif<'a> {
     ///
     /// # Encoding
     ///
-    /// Per Exif 2.32 / CIPA DC-008 (Table 6), Copyright and Artist may be stored
-    /// as **ASCII (type 2, NUL-terminated 7-bit)** *or* **UTF-8 (type 129)** —
-    /// UTF-8 is the spec-conformant way to carry Unicode in these fields. A
-    /// type-2 field that nonetheless contains non-ASCII bytes (UTF-8 / Latin-1
-    /// stuffed into an ASCII field — common in the wild) is the non-conformant
-    /// case. zencodec reads both string types and
+    /// Per Exif / CIPA DC-008 (Table 6), Copyright and Artist are stored as
+    /// **ASCII (type 2, NUL-terminated 7-bit)**; Exif 3.0 (CIPA DC-008-2023)
+    /// added **UTF-8 (type 129)** as the spec-conformant way to carry Unicode in
+    /// these fields. A type-2 field that nonetheless contains non-ASCII bytes
+    /// (UTF-8 / Latin-1 stuffed into an ASCII field — common in the wild) is the
+    /// non-conformant case. zencodec reads both string types and
     /// [`copyright`](Self::copyright) / [`artist`](Self::artist) decode them as
     /// UTF-8 lossily (invalid sequences → U+FFFD) for a display string, while
-    /// these `*_bytes` accessors return the exact bytes. zencodec never
-    /// *generates* or transcodes these fields: a pruning rewrite preserves the
-    /// value bytes **and TIFF type** verbatim, so a field is neither corrupted
-    /// nor "corrected".
+    /// these `*_bytes` accessors return the exact bytes. A pruning rewrite
+    /// **never transcodes** — it preserves the value bytes **and TIFF type**
+    /// verbatim, so a field is neither corrupted nor "corrected". Writing a field
+    /// is explicit and the only path that mints new bytes:
+    /// [`set_copyright`](Self::set_copyright) / [`set_artist`](Self::set_artist)
+    /// take a [`TextEncoding`] choosing the TIFF type (Exif 2.x ASCII vs Exif 3.0
+    /// UTF-8).
     ///
     /// Non-ASCII bytes in a type-2 field are **not** stripped: before type 129
     /// existed (Exif 2.32), the de-facto way to carry non-ASCII here was
@@ -349,13 +463,13 @@ impl<'a> Exif<'a> {
     /// stripping the high bytes would corrupt it. A field that actually used a
     /// legacy code page (Latin-1, Shift-JIS) decodes lossily (→ U+FFFD); read
     /// `*_bytes` and apply your own decoder for those.
-    pub fn copyright_bytes(&self) -> Option<&'a [u8]> {
+    pub fn copyright_bytes(&self) -> Option<&[u8]> {
         ascii_bytes(&self.ifd0, TAG_COPYRIGHT)
     }
 
     /// The raw Artist (0x013B) value bytes, NUL-terminator stripped. See
     /// [`copyright_bytes`](Self::copyright_bytes) for the encoding note.
-    pub fn artist_bytes(&self) -> Option<&'a [u8]> {
+    pub fn artist_bytes(&self) -> Option<&[u8]> {
         ascii_bytes(&self.ifd0, TAG_ARTIST)
     }
 
@@ -369,15 +483,40 @@ impl<'a> Exif<'a> {
         self.gps_ifd.is_some()
     }
 
+    /// Set (insert or replace) the IFD0 Copyright tag (0x8298) to `text`.
+    ///
+    /// `encoding` selects the TIFF field type — [`TextEncoding::Ascii`] (Exif
+    /// 2.x, type 2; the compatible default) or [`TextEncoding::Utf8`] (Exif 3.0,
+    /// type 129). The value is written NUL-terminated with the count including
+    /// the NUL (TIFF string convention). An existing Copyright entry is replaced
+    /// in place (keeping IFD order); otherwise a new entry is appended. The
+    /// change is materialized on the next [`to_bytes`](Self::to_bytes); the
+    /// injected value is owned, so the returned blob is independent of the source.
+    ///
+    /// To *remove* the field instead, [`filtered`](Self::filtered) with a policy
+    /// that discards [`rights`](ExifPolicy::rights).
+    ///
+    /// `text` is written as-is (its UTF-8 bytes); an embedded NUL would truncate
+    /// the field when later read, matching the TIFF NUL-terminated convention.
+    pub fn set_copyright(&mut self, text: &str, encoding: TextEncoding) {
+        set_ifd0_string(&mut self.ifd0, TAG_COPYRIGHT, text, encoding);
+    }
+
+    /// Set (insert or replace) the IFD0 Artist tag (0x013B) to `text`. See
+    /// [`set_copyright`](Self::set_copyright) for encoding and replace semantics.
+    pub fn set_artist(&mut self, text: &str, encoding: TextEncoding) {
+        set_ifd0_string(&mut self.ifd0, TAG_ARTIST, text, encoding);
+    }
+
     /// Prune the tree by `policy`, returning a new borrowing view. Surviving
     /// entries still borrow the original source (no payload copy).
     pub fn filtered(&self, policy: &ExifPolicy) -> Exif<'a> {
         let keep = |e: &&Entry<'a>| policy.keeps(classify(e.tag));
-        let ifd0 = self.ifd0.iter().filter(keep).copied().collect();
+        let ifd0 = self.ifd0.iter().filter(keep).cloned().collect();
         let exif_ifd = self
             .exif_ifd
             .as_ref()
-            .map(|d| d.iter().filter(keep).copied().collect::<Vec<_>>())
+            .map(|d| d.iter().filter(keep).cloned().collect::<Vec<_>>())
             .filter(|d: &Vec<_>| !d.is_empty());
         let gps_ifd = match policy.gps {
             Retention::Keep => self.gps_ifd.clone(),
@@ -570,7 +709,7 @@ impl<'a> Exif<'a> {
                     self.put32(out, e.count);
                     if e.value.len() <= 4 {
                         let mut v = [0u8; 4];
-                        v[..e.value.len()].copy_from_slice(e.value);
+                        v[..e.value.len()].copy_from_slice(&e.value);
                         out.extend_from_slice(&v);
                     } else {
                         let (ptr, len) = (e.value.as_ptr() as usize, e.value.len());
@@ -580,7 +719,7 @@ impl<'a> Exif<'a> {
                             o
                         } else {
                             let o = ext.len();
-                            ext.extend_from_slice(e.value);
+                            ext.extend_from_slice(&e.value);
                             if ext.len() % 2 == 1 {
                                 ext.push(0);
                             }
@@ -630,8 +769,8 @@ fn align2(n: usize) -> usize {
 /// Read a SHORT or LONG value as `u32` (for thumbnail length / offset).
 fn read_uint(e: &Entry<'_>, order: ByteOrder) -> Option<u32> {
     match e.kind {
-        TIFF_SHORT => rd16(e.value, 0, order).map(u32::from),
-        TIFF_LONG => rd32(e.value, 0, order),
+        TIFF_SHORT => rd16(&e.value, 0, order).map(u32::from),
+        TIFF_LONG => rd32(&e.value, 0, order),
         _ => None,
     }
 }
@@ -674,17 +813,14 @@ pub(crate) fn set_orientation(data: &[u8], value: Orientation) -> Option<Vec<u8>
 /// Exif 2.32) — up to (not incl.) the first NUL. `None` if the tag is absent,
 /// not a string type (a wrong-type field is ignored, not reinterpreted), or
 /// empty.
-fn ascii_bytes<'a>(entries: &[Entry<'a>], tag: u16) -> Option<&'a [u8]> {
+fn ascii_bytes<'e>(entries: &'e [Entry<'_>], tag: u16) -> Option<&'e [u8]> {
     let e = entries.iter().find(|e| e.tag == tag)?;
     if e.kind != TIFF_ASCII && e.kind != TIFF_UTF8 {
         return None;
     }
-    let end = e
-        .value
-        .iter()
-        .position(|&b| b == 0)
-        .unwrap_or(e.value.len());
-    let bytes = &e.value[..end];
+    let value: &[u8] = &e.value;
+    let end = value.iter().position(|&b| b == 0).unwrap_or(value.len());
+    let bytes = &value[..end];
     if bytes.is_empty() { None } else { Some(bytes) }
 }
 
@@ -693,12 +829,38 @@ fn ascii_bytes<'a>(entries: &[Entry<'a>], tag: u16) -> Option<&'a [u8]> {
 /// and invalid sequences (e.g. raw Latin-1 `0xA9`) become U+FFFD (owned). The
 /// result is always a valid `str`; it is a read-only view and is never written
 /// back (the filter preserves the original bytes verbatim).
-fn ascii_value<'a>(entries: &[Entry<'a>], tag: u16) -> Option<Cow<'a, str>> {
+fn ascii_value<'e>(entries: &'e [Entry<'_>], tag: u16) -> Option<Cow<'e, str>> {
     let bytes = ascii_bytes(entries, tag)?;
     Some(match core::str::from_utf8(bytes) {
         Ok(s) => Cow::Borrowed(s),
         Err(_) => Cow::Owned(alloc::string::String::from_utf8_lossy(bytes).into_owned()),
     })
+}
+
+/// Insert-or-replace a NUL-terminated string entry (Copyright, Artist, …) in an
+/// IFD. The value is `text`'s UTF-8 bytes plus a trailing NUL (count includes
+/// the NUL); the TIFF type is ASCII (2) or UTF-8 (129) per [`TextEncoding`]. The
+/// owned `Cow` makes the entry independent of any source blob. An existing entry
+/// with the same tag is overwritten in place (preserving IFD order); otherwise
+/// the new entry is appended.
+fn set_ifd0_string<'a>(entries: &mut Vec<Entry<'a>>, tag: u16, text: &str, encoding: TextEncoding) {
+    let kind = match encoding {
+        TextEncoding::Ascii => TIFF_ASCII,
+        TextEncoding::Utf8 => TIFF_UTF8,
+    };
+    let mut bytes = text.as_bytes().to_vec();
+    bytes.push(0); // NUL terminator; TIFF string count includes it.
+    let entry = Entry {
+        tag,
+        kind,
+        count: bytes.len() as u32,
+        value: Cow::Owned(bytes),
+        value_offset: 0, // injected entry: re-serialized by to_bytes, never rewritten in place
+    };
+    match entries.iter_mut().find(|e| e.tag == tag) {
+        Some(slot) => *slot = entry,
+        None => entries.push(entry),
+    }
 }
 
 /// Keep-or-discard for a single metadata field. Explicit (no `bool`-direction
@@ -747,7 +909,7 @@ pub struct ExifPolicy {
     /// GPS sub-IFD (location).
     pub gps: Retention,
     /// Capture timestamps (DateTime / Original / Digitized + sub-sec/offset).
-    pub datetime: Retention,
+    pub datetimes: Retention,
     /// Camera/device identity (Make, Model, Software, lens, serial, MakerNote).
     pub camera: Retention,
     /// Everything else (dimensions, exposure settings, …).
@@ -761,7 +923,7 @@ impl ExifPolicy {
         rights: Retention::Keep,
         thumbnail: Retention::Keep,
         gps: Retention::Keep,
-        datetime: Retention::Keep,
+        datetimes: Retention::Keep,
         camera: Retention::Keep,
         other: Retention::Keep,
     };
@@ -771,7 +933,7 @@ impl ExifPolicy {
         rights: Retention::Discard,
         thumbnail: Retention::Discard,
         gps: Retention::Discard,
-        datetime: Retention::Discard,
+        datetimes: Retention::Discard,
         camera: Retention::Discard,
         other: Retention::Discard,
     };
@@ -815,8 +977,8 @@ impl ExifPolicy {
     }
     /// Set the timestamps category.
     #[must_use]
-    pub const fn with_datetime(mut self, r: Retention) -> Self {
-        self.datetime = r;
+    pub const fn with_datetimes(mut self, r: Retention) -> Self {
+        self.datetimes = r;
         self
     }
     /// Set the camera/device-identity category.
@@ -836,7 +998,7 @@ impl ExifPolicy {
         match c {
             Category::Orientation => self.orientation.keeps(),
             Category::Rights => self.rights.keeps(),
-            Category::Datetime => self.datetime.keeps(),
+            Category::Datetimes => self.datetimes.keeps(),
             Category::Camera => self.camera.keeps(),
             Category::Other => self.other.keeps(),
         }
@@ -848,7 +1010,7 @@ impl ExifPolicy {
             && self.rights.keeps()
             && self.thumbnail.keeps()
             && self.gps.keeps()
-            && self.datetime.keeps()
+            && self.datetimes.keeps()
             && self.camera.keeps()
             && self.other.keeps()
     }
@@ -915,7 +1077,7 @@ mod tests {
             tag,
             kind,
             count,
-            value,
+            value: Cow::Borrowed(value),
             value_offset: 0, // synthetic entries; only the rewrite path needs a real offset
         }
     }
@@ -933,12 +1095,12 @@ mod tests {
             order,
             had_prefix,
             ifd0: vec![
-                e(0x010F, 2, 4, b"Cam\0"),               // Make (camera)
-                e(TAG_ORIENTATION, TIFF_SHORT, 1, &ori), // Orientation=Rotate90
-                e(TAG_COPYRIGHT, 2, 7, b"(c) Me\0"),     // Copyright (out-of-line)
+                e(TAG_MAKE, TIFF_ASCII, 4, b"Cam\0"),         // Make (camera)
+                e(TAG_ORIENTATION, TIFF_SHORT, 1, &ori),      // Orientation=Rotate90
+                e(TAG_COPYRIGHT, TIFF_ASCII, 7, b"(c) Me\0"), // Copyright (out-of-line)
             ],
-            exif_ifd: Some(vec![e(0x9003, 2, 5, b"2020\0")]), // DateTimeOriginal
-            gps_ifd: Some(vec![e(0x0001, 2, 2, b"N\0")]),     // GPSLatitudeRef
+            exif_ifd: Some(vec![e(TAG_DATETIME_ORIGINAL, TIFF_ASCII, 5, b"2020\0")]),
+            gps_ifd: Some(vec![e(0x0001, TIFF_ASCII, 2, b"N\0")]), // GPSLatitudeRef
             ifd1: Some(vec![]),
             thumbnail: Some(&[0xFF, 0xD8, 0xFF, 0xD9]),
         };
@@ -1027,9 +1189,12 @@ mod tests {
         assert_eq!(y.copyright().unwrap(), "(c) Me");
         assert!(!y.has_gps());
         assert!(!y.has_thumbnail());
-        // Camera (Make 0x010F) and DateTime (0x9003) gone.
-        assert!(!out.windows(2).any(|w| w == 0x010Fu16.to_le_bytes()));
-        assert!(!out.windows(2).any(|w| w == 0x9003u16.to_le_bytes()));
+        // Camera (Make) and DateTimeOriginal gone.
+        assert!(!out.windows(2).any(|w| w == TAG_MAKE.to_le_bytes()));
+        assert!(
+            !out.windows(2)
+                .any(|w| w == TAG_DATETIME_ORIGINAL.to_le_bytes())
+        );
     }
 
     #[test]
@@ -1469,8 +1634,8 @@ mod tests {
             had_prefix: false,
             ifd0: vec![e(TAG_ORIENTATION, TIFF_SHORT, 1, &[6, 0])],
             exif_ifd: Some(vec![
-                e(0xA431, TIFF_ASCII, 4, b"SN1\0"),  // BodySerialNumber → Camera
-                e(0xA437, TIFF_ASCII, 4, b"Me\0\0"), // Photographer → Rights
+                e(TAG_BODY_SERIAL_NUMBER, TIFF_ASCII, 4, b"SN1\0"), // → Camera
+                e(TAG_PHOTOGRAPHER, TIFF_ASCII, 4, b"Me\0\0"),      // → Rights
             ]),
             gps_ifd: None,
             ifd1: None,
@@ -1481,12 +1646,131 @@ mod tests {
             .filtered(&ExifPolicy::ATTRIBUTED_ORIENTATION)
             .to_bytes();
         assert!(
-            out.windows(2).any(|w| w == 0xA437u16.to_le_bytes()),
+            out.windows(2).any(|w| w == TAG_PHOTOGRAPHER.to_le_bytes()),
             "Photographer (attribution) must survive a rights policy"
         );
         assert!(
-            !out.windows(2).any(|w| w == 0xA431u16.to_le_bytes()),
+            !out.windows(2)
+                .any(|w| w == TAG_BODY_SERIAL_NUMBER.to_le_bytes()),
             "BodySerialNumber (device identity) must be stripped"
         );
+    }
+
+    // ── Editing: set_copyright / set_artist (Exif 2.x ASCII vs Exif 3.0 UTF-8) ─
+
+    /// One orientation-only IFD0 blob, for insert tests.
+    fn orientation_only() -> alloc::vec::Vec<u8> {
+        le_ifd0(
+            &[entry_inline(TAG_ORIENTATION, TIFF_SHORT, 1, [6, 0, 0, 0])],
+            0,
+            &[],
+        )
+    }
+
+    /// Insert a Copyright into a blob that had none, as Exif 2.x ASCII (type 2).
+    /// Round-trips through serialize → parse; the other tags are untouched.
+    #[test]
+    fn set_copyright_inserts_ascii_type2() {
+        let blob = orientation_only();
+        let mut x = Exif::parse(&blob).unwrap();
+        assert!(x.copyright().is_none());
+        x.set_copyright("(c) 2026 Lilith", TextEncoding::Ascii);
+        let out = x.to_bytes();
+        let y = Exif::parse(&out).unwrap();
+        assert_eq!(y.copyright().unwrap(), "(c) 2026 Lilith");
+        assert_eq!(y.copyright_bytes(), Some(&b"(c) 2026 Lilith"[..]));
+        assert_eq!(y.orientation(), Some(Orientation::Rotate90)); // unchanged
+        // Stored as ASCII (type 2 → LE 0x02,0x00).
+        assert!(out.windows(2).any(|w| w == TIFF_ASCII.to_le_bytes()));
+    }
+
+    /// Set a Copyright as Exif 3.0 UTF-8 (type 129); the declared type survives.
+    #[test]
+    fn set_copyright_utf8_writes_type129() {
+        let blob = orientation_only();
+        let mut x = Exif::parse(&blob).unwrap();
+        x.set_copyright("© 2026 Lilith", TextEncoding::Utf8);
+        let out = x.to_bytes();
+        let y = Exif::parse(&out).unwrap();
+        assert_eq!(y.copyright().unwrap(), "© 2026 Lilith");
+        // UTF-8 type (129 → LE 0x81,0x00) is what was written.
+        assert!(out.windows(2).any(|w| w == TIFF_UTF8.to_le_bytes()));
+    }
+
+    /// Setting Copyright replaces an existing entry in place (no duplicate).
+    #[test]
+    fn set_copyright_replaces_existing() {
+        let src = sample(ByteOrder::Little, false); // has "(c) Me"
+        let mut x = Exif::parse(&src).unwrap();
+        assert_eq!(x.copyright().unwrap(), "(c) Me");
+        x.set_copyright("(c) New Owner", TextEncoding::Ascii);
+        let out = x.to_bytes();
+        let y = Exif::parse(&out).unwrap();
+        assert_eq!(y.copyright().unwrap(), "(c) New Owner");
+        let n = y.ifd0.iter().filter(|e| e.tag == TAG_COPYRIGHT).count();
+        assert_eq!(n, 1, "must replace, not duplicate");
+    }
+
+    /// Exif 2.x ASCII shoehorns UTF-8 bytes into the type-2 field (the de-facto
+    /// convention): the bytes are the string's UTF-8, the type stays 2, and the
+    /// value reads back as the same Unicode.
+    #[test]
+    fn set_copyright_ascii_carries_utf8_bytes_defacto() {
+        let blob = orientation_only();
+        let mut x = Exif::parse(&blob).unwrap();
+        x.set_copyright("© Лилит", TextEncoding::Ascii); // non-ASCII into type 2
+        let out = x.to_bytes();
+        let y = Exif::parse(&out).unwrap();
+        assert_eq!(y.copyright_bytes(), Some("© Лилит".as_bytes()));
+        assert_eq!(y.copyright().unwrap(), "© Лилит"); // valid UTF-8 → reads back
+        assert!(out.windows(2).any(|w| w == TIFF_ASCII.to_le_bytes()));
+    }
+
+    /// `set_artist` mirrors `set_copyright` and lands in the `rights` category
+    /// (kept by a rights-keeping policy, dropped when rights are discarded).
+    #[test]
+    fn set_artist_round_trips_and_is_rights() {
+        let blob = orientation_only();
+        let mut x = Exif::parse(&blob).unwrap();
+        x.set_artist("Lilith", TextEncoding::Ascii);
+        let out = x.to_bytes();
+        let y = Exif::parse(&out).unwrap();
+        assert_eq!(y.artist().unwrap(), "Lilith");
+        let kept = y.filtered(&ExifPolicy::ATTRIBUTED_ORIENTATION).to_bytes();
+        assert!(Exif::parse(&kept).unwrap().artist().is_some());
+        let dropped = y
+            .filtered(&ExifPolicy::KEEP_ALL.with_rights(Retention::Discard))
+            .to_bytes();
+        assert!(Exif::parse(&dropped).unwrap().artist().is_none());
+    }
+
+    /// An edited (owned) entry survives a layout-shifting rewrite: the value is
+    /// owned, not aliased to a source offset, so the serializer relocates it like
+    /// any other out-of-line value.
+    #[test]
+    fn edited_copyright_survives_filter_rewrite() {
+        let src = sample(ByteOrder::Little, false);
+        let mut x = Exif::parse(&src).unwrap();
+        let long = "Copyright 2026 Lilith River — all rights reserved worldwide.";
+        x.set_copyright(long, TextEncoding::Ascii); // long → out-of-line
+        let out = x
+            .filtered(&ExifPolicy::KEEP_ALL.with_gps(Retention::Discard))
+            .to_bytes();
+        let y = Exif::parse(&out).unwrap();
+        assert_eq!(y.copyright().unwrap(), long);
+        assert!(!y.has_gps());
+        assert_eq!(y.orientation(), Some(Orientation::Rotate90));
+    }
+
+    /// Editing then serializing stays canonical (a byte-exact fixpoint), so an
+    /// edited blob filters idempotently like a parsed one.
+    #[test]
+    fn edited_to_bytes_is_canonical_fixpoint() {
+        let blob = orientation_only();
+        let mut x = Exif::parse(&blob).unwrap();
+        x.set_copyright("(c) Me", TextEncoding::Utf8);
+        let b1 = x.to_bytes();
+        let b2 = Exif::parse(&b1).unwrap().to_bytes();
+        assert_eq!(b1, b2, "edited output must be a canonical fixpoint");
     }
 }
