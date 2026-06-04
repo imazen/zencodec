@@ -34,7 +34,7 @@
 use alloc::sync::Arc;
 
 use crate::Orientation;
-use crate::exif::{ExifPolicy, Retention};
+use crate::exif::{Exif, ExifPolicy, Retention, TextEncoding};
 use crate::info::{Cicp, ContentLightLevel, MasteringDisplay};
 use zenpixels::{ColorPrimaries, TransferFunction};
 
@@ -112,6 +112,43 @@ impl Metadata {
             self.orientation = o;
         }
         self.exif = Some(bytes);
+        self
+    }
+
+    /// Set the EXIF Copyright tag, creating an EXIF blob if there is none and
+    /// merging into the existing one otherwise.
+    ///
+    /// Written as ASCII (Exif 2.x, the most widely-read form). For UTF-8 (Exif
+    /// 3.0) or other tags, build the blob via [`exif::Exif`](crate::exif::Exif)
+    /// and pass it to [`with_exif`](Self::with_exif). Unparseable existing EXIF
+    /// is replaced with a fresh blob carrying just this field.
+    #[must_use]
+    pub fn with_copyright(self, copyright: &str) -> Self {
+        self.set_exif_string(copyright, |e, t| e.set_copyright(t, TextEncoding::Ascii))
+    }
+
+    /// Set the EXIF Artist tag. See [`with_copyright`](Self::with_copyright) for
+    /// encoding and merge semantics.
+    #[must_use]
+    pub fn with_artist(self, artist: &str) -> Self {
+        self.set_exif_string(artist, |e, t| e.set_artist(t, TextEncoding::Ascii))
+    }
+
+    /// Shared helper for [`with_copyright`]/[`with_artist`]: parse the existing
+    /// EXIF (or start fresh via [`Exif::new`]), apply `set`, and re-serialize.
+    fn set_exif_string(mut self, text: &str, set: impl FnOnce(&mut Exif<'_>, &str)) -> Self {
+        let bytes = {
+            // `exif` borrows `self.exif` here; `to_bytes` copies values out, so
+            // `bytes` is owned and the borrow ends before we reassign below.
+            let mut exif = self
+                .exif
+                .as_deref()
+                .and_then(Exif::parse)
+                .unwrap_or_default();
+            set(&mut exif, text);
+            exif.to_bytes()
+        };
+        self.exif = Some(Arc::from(bytes));
         self
     }
 
@@ -1006,6 +1043,40 @@ mod tests {
         assert_eq!(twice.exif, once.exif);
         let ex = Exif::parse(twice.exif.as_deref().unwrap()).unwrap();
         assert_eq!(ex.copyright().unwrap(), "(c) Me");
+    }
+
+    // ── with_copyright / with_artist sugar (build/merge an EXIF blob) ─────────
+
+    #[test]
+    fn with_copyright_creates_blob_from_nothing() {
+        let meta = Metadata::none().with_copyright("(c) 2026 Lilith");
+        let e = meta.exif.as_deref().expect("EXIF created");
+        assert_eq!(
+            Exif::parse(e).unwrap().copyright().unwrap(),
+            "(c) 2026 Lilith"
+        );
+    }
+
+    #[test]
+    fn with_copyright_merges_into_existing() {
+        // src carries Make (camera), Orientation=6 (Rotate90), Copyright "old".
+        let src = src_exif(6, "old", false);
+        let meta = Metadata::none()
+            .with_exif(src)
+            .with_copyright("(c) New Owner");
+        let e = meta.exif.as_deref().expect("EXIF");
+        let x = Exif::parse(e).unwrap();
+        assert_eq!(x.copyright().unwrap(), "(c) New Owner"); // replaced
+        assert_eq!(x.orientation(), Some(Orientation::Rotate90)); // preserved
+        assert!(has_tag(e, 0x010F), "Make preserved on merge");
+        assert_eq!(meta.orientation, Orientation::Rotate90); // with_exif synced it
+    }
+
+    #[test]
+    fn with_artist_creates_blob() {
+        let meta = Metadata::none().with_artist("Lilith");
+        let e = meta.exif.as_deref().expect("EXIF");
+        assert_eq!(Exif::parse(e).unwrap().artist().unwrap(), "Lilith");
     }
 
     #[test]
