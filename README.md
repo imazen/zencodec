@@ -102,6 +102,8 @@ let no_thumb = decoded_meta.filtered(&policy);
 
 `MetadataFields` encapsulates EXIF in an `ExifPolicy` with seven keep/discard categories — `orientation`, `rights`, `thumbnail`, `gps`, `datetimes`, `camera`, `other` — and three-way ICC handling (`IccRetention::{Drop, KeepNonSrgb, Keep}`). EXIF passes through byte-unchanged (zero-copy) when no category is dropped, and is rewritten — offsets recomputed — only when pruning. CICP/HDR are color *signaling* (dropping them changes displayed pixels), so the presets keep them; a `Custom` policy can drop them. The structured parser/editor is public as [`zencodec::exif::Exif`](https://docs.rs/zencodec) (`parse` → `filtered`/edit → `to_bytes`) for direct EXIF work — including setting Copyright/Artist (`set_copyright` / `set_artist`, with a `TextEncoding` choice of Exif 2.x ASCII or Exif 3.0 UTF-8).
 
+**Privacy by default.** `Metadata` carries its intended `policy` (default `Web`), and `Metadata::for_embedding()` returns `self.filtered(&self.policy)` — the metadata a codec embeds. A codec opts in by calling it inside its existing `with_metadata` (no trait change), so a forgotten filter strips GPS/camera/timestamps/thumbnail rather than leaking them; set `with_policy(MetadataPolicy::PreserveExact)` for a verbatim transcode. The carried bytes stay untouched until embed, so you can still pull `metadata.exif` out, edit it with any EXIF library, and put it back via `with_exif`.
+
 ## What's in this crate
 
 | Module | Contents |

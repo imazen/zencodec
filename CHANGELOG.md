@@ -52,6 +52,29 @@ All notable changes to zencodec are documented here.
   are named constants (no bare hex), and the `ExifPolicy` timestamps category is
   `datetimes` (plural — it covers DateTime / Original / Digitized / OffsetTime* /
   SubSecTime*). (f4b9f1b)
+- **Embed-time metadata policy carried on `Metadata` (privacy by default)** —
+  `Metadata` gains `policy: MetadataPolicy` (default `Web`) and `with_policy()`;
+  `Metadata::for_embedding()` returns `self.filtered(&self.policy)` — the hook a
+  codec calls inside its existing `EncodeJob::with_metadata` so embedding honors
+  the caller's policy with no EXIF logic in the codec and no trait/signature
+  change. The carried bytes stay untouched until then (bring-your-own-EXIF-library
+  round-trips still see originals); `From<&ImageInfo>` defaults to `Web` so a
+  forgotten filter strips rather than leaks; `filtered()`'s output is marked
+  `PreserveExact` so `for_embedding` can't double-strip. `EncodePolicy::strip_all`
+  / `preserve_all` now carry a real `MetadataPolicy` through the reliable
+  `resolve_metadata` channel (`Custom(DISCARD_ALL)` / `PreserveExact`) instead of
+  relying on the advisory `embed_*` flags that no-op on codecs without
+  `with_policy`. `Metadata` is `#[non_exhaustive]`, so the new field is additive
+  (`size_of` 104 → 120 on 64-bit). (b832cdc)
+- **EXIF privacy hardening for partial-strip policies** — `MakerNote` (0x927C) is
+  dropped whenever `gps` **or** `camera` is stripped (it can embed GPS/serials and
+  can't be selectively scrubbed); `SubIFDs` (0x014A, an unmodeled sub-IFD pointer)
+  is dropped on a rewrite rather than left dangling; IFD1 (thumbnail-directory)
+  entries are filtered by the same per-category rules as IFD0 (a keep-thumbnail
+  policy previously kept their Make/Model/DateTime); and `exif::retain` now fails
+  **safe** for a >4 GiB blob under a stripping policy (drop, not pass-through). The
+  `Web`/`ColorAndRotation` presets were already safe — these close gaps for
+  hand-rolled `Custom` policies. (d8a2fae)
 
 ## [0.1.21] - 2026-05-29
 

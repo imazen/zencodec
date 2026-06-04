@@ -456,11 +456,24 @@ Non-color metadata blobs. Fields: `exif: Option<Vec<u8>>`, `xmp: Option<Vec<u8>>
 
 Owned metadata for encode/decode roundtrip. Fields: `icc_profile`, `exif`, `xmp`
 (`Option<Arc<[u8]>>`), `cicp`, `content_light_level`, `mastering_display` (Copy),
-`orientation`. `#[non_exhaustive]`.
+`orientation`, and `policy: MetadataPolicy`. `#[non_exhaustive]`.
 
-Methods: builder pattern (`with_icc()`, etc.), `transfer_function()`,
-`color_primaries()`, `is_empty()`, `filtered(&MetadataPolicy) -> Metadata`.
+Methods: builder pattern (`with_icc()`, `with_policy()`, etc.),
+`transfer_function()`, `color_primaries()`, `is_empty()`,
+`filtered(&MetadataPolicy) -> Metadata`, `for_embedding() -> Metadata`.
 `From<&ImageInfo>` conversion.
+
+**Embed-time policy (privacy by default).** `policy` carries *intent only* — the
+raw `exif`/`xmp`/`icc_profile` bytes are untouched (so an inspect / bring-your-own
+EXIF-library round-trip still sees the originals) until a codec materializes them.
+`Metadata::for_embedding()` returns `self.filtered(&self.policy)` — the metadata a
+codec should actually embed — and is the hook a codec calls inside its existing
+`EncodeJob::with_metadata` so embedding honors the caller's policy with no EXIF
+logic in the codec (works for every codec; no trait/signature change). `policy`
+defaults to `Web` (`Metadata::default()` and `From<&ImageInfo>`), so a forgotten
+filter strips rather than leaks; opt into verbatim embedding with
+`with_policy(MetadataPolicy::PreserveExact)`. `filtered()`'s output is marked
+`PreserveExact`, so `for_embedding()` is idempotent (never double-strips).
 
 ### `MetadataPolicy` / `MetadataFields` / `IccRetention`
 
@@ -527,16 +540,27 @@ nothing is dropped (so `Metadata::filtered` is a cheap `Arc` clone),
 `Cow::Owned` on a rewrite, `None` when all EXIF is discarded.
 
 `helpers::parse_exif_orientation` is a lightweight orientation accessor that
-delegates here. Limitation: a partial rewrite relocates `MakerNote`, whose
-maker-specific internal offsets aren't fixed up — keep all EXIF (no prune) for
-byte-exact MakerNote.
+delegates here. Limitation: a partial rewrite that *keeps* `MakerNote` (0x927C)
+relocates it without fixing its maker-specific internal offsets — keep all EXIF
+(no prune) for byte-exact MakerNote.
+
+Privacy (partial-strip policies): `MakerNote` is dropped whenever `gps` **or**
+`camera` is stripped (it's opaque and can embed GPS/serials); `SubIFDs` (0x014A,
+an unmodeled sub-IFD pointer) is dropped on a rewrite rather than left dangling;
+IFD1 (thumbnail directory) entries are filtered by the same per-category rules as
+IFD0, so a keep-thumbnail policy doesn't leak the Make/Model/DateTime it carries.
+The `Web`/`ColorAndRotation` presets drop `gps`/`camera`/`thumbnail`/`other`, so
+they were already safe; these close the gaps for hand-rolled `Custom` policies.
+Cross-carrier caveat: XMP can duplicate GPS/identity — a policy that keeps XMP
+ships it even when the EXIF copy is stripped.
 
 Hardening: bounds-checked, no panics on untrusted input (32M+ fuzz executions);
 the serializer dedups aliased out-of-line values to prevent rewrite
-memory-amplification; ASCII accessors require the ASCII TIFF type; thumbnail
-length is read as SHORT or LONG; `retain` passes >4 GiB blobs through untouched.
-Validated by differential tests vs `kamadak-exif`, three libFuzzer targets, and
-a 1 KiB–1 MiB-thumbnail zero-copy benchmark.
+memory-amplification; ASCII accessors require the ASCII/UTF-8 TIFF type; thumbnail
+length is read as SHORT or LONG; under a stripping policy `retain` fails **safe**
+— unparseable or >4 GiB blobs are dropped, never passed through unfiltered.
+Validated by differential tests vs `kamadak-exif`, libFuzzer targets, and a
+1 KiB–1 MiB-thumbnail zero-copy benchmark.
 
 #### EXIF write / edit path
 
