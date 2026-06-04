@@ -113,37 +113,116 @@ pub enum LosslessMode {
     /// per-channel error. The codec rounds pixel samples so the lossless coder
     /// compresses better, while guaranteeing the deviation ceiling below.
     ///
-    /// `max_channel_error` is the **guaranteed ceiling**, in sample LSBs at the
-    /// encoded integer bit depth (e.g. 0–255 for 8-bit, 0–65535 for 16-bit).
-    /// `0` is equivalent to [`Lossless`](Self::Lossless). A codec must **never
+    /// The budget is a **guaranteed L∞-per-channel ceiling** (see §4.2). `EXACT`
+    /// is equivalent to [`Lossless`](Self::Lossless). A codec must **never
     /// exceed** this ceiling: it rounds the budget *down* to the nearest level
     /// it can honor, never up. See [`EncoderConfig::lossless_mode`] for what was
     /// actually resolved.
-    NearLossless { max_channel_error: u16 },
+    NearLossless(NearLosslessBudget),
 
     /// Mathematically exact. Decoding reproduces the input sample-for-sample.
     Lossless,
 }
 
 impl LosslessMode {
-    /// A sensible default near-lossless budget (ε = 2 LSB at 8-bit): visually
-    /// transparent on photographic content, meaningfully smaller files. Use
-    /// when you want "near-lossless" without choosing a number.
-    pub const NEAR_LOSSLESS_DEFAULT: Self = Self::NearLossless { max_channel_error: 2 };
+    /// A sensible default near-lossless budget (±2/255): visually transparent on
+    /// photographic content, meaningfully smaller files. Use when you want
+    /// "near-lossless" without choosing a number.
+    pub const NEAR_LOSSLESS_DEFAULT: Self =
+        Self::NearLossless(NearLosslessBudget::from_lsb8(2));
 }
 ```
 
-**Why ε (max per-channel error), not "bits" or "0–100":**
+### 4.2 The error metric and the budget type (the part that matters)
 
-- It is physically meaningful and codec-independent: the maximum absolute
-  deviation of *any* channel sample. A caller can reason about it without
-  knowing the codec.
-- It is a **contract**, not an opaque dial. "bits" (PNG) and "0–100" (WebP) are
-  each codec's *private encoding* of the same ceiling.
-- WebP and PNG already describe their effect as a max-error ceiling; ε is simply
-  their common denominator. (WebP: `(1<<bits)-1`; PNG: `2^(bits-1)`.)
+There are **two unrelated "error tolerance" notions** already living in our
+codecs, and near-lossless must use the right one:
 
-### 4.2 `EncoderConfig` additions
+| | **L∞ per-channel** (near-lossless) | **aggregate perceptual** (quality gate) |
+|---|---|---|
+| What it bounds | the *worst* single channel of the *worst* pixel | an *image-wide average* of perceptual distance |
+| Examples in tree | `zengif::pixels_similar` (`dr,dg,db,da ≤ tol`); `zenpng::near_lossless_quantize` (round to 2^b); WebP `near_lossless` | `zenpng::QualityGate::{MaxDeltaE, MaxMpe, MinSsim2}` (mean OKLab ΔE / MPE / SSIMULACRA2); `zenquant` OKLab `base_tolerance` |
+| Guarantee | **per-pixel, hard.** "no channel of any pixel moves by more than ε" | **statistical, soft.** mean ΔE 0.3 still allows individual pixels far off |
+| Verifiable by | decode + diff + `max()` | requires colour-space conversion + averaging |
+
+**Near-lossless is L∞ per channel — a hard per-pixel ceiling — not an aggregate
+metric.** That is the whole value proposition: a caller can promise downstream
+"no pixel shifted by more than ε." A mean-ΔE / SSIM2 bound permits arbitrary
+local excursions while the average stays low, so it is *not* near-lossless — it
+is a *lossy quality target* (axis 3 / palette quality, `zenquant`'s domain).
+Folding the OKLab-ΔE metric into `NearLossless` would repeat the §3 mistake of
+merging two contracts. Keep them apart: `NearLossless` = L∞ ε; perceptual
+targets stay on `with_generic_quality` / the quantizer's quality gate.
+
+**Units across bit depths (the 8-bit-vs-16-bit question).** A bare integer
+`max_channel_error` is ambiguous: `2` means ±2/255 (~0.8%) at 8-bit but
+±2/65535 (~0.003%) at 16-bit — wildly different. Worse, the two natural ways a
+caller thinks about the budget scale with depth *differently*:
+
+- *"±2 levels of 255"* — a **fraction of full range**, depth-independent. The
+  8-bit web case. (`zenpng`'s perceptual gates are already f32 fractions:
+  `MaxMpe(0.008)`.)
+- *"the bottom 4 bits are sensor noise, drop them"* — **bits dropped**,
+  depth-relative. Same *count* of LSBs (15) at any depth, but a different
+  *fraction*. The 16-bit scientific case the question is about.
+
+So the budget is its own small type that can carry either intent and resolve to
+a per-depth integer ceiling — never a raw depth-blind integer:
+
+```rust
+/// A near-lossless error budget. The metric is **L∞ per channel** (max absolute
+/// deviation of any single channel) — a hard per-pixel ceiling, *not* an
+/// image-aggregate. Resolves to an integer ceiling at the codec's encoded depth.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum NearLosslessBudget {
+    /// Fraction of a channel's full range, depth-independent. `0.0` == exact.
+    /// e.g. `Fraction(0.008)` ≈ ±2/255. The portable default representation.
+    Fraction(f32),
+    /// Absolute LSBs at 8-bit (parts per 255). Matches WebP / PNG-8 / GIF tables
+    /// 1:1; scaled up for deeper encodes. `Lsb8(2)` ⇒ ±2/255 ⇒ ±514/65535.
+    Lsb8(u8),
+    /// Low bits permitted to change (PNG-style, depth-relative). `Bits(4)` keeps
+    /// the same LSB count at any depth. Ceiling = 2^(b-1) at the encoded depth.
+    Bits(u8),
+}
+
+impl NearLosslessBudget {
+    pub const EXACT: Self = Self::Fraction(0.0);
+    pub const fn from_lsb8(n: u8) -> Self { Self::Lsb8(n) }
+
+    /// Largest integer L∞ ceiling (in LSBs) honorable at a `depth`-bit sample
+    /// that does **not exceed** this budget. Codecs round *down* from here to
+    /// their nearest representable level.
+    pub fn max_lsb_at_depth(self, depth: u32) -> u32 {
+        let full = (1u32 << depth) - 1; // e.g. 255 or 65535
+        match self {
+            Self::Fraction(f) => (f.clamp(0.0, 1.0) * full as f32) as u32,
+            Self::Lsb8(n)     => ((n as u32 * full) / 255),      // scale 8-bit → depth
+            Self::Bits(b)     => if b == 0 { 0 } else { 1u32 << (b - 1) }, // 2^(b-1)
+        }
+    }
+}
+```
+
+Recommendation: **`Fraction` is the canonical/portable form** (depth-independent,
+matches the style of the existing perceptual gates), with `Lsb8` as the
+ergonomic 8-bit constructor (matches every existing near-lossless impl 1:1) and
+`Bits` for the deep-content "drop N noisy bits" intent. Codecs only ever consume
+`max_lsb_at_depth(their_depth)` and round down — so the per-codec mapping tables
+in §6 stay exactly as written for the 8-bit path.
+
+**Alpha.** The metric is per-channel; whether alpha is *in* the ceiling differs
+today — `zengif` includes alpha, `zenpng::near_lossless_quantize` exempts it,
+WebP includes it. The contract: **ε applies to every encoded channel including
+alpha, unless the codec documents an exemption** (zenpng's exemption is then a
+documented, queryable deviation, not silent).
+
+**Today's reality:** all three near-lossless impls (WebP, PNG, GIF-tolerance)
+are **8-bit only**; none does 16-bit near-lossless yet. The budget type is
+forward-compatible so a 16-bit path can land later without an API change.
+
+### 4.3 `EncoderConfig` additions
 
 ```rust
 pub trait EncoderConfig: Clone + Send + Sync {
@@ -198,7 +277,7 @@ only implement `with_lossless` + `is_lossless` keep working unchanged (the
 default `with_lossless_mode` is a no-op, so they simply ignore `NearLossless`
 until they opt in — identical to today's behavior for any unknown setting).
 
-### 4.3 `EncodeCapabilities` addition
+### 4.4 `EncodeCapabilities` addition
 
 ```rust
 // in struct EncodeCapabilities:
@@ -213,7 +292,7 @@ pub const fn near_lossless(&self) -> bool { self.near_lossless }
 `lossy` / `lossless` already exist; `near_lossless` slots in beside them so a
 codec-agnostic pipeline can query support before requesting it.
 
-### 4.4 `DynEncoderConfig` addition
+### 4.5 `DynEncoderConfig` addition
 
 ```rust
 fn set_lossless_mode(&mut self, mode: LosslessMode);
@@ -322,19 +401,20 @@ in near-lossless. Only JPEG (no lossless path) actually has to demote.
 
 ## 7. Edge cases & scope
 
-- **Bit depth.** ε is in LSBs at the encoded integer bit depth. A codec that
-  encodes 8-bit interprets ε ∈ [0,255]; a 16-bit encode interprets ε ∈
-  [0,65535]. Callers targeting a specific depth should set ε in that depth's
-  units. (A future helper could accept a normalized fraction and scale, but the
-  integer ceiling is the primitive.)
-- **Float / HDR formats.** A per-channel integer LSB ceiling is undefined for
-  `f32` pixels. For float formats `NearLossless` resolves to `Lossless` (or
-  `Lossy` if no lossless path) and `near_lossless` capability is false.
-- **Alpha.** ε applies per channel including alpha, matching WebP/PNG behavior
-  (both quantize alpha alongside color). `with_alpha_quality` is orthogonal and
-  unchanged.
-- **`NearLossless{0}`** is exactly `Lossless`; codecs may normalize it to the
-  `Lossless` variant in `lossless_mode()`.
+- **Bit depth.** Resolved per §4.2: the budget is depth-portable
+  (`Fraction`/`Lsb8`/`Bits`) and each codec consumes `max_lsb_at_depth(depth)`.
+  Never a raw depth-blind integer.
+- **Metric.** L∞ per channel (max absolute per-channel deviation), a hard
+  per-pixel ceiling — *not* the mean OKLab ΔE / MPE / SSIM2 used by the
+  quantizer's quality gate. See §4.2 for why these are different axes.
+- **Float / HDR formats.** A per-channel LSB ceiling is undefined for `f32`
+  pixels. For float formats `NearLossless` resolves to `Lossless` (or `Lossy` if
+  no lossless path) and `near_lossless` capability is false.
+- **Alpha.** Per §4.2: ε applies to every encoded channel including alpha unless
+  the codec documents an exemption (zenpng exempts alpha today; zengif/WebP do
+  not). `with_alpha_quality` is orthogonal and unchanged.
+- **`NearLosslessBudget::EXACT`** is exactly `Lossless`; codecs may normalize it
+  to the `Lossless` variant in `lossless_mode()`.
 
 ---
 
@@ -351,10 +431,17 @@ in near-lossless. Only JPEG (no lossless path) actually has to demote.
   re-merges axis 3 into axis 2. It's already `with_generic_quality(~98)`; a
   second path to the same lossy codestream is redundant and confuses "ε ceiling"
   with "perception bound."
-- **A normalized [0,1] error fraction instead of LSBs**: more portable across
-  depths but loses the exact integer ceiling WebP/PNG actually honor, and most
-  near-lossless usage is 8-bit. The integer LSB is the primitive; a fraction can
-  layer on top later.
+- **A bare depth-blind integer `max_channel_error`** (the first cut here):
+  ambiguous across bit depths (±2 means 0.8% at 8-bit, 0.003% at 16-bit) and
+  can't express the "drop N noisy bits" intent. Replaced by `NearLosslessBudget`
+  (§4.2), which carries the intent (`Fraction`/`Lsb8`/`Bits`) and resolves to a
+  per-depth integer ceiling. The integer ceiling each codec honors is recovered
+  via `max_lsb_at_depth`; nothing is lost.
+- **An aggregate perceptual metric (mean OKLab ΔE / SSIM2) for near-lossless**:
+  that is a *soft, image-wide* bound — it permits individual pixels to be far
+  off, so it is not "near-lossless." It is the right metric for the *lossy
+  quality* axis (`zenquant` / `QualityGate`), not the per-pixel ε ceiling. See
+  §4.2.
 
 ---
 
