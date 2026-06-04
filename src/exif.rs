@@ -336,7 +336,40 @@ fn take_pointer(entries: &mut Vec<Entry<'_>>, tag: u16, order: ByteOrder) -> Opt
     Some(off)
 }
 
+impl<'a> Default for Exif<'a> {
+    /// An empty EXIF tree — see [`Exif::new`].
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'a> Exif<'a> {
+    /// Start an empty EXIF tree to build from scratch — e.g. to stamp a
+    /// Copyright on an image that carried no EXIF. Little-endian, no `Exif\0\0`
+    /// prefix. Set fields with [`set_copyright`](Self::set_copyright) /
+    /// [`set_artist`](Self::set_artist), then serialize with
+    /// [`to_bytes`](Self::to_bytes) (which yields a raw TIFF — the JPEG/codec
+    /// layer adds the APP1 `Exif\0\0` framing).
+    ///
+    /// ```
+    /// use zencodec::exif::{Exif, TextEncoding};
+    /// let mut exif = Exif::new();
+    /// exif.set_copyright("© 2026 Lilith", TextEncoding::Utf8);
+    /// let blob = exif.to_bytes();
+    /// assert_eq!(Exif::parse(&blob).unwrap().copyright().unwrap(), "© 2026 Lilith");
+    /// ```
+    pub fn new() -> Self {
+        Exif {
+            order: ByteOrder::Little,
+            had_prefix: false,
+            ifd0: Vec::new(),
+            exif_ifd: None,
+            gps_ifd: None,
+            ifd1: None,
+            thumbnail: None,
+        }
+    }
+
     /// Parse a TIFF/EXIF blob (optionally `Exif\0\0`-prefixed). Returns `None`
     /// for malformed input. Zero-copy: entry values borrow `data`.
     pub fn parse(data: &'a [u8]) -> Option<Self> {
@@ -1893,5 +1926,33 @@ mod tests {
             !out.windows(2).any(|w| w == TAG_MAKE.to_le_bytes()),
             "IFD1 camera tag (Make) must be stripped"
         );
+    }
+
+    // ── From-scratch construction (Exif::new) ────────────────────────────────
+
+    /// Build a fresh EXIF from nothing: new → set_copyright → to_bytes → parse.
+    #[test]
+    fn new_from_scratch_copyright_round_trips() {
+        let mut exif = Exif::new();
+        assert!(exif.copyright().is_none());
+        exif.set_copyright("(c) 2026 Lilith", TextEncoding::Ascii);
+        let blob = exif.to_bytes();
+        let y = Exif::parse(&blob).expect("fresh blob parses");
+        assert_eq!(y.copyright().unwrap(), "(c) 2026 Lilith");
+        assert!(!y.has_gps() && !y.has_thumbnail());
+        // Copyright is `rights`, so it survives even the web preset.
+        let kept = y.filtered(&ExifPolicy::ATTRIBUTED_ORIENTATION).to_bytes();
+        assert_eq!(
+            Exif::parse(&kept).unwrap().copyright().unwrap(),
+            "(c) 2026 Lilith"
+        );
+    }
+
+    /// `Exif::default()` == empty `new()`, and an empty blob round-trips.
+    #[test]
+    fn new_default_empty_round_trips() {
+        let blob = Exif::default().to_bytes();
+        let y = Exif::parse(&blob).expect("empty blob parses");
+        assert!(y.copyright().is_none() && !y.has_gps() && !y.has_thumbnail());
     }
 }
