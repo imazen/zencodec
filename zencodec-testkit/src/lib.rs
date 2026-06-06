@@ -7,12 +7,18 @@
 //!
 //! - [`check_metadata_no_leak`] — a [`MetadataPolicy`] must never leak what it
 //!   discards. The privacy guarantee.
-//! - [`check_cross_path_pixel_equivalence`] — every feeding mode (one-shot,
+//! - [`check_cross_path_pixel_equivalence`] — every still feeding mode (one-shot,
 //!   incremental, streaming, push-sink) must produce identical pixels.
+//! - [`check_animation_cross_path_equivalence`] — every animation decode path
+//!   (borrowed, owned, push-sink) must yield identical frames, matching the input.
+//! - [`check_orientation_roundtrip`] — an orientation survives a keeping policy
+//!   exactly once (no loss, no double-application).
 //! - [`check_capability_honesty`] — comprehensively, every declared capability
 //!   works and every undeclared optional path cleanly returns
 //!   [`UnsupportedOperation`](zencodec::UnsupportedOperation). Both directions, so
 //!   a codec can't claim a feature it lacks *or* hide one it has.
+//!
+//! [`check_all`] runs them all with default inputs — the one-call entry point.
 //!
 //! The [`reference`] module ships a faithful codec (declares and honors every
 //! capability) the harness is validated against; the [`minimal`] module ships its
@@ -88,25 +94,32 @@ impl TestImage {
     /// An RGBA8 image whose channels vary with position, so any row/column
     /// transposition shows up as a pixel diff.
     pub fn rgba8_gradient(width: u32, height: u32) -> Self {
-        Self::gradient(width, height, PixelDescriptor::RGBA8_SRGB, 4)
+        Self::gradient(width, height, PixelDescriptor::RGBA8_SRGB, 4, 0)
     }
 
     /// An RGB8 image with the same gradient pattern.
     pub fn rgb8_gradient(width: u32, height: u32) -> Self {
-        Self::gradient(width, height, PixelDescriptor::RGB8_SRGB, 3)
+        Self::gradient(width, height, PixelDescriptor::RGB8_SRGB, 3, 0)
     }
 
-    fn gradient(width: u32, height: u32, desc: PixelDescriptor, bpp: usize) -> Self {
+    /// An RGBA8 gradient offset by `seed`, so distinct same-size frames (for
+    /// animation tests) differ in content and a frame-ordering bug is visible.
+    pub fn rgba8_gradient_seeded(width: u32, height: u32, seed: u8) -> Self {
+        Self::gradient(width, height, PixelDescriptor::RGBA8_SRGB, 4, seed)
+    }
+
+    fn gradient(width: u32, height: u32, desc: PixelDescriptor, bpp: usize, seed: u8) -> Self {
         assert!(width > 0 && height > 0, "test image must be non-empty");
+        let s = seed as usize;
         let mut data = vec![0u8; width as usize * height as usize * bpp];
         for y in 0..height as usize {
             for x in 0..width as usize {
                 let p = (y * width as usize + x) * bpp;
-                data[p] = (x * 7 + y * 3) as u8; // R
-                data[p + 1] = (x * 3 + y * 11) as u8; // G
-                data[p + 2] = (x ^ y) as u8; // B
+                data[p] = (x * 7 + y * 3 + s) as u8; // R
+                data[p + 1] = (x * 3 + y * 11 + s * 2) as u8; // G
+                data[p + 2] = ((x ^ y) + s) as u8; // B
                 if bpp == 4 {
-                    data[p + 3] = 255 - (x + y) as u8; // A
+                    data[p + 3] = 255 - (x + y + s) as u8; // A
                 }
             }
         }
@@ -172,6 +185,12 @@ impl std::fmt::Debug for Pixels {
 }
 
 fn grab(ps: PixelSlice<'_>) -> Pixels {
+    grab_ref(&ps)
+}
+
+/// `grab` for a borrowed slice — e.g. [`AnimationFrame::pixels`], which returns a
+/// reference into the decoder's canvas.
+fn grab_ref(ps: &PixelSlice<'_>) -> Pixels {
     let rb = ps.width() as usize * ps.descriptor().bytes_per_pixel();
     let mut bytes = Vec::with_capacity(rb * ps.rows() as usize);
     for y in 0..ps.rows() {
@@ -431,6 +450,132 @@ where
         }
     }
 
+    Ok(())
+}
+
+fn encode_animation<E>(cfg: &E, frames: &[TestImage]) -> Result<Vec<u8>, String>
+where
+    E: EncoderConfig,
+    <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder<Error = E::Error>,
+{
+    let mut a = cfg
+        .clone()
+        .job()
+        .with_loop_count(Some(0))
+        .animation_frame_encoder()
+        .map_err(|e| e.to_string())?;
+    for (i, f) in frames.iter().enumerate() {
+        a.push_frame(f.as_slice(), 40 + i as u32 * 10, None)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(a.finish(None).map_err(|e| e.to_string())?.into_vec())
+}
+
+fn decode_anim_borrowed<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<Vec<Pixels>, String> {
+    let mut d = cfg
+        .clone()
+        .job()
+        .animation_frame_decoder(Cow::Borrowed(bytes), &[])
+        .map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    // The borrowed frame is invalidated by the next call, so copy before looping.
+    while let Some(frame) = d.render_next_frame(None).map_err(|e| e.to_string())? {
+        out.push(grab_ref(frame.pixels()));
+    }
+    Ok(out)
+}
+
+fn decode_anim_owned<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<Vec<Pixels>, String> {
+    let mut d = cfg
+        .clone()
+        .job()
+        .animation_frame_decoder(Cow::Borrowed(bytes), &[])
+        .map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    while let Some(frame) = d.render_next_frame_owned(None).map_err(|e| e.to_string())? {
+        out.push(grab(frame.pixels()));
+    }
+    Ok(out)
+}
+
+fn decode_anim_sink<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<Vec<Pixels>, String> {
+    let mut d = cfg
+        .clone()
+        .job()
+        .animation_frame_decoder(Cow::Borrowed(bytes), &[])
+        .map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    loop {
+        let mut sink = CollectSink::default();
+        match d
+            .render_next_frame_to_sink(None, &mut sink)
+            .map_err(|e| e.to_string())?
+        {
+            Some(_info) => out.push(sink.into_pixels()?),
+            None => break,
+        }
+    }
+    Ok(out)
+}
+
+/// Every animation decode path yields identical frames, matching the input.
+///
+/// Encodes the frames via the animation encoder, then decodes the result three
+/// ways — [`render_next_frame`](zencodec::decode::AnimationFrameDecoder::render_next_frame)
+/// (borrowed canvas), `render_next_frame_owned`, and `render_next_frame_to_sink`
+/// (push model) — and asserts all three produce the same frame count and the same
+/// per-frame pixels as the input. The borrowed path is the usual source of bugs:
+/// its frame aliases the decoder's canvas and is invalidated by the next call, so
+/// a codec that composites in place can leak the wrong frame.
+///
+/// Skipped (returns `Ok`) when either end does not advertise animation.
+pub fn check_animation_cross_path_equivalence<E, D>(
+    enc: E,
+    dec: D,
+    frames: &[TestImage],
+) -> Conformance
+where
+    E: EncoderConfig,
+    D: DecoderConfig,
+    <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder<Error = E::Error>,
+{
+    const CHECK: &str = "animation_cross_path_equivalence";
+    if !E::capabilities().animation() || !D::capabilities().animation() {
+        return Ok(()); // not applicable to a still-only codec
+    }
+    if frames.is_empty() {
+        return Err(fail(CHECK, "no frames supplied"));
+    }
+
+    let bytes = encode_animation(&enc, frames).map_err(|e| fail(CHECK, format!("encode: {e}")))?;
+    let want: Vec<Pixels> = frames.iter().map(|f| f.pixels()).collect();
+
+    let paths = [
+        ("render_next_frame", decode_anim_borrowed(&dec, &bytes)),
+        ("render_next_frame_owned", decode_anim_owned(&dec, &bytes)),
+        ("render_next_frame_to_sink", decode_anim_sink(&dec, &bytes)),
+    ];
+    for (name, res) in paths {
+        let got = res.map_err(|e| fail(CHECK, format!("{name}: {e}")))?;
+        if got.len() != want.len() {
+            return Err(fail(
+                CHECK,
+                format!(
+                    "{name} produced {} frames, expected {}",
+                    got.len(),
+                    want.len()
+                ),
+            ));
+        }
+        for (i, (g, w)) in got.iter().zip(&want).enumerate() {
+            if g != w {
+                return Err(fail(
+                    CHECK,
+                    format!("{name} frame {i} pixels differ from the input"),
+                ));
+            }
+        }
+    }
     Ok(())
 }
 
@@ -839,6 +984,31 @@ where
     }
 }
 
+/// Run every conformance check with sensible default inputs, returning the first
+/// failure. The one-call entry point for a codec's test suite; for control over
+/// image sizes or animation frames, call the individual `check_*` functions.
+pub fn check_all<E, D>(enc: E, dec: D) -> Conformance
+where
+    E: EncoderConfig,
+    D: DecoderConfig,
+    <E::Job as EncodeJob>::Enc: Encoder<Error = E::Error>,
+    <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder<Error = E::Error>,
+{
+    let img = TestImage::rgba8_gradient(40, 24);
+    check_pixel_roundtrip(enc.clone(), dec.clone(), &img)?;
+    check_cross_path_pixel_equivalence(enc.clone(), dec.clone(), &img)?;
+    check_orientation_roundtrip(enc.clone(), dec.clone(), &img)?;
+    check_metadata_no_leak(enc.clone(), dec.clone(), &img)?;
+    check_capability_honesty(enc.clone(), dec.clone(), &img)?;
+    let frames = [
+        TestImage::rgba8_gradient_seeded(24, 16, 0),
+        TestImage::rgba8_gradient_seeded(24, 16, 60),
+        TestImage::rgba8_gradient_seeded(24, 16, 120),
+    ];
+    check_animation_cross_path_equivalence(enc, dec, &frames)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -943,6 +1113,41 @@ mod tests {
     fn reference_orientation_roundtrip() {
         let (e, d) = ref_codecs();
         check_orientation_roundtrip(e, d, &TestImage::rgba8_gradient(8, 8)).unwrap();
+    }
+
+    #[test]
+    fn reference_animation_cross_path() {
+        let (e, d) = ref_codecs();
+        // Distinct frames, so a frame-ordering or canvas-aliasing bug is visible.
+        let frames = [
+            TestImage::rgba8_gradient_seeded(10, 8, 0),
+            TestImage::rgba8_gradient_seeded(10, 8, 50),
+            TestImage::rgba8_gradient_seeded(10, 8, 130),
+        ];
+        check_animation_cross_path_equivalence(e, d, &frames).unwrap();
+    }
+
+    #[test]
+    fn minimal_animation_cross_path_skipped() {
+        // Minimal declares animation=false, so the check is not applicable and passes.
+        let frames = [TestImage::rgba8_gradient_seeded(8, 8, 0)];
+        check_animation_cross_path_equivalence(
+            MinimalEncoderConfig::new(),
+            MinimalDecoderConfig::new(),
+            &frames,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn reference_check_all() {
+        let (e, d) = ref_codecs();
+        check_all(e, d).unwrap();
+    }
+
+    #[test]
+    fn minimal_check_all() {
+        check_all(MinimalEncoderConfig::new(), MinimalDecoderConfig::new()).unwrap();
     }
 
     /// The reference round-trips metadata faithfully, so under PreserveExact the

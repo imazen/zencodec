@@ -114,6 +114,11 @@ codec crate adds it as a `dev-dependency` and runs the checks against its own
   feeding mode and diffs the results byte-for-byte. This is what catches
   buffered-vs-streaming divergence (tile-boundary handling, edge padding, rounding
   differences between a one-shot path and an incremental one).
+- `check_animation_cross_path_equivalence` — the same for the three animation
+  decode paths (borrowed canvas, owned, push-sink): all must yield identical
+  frames matching the input. The borrowed path is the usual culprit — its frame
+  aliases the decoder's canvas and is invalidated by the next call, so a codec
+  that composites in place can leak the wrong frame.
 - `check_orientation_roundtrip` — confirms an orientation survives a keeping
   policy exactly once, catching both loss and double-application.
 - `check_capability_honesty` — comprehensive and bidirectional: every declared

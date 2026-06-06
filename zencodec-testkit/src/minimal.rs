@@ -15,7 +15,9 @@ use zencodec::decode::{
     Decode, DecodeCapabilities, DecodeJob, DecodeOutput, DecodeRowSink, DecoderConfig, OutputInfo,
 };
 use zencodec::encode::{EncodeCapabilities, EncodeJob, EncodeOutput, Encoder, EncoderConfig};
-use zencodec::{ImageFormat, ImageInfo, Metadata, ResourceLimits, StopToken, UnsupportedOperation};
+use zencodec::{
+    ImageFormat, ImageInfo, Metadata, Orientation, ResourceLimits, StopToken, UnsupportedOperation,
+};
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
 
 use crate::reference::{
@@ -60,12 +62,16 @@ impl EncoderConfig for MinimalEncoderConfig {
         &ENCODE_CAPS
     }
     fn job(self) -> MinEncodeJob {
-        MinEncodeJob
+        MinEncodeJob {
+            orientation: Orientation::Identity,
+        }
     }
 }
 
 /// Minimal encode job.
-pub struct MinEncodeJob;
+pub struct MinEncodeJob {
+    orientation: Orientation,
+}
 
 impl EncodeJob for MinEncodeJob {
     type Error = RefError;
@@ -79,12 +85,16 @@ impl EncodeJob for MinEncodeJob {
     fn with_limits(self, _limits: ResourceLimits) -> Self {
         self
     }
-    // Drops metadata: the minimal codec declares no metadata channels.
-    fn with_metadata(self, _meta: Metadata) -> Self {
+    // Keeps only orientation (display-critical); drops every metadata *channel*
+    // (icc/exif/xmp/cicp), which it declares no capability for.
+    fn with_metadata(mut self, meta: Metadata) -> Self {
+        self.orientation = meta.orientation;
         self
     }
     fn encoder(self) -> Result<MinEnc, RefError> {
-        Ok(MinEnc)
+        Ok(MinEnc {
+            orientation: self.orientation,
+        })
     }
     fn animation_frame_encoder(self) -> Result<RefAnimEnc, RefError> {
         Err(RefError::Unsupported(UnsupportedOperation::AnimationEncode))
@@ -93,7 +103,9 @@ impl EncodeJob for MinEncodeJob {
 
 /// Minimal one-shot encoder. `push_rows` / `finish` / `encode_from` fall through
 /// to the trait defaults, which reject with `UnsupportedOperation`.
-pub struct MinEnc;
+pub struct MinEnc {
+    orientation: Orientation,
+}
 
 impl Encoder for MinEnc {
     type Error = RefError;
@@ -103,9 +115,10 @@ impl Encoder for MinEnc {
     }
 
     fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, RefError> {
-        // Encode with empty metadata — the minimal codec embeds none.
+        // Orientation only — no metadata channels.
+        let meta = Metadata::none().with_orientation(self.orientation);
         Ok(EncodeOutput::new(
-            encode_single(pixels, &Metadata::none()),
+            encode_single(pixels, &meta),
             ImageFormat::Pnm,
         ))
     }

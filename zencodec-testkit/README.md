@@ -17,7 +17,9 @@ expensive to ship wrong:
   (one-shot `encode`, incremental `push_rows`, pull `encode_from`; one-shot
   `decode`, `streaming_decoder`, `push_decoder`). They must all produce identical
   pixels. `check_cross_path_pixel_equivalence` runs every advertised path and
-  diffs the results byte-for-byte.
+  diffs the results byte-for-byte. `check_animation_cross_path_equivalence` does
+  the same for the three animation decode paths (borrowed, owned, push-sink),
+  which is where canvas-aliasing and frame-ordering bugs hide.
 - **Capability honesty.** `EncodeCapabilities` / `DecodeCapabilities` are
   load-bearing — callers branch on them. `check_capability_honesty` exercises
   them comprehensively, in both directions: every declared capability
@@ -43,9 +45,14 @@ use zencodec_testkit as tk;
 
 #[test]
 fn my_codec_is_conformant() {
+    // One call runs every check with default inputs.
+    tk::check_all(MyEncoderConfig::new(), MyDecoderConfig).expect("conformance failed");
+}
+
+#[test]
+fn my_codec_privacy() {
+    // Or call individual checks for control over image sizes / frames.
     let img = tk::TestImage::rgba8_gradient(64, 48);
-    tk::check_cross_path_pixel_equivalence(MyEncoderConfig::new(), MyDecoderConfig, &img)
-        .expect("cross-path pixels diverge");
     tk::check_metadata_no_leak(MyEncoderConfig::new(), MyDecoderConfig, &img)
         .expect("metadata leaked past the policy");
 }
