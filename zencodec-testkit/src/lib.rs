@@ -714,14 +714,25 @@ fn assert_no_leak(
     Ok(())
 }
 
-/// An orientation set on the metadata survives a policy that keeps it, exactly
-/// once.
+/// An orientation set on the metadata survives a policy that keeps it, carried
+/// as metadata exactly once — never lost and never double-applied.
 ///
 /// `Web`, `ColorAndRotation`, and `PreserveExact` all keep orientation (it is
-/// display-correctness, not privacy). This encodes each non-identity orientation
-/// under each, decodes, and asserts the decoded orientation matches — catching
-/// both *loss* (reset to identity) and the *double-application* hazard where a
-/// codec bakes the rotation into pixels and also re-emits the tag.
+/// display-correctness, not privacy). For each non-identity orientation under
+/// each, this asserts two things on decode:
+///
+/// 1. The decoded orientation field equals the requested one (no *loss* — reset
+///    to identity, or to a different orientation).
+/// 2. The decoded **pixels equal the input** (no *double-application*). A codec
+///    that carries the orientation tag *and* also bakes the rotation into the
+///    pixels would round-trip the tag correctly yet return rotated pixels — a
+///    downstream viewer then re-applies the tag and shows the image twice-rotated.
+///    Comparing pixels catches exactly that bake+tag inconsistency.
+///
+/// This models the "carry as metadata" contract (orientation lives in the field,
+/// pixels stay as-authored). A codec that legitimately bakes orientation upright
+/// reports `Identity` and is caught by assertion 1 — bake-mode codecs should not
+/// claim a non-identity orientation round-trips through metadata.
 pub fn check_orientation_roundtrip<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
 where
     E: EncoderConfig,
@@ -741,12 +752,13 @@ where
         ("ColorAndRotation", MetadataPolicy::ColorAndRotation),
         ("PreserveExact", MetadataPolicy::PreserveExact),
     ];
+    let want_pixels = img.pixels();
     for ori in orientations {
         for (name, policy) in policies {
             let meta = Metadata::none().with_orientation(ori);
             let bytes = enc_oneshot(&enc, img, meta, policy)
                 .map_err(|e| fail(CHECK, format!("[{name}] encode {ori:?}: {e}")))?;
-            let (_, decoded) = dec_oneshot(&dec, &bytes)
+            let (px, decoded) = dec_oneshot(&dec, &bytes)
                 .map_err(|e| fail(CHECK, format!("[{name}] decode {ori:?}: {e}")))?;
             if decoded.orientation != ori {
                 return Err(fail(
@@ -754,6 +766,17 @@ where
                     format!(
                         "[{name}] orientation {ori:?} survived as {:?}",
                         decoded.orientation
+                    ),
+                ));
+            }
+            // Tag carried => pixels must be as-authored. Rotated pixels here mean
+            // the codec baked the rotation *and* re-emitted the tag: a viewer
+            // applying the tag double-rotates.
+            if px != want_pixels {
+                return Err(fail(
+                    CHECK,
+                    format!(
+                        "[{name}] orientation {ori:?} is carried in metadata but the pixels were also rotated (double-application: a viewer that applies the tag rotates twice)"
                     ),
                 ));
             }
