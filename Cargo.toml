@@ -1,3 +1,10 @@
+[workspace]
+# zencodec (this manifest's package) is the root member; zencodec-testkit is a
+# dev/conformance helper that depends on zencodec by path and is never published
+# alongside it.
+members = ["zencodec-testkit"]
+resolver = "3"
+
 [package]
 name = "zencodec"
 version = "0.1.21"

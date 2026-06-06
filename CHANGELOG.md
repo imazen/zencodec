@@ -6,6 +6,18 @@ All notable changes to zencodec are documented here.
 
 ### Added
 
+- **`zencodec-testkit` crate (new workspace member, unpublished)** — a
+  conformance harness codec crates run against their own `EncoderConfig` /
+  `DecoderConfig`. Ships `check_metadata_no_leak` (a retention policy must never
+  leak what it discards — decodes the output and re-parses the embedded EXIF to
+  prove GPS/thumbnail/rights the policy dropped are actually gone),
+  `check_cross_path_pixel_equivalence` (one-shot vs `push_rows` vs streaming vs
+  push-sink produce identical pixels), and `check_capability_honesty` (a declared
+  capability works; an undeclared one returns `UnsupportedOperation`). Includes a
+  faithful in-memory `reference` codec that round-trips pixels *and* metadata,
+  validated against the harness in-crate, plus a hand-built GPS/thumbnail EXIF
+  fixture. The repo is now a Cargo workspace (`zencodec` root + `zencodec-testkit`
+  member); `zencodec`'s published package is unaffected.
 - **Cross-codec color-emission policy** —
   `resolve_color_emit(&SourceColor, &EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan`,
   a pure `no_std` decision of which color carriers (ICC vs CICP) to write for a

@@ -2,6 +2,17 @@
 
 Shared traits and types for zen* image codecs.
 
+## Workspace Layout
+
+This repo is a Cargo workspace:
+- **`zencodec`** (root package) — the published traits/types crate.
+- **`zencodec-testkit/`** (member, unpublished) — conformance harness codec
+  crates run against their own `EncoderConfig`/`DecoderConfig`. Ships
+  `check_metadata_no_leak` (privacy), `check_cross_path_pixel_equivalence`,
+  `check_capability_honesty`, a faithful in-memory `reference` codec, and EXIF
+  fixtures. Build/test the whole workspace with `cargo test --workspace`; the
+  testkit must stay green and is the place to add cross-codec correctness checks.
+
 ## API Specification
 
 **[spec.md](docs/spec.md)** — canonical reference for the full public API surface.
