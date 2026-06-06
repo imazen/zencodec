@@ -116,13 +116,21 @@ codec crate adds it as a `dev-dependency` and runs the checks against its own
   differences between a one-shot path and an incremental one).
 - `check_orientation_roundtrip` — confirms an orientation survives a keeping
   policy exactly once, catching both loss and double-application.
-- `check_capability_honesty` — a declared capability works; an undeclared one
-  (`encode_from`, here) returns `UnsupportedOperation` in its error chain rather
-  than panicking or silently succeeding.
+- `check_capability_honesty` — comprehensive and bidirectional: every declared
+  capability (the encode paths `push_rows`/`encode_from`/animation, the decode
+  paths streaming/animation, the `lossless` knob, `cheap_probe`, the
+  `icc`/`exif`/`xmp`/`cicp` metadata channels, and `native_alpha`) must actually
+  work, and every *undeclared* optional path must decline with
+  `UnsupportedOperation` rather than panicking or silently succeeding. All
+  violations are collected and reported together. (Cancellation and the lossy flag
+  are out of scope: cancellation timing isn't reliably testable on bounded inputs,
+  and lossy-vs-lossless output isn't observable from the bitstream.)
 
-The testkit ships a faithful in-memory `reference` codec that round-trips pixels
-*and* metadata; the checks are validated against it in the testkit's own tests, so
-the harness itself is known-good before you point it at a real codec.
+The testkit ships two codecs the checks are validated against in its own tests, so
+the harness is known-good before you point it at a real codec: a faithful
+`reference` (round-trips pixels *and* metadata, declares and honors every
+capability) and a `minimal` one (one-shot only, every optional capability declared
+false) that exercises the false-direction branches.
 
 ## Known hazards the testkit is meant to catch
 

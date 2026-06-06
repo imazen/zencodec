@@ -102,7 +102,7 @@ impl From<zencodec::LimitExceeded> for RefError {
 
 const MAGIC: &[u8; 4] = b"ZCR1";
 
-fn descriptor_for_bpp(bpp: u8) -> Result<PixelDescriptor, RefError> {
+pub(crate) fn descriptor_for_bpp(bpp: u8) -> Result<PixelDescriptor, RefError> {
     match bpp {
         3 => Ok(PixelDescriptor::RGB8_SRGB),
         4 => Ok(PixelDescriptor::RGBA8_SRGB),
@@ -111,13 +111,13 @@ fn descriptor_for_bpp(bpp: u8) -> Result<PixelDescriptor, RefError> {
 }
 
 /// Parsed header plus the byte offset where frame data starts.
-struct Header {
-    width: u32,
-    height: u32,
-    frame_count: u32,
-    bpp: u8,
-    meta: Metadata,
-    frames_offset: usize,
+pub(crate) struct Header {
+    pub(crate) width: u32,
+    pub(crate) height: u32,
+    pub(crate) frame_count: u32,
+    pub(crate) bpp: u8,
+    pub(crate) meta: Metadata,
+    pub(crate) frames_offset: usize,
 }
 
 fn push_u32(out: &mut Vec<u8>, v: u32) {
@@ -173,7 +173,7 @@ fn write_header(out: &mut Vec<u8>, w: u32, h: u32, frames: u32, bpp: u8, meta: &
     }
 }
 
-fn parse_header(data: &[u8]) -> Result<Header, RefError> {
+pub(crate) fn parse_header(data: &[u8]) -> Result<Header, RefError> {
     if data.len() < 18 || &data[..4] != MAGIC {
         return Err(RefError::Invalid("bad magic / short header".into()));
     }
@@ -231,16 +231,16 @@ fn parse_header(data: &[u8]) -> Result<Header, RefError> {
 }
 
 /// Byte offset of frame `i`'s pixel data (skipping its leading duration u32).
-fn frame_pixels_offset(h: &Header, i: u32) -> usize {
+pub(crate) fn frame_pixels_offset(h: &Header, i: u32) -> usize {
     let frame_bytes = 4 + h.width as usize * h.height as usize * h.bpp as usize;
     h.frames_offset + i as usize * frame_bytes + 4
 }
 
-fn frame_pixel_len(h: &Header) -> usize {
+pub(crate) fn frame_pixel_len(h: &Header) -> usize {
     h.width as usize * h.height as usize * h.bpp as usize
 }
 
-fn build_info(h: &Header) -> ImageInfo {
+pub(crate) fn build_info(h: &Header) -> ImageInfo {
     let mut info =
         ImageInfo::new(h.width, h.height, ImageFormat::Pnm).with_orientation(h.meta.orientation);
     if let Some(icc) = &h.meta.icc_profile {
@@ -265,7 +265,7 @@ fn build_info(h: &Header) -> ImageInfo {
     info
 }
 
-fn encode_single(pixels: PixelSlice<'_>, meta: &Metadata) -> Vec<u8> {
+pub(crate) fn encode_single(pixels: PixelSlice<'_>, meta: &Metadata) -> Vec<u8> {
     let bpp = pixels.descriptor().bytes_per_pixel() as u8;
     let mut out = Vec::new();
     write_header(&mut out, pixels.width(), pixels.rows(), 1, bpp, meta);
@@ -280,26 +280,27 @@ fn encode_single(pixels: PixelSlice<'_>, meta: &Metadata) -> Vec<u8> {
 // Capabilities
 // ===========================================================================
 
+// The reference is a lossless-only codec. Every capability declared here is
+// honored — that's the point: `check_capability_honesty` must pass against it.
+// (No `lossy`, `stop`, or quality-range: the reference stores raw pixels, encodes
+// instantly so there's nothing to cancel, and has no quality knob. Declaring them
+// would be the exact dishonesty the check exists to catch.)
 static ENCODE_CAPS: EncodeCapabilities = EncodeCapabilities::new()
     .with_lossless(true)
-    .with_lossy(true)
     .with_native_alpha(true)
     .with_animation(true)
     .with_push_rows(true)
     .with_encode_from(false) // reference declines the pull path (see encoder)
-    .with_stop(true)
     .with_icc(true)
     .with_exif(true)
     .with_xmp(true)
-    .with_cicp(true)
-    .with_quality_range(0.0, 100.0);
+    .with_cicp(true);
 
 static DECODE_CAPS: DecodeCapabilities = DecodeCapabilities::new()
     .with_cheap_probe(true)
     .with_animation(true)
     .with_streaming(true)
-    .with_native_alpha(true)
-    .with_stop(true);
+    .with_native_alpha(true);
 
 // ===========================================================================
 // Encode: Config -> Job -> Encoder / AnimationFrameEncoder
@@ -308,7 +309,7 @@ static DECODE_CAPS: DecodeCapabilities = DecodeCapabilities::new()
 /// Reference encoder configuration. Accepts RGB8 and RGBA8.
 #[derive(Clone, Debug, Default)]
 pub struct ReferenceEncoderConfig {
-    quality: Option<f32>,
+    lossless: Option<bool>,
 }
 
 impl ReferenceEncoderConfig {
@@ -331,12 +332,14 @@ impl EncoderConfig for ReferenceEncoderConfig {
     fn capabilities() -> &'static EncodeCapabilities {
         &ENCODE_CAPS
     }
-    fn with_generic_quality(mut self, q: f32) -> Self {
-        self.quality = Some(q);
+    // The reference is always lossless; it records the request so `is_lossless()`
+    // honors the declared `lossless` capability (output is raw either way).
+    fn with_lossless(mut self, lossless: bool) -> Self {
+        self.lossless = Some(lossless);
         self
     }
-    fn generic_quality(&self) -> Option<f32> {
-        self.quality
+    fn is_lossless(&self) -> Option<bool> {
+        self.lossless
     }
     fn job(self) -> RefEncodeJob {
         RefEncodeJob {

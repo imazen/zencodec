@@ -9,11 +9,15 @@
 //!   discards. The privacy guarantee.
 //! - [`check_cross_path_pixel_equivalence`] — every feeding mode (one-shot,
 //!   incremental, streaming, push-sink) must produce identical pixels.
-//! - [`check_capability_honesty`] — a declared capability works; an undeclared
-//!   one cleanly returns [`UnsupportedOperation`](zencodec::UnsupportedOperation).
+//! - [`check_capability_honesty`] — comprehensively, every declared capability
+//!   works and every undeclared optional path cleanly returns
+//!   [`UnsupportedOperation`](zencodec::UnsupportedOperation). Both directions, so
+//!   a codec can't claim a feature it lacks *or* hide one it has.
 //!
-//! The [`reference`] module ships a faithful codec the harness is validated
-//! against, which also serves as a worked example.
+//! The [`reference`] module ships a faithful codec (declares and honors every
+//! capability) the harness is validated against; the [`minimal`] module ships its
+//! opposite (declares every optional capability false) so the false-direction
+//! branches are validated too. Both double as worked examples.
 //!
 //! [`EncoderConfig`]: zencodec::encode::EncoderConfig
 //! [`DecoderConfig`]: zencodec::decode::DecoderConfig
@@ -22,16 +26,19 @@ use std::borrow::Cow;
 
 use zencodec::CodecErrorExt;
 use zencodec::decode::{
-    Decode, DecodeJob, DecodeRowSink, DecoderConfig, SinkError, StreamingDecode,
+    AnimationFrameDecoder, Decode, DecodeJob, DecodeRowSink, DecoderConfig, SinkError,
+    StreamingDecode,
 };
-use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
+use zencodec::encode::{AnimationFrameEncoder, EncodeJob, Encoder, EncoderConfig};
 use zencodec::exif::Exif;
-use zencodec::{Metadata, MetadataFields, MetadataPolicy, Orientation};
+use zencodec::{Cicp, Metadata, MetadataFields, MetadataPolicy, Orientation};
 use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 
 pub mod fixtures;
+pub mod minimal;
 pub mod reference;
 
+pub use minimal::{MinimalDecoderConfig, MinimalEncoderConfig};
 pub use reference::{RefError, ReferenceDecoderConfig, ReferenceEncoderConfig};
 
 // ===========================================================================
@@ -580,49 +587,256 @@ where
     Ok(())
 }
 
-/// Declared capabilities match real behavior.
-///
-/// For now: the encoder's pull path (`encode_from`) must succeed iff
-/// [`EncodeCapabilities::encode_from`](zencodec::EncodeCapabilities::encode_from)
-/// is set; when unset, the call must fail with an
-/// [`UnsupportedOperation`](zencodec::UnsupportedOperation) in its cause chain
-/// (not a panic, not a silent success).
-pub fn check_capability_honesty<E, D>(enc: E, _dec: D) -> Conformance
+/// Classify one structural capability: declared support must match observed
+/// behavior. Declared + works = fine; declared + failed = lying (missing impl);
+/// undeclared + worked = lying (hidden support); undeclared + failed with
+/// anything other than `UnsupportedOperation` = wrong error for an absent
+/// feature.
+fn classify<T, Er>(name: &str, declared: bool, res: Result<T, Er>, v: &mut Vec<String>)
+where
+    Er: std::error::Error + 'static,
+{
+    match (declared, res) {
+        (true, Ok(_)) => {}
+        (true, Err(e)) => v.push(format!(
+            "{name}: declared supported, but the operation failed: {e}"
+        )),
+        (false, Ok(_)) => v.push(format!(
+            "{name}: not declared, but the operation succeeded (hidden capability)"
+        )),
+        (false, Err(e)) => {
+            if e.unsupported_operation().is_none() {
+                v.push(format!(
+                    "{name}: not declared; expected UnsupportedOperation when used, got a different error: {e}"
+                ));
+            }
+        }
+    }
+}
+
+fn run_push_rows<E>(cfg: &E, img: &TestImage) -> Result<Vec<u8>, E::Error>
 where
     E: EncoderConfig,
     <E::Job as EncodeJob>::Enc: Encoder<Error = E::Error>,
 {
+    let mut e = cfg
+        .clone()
+        .job()
+        .with_metadata_policy(Metadata::none(), MetadataPolicy::PreserveExact)
+        .encoder()?;
+    let strip = e.preferred_strip_height().max(1);
+    let mut y = 0;
+    while y < img.height {
+        let h = strip.min(img.height - y);
+        e.push_rows(img.strip(y, h))?;
+        y += h;
+    }
+    Ok(e.finish()?.into_vec())
+}
+
+fn run_encode_from<E>(cfg: &E, img: &TestImage) -> Result<Vec<u8>, E::Error>
+where
+    E: EncoderConfig,
+    <E::Job as EncodeJob>::Enc: Encoder<Error = E::Error>,
+{
+    let e = cfg
+        .clone()
+        .job()
+        .with_metadata_policy(Metadata::none(), MetadataPolicy::PreserveExact)
+        .encoder()?;
+    let rb = img.row_bytes();
+    let mut next = 0u32;
+    let mut src = |_y: u32, mut buf: PixelSliceMut<'_>| -> usize {
+        if next >= img.height {
+            return 0;
+        }
+        let want = buf.rows().min(img.height - next);
+        for r in 0..want {
+            let s = (next + r) as usize * rb;
+            let dst = buf.row_mut(r);
+            let n = dst.len().min(rb);
+            dst[..n].copy_from_slice(&img.data[s..s + n]);
+        }
+        next += want;
+        want as usize
+    };
+    Ok(e.encode_from(&mut src)?.into_vec())
+}
+
+fn run_animation_encode<E>(cfg: &E, img: &TestImage) -> Result<Vec<u8>, E::Error>
+where
+    E: EncoderConfig,
+    <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder<Error = E::Error>,
+{
+    let mut a = cfg
+        .clone()
+        .job()
+        .with_loop_count(Some(0))
+        .animation_frame_encoder()?;
+    a.push_frame(img.as_slice(), 100, None)?;
+    a.push_frame(img.as_slice(), 100, None)?;
+    Ok(a.finish(None)?.into_vec())
+}
+
+fn run_streaming<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<(), D::Error> {
+    let mut sd = cfg
+        .clone()
+        .job()
+        .streaming_decoder(Cow::Borrowed(bytes), &[])?;
+    while sd.next_batch()?.is_some() {}
+    Ok(())
+}
+
+fn run_animation_decode<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<(), D::Error> {
+    let mut ad = cfg
+        .clone()
+        .job()
+        .animation_frame_decoder(Cow::Borrowed(bytes), &[])?;
+    while ad.render_next_frame(None)?.is_some() {}
+    Ok(())
+}
+
+/// Declared capabilities match real behavior, comprehensively.
+///
+/// Every declared capability is exercised and every *undeclared* optional path
+/// is confirmed to decline with [`UnsupportedOperation`](zencodec::UnsupportedOperation)
+/// — both directions, so a codec can't claim a feature it lacks *or* hide one it
+/// has. Covered: the encode paths (`push_rows`, `encode_from`, animation), the
+/// decode paths (streaming, animation), the lossless config knob, the
+/// `cheap_probe` flag, the metadata channels (`icc`/`exif`/`xmp`/`cicp`, checked
+/// for survival through a `PreserveExact` round trip), and `native_alpha`.
+///
+/// All violations are collected and reported together, so one run names every
+/// dishonest flag.
+///
+/// Not covered: cooperative cancellation (`stop`) — whether a codec honors a
+/// triggered token is timing-dependent on small inputs and can't be asserted
+/// reliably here; and the `lossy` flag, whose effect (lossy vs lossless output)
+/// isn't observable from the bitstream alone.
+pub fn check_capability_honesty<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
+where
+    E: EncoderConfig,
+    D: DecoderConfig,
+    <E::Job as EncodeJob>::Enc: Encoder<Error = E::Error>,
+    <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder<Error = E::Error>,
+{
     const CHECK: &str = "capability_honesty";
-    if !E::capabilities().encode_from() {
-        let encoder = enc
-            .clone()
-            .job()
-            .with_metadata_policy(Metadata::none(), MetadataPolicy::PreserveExact)
-            .encoder()
-            .map_err(|e| fail(CHECK, format!("build encoder: {e}")))?;
-        // Source that immediately signals end-of-image; an honest decline should
-        // reject before consuming it.
-        let mut src = |_y: u32, _buf: PixelSliceMut<'_>| 0usize;
-        match encoder.encode_from(&mut src) {
-            Ok(_) => {
-                return Err(fail(
-                    CHECK,
-                    "encode_from succeeded although capabilities advertise it is unsupported",
+    let ec = E::capabilities();
+    let dc = D::capabilities();
+    let mut v: Vec<String> = Vec::new();
+
+    // --- structural encode paths (both directions) ---
+    classify(
+        "encode push_rows",
+        ec.push_rows(),
+        run_push_rows(&enc, img),
+        &mut v,
+    );
+    classify(
+        "encode encode_from",
+        ec.encode_from(),
+        run_encode_from(&enc, img),
+        &mut v,
+    );
+    classify(
+        "encode animation",
+        ec.animation(),
+        run_animation_encode(&enc, img),
+        &mut v,
+    );
+
+    // --- lossless config-knob honesty ---
+    // Declared => with_lossless(true) must surface via is_lossless(); undeclared
+    // => the no-op default leaves is_lossless() == None.
+    let toggled = enc.clone().with_lossless(true).is_lossless();
+    match (ec.lossless(), toggled) {
+        (true, Some(true)) => {}
+        (true, other) => v.push(format!(
+            "encode lossless: declared, but with_lossless(true) gives is_lossless() = {other:?} (expected Some(true))"
+        )),
+        (false, None) => {}
+        (false, other) => v.push(format!(
+            "encode lossless: not declared, but with_lossless(true) gives is_lossless() = {other:?} (expected None)"
+        )),
+    }
+
+    // --- a canonical encode for the decode-side checks ---
+    match enc_oneshot(&enc, img, Metadata::none(), MetadataPolicy::PreserveExact) {
+        Err(e) => v.push(format!(
+            "could not produce a canonical encode for decode checks: {e}"
+        )),
+        Ok(canonical) => {
+            classify(
+                "decode streaming",
+                dc.streaming(),
+                run_streaming(&dec, &canonical),
+                &mut v,
+            );
+            classify(
+                "decode animation",
+                dc.animation(),
+                run_animation_decode(&dec, &canonical),
+                &mut v,
+            );
+            if dc.cheap_probe()
+                && let Err(e) = dec.clone().job().probe(&canonical)
+            {
+                v.push(format!(
+                    "decode cheap_probe: declared, but probe() failed: {e}"
                 ));
             }
-            Err(e) => {
-                if e.unsupported_operation().is_none() {
-                    return Err(fail(
-                        CHECK,
-                        format!(
-                            "encode_from is unsupported but the error lacks UnsupportedOperation in its chain: {e}"
-                        ),
-                    ));
+        }
+    }
+
+    // --- metadata-channel honesty: declared channels survive a PreserveExact
+    //     round trip (checked only when both ends claim the channel) ---
+    let rich = Metadata::none()
+        .with_icc(fixtures::sample_icc())
+        .with_exif(fixtures::rich_exif_le())
+        .with_xmp(fixtures::sample_xmp())
+        .with_cicp(Cicp::SRGB);
+    match enc_oneshot(&enc, img, rich, MetadataPolicy::PreserveExact)
+        .and_then(|b| dec_oneshot(&dec, &b))
+    {
+        Err(e) => v.push(format!("metadata-channel round trip failed: {e}")),
+        Ok((_, meta)) => {
+            if ec.icc() && dc.icc() && meta.icc_profile.is_none() {
+                v.push("icc: declared by encoder+decoder, but did not survive a PreserveExact round trip".into());
+            }
+            if ec.exif() && dc.exif() && meta.exif.is_none() {
+                v.push("exif: declared by encoder+decoder, but did not survive a PreserveExact round trip".into());
+            }
+            if ec.xmp() && dc.xmp() && meta.xmp.is_none() {
+                v.push("xmp: declared by encoder+decoder, but did not survive a PreserveExact round trip".into());
+            }
+            if ec.cicp() && dc.cicp() && meta.cicp.is_none() {
+                v.push("cicp: declared by encoder+decoder, but did not survive a PreserveExact round trip".into());
+            }
+        }
+    }
+
+    // --- native_alpha honesty: RGBA8 alpha survives when both ends claim it ---
+    if ec.native_alpha() && dc.native_alpha() {
+        let rgba = TestImage::rgba8_gradient(img.width.max(2), img.height.max(2));
+        match enc_oneshot(&enc, &rgba, Metadata::none(), MetadataPolicy::PreserveExact)
+            .and_then(|b| dec_oneshot(&dec, &b))
+        {
+            Err(e) => v.push(format!(
+                "native_alpha: declared, but an RGBA8 round trip failed: {e}"
+            )),
+            Ok((px, _)) => {
+                if px != rgba.pixels() {
+                    v.push("native_alpha: declared, but RGBA8 pixels (alpha included) did not round-trip".into());
                 }
             }
         }
     }
-    Ok(())
+
+    if v.is_empty() {
+        Ok(())
+    } else {
+        Err(fail(CHECK, v.join("; ")))
+    }
 }
 
 #[cfg(test)]
@@ -668,10 +882,61 @@ mod tests {
         check_metadata_no_leak(e, d, &TestImage::rgba8_gradient(8, 8)).unwrap();
     }
 
+    /// The full reference declares (and honors) every capability, so the
+    /// true-direction branches must all pass.
     #[test]
     fn reference_capability_honesty() {
         let (e, d) = ref_codecs();
-        check_capability_honesty(e, d).unwrap();
+        check_capability_honesty(e, d, &TestImage::rgba8_gradient(12, 9)).unwrap();
+    }
+
+    /// The minimal codec declares every optional capability *false* and rejects
+    /// those paths, so the false-direction branches must all pass.
+    #[test]
+    fn minimal_capability_honesty() {
+        check_capability_honesty(
+            MinimalEncoderConfig::new(),
+            MinimalDecoderConfig::new(),
+            &TestImage::rgba8_gradient(12, 9),
+        )
+        .unwrap();
+    }
+
+    /// The minimal codec still round-trips pixels one-shot and cleanly declines
+    /// every optional path with `UnsupportedOperation`.
+    #[test]
+    fn minimal_one_shot_roundtrip_and_pixels() {
+        let (e, d) = (MinimalEncoderConfig::new(), MinimalDecoderConfig::new());
+        check_pixel_roundtrip(e, d, &TestImage::rgb8_gradient(10, 7)).unwrap();
+    }
+
+    /// The classifier underpinning the honesty check must flag both kinds of lie
+    /// (declared-but-broken, and works-but-undeclared) while accepting an honest
+    /// decline (undeclared + `UnsupportedOperation`).
+    #[test]
+    fn detector_catches_a_lie() {
+        // declared = true, but the operation failed → lie (missing impl).
+        let mut v = Vec::new();
+        classify(
+            "x",
+            true,
+            Err::<(), _>(RefError::Invalid("boom".into())),
+            &mut v,
+        );
+        assert_eq!(v.len(), 1, "declared + failed must be flagged");
+
+        // declared = false, but the operation succeeded → lie (hidden capability).
+        let mut v = Vec::new();
+        classify("y", false, Ok::<(), RefError>(()), &mut v);
+        assert_eq!(v.len(), 1, "undeclared + worked must be flagged");
+
+        // declared = false, and it declined with UnsupportedOperation → honest.
+        let mut v = Vec::new();
+        let declined = Err::<(), _>(RefError::Unsupported(
+            zencodec::UnsupportedOperation::RowLevelEncode,
+        ));
+        classify("z", false, declined, &mut v);
+        assert!(v.is_empty(), "undeclared + UnsupportedOperation is honest");
     }
 
     #[test]

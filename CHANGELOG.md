@@ -12,12 +12,19 @@ All notable changes to zencodec are documented here.
   leak what it discards — decodes the output and re-parses the embedded EXIF to
   prove GPS/thumbnail/rights the policy dropped are actually gone),
   `check_cross_path_pixel_equivalence` (one-shot vs `push_rows` vs streaming vs
-  push-sink produce identical pixels), and `check_capability_honesty` (a declared
-  capability works; an undeclared one returns `UnsupportedOperation`). Includes a
-  faithful in-memory `reference` codec that round-trips pixels *and* metadata,
-  validated against the harness in-crate, plus a hand-built GPS/thumbnail EXIF
-  fixture. The repo is now a Cargo workspace (`zencodec` root + `zencodec-testkit`
-  member); `zencodec`'s published package is unaffected.
+  push-sink produce identical pixels), `check_orientation_roundtrip` (an
+  orientation survives a keeping policy exactly once — no loss, no
+  double-application), and `check_capability_honesty` — comprehensive,
+  bidirectional: every declared capability (`push_rows`, `encode_from`, animation,
+  streaming, `lossless`, `cheap_probe`, the `icc`/`exif`/`xmp`/`cicp` channels,
+  `native_alpha`) must work, and every undeclared optional path must decline with
+  `UnsupportedOperation`; all violations are reported together. Includes two
+  codecs validated against the harness in-crate: a faithful `reference` (round-
+  trips pixels *and* metadata, declares/honors every capability) and a `minimal`
+  one (one-shot only, declares every optional capability false) exercising the
+  false-direction branches, plus a hand-built GPS/thumbnail EXIF fixture. The repo
+  is now a Cargo workspace (`zencodec` root + `zencodec-testkit` member);
+  `zencodec`'s published package is unaffected.
 - **Cross-codec color-emission policy** —
   `resolve_color_emit(&SourceColor, &EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan`,
   a pure `no_std` decision of which color carriers (ICC vs CICP) to write for a

@@ -9,9 +9,12 @@ This repo is a Cargo workspace:
 - **`zencodec-testkit/`** (member, unpublished) — conformance harness codec
   crates run against their own `EncoderConfig`/`DecoderConfig`. Ships
   `check_metadata_no_leak` (privacy), `check_cross_path_pixel_equivalence`,
-  `check_capability_honesty`, a faithful in-memory `reference` codec, and EXIF
-  fixtures. Build/test the whole workspace with `cargo test --workspace`; the
-  testkit must stay green and is the place to add cross-codec correctness checks.
+  `check_orientation_roundtrip`, and a comprehensive bidirectional
+  `check_capability_honesty`. Two in-crate codecs validate the harness: a faithful
+  `reference` (honors every capability) and a `minimal` one (declares every
+  optional capability false) for the false-direction branches, plus EXIF fixtures.
+  Build/test the whole workspace with `cargo test --workspace`; the testkit must
+  stay green and is the place to add cross-codec correctness checks.
 
 ## API Specification
 

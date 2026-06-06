@@ -19,13 +19,20 @@ expensive to ship wrong:
   pixels. `check_cross_path_pixel_equivalence` runs every advertised path and
   diffs the results byte-for-byte.
 - **Capability honesty.** `EncodeCapabilities` / `DecodeCapabilities` are
-  load-bearing — callers branch on them. `check_capability_honesty` confirms a
-  declared capability actually works and an undeclared one cleanly returns
-  `UnsupportedOperation` rather than panicking or silently misbehaving.
+  load-bearing — callers branch on them. `check_capability_honesty` exercises
+  them comprehensively, in both directions: every declared capability
+  (`push_rows`, `encode_from`, animation, streaming, `lossless`, `cheap_probe`,
+  the `icc`/`exif`/`xmp`/`cicp` metadata channels, `native_alpha`) must actually
+  work, and every undeclared optional path must decline with `UnsupportedOperation`
+  rather than panicking or silently succeeding. All violations are reported
+  together, so one run names every dishonest flag. (Cancellation and the lossy
+  flag are out of scope — see the function docs for why.)
 
-The crate ships a `reference` codec — a faithful in-memory codec that round-trips
-both pixels and metadata — that the harness is validated against in this crate's
-own tests, and which doubles as a worked example of implementing the traits.
+The crate ships two codecs the harness is validated against in this crate's own
+tests, both worked examples of implementing the traits: `reference`, a faithful
+in-memory codec that round-trips pixels *and* metadata and declares/honors every
+capability; and `minimal`, its opposite — one-shot only, declaring every optional
+capability false — which exercises the false-direction branches.
 
 [`MetadataPolicy`]: https://docs.rs/zencodec/latest/zencodec/enum.MetadataPolicy.html
 
