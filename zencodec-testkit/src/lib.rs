@@ -456,7 +456,7 @@ where
 fn encode_animation<E>(cfg: &E, frames: &[TestImage]) -> Result<Vec<u8>, String>
 where
     E: EncoderConfig,
-    <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder<Error = E::Error>,
+    <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
 {
     let mut a = cfg
         .clone()
@@ -537,7 +537,7 @@ pub fn check_animation_cross_path_equivalence<E, D>(
 where
     E: EncoderConfig,
     D: DecoderConfig,
-    <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder<Error = E::Error>,
+    <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
 {
     const CHECK: &str = "animation_cross_path_equivalence";
     if !E::capabilities().animation() || !D::capabilities().animation() {
@@ -582,10 +582,21 @@ where
 /// A retention policy never leaks what it discards.
 ///
 /// Encodes the image with rich metadata (GPS + thumbnail + camera + copyright +
-/// XMP + ICC) under several policies, decodes, and asserts the output metadata
-/// is a *subset* of what the policy keeps. A subset (not equality) check, so a
-/// codec that supports fewer channels still passes — it can drop more, never
-/// add back. Anything the policy dropped reappearing in the output is a leak.
+/// XMP + ICC + CICP) under several policies, decodes, and asserts the output
+/// metadata is a *subset* of what the policy keeps. A subset (not equality)
+/// check, so a codec that supports fewer channels still passes — it can drop
+/// more, never add back. Anything the policy dropped reappearing in the output
+/// is a leak.
+///
+/// What's directly asserted on the decoded output: ICC, XMP, CICP, HDR
+/// (content-light-level / mastering-display), and the EXIF sub-categories the
+/// public [`Exif`] API can introspect — GPS, thumbnail, and rights
+/// (copyright/artist). Camera/device identity (Make/Model) and EXIF timestamps
+/// are present in the fixture and exercised through the filter, but are not
+/// independently asserted on the output: `zencodec::exif::Exif` exposes no
+/// per-category predicate for them, so their removal is covered by the EXIF
+/// filter's own unit tests rather than re-checked here. (A `has_camera`-style
+/// accessor would let this assert them directly.)
 pub fn check_metadata_no_leak<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
 where
     E: EncoderConfig,
@@ -596,7 +607,8 @@ where
     let rich = Metadata::none()
         .with_exif(fixtures::rich_exif_le())
         .with_xmp(fixtures::sample_xmp())
-        .with_icc(fixtures::sample_icc());
+        .with_icc(fixtures::sample_icc())
+        .with_cicp(Cicp::SRGB);
 
     let policies = [
         ("Web", MetadataPolicy::Web),
@@ -635,6 +647,24 @@ fn assert_no_leak(
         return Err(fail(
             check,
             format!("[{policy}] XMP in output but the policy dropped it"),
+        ));
+    }
+    if decoded.cicp.is_some() && expected.cicp.is_none() {
+        return Err(fail(
+            check,
+            format!("[{policy}] CICP color signaling in output but the policy dropped it"),
+        ));
+    }
+    if decoded.content_light_level.is_some() && expected.content_light_level.is_none() {
+        return Err(fail(
+            check,
+            format!("[{policy}] HDR content-light-level in output but the policy dropped it"),
+        ));
+    }
+    if decoded.mastering_display.is_some() && expected.mastering_display.is_none() {
+        return Err(fail(
+            check,
+            format!("[{policy}] HDR mastering-display in output but the policy dropped it"),
         ));
     }
 
@@ -808,19 +838,51 @@ where
     Ok(e.encode_from(&mut src)?.into_vec())
 }
 
-fn run_animation_encode<E>(cfg: &E, img: &TestImage) -> Result<Vec<u8>, E::Error>
+/// Capability-honesty for the animation encode path, handled separately from
+/// [`classify`] because the frame encoder's `Error` can differ from the codec's
+/// (`type AnimationFrameEnc = ()` has `Error = UnsupportedOperation`, not the
+/// codec's error). `animation_frame_encoder()` returns the *job's* error
+/// (`E::Error`, inspectable for `UnsupportedOperation`); the per-frame error is
+/// only stringified, so no `Error = E::Error` unification is required.
+fn check_animation_encode_honesty<E>(cfg: &E, img: &TestImage, declared: bool, v: &mut Vec<String>)
 where
     E: EncoderConfig,
-    <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder<Error = E::Error>,
+    <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
 {
-    let mut a = cfg
+    match cfg
         .clone()
         .job()
         .with_loop_count(Some(0))
-        .animation_frame_encoder()?;
-    a.push_frame(img.as_slice(), 100, None)?;
-    a.push_frame(img.as_slice(), 100, None)?;
-    Ok(a.finish(None)?.into_vec())
+        .animation_frame_encoder()
+    {
+        Ok(mut a) => {
+            // The encoder was created, so the codec supports animation.
+            let frames: Result<(), String> = (|| {
+                a.push_frame(img.as_slice(), 100, None)
+                    .map_err(|e| e.to_string())?;
+                a.push_frame(img.as_slice(), 100, None)
+                    .map_err(|e| e.to_string())?;
+                a.finish(None).map_err(|e| e.to_string())?;
+                Ok(())
+            })();
+            match (declared, frames) {
+                (true, Ok(())) => {}
+                (true, Err(e)) => v.push(format!("encode animation: declared supported, but the operation failed: {e}")),
+                (false, _) => v.push(
+                    "encode animation: not declared, but animation_frame_encoder() succeeded (hidden capability)".into(),
+                ),
+            }
+        }
+        Err(e) => {
+            if declared {
+                v.push(format!("encode animation: declared supported, but animation_frame_encoder() failed: {e}"));
+            } else if e.unsupported_operation().is_none() {
+                v.push(format!(
+                    "encode animation: not declared; expected UnsupportedOperation when used, got a different error: {e}"
+                ));
+            }
+        }
+    }
 }
 
 fn run_streaming<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<(), D::Error> {
@@ -863,7 +925,7 @@ where
     E: EncoderConfig,
     D: DecoderConfig,
     <E::Job as EncodeJob>::Enc: Encoder<Error = E::Error>,
-    <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder<Error = E::Error>,
+    <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
 {
     const CHECK: &str = "capability_honesty";
     let ec = E::capabilities();
@@ -883,12 +945,7 @@ where
         run_encode_from(&enc, img),
         &mut v,
     );
-    classify(
-        "encode animation",
-        ec.animation(),
-        run_animation_encode(&enc, img),
-        &mut v,
-    );
+    check_animation_encode_honesty(&enc, img, ec.animation(), &mut v);
 
     // --- lossless config-knob honesty ---
     // Declared => with_lossless(true) must surface via is_lossless(); undeclared
@@ -992,7 +1049,7 @@ where
     E: EncoderConfig,
     D: DecoderConfig,
     <E::Job as EncodeJob>::Enc: Encoder<Error = E::Error>,
-    <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder<Error = E::Error>,
+    <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
 {
     let img = TestImage::rgba8_gradient(40, 24);
     check_pixel_roundtrip(enc.clone(), dec.clone(), &img)?;

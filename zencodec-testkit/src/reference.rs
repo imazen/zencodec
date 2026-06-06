@@ -174,7 +174,9 @@ fn write_header(out: &mut Vec<u8>, w: u32, h: u32, frames: u32, bpp: u8, meta: &
 }
 
 pub(crate) fn parse_header(data: &[u8]) -> Result<Header, RefError> {
-    if data.len() < 18 || &data[..4] != MAGIC {
+    // Fixed header is 19 bytes: magic(4) + w(4) + h(4) + frames(4) + bpp(1) +
+    // orient(1) + flags(1); data[18] (flags) is read below.
+    if data.len() < 19 || &data[..4] != MAGIC {
         return Err(RefError::Invalid("bad magic / short header".into()));
     }
     let width = read_u32(data, 4)?;

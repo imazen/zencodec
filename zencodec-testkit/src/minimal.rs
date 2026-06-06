@@ -21,8 +21,8 @@ use zencodec::{
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
 
 use crate::reference::{
-    Header, RefAnimDec, RefAnimEnc, RefError, RefStreamDec, build_info, descriptor_for_bpp,
-    encode_single, frame_pixel_len, frame_pixels_offset, parse_header,
+    Header, RefAnimDec, RefError, RefStreamDec, build_info, descriptor_for_bpp, encode_single,
+    frame_pixel_len, frame_pixels_offset, parse_header,
 };
 
 // Only the always-available capabilities are declared. Everything optional —
@@ -76,8 +76,11 @@ pub struct MinEncodeJob {
 impl EncodeJob for MinEncodeJob {
     type Error = RefError;
     type Enc = MinEnc;
-    // Never constructed — animation is declared false and rejected below.
-    type AnimationFrameEnc = RefAnimEnc;
+    // `()` is the standard rejection stub for a still-only codec (the shape real
+    // codecs use). It also pins the testkit's animation bounds to NOT require
+    // `AnimationFrameEnc::Error == E::Error` — `<() as AnimationFrameEncoder>::Error`
+    // is `UnsupportedOperation`, not `RefError`.
+    type AnimationFrameEnc = ();
 
     fn with_stop(self, _stop: StopToken) -> Self {
         self
@@ -96,7 +99,7 @@ impl EncodeJob for MinEncodeJob {
             orientation: self.orientation,
         })
     }
-    fn animation_frame_encoder(self) -> Result<RefAnimEnc, RefError> {
+    fn animation_frame_encoder(self) -> Result<(), RefError> {
         Err(RefError::Unsupported(UnsupportedOperation::AnimationEncode))
     }
 }
