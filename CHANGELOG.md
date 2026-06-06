@@ -110,7 +110,7 @@ All notable changes to zencodec are documented here.
   the shared filter for re-encode / recompress pipelines: keep what a
   downstream image needs, strip the rest, without callers hand-parsing EXIF.
   - `MetadataPolicy`: `PreserveExact` (keep all, incl. a redundant sRGB ICC),
-    `Preserve` (keep all but drop a redundant sRGB ICC), `Web` (**default** —
+    `Preserve` (keep all but drop a redundant sRGB ICC), `Web` (recommended —
     ICC non-sRGB + EXIF orientation/rights + CICP/HDR; drop the rest of EXIF
     and all XMP), `ColorAndRotation` (only what places pixels: ICC non-sRGB +
     CICP/HDR + orientation), and `Custom(MetadataFields)`.

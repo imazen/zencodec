@@ -494,7 +494,7 @@ filter for re-encode / recompress pipelines.
 decision the caller must make explicitly; `Web` is the recommended choice):
 - `PreserveExact` — keep everything, byte-faithfully (incl. a redundant sRGB ICC).
 - `Preserve` — keep everything, but drop a redundant sRGB ICC.
-- `Web` (default) — ICC (unless redundant sRGB) + EXIF orientation/rights +
+- `Web` (recommended) — ICC (unless redundant sRGB) + EXIF orientation/rights +
   CICP/HDR; drop the rest of EXIF (GPS, timestamps, camera, thumbnail) and XMP.
 - `ColorAndRotation` — only what places pixels: ICC (non-sRGB) + CICP/HDR +
   EXIF orientation. Drops attribution, XMP, other EXIF.

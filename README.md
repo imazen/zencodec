@@ -84,7 +84,7 @@ Re-encode and recompress pipelines need to decide what metadata survives. `Metad
 ```rust,ignore
 use zencodec::{MetadataPolicy, MetadataFields, IccRetention, exif::{ExifPolicy, Retention}};
 
-// Decode → filter → re-encode. `Web` (the default) keeps the ICC profile
+// Decode → filter → re-encode. `Web` (recommended for publishing) keeps the ICC profile
 // (unless a redundant sRGB), EXIF orientation + rights, and CICP/HDR color
 // signaling — and strips GPS, timestamps, camera info, thumbnail, and XMP.
 let kept = decoded_meta.filtered(&MetadataPolicy::Web);
@@ -105,6 +105,8 @@ let no_thumb = decoded_meta.filtered(&policy);
 **Privacy is an explicit choice — enforced at compile time.** Retention is a *transient* decision made when you hand metadata to the encoder, not a field stored on `Metadata`. The blessed path is `job.with_metadata_policy(meta, MetadataPolicy::Web)` (privacy-safe: strips camera/GPS, keeps orientation + rights) or `PreserveExact` (verbatim). The old unguarded `with_metadata(meta)` still works but is `#[deprecated]` — the compiler **warns** at every call site that picks no policy, so you can't propagate metadata without choosing retention by accident. It's a compile-time nudge, not a semver break: existing code keeps compiling, but the warning points you at the safe call. The filter runs *before* the codec sees the record, so a codec only ever receives exactly what the policy kept. The carried bytes stay untouched until then, so you can still pull `metadata.exif` out, edit it with any EXIF library, and put it back via `with_exif`.
 
 To **stamp** rights in one line — `Metadata::none().with_copyright("© 2026 You")` builds (or merges into) the EXIF blob (ASCII); or build it directly with `Exif::new(TextEncoding::Ascii).set_copyright(…)` → `to_bytes()` — `Exif::new` requires the Exif 2.x-vs-3.0 field-type choice (type 129 is read by almost nothing, so it's never a silent default).
+
+Metadata retention, color emission, and orientation are the three *correctness* signals an encode has to get right; [docs/correctness-model.md](docs/correctness-model.md) describes how the framework resolves each one before the codec runs so a codec can't quietly clobber it. The [`zencodec-testkit`](zencodec-testkit) crate verifies a codec honors that contract — `check_metadata_no_leak` re-parses the embedded EXIF to prove a policy's drops actually happened, and `check_cross_path_pixel_equivalence` diffs every feeding mode.
 
 ## What's in this crate
 

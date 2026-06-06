@@ -18,6 +18,11 @@ This repo is a Cargo workspace:
 **[spec.md](docs/spec.md)** — canonical reference for the full public API surface.
 Read this before modifying any traits.
 
+**[correctness-model.md](docs/correctness-model.md)** — how color emission,
+orientation, and metadata retention are resolved by the framework before a codec
+runs (the "pit of success" contract), and how `zencodec-testkit` verifies a codec
+honors it. Read before changing metadata/color/orientation flow.
+
 ## Purpose
 
 Tiny, stable crate defining the common interface that all zen* codecs implement:
