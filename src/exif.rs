@@ -60,6 +60,13 @@ const TAG_THUMB_LENGTH: u16 = 0x0202; // JPEGInterchangeFormatLength
 // with their own EXIF/GPS). NOT modeled here, so its offsets can't be fixed up
 // on a rewrite; dropped during filtering rather than left dangling.
 const TAG_SUBIFDS: u16 = 0x014A;
+// Strip/tile image-data offset+count tags. For an uncompressed (non-JPEG)
+// thumbnail in IFD1 these point at pixel data a rewrite does not carry, so they
+// must be dropped on filter rather than left as dangling offsets.
+const TAG_STRIP_OFFSETS: u16 = 0x0111;
+const TAG_STRIP_BYTE_COUNTS: u16 = 0x0117;
+const TAG_TILE_OFFSETS: u16 = 0x0144;
+const TAG_TILE_BYTE_COUNTS: u16 = 0x0145;
 
 // Exif sub-IFD: capture timestamps (the `datetimes` category).
 const TAG_DATETIME_ORIGINAL: u16 = 0x9003;
@@ -440,7 +447,9 @@ impl<'a> Exif<'a> {
                 .find(|e| e.tag == TAG_THUMB_LENGTH)
                 .and_then(|e| read_uint(e, order));
             if let (Some(o), Some(l)) = (toff, tlen)
-                && let Some(t) = tiff.get(o as usize..(o as usize).checked_add(l as usize)?)
+                && let Some(t) = (o as usize)
+                    .checked_add(l as usize)
+                    .and_then(|end| tiff.get(o as usize..end))
             {
                 thumbnail = Some(t);
                 entries.retain(|e| e.tag != TAG_THUMB_OFFSET && e.tag != TAG_THUMB_LENGTH);
@@ -565,10 +574,25 @@ impl<'a> Exif<'a> {
     /// entries still borrow the original source (no payload copy).
     pub fn filtered(&self, policy: &ExifPolicy) -> Exif<'a> {
         let keep = |e: &&Entry<'a>| match e.tag {
-            // Unmodeled sub-IFD pointer (only Exif/GPS/Interop are modeled). Its
-            // offset can't be recomputed on a rewrite, so keeping it would emit a
-            // dangling offset / orphaned sub-IFD — drop it instead.
-            TAG_SUBIFDS => false,
+            // Offset-bearing structural tags whose value is a file offset, dropped
+            // here so a rewrite never emits a dangling offset:
+            //  - The modeled sub-IFD/thumbnail pointers (Exif/GPS/Interop, the
+            //    JPEGInterchangeFormat offset+length) are re-synthesized by
+            //    `to_bytes` from the extracted sub-IFDs / thumbnail. A copy left in
+            //    an IFD would either duplicate the synthesized one or, if it was
+            //    never extractable (malformed type, so it stayed here), dangle.
+            //  - The unrelocatable ones (SubIFDs; strip/tile tables for an
+            //    uncompressed thumbnail) point at bytes a rewrite doesn't carry.
+            TAG_SUBIFDS
+            | TAG_EXIF_IFD
+            | TAG_GPS_IFD
+            | TAG_INTEROP_IFD
+            | TAG_THUMB_OFFSET
+            | TAG_THUMB_LENGTH
+            | TAG_STRIP_OFFSETS
+            | TAG_STRIP_BYTE_COUNTS
+            | TAG_TILE_OFFSETS
+            | TAG_TILE_BYTE_COUNTS => false,
             // MakerNote is opaque and routinely embeds GPS coordinates + serials;
             // it can only be dropped wholesale. Strip it whenever EITHER camera or
             // GPS is being removed — otherwise a gps-strip could still leak the
@@ -1617,6 +1641,34 @@ mod tests {
         let out = x.to_bytes();
         // The 0x8769 entry survived the round-trip (LE tag bytes 0x69, 0x87).
         assert!(out.windows(2).any(|w| w == TAG_EXIF_IFD.to_le_bytes()));
+    }
+
+    /// A structural sub-IFD pointer left un-extracted (malformed type) must NOT
+    /// be re-emitted on a *filtering* rewrite: keeping it would write a dangling
+    /// offset, and for a GPS/Exif pointer it leaves a stray pointer the policy
+    /// meant to strip. (The pure-serialize `to_bytes` path preserves it, per
+    /// `short_subifd_pointer_is_preserved`; the filter path cleans it up.)
+    #[test]
+    fn stray_structural_pointer_dropped_on_filtering_rewrite() {
+        let ori = entry_inline(TAG_ORIENTATION, TIFF_SHORT, 1, [6, 0, 0, 0]);
+        // 0x8825 (GPS) as SHORT/count-1: not an extractable 4-byte pointer, so it
+        // survives parse sitting in IFD0 (classified Other).
+        let bad_gps = entry_inline(TAG_GPS_IFD, TIFF_SHORT, 1, [1, 0, 0, 0]);
+        let src = le_ifd0(&[ori, bad_gps], 0, &[]);
+        let x = Exif::parse(&src).expect("parses");
+        // A pruning policy (drops gps) forces a rewrite; the stray GPS pointer
+        // must not be re-emitted as a dangling offset.
+        let policy = ExifPolicy::KEEP_ALL.with_gps(Retention::Discard);
+        let out = x.filtered(&policy).to_bytes();
+        assert!(
+            !out.windows(2).any(|w| w == TAG_GPS_IFD.to_le_bytes()),
+            "stray GPS pointer must be dropped on a filtering rewrite, not left dangling"
+        );
+        assert_eq!(
+            Exif::parse(&out).unwrap().orientation(),
+            Some(Orientation::Rotate90),
+            "real metadata still round-trips"
+        );
     }
 
     /// Encoding: a non-ASCII (Latin-1) copyright is exposed raw via
