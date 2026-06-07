@@ -188,6 +188,33 @@ fn grab(ps: PixelSlice<'_>) -> Pixels {
     grab_ref(&ps)
 }
 
+/// Apply an EXIF `orientation` to `p`, producing the image a conformant reader
+/// would *display* — orientation is a rendering transform, not a label. Uses
+/// zenpixels' canonical [`Orientation::forward_map`] / `output_dimensions`, so
+/// the conventions match production exactly.
+fn render(p: &Pixels, orientation: Orientation) -> Pixels {
+    let bpp = p.desc.bytes_per_pixel();
+    let (w, h) = (p.width, p.rows);
+    let (ow, oh) = orientation.output_dimensions(w, h);
+    let in_rb = w as usize * bpp;
+    let out_rb = ow as usize * bpp;
+    let mut bytes = vec![0u8; oh as usize * out_rb];
+    for sy in 0..h {
+        for sx in 0..w {
+            let (dx, dy) = orientation.forward_map(sx, sy, w, h);
+            let si = sy as usize * in_rb + sx as usize * bpp;
+            let di = dy as usize * out_rb + dx as usize * bpp;
+            bytes[di..di + bpp].copy_from_slice(&p.bytes[si..si + bpp]);
+        }
+    }
+    Pixels {
+        width: ow,
+        rows: oh,
+        desc: p.desc,
+        bytes,
+    }
+}
+
 /// `grab` for a borrowed slice — e.g. [`AnimationFrame::pixels`], which returns a
 /// reference into the decoder's canvas.
 fn grab_ref(ps: &PixelSlice<'_>) -> Pixels {
@@ -714,25 +741,23 @@ fn assert_no_leak(
     Ok(())
 }
 
-/// An orientation set on the metadata survives a policy that keeps it, carried
-/// as metadata exactly once — never lost and never double-applied.
+/// The *displayed* image is preserved through a policy that keeps orientation.
 ///
-/// `Web`, `ColorAndRotation`, and `PreserveExact` all keep orientation (it is
-/// display-correctness, not privacy). For each non-identity orientation under
-/// each, this asserts two things on decode:
+/// EXIF orientation is a rendering transform the reader applies, not a label, so
+/// the invariant is on the displayed pixels — `render(pixels, orientation)` — not
+/// the stored buffer. For each non-identity orientation under each keeping policy
+/// (`Web`, `ColorAndRotation`, `PreserveExact`), this asserts
+/// `render(decoded_pixels, decoded_orientation) == render(input, requested)`.
 ///
-/// 1. The decoded orientation field equals the requested one (no *loss* — reset
-///    to identity, or to a different orientation).
-/// 2. The decoded **pixels equal the input** (no *double-application*). A codec
-///    that carries the orientation tag *and* also bakes the rotation into the
-///    pixels would round-trip the tag correctly yet return rotated pixels — a
-///    downstream viewer then re-applies the tag and shows the image twice-rotated.
-///    Comparing pixels catches exactly that bake+tag inconsistency.
-///
-/// This models the "carry as metadata" contract (orientation lives in the field,
-/// pixels stay as-authored). A codec that legitimately bakes orientation upright
-/// reports `Identity` and is caught by assertion 1 — bake-mode codecs should not
-/// claim a non-identity orientation round-trips through metadata.
+/// That one invariant is correct for every valid storage strategy and catches
+/// every failure mode:
+/// - **Carry** (stored pixels as-authored + tag) — passes.
+/// - **Bake** (rotated pixels + `Identity` tag, the only option for a
+///   metadata-free format) — also passes; the displayed image is identical.
+/// - **Double-application** (rotated pixels *and* the tag) — caught: applying the
+///   tag to already-rotated pixels rotates twice, so the render differs.
+/// - **Loss** (tag dropped to `Identity`, pixels untouched) — caught: the render
+///   is the un-rotated image.
 pub fn check_orientation_roundtrip<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
 where
     E: EncoderConfig,
@@ -752,31 +777,23 @@ where
         ("ColorAndRotation", MetadataPolicy::ColorAndRotation),
         ("PreserveExact", MetadataPolicy::PreserveExact),
     ];
-    let want_pixels = img.pixels();
+    let input = img.pixels();
     for ori in orientations {
+        // What a reader should display for an image authored with this orientation.
+        let want = render(&input, ori);
         for (name, policy) in policies {
             let meta = Metadata::none().with_orientation(ori);
             let bytes = enc_oneshot(&enc, img, meta, policy)
                 .map_err(|e| fail(CHECK, format!("[{name}] encode {ori:?}: {e}")))?;
             let (px, decoded) = dec_oneshot(&dec, &bytes)
                 .map_err(|e| fail(CHECK, format!("[{name}] decode {ori:?}: {e}")))?;
-            if decoded.orientation != ori {
+            if render(&px, decoded.orientation) != want {
                 return Err(fail(
                     CHECK,
                     format!(
-                        "[{name}] orientation {ori:?} survived as {:?}",
+                        "[{name}] orientation {ori:?}: displayed image not preserved (decoded orientation = {:?}; \
+                         a reader applying the tag would show loss, or a double-rotation if the codec also baked it)",
                         decoded.orientation
-                    ),
-                ));
-            }
-            // Tag carried => pixels must be as-authored. Rotated pixels here mean
-            // the codec baked the rotation *and* re-emitted the tag: a viewer
-            // applying the tag double-rotates.
-            if px != want_pixels {
-                return Err(fail(
-                    CHECK,
-                    format!(
-                        "[{name}] orientation {ori:?} is carried in metadata but the pixels were also rotated (double-application: a viewer that applies the tag rotates twice)"
                     ),
                 ));
             }
@@ -1192,7 +1209,32 @@ mod tests {
     #[test]
     fn reference_orientation_roundtrip() {
         let (e, d) = ref_codecs();
-        check_orientation_roundtrip(e, d, &TestImage::rgba8_gradient(8, 8)).unwrap();
+        // Non-square so an axis-swap bug (Rotate90/270/transpose) shows as a
+        // dimension or pixel mismatch.
+        check_orientation_roundtrip(e, d, &TestImage::rgba8_gradient(9, 6)).unwrap();
+    }
+
+    /// `render` must match EXIF semantics: identity is a no-op, Rotate90 swaps
+    /// axes, and self-inverse transforms applied twice return the original.
+    #[test]
+    fn render_matches_orientation_semantics() {
+        let p = TestImage::rgba8_gradient(3, 2).pixels();
+        assert_eq!(render(&p, Orientation::Identity), p, "identity is a no-op");
+
+        let r90 = render(&p, Orientation::Rotate90);
+        assert_eq!((r90.width, r90.rows), (2, 3), "Rotate90 swaps axes");
+
+        // Self-inverse transforms applied twice are the identity.
+        let r180 = render(&p, Orientation::Rotate180);
+        assert_eq!(
+            render(&r180, Orientation::Rotate180),
+            p,
+            "Rotate180∘Rotate180 == id"
+        );
+        let fh = render(&p, Orientation::FlipH);
+        assert_eq!(render(&fh, Orientation::FlipH), p, "FlipH∘FlipH == id");
+        let fv = render(&p, Orientation::FlipV);
+        assert_eq!(render(&fv, Orientation::FlipV), p, "FlipV∘FlipV == id");
     }
 
     #[test]
