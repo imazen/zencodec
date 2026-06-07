@@ -224,7 +224,15 @@ pub trait DynEncodeJob {
 
     /// Set metadata to embed, filtered by an explicit retention policy (blessed
     /// path; mirrors [`EncodeJob::with_metadata_policy`](crate::encode::EncodeJob::with_metadata_policy)).
-    fn set_metadata_policy(&mut self, meta: Metadata, policy: crate::MetadataPolicy);
+    ///
+    /// Provided method: filters via [`Metadata::filtered`](crate::Metadata::filtered)
+    /// and routes through [`set_metadata`](Self::set_metadata). Has a default so
+    /// adding it is not a breaking change for downstream implementors; the blanket
+    /// impl overrides it to filter before the job is consumed.
+    fn set_metadata_policy(&mut self, meta: Metadata, policy: crate::MetadataPolicy) {
+        #[allow(deprecated)]
+        self.set_metadata(meta.filtered(&policy));
+    }
 
     /// Set metadata (ICC, EXIF, XMP) to embed, without a retention policy. Prefer
     /// [`set_metadata_policy`](Self::set_metadata_policy) so retention is explicit.

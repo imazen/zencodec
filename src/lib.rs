@@ -53,7 +53,10 @@ pub mod gainmap;
 /// Codec implementation helpers (not consumer API).
 pub mod helpers;
 /// Lightweight ICC profile inspection (tag extraction, no full parse).
-mod icc;
+// Kept `pub` — privatizing it removes `zencodec::icc` from the public API, a
+// breaking change. The removal stays in CHANGELOG's QUEUED BREAKING CHANGES for
+// a future major; do not ship it in a patch/minor.
+pub mod icc;
 mod info;
 mod limits;
 mod metadata;
