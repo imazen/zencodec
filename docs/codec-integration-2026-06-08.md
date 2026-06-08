@@ -109,7 +109,7 @@ This order is deliberate: if integration surfaces an API gap, we fix zencodec
 
 | # | codec | dep | readiness | key work | effort | status |
 |---|-------|-----|-----------|----------|--------|--------|
-| 1 | zenjxl | 0.1.19→.20 | provisional `@` already on merged API | finalize + jpeg_lossy color + test migrations | M | ✅ done (provisional `3282f6f2`) — color-emit + **jpeg_lossy ICC preservation** + migrations |
+| 1 | zenjxl | 0.1.19→.20 | provisional `@` already on merged API | finalize + jpeg_lossy color + test migrations | M | ✅ done (provisional `f7be9506`) — color-emit + **jpeg_lossy ICC preservation** + migrations |
 | 2 | zenjpeg | 0.1.20 | provisional emit-integ on OLD API | rewrite vs new API (descriptor threading blueprint exists) | M | ✅ done (provisional `b5df9c72`) — decode double-rotation fix + color-emit + caps |
 | 3 | zenavif | 0.1.19 | clean | **fix apply_descriptor_color CICP-override (High)** + color-emit wiring | M | ✅ done (provisional `9c71eff0`) — CICP-override fixed + color-emit + caps |
 | 4 | zenpng | 0.1.19 | clean | caps flags + resolve_color_emit + decode orientation extraction | M | ✅ done (provisional `e7bd4e66`) — caps + color-emit + decode orientation |
@@ -263,14 +263,14 @@ doc note for BMPv5. No required behavioral change.
 - `docs/codec-integration-2026-06-08.md` — this report (the sweep tracker).
 
 ### zenjxl  ✅ main integration + jpeg_lossy color done (provisional, unpushed)
-- **Change:** `3282f6f2` (jj `vroqozzq`) on top of zenjxl `main` (38b7eadb) — **not pushed** (gated on zencodec 0.1.21 release).
+- **Change:** `f7be9506` (jj `vroqozzq`) on top of zenjxl `main` (38b7eadb) — **not pushed** (gated on zencodec 0.1.21 release).
 - **Dev patch:** gitignored `.cargo/config.toml` → `paths = ["/home/lilith/work/zen/zencodec"]` (the `[patch.crates-io]`-in-config form does *not* apply here; the `paths` override does).
 - **Files:** `src/codec.rs` (color-emit integration, already provisional from prior work; + 5 test migrations), `.gitignore` (+`.cargo/config.toml`).
 - **Color:** `resolve_jxl_color` → `resolve_color_emit` + `EncodePolicy::resolve_color(Balanced)`; `JXL_ENCODE_CAPS` declares `cicp` + `cicp_is_valid_carrier` + `cicp_safe_sole_carrier(true)` (JXL is the only sole-safe carrier).
 - **Metadata:** 5 test sites `with_metadata` → `with_metadata_policy(.., PreserveExact)` (verbatim semantics preserved); deprecation warnings now **0**.
 - **E2E:** `cargo test --features zencodec` → **48 lib + 8 validate + doctests pass**; `metadata_cicp_round_trips_via_enum_color` + `icc_from_structured_color` green.
 - **jpeg_lossy color — FIXED (2026-06-08, "edit siblings"):** investigation showed the **Coarsen** path already preserves the source ICC (jxl-encoder `encode_jpeg_to_jxl_with_effort` → `extract_icc`+`write_icc`); only the **Reencode** path (`convenience::encode_rgb8`, pixels-only) dropped it. Fixed entirely in zenjxl: extract the source APP2 ICC once (`zenjpeg::extract_icc_profile`) and embed it via the full `EncodeRequest`+`with_icc_profile` on the Reencode path; untagged JPEG stays sRGB (correct). Tests: `reencode_preserves_source_icc` (the fix), `coarsen_preserves_source_icc` (locks the existing behavior), `reencode_untagged_jpeg_stays_srgb`. No jxl-encoder edit needed.
-- **Review item (before landing):** the `jpeg-lossy` feature now pulls `zenjpeg/{decoder,moxcms}` to reach `extract_icc_profile`, which is mis-gated behind `moxcms` in zenjpeg despite being a pure APP2 byte-scanner. Cleaner options for landing: ungate `extract_icc_profile` in zenjpeg, or `pub` jxl-encoder's `jpeg::extract_icc(&JpegData)` and reuse it (the Coarsen path's scanner). Functional + tested as-is; gated to the opt-in `jpeg-lossy` feature.
+- **moxcms misgating — FIXED (2026-06-08):** `extract_icc_profile`'s re-export was `#[cfg(feature = "moxcms")]` in zenjpeg despite doing no color management. Ungated it (`zenjpeg` `decoder/mod.rs`) — pushed to **zenjpeg main `6d59a2d6`** (standalone fix, independent of 0.1.21). zenjxl's `jpeg-lossy` feature now requires only `zenjpeg/decoder` (not `zenjpeg/moxcms`); `cargo tree` confirms moxcms is **dev-dep-only** (test fixture). Landing note: a *published* zenjxl jpeg-lossy needs a zenjpeg release carrying the ungate (it builds today via the path-dep) — or switch the call to `zenjpeg::color::icc::extract_icc_profile` (`color` is `pub`, so that path works against published zenjpeg without the ungate).
 
 ### zenjpeg  ✅ (provisional `b5df9c72`, unpushed)
 - **Change:** `b5df9c72` (jj `nwkkptnw`) on `@` over main `9fe32816` — **not pushed**. Files: `zenjpeg/zenjpeg/src/codec.rs` (+326), `zenjpeg/zenjpeg/Cargo.toml` (+19), `Cargo.lock` (+1).
@@ -353,18 +353,18 @@ Nothing here is on any codec's `main` yet. To land, **per codec** (gated on the
 - **zentiff** — `Cargo.lock` carries pre-existing zenpdf/zenpixels bumps made by
   another process; confirm those are intended before pushing the lockfile.
 
-### Done since first report (2026-06-08, "do both, edit siblings")
-- **zenjxl `jpeg_lossy.rs` color — FIXED** (`3282f6f2`). Coarsen already preserved
+### Done since first report (2026-06-08, "do both, edit siblings" + "fix the misgating")
+- **zenjxl `jpeg_lossy.rs` color — FIXED** (`f7be9506`). Coarsen already preserved
   ICC; the Reencode path now embeds the source ICC via `EncodeRequest`. No
   jxl-encoder edit was needed (the deferral over-estimated the scope).
 - **zentiff EXIF — now properly decomposed** (`58e69cb1`): IFD0/EXIF(34665)/GPS(34853)
   routing instead of the round-trip-only blob re-emit. Correct for foreign blobs.
+- **zenjpeg `extract_icc_profile` moxcms misgating — FIXED + PUSHED** to zenjpeg
+  main (`6d59a2d6`). Standalone (no 0.1.21 dependency); the only thing landed on a
+  codec's `main` in this whole sweep. zenjxl's `jpeg-lossy` dropped the
+  `zenjpeg/moxcms` pull (moxcms now dev-dep-only).
 
 ### Deferred / review-before-landing (reported, not implemented)
-- **zenjxl `jpeg-lossy` feature pulls `zenjpeg/moxcms`** just to reach the pure
-  byte-scanner `extract_icc_profile` (mis-gated behind `moxcms` in zenjpeg).
-  Cleaner: ungate it in zenjpeg, or `pub` jxl-encoder's `jpeg::extract_icc`.
-  Gated to the opt-in feature; functional + tested as-is.
 - **zentiff EXIF UNDEFINED→BYTE** type-code downgrade (ExifVersion/UserComment/
   MakerNote) — `tiff 0.11.3`'s `write_tag` has no raw-undefined constructor;
   value bytes are identical, only the type code differs. Faithful types need an
