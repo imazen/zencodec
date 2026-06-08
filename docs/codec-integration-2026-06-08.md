@@ -72,15 +72,24 @@ on a published 0.1.13–0.1.20, so **none can see** `resolve_color_emit`,
 `ColorEmitPolicy`, `with_metadata_policy`, `EncodePolicy::resolve_color`, or the
 `with_cicp_is_valid_carrier`/`with_cicp_safe_sole_carrier` builders today.
 
-**Dev bridge (the "cargo patch to this folder"):** add a *gitignored*
-`.cargo/config.toml` with
+**Dev bridge (the "cargo patch to this folder") — ⚠ TEMPORARY, must be removed:**
+a single workspace-level override at **`/home/lilith/work/zen/.cargo/config.toml`**:
 ```toml
-[patch.crates-io]
-zencodec = { path = "/home/lilith/work/zen/zencodec" }
+paths = ["/home/lilith/work/zen/zencodec"]
 ```
-0.1.21 satisfies the existing `^0.1.x` requirement, so **no `Cargo.toml` version
-bump is needed to build+test**. The patch lets us develop and e2e-test the
-integration now, while keeping each codec's committed manifest clean.
+This redirects zencodec to the local 0.1.21 for *every* codec under `~/work/zen/`
+at once. 0.1.21 satisfies the existing `^0.1.x` requirements, so **no `Cargo.toml`
+version bump is needed to build+test**. That dir is not inside any git repo, so
+there is zero tracked-file impact.
+
+Mechanism note: the legacy `paths` override is used, **not** `[patch.crates-io]` —
+a `[patch.crates-io]` table in a `.cargo/config.toml` is silently *not applied*
+(cargo falls back to the registry version), whereas `paths` reliably replaces
+zencodec by name across the whole graph. It emits one cosmetic
+"path override / dep mismatch" warning (zencodec 0.1.21 added `kamadak-exif`).
+**⚠ This file must be reverted to just the wasm `runner` line when the sweep is
+done / 0.1.21 publishes — otherwise every `~/work/zen` build silently uses local
+zencodec.**
 
 **Landing strategy (two layers):**
 1. **Now (this sweep):** patch → implement → e2e test → report. Integration is
@@ -100,14 +109,16 @@ This order is deliberate: if integration surfaces an API gap, we fix zencodec
 
 | # | codec | dep | readiness | key work | effort | status |
 |---|-------|-----|-----------|----------|--------|--------|
-| 1 | zenjxl | 0.1.19→.20 | provisional `@` already on merged API | finalize, jpeg_lossy color, test migrations | M (mostly done) | ⬜ in progress |
-| 2 | zenjpeg | 0.1.20 | provisional emit-integ on OLD API | rewrite vs new API (descriptor threading blueprint exists) | M | ⬜ |
-| 3 | zenavif | 0.1.19 | clean | **fix apply_descriptor_color CICP-override (High)** + color-emit wiring | M | ⬜ |
-| 4 | zenpng | 0.1.19 | clean | caps flags + resolve_color_emit + decode orientation extraction | M | ⬜ |
-| 5 | zenwebp | 0.1.13 | far behind | dep bump + color-emit (synthesize ICC) + drop bespoke gating | M | ⬜ |
-| 6 | zentiff | 0.1.19 | clean | **metadata currently DROPPED entirely (High)** — wire real embedding | M–L | ⬜ |
-| 7 | zengif | 0.1.19 | already honest | dep bump + doc notes + optional testkit | S | ⬜ |
-| 8 | zenbitmaps | 0.1.20 | already honest | dep bump + optional polish | S | ⬜ |
+| 1 | zenjxl | 0.1.19→.20 | provisional `@` already on merged API | finalize, jpeg_lossy color, test migrations | M (mostly done) | ✅ done (provisional `8a618923`); jpeg_lossy deferred |
+| 2 | zenjpeg | 0.1.20 | provisional emit-integ on OLD API | rewrite vs new API (descriptor threading blueprint exists) | M | ✅ done (provisional `b5df9c72`) — decode double-rotation fix + color-emit + caps |
+| 3 | zenavif | 0.1.19 | clean | **fix apply_descriptor_color CICP-override (High)** + color-emit wiring | M | ✅ done (provisional `9c71eff0`) — CICP-override fixed + color-emit + caps |
+| 4 | zenpng | 0.1.19 | clean | caps flags + resolve_color_emit + decode orientation extraction | M | ✅ done (provisional `e7bd4e66`) — caps + color-emit + decode orientation |
+| 5 | zenwebp | 0.1.13 | far behind | dep bump + color-emit (synthesize ICC) + drop bespoke gating | M | ✅ done (provisional `3a981325`) — ICC synthesis + policy path |
+| 6 | zentiff | 0.1.19 | clean | **metadata currently DROPPED entirely (High)** — wire real embedding | M–L | ✅ done (provisional `b3c87c0c`) — real embedding wired + caps + color-emit |
+| 7 | zengif | 0.1.19 | already honest | verify compatible/honest (no code change) | S | ✅ verified green vs 0.1.21 — no change needed |
+| 8 | zenbitmaps | 0.1.20 | already honest | verify compatible/honest (no code change) | S | ✅ verified green vs 0.1.21 — no change needed |
+
+**Sweep result: all 8 codecs covered. 6 carry provisional (unpushed) integration commits; 2 (gif, bitmaps) are already honest and verified compatible. Every suite green against patched 0.1.21. Nothing pushed — landing is gated on publishing zencodec 0.1.21 (see Landing checklist).**
 
 Secondary (decode-mostly / wrappers, audit in wave 2 if wanted): heic, zenraw,
 mozjpeg-rs, ultrahdr, zenpdf, zenjp2, zensvg.
@@ -251,26 +262,103 @@ doc note for BMPv5. No required behavioral change.
 ### zencodec (this repo)
 - `docs/codec-integration-2026-06-08.md` — this report (the sweep tracker).
 
-### zenjxl
-- _pending_
+### zenjxl  ✅ main integration done (provisional, unpushed)
+- **Change:** `8a618923` (jj `vroqozzq`) on top of zenjxl `main` (38b7eadb) — **not pushed** (gated on zencodec 0.1.21 release).
+- **Dev patch:** gitignored `.cargo/config.toml` → `paths = ["/home/lilith/work/zen/zencodec"]` (the `[patch.crates-io]`-in-config form does *not* apply here; the `paths` override does).
+- **Files:** `src/codec.rs` (color-emit integration, already provisional from prior work; + 5 test migrations), `.gitignore` (+`.cargo/config.toml`).
+- **Color:** `resolve_jxl_color` → `resolve_color_emit` + `EncodePolicy::resolve_color(Balanced)`; `JXL_ENCODE_CAPS` declares `cicp` + `cicp_is_valid_carrier` + `cicp_safe_sole_carrier(true)` (JXL is the only sole-safe carrier).
+- **Metadata:** 5 test sites `with_metadata` → `with_metadata_policy(.., PreserveExact)` (verbatim semantics preserved); deprecation warnings now **0**.
+- **E2E:** `cargo test --features zencodec` → **48 lib + 8 validate + doctests pass**; `metadata_cicp_round_trips_via_enum_color` + `icc_from_structured_color` green.
+- **Deferred (reported, not done):** `jpeg_lossy.rs` recompress drops source color — a wide-gamut JPEG→JXL recompress is silently relabeled sRGB. `encode_pixel` uses `convenience::encode_rgb8` (bare codestream); `encode_coarsen` calls `encode_jpeg_recompress_auto_codestream` (a **jxl-encoder** fn). Fix needs JPEG color extraction (via the zenjpeg path-dep) + enum-color application, and the coarsen path needs jxl-encoder support (off-limits sibling). This is a native-transcode path, not the zencodec EncodeJob trait path the sweep targets.
 
-### zenjpeg
-- _pending_
+### zenjpeg  ✅ (provisional `b5df9c72`, unpushed)
+- **Change:** `b5df9c72` (jj `nwkkptnw`) on `@` over main `9fe32816` — **not pushed**. Files: `zenjpeg/zenjpeg/src/codec.rs` (+326), `zenjpeg/zenjpeg/Cargo.toml` (+19), `Cargo.lock` (+1).
+- **HIGH fix — decode double-rotation:** new `reconcile_baked_orientation` rewrites the embedded EXIF orientation tag to Identity (via `helpers::set_exif_orientation`) when the decoder bakes upright and reports `Identity`; applied in `Decode::decode` + `streaming_decoder` (OutputInfo paths carry no EXIF blob → untouched). Tests: `decode_auto_orient_rewrites_exif_tag_no_double_rotation`, `decode_preserve_orientation_keeps_exif_tag`.
+- **Color-emit:** `PixelDescriptor` threaded through all 6 encode entry points into `build_request_from`; builds `SourceColor`, calls `resolve_color_emit` (JPEG caps, no CICP carrier), applies ICC disposition (KeepSource / SynthesizeFrom via `zenpixels_convert::icc_profiles::icc_profile_for_primaries` / Drop) — fixes ignored `meta.cicp` + always-embedded redundant sRGB ICC. Tests: `encode_color_emit_{synthesizes_icc_from_nonsrgb_cicp, drops_redundant_srgb_cicp, keeps_source_icc}`.
+- **Caps:** `JPEG_ENCODE_CAPS` explicit `.with_cicp(false).with_cicp_is_valid_carrier(false).with_cicp_safe_sole_carrier(false)`. **Metadata:** 2 test sites → `with_metadata_policy(.., PreserveExact)`; `#[allow(deprecated)]` on the kept `with_metadata` impl. **Decode SourceColor:** `source_color_from_header` now sets channel_count + bit_depth.
+- **Dep:** added `zenpixels-convert` (optional, tied to `zencodec` feature) — needed for ICC synthesis; lands with the work.
+- **E2E:** `cargo test -p zenjpeg --features zencodec` → ~2103 passed, **0 failed**.
+- **Scope note (review):** also added `required-features = ["target-zq"]` to two crate-`cfg`'d examples (`zq_calibrate`, `zq_pareto_calibrate`) that fail `cargo test` on main without it — a minimal pre-existing-build-bug fix, separable from the integration.
+- **API note:** real signature is `helpers::set_exif_orientation(&[u8], Orientation) -> Option<Vec<u8>>`.
 
-### zenavif
-- _pending_
+### zenavif  ✅ (provisional `9c71eff0`, unpushed) — Known-Issue #2 fixed
+- **Change:** `9c71eff0` (jj `owoouqzx`) over main `46fc4bf7` — **not pushed**. Files: `src/codec.rs` (+294), `Cargo.toml` (+14), `Cargo.lock`.
+- **HIGH fix — `apply_descriptor_color` CICP override (zencodec Known-Issue #2):** `AvifEncoder` gained a `caller_cicp` field; `apply_descriptor_color` now fills a primaries/transfer axis from the descriptor ONLY when the caller's `Metadata.cicp` left it unspecified (H.273 sentinels 0/2), and writes a coherent matrix. Caller CICP now wins. Tests: `caller_cicp_wins_over_descriptor_color` (P3 metadata over sRGB descriptor → nclx primaries=12, the regression), `descriptor_drives_cicp_without_caller_cicp` (fallback).
+- **Color-emit:** `resolve_avif_color` builds `SourceColor`, `resolve_color_emit` (AVIF caps), lowers `plan.cicp`→nclx + ICC KeepSource/SynthesizeFrom/Drop; wired in `encoder()` + `animation_frame_encoder()`.
+- **Caps:** `.with_cicp_is_valid_carrier(true).with_cicp_safe_sole_carrier(false)`; `#[allow(deprecated)]` on `with_metadata`.
+- **E2E:** `cargo test --features zencodec,encode` → 83 lib + all integration suites green, **0 failed**.
+- **Caveats (review):** (1) emitted nclx `matrix_coefficients` = BT.601 (6), honest for zenravif's RGB→YCbCr path (not the CICP's Identity). (2) **⚠ MUST-NOT-LAND:** the change relaxes `zenanalyze`/`zenpredict` path-dep version reqs (0.2.1/0.1.0 → 0.2.0, clearly commented "worktree-only") because the local siblings drifted — an environmental workaround, revert before landing. (3) a pre-existing stray `cargo fmt` edit in `src/yuv_convert.rs` (forgotten `zenavif--emit-integ` workspace) left untouched. `zenavif-parse` untouched.
+- **Action:** zenavif owner can clear Known-Issue #2 from zencodec CLAUDE.md once this lands.
 
-### zenpng
-- _pending_
+### zenpng  ✅ (provisional `e7bd4e66`, unpushed)
+- **Change:** `e7bd4e66` (jj `lvqvvvzz`) over main `6156d550` — **not pushed**. Files: `src/codec.rs` (+202), `src/encode.rs` (+10, `ColorType::channels()`). No Cargo.toml change (zenpixels-convert already available).
+- **Caps:** `PNG_ENCODE_CAPS` += `.with_cicp_is_valid_carrier(true).with_cicp_safe_sole_carrier(false)` (cICP is a valid, non-sole-safe carrier — was being silently dropped by `resolve_color_emit`).
+- **Color-emit:** `apply_encode_policy` now builds `SourceColor` (channel count threaded through 6 sites), calls `resolve_color_emit`, lowers the plan onto `PngWriteMetadata` (cICP + iCCP KeepSource/SynthesizeFrom/Drop). Under Balanced a redundant sRGB iCCP drops while cICP stays.
+- **Decode orientation:** `convert_info` parses the eXIf orientation tag (`helpers::parse_exif_orientation`) and sets `ImageInfo.orientation` (PNG never bakes → reports the stored tag). Tests: `decode_reports_exif_orientation`, `decode_without_exif_reports_identity_orientation`.
+- **Metadata:** 1 test site → `with_metadata_policy(.., PreserveExact)`.
+- **E2E:** `cargo test --features zencodec` → 664 passed, **0 failed**. Nothing deferred.
 
-### zenwebp
-- _pending_
+### zenwebp  ✅ (provisional `3a981325`, unpushed)
+- **Change:** `3a981325` (jj `msknvkwv`) over main `9477d448` — **not pushed**. Files: `src/codec.rs` (+233), `Cargo.toml` (+8).
+- **Color-emit + ICC synthesis (the key fix):** `WebpEncodeJob`/`WebpEncoder` gained internal `cicp`/`color_policy`; `do_encode` builds `SourceColor`, `resolve_color_emit` (WebP caps, no CICP carrier), lowers ICC: KeepSource / `SynthesizeFrom`→synthesize an ICC for CICP-only sources (previously silently dropped → untagged sRGB) / Drop. Test: `cicp_only_source_synthesizes_icc` + 3 guards (`srgb→no ICC`, `KeepSource`, decode authority).
+- **Metadata path:** removed the bespoke all-or-nothing `EncodePolicy.resolve_icc/exif/xmp` gating; retention now flows through the provided `with_metadata_policy`→`Metadata::filtered` (enables sub-field EXIF web-filtering). `#[allow(deprecated)]` on the kept `with_metadata`.
+- **Caps:** explicit `.with_cicp(false)`. **Decode:** `to_image_info` sets `color_authority = Icc` when ICCP present.
+- **Dep:** `zenpixels-convert` promoted dev-dep → optional dep (tied to `zencodec`), `default-features = false` (wasm-clean). No public-API change.
+- **E2E:** `cargo test --features zencodec` → 647 passed, **0 failed** (+ wasm32 build + clippy clean). Nothing deferred.
 
-### zentiff
-- _pending_
+### zentiff  ✅ (provisional `b3c87c0c`, unpushed) — HIGH metadata-drop fixed
+- **Change:** `b3c87c0c` (jj `spmyztpy`) over `zenextras` main `ce54a751` — **not pushed**. Files: `zentiff/src/codec.rs` (+129), `src/encode.rs` (+606), `Cargo.toml` (+7), `tests/zencodec_integration.rs` (+270), `CHANGELOG.md`; `zenextras/Cargo.lock` (+110).
+- **HIGH fix — metadata was dropped entirely:** the old `with_metadata` stored into a dead `_metadata` field and `encoder()` ignored it → encode wrote NO ICC/EXIF/XMP/orientation (decode→encode silently stripped everything). Now carries `Metadata`+`EncodePolicy` into `TiffCodecEncoder` and writes ICC (tag 34675), XMP (700), orientation (274, IFD0), and EXIF as a **native sub-IFD** (tag 34665) via a hand-rolled, bounds-checked blob→sub-IFD re-emitter (the decode-side blob is a tag-only TIFF that `image-tiff`'s decoder rejects). Test: `metadata_web_policy_roundtrip_keeps_icc_orientation_strips_gps` (Web policy keeps ICC+orientation+copyright, strips GPS + camera Make).
+- **Caps:** Encode += `.with_icc/exif/xmp(true)`; Decode += `.with_multi_image(true)`.
+- **Color-emit:** `lower_metadata` → `resolve_color_emit` (TIFF caps, no CICP carrier); CICP-only source synthesizes an ICC. Tests: `cicp_only_source_synthesizes_icc_on_encode`, `srgb_cicp_only_source_embeds_no_icc`, `metadata_default_no_metadata_is_byte_identical`.
+- **Dep:** added `zenpixels-convert` (optional, `zencodec` feature); bumped `zenpixels` min → 0.2.11.
+- **E2E:** `cargo test --features zencodec` → 68 passed, **0 failed**.
+- **DEFERRED (review):** EXIF tags of TIFF type UNDEFINED (7) — ExifVersion/UserComment/MakerNote — are re-emitted as type BYTE (1) because `image-tiff`'s public `write_tag` API has no raw-undefined-bytes constructor. Value bytes identical, only the type code differs; nothing malformed, most readers accept either. Exact type preservation needs an upstream image-tiff API. **`Cargo.lock` also carries pre-existing zenpdf/zenpixels bumps made by another process — left intact (not reverted).**
 
-### zengif
-- _pending_
+### zengif  ✅ verified — already honest, no code change
+- Audit confirmed GIF correctly declares all metadata/color caps false (palette-only), has zero `with_metadata` call sites, and fabricates no color metadata on decode. **No code change needed.**
+- **E2E:** `cargo test --features zencodec` → green vs patched 0.1.21 (19 + 15 + … passed, **0 failed**) — confirms the new API doesn't break it.
+- **Landing:** bump the dep floor to 0.1.21 when it publishes (optional — `^0.1.19` already resolves it). Optional polish (not done): a doc note that `resolve_color_emit` is deliberately skipped, and a `zencodec-testkit` `check_capability_honesty` test.
 
-### zenbitmaps
-- _pending_
+### zenbitmaps  ✅ verified — already honest, no code change
+- Audit confirmed PNM/PFM/farbfeld/QOI/HDR/TGA/BMP correctly declare no metadata/color caps; `with_metadata` is an honest no-op; no call sites; decode synthesizes only *derivable* CICP (sRGB / BT.709-linear). **No code change needed.**
+- **E2E:** `cargo test --features zencodec,bmp,qoi,hdr,tga` → green vs patched 0.1.21 (1+37+13+100+46+5 passed, **0 failed**).
+- **Low/Info (optional, not done):** one-shot `Decode::decode()` omits the CICP that `probe()` populates (parity); BMPv5 ICC parsed-and-discarded on decode.
+- **Landing:** bump the dep floor to 0.1.21 when it publishes (optional).
+
+---
+
+## Landing checklist (when zencodec 0.1.21 publishes)
+
+Nothing here is on any codec's `main` yet. To land, **per codec** (gated on the
+0.1.21 release + the usual release ceremony):
+
+1. **Publish zencodec 0.1.21** (full ceremony: CI green all platforms → tag →
+   GitHub release → `cargo publish`; user-approved). This unblocks everything.
+2. **Remove the dev bridge:** revert `/home/lilith/work/zen/.cargo/config.toml`
+   to just the wasm `runner` line.
+3. For each provisional codec change (`b5df9c72` zenjpeg, `9c71eff0` zenavif,
+   `e7bd4e66` zenpng, `3a981325` zenwebp, `b3c87c0c` zentiff, `8a618923` zenjxl):
+   bump the codec's `zencodec` dep floor to `0.1.21`, then push to its `main`.
+4. **gif / bitmaps:** optional dep-floor bump to `0.1.21`; no code change.
+
+### Must-not-land / review-before-landing
+- **zenavif** — revert the `zenanalyze`/`zenpredict` path-dep version relaxations
+  (0.2.0 → back to 0.2.1/0.1.0) once the local siblings are back on their
+  published versions. These are an environmental worktree-only workaround.
+- **zenjpeg** — the two `required-features = ["target-zq"]` example fixes are a
+  pre-existing build-bug fix; can land as-is or be split into their own commit.
+- **zentiff** — `Cargo.lock` carries pre-existing zenpdf/zenpixels bumps made by
+  another process; confirm those are intended before pushing the lockfile.
+
+### Deferred work (reported, not implemented)
+- **zenjxl `jpeg_lossy.rs`** — JPEG→JXL recompress drops source color (wide-gamut
+  silently → sRGB). Needs JPEG color extraction + enum-color on the coarsen path
+  (`encode_jpeg_recompress_auto_codestream`, a **jxl-encoder** fn). Native
+  transcode path, partly off-limits sibling — separate task.
+- **zentiff EXIF UNDEFINED→BYTE** type-code downgrade — needs an upstream
+  `image-tiff` API for raw-undefined writes.
+
+### Verification record (all green vs patched 0.1.21, 0 failures)
+zenjxl 48+8 · zenjpeg ~2103 · zenavif 83+integration · zenpng 664 · zenwebp 647 ·
+zentiff 68 · zengif 19+15 · zenbitmaps 202. Logs in `/tmp/<codec>-integ-test.log`.
