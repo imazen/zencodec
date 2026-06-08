@@ -148,3 +148,72 @@ can round-trip a gain map (decode → `DecodedGainMap` → `GainMapEncodeSource`
 - **Effort:** Phase 1 ~S (additive types + one provided method + a test), Phase 2
   ~M per codec, Phase 3 ~M (math lift + policy). Native HDR (Phase 0) is mostly a
   test-writing exercise on top of the color-emit work already done.
+
+---
+
+## Caller intent: decode rendition + encode tonemap
+
+**Does intent bloat each codec, or is it a per-codec feature flag? Neither — three
+separate layers.** The mistake would be to bake "apply the gain map?" / "tonemap?"
+decisions into each codec. Instead:
+
+| layer | nature | who owns it |
+|---|---|---|
+| **Feature flag** (`ultrahdr`, gain-map, hdr) | *compile-time* — does this build link the gain-map/HDR machinery + its deps (ultrahdr-core, tonemap)? | each codec's Cargo features |
+| **Capability** (`EncodeCapabilities`/`DecodeCapabilities::{hdr, gain_map}`) | *runtime reflection* of the flag — "this build can do it" | codec (reports caps) |
+| **Intent / policy** (decode render, encode emit) | *runtime caller choice* — what to do given the codec can | **zencodec framework** (one policy type, all codecs honor it) |
+| **Math** (apply gain map; tonemap+fit gain map) | shared implementation | ultrahdr-core, not per-codec |
+
+So the feature flag gates the *weight* (gain-map deps aren't free), the capability
+reflects it, the **intent is a uniform framework policy** every codec reads, and the
+heavy math is shared. A codec's only added surface is "read the policy, pick the
+rendition/emission, call the shared math" — it does **not** grow its own intent
+vocabulary, and consumers get one consistent knob across formats.
+
+### Decode intent — which rendition? (`DecodePolicy.gain_map`)
+A gain-map file (UltraHDR JPEG, AVIF `tmap`, …) can be decoded three ways. Add a
+`GainMapRender` to `DecodePolicy` (it stays `Copy` — all small):
+```rust
+pub enum GainMapRender {
+    BaseOnly,                                   // SDR base only; ignore the gain map (DEFAULT)
+    ReconstructHdr { target_headroom: Option<f32> }, // base × gain map → HDR (None = full metadata headroom)
+    Components,                                  // base pixels + DecodedGainMap + metadata, no compositing
+}
+```
+- **Default `BaseOnly`** is the pit-of-success: an SDR consumer that doesn't ask for
+  HDR gets a normal SDR image (and an SDR-sized buffer) — applying the gain map by
+  default would surprise callers and force HDR output buffers.
+- **`ReconstructHdr`** is opt-in; output is an HDR pixel format (f32 / 10-bit) chosen
+  through the existing ranked-`PixelDescriptor` negotiation. `target_headroom` lets a
+  caller render for a specific display's HDR headroom (gain maps are display-referred).
+- **`Components`** feeds transcode/re-processing (it's what a decode→encode gain-map
+  round-trip needs — pairs with `DecodedGainMap` → `GainMapEncodeSource`).
+- **Fallback semantics (document):** `ReconstructHdr` on a file with *no* gain map →
+  return the image as-is + a warning (it's already the best rendition); on a codec
+  without the `gain_map` capability → `UnsupportedOperation` (don't silently hand back
+  SDR labeled as HDR — sacred pixels).
+
+### Encode intent — tonemap or not? (`EncodePolicy` HDR emit, = the prior `HdrEmitPolicy`)
+"Tonemap or not" is the same decision as native-vs-gain-map:
+- `Native` — encode the HDR pixels directly (PQ/HLG via the color-emit CICP path); **no tonemap**. Needs a native-HDR-capable target (AVIF/JXL/PNG).
+- `GainMap` — **tonemap** HDR → SDR base + compute the gain map (shared math) + compose. SDR-compatible; the only option for JPEG.
+- `Auto` (default) — `Native` if the target has a native HDR carrier and the caller didn't ask for SDR-compat; else `GainMap`; else (SDR-only target like WebP) tonemap-to-SDR with a warning that HDR was lost.
+- A caller who supplies a *pre-composed* gain map via `with_gain_map` has already
+  tonemapped — the framework just composes (no tonemap step).
+
+### Why this is the right shape
+- **One vocabulary, every codec.** Same `DecodePolicy.gain_map` / `EncodePolicy` HDR
+  knob whether the target is JPEG, AVIF, or JXL — like `ColorEmitPolicy` and
+  `MetadataPolicy` already are. No per-codec intent enums to learn.
+- **Honest capabilities gate it.** A build without the gain-map feature reports
+  `gain_map=false`; the framework then errors or falls back per the documented rules,
+  never silently mis-renders.
+- **Testkit conformance.** Add `check_gain_map_render_intent` (decode honors
+  BaseOnly/ReconstructHdr/Components or errors honestly) and `check_hdr_emit_intent`
+  (encode honors Native/GainMap or errors) — same pattern as the existing capability-
+  honesty checks.
+
+### Phasing addition
+- Folds into Phase 1 (add `GainMapRender` to `DecodePolicy` + the HDR emit policy to
+  `EncodePolicy`, both additive/non-breaking) and Phase 3 (the `encode_hdr`/decode
+  paths honor them via the shared math). No new phase.
