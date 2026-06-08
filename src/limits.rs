@@ -25,7 +25,7 @@
 ///
 /// # Controlling thread count
 ///
-/// Thread count is controlled externally via [`rayon::ThreadPool::install()`]:
+/// Thread count is controlled externally via `rayon::ThreadPool::install()`:
 ///
 /// ```ignore
 /// use rayon::ThreadPoolBuilder;

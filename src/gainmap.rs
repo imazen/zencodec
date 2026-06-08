@@ -41,9 +41,9 @@ use crate::info::Cicp;
 ///
 /// | Context | Zencodec produces/consumes | Framing the caller adds on top |
 /// |---------|----------------------------|--------------------------------|
-/// | JPEG APP2 (secondary) | [`JpegApp2BodyWithUrn`] bytes — URN + payload | `FF E2` marker + `u16 BE` length (length counts itself + these bytes) |
-/// | AVIF `tmap` item | [`AvifTmap`] bytes — this *is* the tmap item payload | ISOBMFF item framing (`iinf` / `iloc` / `iref`) pointing at these bytes |
-/// | JXL `jhgm` box | [`JpegApp2`] bytes go into the bundle's `gain_map_metadata` field only — **no URN** | A whole `JxlGainMapBundle` (`jhgm_version u8` + `gain_map_metadata_size u16 BE` + **payload** + color encoding + alt ICC + JXL codestream), then the ISOBMFF `jhgm` box around the bundle |
+/// | JPEG APP2 (secondary) | [`JpegApp2BodyWithUrn`](Iso21496Format::JpegApp2BodyWithUrn) bytes — URN + payload | `FF E2` marker + `u16 BE` length (length counts itself + these bytes) |
+/// | AVIF `tmap` item | [`AvifTmap`](Iso21496Format::AvifTmap) bytes — this *is* the tmap item payload | ISOBMFF item framing (`iinf` / `iloc` / `iref`) pointing at these bytes |
+/// | JXL `jhgm` box | [`JpegApp2`](Iso21496Format::JpegApp2) bytes go into the bundle's `gain_map_metadata` field only — **no URN** | A whole `JxlGainMapBundle` (`jhgm_version u8` + `gain_map_metadata_size u16 BE` + **payload** + color encoding + alt ICC + JXL codestream), then the ISOBMFF `jhgm` box around the bundle |
 ///
 /// **Note on JXL:** `jhgm` is *not* just "an ISOBMFF box around the ISO
 /// payload". It's a structured bundle with its own header and trailing
@@ -795,7 +795,7 @@ pub enum GainMapParseError {
     MinExceedsMax { channel: usize, min: f64, max: f64 },
     /// A value is NaN or infinity.
     NonFiniteValue { field: &'static str },
-    /// Input to [`parse_iso21496_with_urn`] did not begin with the ISO 21496-1 URN.
+    /// Input to [`parse_iso21496_fmt`] did not begin with the ISO 21496-1 URN.
     UrnMismatch,
 }
 

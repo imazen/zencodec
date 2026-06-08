@@ -285,14 +285,16 @@ Decode captures metadata. Pass it through to encode for lossless metadata roundt
 let dec_output = decoder.decode()?;
 let metadata = dec_output.metadata(); // returns Metadata (Arc-backed, cheap clone)
 
-// Re-encode with same metadata
+// Re-encode, choosing a retention policy explicitly.
+// PreserveExact = verbatim roundtrip; MetadataPolicy::Web = strip camera/GPS,
+// keep orientation + rights (privacy-safe).
 let job = enc_config.job()
-    .with_metadata(metadata);
+    .with_metadata_policy(metadata, MetadataPolicy::PreserveExact);
 let encoder = job.encoder()?;
 let output = encoder.encode(dec_output.pixels())?;
 ```
 
-`Metadata` carries ICC profile, EXIF, XMP, CICP, orientation, HDR metadata (content light level, mastering display), and resolution. The encoder embeds what it supports and what the policy allows.
+`Metadata` carries ICC profile, EXIF, XMP, CICP, orientation, and HDR metadata (content light level, mastering display). Retention is an explicit choice at embed time: `with_metadata_policy(meta, policy)` filters the record before the codec sees it. The plain `with_metadata(meta)` still works but is `#[deprecated]` — the compiler warns when no policy is chosen, so metadata can't propagate silently. The encoder then embeds what its format supports.
 
 Color management is not the codec's job. Decoders return native pixels with ICC/CICP metadata attached. Encoders accept pixels as-is and embed the provided metadata. If you need color space conversion, handle it between decode and encode using a CMS.
 

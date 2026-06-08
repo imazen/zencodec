@@ -6,6 +6,179 @@ All notable changes to zencodec are documented here.
 
 ### Added
 
+- **`zencodec-testkit` crate (new workspace member, unpublished)** — a
+  conformance harness codec crates run against their own `EncoderConfig` /
+  `DecoderConfig`. Ships `check_metadata_no_leak` (a retention policy must never
+  leak what it discards — decodes the output and re-parses the embedded EXIF to
+  prove GPS/thumbnail/rights the policy dropped are actually gone),
+  `check_cross_path_pixel_equivalence` (one-shot vs `push_rows` vs streaming vs
+  push-sink produce identical pixels), `check_animation_cross_path_equivalence`
+  (the three animation decode paths — borrowed, owned, push-sink — yield identical
+  frames, where canvas-aliasing/frame-ordering bugs hide),
+  `check_orientation_roundtrip` (an orientation survives a keeping policy exactly
+  once — no loss, no double-application), and `check_capability_honesty` —
+  comprehensive, bidirectional: every declared capability (`push_rows`,
+  `encode_from`, animation, streaming, `lossless`, `cheap_probe`, the
+  `icc`/`exif`/`xmp`/`cicp` channels, `native_alpha`) must work, and every
+  undeclared optional path must decline with `UnsupportedOperation`; all
+  violations are reported together. `check_all` runs every check with default
+  inputs. Includes two codecs validated against the harness in-crate: a faithful
+  `reference` (round-trips pixels *and* metadata, declares/honors every
+  capability) and a `minimal` one (one-shot only, declares every optional
+  capability false) exercising the false-direction branches, plus a hand-built
+  GPS/thumbnail EXIF fixture. The repo is now a Cargo workspace (`zencodec` root +
+  `zencodec-testkit` member); `zencodec`'s published package is unaffected.
+- **Cross-codec color-emission policy** —
+  `resolve_color_emit(&SourceColor, &EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan`,
+  a pure `no_std` decision of which color carriers (ICC vs CICP) to write for a
+  target, with no CMS and no codec dependencies. The `color` module is private;
+  the types are re-exported at the crate root (`zencodec::ColorEmitPolicy`, …).
+  - `ColorEmitPolicy { Compatibility, Balanced (default), Compact, Verbatim, Custom(ColorEmitFields) }`;
+    `ColorEmitPlan { cicp: Option<Cicp>, icc: IccDisposition }`;
+    `IccDisposition { KeepSource, SynthesizeFrom(Cicp), Drop }`. Handles the
+    grayscale/CMYK terminal states and never emits a redundant `SynthesizeFrom(sRGB)`.
+    (Names carry the emit direction so they can't be confused with the decode-side
+    `SourceColor`.)
+  - `ColorEmitFields::new` makes `ColorEmitPolicy::Custom` constructible downstream.
+  - `EncodeCapabilities` gains `cicp_is_valid_carrier` (standardized carrier —
+    JXL/AVIF/HEIC `nclx`, PNG `cICP`) and `cicp_safe_sole_carrier` (safe CICP-only,
+    JXL) (+ `with_*`); `IccRetention` gains `DropIfCicpRepresentable`,
+    `DropIfCicpSafeSoleCarrier`. The plan lowers to `zenpixels_convert`'s
+    `finalize_for_output_with` (`icc_profile_for_primaries` materializes a
+    `SynthesizeFrom` from a `const fn` table — no CMS, never a silent drop).
+  - `EncodePolicy` carries the color-carrier emission policy: `color:
+    Option<ColorEmitPolicy>` (+ `with_color`, `resolve_color`), so encode and
+    transcode select the ICC-vs-CICP carrier through it. Its docs reframe the
+    legacy `embed_*` flags as a coarse best-effort codec gate, and point at
+    `EncodeJob::with_metadata_policy` for reliable field-level retention.
+    `MetadataPolicy` is now `Copy`.
+  - `helpers::set_exif_orientation` rewrites a blob's EXIF orientation tag inline
+    (offset-preserving) so a baked-upright pixel buffer and its embedded tag can't
+    disagree (the double-rotation hazard). Applied by the pipeline, not by the
+    color resolver.
+  - `exif::ByteOrder` is module-scoped (a TIFF/EXIF header detail), not re-exported
+    at the crate root.
+  - Design + rejected alternatives: `docs/color-emit-model.md`.
+- **EXIF string-field editing** — `Exif::set_copyright` / `set_artist` set (insert
+  or replace) the IFD0 rights tags, materialized through the existing canonical
+  `Exif::to_bytes` (offsets recomputed, byte-exact fixpoint preserved). The new
+  `exif::TextEncoding` (re-exported at the crate root) lets the caller pick the
+  TIFF field type explicitly: `Ascii` (Exif 2.x, type 2 — carries UTF-8 bytes
+  de-facto, most compatible) or `Utf8` (Exif 3.0 / CIPA DC-008-2023, type 129 —
+  spec-conformant Unicode, thinly read). Explicit over auto-upgrade because
+  auto-promoting non-ASCII to type 129 would silently produce strings most
+  readers can't parse. `Entry` value bytes are now `Cow` so parsed entries stay
+  zero-copy while edited ones are owned; the `copyright()` / `artist()` /
+  `*_bytes()` accessors now borrow `&self`. EXIF tag/type numbers in the parser
+  are named constants (no bare hex), and the `ExifPolicy` timestamps category is
+  `datetimes` (plural — it covers DateTime / Original / Digitized / OffsetTime* /
+  SubSecTime*). (f4b9f1b)
+- **Explicit metadata-retention policy at embed time (compile-time enforced)** —
+  retention is a *transient* choice made when handing metadata to the encoder, not
+  state stored on `Metadata`. New blessed entry points:
+  `EncodeJob::with_metadata_policy(meta, MetadataPolicy)` and
+  `DynEncodeJob::set_metadata_policy(meta, MetadataPolicy)` filter the record via
+  `Metadata::filtered` *before* it reaches the codec, so a codec only ever embeds
+  what the policy kept. The pre-existing `EncodeJob::with_metadata` /
+  `DynEncodeJob::set_metadata` are now `#[deprecated]`: they propagate metadata
+  without a retention choice, so the compiler **warns at every such call site** —
+  a compile-time nudge toward `with_metadata_policy`, **not** a semver break
+  (existing code still compiles, and codecs still *implement* `with_metadata` as
+  the primitive the wrapper routes through; deprecation warns callers, not
+  implementors). `MetadataPolicy` has **no `Default`** — callers name a policy
+  explicitly (`Web` recommended, privacy-safe). No field was added to `Metadata`
+  (`size_of` stays 104 on 64-bit) and its bytes stay untouched until embed, so
+  bring-your-own-EXIF-library round-trips still see the originals. (73c5799)
+- **EXIF privacy hardening for partial-strip policies** — `MakerNote` (0x927C) is
+  dropped whenever `gps` **or** `camera` is stripped (it can embed GPS/serials and
+  can't be selectively scrubbed); `SubIFDs` (0x014A, an unmodeled sub-IFD pointer)
+  is dropped on a rewrite rather than left dangling; IFD1 (thumbnail-directory)
+  entries are filtered by the same per-category rules as IFD0 (a keep-thumbnail
+  policy previously kept their Make/Model/DateTime); and `exif::retain` now fails
+  **safe** for a >4 GiB blob under a stripping policy (drop, not pass-through). The
+  `Web`/`ColorAndRotation` presets were already safe — these close gaps for
+  hand-rolled `Custom` policies. (d8a2fae)
+- **From-scratch EXIF construction** — `Exif::new(TextEncoding)` (+ `Default`,
+  which uses `Ascii`) starts an empty little-endian tree, completing the
+  `parse`/`new` → edit → `to_bytes` flow so you can build a blob with no source:
+  `Exif::new(TextEncoding::Ascii)` → `set_copyright(…)` → `to_bytes()` (raw TIFF;
+  the codec adds the APP1 `Exif\0\0` framing). The `TextEncoding` is required — the
+  Exif 2.x ASCII (type 2) vs Exif 3.0 UTF-8 (type 129) choice is a blob property
+  used by `set_copyright`/`set_artist` (type 129 is read by almost nothing, so it
+  can't be a silent default). (b7acd9f, 73c5799)
+- **`Metadata::with_copyright(&str)` / `with_artist(&str)`** — one-liner rights
+  stamping that builds an EXIF blob if there is none and merges into a parseable
+  existing one (keeping other tags), replacing an unparseable one. Written ASCII
+  (Exif 2.x, most compatible); for UTF-8/Exif 3.0 or other tags, build via
+  `exif::Exif` + `with_exif`. (1051288)
+
+## [0.1.21] - 2026-05-29
+
+### Added
+
+- **Field-level metadata retention** — `Metadata::filtered(&MetadataPolicy)`,
+  the shared filter for re-encode / recompress pipelines: keep what a
+  downstream image needs, strip the rest, without callers hand-parsing EXIF.
+  - `MetadataPolicy`: `PreserveExact` (keep all, incl. a redundant sRGB ICC),
+    `Preserve` (keep all but drop a redundant sRGB ICC), `Web` (recommended —
+    ICC non-sRGB + EXIF orientation/rights + CICP/HDR; drop the rest of EXIF
+    and all XMP), `ColorAndRotation` (only what places pixels: ICC non-sRGB +
+    CICP/HDR + orientation), and `Custom(MetadataFields)`.
+  - `MetadataFields` (`#[non_exhaustive]`, `with_*` builders): `icc:
+    IccRetention` (`#[non_exhaustive]`; `Drop` / `KeepNonSrgb` / `Keep` —
+    three-way sRGB handling), `exif: ExifPolicy`, and `xmp` / `cicp` / `hdr:
+    Retention`.
+  - `exif::Retention` (`#[non_exhaustive]`; `Keep` / `Discard`, query via
+    `keeps`/`discards`) — explicit per-field intent, no `bool`-direction
+    ambiguity.
+  - Every disposition type (`MetadataPolicy`, `IccRetention`, `Retention`) and
+    every record (`Metadata`, `MetadataFields`, `ExifPolicy`) is
+    `#[non_exhaustive]` with builder construction, so new policies, ICC modes,
+    EXIF categories, retention fields, and `Metadata` fields land additively —
+    the surface never needs a semver-major break (see the module's *Forward
+    compatibility* docs).
+- **Structured EXIF** (`zencodec::exif`) — `Exif<'a>` parses a TIFF/EXIF blob
+  into a borrowing IFD tree (zero-copy; thumbnails/values are never copied),
+  `Exif::filtered(&ExifPolicy)` prunes by category, and `Exif::to_bytes`
+  re-serializes a valid TIFF with recomputed offsets. `ExifPolicy`
+  (`#[non_exhaustive]`, `with_*` builders) has seven categories: `orientation`,
+  `rights`, `thumbnail`, `gps`, `datetimes`, `camera`, `other` — so e.g.
+  "drop only the thumbnail" or "strip GPS" is one field. `exif::retain` is the
+  `Cow` entry point: borrows the source unchanged when nothing is dropped
+  (so `Metadata::filtered` is a cheap `Arc` clone), allocates only on a real
+  rewrite. Bounds-checked, no panics on untrusted input; preserves byte order
+  and `Exif\0\0` framing. (`helpers::parse_exif_orientation` now delegates
+  here.)
+  - Hardened (adversarial review + 80M+ fuzz executions across four targets):
+    the serializer **deduplicates aliased out-of-line values** so a malformed
+    IFD pointing many entries at one blob can't amplify the rewrite ~1000×
+    (DoS); Copyright/Artist accessors read both **ASCII (type 2) and UTF-8
+    (type 129, Exif 3.0)** per CIPA DC-008 (a UTF-8-typed field was previously
+    dropped as unknown), expose raw bytes (`copyright_bytes` / `artist_bytes`)
+    alongside the lossy-UTF-8 text view, and a pruning rewrite preserves field
+    bytes **and TIFF type** verbatim (never transcoded — neither corrupted nor
+    "corrected"); EXIF categories were corrected per the spec's tag tables —
+    the Exif-IFD creator/owner *name* tags (CameraOwnerName 0xA430, Photographer
+    0xA437, ImageEditor 0xA438) are attribution (`rights`, kept by a copyright
+    policy — they were previously stripped as "other"), and firmware / editing-
+    software / unique-ID tags are device identity (`camera`); the thumbnail
+    length tag is read as SHORT *or* LONG (real cameras use SHORT — was silently
+    dropping valid thumbnails);
+    structural sub-IFD pointers too short to hold an offset are preserved
+    (peek-before-remove) instead of dropping the sub-IFD; and `retain` passes a
+    >4 GiB blob through untouched rather than risk `u32` offset truncation.
+  - Robust error model: `Exif::parse` returns `None` on structural failure but
+    **gracefully skips** an individual unreadable / unknown-type / out-of-bounds
+    entry (and salvages a truncated entry table) — one bad or future-typed
+    entry no longer discards the whole IFD; `retain` **fails safe** (drops EXIF
+    it can't parse under a stripping policy rather than leaking it through); and
+    `to_bytes` is **canonical** (a byte-exact fixpoint), so filtering is
+    idempotent (a fuzz-found non-idempotence, now a regression seed).
+  - Test infrastructure: differential tests against `kamadak-exif`
+    (`tests/exif_differential.rs`), four libFuzzer targets (`fuzz/` — parse,
+    roundtrip, filter, and `Metadata::filtered`), a stable regression harness
+    with a committed crash seed (`tests/fuzz_regression.rs`), and a zero-copy
+    benchmark over 1 KiB–1 MiB thumbnails (`benches/exif_filter.rs`).
 - `ThreadingPolicy::resolve_thread_count()` — cross-codec shared helper that
   translates a [`ThreadingPolicy`] to the integer thread count that
   native-threaded encoder libraries (rav1e/ravif, dav1d/rav1d, libwebp, etc.)

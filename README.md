@@ -77,6 +77,37 @@ let pixels = decoded.into_buffer();
 
 **Pixel types from `zenpixels`.** All pixel interchange types (`PixelSlice`, `PixelBuffer`, `PixelDescriptor`, etc.) are defined in the `zenpixels` crate. All zen\* crates depend on `zenpixels` directly.
 
+## Metadata Retention
+
+Re-encode and recompress pipelines need to decide what metadata survives. `Metadata::filtered` applies a `MetadataPolicy`, so callers never hand-parse EXIF:
+
+```rust,ignore
+use zencodec::{MetadataPolicy, MetadataFields, IccRetention, exif::{ExifPolicy, Retention}};
+
+// Decode → filter → re-encode. `Web` (recommended for publishing) keeps the ICC profile
+// (unless a redundant sRGB), EXIF orientation + rights, and CICP/HDR color
+// signaling — and strips GPS, timestamps, camera info, thumbnail, and XMP.
+let kept = decoded_meta.filtered(&MetadataPolicy::Web);
+
+// Presets: PreserveExact (keep all, incl. duplicate sRGB), Preserve (drop dup
+// sRGB), Web, ColorAndRotation (only what places pixels), Custom.
+let minimal = decoded_meta.filtered(&MetadataPolicy::ColorAndRotation);
+
+// Per-field control — drop only the thumbnail, keep everything else:
+let policy = MetadataPolicy::Custom(
+    MetadataFields::KEEP_ALL.with_exif(ExifPolicy::KEEP_ALL.with_thumbnail(Retention::Discard)),
+);
+let no_thumb = decoded_meta.filtered(&policy);
+```
+
+`MetadataFields` encapsulates EXIF in an `ExifPolicy` with seven keep/discard categories — `orientation`, `rights`, `thumbnail`, `gps`, `datetimes`, `camera`, `other` — and three-way ICC handling (`IccRetention::{Drop, KeepNonSrgb, Keep}`). EXIF passes through byte-unchanged (zero-copy) when no category is dropped, and is rewritten — offsets recomputed — only when pruning. CICP/HDR are color *signaling* (dropping them changes displayed pixels), so the presets keep them; a `Custom` policy can drop them. The structured parser/editor is public as [`zencodec::exif::Exif`](https://docs.rs/zencodec) (`parse` → `filtered`/edit → `to_bytes`) for direct EXIF work — including setting Copyright/Artist (`set_copyright` / `set_artist`, with a `TextEncoding` choice of Exif 2.x ASCII or Exif 3.0 UTF-8).
+
+**Privacy is an explicit choice — enforced at compile time.** Retention is a *transient* decision made when you hand metadata to the encoder, not a field stored on `Metadata`. The blessed path is `job.with_metadata_policy(meta, MetadataPolicy::Web)` (privacy-safe: strips camera/GPS, keeps orientation + rights) or `PreserveExact` (verbatim). The old unguarded `with_metadata(meta)` still works but is `#[deprecated]` — the compiler **warns** at every call site that picks no policy, so you can't propagate metadata without choosing retention by accident. It's a compile-time nudge, not a semver break: existing code keeps compiling, but the warning points you at the safe call. The filter runs *before* the codec sees the record, so a codec only ever receives exactly what the policy kept. The carried bytes stay untouched until then, so you can still pull `metadata.exif` out, edit it with any EXIF library, and put it back via `with_exif`.
+
+To **stamp** rights in one line — `Metadata::none().with_copyright("© 2026 You")` builds (or merges into) the EXIF blob (ASCII); or build it directly with `Exif::new(TextEncoding::Ascii).set_copyright(…)` → `to_bytes()` — `Exif::new` requires the Exif 2.x-vs-3.0 field-type choice (type 129 is read by almost nothing, so it's never a silent default).
+
+Metadata retention, color emission, and orientation are the three *correctness* signals an encode has to get right; [docs/correctness-model.md](docs/correctness-model.md) describes how the framework resolves each one before the codec runs so a codec can't quietly clobber it. The [`zencodec-testkit`](zencodec-testkit) crate verifies a codec honors that contract — `check_metadata_no_leak` re-parses the embedded EXIF to prove a policy's drops actually happened, and `check_cross_path_pixel_equivalence` diffs every feeding mode.
+
 ## What's in this crate
 
 | Module | Contents |
@@ -84,8 +115,9 @@ let pixels = decoded.into_buffer();
 | `zencodec::encode` | `EncoderConfig`, `EncodeJob`, `Encoder`, `AnimationFrameEncoder`, `EncodeOutput`, `EncodeCapabilities`, `EncodePolicy`, `best_encode_format`, dyn dispatch traits (`DynEncoderConfig`, `DynEncodeJob`, `DynEncoder`, `DynAnimationFrameEncoder`) |
 | `zencodec::decode` | `DecoderConfig`, `DecodeJob`, `Decode`, `StreamingDecode`, `AnimationFrameDecoder`, `DecodeOutput`, `DecodeCapabilities`, `DecodePolicy`, `DecodeRowSink`, `SinkError`, `OutputInfo`, `SourceEncodingDetails`, `negotiate_pixel_format`, `is_format_available`, dyn dispatch traits (`DynDecoderConfig`, `DynDecodeJob`, `DynDecoder`, `DynStreamingDecoder`, `DynAnimationFrameDecoder`) |
 | `zencodec::gainmap` | `GainMapInfo`, `GainMapParams`, `GainMapChannel`, `GainMapDirection`, `GainMapPresence`, `Iso21496Format` (wire-format variant: `AvifTmap`, `JxlJhgm`, `JpegApp2BodyWithUrn`; the original `JpegApp2` is deprecated since 0.1.20), `ISO_21496_1_URN`, `ISO_21496_1_PRIMARY_APP2_BODY`, `serialize_iso21496_fmt` / `serialize_iso21496_fmt_into` / `parse_iso21496_fmt`, `GainMapParseError` — cross-codec gain map types and wire-format helpers (ISO 21496-1) |
-| `zencodec::helpers` | Codec implementation helpers (not consumer API) — shared boilerplate for trait implementors |
-| root | `ImageFormat`, `ImageFormatDefinition`, `ImageFormatRegistry` (format detection via `ImageFormatRegistry::detect()`), `ImageInfo`, `Metadata`, `Orientation`, `OrientationHint`, `ResourceLimits`, `LimitExceeded`, `ThreadingPolicy`, `UnsupportedOperation`, `CodecErrorExt`, `find_cause`, `Unsupported`, `Extensions`, `AnimationFrame`, `OwnedAnimationFrame`, `Cicp`, `ContentLightLevel`, `MasteringDisplay`, `StopToken`, `Unstoppable` |
+| `zencodec::exif` | Structured EXIF/TIFF: `Exif` (borrowing parse → prune → serialize), `ExifPolicy` (7 keep/discard categories), `Retention`, `ByteOrder`, `retain` |
+| `zencodec::helpers` | Codec implementation helpers (not consumer API) — shared boilerplate for trait implementors, plus the lightweight `parse_exif_orientation` accessor |
+| root | `ImageFormat`, `ImageFormatDefinition`, `ImageFormatRegistry` (format detection via `ImageFormatRegistry::detect()`), `ImageInfo`, `Metadata`, `MetadataPolicy`, `MetadataFields`, `IccRetention`, `Exif`, `ExifPolicy`, `Retention`, `ByteOrder`, `Orientation`, `OrientationHint`, `ResourceLimits`, `LimitExceeded`, `ThreadingPolicy`, `UnsupportedOperation`, `CodecErrorExt`, `find_cause`, `Unsupported`, `Extensions`, `AnimationFrame`, `OwnedAnimationFrame`, `Cicp`, `ContentLightLevel`, `MasteringDisplay`, `StopToken`, `Unstoppable` |
 
 zencodec has no feature flags. The full API is always available.
 

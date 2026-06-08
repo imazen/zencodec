@@ -6,7 +6,7 @@
 //!
 //! # Submodules
 //!
-//! - [`icc`]: ICC profile identification and pixel descriptor derivation.
+//! - `icc`: ICC profile identification and pixel descriptor derivation.
 
 use alloc::borrow::Cow;
 
@@ -19,7 +19,7 @@ use crate::traits::{AnimationFrameDecoder, Decode, DecodeJob};
 
 mod exif;
 mod icc;
-pub use exif::parse_exif_orientation;
+pub use exif::{parse_exif_orientation, set_exif_orientation};
 pub use icc::descriptor_for_decoded_pixels_v2;
 #[allow(deprecated)]
 pub use icc::{

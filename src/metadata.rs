@@ -2,10 +2,39 @@
 //!
 //! [`Metadata`] carries ICC, EXIF, XMP, CICP, HDR, and orientation data
 //! using `Arc<[u8]>` for byte buffers (cheap cloning via ref-count bump).
+//!
+//! # Forward compatibility
+//!
+//! This surface is shaped so it never needs a semver-major break. Every
+//! growable record ([`Metadata`], [`MetadataFields`], [`ExifPolicy`]) is
+//! `#[non_exhaustive]` and built from a constructor plus `with_*` setters, and
+//! every disposition enum ([`MetadataPolicy`], [`IccRetention`],
+//! [`Retention`](crate::exif::Retention)) is `#[non_exhaustive]` — so new
+//! record fields and new enum variants both land additively, and downstream
+//! cannot struct-literal or exhaustively match these types. Query
+//! [`Retention`](crate::exif::Retention) via
+//! [`keeps`](crate::exif::Retention::keeps) / `discards` rather than matching,
+//! so callers stay correct as variants are added.
+//!
+//! Anticipated additive growth (each a new field or variant, never a break):
+//! partial-XMP retention beside the whole-segment `xmp` switch, gain-map and
+//! depth-map retention, new [`ExifPolicy`] categories, new [`IccRetention`]
+//! modes, and new color-signaling fields on [`Metadata`] /
+//! [`SourceColor`](crate::SourceColor).
+//!
+//! The known cross-codec carrier gaps (imazen/zenpipe#36 —
+//! `Metadata::orientation` emission, decode-side EXIF-orientation
+//! normalization, CICP wiring for native-carrier formats, and AVIF EXIF-blob
+//! preservation) are fixable as behavioral changes in the codec adapters:
+//! [`Metadata`] already models every value those fixes produce
+//! ([`orientation`](Metadata::orientation), [`cicp`](Metadata::cicp),
+//! [`exif`](Metadata::exif)), so none require a type, field, or signature
+//! change here.
 
 use alloc::sync::Arc;
 
 use crate::Orientation;
+use crate::exif::{Exif, ExifPolicy, Retention};
 use crate::info::{Cicp, ContentLightLevel, MasteringDisplay};
 use zenpixels::{ColorPrimaries, TransferFunction};
 
@@ -73,6 +102,43 @@ impl Metadata {
         self
     }
 
+    /// Set the EXIF Copyright tag, creating an EXIF blob if there is none and
+    /// merging into the existing one otherwise.
+    ///
+    /// Written as ASCII (Exif 2.x, the most widely-read form). For UTF-8 (Exif
+    /// 3.0) or other tags, build the blob via [`exif::Exif`](crate::exif::Exif)
+    /// and pass it to [`with_exif`](Self::with_exif). Unparseable existing EXIF
+    /// is replaced with a fresh blob carrying just this field.
+    #[must_use]
+    pub fn with_copyright(self, copyright: &str) -> Self {
+        self.set_exif_string(copyright, |e, t| e.set_copyright(t))
+    }
+
+    /// Set the EXIF Artist tag. See [`with_copyright`](Self::with_copyright) for
+    /// encoding and merge semantics.
+    #[must_use]
+    pub fn with_artist(self, artist: &str) -> Self {
+        self.set_exif_string(artist, |e, t| e.set_artist(t))
+    }
+
+    /// Shared helper for [`with_copyright`]/[`with_artist`]: parse the existing
+    /// EXIF (or start fresh via [`Exif::new`]), apply `set`, and re-serialize.
+    fn set_exif_string(mut self, text: &str, set: impl FnOnce(&mut Exif<'_>, &str)) -> Self {
+        let bytes = {
+            // `exif` borrows `self.exif` here; `to_bytes` copies values out, so
+            // `bytes` is owned and the borrow ends before we reassign below.
+            let mut exif = self
+                .exif
+                .as_deref()
+                .and_then(Exif::parse)
+                .unwrap_or_default();
+            set(&mut exif, text);
+            exif.to_bytes()
+        };
+        self.exif = Some(Arc::from(bytes));
+        self
+    }
+
     /// Set the XMP metadata.
     ///
     /// Accepts `Vec<u8>`, `&[u8]`, or `Arc<[u8]>`.
@@ -135,8 +201,351 @@ impl Metadata {
             .map(|c| c.color_primaries_enum())
             .unwrap_or(ColorPrimaries::Bt709)
     }
+
+    /// Apply a retention [`MetadataPolicy`], returning a filtered copy.
+    ///
+    /// The shared field-level metadata filter for re-encode / recompress
+    /// pipelines: keep what a downstream image needs, strip the rest, without
+    /// callers hand-parsing EXIF.
+    ///
+    /// - **ICC** is three-way ([`IccRetention`]): keep as-is, keep only when
+    ///   it isn't a redundant sRGB ([`zenpixels::icc::is_common_srgb`]), or drop.
+    /// - **EXIF** is pruned by category via [`ExifPolicy`]. The source blob
+    ///   passes through unchanged (zero-copy `Arc` clone) when no category is
+    ///   dropped and the embedded orientation already matches the field, and is
+    ///   rewritten — offsets recomputed — only when pruning.
+    /// - **Orientation** is reconciled: the embedded EXIF orientation tag is
+    ///   rewritten to match the authoritative [`orientation`](Metadata::orientation)
+    ///   field, so a baked-upright image (field `Identity`, blob still rotated)
+    ///   cannot be double-rotated by a consumer that re-applies the tag.
+    /// - **CICP** and **HDR** light-level/mastering are color *signaling* (they
+    ///   change how pixels display); the presets keep them, a
+    ///   [`Custom`](MetadataPolicy::Custom) policy can drop them.
+    ///
+    /// # HDR signaling and gain maps — keep these consistent with the pixels
+    ///
+    /// CICP (`transfer_characteristics`, `color_primaries`, `matrix_coefficients`)
+    /// and the HDR `ContentLightLevel` / `MasteringDisplay` describe **how the
+    /// stored pixels are to be interpreted**. They are not free-floating notes:
+    /// a decoder uses CICP transfer (e.g. PQ or HLG) to linearize, and uses
+    /// CLLI/MDCV to tone-map for the target display. If they disagree with the
+    /// actual pixels, the image renders **wrong** (clipped highlights, wrong
+    /// gamut, double tone-mapping).
+    ///
+    /// A **gain map** is a *separate plane* (not a field of [`Metadata`] — it
+    /// lives at the encode-request / codec-output layer with its
+    /// [`GainMapInfo`](crate::GainMapInfo)). The base image, its HDR signaling,
+    /// and the gain map together reconstruct the HDR rendition. That coupling
+    /// is the hazard:
+    ///
+    /// - **Dropping or flattening the gain map (HDR → SDR) without also fixing
+    ///   the signaling leaves invalid metadata.** If you tone-map to an SDR
+    ///   base and discard the gain map, but leave `transfer_characteristics =
+    ///   PQ/HLG` and an MDCV describing a 1000-nit mastering display, a
+    ///   conformant decoder will treat your SDR pixels as HDR and tone-map them
+    ///   a second time — visibly wrong. When the gain map goes, the HDR
+    ///   signaling that described the HDR rendition must go (or be rewritten to
+    ///   match the SDR base: `transfer` → sRGB, drop CLLI/MDCV).
+    /// - Conversely, **stripping CICP/HDR while keeping a gain map** orphans the
+    ///   gain map (the decoder no longer knows the base is HDR-relative), so the
+    ///   HDR rendition is lost or misrendered.
+    ///
+    /// `filtered` **cannot see the gain map** (it isn't in `Metadata`), so it
+    /// cannot enforce this — the consistency is the **caller's responsibility**
+    /// at the layer that owns the gain map. Practical guidance:
+    ///
+    /// - Keeping the gain map untouched → keep CICP/HDR (`Web` / `Preserve`).
+    /// - Flattening to SDR and dropping the gain map → drop HDR here (a
+    ///   [`Custom`](MetadataPolicy::Custom) policy with `hdr: Discard`, and set
+    ///   the encoder's CICP to the SDR transfer) so the signaling matches the
+    ///   pixels you actually wrote.
+    ///
+    /// `cicp` and `hdr` are deliberately *separate* retention flags so this
+    /// SDR-flatten case is expressible (drop HDR light-level/mastering while
+    /// keeping CICP primaries). The *inverse* — a `Custom` policy that drops
+    /// `cicp` but keeps `hdr` — leaves the CLLI/MDCV light-level metadata with no
+    /// transfer/primaries to interpret it against (orphaned HDR signaling); it is
+    /// not rejected, so a `Custom` policy that drops color signaling should drop
+    /// `hdr` too.
+    #[must_use]
+    pub fn filtered(&self, policy: &MetadataPolicy) -> Metadata {
+        let f = policy.fields();
+        let mut out = Metadata::none();
+
+        // ICC — three-way; only KeepNonSrgb drops a redundant sRGB profile.
+        out.icc_profile = match f.icc {
+            IccRetention::Drop => None,
+            // Target-blind retention keeps the profile; the CICP-conditional
+            // drop is resolved against a concrete target in
+            // `color::resolve_color_emit`, which `filtered` does not see.
+            IccRetention::Keep
+            | IccRetention::DropIfCicpRepresentable
+            | IccRetention::DropIfCicpSafeSoleCarrier => self.icc_profile.clone(),
+            IccRetention::KeepNonSrgb => self
+                .icc_profile
+                .as_ref()
+                .filter(|icc| !zenpixels::icc::is_common_srgb(icc))
+                .cloned(),
+        };
+
+        // Orientation field (codecs may apply it without re-reading the EXIF).
+        out.orientation = if f.exif.orientation.keeps() {
+            self.orientation
+        } else {
+            Orientation::Identity
+        };
+
+        // Color signaling.
+        if f.cicp.keeps() {
+            out.cicp = self.cicp;
+        }
+        if f.hdr.keeps() {
+            out.content_light_level = self.content_light_level;
+            out.mastering_display = self.mastering_display;
+        }
+
+        // XMP (whole-segment).
+        if f.xmp.keeps() {
+            out.xmp = self.xmp.clone();
+        }
+
+        // EXIF — pruned by category AND reconciled to the authoritative
+        // `out.orientation` field in a *single* parse (see
+        // `exif::retain_reconciled`). Reconciliation rewrites the embedded
+        // orientation tag to match the field: a decoder that bakes orientation
+        // upright sets the field to Identity while the source blob still carries
+        // the original tag (e.g. Rotate90); left alone, a consumer re-applying the
+        // tag would rotate twice. `Arc` clone (zero-copy) when nothing is pruned
+        // and the tag already matches.
+        out.exif = self.exif.as_ref().and_then(|src| {
+            match crate::exif::retain_reconciled(src, &f.exif, Some(out.orientation))? {
+                alloc::borrow::Cow::Borrowed(_) => Some(src.clone()),
+                alloc::borrow::Cow::Owned(v) => Some(Arc::from(v)),
+            }
+        });
+        out
+    }
 }
 
+/// How to treat the ICC profile when filtering [`Metadata`].
+///
+/// `#[non_exhaustive]`: ICC handling can gain dispositions (e.g. a future
+/// convert-to-sRGB or keep-if-display-referred mode) without a breaking
+/// change. Match with a `_` arm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum IccRetention {
+    /// Always drop the profile.
+    Drop,
+    /// Keep the profile unless it is a redundant sRGB profile — the common
+    /// choice (sRGB is the assumed default, so embedding it is pure weight).
+    KeepNonSrgb,
+    /// Keep the profile as-is, even a redundant sRGB one (byte-faithful).
+    Keep,
+    /// Drop the profile when it maps to a CICP expressible as code points
+    /// (sRGB / Display-P3 / BT.2020 / BT.2100…) — i.e. CICP fully describes the
+    /// color. **Target-aware**: only takes effect in
+    /// [`color::resolve_color_emit`](crate::color::resolve_color_emit), where the
+    /// target's CICP carrier is known. In the target-blind [`Metadata::filtered`]
+    /// path it conservatively keeps the profile.
+    DropIfCicpRepresentable,
+    /// Drop the profile only when the target format's CICP is safe as the sole
+    /// color carrier ([`EncodeCapabilities::cicp_safe_sole_carrier`](crate::encode::EncodeCapabilities::cicp_safe_sole_carrier)
+    /// — JXL today) and CICP represents the color. Like
+    /// [`DropIfCicpRepresentable`](Self::DropIfCicpRepresentable), this is
+    /// target-aware and keeps the profile in [`Metadata::filtered`].
+    DropIfCicpSafeSoleCarrier,
+}
+
+/// Per-field metadata retention for [`MetadataPolicy::Custom`].
+///
+/// EXIF is encapsulated in [`ExifPolicy`] (pruned by category); the remaining
+/// fields use [`Retention`] (explicit `Keep`/`Discard`). This type is
+/// `#[non_exhaustive]` (new fields can be added without a breaking change), so
+/// downstream crates build from [`KEEP_ALL`](Self::KEEP_ALL) /
+/// [`DISCARD_ALL`](Self::DISCARD_ALL) via the `with_*` builders rather than
+/// struct-update syntax. Drop only GPS, keep all else:
+///
+/// ```
+/// use zencodec::{MetadataFields, exif::{ExifPolicy, Retention}};
+/// let fields = MetadataFields::KEEP_ALL
+///     .with_exif(ExifPolicy::KEEP_ALL.with_gps(Retention::Discard));
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct MetadataFields {
+    /// ICC color profile.
+    pub icc: IccRetention,
+    /// EXIF, pruned by category.
+    pub exif: ExifPolicy,
+    /// XMP, whole-segment. The XMP packet (RDF/XML) can carry GPS
+    /// (`exif:GPS*`), edit history (`photoshop:History`, `xmpMM:History`),
+    /// and C2PA provenance (`xmpMM` manifests), so the presets that strip
+    /// privacy/bloat ([`Web`](MetadataPolicy::Web)) discard it wholesale while
+    /// keeping EXIF rights.
+    ///
+    /// Partial XMP (e.g. keep `dc:rights`/`dc:creator`, drop GPS + history +
+    /// C2PA) is a planned future addition — it needs an RDF/XML parser, so it
+    /// is deferred rather than half-done. It will arrive as a *new*
+    /// `MetadataFields` field (this struct is `#[non_exhaustive]`, so adding
+    /// one is non-breaking); `xmp` will remain the whole-segment master switch.
+    pub xmp: Retention,
+    /// CICP color signaling.
+    pub cicp: Retention,
+    /// HDR `ContentLightLevel` + `MasteringDisplay`.
+    pub hdr: Retention,
+}
+
+impl MetadataFields {
+    /// Keep every field (ICC kept as-is, including a redundant sRGB).
+    pub const KEEP_ALL: Self = Self {
+        icc: IccRetention::Keep,
+        exif: ExifPolicy::KEEP_ALL,
+        xmp: Retention::Keep,
+        cicp: Retention::Keep,
+        hdr: Retention::Keep,
+    };
+    /// Discard every field.
+    pub const DISCARD_ALL: Self = Self {
+        icc: IccRetention::Drop,
+        exif: ExifPolicy::DISCARD_ALL,
+        xmp: Retention::Discard,
+        cicp: Retention::Discard,
+        hdr: Retention::Discard,
+    };
+
+    /// Set ICC retention. (Builder — this type is `#[non_exhaustive]`.)
+    #[must_use]
+    pub const fn with_icc(mut self, r: IccRetention) -> Self {
+        self.icc = r;
+        self
+    }
+    /// Set the EXIF retention policy.
+    #[must_use]
+    pub const fn with_exif(mut self, p: ExifPolicy) -> Self {
+        self.exif = p;
+        self
+    }
+    /// Set XMP retention.
+    #[must_use]
+    pub const fn with_xmp(mut self, r: Retention) -> Self {
+        self.xmp = r;
+        self
+    }
+    /// Set CICP retention.
+    #[must_use]
+    pub const fn with_cicp(mut self, r: Retention) -> Self {
+        self.cicp = r;
+        self
+    }
+    /// Set HDR (light-level/mastering) retention.
+    #[must_use]
+    pub const fn with_hdr(mut self, r: Retention) -> Self {
+        self.hdr = r;
+        self
+    }
+}
+
+/// Field-level metadata retention policy applied by [`Metadata::filtered`].
+///
+/// `Copy` (all variants, including `Custom(MetadataFields)`, are `Copy`) so it
+/// can be bundled by value into [`EncodePolicy`](crate::encode::EncodePolicy).
+///
+/// **No `Default`.** Metadata retention is a privacy decision, so callers must
+/// name a policy explicitly — there is no implicit fallback. [`Web`](Self::Web)
+/// is the recommended privacy-safe choice for publishing.
+///
+/// # Delivery exceptions
+///
+/// Each variant's per-channel promise holds in the common case; these are the
+/// edges where it does not, by design:
+///
+/// - **Unparseable or > 4 GiB EXIF under a *partial* policy ([`Web`](Self::Web),
+///   [`ColorAndRotation`](Self::ColorAndRotation), or any [`Custom`](Self::Custom)
+///   that drops an EXIF category) → the *whole* EXIF blob is dropped (fail-safe:
+///   an unverifiable strip must not leak).** So the "keep EXIF orientation tag +
+///   rights" part of those policies is *not* delivered for such a blob. The
+///   authoritative [`orientation`](Metadata::orientation) **field** is separate
+///   and is always preserved; only EXIF-blob-carried data (rights/copyright,
+///   the embedded tag) is lost. [`PreserveExact`](Self::PreserveExact) /
+///   [`Preserve`](Self::Preserve) keep EXIF byte-faithfully (no parse, so an
+///   unparseable/oversize blob passes through unchanged).
+/// - **[`Custom`](Self::Custom) keeping `camera` *through a prune*:** the rewrite
+///   relocates `MakerNote` (0x927C) without fixing its maker-specific internal
+///   offsets, and an uncompressed (StripOffsets) thumbnail is dropped on any
+///   rewrite — see the [`exif`](crate::exif) module limitations. (The presets
+///   sidestep this: `Web`/`ColorAndRotation` drop `camera`; `Preserve*` never
+///   rewrite.)
+/// - **CICP/HDR vs the pixels and any gain map** is the caller's responsibility —
+///   `filtered` cannot see the gain map; see [`Metadata::filtered`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum MetadataPolicy {
+    /// Keep everything the source carried, byte-faithfully — including a
+    /// redundant sRGB ICC profile.
+    ///
+    /// One exception: if the embedded EXIF orientation tag disagrees with the
+    /// authoritative [`orientation`](Metadata::orientation) field (e.g. a decoder
+    /// baked the image upright and set the field to `Identity`), the tag is
+    /// rewritten in place to match the field — preventing a double-rotation. The
+    /// EXIF is otherwise byte-identical; only that 2-byte value changes, and only
+    /// on a mismatch.
+    PreserveExact,
+    /// Keep everything, but drop a redundant sRGB ICC profile.
+    Preserve,
+    /// The web-publish set (recommended for publishing): keep the ICC profile
+    /// (unless a redundant sRGB), EXIF orientation + rights (copyright/artist),
+    /// and CICP / HDR color signaling. Drop the rest of EXIF (GPS, timestamps,
+    /// camera/device identity, thumbnail) and all XMP.
+    Web,
+    /// Keep only what places pixels on screen: the ICC profile (unless a
+    /// redundant sRGB), CICP / HDR color signaling, and EXIF orientation.
+    /// Drops attribution, XMP, and all other EXIF.
+    ColorAndRotation,
+    /// Explicit per-field control via [`MetadataFields`].
+    Custom(MetadataFields),
+}
+
+impl MetadataPolicy {
+    /// Resolve the policy to its concrete per-field retention set.
+    #[must_use]
+    pub fn fields(&self) -> MetadataFields {
+        match self {
+            Self::PreserveExact => MetadataFields::KEEP_ALL,
+            Self::Preserve => MetadataFields {
+                icc: IccRetention::KeepNonSrgb,
+                ..MetadataFields::KEEP_ALL
+            },
+            Self::Web => MetadataFields {
+                icc: IccRetention::KeepNonSrgb,
+                exif: ExifPolicy::ATTRIBUTED_ORIENTATION,
+                xmp: Retention::Discard,
+                cicp: Retention::Keep,
+                hdr: Retention::Keep,
+            },
+            Self::ColorAndRotation => MetadataFields {
+                icc: IccRetention::KeepNonSrgb,
+                exif: ExifPolicy::ORIENTATION_ONLY,
+                xmp: Retention::Discard,
+                cicp: Retention::Keep,
+                hdr: Retention::Keep,
+            },
+            Self::Custom(f) => *f,
+        }
+    }
+}
+
+/// Extract a [`Metadata`] from decoded [`ImageInfo`](crate::ImageInfo).
+///
+/// `info.orientation` is taken as the authoritative orientation **verbatim** — it
+/// is *not* re-derived from the embedded EXIF tag. A decoder MUST set
+/// `info.orientation` to the intended display orientation (the EXIF tag value if
+/// it carries the rotation, or `Identity` if it baked the pixels upright). If a
+/// decoder leaves `info.orientation` at the default `Identity` while
+/// `embedded_metadata.exif` still carries a non-identity tag, [`filtered`] will
+/// reconcile the blob's tag down to `Identity` — silently discarding the rotation.
+/// (The [`with_exif`](Metadata::with_exif) builder, by contrast, syncs the field
+/// from the tag; `From` trusts the decoder.)
 impl From<&crate::ImageInfo> for Metadata {
     fn from(info: &crate::ImageInfo) -> Self {
         Self {
@@ -385,5 +794,292 @@ mod tests {
             .with_exif(blob);
         // Explicit FlipH must win over the EXIF blob's Rotate90.
         assert_eq!(meta.orientation, Orientation::FlipH);
+    }
+
+    // ── MetadataPolicy / filtered ──────────────────────────────────────────
+
+    use crate::exif::Exif;
+
+    /// LE TIFF source: Make (0x010F, camera) + Orientation (0x0112) + Copyright
+    /// (0x8298, out-of-line), tag-sorted. `prefix` adds `Exif\0\0` framing.
+    fn src_exif(orientation: u16, copyright: &str, prefix: bool) -> alloc::vec::Vec<u8> {
+        use alloc::vec::Vec;
+        let mut cw = copyright.as_bytes().to_vec();
+        cw.push(0); // > 4 bytes → out-of-line
+        let n: u16 = 3;
+        let ifd_size = 2 + 12 * n as usize + 4;
+        let ext_off = 8 + ifd_size;
+
+        let mut t = Vec::new();
+        t.extend_from_slice(b"II");
+        t.extend_from_slice(&42u16.to_le_bytes());
+        t.extend_from_slice(&8u32.to_le_bytes());
+        t.extend_from_slice(&n.to_le_bytes());
+        // Make 0x010F ASCII "Cam\0" (4 bytes, inline) — camera category.
+        t.extend_from_slice(&0x010Fu16.to_le_bytes());
+        t.extend_from_slice(&2u16.to_le_bytes());
+        t.extend_from_slice(&4u32.to_le_bytes());
+        t.extend_from_slice(b"Cam\0");
+        // Orientation 0x0112 SHORT (inline).
+        t.extend_from_slice(&0x0112u16.to_le_bytes());
+        t.extend_from_slice(&3u16.to_le_bytes());
+        t.extend_from_slice(&1u32.to_le_bytes());
+        t.extend_from_slice(&u32::from(orientation).to_le_bytes());
+        // Copyright 0x8298 ASCII (out-of-line).
+        t.extend_from_slice(&0x8298u16.to_le_bytes());
+        t.extend_from_slice(&2u16.to_le_bytes());
+        t.extend_from_slice(&(cw.len() as u32).to_le_bytes());
+        t.extend_from_slice(&(ext_off as u32).to_le_bytes());
+        t.extend_from_slice(&0u32.to_le_bytes()); // next-IFD offset
+        t.extend_from_slice(&cw);
+
+        if prefix {
+            let mut out = Vec::with_capacity(6 + t.len());
+            out.extend_from_slice(b"Exif\0\0");
+            out.extend_from_slice(&t);
+            out
+        } else {
+            t
+        }
+    }
+
+    /// True if the (little-endian) tag appears in the blob's entry stream.
+    fn has_tag(blob: &[u8], tag: u16) -> bool {
+        blob.windows(2).any(|w| w == tag.to_le_bytes())
+    }
+
+    #[test]
+    fn policy_fields_resolution() {
+        assert_eq!(
+            MetadataPolicy::PreserveExact.fields(),
+            MetadataFields::KEEP_ALL
+        );
+        assert_eq!(
+            MetadataPolicy::PreserveExact.fields().icc,
+            IccRetention::Keep
+        );
+        assert_eq!(
+            MetadataPolicy::Preserve.fields().icc,
+            IccRetention::KeepNonSrgb
+        );
+        assert_eq!(MetadataPolicy::Preserve.fields().exif, ExifPolicy::KEEP_ALL);
+
+        let web = MetadataPolicy::Web.fields();
+        assert_eq!(web.icc, IccRetention::KeepNonSrgb);
+        assert_eq!(web.exif, ExifPolicy::ATTRIBUTED_ORIENTATION);
+        assert_eq!(web.xmp, Retention::Discard);
+        assert_eq!(web.cicp, Retention::Keep);
+        assert_eq!(web.hdr, Retention::Keep);
+
+        let car = MetadataPolicy::ColorAndRotation.fields();
+        assert_eq!(car.exif, ExifPolicy::ORIENTATION_ONLY);
+        assert_eq!(car.cicp, Retention::Keep);
+
+        let custom = MetadataFields {
+            xmp: Retention::Keep,
+            ..MetadataFields::DISCARD_ALL
+        };
+        assert_eq!(MetadataPolicy::Custom(custom).fields(), custom);
+    }
+
+    #[test]
+    fn icc_three_way_retention() {
+        let icc = alloc::vec![0xABu8; 256]; // arbitrary → not recognized as sRGB
+        let meta = Metadata::none().with_icc(icc.clone());
+        // KeepNonSrgb keeps a non-sRGB profile (Web/Preserve).
+        assert_eq!(
+            meta.filtered(&MetadataPolicy::Web).icc_profile.as_deref(),
+            Some(icc.as_slice())
+        );
+        // Keep keeps it too (PreserveExact).
+        assert_eq!(
+            meta.filtered(&MetadataPolicy::PreserveExact)
+                .icc_profile
+                .as_deref(),
+            Some(icc.as_slice())
+        );
+        // Drop removes it.
+        let drop = MetadataFields {
+            icc: IccRetention::Drop,
+            ..MetadataFields::KEEP_ALL
+        };
+        assert!(
+            meta.filtered(&MetadataPolicy::Custom(drop))
+                .icc_profile
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn web_keeps_orientation_rights_drops_camera_and_xmp() {
+        let src = src_exif(6, "(c) 2026 Lilith", false);
+        let meta = Metadata::none()
+            .with_exif(src.clone())
+            .with_xmp(alloc::vec![1, 2, 3])
+            .with_cicp(Cicp::SRGB)
+            .with_content_light_level(ContentLightLevel {
+                max_content_light_level: 1000,
+                max_frame_average_light_level: 400,
+            });
+        assert_eq!(meta.orientation, Orientation::Rotate90);
+
+        let out = meta.filtered(&MetadataPolicy::Web);
+        let e = out.exif.as_deref().expect("rewritten EXIF");
+        let ex = Exif::parse(e).expect("parses");
+        assert_eq!(ex.orientation(), Some(Orientation::Rotate90));
+        assert_eq!(ex.copyright().unwrap(), "(c) 2026 Lilith");
+        // Camera (Make 0x010F) dropped; output is smaller than the source.
+        assert!(!has_tag(e, 0x010F));
+        assert!(e.len() < src.len());
+        assert_eq!(out.orientation, Orientation::Rotate90);
+        assert!(out.xmp.is_none());
+        assert_eq!(out.cicp, Some(Cicp::SRGB));
+        assert!(out.content_light_level.is_some());
+    }
+
+    #[test]
+    fn preserve_exact_passes_exif_through_byte_identical() {
+        let src = src_exif(6, "(c) Owner", false);
+        let meta = Metadata::none()
+            .with_exif(src.clone())
+            .with_xmp(alloc::vec![9, 9])
+            .with_icc(alloc::vec![0xABu8; 200]);
+        let out = meta.filtered(&MetadataPolicy::PreserveExact);
+        assert_eq!(out.exif.as_deref(), Some(src.as_slice()));
+        assert!(has_tag(out.exif.as_deref().unwrap(), 0x010F)); // camera kept
+        assert_eq!(out.xmp.as_deref(), Some([9, 9].as_slice()));
+        assert!(out.icc_profile.is_some());
+    }
+
+    #[test]
+    fn color_and_rotation_keeps_orientation_drops_rights() {
+        let src = src_exif(8, "(c) Owner", false);
+        let meta = Metadata::none().with_exif(src).with_cicp(Cicp::SRGB);
+        let out = meta.filtered(&MetadataPolicy::ColorAndRotation);
+        let e = out.exif.as_deref().expect("EXIF");
+        let ex = Exif::parse(e).expect("parses");
+        assert_eq!(ex.orientation(), Some(Orientation::Rotate270));
+        assert!(ex.copyright().is_none()); // rights dropped
+        assert!(!has_tag(e, 0x010F)); // camera dropped
+        assert_eq!(out.cicp, Some(Cicp::SRGB));
+    }
+
+    // ── with_copyright / with_artist sugar (build/merge an EXIF blob) ─────────
+
+    #[test]
+    fn with_copyright_creates_blob_from_nothing() {
+        let meta = Metadata::none().with_copyright("(c) 2026 Lilith");
+        let e = meta.exif.as_deref().expect("EXIF created");
+        assert_eq!(
+            Exif::parse(e).unwrap().copyright().unwrap(),
+            "(c) 2026 Lilith"
+        );
+    }
+
+    #[test]
+    fn with_copyright_merges_into_existing() {
+        // src carries Make (camera), Orientation=6 (Rotate90), Copyright "old".
+        let src = src_exif(6, "old", false);
+        let meta = Metadata::none()
+            .with_exif(src)
+            .with_copyright("(c) New Owner");
+        let e = meta.exif.as_deref().expect("EXIF");
+        let x = Exif::parse(e).unwrap();
+        assert_eq!(x.copyright().unwrap(), "(c) New Owner"); // replaced
+        assert_eq!(x.orientation(), Some(Orientation::Rotate90)); // preserved
+        assert!(has_tag(e, 0x010F), "Make preserved on merge");
+        assert_eq!(meta.orientation, Orientation::Rotate90); // with_exif synced it
+    }
+
+    #[test]
+    fn with_artist_creates_blob() {
+        let meta = Metadata::none().with_artist("Lilith");
+        let e = meta.exif.as_deref().expect("EXIF");
+        assert_eq!(Exif::parse(e).unwrap().artist().unwrap(), "Lilith");
+    }
+
+    #[test]
+    fn filtered_reconciles_baked_orientation_tag() {
+        // Simulate a decoder that baked orientation upright: the structured field
+        // is Identity, but the source EXIF blob still carries Rotate90 (6).
+        let blob = src_exif(6, "(c) Owner", false);
+        let meta = Metadata::none()
+            .with_exif(blob) // parses 6 → field = Rotate90
+            .with_orientation(Orientation::Identity); // baked: field reset to Identity
+        assert_eq!(meta.orientation, Orientation::Identity);
+        // The unfiltered blob still says Rotate90 — the divergence.
+        assert_eq!(
+            parse_exif_orientation(meta.exif.as_deref().unwrap()),
+            Some(Orientation::Rotate90)
+        );
+
+        // filtered() rewrites the embedded tag to match the authoritative field,
+        // so the emitted metadata is self-consistent (no double-rotation).
+        let out = meta.filtered(&MetadataPolicy::PreserveExact);
+        assert_eq!(out.orientation, Orientation::Identity);
+        assert_eq!(
+            parse_exif_orientation(out.exif.as_deref().unwrap()),
+            Some(Orientation::Identity),
+            "baked-upright blob must be rewritten to Identity, not left at Rotate90"
+        );
+    }
+
+    #[test]
+    fn custom_drop_only_camera_keeps_rest() {
+        let src = src_exif(6, "(c) Owner", false);
+        let fields = MetadataFields {
+            exif: ExifPolicy {
+                camera: Retention::Discard,
+                ..ExifPolicy::KEEP_ALL
+            },
+            ..MetadataFields::KEEP_ALL
+        };
+        let out = Metadata::none()
+            .with_exif(src)
+            .filtered(&MetadataPolicy::Custom(fields));
+        let e = out.exif.as_deref().expect("EXIF");
+        let ex = Exif::parse(e).expect("parses");
+        assert_eq!(ex.orientation(), Some(Orientation::Rotate90));
+        assert_eq!(ex.copyright().unwrap(), "(c) Owner");
+        assert!(!has_tag(e, 0x010F)); // only camera dropped
+    }
+
+    #[test]
+    fn dropping_orientation_resets_field_to_identity() {
+        let meta = Metadata::none().with_orientation(Orientation::Rotate90);
+        let fields = MetadataFields {
+            exif: ExifPolicy {
+                orientation: Retention::Discard,
+                ..ExifPolicy::KEEP_ALL
+            },
+            ..MetadataFields::KEEP_ALL
+        };
+        let out = meta.filtered(&MetadataPolicy::Custom(fields));
+        assert_eq!(out.orientation, Orientation::Identity);
+    }
+
+    #[test]
+    fn exif_prefix_preserved_through_rewrite() {
+        let src = src_exif(6, "(c) Owner", true); // Exif\0\0 prefix
+        let out = Metadata::none()
+            .with_exif(src)
+            .filtered(&MetadataPolicy::Web);
+        let e = out.exif.as_deref().expect("EXIF");
+        assert_eq!(&e[..6], b"Exif\0\0");
+        let ex = Exif::parse(e).expect("parses");
+        assert_eq!(ex.orientation(), Some(Orientation::Rotate90));
+        assert_eq!(ex.copyright().unwrap(), "(c) Owner");
+    }
+
+    #[test]
+    fn filtered_empty_metadata_is_empty() {
+        for p in [
+            MetadataPolicy::PreserveExact,
+            MetadataPolicy::Preserve,
+            MetadataPolicy::Web,
+            MetadataPolicy::ColorAndRotation,
+        ] {
+            assert!(Metadata::none().filtered(&p).is_empty());
+        }
     }
 }

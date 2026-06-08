@@ -224,29 +224,48 @@ impl DecodePolicy {
     }
 }
 
-/// Encode metadata policy.
+/// Output-emission policy for an encode or transcode: which color carrier to
+/// emit and a coarse per-channel embed gate. Two concerns that apply at
+/// different stages.
 ///
-/// Controls which metadata an encoder embeds in the output.
-/// All fields default to `None`, meaning the codec uses its own default.
-/// `Some(true)` explicitly allows embedding; `Some(false)` explicitly strips.
+/// - [`color`](Self::color) — color-carrier emission (ICC bytes vs CICP code
+///   points). The codec reads it during encode via
+///   [`resolve_color`](Self::resolve_color) and feeds it to
+///   [`resolve_color_emit`](crate::resolve_color_emit). `None` defers to the
+///   codec's default.
+/// - [`embed_icc`](Self::embed_icc) / [`embed_exif`](Self::embed_exif) /
+///   [`embed_xmp`](Self::embed_xmp) — a coarse, best-effort per-channel embed
+///   gate handed to the codec via
+///   [`EncodeJob::with_policy`](crate::encode::EncodeJob::with_policy).
+///   Tri-state (`None` = codec default, `Some(true/false)` = embed/strip),
+///   whole-channel only. Best-effort: the `with_policy` default is a no-op, so a
+///   codec that does not implement it silently ignores this gate.
+///
+/// Field-level metadata *retention* is a separate, reliable concern: choose a
+/// [`MetadataPolicy`](crate::MetadataPolicy) and apply it at
+/// [`EncodeJob::with_metadata_policy`](crate::encode::EncodeJob::with_metadata_policy),
+/// which filters the record *before* it reaches the codec. The coarse `embed_*`
+/// gates here are not a substitute — for privacy, set a policy.
 ///
 /// # Example
 ///
 /// ```
 /// use zencodec::encode::EncodePolicy;
+/// use zencodec::ColorEmitPolicy;
 ///
-/// // Strip all metadata from output
+/// // Prefer compact color carriers (CICP code points over embedded ICC bytes).
+/// let policy = EncodePolicy::none().with_color(ColorEmitPolicy::Compact);
+///
+/// // Coarse legacy gate: ask the codec to strip every metadata channel.
 /// let policy = EncodePolicy::strip_all();
-///
-/// // Or fine-grained: keep ICC, strip EXIF/XMP
-/// let policy = EncodePolicy::none()
-///     .with_embed_icc(true)
-///     .with_embed_exif(false)
-///     .with_embed_xmp(false);
 /// ```
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct EncodePolicy {
+    /// Color-carrier emission policy (ICC bytes vs CICP code points). `None`
+    /// defers to the codec's default. The codec reads it during encode via
+    /// [`resolve_color`](EncodePolicy::resolve_color).
+    pub color: Option<crate::ColorEmitPolicy>,
     /// Embed ICC color profiles in the output.
     pub embed_icc: Option<bool>,
     /// Embed EXIF metadata in the output.
@@ -255,30 +274,40 @@ pub struct EncodePolicy {
     pub embed_xmp: Option<bool>,
 }
 
-const _: () = assert!(core::mem::size_of::<EncodePolicy>() == 3);
+// No longer a 3-byte gate: EncodePolicy now bundles the color + metadata
+// policies. Keep a loose upper bound to catch accidental bloat (e.g. a field
+// that pulls in a Vec/Arc).
+const _: () = assert!(core::mem::size_of::<EncodePolicy>() <= 32);
 
 impl EncodePolicy {
     /// No preferences — codec uses its own defaults.
     pub const fn none() -> Self {
         Self {
+            color: None,
             embed_icc: None,
             embed_exif: None,
             embed_xmp: None,
         }
     }
 
-    /// Strip all metadata from output.
+    /// Coarse, best-effort gate asking the codec to embed no metadata. For
+    /// *reliable* retention choose a [`MetadataPolicy`](crate::MetadataPolicy) at
+    /// [`EncodeJob::with_metadata_policy`](crate::encode::EncodeJob::with_metadata_policy);
+    /// these `embed_*` flags only reach codecs that implement `with_policy`.
     pub const fn strip_all() -> Self {
         Self {
+            color: None,
             embed_icc: Some(false),
             embed_exif: Some(false),
             embed_xmp: Some(false),
         }
     }
 
-    /// Preserve all metadata in output.
+    /// Coarse, best-effort gate asking the codec to embed all metadata (see
+    /// [`strip_all`](Self::strip_all) for the reliable path).
     pub const fn preserve_all() -> Self {
         Self {
+            color: None,
             embed_icc: Some(true),
             embed_exif: Some(true),
             embed_xmp: Some(true),
@@ -323,6 +352,23 @@ impl EncodePolicy {
     pub const fn resolve_xmp(&self, default: bool) -> bool {
         match self.embed_xmp {
             Some(v) => v,
+            None => default,
+        }
+    }
+
+    /// Set the color-carrier emission policy.
+    pub const fn with_color(mut self, policy: crate::ColorEmitPolicy) -> Self {
+        self.color = Some(policy);
+        self
+    }
+
+    /// Resolve the color-carrier emission policy, falling back to `default` —
+    /// codecs pass their own default here (e.g.
+    /// [`ColorEmitPolicy::Balanced`](crate::ColorEmitPolicy::Balanced)), so a
+    /// caller that set nothing keeps the codec's behavior.
+    pub const fn resolve_color(&self, default: crate::ColorEmitPolicy) -> crate::ColorEmitPolicy {
+        match self.color {
+            Some(p) => p,
             None => default,
         }
     }

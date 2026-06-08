@@ -38,9 +38,14 @@ extern crate alloc;
 whereat::define_at_crate_info!();
 
 mod capabilities;
+/// Cross-codec color-signaling emission policy (ICC vs CICP). See
+/// `docs/color-emit-model.md`.
+mod color;
 mod cost;
 mod detect;
 mod error;
+/// Structured EXIF/TIFF parsing, pruning, and serialization.
+pub mod exif;
 mod extensions;
 mod format;
 /// Cross-codec gain map types (ISO 21496-1).
@@ -48,6 +53,9 @@ pub mod gainmap;
 /// Codec implementation helpers (not consumer API).
 pub mod helpers;
 /// Lightweight ICC profile inspection (tag extraction, no full parse).
+// Kept `pub` — privatizing it removes `zencodec::icc` from the public API, a
+// breaking change. The removal stays in CHANGELOG's QUEUED BREAKING CHANGES for
+// a future major; do not ship it in a patch/minor.
 pub mod icc;
 mod info;
 mod limits;
@@ -63,6 +71,14 @@ mod traits;
 // Public root: shared types used by both encode and decode
 // =========================================================================
 
+pub use color::{
+    CicpEmission, ColorEmitFields, ColorEmitPlan, ColorEmitPolicy, IccDisposition,
+    resolve_color_emit,
+};
+// `ByteOrder` is intentionally NOT re-exported at the root: it is a TIFF/EXIF
+// header detail used only within the `exif` module, and the bare name is too
+// generic for the crate root. Reach it as `exif::ByteOrder`.
+pub use exif::{Exif, ExifPolicy, Retention, TextEncoding};
 pub use extensions::Extensions;
 pub use format::{ImageFormat, ImageFormatDefinition, ImageFormatRegistry};
 pub use gainmap::{
@@ -76,7 +92,7 @@ pub use info::{
     ResolutionUnit, SourceColor, Supplements,
 };
 pub use limits::{LimitExceeded, ResourceLimits, ThreadingPolicy};
-pub use metadata::Metadata;
+pub use metadata::{IccRetention, Metadata, MetadataFields, MetadataPolicy};
 pub use orientation::{Orientation, OrientationHint};
 pub use output::{AnimationFrame, OwnedAnimationFrame};
 pub use zenpixels::ColorAuthority;

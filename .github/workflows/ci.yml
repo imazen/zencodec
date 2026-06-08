@@ -206,10 +206,11 @@ jobs:
 
 
       - name: Check semver
+        # Enforcing: a breaking change vs the published baseline fails CI (no
+        # `continue-on-error`, which previously let real breaks pass green). The
+        # crate is non-breaking vs 0.1.20; intentional breaks must bump the version
+        # and clear CHANGELOG's QUEUED BREAKING list.
         run: cargo semver-checks check-release
-        # Intentional breaking change in 0.1.5: DecoderConfig::job() now consumes self.
-        # All pre-0.1.5 versions are yanked. Re-enable strict checking after this release.
-        continue-on-error: true
 
   # ==========================================================================
   # Code coverage

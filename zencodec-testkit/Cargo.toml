@@ -1,0 +1,18 @@
+[package]
+name = "zencodec-testkit"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "Apache-2.0 OR MIT"
+description = "Conformance test harness for zencodec codec implementations"
+categories = ["multimedia::images", "development-tools::testing"]
+keywords = ["image", "codec", "conformance", "testing"]
+repository = "https://github.com/imazen/zencodec"
+include = ["/src/**", "/README.md", "/LICENSE*"]
+
+[dependencies]
+# Path for in-workspace development; version so a future `cargo publish` resolves
+# against crates.io. zencodec-testkit tracks zencodec's own version line.
+zencodec = { path = "..", version = "0.1.21" }
+zenpixels = { version = "0.2.10", features = ["icc"] }
+enough = "0.4.4"

@@ -58,3 +58,6 @@ Cargo.toml.original.txt
 *.profraw
 *.profdata
 fuzz-*.log
+
+# Local-only dev dependency overrides (build against in-tree zen sources)
+.cargo/

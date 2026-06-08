@@ -2,10 +2,29 @@
 
 Shared traits and types for zen* image codecs.
 
+## Workspace Layout
+
+This repo is a Cargo workspace:
+- **`zencodec`** (root package) — the published traits/types crate.
+- **`zencodec-testkit/`** (member, unpublished) — conformance harness codec
+  crates run against their own `EncoderConfig`/`DecoderConfig`. Ships
+  `check_metadata_no_leak` (privacy), `check_cross_path_pixel_equivalence`,
+  `check_orientation_roundtrip`, and a comprehensive bidirectional
+  `check_capability_honesty`. Two in-crate codecs validate the harness: a faithful
+  `reference` (honors every capability) and a `minimal` one (declares every
+  optional capability false) for the false-direction branches, plus EXIF fixtures.
+  Build/test the whole workspace with `cargo test --workspace`; the testkit must
+  stay green and is the place to add cross-codec correctness checks.
+
 ## API Specification
 
 **[spec.md](docs/spec.md)** — canonical reference for the full public API surface.
 Read this before modifying any traits.
+
+**[correctness-model.md](docs/correctness-model.md)** — how color emission,
+orientation, and metadata retention are resolved by the framework before a codec
+runs (the "pit of success" contract), and how `zencodec-testkit` verifies a codec
+honors it. Read before changing metadata/color/orientation flow.
 
 ## Purpose
 
@@ -66,4 +85,27 @@ Tiny, stable crate defining the common interface that all zen* codecs implement:
 
 ## Known Issues
 
-(none)
+Three bugs verified during the cross-codec color/metadata scenario-matrix
+research (2026-06-01). The first is in this crate; the other two are recorded
+here as cross-repo findings (do NOT edit those repos from here — flag to the
+owner). Full design context: [`docs/color-emit-model.md`](docs/color-emit-model.md).
+
+1. **Double-rotation hazard — FIXED (this crate, `src/metadata.rs`).** When a
+   decoder bakes orientation upright it sets `Metadata::orientation = Identity`
+   while the EXIF blob still carries the original `Orientation` tag (e.g. `6`); a
+   consumer that re-applied the tag would rotate twice. `Metadata::filtered` now
+   reconciles them — it rewrites the embedded tag to match the authoritative
+   `orientation` field via `helpers::set_exif_orientation` (offset-preserving,
+   fires only on a mismatch so the matched case keeps the zero-copy `Arc` clone).
+   Regression: `filtered_reconciles_baked_orientation_tag`.
+
+2. **AVIF descriptor-CICP override (zenavif, `src/codec.rs:824-831`).**
+   `apply_descriptor_color` overrides a metadata-set CICP unconditionally,
+   ignoring a CICP explicitly provided via `Metadata`. It should check for a
+   caller-supplied CICP before overriding from the pixel descriptor.
+
+3. **Missing signal-range conversion kernels (zenpixels-convert).** No
+   `Narrow <-> Full` range conversion kernels exist, so a range mismatch refuses
+   zero-copy but can relabel without rescaling — a black-crush risk. Needs
+   `ConvertStep::{Expand,Contract}NarrowToFull`. Until then, range must be
+   preserved verbatim, never relabeled.
