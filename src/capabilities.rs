@@ -455,6 +455,8 @@ impl fmt::Debug for EncodeCapabilities {
             .field("exif", &self.exif)
             .field("xmp", &self.xmp)
             .field("cicp", &self.cicp)
+            .field("cicp_is_valid_carrier", &self.cicp_is_valid_carrier)
+            .field("cicp_safe_sole_carrier", &self.cicp_safe_sole_carrier)
             .field("stop", &self.stop)
             .field("animation", &self.animation)
             .field("lossy", &self.lossy)
@@ -476,7 +478,7 @@ impl fmt::Debug for EncodeCapabilities {
         if let Some(range) = &self.quality_range {
             s.field("quality_range", range);
         }
-        s.finish()
+        s.finish_non_exhaustive()
     }
 }
 

@@ -25,12 +25,14 @@
 //!   stripping policy (rather than passing it through and risking a leak); see
 //!   its docs.
 //!
-//! Known limitation: rewriting (any partial prune) relocates the `MakerNote`
-//! blob (0x927C, the `camera` category), whose maker-specific *internal*
-//! offsets cannot always be fixed up. Pipelines needing byte-exact MakerNote
-//! should keep all EXIF (no prune), in which case the source passes through
-//! untouched. Uncompressed (StripOffsets) thumbnails are dropped-only — kept
-//! correctly only in the no-prune passthrough.
+//! `MakerNote` (0x927C, the `camera` category) is opaque and may carry
+//! maker-specific *internal* offsets (often TIFF-relative) that can't be fixed up
+//! without parsing each vendor's format. A rewrite relocates the blob and would
+//! break those, so any partial prune **drops** it rather than emit a corrupted
+//! block (it also routinely embeds GPS/serials). Pipelines needing byte-exact
+//! MakerNote must keep all EXIF (no prune), where the source passes through
+//! untouched. Uncompressed (StripOffsets) thumbnails are likewise dropped on a
+//! prune — kept only in the no-prune passthrough.
 
 use alloc::borrow::Cow;
 use alloc::vec::Vec;
@@ -593,11 +595,11 @@ impl<'a> Exif<'a> {
             | TAG_STRIP_BYTE_COUNTS
             | TAG_TILE_OFFSETS
             | TAG_TILE_BYTE_COUNTS => false,
-            // MakerNote is opaque and routinely embeds GPS coordinates + serials;
-            // it can only be dropped wholesale. Strip it whenever EITHER camera or
-            // GPS is being removed — otherwise a gps-strip could still leak the
-            // location carried inside the maker block.
-            TAG_MAKER_NOTE => policy.camera.keeps() && policy.gps.keeps(),
+            // MakerNote is opaque and may carry maker-internal (TIFF-relative)
+            // offsets we can't fix up; a rewrite relocates it and would corrupt
+            // those. It also routinely embeds GPS/serials. Drop it on any prune —
+            // byte-exact preservation is the keep-everything (no-rewrite) path.
+            TAG_MAKER_NOTE => false,
             tag => policy.keeps(classify(tag)),
         };
         let ifd0 = self.ifd0.iter().filter(keep).cloned().collect();
@@ -2055,13 +2057,24 @@ mod tests {
                 .any(|w| w == TAG_MAKER_NOTE.to_le_bytes()),
             "MakerNote must be stripped when GPS is dropped"
         );
-        // Both camera and gps kept (drop only `other`) → MakerNote survives.
-        let kept = exif
+        // Even with camera+gps kept, pruning `other` forces a rewrite that would
+        // relocate the opaque MakerNote and break its maker-internal offsets — so
+        // a pruning rewrite drops it rather than emit a corrupted block.
+        let pruned = exif
             .filtered(&ExifPolicy::KEEP_ALL.with_other(Retention::Discard))
             .to_bytes();
         assert!(
-            kept.windows(2).any(|w| w == TAG_MAKER_NOTE.to_le_bytes()),
-            "MakerNote kept when both camera and gps are kept"
+            !pruned.windows(2).any(|w| w == TAG_MAKER_NOTE.to_le_bytes()),
+            "MakerNote dropped on a pruning rewrite (can't safely relocate)"
+        );
+        // Byte-exact preservation is the no-prune path: retain(KEEP_ALL) returns
+        // the blob untouched, MakerNote intact.
+        let blob = exif.to_bytes();
+        let kept = retain(&blob, &ExifPolicy::KEEP_ALL).expect("keep-all");
+        assert!(
+            matches!(kept, Cow::Borrowed(_))
+                && kept.windows(2).any(|w| w == TAG_MAKER_NOTE.to_le_bytes()),
+            "MakerNote preserved byte-exact under keep-everything (no rewrite)"
         );
     }
 

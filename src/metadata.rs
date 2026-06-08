@@ -262,7 +262,11 @@ impl Metadata {
     ///
     /// `cicp` and `hdr` are deliberately *separate* retention flags so this
     /// SDR-flatten case is expressible (drop HDR light-level/mastering while
-    /// keeping CICP primaries).
+    /// keeping CICP primaries). The *inverse* — a `Custom` policy that drops
+    /// `cicp` but keeps `hdr` — leaves the CLLI/MDCV light-level metadata with no
+    /// transfer/primaries to interpret it against (orphaned HDR signaling); it is
+    /// not rejected, so a `Custom` policy that drops color signaling should drop
+    /// `hdr` too.
     #[must_use]
     pub fn filtered(&self, policy: &MetadataPolicy) -> Metadata {
         let f = policy.fields();
@@ -479,6 +483,13 @@ impl MetadataFields {
 pub enum MetadataPolicy {
     /// Keep everything the source carried, byte-faithfully — including a
     /// redundant sRGB ICC profile.
+    ///
+    /// One exception: if the embedded EXIF orientation tag disagrees with the
+    /// authoritative [`orientation`](Metadata::orientation) field (e.g. a decoder
+    /// baked the image upright and set the field to `Identity`), the tag is
+    /// rewritten in place to match the field — preventing a double-rotation. The
+    /// EXIF is otherwise byte-identical; only that 2-byte value changes, and only
+    /// on a mismatch.
     PreserveExact,
     /// Keep everything, but drop a redundant sRGB ICC profile.
     Preserve,
@@ -524,6 +535,17 @@ impl MetadataPolicy {
     }
 }
 
+/// Extract a [`Metadata`] from decoded [`ImageInfo`](crate::ImageInfo).
+///
+/// `info.orientation` is taken as the authoritative orientation **verbatim** — it
+/// is *not* re-derived from the embedded EXIF tag. A decoder MUST set
+/// `info.orientation` to the intended display orientation (the EXIF tag value if
+/// it carries the rotation, or `Identity` if it baked the pixels upright). If a
+/// decoder leaves `info.orientation` at the default `Identity` while
+/// `embedded_metadata.exif` still carries a non-identity tag, [`filtered`] will
+/// reconcile the blob's tag down to `Identity` — silently discarding the rotation.
+/// (The [`with_exif`](Metadata::with_exif) builder, by contrast, syncs the field
+/// from the tag; `From` trusts the decoder.)
 impl From<&crate::ImageInfo> for Metadata {
     fn from(info: &crate::ImageInfo) -> Self {
         Self {
