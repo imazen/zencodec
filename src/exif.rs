@@ -636,6 +636,30 @@ impl<'a> Exif<'a> {
         }
     }
 
+    /// Set the IFD0 orientation tag value to `o` *if such an entry exists* (does
+    /// not add one — a tag-less blob is left tag-less, matching `set_orientation`).
+    /// Edits the parsed entry so a subsequent [`to_bytes`](Self::to_bytes) emits
+    /// the reconciled value in a single serialize, no re-parse. Preserves the
+    /// entry's TIFF type (SHORT/LONG); a non-integer carrier is left untouched.
+    fn set_orientation_tag(&mut self, o: Orientation) {
+        let order = self.order;
+        let Some(entry) = self.ifd0.iter_mut().find(|e| e.tag == TAG_ORIENTATION) else {
+            return;
+        };
+        let v = u32::from(o.to_exif());
+        entry.value = match entry.kind {
+            TIFF_SHORT => Cow::Owned(match order {
+                ByteOrder::Little => (v as u16).to_le_bytes().to_vec(),
+                ByteOrder::Big => (v as u16).to_be_bytes().to_vec(),
+            }),
+            TIFF_LONG => Cow::Owned(match order {
+                ByteOrder::Little => v.to_le_bytes().to_vec(),
+                ByteOrder::Big => v.to_be_bytes().to_vec(),
+            }),
+            _ => return, // non-integer orientation carrier — leave untouched
+        };
+    }
+
     /// Serialize to a valid TIFF, recomputing every offset. Preserves the
     /// source byte order and `Exif\0\0` framing.
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -885,6 +909,13 @@ fn read_uint(e: &Entry<'_>, order: ByteOrder) -> Option<u32> {
 /// inline (a 1-element SHORT/LONG fits the 4-byte value field).
 pub(crate) fn set_orientation(data: &[u8], value: Orientation) -> Option<Vec<u8>> {
     let exif = Exif::parse(data)?;
+    set_orientation_with(data, &exif, value)
+}
+
+/// In-place orientation rewrite using an already-parsed [`Exif`] (avoids a second
+/// parse when the caller already has one). Offset-preserving: the rest of `data`
+/// is byte-identical.
+fn set_orientation_with(data: &[u8], exif: &Exif<'_>, value: Orientation) -> Option<Vec<u8>> {
     let entry = exif.ifd0.iter().find(|e| e.tag == TAG_ORIENTATION)?;
     let size = match entry.kind {
         TIFF_SHORT => 2usize,
@@ -1136,37 +1167,83 @@ impl ExifPolicy {
 ///   blob can't be safely rewritten (offsets are `u32`), so it is dropped rather
 ///   than passed through unfiltered — same reasoning as the unparseable case.
 pub fn retain<'a>(src: &'a [u8], policy: &ExifPolicy) -> Option<Cow<'a, [u8]>> {
+    retain_reconciled(src, policy, None)
+}
+
+/// [`retain`], but in the **same parse** also reconciles the embedded IFD0
+/// orientation tag to `want` (when `Some`).
+///
+/// This is what [`Metadata::filtered`](crate::Metadata::filtered) uses. Folding
+/// the orientation reconcile in here collapses what was up to three
+/// `Exif::parse` calls + two full-blob copies (filter, then a separate
+/// parse-to-check + parse-and-rewrite) into **one parse and at most one
+/// serialize**, with the same output:
+///
+/// - keep-everything + no orientation change → [`Cow::Borrowed`] (zero-copy);
+/// - keep-everything + orientation change → byte-exact in-place tag rewrite
+///   (or `Cow::Borrowed` if the tag already matches / is absent);
+/// - partial policy → prune, set the tag on the parsed tree, serialize once.
+///
+/// `want = None` reproduces [`retain`] exactly. Fail-safe and oversize behavior
+/// match [`retain`].
+pub(crate) fn retain_reconciled<'a>(
+    src: &'a [u8],
+    policy: &ExifPolicy,
+    want: Option<Orientation>,
+) -> Option<Cow<'a, [u8]>> {
     if policy.discards_everything() {
         return None;
     }
-    if policy.keeps_everything() {
+    let keeps_all = policy.keeps_everything();
+    // Keep-everything with no orientation change: zero-copy passthrough, no parse.
+    if keeps_all && want.is_none() {
         return Some(Cow::Borrowed(src));
     }
-    // A valid TIFF is ≤ 4 GiB (offsets are `u32`); a larger blob can't be
-    // rewritten without risking offset truncation. We've already returned for
-    // keep-everything above, so reaching here means a stripping policy — fail
-    // SAFE (drop) rather than pass the original through unfiltered, which would
-    // leak exactly the GPS/camera data the policy asked to remove. (Matches the
-    // unparseable-input fail-safe below; a >4 GiB EXIF blob is itself anomalous.)
+    // A valid TIFF is ≤ 4 GiB (offsets are `u32`); a larger blob can't be safely
+    // rewritten. Keep-everything passes through unchanged (skipping the orientation
+    // fix rather than doing a multi-GiB copy); a stripping policy fails safe.
     if src.len() > u32::MAX as usize {
-        return None;
+        return if keeps_all {
+            Some(Cow::Borrowed(src))
+        } else {
+            None
+        };
     }
-    match Exif::parse(src) {
-        Some(exif) => {
-            let pruned = exif.filtered(policy);
-            if pruned.ifd0.is_empty()
-                && pruned.exif_ifd.is_none()
-                && pruned.gps_ifd.is_none()
-                && pruned.ifd1.is_none()
-            {
-                None
-            } else {
-                Some(Cow::Owned(pruned.to_bytes()))
-            }
+    let Some(exif) = Exif::parse(src) else {
+        // Unparseable: keep-everything passes through (can't verify, none asked);
+        // a stripping policy fails safe (drop) — orientation lives on `Metadata`.
+        return if keeps_all {
+            Some(Cow::Borrowed(src))
+        } else {
+            None
+        };
+    };
+
+    if keeps_all {
+        // Nothing pruned — only maybe rewrite the orientation tag in place
+        // (byte-exact except the value), reusing the parse we already have.
+        match want {
+            Some(o) if exif.orientation() != Some(o) => match set_orientation_with(src, &exif, o) {
+                Some(v) => Some(Cow::Owned(v)),
+                None => Some(Cow::Borrowed(src)), // tag-less / non-integer → unchanged
+            },
+            _ => Some(Cow::Borrowed(src)), // already matches, or absent → unchanged
         }
-        // Unparseable EXIF under a stripping policy: we can't verify the strip,
-        // so fail safe and drop it (orientation survives on `Metadata`).
-        None => None,
+    } else {
+        // Pruning rewrite: filter, set the tag on the tree, serialize once.
+        let mut pruned = exif.filtered(policy);
+        if let Some(o) = want {
+            pruned.set_orientation_tag(o);
+        }
+        if pruned.ifd0.is_empty()
+            && pruned.exif_ifd.is_none()
+            && pruned.gps_ifd.is_none()
+            && pruned.ifd1.is_none()
+        {
+            None
+        } else {
+            Some(Cow::Owned(pruned.to_bytes()))
+        }
     }
 }
 
@@ -1669,6 +1746,44 @@ mod tests {
             Some(Orientation::Rotate90),
             "real metadata still round-trips"
         );
+    }
+
+    /// `retain_reconciled` prunes AND reconciles orientation in one pass, with the
+    /// same output the old retain-then-reparse-twice path produced.
+    #[test]
+    fn retain_reconciled_reconciles_in_one_pass() {
+        let ori = entry_inline(TAG_ORIENTATION, TIFF_SHORT, 1, [6, 0, 0, 0]); // Rotate90
+        let cr = entry_inline(TAG_COPYRIGHT, TIFF_ASCII, 3, [b'M', b'e', 0, 0]);
+        let src = le_ifd0(&[ori, cr], 0, &[]);
+
+        // Prune (drop gps → rewrite) + reconcile the tag to the field (baked upright).
+        let policy = ExifPolicy::KEEP_ALL.with_gps(Retention::Discard);
+        let out = retain_reconciled(&src, &policy, Some(Orientation::Identity)).expect("some");
+        let x = Exif::parse(&out).unwrap();
+        assert_eq!(
+            x.orientation(),
+            Some(Orientation::Identity),
+            "tag reconciled"
+        );
+        assert_eq!(x.copyright().unwrap(), "Me", "rights preserved");
+
+        // Keep-everything + tag already matches → zero-copy borrow (no rewrite).
+        assert!(matches!(
+            retain_reconciled(&src, &ExifPolicy::KEEP_ALL, Some(Orientation::Rotate90)),
+            Some(Cow::Borrowed(_))
+        ));
+        // Keep-everything + mismatch → in-place owned rewrite.
+        let fixed =
+            retain_reconciled(&src, &ExifPolicy::KEEP_ALL, Some(Orientation::Rotate180)).unwrap();
+        assert_eq!(
+            Exif::parse(&fixed).unwrap().orientation(),
+            Some(Orientation::Rotate180)
+        );
+        // want = None reproduces `retain` (keep-everything → borrow).
+        assert!(matches!(
+            retain_reconciled(&src, &ExifPolicy::KEEP_ALL, None),
+            Some(Cow::Borrowed(_))
+        ));
     }
 
     /// Encoding: a non-ASCII (Latin-1) copyright is exposed raw via

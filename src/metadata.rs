@@ -305,31 +305,20 @@ impl Metadata {
             out.xmp = self.xmp.clone();
         }
 
-        // EXIF — pruned by category; `Arc` clone when nothing is dropped.
-        out.exif = self
-            .exif
-            .as_ref()
-            .and_then(|src| match crate::exif::retain(src, &f.exif)? {
+        // EXIF — pruned by category AND reconciled to the authoritative
+        // `out.orientation` field in a *single* parse (see
+        // `exif::retain_reconciled`). Reconciliation rewrites the embedded
+        // orientation tag to match the field: a decoder that bakes orientation
+        // upright sets the field to Identity while the source blob still carries
+        // the original tag (e.g. Rotate90); left alone, a consumer re-applying the
+        // tag would rotate twice. `Arc` clone (zero-copy) when nothing is pruned
+        // and the tag already matches.
+        out.exif = self.exif.as_ref().and_then(|src| {
+            match crate::exif::retain_reconciled(src, &f.exif, Some(out.orientation))? {
                 alloc::borrow::Cow::Borrowed(_) => Some(src.clone()),
                 alloc::borrow::Cow::Owned(v) => Some(Arc::from(v)),
-            });
-
-        // Reconcile the embedded EXIF orientation tag with the authoritative
-        // `out.orientation` field. A decoder that bakes orientation upright sets
-        // the field to Identity while the source blob still carries the original
-        // tag (e.g. Rotate90); left alone, a consumer that re-applies the EXIF tag
-        // would rotate twice. Rewriting the tag to match closes that. Only fires
-        // on a mismatch, so the matched/common case keeps the zero-copy `Arc`
-        // clone above; absent or tag-less blobs are left untouched.
-        let want = out.orientation;
-        let reconciled = out
-            .exif
-            .as_deref()
-            .filter(|e| parse_exif_orientation(e) != Some(want))
-            .and_then(|e| crate::helpers::set_exif_orientation(e, want));
-        if let Some(v) = reconciled {
-            out.exif = Some(Arc::from(v));
-        }
+            }
+        });
         out
     }
 }
