@@ -27,7 +27,7 @@ use crate::metadata::IccRetention;
 /// - [`Compatibility`](ColorEmitPolicy::Compatibility) — always embed an ICC; add CICP where reliable.
 /// - [`Balanced`](ColorEmitPolicy::Balanced) (**default**) — emit CICP where the format has a
 ///   standardized CICP carrier, drop a redundant ICC only where CICP is safe as the sole carrier
-///   (JXL today) or the ICC is plain sRGB.
+///   (JXL/AVIF/HEIC today) or the ICC is plain sRGB.
 /// - [`Compact`](ColorEmitPolicy::Compact) — smallest: prefer CICP wherever the format carries it, drop the ICC.
 /// - [`Verbatim`](ColorEmitPolicy::Verbatim) — carry the source's signals unchanged.
 /// - [`Custom`](ColorEmitPolicy::Custom) — explicit [`ColorEmitFields`] for power users.
@@ -70,7 +70,7 @@ pub enum ColorEmitPolicy {
     /// **Default.** Emit CICP where it is the format's authority and drop a
     /// redundant ICC only where CICP is safe as the *sole* carrier
     /// ([`cicp_safe_sole_carrier`](EncodeCapabilities::cicp_safe_sole_carrier) —
-    /// JXL today) or the ICC is a plain sRGB profile. Otherwise keep the ICC.
+    /// JXL/AVIF/HEIC today) or the ICC is a plain sRGB profile. Otherwise keep the ICC.
     #[default]
     Balanced,
     /// Smallest color overhead: prefer CICP wherever the format can carry it at
@@ -320,11 +320,13 @@ mod tests {
             .with_cicp_safe_sole_carrier(true)
     }
     fn caps_avif() -> EncodeCapabilities {
+        // AVIF nclx is spec-mandated + reader-authoritative (MIAF/HEIF) → sole-safe,
+        // like JXL. (HEIC has identical caps.) PNG (`caps_png`) stays NOT sole-safe.
         EncodeCapabilities::new()
             .with_icc(true)
             .with_cicp(true)
             .with_cicp_is_valid_carrier(true)
-            .with_cicp_safe_sole_carrier(false)
+            .with_cicp_safe_sole_carrier(true)
     }
     fn caps_jpeg() -> EncodeCapabilities {
         // No CICP carrier at all.
@@ -360,14 +362,15 @@ mod tests {
     }
 
     #[test]
-    fn avif_balanced_keeps_nonsrgb_icc_alongside_cicp() {
-        // AVIF (not sole-safe): a non-sRGB ICC is kept alongside CICP. (The
-        // redundant-sRGB drop needs a corpus-recognized profile and is covered
-        // by the conformance suite, which has a real sRGB profile via `cms`.)
+    fn avif_balanced_drops_redundant_icc_now_sole_safe() {
+        // AVIF nclx is sole-safe (spec-mandated + reader-authoritative): a non-sRGB
+        // ICC whose color the CICP represents is dropped under Balanced, like JXL.
+        // (The not-sole-safe "keep the ICC alongside" path is covered by
+        // `png_emits_cicp_keeps_icc_under_balanced`.)
         let p3 = src_cicp(Cicp::DISPLAY_P3).with_icc_profile(alloc::vec![0u8; 132]);
         let plan = resolve_color_emit(&p3, &caps_avif(), ColorEmitPolicy::Balanced);
         assert_eq!(plan.cicp, Some(Cicp::DISPLAY_P3));
-        assert_eq!(plan.icc, IccDisposition::KeepSource);
+        assert_eq!(plan.icc, IccDisposition::Drop);
     }
 
     #[test]
@@ -467,13 +470,14 @@ mod tests {
     }
 
     #[test]
-    fn avif_balanced_synthesizes_companion_for_cicp_only() {
-        // Same for AVIF nclx (also not sole-safe) — the rule keys on `sole_safe`,
-        // not on the specific format.
+    fn avif_balanced_cicp_only_needs_no_companion_now_sole_safe() {
+        // AVIF nclx is sole-safe, so a CICP-only source needs no companion ICC —
+        // like JXL. (The not-sole-safe companion-synth path is covered by
+        // `png_balanced_synthesizes_icc_companion_for_cicp_only`.)
         let p3 = src_cicp(Cicp::DISPLAY_P3);
         let plan = resolve_color_emit(&p3, &caps_avif(), ColorEmitPolicy::Balanced);
         assert_eq!(plan.cicp, Some(Cicp::DISPLAY_P3));
-        assert_eq!(plan.icc, IccDisposition::SynthesizeFrom(Cicp::DISPLAY_P3));
+        assert_eq!(plan.icc, IccDisposition::Drop);
     }
 
     #[test]
