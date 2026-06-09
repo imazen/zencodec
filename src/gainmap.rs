@@ -488,6 +488,60 @@ impl GainMapPresence {
     }
 }
 
+/// How a decoder should render a gain-map (HDR) image — the caller's intent for
+/// what `decode()` produces.
+///
+/// A gain-map file (AVIF `tmap`, JXL `jhgm`, JPEG UltraHDR) carries an SDR base
+/// image plus a gain map that reconstructs HDR on capable displays. This selects
+/// which rendition the decode output holds. Set it on the decode job via
+/// [`DecodeJob::with_gain_map_render`](crate::decode::DecodeJob::with_gain_map_render).
+///
+/// zencodec carries **no** HDR math: [`Components`](Self::Components) (extract +
+/// surface, no compositing) is the cheap codec-only path that a transcode wants,
+/// and [`ReconstructHdr`](Self::ReconstructHdr) (apply the gain map → HDR) is honored
+/// only by codecs that advertise
+/// [`DecodeCapabilities::reconstructs_hdr`](crate::decode::DecodeCapabilities::reconstructs_hdr).
+/// When a codec can't reconstruct, the apply math lives one layer up — apply the
+/// [`DecodedGainMap`] from `Components` via `ultrahdr-core`.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[non_exhaustive]
+pub enum GainMapRender {
+    /// Decode only the SDR base image; ignore the gain map. **Default** — an SDR
+    /// consumer gets a normal SDR image (and an SDR-sized buffer), no surprise HDR.
+    #[default]
+    BaseOnly,
+    /// Reconstruct HDR by applying the gain map to the base, rendered for the
+    /// display's HDR headroom. Output is an HDR pixel format (negotiated through the
+    /// normal ranked-descriptor preference). Honored only when the decoder's
+    /// [`reconstructs_hdr`](crate::decode::DecodeCapabilities::reconstructs_hdr)
+    /// capability is set; a decoder without it surfaces [`Components`](Self::Components)
+    /// or reports [`UnsupportedOperation`](crate::UnsupportedOperation) — never
+    /// silently SDR-labeled-as-HDR.
+    ///
+    /// **Envelope obligation.** The reconstructed [`PixelBuffer`](zenpixels::PixelBuffer)
+    /// carries the HDR *signal* (its descriptor's transfer/primaries/range), but **not**
+    /// the luminance *envelope*. A codec honoring this **must** populate the envelope on
+    /// the output [`ImageInfo`](crate::ImageInfo)'s [`SourceColor`](crate::decode::SourceColor) —
+    /// [`mastering_display`](crate::MasteringDisplay) (from the gain map's alternate-image
+    /// capacity) and [`content_light_level`](crate::ContentLightLevel) — so a downstream
+    /// full native-HDR encode is complete. MaxCLL/MaxFALL are *measured*, so the encoder
+    /// recomputes them from the actual reconstructed pixels; what the decoder carries is
+    /// the derived peak and the (invariant) mastering display. Without this the envelope
+    /// is silently lost on a gain-map → native-HDR transcode.
+    ReconstructHdr {
+        /// Target display HDR headroom (linear multiple of SDR white). `None` = the
+        /// gain map's encoded maximum (full reconstruction). Transcoding *to native HDR*
+        /// uses `None`; `Some(h)` renders for a specific display or HDR class. (Transcoding
+        /// to *another gain map* doesn't reconstruct at all — that's [`Components`](Self::Components).)
+        target_headroom: Option<f32>,
+    },
+    /// Decode the SDR base **and** surface the gain map (a [`DecodedGainMap`] in the
+    /// decode output's extras) without compositing — for transcoding or custom HDR
+    /// processing. Equivalent to the older
+    /// [`with_extract_gain_map(true)`](crate::decode::DecodeJob::with_extract_gain_map).
+    Components,
+}
+
 // =========================================================================
 // Gain map source (raw, pre-decode)
 // =========================================================================
@@ -2751,5 +2805,26 @@ mod tests {
         assert_eq!(Iso21496Format::JxlJhgm as u8, 2);
         assert_eq!(Iso21496Format::JpegApp2BodyWithUrn as u8, 3);
         assert_ne!(Iso21496Format::JpegApp2, Iso21496Format::JxlJhgm);
+    }
+
+    #[test]
+    fn gain_map_render_default_is_base_only() {
+        // The pit-of-success default: SDR base, no surprise HDR reconstruction.
+        assert_eq!(GainMapRender::default(), GainMapRender::BaseOnly);
+    }
+
+    #[test]
+    fn gain_map_render_reconstruct_carries_headroom() {
+        let full = GainMapRender::ReconstructHdr {
+            target_headroom: None,
+        };
+        let to_display = GainMapRender::ReconstructHdr {
+            target_headroom: Some(4.0),
+        };
+        assert_ne!(full, to_display);
+        assert_ne!(GainMapRender::Components, GainMapRender::BaseOnly);
+        // Copy + Eq so it threads cheaply through job builders.
+        let copied = to_display;
+        assert_eq!(copied, to_display);
     }
 }

@@ -97,6 +97,26 @@ best-effort whole-channel gate, but they are not the retention control — they
 no-op on a codec that doesn't implement `with_policy`. For privacy, use a
 `MetadataPolicy`.
 
+## Gain-map HDR: signal on the buffer, envelope on the info
+
+A `PixelBuffer` is self-describing for the color **signal** — its descriptor
+carries transfer (PQ/HLG/linear), primaries, range, and bit depth, so the samples
+encode the HDR fully (PQ is absolute). It deliberately does **not** carry the
+luminance **envelope** (MaxCLL/MaxFALL, mastering display): the zenpixels color
+structs (`ColorContext`, `ColorOrigin`) are `Eq`, and `MasteringDisplay` is `f32`
+(not `Eq`), so the envelope lives on the non-`Eq` `ImageInfo`/`SourceColor` and
+`Metadata` instead — where it travels *alongside* the buffer, not inside it.
+
+So the contract for `GainMapRender::ReconstructHdr` (decode → native HDR): the
+codec returns the reconstructed buffer **and** populates
+`ImageInfo.source_color.{mastering_display, content_light_level}`. MaxCLL/MaxFALL
+are measured, so they are recomputed from the reconstructed pixels at encode time;
+the decoder carries the derived peak + the invariant mastering display. A full
+native-HDR encode is then `buffer (signal) + SourceColor (envelope)` — the encoder
+reads the envelope off `Metadata`. Skipping this silently drops the envelope on a
+gain-map → native-HDR transcode. (Gain-map → *gain-map* transcode is
+`GainMapRender::Components` and reconstructs nothing — no envelope step.)
+
 ## Verifying a codec: zencodec-testkit
 
 The contract above is only worth anything if codecs actually honor it. The

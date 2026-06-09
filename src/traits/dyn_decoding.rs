@@ -223,6 +223,10 @@ pub trait DynDecodeJob<'a> {
     /// Opt in to supplementary gain map extraction.
     fn set_extract_gain_map(&mut self, _extract: bool) {}
 
+    /// Select how a gain-map (HDR) image is rendered. See
+    /// [`DecodeJob::with_gain_map_render`](crate::decode::DecodeJob::with_gain_map_render).
+    fn set_gain_map_render(&mut self, _render: crate::GainMapRender) {}
+
     /// Access codec-specific extensions for this job.
     ///
     /// Returns a reference to a `'static` extension type stored inside the
@@ -350,6 +354,10 @@ where
 
     fn set_extract_gain_map(&mut self, extract: bool) {
         self.try_apply(|job| job.with_extract_gain_map(extract));
+    }
+
+    fn set_gain_map_render(&mut self, render: crate::GainMapRender) {
+        self.try_apply(|job| job.with_gain_map_render(render));
     }
 
     fn extensions(&self) -> Option<&dyn Any> {

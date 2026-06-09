@@ -524,6 +524,7 @@ pub struct DecodeCapabilities {
     // Format capabilities
     hdr: bool,
     gain_map: bool,
+    reconstructs_hdr: bool,
     native_gray: bool,
     native_16bit: bool,
     native_f32: bool,
@@ -561,6 +562,7 @@ impl DecodeCapabilities {
             streaming: false,
             hdr: false,
             gain_map: false,
+            reconstructs_hdr: false,
             native_gray: false,
             native_16bit: false,
             native_f32: false,
@@ -624,6 +626,17 @@ impl DecodeCapabilities {
     /// Whether the codec supports gain map (HDR/SDR) extraction.
     pub const fn gain_map(&self) -> bool {
         self.gain_map
+    }
+    /// Whether the codec *reconstructs* HDR itself (applies the gain map), as
+    /// opposed to only extracting/surfacing it.
+    ///
+    /// Gates [`GainMapRender::ReconstructHdr`](crate::decode::GainMapRender::ReconstructHdr):
+    /// when `false`, a decoder asked to reconstruct surfaces the gain map as
+    /// [`Components`](crate::decode::GainMapRender::Components) (or reports
+    /// [`UnsupportedOperation`](crate::UnsupportedOperation)) and the apply math is
+    /// done one layer up — zencodec carries no HDR math.
+    pub const fn reconstructs_hdr(&self) -> bool {
+        self.reconstructs_hdr
     }
     /// Whether the codec supports grayscale natively.
     pub const fn native_gray(&self) -> bool {
@@ -758,6 +771,12 @@ impl DecodeCapabilities {
         self.gain_map = v;
         self
     }
+    /// Set whether the codec reconstructs HDR itself (applies the gain map).
+    /// See [`reconstructs_hdr`](Self::reconstructs_hdr).
+    pub const fn with_reconstructs_hdr(mut self, v: bool) -> Self {
+        self.reconstructs_hdr = v;
+        self
+    }
     /// Set whether native grayscale decoding is supported.
     pub const fn with_native_gray(mut self, v: bool) -> Self {
         self.native_gray = v;
@@ -818,6 +837,7 @@ impl fmt::Debug for DecodeCapabilities {
             .field("streaming", &self.streaming)
             .field("hdr", &self.hdr)
             .field("gain_map", &self.gain_map)
+            .field("reconstructs_hdr", &self.reconstructs_hdr)
             .field("native_gray", &self.native_gray)
             .field("native_16bit", &self.native_16bit)
             .field("native_f32", &self.native_f32)
@@ -918,6 +938,25 @@ mod tests {
         assert!(caps.animation());
         assert!(caps.enforces_max_input_bytes());
         assert_eq!(caps.threads_supported_range(), (1, 4));
+    }
+
+    #[test]
+    fn decode_gain_map_reconstruct_flags() {
+        // gain_map (extraction) and reconstructs_hdr (applies the gain map) are
+        // independent and both default false.
+        let base = DecodeCapabilities::new();
+        assert!(!base.gain_map());
+        assert!(!base.reconstructs_hdr());
+        // A codec that only extracts (surfaces Components) but doesn't reconstruct.
+        let extract_only = DecodeCapabilities::new().with_gain_map(true);
+        assert!(extract_only.gain_map());
+        assert!(!extract_only.reconstructs_hdr());
+        // A codec that reconstructs HDR internally.
+        let recon = DecodeCapabilities::new()
+            .with_gain_map(true)
+            .with_reconstructs_hdr(true);
+        assert!(recon.gain_map());
+        assert!(recon.reconstructs_hdr());
     }
 
     #[test]
