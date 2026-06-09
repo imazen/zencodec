@@ -82,7 +82,7 @@ pub use exif::{Exif, ExifPolicy, Retention, TextEncoding};
 pub use extensions::Extensions;
 pub use format::{ImageFormat, ImageFormatDefinition, ImageFormatRegistry};
 pub use gainmap::{
-    GainMapChannel, GainMapDirection, GainMapInfo, GainMapParams, GainMapPresence,
+    GainMapChannel, GainMapDirection, GainMapInfo, GainMapParams, GainMapPresence, GainMapRender,
     ISO_21496_1_PRIMARY_APP2_BODY, ISO_21496_1_URN, Iso21496Format,
 };
 #[allow(deprecated)]
@@ -208,4 +208,7 @@ pub mod decode {
 
     // Shared types re-exported for convenience (commonly needed alongside decode)
     pub use crate::info::{EmbeddedMetadata, SourceColor};
+
+    // Gain-map decode intent + decoded payloads (the math stays in `ultrahdr-core`).
+    pub use crate::gainmap::{DecodedGainMap, GainMapRender};
 }

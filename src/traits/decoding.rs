@@ -177,7 +177,29 @@ pub trait DecodeJob<'a>: Sized {
     /// When true, codecs that support gain maps (AVIF tmap, JXL jhgm,
     /// JPEG UltraHDR) extract and attach gain map data to decode output
     /// extras. Typically set after probing reveals a gain map is present.
+    ///
+    /// This is the 2-way toggle; `with_extract_gain_map(true)` is equivalent to
+    /// [`with_gain_map_render`](Self::with_gain_map_render) with
+    /// [`GainMapRender::Components`](crate::decode::GainMapRender::Components). Prefer
+    /// `with_gain_map_render` when you also want the HDR-reconstruction intent.
     fn with_extract_gain_map(self, _extract: bool) -> Self {
+        self
+    }
+
+    /// Select how a gain-map (HDR) image is rendered — the caller's intent for what
+    /// `decode()` produces (SDR base, surfaced components, or reconstructed HDR).
+    ///
+    /// Default is a no-op (the codec's own default, normally
+    /// [`GainMapRender::BaseOnly`](crate::decode::GainMapRender)). Codecs that
+    /// support gain maps override this; check the codec's
+    /// [`DecodeCapabilities`](crate::decode::DecodeCapabilities) —
+    /// [`gain_map`](crate::decode::DecodeCapabilities::gain_map) for
+    /// `Components`/extraction, and
+    /// [`reconstructs_hdr`](crate::decode::DecodeCapabilities::reconstructs_hdr) for
+    /// [`ReconstructHdr`](crate::decode::GainMapRender::ReconstructHdr). zencodec
+    /// carries no HDR math: a codec that can't reconstruct surfaces `Components` (or
+    /// errors), and the apply happens one layer up (`ultrahdr-core`).
+    fn with_gain_map_render(self, _render: crate::GainMapRender) -> Self {
         self
     }
 
