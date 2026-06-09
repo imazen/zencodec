@@ -6,7 +6,7 @@
 //! `ColorEmitPolicy`; the full per-format design is in `docs/color-emit-model.md`.
 
 use zenpixels::icc;
-use zenpixels::{Cicp, ColorModel};
+use zenpixels::{Cicp, ColorAuthority, ColorModel};
 
 use crate::capabilities::EncodeCapabilities;
 use crate::info::SourceColor;
@@ -211,15 +211,32 @@ pub struct ColorEmitPlan {
     pub icc: IccDisposition,
 }
 
-/// The CICP that describes this source's color as code points, if any:
-/// the explicit CICP, else derived from the ICC (`cicp` tag, then corpus).
+/// The CICP that describes this source's color as code points, if any.
+///
+/// Authority-aware (per [`ColorAuthority`]): when the **ICC** is authoritative and
+/// present, the emittable CICP must *describe that ICC* — derived from its `cicp`
+/// tag, then the corpus — **not** a co-existing CICP, which the spec treats as a
+/// backwards-compat round-trip companion that "should NOT override the TRC." If the
+/// ICC isn't identifiable as code points, this returns `None`, so the resolver keeps
+/// the authoritative ICC rather than dropping it for a CICP that doesn't represent
+/// it (precision loss / mis-tag on a sole-safe carrier). When CICP is authoritative
+/// (or ICC is absent), the explicit CICP wins, then the ICC-derived fallback.
 fn representable_cicp(src: &SourceColor) -> Option<Cicp> {
+    let from_icc = |icc_bytes: &[u8]| -> Option<Cicp> {
+        icc::extract_cicp(icc_bytes)
+            .or_else(|| icc::identify_common(icc_bytes).and_then(|id| id.to_cicp()))
+    };
+    if src.color_authority == ColorAuthority::Icc
+        && let Some(icc_bytes) = src.icc_profile.as_deref()
+    {
+        return from_icc(icc_bytes);
+    }
+    // CICP authoritative (or ICC declared authoritative but absent — the lenient
+    // fallback the contract allows): explicit CICP first, then the ICC-derived one.
     if let Some(c) = src.cicp {
         return Some(c);
     }
-    let icc_bytes = src.icc_profile.as_ref()?;
-    icc::extract_cicp(icc_bytes)
-        .or_else(|| icc::identify_common(icc_bytes).and_then(|id| id.to_cicp()))
+    from_icc(src.icc_profile.as_deref()?)
 }
 
 /// Reconcile a source's color description against a target's capabilities under
@@ -296,11 +313,16 @@ pub fn resolve_color_emit(
         _ => drop_by_rule,
     };
 
-    // sRGB is the universally-assumed default: there is no sRGB ICC to synthesize
-    // (`zenpixels_convert::icc_profiles::synthesize_icc_for_cicp` returns
-    // `NotNeeded` for BT.709/sRGB), so a `SynthesizeFrom(sRGB)` directive would
-    // lower to nothing. Don't emit it — drop instead.
-    let synth_worthwhile = cicp_represents && repr_cicp != Some(Cicp::SRGB);
+    // The sRGB/BT.709 default has no ICC to synthesize: the lowering
+    // (`zenpixels_convert::icc_profiles::synthesize_icc_for_cicp`) returns
+    // `NotNeeded` for *any* CICP with primaries ∈ {BT.709(1), unspecified(2)} and
+    // transfer ∈ {BT.709(1), unspecified(2), sRGB(13)} — not just the exact
+    // `Cicp::SRGB`. Mirror that predicate here so we never emit a `SynthesizeFrom`
+    // directive that would silently lower to nothing.
+    let is_assumed_default = |c: &Cicp| {
+        matches!(c.color_primaries, 1 | 2) && matches!(c.transfer_characteristics, 1 | 2 | 13)
+    };
+    let synth_worthwhile = repr_cicp.is_some_and(|c| !is_assumed_default(&c));
 
     let icc = if src_has_icc {
         if drop_icc {
@@ -376,15 +398,41 @@ mod tests {
 
     #[test]
     fn jxl_balanced_strips_representable_icc() {
-        // JXL (sole-safe): CICP present + an ICC whose color CICP represents →
-        // emit CICP, drop the ICC (matches libjxl's want_icc=false default).
+        // JXL (sole-safe) with CICP declared authoritative + a redundant ICC
+        // companion → emit CICP, drop the ICC (matches libjxl's want_icc=false
+        // default). Dropping is safe because CICP is the *declared* truth here.
         let src = SourceColor::default()
             .with_cicp(Cicp::SRGB)
             .with_icc_profile(alloc::vec![0u8; 132])
+            .with_color_authority(ColorAuthority::Cicp)
             .with_channel_count(3);
         let plan = resolve_color_emit(&src, &caps_jxl(), ColorEmitPolicy::Balanced);
         assert_eq!(plan.cicp, Some(Cicp::SRGB));
         assert_eq!(plan.icc, IccDisposition::Drop);
+    }
+
+    #[test]
+    fn authoritative_icc_not_dropped_for_roundtrip_cicp() {
+        // Bug guard (review HIGH #2): an authoritative ICC (the default authority)
+        // co-existing with a CICP the spec treats as a round-trip companion must
+        // NOT be dropped on a sole-safe target in favor of that CICP — doing so
+        // mis-tags / precision-loses when the CICP doesn't represent the ICC. Here
+        // the ICC isn't identifiable as code points, so no CICP can stand in for it.
+        let src = SourceColor::default()
+            .with_cicp(Cicp::SRGB)
+            .with_icc_profile(alloc::vec![0u8; 132]) // present, unidentifiable, authoritative
+            .with_color_authority(ColorAuthority::Icc)
+            .with_channel_count(3);
+        let plan = resolve_color_emit(&src, &caps_jxl(), ColorEmitPolicy::Balanced);
+        assert_eq!(
+            plan.icc,
+            IccDisposition::KeepSource,
+            "authoritative ICC must survive"
+        );
+        assert_eq!(
+            plan.cicp, None,
+            "no CICP can represent the unidentifiable authoritative ICC"
+        );
     }
 
     #[test]

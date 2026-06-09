@@ -2823,7 +2823,8 @@ mod tests {
         };
         assert_ne!(full, to_display);
         assert_ne!(GainMapRender::Components, GainMapRender::BaseOnly);
-        // Copy + Eq so it threads cheaply through job builders.
+        // Copy + PartialEq (holds an f32 headroom, so not Eq) — threads cheaply
+        // through job builders.
         let copied = to_display;
         assert_eq!(copied, to_display);
     }

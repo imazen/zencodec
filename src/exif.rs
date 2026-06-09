@@ -473,6 +473,12 @@ impl<'a> Exif<'a> {
         })
     }
 
+    /// The byte order (endianness) of the parsed TIFF/EXIF stream. Preserved
+    /// across [`to_bytes`](Self::to_bytes).
+    pub fn byte_order(&self) -> ByteOrder {
+        self.order
+    }
+
     /// The EXIF Orientation tag (0x0112), if present and valid.
     pub fn orientation(&self) -> Option<Orientation> {
         let e = self.ifd0.iter().find(|e| e.tag == TAG_ORIENTATION)?;
@@ -662,10 +668,46 @@ impl<'a> Exif<'a> {
         };
     }
 
+    /// Projected serialized length — exactly `self.to_bytes().len()`, computed
+    /// without allocating the output.
+    ///
+    /// Lets a rewrite be size-checked *before* it allocates, so a malformed blob
+    /// whose out-of-line values alias **overlapping** source windows (which the
+    /// per-IFD exact-alias dedup in [`write_ifd`](Self::write_ifd) does not merge)
+    /// can be rejected instead of amplifying the output ~1000× / overflowing the
+    /// `u32` offsets. Must stay in lockstep with [`to_bytes`](Self::to_bytes)
+    /// (guarded by `serialized_len_equals_to_bytes_len`).
+    pub(crate) fn serialized_len(&self) -> usize {
+        let ifd0_nptr = self.exif_ifd.is_some() as usize + self.gps_ifd.is_some() as usize;
+        let ifd1_nptr = if self.thumbnail.is_some() { 2 } else { 0 };
+        let block = |entries: &[Entry<'a>], nptr: usize| -> usize {
+            2 + 12 * (entries.len() + nptr) + 4 + ext_size(entries)
+        };
+        let mut total = if self.had_prefix {
+            EXIF_PREFIX.len()
+        } else {
+            0
+        };
+        total += TIFF_HEADER_SIZE + block(&self.ifd0, ifd0_nptr);
+        if let Some(d) = &self.exif_ifd {
+            total += block(d, 0);
+        }
+        if let Some(d) = &self.gps_ifd {
+            total += block(d, 0);
+        }
+        if let Some(d) = &self.ifd1 {
+            total += block(d, ifd1_nptr);
+        }
+        if let Some(t) = self.thumbnail {
+            total += t.len();
+        }
+        total
+    }
+
     /// Serialize to a valid TIFF, recomputing every offset. Preserves the
     /// source byte order and `Exif\0\0` framing.
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut out = Vec::new();
+        let mut out = Vec::with_capacity(self.serialized_len());
         if self.had_prefix {
             out.extend_from_slice(EXIF_PREFIX);
         }
@@ -1244,6 +1286,21 @@ pub(crate) fn retain_reconciled<'a>(
         {
             None
         } else {
+            // Amplification / overflow guard. A faithful prune only *removes*
+            // data, so its canonical re-serialization never exceeds the source
+            // (a little slack covers per-value alignment padding). A malformed
+            // blob that points many entries at overlapping source windows — which
+            // the per-IFD exact-alias dedup does not coalesce — would instead blow
+            // the output up ~1000× and push offsets past `u32`. Reject it (fail
+            // safe: drop the EXIF) rather than OOM-aborting on an infallible `Vec`.
+            let cap = src
+                .len()
+                .saturating_mul(2)
+                .saturating_add(1024)
+                .min(u32::MAX as usize);
+            if pruned.serialized_len() > cap {
+                return None;
+            }
             Some(Cow::Owned(pruned.to_bytes()))
         }
     }
@@ -1705,6 +1762,71 @@ mod tests {
             src.len()
         );
         assert!(Exif::parse(&out).is_some(), "rewritten output re-parses");
+    }
+
+    /// Sibling to the exact-alias test, for the case the per-IFD `(ptr,len)` dedup
+    /// **cannot** catch: many entries whose out-of-line values are *overlapping,
+    /// byte-shifted* windows of one region (distinct pointers). Re-serializing them
+    /// faithfully would balloon the output ~13× and could push offsets past `u32`,
+    /// so the rewrite path must reject the blob (fail-safe → `None`) rather than
+    /// amplify on an infallible `Vec`.
+    #[test]
+    fn overlapping_window_values_rejected_not_amplified() {
+        let k: u32 = 16;
+        let win: u32 = 1024; // BYTE count → 1024-byte out-of-line value
+        let vstart: u32 = 8 + 2 + 12 * k + 4; // where `le_ifd0` places the tail
+        let entries: Vec<[u8; 12]> = (0..k)
+            .map(|i| entry_offset(0xC000 + i as u16, TIFF_BYTE, win, vstart + i))
+            .collect();
+        let tail = vec![0xABu8; (k - 1 + win + 16) as usize];
+        let src = le_ifd0(&entries, 0, &tail);
+
+        let x = Exif::parse(&src).expect("malicious-but-parseable blob");
+        assert_eq!(x.ifd0.len(), k as usize, "all overlapping entries parsed");
+        // Distinct windows can't be deduped — `serialized_len` sees the blow-up
+        // without allocating the (multi-MB in the wild) output.
+        assert!(
+            x.serialized_len() > src.len() * 3,
+            "expected amplification: serialized_len {} vs src {}",
+            x.serialized_len(),
+            src.len()
+        );
+        // A stripping policy forces the rewrite; the guard must fail safe.
+        let policy = ExifPolicy::KEEP_ALL.with_gps(Retention::Discard);
+        assert_eq!(
+            retain(&src, &policy),
+            None,
+            "amplifying blob must fail safe"
+        );
+    }
+
+    /// The amplification guard relies on `serialized_len` being an exact preview of
+    /// `to_bytes().len()` — verify they stay in lockstep across byte orders, the
+    /// `Exif\0\0` prefix, and a pruned subset.
+    #[test]
+    fn serialized_len_equals_to_bytes_len() {
+        for prefix in [false, true] {
+            let bytes = sample(ByteOrder::Little, prefix);
+            let x = Exif::parse(&bytes).expect("parses");
+            assert_eq!(
+                x.serialized_len(),
+                x.to_bytes().len(),
+                "full tree (prefix={prefix})"
+            );
+            let pruned = x.filtered(&ExifPolicy::KEEP_ALL.with_gps(Retention::Discard));
+            assert_eq!(
+                pruned.serialized_len(),
+                pruned.to_bytes().len(),
+                "pruned (prefix={prefix})"
+            );
+        }
+        let be_bytes = sample(ByteOrder::Big, false);
+        let be = Exif::parse(&be_bytes).expect("parses");
+        assert_eq!(
+            be.serialized_len(),
+            be.to_bytes().len(),
+            "big-endian full tree"
+        );
     }
 
     /// #3: a structural sub-IFD pointer too short to hold a 4-byte offset is
