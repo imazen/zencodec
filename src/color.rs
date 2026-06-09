@@ -286,8 +286,15 @@ pub fn resolve_color_emit(
         // No source ICC and CICP isn't carrying the color (target is ICC-only):
         // synthesize an ICC so the (non-default) color isn't lost.
         IccDisposition::SynthesizeFrom(repr_cicp.expect("synth_worthwhile"))
-    } else if matches!(policy, ColorEmitPolicy::Compatibility) && synth_worthwhile {
-        // Compatibility wants an ICC present alongside CICP (non-sRGB only).
+    } else if synth_worthwhile
+        && (matches!(policy, ColorEmitPolicy::Compatibility)
+            || (matches!(policy, ColorEmitPolicy::Balanced) && !sole_safe))
+    {
+        // Compatibility always wants an ICC alongside CICP; Balanced synthesizes a
+        // companion when the CICP carrier isn't sole-safe (PNG cICP, AVIF/HEIC nclx)
+        // so the color survives decoders that ignore the carrier — symmetric with
+        // keeping a source ICC there. Compact accepts CICP-only (smallest); Verbatim
+        // derives nothing. (non-sRGB only — see `synth_worthwhile`.)
         IccDisposition::SynthesizeFrom(repr_cicp.expect("synth_worthwhile"))
     } else {
         IccDisposition::Drop
@@ -447,5 +454,53 @@ mod tests {
         let plan = resolve_color_emit(&p3, &caps_avif(), policy);
         assert_eq!(plan.cicp, None); // CicpEmission::Never
         assert_eq!(plan.icc, IccDisposition::KeepSource); // IccRetention::Keep
+    }
+
+    #[test]
+    fn png_balanced_synthesizes_icc_companion_for_cicp_only() {
+        // CICP-only (no source ICC) → PNG under Balanced: cICP is a valid but NOT
+        // sole-safe carrier, so synthesize a companion ICC rather than ship cICP alone.
+        let p3 = src_cicp(Cicp::DISPLAY_P3);
+        let plan = resolve_color_emit(&p3, &caps_png(), ColorEmitPolicy::Balanced);
+        assert_eq!(plan.cicp, Some(Cicp::DISPLAY_P3));
+        assert_eq!(plan.icc, IccDisposition::SynthesizeFrom(Cicp::DISPLAY_P3));
+    }
+
+    #[test]
+    fn avif_balanced_synthesizes_companion_for_cicp_only() {
+        // Same for AVIF nclx (also not sole-safe) — the rule keys on `sole_safe`,
+        // not on the specific format.
+        let p3 = src_cicp(Cicp::DISPLAY_P3);
+        let plan = resolve_color_emit(&p3, &caps_avif(), ColorEmitPolicy::Balanced);
+        assert_eq!(plan.cicp, Some(Cicp::DISPLAY_P3));
+        assert_eq!(plan.icc, IccDisposition::SynthesizeFrom(Cicp::DISPLAY_P3));
+    }
+
+    #[test]
+    fn png_compact_stays_cicp_only_for_cicp_only() {
+        // Compact is "smallest": it accepts cICP-only even on a non-sole-safe carrier,
+        // so it must NOT synthesize a companion (guards against over-synth).
+        let p3 = src_cicp(Cicp::DISPLAY_P3);
+        let plan = resolve_color_emit(&p3, &caps_png(), ColorEmitPolicy::Compact);
+        assert_eq!(plan.cicp, Some(Cicp::DISPLAY_P3));
+        assert_eq!(plan.icc, IccDisposition::Drop);
+    }
+
+    #[test]
+    fn srgb_cicp_only_png_balanced_does_not_synthesize() {
+        // sRGB is the assumed default and the canned table has no sRGB ICC, so even on
+        // a non-sole-safe carrier Balanced must not synthesize a redundant companion.
+        let srgb = src_cicp(Cicp::SRGB);
+        let plan = resolve_color_emit(&srgb, &caps_png(), ColorEmitPolicy::Balanced);
+        assert_eq!(plan.icc, IccDisposition::Drop);
+    }
+
+    #[test]
+    fn jxl_balanced_cicp_only_needs_no_companion() {
+        // JXL enum color IS sole-safe → a CICP-only source needs no companion ICC.
+        let p3 = src_cicp(Cicp::DISPLAY_P3);
+        let plan = resolve_color_emit(&p3, &caps_jxl(), ColorEmitPolicy::Balanced);
+        assert_eq!(plan.cicp, Some(Cicp::DISPLAY_P3));
+        assert_eq!(plan.icc, IccDisposition::Drop);
     }
 }
