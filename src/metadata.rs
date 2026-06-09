@@ -542,7 +542,7 @@ impl MetadataPolicy {
 /// `info.orientation` to the intended display orientation (the EXIF tag value if
 /// it carries the rotation, or `Identity` if it baked the pixels upright). If a
 /// decoder leaves `info.orientation` at the default `Identity` while
-/// `embedded_metadata.exif` still carries a non-identity tag, [`filtered`] will
+/// `embedded_metadata.exif` still carries a non-identity tag, [`filtered`](Metadata::filtered) will
 /// reconcile the blob's tag down to `Identity` — silently discarding the rotation.
 /// (The [`with_exif`](Metadata::with_exif) builder, by contrast, syncs the field
 /// from the tag; `From` trusts the decoder.)
