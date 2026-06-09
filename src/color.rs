@@ -52,7 +52,7 @@ use crate::metadata::IccRetention;
 /// - [`IccDisposition::KeepSource`] → re-embed the source ICC bytes
 ///   (`OutputProfile::SameAsOrigin`).
 /// - [`IccDisposition::SynthesizeFrom`]`(cicp)` → lower through
-///   `zenpixels_convert::icc_profiles::icc_profile_for_cicp(cicp)`, which is
+///   `zenpixels_convert::icc_profiles::synthesize_icc_for_cicp(cicp)`, which is
 ///   **transfer-aware** (it won't hand a BT.2020-PQ source the SDR-TRC Rec.2020
 ///   profile) and returns a typed `SynthesizedIcc`: embed the bytes on `Profile`;
 ///   on `NotNeeded`/`NeedsCms`/`CmsUnsupported` embed no ICC and let
@@ -174,7 +174,7 @@ pub enum IccDisposition {
     /// this `no_std`, CMS-less crate only states the intent.
     ///
     /// **Recommended lowering:** `zenpixels_convert::icc_profiles`'s
-    /// `icc_profile_for_cicp(cicp)`, which is transfer-aware and returns a typed
+    /// `synthesize_icc_for_cicp(cicp)`, which is transfer-aware and returns a typed
     /// `SynthesizedIcc`:
     /// - `Profile(bytes)` — embed them (bundled `&'static`, or `cms-moxcms`-generated).
     /// - `NotNeeded` — the CICP is the sRGB/BT.709 default; embed nothing. (The
@@ -296,9 +296,9 @@ pub fn resolve_color_emit(
         _ => drop_by_rule,
     };
 
-    // sRGB is the universally-assumed default: the canned-profile table has no
-    // sRGB ICC to synthesize (`zenpixels_convert::icc_profile_for_primaries`
-    // returns `None` for BT.709), so a `SynthesizeFrom(sRGB)` directive would
+    // sRGB is the universally-assumed default: there is no sRGB ICC to synthesize
+    // (`zenpixels_convert::icc_profiles::synthesize_icc_for_cicp` returns
+    // `NotNeeded` for BT.709/sRGB), so a `SynthesizeFrom(sRGB)` directive would
     // lower to nothing. Don't emit it — drop instead.
     let synth_worthwhile = cicp_represents && repr_cicp != Some(Cicp::SRGB);
 

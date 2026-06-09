@@ -376,19 +376,19 @@ zentiff 68 · zengif 19+15 · zenbitmaps 202. Logs in `/tmp/<codec>-integ-test.l
 
 ---
 
-## 2026-06-09 — transfer-aware ICC synthesis: `icc_profile_for_cicp` switch
+## 2026-06-09 — transfer-aware ICC synthesis: `synthesize_icc_for_cicp` switch
 
 Every codec's `SynthesizeFrom(cicp)` lowering used
 `zenpixels_convert::icc_profiles::icc_profile_for_primaries(cicp.color_primaries_enum())`
 — **primaries-only**, so it would hand a BT.2020-**PQ** source the SDR-TRC
 Rec.2020 profile (a silently mis-tagged transfer). Replaced with the new
-transfer-aware `icc_profile_for_cicp(cicp) -> SynthesizedIcc`.
+transfer-aware `synthesize_icc_for_cicp(cicp) -> SynthesizedIcc`.
 
-### zenpixels-convert — `icc_profile_for_cicp` (routed as a PR, not direct to main)
+### zenpixels-convert — `synthesize_icc_for_cicp` (routed as a PR, not direct to main)
 - **PR: imazen/zenpixels#37** (branch `feat/icc-profile-for-cicp`), assigned
   lilith. CI fully green (Clippy, Feature powerset, Format, MSRV, every Test
   platform incl windows-11-arm / i686 / macOS-Intel, WASM, Coverage).
-- Adds `icc_profiles::icc_profile_for_cicp(Cicp) -> SynthesizedIcc` + the
+- Adds `icc_profiles::synthesize_icc_for_cicp(Cicp) -> SynthesizedIcc` + the
   `#[non_exhaustive]` `SynthesizedIcc { Profile(Cow<'static,[u8]>), NotNeeded,
   NeedsCms, CmsUnsupported }`. Promotes `icc_profile_for` to `pub`; documents the
   HDR mis-tag hazard on `icc_profile_for_primaries`.
@@ -405,13 +405,13 @@ transfer-aware `icc_profile_for_cicp(cicp) -> SynthesizedIcc`.
 
 ### zencodec — `IccDisposition::SynthesizeFrom` doc (landed on main `33295a8`)
 Module "Lowering the plan" bullet + the variant doc now point at
-`icc_profile_for_cicp` and spell out the best-effort contract (bundled coverage
+`synthesize_icc_for_cicp` and spell out the best-effort contract (bundled coverage
 Display-P3 + SDR BT.2020 vs cms-moxcms PQ/HLG; any non-`Profile` outcome embeds no
 ICC and lets the CICP carrier convey color — never fabricate or mis-tag).
 
 ### Codec switches (PROVISIONAL — folded into each codec's existing 0.1.21 commit)
 All sites switched `icc_profile_for_primaries(…color_primaries_enum())` →
-`match icc_profile_for_cicp(cicp) { Profile(b) => embed b, _ => no ICC }`:
+`match synthesize_icc_for_cicp(cicp) { Profile(b) => embed b, _ => no ICC }`:
 
 | Codec | Commit | Site shape | e2e synth test |
 |---|---|---|---|
@@ -428,7 +428,7 @@ All sites switched `icc_profile_for_primaries(…color_primaries_enum())` →
 
 ### Dev bridge broadened
 `/home/lilith/work/zen/.cargo/config.toml` `paths` now also overrides
-`zenpixels-convert` → local (0.2.11, with `icc_profile_for_cicp`). **TEMPORARY.**
+`zenpixels-convert` → local (0.2.11, with `synthesize_icc_for_cicp`). **TEMPORARY.**
 Forced an `archmage`/`magetypes` `0.9.23 → 0.9.26` Cargo.lock bump in
 zenwebp/zenpng/zenavif (local zenpixels-convert requires `^0.9.26`; the codecs
 allow `^0.9.15` so it's compatible and pre-aligns for the eventual publish).
@@ -436,7 +436,7 @@ zentiff/zenextras needed no bump.
 
 ### Landing checklist addendum (additionally gated on a zenpixels-convert publish)
 1. Merge **zenpixels#37**, then publish a zenpixels-convert release carrying
-   `icc_profile_for_cicp` (≥ 0.2.12, full ceremony, user-approved).
+   `synthesize_icc_for_cicp` (≥ 0.2.12, full ceremony, user-approved).
 2. Bump each codec's `zenpixels-convert` dep floor to that version alongside the
    `zencodec` 0.1.21 floor bump (step 3 of the original checklist), then push to
    its `main`.
