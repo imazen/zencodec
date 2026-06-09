@@ -108,6 +108,20 @@ To **stamp** rights in one line — `Metadata::none().with_copyright("© 2026 Yo
 
 Metadata retention, color emission, and orientation are the three *correctness* signals an encode has to get right; [docs/correctness-model.md](docs/correctness-model.md) describes how the framework resolves each one before the codec runs so a codec can't quietly clobber it. The [`zencodec-testkit`](zencodec-testkit) crate verifies a codec honors that contract — `check_metadata_no_leak` re-parses the embedded EXIF to prove a policy's drops actually happened, and `check_cross_path_pixel_equivalence` diffs every feeding mode.
 
+## Color Emission
+
+The encode-side dual of color resolution: which color carriers (ICC vs CICP) should an encode *write*? `resolve_color_emit` decides — a pure, `no_std`, CMS-free function of the source color, the target's carrier capabilities, and a policy:
+
+```rust,ignore
+use zencodec::{resolve_color_emit, ColorEmitPolicy, IccDisposition};
+
+let plan = resolve_color_emit(&source_color, &target_caps, ColorEmitPolicy::Balanced);
+// plan.cicp: Option<Cicp>   — write this CICP (JXL/AVIF/HEIC nclx, PNG cICP) if the format carries it
+// plan.icc:  IccDisposition — KeepSource | SynthesizeFrom(Cicp) | Drop
+```
+
+`ColorEmitPolicy` picks the tradeoff: `Compatibility` (widest reader support), `Balanced` (default — CICP where it's a spec-mandated *safe sole carrier*, an ICC companion otherwise), `Compact` (smallest — prefer CICP, drop the ICC), `Verbatim` (carry the source's signals unchanged), or `Custom(ColorEmitFields)`. A target advertises its carriers via `EncodeCapabilities::{cicp_is_valid_carrier, cicp_safe_sole_carrier}`. The plan never emits a redundant `SynthesizeFrom(sRGB)`; a codec lowers a `SynthesizeFrom` through `zenpixels-convert`'s transfer-aware `synthesize_icc_for_cicp` (a bundled `const` profile, or — with its `cms-moxcms` feature — a generated one) so an HDR transfer is never mis-tagged with an SDR profile and color is never silently dropped. The names carry the emit direction so they can't be confused with the decode-side `SourceColor`. Design + rejected alternatives: [docs/color-emit-model.md](docs/color-emit-model.md).
+
 ## What's in this crate
 
 | Module | Contents |
@@ -117,7 +131,7 @@ Metadata retention, color emission, and orientation are the three *correctness* 
 | `zencodec::gainmap` | `GainMapInfo`, `GainMapParams`, `GainMapChannel`, `GainMapDirection`, `GainMapPresence`, `Iso21496Format` (wire-format variant: `AvifTmap`, `JxlJhgm`, `JpegApp2BodyWithUrn`; the original `JpegApp2` is deprecated since 0.1.20), `ISO_21496_1_URN`, `ISO_21496_1_PRIMARY_APP2_BODY`, `serialize_iso21496_fmt` / `serialize_iso21496_fmt_into` / `parse_iso21496_fmt`, `GainMapParseError` — cross-codec gain map types and wire-format helpers (ISO 21496-1) |
 | `zencodec::exif` | Structured EXIF/TIFF: `Exif` (borrowing parse → prune → serialize), `ExifPolicy` (7 keep/discard categories), `Retention`, `ByteOrder`, `retain` |
 | `zencodec::helpers` | Codec implementation helpers (not consumer API) — shared boilerplate for trait implementors, plus the lightweight `parse_exif_orientation` accessor |
-| root | `ImageFormat`, `ImageFormatDefinition`, `ImageFormatRegistry` (format detection via `ImageFormatRegistry::detect()`), `ImageInfo`, `Metadata`, `MetadataPolicy`, `MetadataFields`, `IccRetention`, `Exif`, `ExifPolicy`, `Retention`, `ByteOrder`, `Orientation`, `OrientationHint`, `ResourceLimits`, `LimitExceeded`, `ThreadingPolicy`, `UnsupportedOperation`, `CodecErrorExt`, `find_cause`, `Unsupported`, `Extensions`, `AnimationFrame`, `OwnedAnimationFrame`, `Cicp`, `ContentLightLevel`, `MasteringDisplay`, `StopToken`, `Unstoppable` |
+| root | `ImageFormat`, `ImageFormatDefinition`, `ImageFormatRegistry` (format detection via `ImageFormatRegistry::detect()`), `ImageInfo`, `Metadata`, `MetadataPolicy`, `MetadataFields`, `IccRetention`, `Exif`, `ExifPolicy`, `Retention`, `ByteOrder`, `Orientation`, `OrientationHint`, `ResourceLimits`, `LimitExceeded`, `ThreadingPolicy`, `UnsupportedOperation`, `CodecErrorExt`, `find_cause`, `Unsupported`, `Extensions`, `AnimationFrame`, `OwnedAnimationFrame`, `resolve_color_emit`, `ColorEmitPolicy`, `ColorEmitPlan`, `ColorEmitFields`, `IccDisposition`, `CicpEmission`, `ColorAuthority`, `Cicp`, `ContentLightLevel`, `MasteringDisplay`, `StopToken`, `Unstoppable` |
 
 zencodec has no feature flags. The full API is always available.
 

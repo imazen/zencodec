@@ -4,6 +4,10 @@ All notable changes to zencodec are documented here.
 
 ## [Unreleased]
 
+_Nothing yet — the entries below ship in 0.1.21._
+
+## [0.1.21] - 2026-06-09
+
 ### Added
 
 - **`zencodec-testkit` crate (new workspace member, unpublished)** — a
@@ -27,7 +31,7 @@ All notable changes to zencodec are documented here.
   capability) and a `minimal` one (one-shot only, declares every optional
   capability false) exercising the false-direction branches, plus a hand-built
   GPS/thumbnail EXIF fixture. The repo is now a Cargo workspace (`zencodec` root +
-  `zencodec-testkit` member); `zencodec`'s published package is unaffected.
+  `zencodec-testkit` member); `zencodec`'s published package is unaffected. (23d4046)
 - **Cross-codec color-emission policy** —
   `resolve_color_emit(&SourceColor, &EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan`,
   a pure `no_std` decision of which color carriers (ICC vs CICP) to write for a
@@ -41,11 +45,15 @@ All notable changes to zencodec are documented here.
     `SourceColor`.)
   - `ColorEmitFields::new` makes `ColorEmitPolicy::Custom` constructible downstream.
   - `EncodeCapabilities` gains `cicp_is_valid_carrier` (standardized carrier —
-    JXL/AVIF/HEIC `nclx`, PNG `cICP`) and `cicp_safe_sole_carrier` (safe CICP-only,
-    JXL) (+ `with_*`); `IccRetention` gains `DropIfCicpRepresentable`,
-    `DropIfCicpSafeSoleCarrier`. The plan lowers to `zenpixels_convert`'s
-    `finalize_for_output_with` (`icc_profile_for_primaries` materializes a
-    `SynthesizeFrom` from a `const fn` table — no CMS, never a silent drop).
+    JXL/AVIF/HEIC `nclx`, PNG `cICP`) and `cicp_safe_sole_carrier` (safe CICP-only
+    — JXL, AVIF, HEIC, whose `nclx`/CICP is spec-mandated and reader-authoritative)
+    (+ `with_*`); `IccRetention` gains `DropIfCicpRepresentable`,
+    `DropIfCicpSafeSoleCarrier`. `Balanced` keeps a synthesized ICC companion when
+    the CICP carrier is not sole-safe (PNG `cICP`). The plan lowers through
+    `zenpixels_convert`'s `finalize_for_output_with`; a `SynthesizeFrom`
+    materializes via the transfer-aware `synthesize_icc_for_cicp` — a bundled
+    `const` profile, or (with `cms-moxcms`) generated — never a mis-tagged TRC,
+    never a silent drop.
   - `EncodePolicy` carries the color-carrier emission policy: `color:
     Option<ColorEmitPolicy>` (+ `with_color`, `resolve_color`), so encode and
     transcode select the ICC-vs-CICP carrier through it. Its docs reframe the
@@ -58,7 +66,7 @@ All notable changes to zencodec are documented here.
     color resolver.
   - `exif::ByteOrder` is module-scoped (a TIFF/EXIF header detail), not re-exported
     at the crate root.
-  - Design + rejected alternatives: `docs/color-emit-model.md`.
+  - Design + rejected alternatives: `docs/color-emit-model.md`. (23d4046, bbe4c7e, 3fb841e)
 - **EXIF string-field editing** — `Exif::set_copyright` / `set_artist` set (insert
   or replace) the IFD0 rights tags, materialized through the existing canonical
   `Exif::to_bytes` (offsets recomputed, byte-exact fixpoint preserved). The new
@@ -111,10 +119,6 @@ All notable changes to zencodec are documented here.
   existing one (keeping other tags), replacing an unparseable one. Written ASCII
   (Exif 2.x, most compatible); for UTF-8/Exif 3.0 or other tags, build via
   `exif::Exif` + `with_exif`. (1051288)
-
-## [0.1.21] - 2026-05-29
-
-### Added
 
 - **Field-level metadata retention** — `Metadata::filtered(&MetadataPolicy)`,
   the shared filter for re-encode / recompress pipelines: keep what a

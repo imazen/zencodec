@@ -883,6 +883,49 @@ See `zenpixels` documentation for field details.
 
 ---
 
+## Color emission
+
+`resolve_color_emit(&SourceColor, &EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan`
+— a pure, `no_std`, CMS-free decision of which color carriers an *encode* writes for
+a target. Crate-root re-exports (`CicpEmission`, `ColorEmitFields`, `ColorEmitPlan`,
+`ColorEmitPolicy`, `IccDisposition`, `resolve_color_emit`).
+
+```rust
+pub fn resolve_color_emit(
+    source: &SourceColor,
+    caps: &EncodeCapabilities,
+    policy: ColorEmitPolicy,
+) -> ColorEmitPlan;
+
+#[non_exhaustive]
+pub enum ColorEmitPolicy { Compatibility, Balanced, Compact, Verbatim, Custom(ColorEmitFields) }
+
+pub struct ColorEmitPlan { pub cicp: Option<Cicp>, pub icc: IccDisposition }
+
+#[non_exhaustive]
+pub enum IccDisposition { KeepSource, SynthesizeFrom(Cicp), Drop }
+```
+
+- **`ColorEmitPolicy`** — `Balanced` (default) writes CICP where it's a *safe sole
+  carrier* and keeps a synthesized ICC companion otherwise (e.g. PNG `cICP`);
+  `Compatibility` favors the widest reader support; `Compact` prefers CICP and drops
+  the ICC; `Verbatim` carries the source's signals unchanged; `Custom(ColorEmitFields)`
+  is explicit (`ColorEmitFields::new`).
+- **`EncodeCapabilities`** carrier methods: `cicp_is_valid_carrier` (the format has a
+  standardized CICP slot — JXL/AVIF/HEIC `nclx`, PNG `cICP`) and `cicp_safe_sole_carrier`
+  (CICP alone is spec-mandated and reader-authoritative — JXL, AVIF, HEIC).
+- **`IccDisposition`** — `KeepSource` re-embeds the source ICC; `Drop` emits none;
+  `SynthesizeFrom(cicp)` asks the caller to materialize bytes (this crate carries no
+  CMS) via `zenpixels_convert`'s transfer-aware `synthesize_icc_for_cicp` — a bundled
+  `const` profile or a CMS-generated one, never a mis-tagged TRC. The plan never emits
+  a redundant `SynthesizeFrom(sRGB)`.
+
+The emit-direction names can't be confused with the decode-side `SourceColor`. Design
+and rejected alternatives: `docs/color-emit-model.md`; how the framework resolves
+color/orientation/metadata before a codec runs: `docs/correctness-model.md`.
+
+---
+
 ## Error utilities
 
 ### `CodecErrorExt` (trait)
