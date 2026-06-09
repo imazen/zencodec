@@ -141,15 +141,20 @@ codec crate adds it as a `dev-dependency` and runs the checks against its own
   that composites in place can leak the wrong frame.
 - `check_orientation_roundtrip` — confirms an orientation survives a keeping
   policy exactly once, catching both loss and double-application.
-- `check_capability_honesty` — comprehensive and bidirectional: every declared
-  capability (the encode paths `push_rows`/`encode_from`/animation, the decode
-  paths streaming/animation, the `lossless` knob, `cheap_probe`, the
-  `icc`/`exif`/`xmp`/`cicp` metadata channels, and `native_alpha`) must actually
-  work, and every *undeclared* optional path must decline with
-  `UnsupportedOperation` rather than panicking or silently succeeding. All
-  violations are collected and reported together. (Cancellation and the lossy flag
-  are out of scope: cancellation timing isn't reliably testable on bounded inputs,
-  and lossy-vs-lossless output isn't observable from the bitstream.)
+- `check_capability_honesty` — every declared capability (the encode paths
+  `push_rows`/`encode_from`/animation, the decode paths streaming/animation, the
+  `lossless` knob, `cheap_probe`, the `icc`/`exif`/`xmp`/`cicp` metadata channels,
+  and `native_alpha`) must actually work, and every *undeclared* optional path must
+  decline with `UnsupportedOperation` rather than panicking or silently succeeding.
+  Both directions are checked for the structural paths and (where the decoder can
+  observe them) the metadata channels — so a codec can't claim a feature it lacks
+  *or* hide one it has; `native_alpha` is forward-only (a no-alpha codec may
+  legitimately reject or flatten RGBA, so that direction isn't asserted). All
+  violations are collected and reported together. Out of scope: cancellation
+  (timing isn't reliably testable on bounded inputs), the lossy flag (not observable
+  from the bitstream), and the pixel-format/resource/tuning flags (`native_gray`,
+  `native_16bit`, `native_f32`, `hdr`, `gain_map`, `enforces_max_*`, CICP-carrier,
+  and the `effort`/`quality`/`threads` ranges), which need format-specific fixtures.
 
 The testkit ships two codecs the checks are validated against in its own tests, so
 the harness is known-good before you point it at a real codec: a faithful

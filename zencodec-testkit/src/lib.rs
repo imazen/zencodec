@@ -7,21 +7,24 @@
 //!
 //! - [`check_metadata_no_leak`] — a [`MetadataPolicy`] must never leak what it
 //!   discards. The privacy guarantee.
-//! - [`check_cross_path_pixel_equivalence`] — every still feeding mode (one-shot,
-//!   incremental, streaming, push-sink) must produce identical pixels.
+//! - [`check_cross_path_pixel_equivalence`] — every still encode/decode path
+//!   (one-shot, `push_rows` + pull `encode_from` encode; one-shot, push-sink,
+//!   streaming decode) must produce identical pixels.
 //! - [`check_animation_cross_path_equivalence`] — every animation decode path
 //!   (borrowed, owned, push-sink) must yield identical frames, matching the input.
 //! - [`check_orientation_roundtrip`] — an orientation survives a keeping policy
 //!   exactly once (no loss, no double-application).
-//! - [`check_capability_honesty`] — comprehensively, every declared capability
-//!   works and every undeclared optional path cleanly returns
-//!   [`UnsupportedOperation`](zencodec::UnsupportedOperation). Both directions, so
-//!   a codec can't claim a feature it lacks *or* hide one it has.
+//! - [`check_capability_honesty`] — every declared capability works and every
+//!   undeclared optional path cleanly returns
+//!   [`UnsupportedOperation`](zencodec::UnsupportedOperation). Both directions for
+//!   the structural paths and (where the decoder can observe them) the metadata
+//!   channels, so a codec can't claim a feature it lacks *or* hide one it has; see
+//!   the fn docs for the exact per-flag scope.
 //!
 //! [`check_all`] runs them all with default inputs — the one-call entry point.
 //!
-//! The [`reference`] module ships a faithful codec (declares and honors every
-//! capability) the harness is validated against; the [`minimal`] module ships its
+//! The [`reference`](mod@reference) module ships a faithful codec (declares and
+//! honors every capability) the harness is validated against; the [`minimal`] module ships its
 //! opposite (declares every optional capability false) so the false-direction
 //! branches are validated too. Both double as worked examples.
 //!
@@ -477,6 +480,20 @@ where
         }
     }
 
+    if E::capabilities().encode_from() {
+        let ef = run_encode_from(&enc, img)
+            .map_err(|e| fail(CHECK, format!("encode_from encode: {e}")))?;
+        let (got, _) = dec_oneshot(&dec, &ef)
+            .map_err(|e| fail(CHECK, format!("decode encode_from output: {e}")))?;
+        if got != want {
+            return Err(fail(
+                CHECK,
+                "encode_from (pull-source) produced different pixels than one-shot encode"
+                    .to_string(),
+            ));
+        }
+    }
+
     Ok(())
 }
 
@@ -617,13 +634,11 @@ where
 ///
 /// What's directly asserted on the decoded output: ICC, XMP, CICP, HDR
 /// (content-light-level / mastering-display), and the EXIF sub-categories the
-/// public [`Exif`] API can introspect — GPS, thumbnail, and rights
-/// (copyright/artist). Camera/device identity (Make/Model) and EXIF timestamps
-/// are present in the fixture and exercised through the filter, but are not
-/// independently asserted on the output: `zencodec::exif::Exif` exposes no
-/// per-category predicate for them, so their removal is covered by the EXIF
-/// filter's own unit tests rather than re-checked here. (A `has_camera`-style
-/// accessor would let this assert them directly.)
+/// public [`Exif`] API can introspect — GPS, thumbnail, rights (copyright/artist),
+/// **camera/device identity** ([`Exif::has_camera`], Make/Model/MakerNote/serials/…)
+/// and **capture timestamps** ([`Exif::has_datetimes`]). An emitted EXIF blob that
+/// fails to re-parse is also a failure (a mangled blob can hide raw GPS/camera
+/// bytes a lenient reader scrapes, and its drops can't be verified).
 pub fn check_metadata_no_leak<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
 where
     E: EncoderConfig,
@@ -735,6 +750,35 @@ fn assert_no_leak(
                         ),
                     ));
                 }
+                let want_camera = want.as_ref().is_some_and(Exif::has_camera);
+                if dx.has_camera() && !want_camera {
+                    return Err(fail(
+                        check,
+                        format!(
+                            "[{policy}] camera-identity tags (Make/Model/MakerNote/serial/…) in output EXIF but the policy dropped them (privacy leak)"
+                        ),
+                    ));
+                }
+                let want_datetimes = want.as_ref().is_some_and(Exif::has_datetimes);
+                if dx.has_datetimes() && !want_datetimes {
+                    return Err(fail(
+                        check,
+                        format!(
+                            "[{policy}] capture-timestamp tags in output EXIF but the policy dropped them (privacy leak)"
+                        ),
+                    ));
+                }
+            } else {
+                // The output carries an EXIF blob the policy meant to keep (in part),
+                // but it does not parse. A mangled blob can still embed raw GPS /
+                // camera bytes a lenient reader scrapes, and the drops can't be
+                // verified — treat an unparseable emitted blob as a failure.
+                return Err(fail(
+                    check,
+                    format!(
+                        "[{policy}] output EXIF is unparseable — cannot verify the policy's drops, and it may hide raw GPS/camera bytes"
+                    ),
+                ));
             }
         }
     }
@@ -943,23 +987,33 @@ fn run_animation_decode<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<(), D
     Ok(())
 }
 
-/// Declared capabilities match real behavior, comprehensively.
+/// Declared capabilities match real behavior.
 ///
-/// Every declared capability is exercised and every *undeclared* optional path
-/// is confirmed to decline with [`UnsupportedOperation`](zencodec::UnsupportedOperation)
-/// — both directions, so a codec can't claim a feature it lacks *or* hide one it
-/// has. Covered: the encode paths (`push_rows`, `encode_from`, animation), the
-/// decode paths (streaming, animation), the lossless config knob, the
-/// `cheap_probe` flag, the metadata channels (`icc`/`exif`/`xmp`/`cicp`, checked
-/// for survival through a `PreserveExact` round trip), and `native_alpha`.
+/// For the encode paths (`push_rows`, `encode_from`, animation), the decode paths
+/// (streaming, animation), the `lossless` knob, and `cheap_probe`, **both
+/// directions** are checked: every declared capability is exercised, and every
+/// *undeclared* optional path must decline with
+/// [`UnsupportedOperation`](zencodec::UnsupportedOperation) — a codec can't claim a
+/// feature it lacks *or* hide one it has. The metadata channels
+/// (`icc`/`exif`/`xmp`/`cicp`) are checked bidirectionally **where the decoder can
+/// observe them**: a declared channel must survive a `PreserveExact` round trip, and
+/// an undeclared one must *not* (a hidden write capability); the
+/// encoder-writes-but-decoder-doesn't-read quadrant isn't observable through decode.
+/// `native_alpha` is forward-only — a declared RGBA8 round trip must preserve alpha;
+/// the no-alpha direction isn't cleanly assertable (a codec may legitimately reject
+/// or flatten RGBA input).
 ///
 /// All violations are collected and reported together, so one run names every
 /// dishonest flag.
 ///
 /// Not covered: cooperative cancellation (`stop`) — whether a codec honors a
 /// triggered token is timing-dependent on small inputs and can't be asserted
-/// reliably here; and the `lossy` flag, whose effect (lossy vs lossless output)
-/// isn't observable from the bitstream alone.
+/// reliably here; the `lossy` flag, whose effect isn't observable from the
+/// bitstream alone; and the pixel-format / resource / tuning flags (`native_gray`,
+/// `native_16bit`, `native_f32`, `hdr`, `gain_map`, `enforces_max_pixels` /
+/// `enforces_max_memory`, the CICP-carrier flags, and the `effort` / `quality` /
+/// `threads` ranges), whose honesty needs format-specific fixtures a generic
+/// harness can't supply.
 pub fn check_capability_honesty<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
 where
     E: EncoderConfig,
@@ -1030,8 +1084,12 @@ where
         }
     }
 
-    // --- metadata-channel honesty: declared channels survive a PreserveExact
-    //     round trip (checked only when both ends claim the channel) ---
+    // --- metadata-channel honesty (bidirectional): for each channel the decoder
+    //     can read back, a declared encoder channel must survive a PreserveExact
+    //     round trip, AND an *undeclared* encoder channel must NOT (a codec can't
+    //     hide a write capability it claims not to have). The "encoder writes,
+    //     decoder doesn't read" quadrant isn't observable through decode, so it's
+    //     left to the codec's own tests. ---
     let rich = Metadata::none()
         .with_icc(fixtures::sample_icc())
         .with_exif(fixtures::rich_exif_le())
@@ -1042,17 +1100,26 @@ where
     {
         Err(e) => v.push(format!("metadata-channel round trip failed: {e}")),
         Ok((_, meta)) => {
-            if ec.icc() && dc.icc() && meta.icc_profile.is_none() {
-                v.push("icc: declared by encoder+decoder, but did not survive a PreserveExact round trip".into());
-            }
-            if ec.exif() && dc.exif() && meta.exif.is_none() {
-                v.push("exif: declared by encoder+decoder, but did not survive a PreserveExact round trip".into());
-            }
-            if ec.xmp() && dc.xmp() && meta.xmp.is_none() {
-                v.push("xmp: declared by encoder+decoder, but did not survive a PreserveExact round trip".into());
-            }
-            if ec.cicp() && dc.cicp() && meta.cicp.is_none() {
-                v.push("cicp: declared by encoder+decoder, but did not survive a PreserveExact round trip".into());
+            // (channel name, encoder declares write, decoder declares read, survived)
+            let channels = [
+                ("icc", ec.icc(), dc.icc(), meta.icc_profile.is_some()),
+                ("exif", ec.exif(), dc.exif(), meta.exif.is_some()),
+                ("xmp", ec.xmp(), dc.xmp(), meta.xmp.is_some()),
+                ("cicp", ec.cicp(), dc.cicp(), meta.cicp.is_some()),
+            ];
+            for (name, enc_writes, dec_reads, survived) in channels {
+                if !dec_reads {
+                    continue; // not observable through this decoder
+                }
+                if enc_writes && !survived {
+                    v.push(format!(
+                        "{name}: declared by encoder+decoder, but did not survive a PreserveExact round trip"
+                    ));
+                } else if !enc_writes && survived {
+                    v.push(format!(
+                        "{name}: encoder declared it does NOT support this channel, yet it survived a round trip (hidden capability)"
+                    ));
+                }
             }
         }
     }

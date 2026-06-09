@@ -555,6 +555,29 @@ impl<'a> Exif<'a> {
         self.gps_ifd.is_some()
     }
 
+    /// Whether any device/capture-identity tag (the [`camera`](ExifPolicy::camera)
+    /// category — Make/Model/Software/MakerNote/serials/lens/ImageUniqueID/firmware…)
+    /// is present, in IFD0 or the Exif sub-IFD. Lets a privacy check assert that a
+    /// stripping policy actually removed camera identity (not just GPS/thumbnail).
+    pub fn has_camera(&self) -> bool {
+        self.has_category(Category::Camera)
+    }
+
+    /// Whether any capture-timestamp tag (the [`datetimes`](ExifPolicy::datetimes)
+    /// category — DateTime / DateTimeOriginal / Digitized / SubSecTime\* /
+    /// OffsetTime\*) is present, in IFD0 or the Exif sub-IFD.
+    pub fn has_datetimes(&self) -> bool {
+        self.has_category(Category::Datetimes)
+    }
+
+    /// Whether any IFD0/Exif-IFD entry falls in `cat` (the per-entry categories;
+    /// GPS/thumbnail are structural — use [`has_gps`](Self::has_gps) /
+    /// [`has_thumbnail`](Self::has_thumbnail)).
+    fn has_category(&self, cat: Category) -> bool {
+        let any = |ifd: &[Entry<'_>]| ifd.iter().any(|e| classify(e.tag) == cat);
+        any(&self.ifd0) || self.exif_ifd.as_deref().is_some_and(any)
+    }
+
     /// Set (insert or replace) the IFD0 Copyright tag (0x8298) to `text`.
     ///
     /// The TIFF field type is this blob's [`text_encoding`](Self::new) (Exif 2.x
@@ -1827,6 +1850,26 @@ mod tests {
             be.to_bytes().len(),
             "big-endian full tree"
         );
+    }
+
+    #[test]
+    fn has_camera_and_datetimes_classify_and_filter() {
+        // `sample()` carries Make (camera, IFD0) + DateTimeOriginal (datetimes,
+        // Exif-IFD) — the categories the testkit privacy check now asserts removed.
+        let bytes = sample(ByteOrder::Little, false);
+        let x = Exif::parse(&bytes).expect("parses");
+        assert!(x.has_camera(), "Make is the camera category");
+        assert!(
+            x.has_datetimes(),
+            "DateTimeOriginal is the datetimes category"
+        );
+        let stripped = x.filtered(
+            &ExifPolicy::KEEP_ALL
+                .with_camera(Retention::Discard)
+                .with_datetimes(Retention::Discard),
+        );
+        assert!(!stripped.has_camera(), "camera category dropped");
+        assert!(!stripped.has_datetimes(), "datetimes category dropped");
     }
 
     /// #3: a structural sub-IFD pointer too short to hold a 4-byte offset is
