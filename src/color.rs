@@ -51,9 +51,15 @@ use crate::metadata::IccRetention;
 ///   AVIF/HEIC `nclx`, PNG `cICP`).
 /// - [`IccDisposition::KeepSource`] → re-embed the source ICC bytes
 ///   (`OutputProfile::SameAsOrigin`).
-/// - [`IccDisposition::SynthesizeFrom`]`(cicp)` → fetch a bundled profile via
-///   `zenpixels_convert::icc_profile_for_primaries` (a `const fn` table — **no CMS**;
-///   it returns `None` for BT.709/sRGB, so the assumed default is never embedded).
+/// - [`IccDisposition::SynthesizeFrom`]`(cicp)` → lower through
+///   `zenpixels_convert::icc_profiles::icc_profile_for_cicp(cicp)`, which is
+///   **transfer-aware** (it won't hand a BT.2020-PQ source the SDR-TRC Rec.2020
+///   profile) and returns a typed `SynthesizedIcc`: embed the bytes on `Profile`;
+///   on `NotNeeded`/`NeedsCms`/`CmsUnsupported` embed no ICC and let
+///   [`ColorEmitPlan::cicp`] carry the color. Coverage is best-effort — the
+///   bundled `const` set (no CMS) reaches Display-P3 and SDR BT.2020; the
+///   `cms-moxcms` feature generates the rest, including PQ/HLG. See
+///   [`SynthesizeFrom`](IccDisposition::SynthesizeFrom) for the full contract.
 /// - [`IccDisposition::Drop`] → emit no ICC.
 ///
 /// Orientation/EXIF reconciliation is separate: when a pipeline bakes orientation
@@ -164,7 +170,27 @@ pub enum IccDisposition {
     /// Embed the source ICC bytes verbatim.
     KeepSource,
     /// Embed an ICC synthesized from this CICP (target has no CICP carrier, or
-    /// the policy wants an ICC alongside). The caller materializes the bytes.
+    /// the policy wants an ICC alongside). The caller materializes the bytes —
+    /// this `no_std`, CMS-less crate only states the intent.
+    ///
+    /// **Recommended lowering:** `zenpixels_convert::icc_profiles`'s
+    /// `icc_profile_for_cicp(cicp)`, which is transfer-aware and returns a typed
+    /// `SynthesizedIcc`:
+    /// - `Profile(bytes)` — embed them (bundled `&'static`, or `cms-moxcms`-generated).
+    /// - `NotNeeded` — the CICP is the sRGB/BT.709 default; embed nothing. (The
+    ///   resolver won't normally emit `SynthesizeFrom(sRGB)`, so this is rare.)
+    /// - `NeedsCms` — no bundled profile matches and the `cms-moxcms` feature is
+    ///   off; embed nothing.
+    /// - `CmsUnsupported` — the CMS can't represent this CICP; embed nothing.
+    ///
+    /// **Synthesis is best-effort.** Bundled coverage (no CMS) is Display-P3 and
+    /// SDR BT.2020; `cms-moxcms` extends it to anything moxcms recognizes,
+    /// including PQ/HLG. On any non-`Profile` outcome the lowering must **not**
+    /// fabricate or mis-tag a profile — it embeds no ICC and relies on
+    /// [`ColorEmitPlan::cicp`] to carry the color. For a target with no CICP
+    /// carrier, that means a caller without `cms-moxcms` may lose a wide-gamut
+    /// description it can't bundle; prefer a CICP-carrying format or enable the
+    /// feature when exact wide-gamut/HDR color must survive.
     SynthesizeFrom(Cicp),
     /// Emit no ICC profile.
     Drop,
