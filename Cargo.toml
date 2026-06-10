@@ -31,6 +31,13 @@ include = [
 [lib]
 name = "zencodec"
 
+# Lives in tests-dev/ (outside the `include` whitelist) so the published
+# crate ships neither the test nor its cargo-public-api/nightly-rustdoc
+# requirement; cargo strips this target from the packaged manifest.
+[[test]]
+name = "public_api_doc"
+path = "tests-dev/public_api_doc.rs"
+
 [dependencies]
 # Published manifest uses crates.io versions (CI + `cargo publish` build the
 # real artifact). Local development builds against the in-tree zen sources via

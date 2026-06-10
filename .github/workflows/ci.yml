@@ -14,7 +14,7 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CI: true
-  # Public-API snapshot regen (tests/public_api_doc.rs) needs nightly rustdoc
+  # Public-API snapshot regen (tests-dev/public_api_doc.rs) needs nightly rustdoc
   # + cargo-public-api; only the clippy job carries them and runs the =check
   # gate. Everywhere else the test skips.
   ZEN_API_DOC: off
