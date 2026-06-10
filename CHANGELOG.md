@@ -4,7 +4,14 @@ All notable changes to zencodec are documented here.
 
 ## [Unreleased]
 
-_Nothing yet — the entries below ship in 0.1.21._
+### Added
+
+- **`OrientationHint::bakes() -> bool`** — the gate codecs use to choose between
+  the preserve path (leave pixels in stored orientation, report stored dims + the
+  intrinsic `Orientation` tag) and the bake path (transform pixels, report display
+  dims + the applied orientation). `true` for everything except `Preserve`.
+  Replaces the identical `will_auto_orient` match each codec adapter was
+  hand-rolling. Additive.
 
 ## [0.1.21] - 2026-06-09
 

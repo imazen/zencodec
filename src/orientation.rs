@@ -43,6 +43,37 @@ pub enum OrientationHint {
     ExactTransform(Orientation),
 }
 
+impl OrientationHint {
+    /// Whether the decoder transforms the decoded pixels (`true`) or leaves
+    /// them in their stored orientation (`false`).
+    ///
+    /// [`Preserve`](Self::Preserve) is the only hint that leaves the pixels
+    /// untouched: the decoder then reports the image's intrinsic orientation on
+    /// [`ImageInfo::orientation`](crate::ImageInfo) alongside the stored
+    /// dimensions, and the caller is responsible for applying it (e.g. via
+    /// [`ImageInfo::display_width`](crate::ImageInfo::display_width)). Every
+    /// other hint puts the decoder on the "bake" path: it transforms the pixels
+    /// and reports the resulting orientation ([`Identity`](Orientation::Identity)
+    /// for [`Correct`](Self::Correct)) with the display dimensions.
+    ///
+    /// This is the gate a codec uses to choose between the preserve path
+    /// (stored dims + intrinsic tag) and the bake path (display dims + applied
+    /// orientation). It deliberately does **not** say *which* transform to
+    /// apply — for [`Correct`](Self::Correct),
+    /// [`CorrectAndTransform`](Self::CorrectAndTransform), and
+    /// [`ExactTransform`](Self::ExactTransform) the net [`Orientation`] depends
+    /// on the image's intrinsic orientation and must be resolved separately.
+    /// The resolved transform may itself be [`Identity`](Orientation::Identity)
+    /// (e.g. `Correct` on an already-upright image), in which case the bake is a
+    /// no-op but the reported orientation is still `Identity` — so a codec
+    /// should drive its *reported* `ImageInfo` from the resolved orientation,
+    /// not from `bakes()` alone.
+    #[must_use]
+    pub const fn bakes(self) -> bool {
+        !matches!(self, Self::Preserve)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -58,5 +89,15 @@ mod tests {
         let _ = OrientationHint::Correct;
         let _ = OrientationHint::CorrectAndTransform(Orientation::Rotate90);
         let _ = OrientationHint::ExactTransform(Orientation::Rotate180);
+    }
+
+    #[test]
+    fn bakes_only_false_for_preserve() {
+        assert!(!OrientationHint::Preserve.bakes());
+        assert!(OrientationHint::Correct.bakes());
+        assert!(OrientationHint::CorrectAndTransform(Orientation::Rotate90).bakes());
+        assert!(OrientationHint::ExactTransform(Orientation::Rotate180).bakes());
+        // The default (Preserve) must not bake — this is the ecosystem default.
+        assert!(!OrientationHint::default().bakes());
     }
 }
