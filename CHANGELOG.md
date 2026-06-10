@@ -195,11 +195,6 @@ _Nothing yet — the entries below ship in 0.1.21._
   200 MP across an animation, 16384×16384 max dims, 1 GiB memory, 256 MiB
   input, 65536 frames, 1 hour duration. `ResourceLimits::default()`
   continues to mean "no limits" for backwards compatibility (bc2790d).
-- `exif::Exif::has_camera()` / `has_datetimes()` — per-category presence
-  predicates (device identity: Make/Model/MakerNote/serials/…; capture
-  timestamps), so a privacy check can assert those categories were stripped, not
-  just GPS/thumbnail/rights. `exif::Exif::byte_order()` exposes the parsed
-  endianness (0ec601a).
 
 ### Changed
 
@@ -214,30 +209,6 @@ _Nothing yet — the entries below ship in 0.1.21._
   catching the (structurally unreachable) misuse path loudly in tests and
   dev builds. Release behaviour is unchanged (silent no-op). Trait
   signatures are unchanged (a5b782e).
-
-### Fixed
-
-- **Color emission respects `SourceColor.color_authority`** — `resolve_color_emit`
-  previously preferred a co-existing CICP unconditionally, so an *authoritative* ICC
-  paired with a backwards-compat round-trip CICP could be dropped for that CICP on a
-  sole-safe target (a mis-tag / precision loss). It now derives the emittable CICP
-  from the ICC when the ICC is authoritative, keeping the ICC if it isn't
-  identifiable as code points (bf19f98).
-- Align the `SynthesizeFrom`-vs-`Drop` decision with the lowering's "assumed sRGB
-  default" gate (any primaries ∈ {BT.709, unspecified} + transfer ∈ {BT.709,
-  unspecified, sRGB}), so the resolver no longer emits a `SynthesizeFrom` directive
-  that would lower to nothing (bf19f98).
-
-### Security
-
-- **EXIF serializer amplification-DoS guard.** A malformed-but-parseable EXIF blob
-  pointing many entries at *overlapping, byte-shifted* out-of-line windows (which the
-  per-IFD exact-alias dedup does not coalesce) could re-serialize ~1000× larger and
-  push offsets past `u32` — reachable from untrusted decoder EXIF via
-  `Metadata::filtered`, and OOM-aborting on the infallible `Vec`. The rewrite
-  (`exif::retain` / `retain_reconciled`) now previews the output size
-  (`Exif::serialized_len`) and fails safe (drops the EXIF) when it would exceed 2× the
-  source or the `u32` offset ceiling (bf19f98).
 
 ### Documentation
 
