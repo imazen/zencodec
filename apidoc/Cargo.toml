@@ -9,5 +9,4 @@ edition = "2024"
 publish = false
 
 [dependencies]
-# git-pinned until zenutils-apidoc 0.1.0 is on crates.io.
-zenutils-apidoc = { git = "https://github.com/imazen/zenutils", rev = "35dcc4a347ed0fd19c204563d92ae8b9787db630" }
+zenutils-apidoc = "0.1.0"
