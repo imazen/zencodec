@@ -99,10 +99,10 @@ owner). Full design context: [`docs/color-emit-model.md`](docs/color-emit-model.
    fires only on a mismatch so the matched case keeps the zero-copy `Arc` clone).
    Regression: `filtered_reconciles_baked_orientation_tag`.
 
-2. **AVIF descriptor-CICP override (zenavif, `src/codec.rs:824-831`).**
-   `apply_descriptor_color` overrides a metadata-set CICP unconditionally,
-   ignoring a CICP explicitly provided via `Metadata`. It should check for a
-   caller-supplied CICP before overriding from the pixel descriptor.
+2. **AVIF descriptor-CICP override — FIXED (zenavif main, `b3be82a`,
+   2026-06-10).** `apply_descriptor_color` no longer overrides a
+   caller-supplied CICP from `Metadata`; landed with the zencodec 0.1.21
+   color-emit adoption ("AVIF nclx now sole-safe").
 
 3. **Missing signal-range conversion kernels (zenpixels-convert).** No
    `Narrow <-> Full` range conversion kernels exist, so a range mismatch refuses
