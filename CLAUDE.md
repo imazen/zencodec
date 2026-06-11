@@ -104,8 +104,16 @@ owner). Full design context: [`docs/color-emit-model.md`](docs/color-emit-model.
    caller-supplied CICP from `Metadata`; landed with the zencodec 0.1.21
    color-emit adoption ("AVIF nclx now sole-safe").
 
-3. **Missing signal-range conversion kernels (zenpixels-convert).** No
-   `Narrow <-> Full` range conversion kernels exist, so a range mismatch refuses
-   zero-copy but can relabel without rescaling — a black-crush risk. Needs
-   `ConvertStep::{Expand,Contract}NarrowToFull`. Until then, range must be
-   preserved verbatim, never relabeled.
+3. **Missing signal-range conversion kernels (zenpixels-convert) — HARDENED
+   (refuse-fast, 2026-06-11, zenpixels main `54aca62e`), kernels still
+   unbuilt.** `ConvertPlan::new` now refuses any `Narrow <-> Full` crossing
+   with `NoPath` (Display names the range crossing), closing the
+   relabel-without-rescaling hole — previously the allocating path emitted
+   range-coded values under the wrong label. `SignalRange` docs now pin the
+   ITU definition (anchors ×2^(N−8), studio-swing RGB/gray, excursion
+   clamp-vs-preserve decision, CICP/AV1 mapping, the no-relabel rule).
+   Narrow remains verbatim-passthrough-only (sole consumer: zenavif accepts
+   Narrow PQ/HLG BT.2020 → AV1 limited range, no conversion). Build
+   `ConvertStep::{ExpandNarrowToFull,ContractFullToNarrow}` only when a
+   consumer actually needs to cross the boundary; known design points are
+   recorded in the `SignalRange` docs.
