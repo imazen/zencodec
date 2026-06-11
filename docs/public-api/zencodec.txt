@@ -5,7 +5,7 @@
 # all-features section.
 # DO NOT EDIT BY HAND — commit regenerated changes together with the code.
 
-## default features (2231 items)
+## default features (2233 items)
 
 pub mod zencodec
 pub use zencodec::Cicp
@@ -736,6 +736,7 @@ pub fn zencodec::exif::Exif<'a>::orientation(&self) -> core::option::Option<zenp
 pub fn zencodec::exif::Exif<'a>::parse(&'a [u8]) -> core::option::Option<Self>
 pub fn zencodec::exif::Exif<'a>::set_artist(&mut self, &str)
 pub fn zencodec::exif::Exif<'a>::set_copyright(&mut self, &str)
+pub fn zencodec::exif::Exif<'a>::set_orientation(&mut self, zenpixels::orientation::Orientation)
 pub fn zencodec::exif::Exif<'a>::to_bytes(&self) -> alloc::vec::Vec<u8>
 impl<'a> core::clone::Clone for zencodec::exif::Exif<'a>
 pub fn zencodec::exif::Exif<'a>::clone(&self) -> zencodec::exif::Exif<'a>
@@ -1687,6 +1688,7 @@ pub fn zencodec::exif::Exif<'a>::orientation(&self) -> core::option::Option<zenp
 pub fn zencodec::exif::Exif<'a>::parse(&'a [u8]) -> core::option::Option<Self>
 pub fn zencodec::exif::Exif<'a>::set_artist(&mut self, &str)
 pub fn zencodec::exif::Exif<'a>::set_copyright(&mut self, &str)
+pub fn zencodec::exif::Exif<'a>::set_orientation(&mut self, zenpixels::orientation::Orientation)
 pub fn zencodec::exif::Exif<'a>::to_bytes(&self) -> alloc::vec::Vec<u8>
 impl<'a> core::clone::Clone for zencodec::exif::Exif<'a>
 pub fn zencodec::exif::Exif<'a>::clone(&self) -> zencodec::exif::Exif<'a>
@@ -2239,7 +2241,7 @@ pub fn zencodec::find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::
 pub fn zencodec::icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)>
 pub fn zencodec::resolve_color_emit(&zencodec::SourceColor, &zencodec::encode::EncodeCapabilities, zencodec::ColorEmitPolicy) -> zencodec::ColorEmitPlan
 
-## all features except _* (2231 items)
+## all features except _* (2233 items)
 
 pub mod zencodec
 pub use zencodec::Cicp
@@ -2970,6 +2972,7 @@ pub fn zencodec::exif::Exif<'a>::orientation(&self) -> core::option::Option<zenp
 pub fn zencodec::exif::Exif<'a>::parse(&'a [u8]) -> core::option::Option<Self>
 pub fn zencodec::exif::Exif<'a>::set_artist(&mut self, &str)
 pub fn zencodec::exif::Exif<'a>::set_copyright(&mut self, &str)
+pub fn zencodec::exif::Exif<'a>::set_orientation(&mut self, zenpixels::orientation::Orientation)
 pub fn zencodec::exif::Exif<'a>::to_bytes(&self) -> alloc::vec::Vec<u8>
 impl<'a> core::clone::Clone for zencodec::exif::Exif<'a>
 pub fn zencodec::exif::Exif<'a>::clone(&self) -> zencodec::exif::Exif<'a>
@@ -3921,6 +3924,7 @@ pub fn zencodec::exif::Exif<'a>::orientation(&self) -> core::option::Option<zenp
 pub fn zencodec::exif::Exif<'a>::parse(&'a [u8]) -> core::option::Option<Self>
 pub fn zencodec::exif::Exif<'a>::set_artist(&mut self, &str)
 pub fn zencodec::exif::Exif<'a>::set_copyright(&mut self, &str)
+pub fn zencodec::exif::Exif<'a>::set_orientation(&mut self, zenpixels::orientation::Orientation)
 pub fn zencodec::exif::Exif<'a>::to_bytes(&self) -> alloc::vec::Vec<u8>
 impl<'a> core::clone::Clone for zencodec::exif::Exif<'a>
 pub fn zencodec::exif::Exif<'a>::clone(&self) -> zencodec::exif::Exif<'a>

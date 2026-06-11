@@ -6,6 +6,14 @@ All notable changes to zencodec are documented here.
 
 ### Added
 
+- **`Exif::set_orientation(Orientation)`** — insert-or-replace the IFD0
+  Orientation tag, completing the from-scratch authoring path
+  (`Exif::new` → `set_orientation` / `set_copyright` / `set_artist` →
+  `to_bytes`). An existing SHORT/LONG entry keeps its TIFF type; a malformed
+  non-integer carrier is replaced by the canonical 1-count SHORT; a tag-less
+  blob gains one. Covers the "inject Orientation / stamp Copyright" pipeline
+  case from #18 and the field set zenjpeg's `ExifFields` builder writes.
+  Additive.
 - **`OrientationHint::bakes() -> bool`** — the gate codecs use to choose between
   the preserve path (leave pixels in stored orientation, report stored dims + the
   intrinsic `Orientation` tag) and the bake path (transform pixels, report display

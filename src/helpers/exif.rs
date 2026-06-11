@@ -42,10 +42,13 @@ pub fn parse_exif_orientation(data: &[u8]) -> Option<Orientation> {
 /// orders.
 ///
 /// Returns `None` if the blob is malformed or carries no Orientation tag — the
-/// caller should then leave the blob unchanged. This is the byte-level half of
-/// closing the double-rotation hazard: when a decoder bakes orientation upright,
-/// the structured field says `Identity` but the embedded blob still says e.g.
-/// `Rotate90`; rewriting the tag to `1` keeps them in agreement.
+/// caller should then leave the blob unchanged. This is a *reconciliation*
+/// primitive, so it deliberately never **adds** a tag; to insert one (authoring
+/// a blob), use [`crate::exif::Exif::set_orientation`] and re-serialize. It is
+/// the byte-level half of closing the double-rotation hazard: when a decoder
+/// bakes orientation upright, the structured field says `Identity` but the
+/// embedded blob still says e.g. `Rotate90`; rewriting the tag to `1` keeps
+/// them in agreement.
 ///
 /// Reuses the same IFD walker as [`parse_exif_orientation`] rather than a second
 /// hand-rolled scanner, so the two can't diverge on prefix/byte-order/type/bounds

@@ -527,7 +527,11 @@ default). Read accessors: `orientation()`, `copyright()` / `artist()` (lossy-UTF
 text *view*, borrowing `&self`), `copyright_bytes()` / `artist_bytes()` (raw
 field bytes), `has_thumbnail()`, `has_gps()`. Edit accessors: `set_copyright(&str)`
 / `set_artist(&str)` insert-or-replace the IFD0 tag using the blob's `TextEncoding`
-(materialized on the next `to_bytes`). `to_bytes()` re-serializes a valid TIFF
+(materialized on the next `to_bytes`); `set_orientation(Orientation)`
+insert-or-replaces the Orientation tag (an existing SHORT/LONG entry keeps its
+TIFF type; a malformed non-integer carrier is replaced by the canonical 1-count
+SHORT; the serializer writes IFDs tag-sorted, so insertion order is
+immaterial). `to_bytes()` re-serializes a valid TIFF
 with recomputed offsets, preserving byte order and `Exif\0\0` framing; it is a
 byte-exact fixpoint, so filtering and editing stay idempotent.
 
@@ -582,11 +586,15 @@ Validated by differential tests vs `kamadak-exif`, libFuzzer targets, and a
 
 #### EXIF write / edit path
 
-Editing a parsed blob is supported for the string rights fields: `set_copyright`
-/ `set_artist` insert-or-replace the IFD0 tag, then `to_bytes` re-serializes
-through the canonical serializer (offsets recomputed, fixpoint preserved).
-Mechanism: `Entry.value` is `Cow<'a, [u8]>`, so parsed entries stay borrowed
-(zero-copy) while injected ones are owned.
+A blob can be authored from scratch (`Exif::new(TextEncoding)` → setters →
+`to_bytes`) or edited after a parse. Setters: `set_copyright` / `set_artist`
+insert-or-replace the IFD0 string tag; `set_orientation` insert-or-replaces the
+Orientation tag (an existing SHORT/LONG entry keeps its TIFF type, a malformed
+non-integer carrier is replaced by the canonical 1-count SHORT, and a tag-less
+blob gains one). `to_bytes` re-serializes through the canonical serializer
+(offsets recomputed, fixpoint preserved). Mechanism: `Entry.value` is
+`Cow<'a, [u8]>`, so parsed entries stay borrowed (zero-copy) while injected
+ones are owned.
 
 The caller picks the TIFF type explicitly via `TextEncoding` (`Ascii` = type 2,
 `Utf8` = type 129) rather than the writer auto-upgrading to type 129 for
@@ -599,13 +607,15 @@ Both are NUL-terminated with the count including the NUL.
 
 Still planned (additive, semver-minor; deferred until a concrete consumer):
 
-- `exif::Builder` to construct a blob from scratch (today editing starts from a
-  parsed `Exif`), and setters for non-string fields.
+- Setters for further fields (datetimes, software, …) as consumers appear.
 - For broad copyright readability, also writing XMP `dc:rights` (universally
   UTF-8) is the most portable option and a likely companion feature.
-- Orientation editing already exists as a byte-level, offset-preserving rewrite
-  (`helpers::set_exif_orientation`), used by the pipeline to reconcile a
-  baked-upright buffer's `Metadata::orientation` with its embedded tag.
+
+Related: the byte-level, offset-preserving rewrite
+(`helpers::set_exif_orientation`) remains the *reconciliation* path used by
+`Metadata::filtered` to align a baked-upright buffer's embedded tag with the
+authoritative `Metadata::orientation` field — it edits an existing tag only and
+deliberately never adds one. `Exif::set_orientation` is the *authoring* path.
 
 ### `OutputInfo`
 

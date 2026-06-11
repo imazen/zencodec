@@ -601,6 +601,50 @@ impl<'a> Exif<'a> {
         set_ifd0_string(&mut self.ifd0, TAG_ARTIST, text, self.text_encoding);
     }
 
+    /// Set (insert or replace) the IFD0 Orientation tag (0x0112) to `o`.
+    ///
+    /// An existing SHORT/LONG entry keeps its TIFF type (value updated, count
+    /// normalized to 1); a malformed non-integer carrier is replaced by the
+    /// canonical 1-count SHORT form; a tag-less blob gains a SHORT entry (the
+    /// serializer writes IFDs tag-sorted, so insertion position is immaterial).
+    /// Materialized on the next [`to_bytes`](Self::to_bytes); the injected
+    /// value is owned, so the output is independent of any source.
+    ///
+    /// This *authors* the blob — e.g. stamping Orientation on a from-scratch
+    /// tree ([`new`](Self::new)) for an encoder that takes raw EXIF bytes. In
+    /// the framework flow, [`Metadata::orientation`](crate::Metadata) remains
+    /// the authoritative field; `Metadata::filtered` reconciles an embedded tag
+    /// against it (via the byte-level
+    /// [`helpers::set_exif_orientation`](crate::helpers::set_exif_orientation))
+    /// and deliberately never *adds* one.
+    ///
+    /// ```
+    /// use zencodec::Orientation;
+    /// use zencodec::exif::{Exif, TextEncoding};
+    /// let mut exif = Exif::new(TextEncoding::Ascii);
+    /// exif.set_orientation(Orientation::Rotate90);
+    /// let blob = exif.to_bytes();
+    /// assert_eq!(Exif::parse(&blob).unwrap().orientation(), Some(Orientation::Rotate90));
+    /// ```
+    pub fn set_orientation(&mut self, o: Orientation) {
+        let order = self.order;
+        let v = u32::from(o.to_exif());
+        match self.ifd0.iter_mut().find(|e| e.tag == TAG_ORIENTATION) {
+            Some(entry) => match int_bytes(entry.kind, v, order) {
+                Some(value) => {
+                    entry.count = 1;
+                    entry.value = value;
+                }
+                // Non-integer carrier: an explicit set replaces it with the
+                // canonical form — contrast `set_orientation_tag`, which must
+                // stay conservative because reconciliation has no license to
+                // repair a field it wasn't asked to author.
+                None => *entry = orientation_entry(o, order),
+            },
+            None => self.ifd0.push(orientation_entry(o, order)),
+        }
+    }
+
     /// Prune the tree by `policy`, returning a new borrowing view. Surviving
     /// entries still borrow the original source (no payload copy).
     pub fn filtered(&self, policy: &ExifPolicy) -> Exif<'a> {
@@ -677,18 +721,11 @@ impl<'a> Exif<'a> {
         let Some(entry) = self.ifd0.iter_mut().find(|e| e.tag == TAG_ORIENTATION) else {
             return;
         };
-        let v = u32::from(o.to_exif());
-        entry.value = match entry.kind {
-            TIFF_SHORT => Cow::Owned(match order {
-                ByteOrder::Little => (v as u16).to_le_bytes().to_vec(),
-                ByteOrder::Big => (v as u16).to_be_bytes().to_vec(),
-            }),
-            TIFF_LONG => Cow::Owned(match order {
-                ByteOrder::Little => v.to_le_bytes().to_vec(),
-                ByteOrder::Big => v.to_be_bytes().to_vec(),
-            }),
-            _ => return, // non-integer orientation carrier — leave untouched
-        };
+        // Non-integer orientation carriers are left untouched (count too:
+        // reconciliation rewrites the value, it doesn't repair the entry).
+        if let Some(value) = int_bytes(entry.kind, u32::from(o.to_exif()), order) {
+            entry.value = value;
+        }
     }
 
     /// Projected serialized length — exactly `self.to_bytes().len()`, computed
@@ -1057,6 +1094,34 @@ fn set_ifd0_string<'a>(entries: &mut Vec<Entry<'a>>, tag: u16, text: &str, encod
     match entries.iter_mut().find(|e| e.tag == tag) {
         Some(slot) => *slot = entry,
         None => entries.push(entry),
+    }
+}
+
+/// `v` encoded as an owned SHORT/LONG value in `order`; `None` for any other
+/// TIFF type. Shared by the authoring setter ([`Exif::set_orientation`]) and
+/// the reconciliation rewrite ([`Exif::set_orientation_tag`]).
+fn int_bytes(kind: u16, v: u32, order: ByteOrder) -> Option<Cow<'static, [u8]>> {
+    Some(Cow::Owned(match (kind, order) {
+        (TIFF_SHORT, ByteOrder::Little) => (v as u16).to_le_bytes().to_vec(),
+        (TIFF_SHORT, ByteOrder::Big) => (v as u16).to_be_bytes().to_vec(),
+        (TIFF_LONG, ByteOrder::Little) => v.to_le_bytes().to_vec(),
+        (TIFF_LONG, ByteOrder::Big) => v.to_be_bytes().to_vec(),
+        _ => return None,
+    }))
+}
+
+/// The canonical injected Orientation entry — 1-count SHORT, owned value.
+fn orientation_entry<'a>(o: Orientation, order: ByteOrder) -> Entry<'a> {
+    let v = u16::from(o.to_exif());
+    Entry {
+        tag: TAG_ORIENTATION,
+        kind: TIFF_SHORT,
+        count: 1,
+        value: Cow::Owned(match order {
+            ByteOrder::Little => v.to_le_bytes().to_vec(),
+            ByteOrder::Big => v.to_be_bytes().to_vec(),
+        }),
+        value_offset: 0, // injected: re-serialized by to_bytes, never rewritten in place
     }
 }
 
@@ -2324,5 +2389,95 @@ mod tests {
         let blob = Exif::default().to_bytes();
         let y = Exif::parse(&blob).expect("empty blob parses");
         assert!(y.copyright().is_none() && !y.has_gps() && !y.has_thumbnail());
+    }
+
+    // ── Orientation injection (set_orientation) ──────────────────────────────
+
+    /// From-scratch authoring: new → set_copyright + set_orientation →
+    /// to_bytes — the "stamp Orientation + Copyright on an image that carried
+    /// no EXIF" blob — parses back with both fields readable.
+    #[test]
+    fn set_orientation_adds_entry_from_scratch() {
+        let mut exif = Exif::new(TextEncoding::Ascii);
+        assert!(exif.orientation().is_none());
+        exif.set_copyright("(c) Me");
+        exif.set_orientation(Orientation::Rotate90);
+        let blob = exif.to_bytes();
+        let y = Exif::parse(&blob).expect("fresh blob parses");
+        assert_eq!(y.orientation(), Some(Orientation::Rotate90));
+        assert_eq!(y.copyright().unwrap(), "(c) Me");
+        // The injected entry is the canonical 1-count SHORT, and authored
+        // output is already a serializer fixpoint.
+        let en = y.ifd0.iter().find(|e| e.tag == TAG_ORIENTATION).unwrap();
+        assert_eq!((en.kind, en.count), (TIFF_SHORT, 1));
+        assert_eq!(blob, y.to_bytes());
+    }
+
+    /// Replacing an existing tag preserves its TIFF type — SHORT stays SHORT,
+    /// LONG stays LONG — and re-injecting after a policy dropped the tag
+    /// exercises the add path on a big-endian tree.
+    #[test]
+    fn set_orientation_replaces_existing_preserving_kind() {
+        let bytes = sample(ByteOrder::Big, false); // SHORT Orientation=Rotate90
+        let mut x = Exif::parse(&bytes).unwrap();
+        x.set_orientation(Orientation::Identity);
+        let out = x.to_bytes();
+        let y = Exif::parse(&out).unwrap();
+        assert_eq!(y.orientation(), Some(Orientation::Identity));
+        let en = y.ifd0.iter().find(|e| e.tag == TAG_ORIENTATION).unwrap();
+        assert_eq!((en.kind, en.count), (TIFF_SHORT, 1));
+
+        // Drop the tag, then inject into the (big-endian) tag-less tree.
+        let mut nb = y.filtered(&ExifPolicy::KEEP_ALL.with_orientation(Retention::Discard));
+        assert!(nb.orientation().is_none());
+        nb.set_orientation(Orientation::Rotate180);
+        let re = nb.to_bytes();
+        assert_eq!(
+            Exif::parse(&re).unwrap().orientation(),
+            Some(Orientation::Rotate180)
+        );
+
+        // A LONG carrier (spec-tolerated) keeps its type on an explicit set.
+        let mut long = Exif {
+            order: ByteOrder::Little,
+            had_prefix: false,
+            ifd0: vec![e(TAG_ORIENTATION, TIFF_LONG, 1, &[3, 0, 0, 0])],
+            exif_ifd: None,
+            gps_ifd: None,
+            ifd1: None,
+            thumbnail: None,
+            text_encoding: TextEncoding::Ascii,
+        };
+        long.set_orientation(Orientation::Rotate180);
+        let lb = long.to_bytes();
+        let z = Exif::parse(&lb).unwrap();
+        assert_eq!(z.orientation(), Some(Orientation::Rotate180));
+        let en = z.ifd0.iter().find(|e| e.tag == TAG_ORIENTATION).unwrap();
+        assert_eq!((en.kind, en.count), (TIFF_LONG, 1));
+    }
+
+    /// A malformed non-integer Orientation carrier is replaced by the canonical
+    /// SHORT entry on an explicit set — an authoring API must make the value
+    /// readable (contrast `set_orientation_tag`, which leaves such carriers
+    /// alone during reconciliation).
+    #[test]
+    fn set_orientation_replaces_non_integer_carrier() {
+        let mut exif = Exif {
+            order: ByteOrder::Little,
+            had_prefix: false,
+            ifd0: vec![e(TAG_ORIENTATION, TIFF_ASCII, 2, b"6\0")],
+            exif_ifd: None,
+            gps_ifd: None,
+            ifd1: None,
+            thumbnail: None,
+            text_encoding: TextEncoding::Ascii,
+        };
+        assert!(exif.orientation().is_none(), "ASCII carrier is unreadable");
+        exif.set_orientation(Orientation::Rotate270);
+        let blob = exif.to_bytes();
+        let y = Exif::parse(&blob).unwrap();
+        assert_eq!(y.orientation(), Some(Orientation::Rotate270));
+        let en = y.ifd0.iter().find(|e| e.tag == TAG_ORIENTATION).unwrap();
+        assert_eq!((en.kind, en.count), (TIFF_SHORT, 1));
     }
 }
