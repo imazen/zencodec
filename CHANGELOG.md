@@ -4,6 +4,15 @@ All notable changes to zencodec are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Public-API snapshots migrated to the shared `zenutils-apidoc` (format v3:
+  three disjoint files — supported surface / feature additions / hidden;
+  trait rosters; auto-trait exception encoding). The 150-line local
+  generator became a 3-line shim; the `serde_json` dev-dependency and CI's
+  `cargo-public-api` binary install are gone. zencodec-testkit's surface is
+  now snapshotted too (it is publish-ready per its manifest).
+
 ## [0.1.22] - 2026-06-11
 
 ### Added

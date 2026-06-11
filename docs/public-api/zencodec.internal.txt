@@ -1,0 +1,83 @@
+# zencodec public API — doc(hidden) items and excluded-feature surface
+# excluded features: (none)
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   inherent methods                           30
+#   trait roster entries (type × trait)        26
+#
+# per-module pub lines:
+#   (root)                           16
+#   decode                            3
+#   encode                            1
+#   exif                              5
+#   gainmap                           4
+#   helpers                           1
+
+## items (30 lines)
+
+pub fn CicpEmission::assert_fields_are_eq(&self)
+pub fn ColorEmitFields::assert_fields_are_eq(&self)
+pub fn ColorEmitPolicy::assert_fields_are_eq(&self)
+pub fn IccDisposition::assert_fields_are_eq(&self)
+pub fn IccRetention::assert_fields_are_eq(&self)
+pub fn ImageFormat::assert_fields_are_eq(&self)
+pub fn ImageSequence::assert_fields_are_eq(&self)
+pub fn LimitExceeded::assert_fields_are_eq(&self)
+pub fn MetadataFields::assert_fields_are_eq(&self)
+pub fn MetadataPolicy::assert_fields_are_eq(&self)
+pub fn OrientationHint::assert_fields_are_eq(&self)
+pub fn ResolutionUnit::assert_fields_are_eq(&self)
+pub fn ResourceLimits::assert_fields_are_eq(&self)
+pub fn Supplements::assert_fields_are_eq(&self)
+pub fn ThreadingPolicy::assert_fields_are_eq(&self)
+pub fn UnsupportedOperation::assert_fields_are_eq(&self)
+pub fn decode::DecodeCapabilities::assert_fields_are_eq(&self)
+pub fn decode::DecodePolicy::assert_fields_are_eq(&self)
+pub fn decode::OutputInfo::assert_fields_are_eq(&self)
+pub fn encode::EncodePolicy::assert_fields_are_eq(&self)
+pub fn exif::ByteOrder::assert_fields_are_eq(&self)
+pub fn exif::Exif<'a>::assert_fields_are_eq(&self)
+pub fn exif::ExifPolicy::assert_fields_are_eq(&self)
+pub fn exif::Retention::assert_fields_are_eq(&self)
+pub fn exif::TextEncoding::assert_fields_are_eq(&self)
+pub fn gainmap::Fraction::assert_fields_are_eq(&self)
+pub fn gainmap::GainMapDirection::assert_fields_are_eq(&self)
+pub fn gainmap::Iso21496Format::assert_fields_are_eq(&self)
+pub fn gainmap::UFraction::assert_fields_are_eq(&self)
+pub fn helpers::IccMatchTolerance::assert_fields_are_eq(&self)
+
+## trait impls (26 types)
+
+CicpEmission: TrivialClone
+ColorEmitFields: TrivialClone
+ColorEmitPolicy: TrivialClone
+IccRetention: TrivialClone
+ImageFormat: TrivialClone
+MetadataFields: TrivialClone
+MetadataPolicy: TrivialClone
+OrientationHint: TrivialClone
+Resolution: TrivialClone
+ResolutionUnit: TrivialClone
+ResourceLimits: TrivialClone
+ThreadingPolicy: TrivialClone
+UnsupportedOperation: TrivialClone
+decode::DecodePolicy: TrivialClone
+encode::EncodePolicy: TrivialClone
+exif::ByteOrder: TrivialClone
+exif::ExifPolicy: TrivialClone
+exif::Retention: TrivialClone
+exif::TextEncoding: TrivialClone
+gainmap::Fraction: TrivialClone
+gainmap::GainMapChannel: TrivialClone
+gainmap::GainMapDirection: TrivialClone
+gainmap::GainMapRender: TrivialClone
+gainmap::Iso21496Format: TrivialClone
+gainmap::UFraction: TrivialClone
+helpers::IccMatchTolerance: TrivialClone

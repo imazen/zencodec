@@ -56,8 +56,9 @@ thiserror = "2"
 walkdir = "2.5.0"
 rayon = "1.10.0"
 moxcms = { version = "0.8.1", features = ["options"] }
-# tests-dev/public_api_doc.rs parses `cargo metadata` to enumerate features.
-serde_json = "1.0.150"
+# Shared public-API snapshot test implementation (tests-dev/public_api_doc.rs).
+# git-pinned until zenutils-apidoc 0.1.0 is on crates.io.
+zenutils-apidoc = { git = "https://github.com/imazen/zenutils", rev = "5e9447f30abec9db1309896d4a80018a944e36fd" }
 
 [[bench]]
 name = "exif_filter"
