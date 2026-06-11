@@ -11,7 +11,10 @@ All notable changes to zencodec are documented here.
   trait rosters; auto-trait exception encoding). The 150-line local
   generator became a 3-line shim; the `serde_json` dev-dependency and CI's
   `cargo-public-api` binary install are gone. zencodec-testkit's surface is
-  now snapshotted too (it is publish-ready per its manifest).
+  now snapshotted too (it is publish-ready per its manifest). The tooling
+  is local-only by construction: an optional `_api-doc`-gated dependency
+  plus `required-features`, so CI never compiles the apidoc tree or runs
+  rustdoc builds — regenerate via `just api-doc` / `just fmt`.
 
 ## [0.1.22] - 2026-06-11
 
