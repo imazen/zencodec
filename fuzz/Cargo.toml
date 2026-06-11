@@ -40,3 +40,10 @@ path = "fuzz_targets/metadata_filtered.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "exif_author"
+path = "fuzz_targets/exif_author.rs"
+test = false
+doc = false
+bench = false

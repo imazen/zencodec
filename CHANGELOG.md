@@ -4,6 +4,16 @@ All notable changes to zencodec are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`exif_author` fuzz target** — drives the EXIF *write* API
+  (`Exif::new` / edit-after-parse + `set_orientation` / `set_copyright` /
+  `set_artist`) and asserts authored output always parses, reads back the
+  set values faithfully (NUL-truncation semantics included), and is a
+  canonical serializer fixpoint. Mirrored as `run_author` in
+  `tests/fuzz_regression.rs` so regression seeds replay on stable. Smoke
+  run: 11.6M execs / 90 s, zero findings.
+
 ### Changed
 
 - Public-API snapshots migrated to the shared `zenutils-apidoc` (format v3:
