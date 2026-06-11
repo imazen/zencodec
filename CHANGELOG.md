@@ -4,6 +4,8 @@ All notable changes to zencodec are documented here.
 
 ## [Unreleased]
 
+## [0.1.22] - 2026-06-11
+
 ### Added
 
 - **`Exif::set_orientation(Orientation)`** — insert-or-replace the IFD0
