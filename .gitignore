@@ -61,3 +61,4 @@ fuzz-*.log
 
 # Local-only dev dependency overrides (build against in-tree zen sources)
 .cargo/
+apidoc/target/

@@ -1,0 +1,13 @@
+# CI-free public-API snapshot runner — the only package depending on
+# zenutils-apidoc. The real workspace `exclude`s this directory, so plain
+# `cargo test` and every CI job (including --all-features ones) never
+# compile the apidoc tree or run rustdoc. Regenerate via `just api-doc`.
+[package]
+name = "zencodec-apidoc"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+# git-pinned until zenutils-apidoc 0.1.0 is on crates.io.
+zenutils-apidoc = { git = "https://github.com/imazen/zenutils", rev = "35dcc4a347ed0fd19c204563d92ae8b9787db630" }
