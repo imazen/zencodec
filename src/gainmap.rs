@@ -533,6 +533,18 @@ pub enum GainMapRender {
         /// gain map's encoded maximum (full reconstruction). Transcoding *to native HDR*
         /// uses `None`; `Some(h)` renders for a specific display or HDR class. (Transcoding
         /// to *another gain map* doesn't reconstruct at all — that's [`Components`](Self::Components).)
+        ///
+        /// **Canonical `None` boost (normative):** resolve the f32 boost as
+        /// `(params.linear_alternate_headroom() as f32).max(1.0)` — f64 `exp2`
+        /// of the log2 headroom, rounded to f32 **once**. Implementations
+        /// applying via ultrahdr-core should use its
+        /// `full_reconstruction_boost` helper. Double-rounding routes
+        /// (`2f32.powf(stops as f32)`) can land 1 ULP away and break
+        /// bit-identical reconstruction across codecs (imazen/heic#20).
+        ///
+        /// **No-gain-map input:** decoders return the base rendition (the
+        /// image *is* the image) rather than erroring; the error path is for
+        /// gain-map signal that is present but unusable.
         target_headroom: Option<f32>,
     },
     /// Decode the SDR base **and** surface the gain map (a [`DecodedGainMap`] in the
