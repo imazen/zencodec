@@ -9,18 +9,18 @@
 
 ## summary
 #
-#   inherent methods                           32
-#   trait roster entries (type × trait)        31
+#   inherent methods                           30
+#   trait roster entries (type × trait)        26
 #
 # per-module pub lines:
 #   (root)                           16
 #   decode                            3
-#   encode                            3
+#   encode                            1
 #   exif                              5
 #   gainmap                           4
 #   helpers                           1
 
-## items (32 lines)
+## items (30 lines)
 
 pub fn CicpEmission::assert_fields_are_eq(&self)
 pub fn ColorEmitFields::assert_fields_are_eq(&self)
@@ -42,8 +42,6 @@ pub fn decode::DecodeCapabilities::assert_fields_are_eq(&self)
 pub fn decode::DecodePolicy::assert_fields_are_eq(&self)
 pub fn decode::OutputInfo::assert_fields_are_eq(&self)
 pub fn encode::EncodePolicy::assert_fields_are_eq(&self)
-pub fn encode::NearLosslessBudget::assert_fields_are_eq(&self)
-pub fn encode::QualityMetric::assert_fields_are_eq(&self)
 pub fn exif::ByteOrder::assert_fields_are_eq(&self)
 pub fn exif::Exif<'a>::assert_fields_are_eq(&self)
 pub fn exif::ExifPolicy::assert_fields_are_eq(&self)
@@ -55,7 +53,7 @@ pub fn gainmap::Iso21496Format::assert_fields_are_eq(&self)
 pub fn gainmap::UFraction::assert_fields_are_eq(&self)
 pub fn helpers::IccMatchTolerance::assert_fields_are_eq(&self)
 
-## trait impls (31 types)
+## trait impls (26 types)
 
 CicpEmission: TrivialClone
 ColorEmitFields: TrivialClone
@@ -72,11 +70,6 @@ ThreadingPolicy: TrivialClone
 UnsupportedOperation: TrivialClone
 decode::DecodePolicy: TrivialClone
 encode::EncodePolicy: TrivialClone
-encode::Fidelity: TrivialClone
-encode::FidelityMatch: TrivialClone
-encode::LossyTarget: TrivialClone
-encode::NearLosslessBudget: TrivialClone
-encode::QualityMetric: TrivialClone
 exif::ByteOrder: TrivialClone
 exif::ExifPolicy: TrivialClone
 exif::Retention: TrivialClone
