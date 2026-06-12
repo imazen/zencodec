@@ -47,6 +47,7 @@ mod error;
 /// Structured EXIF/TIFF parsing, pruning, and serialization.
 pub mod exif;
 mod extensions;
+mod fidelity;
 mod format;
 /// Cross-codec gain map types (ISO 21496-1).
 pub mod gainmap;
@@ -159,6 +160,9 @@ pub mod encode {
 
     // Types
     pub use crate::capabilities::EncodeCapabilities;
+    pub use crate::fidelity::{
+        Fidelity, FidelityMatch, LossyTarget, NearLosslessBudget, QualityMetric,
+    };
     pub use crate::negotiate::best_encode_format;
     pub use crate::output::EncodeOutput;
     pub use crate::policy::EncodePolicy;
