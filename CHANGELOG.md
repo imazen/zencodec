@@ -18,6 +18,7 @@ All notable changes to zencodec are documented here.
   `supports_distance`, `supports_metric_target`, `supports_size_target`. Default
   impls bridge to the legacy `with_generic_quality`/`with_lossless` scalars, so
   the change is additive and non-breaking. Design: `docs/near-lossless-design.md`.
+  (f0f9527)
 - **`exif_author` fuzz target** — drives the EXIF *write* API
   (`Exif::new` / edit-after-parse + `set_orientation` / `set_copyright` /
   `set_artist`) and asserts authored output always parses, reads back the
