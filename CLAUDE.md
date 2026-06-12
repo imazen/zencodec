@@ -85,26 +85,14 @@ Tiny, stable crate defining the common interface that all zen* codecs implement:
 
 ## Known Issues
 
-Three bugs verified during the cross-codec color/metadata scenario-matrix
-research (2026-06-01). The first is in this crate; the other two are recorded
-here as cross-repo findings (do NOT edit those repos from here — flag to the
-owner). Full design context: [`docs/color-emit-model.md`](docs/color-emit-model.md).
+One open cross-repo finding from the color/metadata scenario-matrix research
+(2026-06-01). Resolved findings from that research (the double-rotation hazard,
+fixed in this crate's `Metadata::filtered`; the zenavif descriptor-CICP
+override, fixed in zenavif `b3be82a`) are recorded in the respective
+CHANGELOGs. Full design context:
+[`docs/color-emit-model.md`](docs/color-emit-model.md).
 
-1. **Double-rotation hazard — FIXED (this crate, `src/metadata.rs`).** When a
-   decoder bakes orientation upright it sets `Metadata::orientation = Identity`
-   while the EXIF blob still carries the original `Orientation` tag (e.g. `6`); a
-   consumer that re-applied the tag would rotate twice. `Metadata::filtered` now
-   reconciles them — it rewrites the embedded tag to match the authoritative
-   `orientation` field via `helpers::set_exif_orientation` (offset-preserving,
-   fires only on a mismatch so the matched case keeps the zero-copy `Arc` clone).
-   Regression: `filtered_reconciles_baked_orientation_tag`.
-
-2. **AVIF descriptor-CICP override — FIXED (zenavif main, `b3be82a`,
-   2026-06-10).** `apply_descriptor_color` no longer overrides a
-   caller-supplied CICP from `Metadata`; landed with the zencodec 0.1.21
-   color-emit adoption ("AVIF nclx now sole-safe").
-
-3. **Missing signal-range conversion kernels (zenpixels-convert) — HARDENED
+1. **Missing signal-range conversion kernels (zenpixels-convert) — HARDENED
    (refuse-fast, 2026-06-11, zenpixels main `54aca62e`), kernels still
    unbuilt.** `ConvertPlan::new` now refuses any `Narrow <-> Full` crossing
    with `NoPath` (Display names the range crossing), closing the
