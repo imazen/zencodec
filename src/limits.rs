@@ -339,7 +339,7 @@ impl ResourceLimits {
     /// ```
     pub fn for_untrusted_input() -> Self {
         Self {
-            max_pixels: Some(100_000_000),
+            max_pixels: Some(120_000_000),
             max_total_pixels: Some(200_000_000),
             max_width: Some(16384),
             max_height: Some(16384),
@@ -1091,8 +1091,8 @@ mod tests {
         // Width is the first cap we trip (16384 < 30000).
         assert!(matches!(err, LimitExceeded::Width { .. }));
 
-        // Smaller width but still huge pixel count.
-        let info = ImageInfo::new(10000, 12000, ImageFormat::Jpeg);
+        // Smaller width but still huge pixel count (130 MP > the 120 MP cap).
+        let info = ImageInfo::new(10000, 13000, ImageFormat::Jpeg);
         let err = limits.check_image_info(&info).unwrap_err();
         assert!(matches!(err, LimitExceeded::Pixels { .. }));
     }

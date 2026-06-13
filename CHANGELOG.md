@@ -4,6 +4,11 @@ All notable changes to zencodec are documented here.
 
 ## [Unreleased]
 
+### Changed
+- `ResourceLimits::for_untrusted_input()` raises `max_pixels` from 100 MP to
+  120 MP so common ~108 MP camera photos pass the recommended untrusted-input
+  policy (`max_total_pixels` stays 200 MP). No API change.
+
 ### Added
 
 - **`exif_author` fuzz target** — drives the EXIF *write* API
