@@ -196,7 +196,7 @@ pub enum ResolutionUnit {
     Unknown,
 }
 
-pub use zenpixels::{ContentLightLevel, MasteringDisplay};
+pub use zenpixels::{ContentLightLevel, DiffuseWhite, MasteringDisplay};
 
 /// Source color description from the image file.
 ///
@@ -239,6 +239,33 @@ pub struct SourceColor {
     pub content_light_level: Option<ContentLightLevel>,
     /// Mastering Display Color Volume (SMPTE ST 2086) for HDR content.
     pub mastering_display: Option<MasteringDisplay>,
+    /// Absolute-luminance anchor — the nits that a relative-linear sample
+    /// value of `1.0` represents (gain-map reconstruction yields 203, the
+    /// BT.2408 diffuse white).
+    ///
+    /// # Codec contract
+    ///
+    /// Codecs SHOULD populate this with `Some(value)` whenever they can
+    /// deliver a useful absolute-luminance anchor — including format-defined
+    /// implicit defaults that consumer code would otherwise have to
+    /// reconstruct independently. Consumer omission is worse than codec
+    /// double-signalling, so prefer to set the default at the source layer:
+    ///
+    /// - **Explicitly signalled** (JPEG XL `intensity_target`, OpenEXR
+    ///   `whiteLuminance`, HEIF `ndwt`, JXL gain-map `alternate_hdr_headroom`
+    ///   reconstruction): pass it through.
+    /// - **Spec-defined implicit default** (JPEG XL `intensity_target = 255`
+    ///   when the field is omitted, PQ container peak 10 000, HLG nominal
+    ///   peak per BT.2100 §6 + ambient): emit the format default so callers
+    ///   don't have to know per-codec rules.
+    /// - **Cross-format conventions** when the codec has a strong opinion:
+    ///   PNG with `cICP` transfer = PQ → emit `DiffuseWhite::BT2408` (203)
+    ///   as the cross-vendor relative-linear convention.
+    ///
+    /// `None` is reserved for genuinely-ambiguous cases (e.g. an unknown
+    /// transfer function paired with no metadata). When unsignalled, the
+    /// converter falls back to `DiffuseWhite::BT2408`.
+    pub diffuse_white: Option<DiffuseWhite>,
 }
 
 impl SourceColor {
@@ -333,7 +360,7 @@ impl SourceColor {
     /// returns the authoritative source without needing a separate
     /// authority parameter.
     pub fn to_color_context(&self) -> zenpixels::ColorContext {
-        match self.color_authority {
+        let base = match self.color_authority {
             ColorAuthority::Cicp if self.cicp.is_some() => {
                 zenpixels::ColorContext::from_cicp(self.cicp.unwrap())
             }
@@ -353,6 +380,12 @@ impl SourceColor {
                     zenpixels::ColorContext::default()
                 }
             }
+        };
+        // Carry the absolute-luminance anchor onto the pixel-side color context
+        // so the converter (e.g. `zenpixels_convert::hdr::quantize_to`) reads it.
+        match self.diffuse_white {
+            Some(white) => base.with_diffuse_white(white),
+            None => base,
         }
     }
 }
@@ -486,8 +519,9 @@ pub struct ImageInfo {
 }
 
 // ImageInfo contains Arc, Vec, trait objects — heavily pointer-dependent.
+// (SourceColor gained the diffuse_white Option<f32> anchor: 248 → 256 on 64-bit.)
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(core::mem::size_of::<ImageInfo>() == 248);
+const _: () = assert!(core::mem::size_of::<ImageInfo>() == 256);
 
 impl ImageInfo {
     /// Create a new `ImageInfo` with the given dimensions and format.
