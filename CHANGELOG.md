@@ -4,6 +4,19 @@ All notable changes to zencodec are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- EXIF `parse → to_bytes → parse` no longer drops GPS/thumbnail presence when the
+  source carries a duplicate sub-IFD pointer tag (fuzz zencodec#30). A second
+  `0x8825`/`0x8769` entry left in IFD0 after the real pointer was extracted is now
+  stripped on parse (only when that pointer is synthesized on write), so it can't
+  shadow the synthesized pointer on re-parse. A short/unusable pointer that wasn't
+  extracted is still preserved as data.
+- `Metadata::filtered` is idempotent again under orientation-reconciling policies
+  (`ColorAndRotation`, etc.) (fuzz zencodec#97). The reconcile path now sets the
+  orientation entry's `count` to 1 when it rewrites the value; a malformed source
+  `count` left next to a 1-element value serialized as a dangling out-of-line
+  offset that re-parse dropped, so `filtered` went `Some` → `None`.
+
 ### Changed
 - `ResourceLimits::for_untrusted_input()` raises `max_pixels` from 100 MP to
   120 MP so common ~108 MP camera photos pass the recommended untrusted-input

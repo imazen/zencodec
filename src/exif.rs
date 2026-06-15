@@ -459,6 +459,24 @@ impl<'a> Exif<'a> {
             ifd1 = Some(entries);
         }
 
+        // `to_bytes` SYNTHESIZES the IFD0 sub-IFD pointers (Exif/GPS) fresh from
+        // the tree shape, so once a sub-IFD has been extracted, any *remaining*
+        // entry with that pointer tag in IFD0 is a parse artifact — a source
+        // duplicate (the original repro had two 0x8825 entries). It must be
+        // dropped, NOT round-tripped as data: re-parse matches these tags by
+        // number, so the stale entry shadows the synthesized pointer and drops
+        // the real sub-IFD (gps presence drift + broken fixpoint, fuzz
+        // zencodec#30/#96). Strip ONLY when the pointer is being synthesized —
+        // a structural tag whose value was too short to be a usable offset is
+        // legitimately preserved as data by `take_pointer` (sub-IFD stays
+        // `None`), and must keep round-tripping (`short_subifd_pointer_is_preserved`).
+        if exif_ifd.is_some() {
+            ifd0.retain(|e| e.tag != TAG_EXIF_IFD);
+        }
+        if gps_ifd.is_some() {
+            ifd0.retain(|e| e.tag != TAG_GPS_IFD);
+        }
+
         Some(Exif {
             order,
             had_prefix,
@@ -721,10 +739,18 @@ impl<'a> Exif<'a> {
         let Some(entry) = self.ifd0.iter_mut().find(|e| e.tag == TAG_ORIENTATION) else {
             return;
         };
-        // Non-integer orientation carriers are left untouched (count too:
-        // reconciliation rewrites the value, it doesn't repair the entry).
+        // Non-integer orientation carriers are left untouched (reconciliation
+        // rewrites the value, it doesn't repair a field it wasn't asked to
+        // author). But when we DO rewrite the value, we author a single
+        // element, so `count` must become 1 to match: leaving a malformed
+        // source count (e.g. 20) next to a 1-element value yields an entry whose
+        // declared `count × type_size` exceeds its data, which serializes as a
+        // dangling out-of-line offset and is silently dropped on re-parse —
+        // making `filtered` non-idempotent (`Some` → `None`) and losing the
+        // orientation (fuzz zencodec#97).
         if let Some(value) = int_bytes(entry.kind, u32::from(o.to_exif()), order) {
             entry.value = value;
+            entry.count = 1;
         }
     }
 
@@ -2479,5 +2505,58 @@ mod tests {
         assert_eq!(y.orientation(), Some(Orientation::Rotate270));
         let en = y.ifd0.iter().find(|e| e.tag == TAG_ORIENTATION).unwrap();
         assert_eq!((en.kind, en.count), (TIFF_SHORT, 1));
+    }
+
+    /// Regression for fuzz zencodec#97 (`Metadata::filtered` non-idempotent):
+    /// the orientation-reconcile path (`set_orientation_tag`) must canonicalize
+    /// `count` to 1 when it rewrites the value. A malformed source entry with
+    /// `count > 1` left next to a 1-element value serializes as a dangling
+    /// out-of-line offset that re-parse silently drops — so `filtered` went
+    /// `Some` → `None` and lost the orientation on the second pass.
+    #[test]
+    fn reconcile_orientation_canonicalizes_count_97() {
+        let mut x = Exif::new(TextEncoding::Ascii);
+        // count=20 SHORT (40 declared bytes) but only a 2-byte value — exactly
+        // the malformed shape the fuzzer produced.
+        x.ifd0.push(e(TAG_ORIENTATION, TIFF_SHORT, 20, &[0, 1]));
+        x.set_orientation_tag(Orientation::Rotate90);
+        let en = x.ifd0.iter().find(|e| e.tag == TAG_ORIENTATION).unwrap();
+        assert_eq!(en.count, 1, "reconcile must canonicalize orientation count");
+        // Round-trips and is a serializer fixpoint (the property that broke).
+        let b1 = x.to_bytes();
+        let y = Exif::parse(&b1).expect("must re-parse");
+        assert_eq!(y.orientation(), Some(Orientation::Rotate90));
+        assert_eq!(b1, y.to_bytes(), "must be a serializer fixpoint");
+    }
+
+    /// Regression for fuzz zencodec#30/#96: when a GPS sub-IFD pointer is
+    /// successfully extracted, a *duplicate* GPS pointer tag must not survive in
+    /// IFD0 — else `to_bytes` re-emits it and on re-parse it shadows the
+    /// synthesized pointer, dropping the real sub-IFD (gps presence drift) and
+    /// breaking the serializer fixpoint. (A short/unusable pointer that was NOT
+    /// extracted stays as data — see `short_subifd_pointer_is_preserved`.)
+    #[test]
+    fn duplicate_gps_pointer_stripped_on_parse_30() {
+        // MM TIFF, IFD0 @ 8 with two LONG GPS pointers (both usable), each → an
+        // empty GPS IFD. take_pointer extracts the first (gps_ifd = Some), so the
+        // second is a duplicate that must be stripped. Offsets: IFD0 spans
+        // 0x08..0x26 (count + 2×12 + next), empty GPS IFDs at 0x26 and 0x2c.
+        let mut t = vec![b'M', b'M', 0, 0x2a, 0, 0, 0, 8];
+        t.extend_from_slice(&[0, 2]); // 2 entries
+        t.extend_from_slice(&[0x88, 0x25, 0, 4, 0, 0, 0, 1, 0, 0, 0, 0x26]); // GPS LONG -> 0x26
+        t.extend_from_slice(&[0x88, 0x25, 0, 4, 0, 0, 0, 1, 0, 0, 0, 0x2c]); // GPS LONG -> 0x2c (dup)
+        t.extend_from_slice(&[0, 0, 0, 0]); // IFD0 next = 0
+        t.extend_from_slice(&[0, 0, 0, 0, 0, 0]); // empty GPS IFD @ 0x26 (count0, next0)
+        t.extend_from_slice(&[0, 0, 0, 0, 0, 0]); // empty GPS IFD @ 0x2c
+        let x = Exif::parse(&t).expect("fixture must parse");
+        assert!(x.has_gps(), "first GPS pointer should be extracted");
+        assert!(
+            !x.ifd0.iter().any(|e| e.tag == TAG_GPS_IFD),
+            "duplicate GPS structural tag leaked into ifd0"
+        );
+        let b1 = x.to_bytes();
+        let y = Exif::parse(&b1).expect("must re-parse");
+        assert_eq!(x.has_gps(), y.has_gps(), "gps presence must round-trip");
+        assert_eq!(b1, y.to_bytes(), "must be a serializer fixpoint");
     }
 }
