@@ -5,6 +5,16 @@ All notable changes to zencodec are documented here.
 ## [Unreleased]
 
 ### Fixed
+- EXIF authoring/serialization is now a true fixpoint for a dangling thumbnail
+  pointer (fuzz zencodec#96). A thumbnail offset/length pair pointing out of
+  bounds wasn't captured but was kept as data entries in IFD1; a rewrite
+  relocated the IFD so the stale offset landed in-bounds, and the next parse
+  captured a phantom thumbnail (`out != out2`, tags flipping SHORT→LONG, output
+  inflating). The thumbnail offset/length tags are now stripped on parse
+  unconditionally (they're structural — synthesized by `to_bytes` only when a
+  thumbnail is actually present), mirroring the sub-IFD pointer handling.
+  Regression: `exif::tests::dangling_thumbnail_pointer_does_not_survive_96` +
+  `fuzz/regression/exif_author_fixpoint_96`.
 - EXIF `parse → to_bytes → parse` no longer drops GPS/thumbnail presence when the
   source carries a duplicate sub-IFD pointer tag (fuzz zencodec#30). A second
   `0x8825`/`0x8769` entry left in IFD0 after the real pointer was extracted is now

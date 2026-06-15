@@ -454,8 +454,18 @@ impl<'a> Exif<'a> {
                     .and_then(|end| tiff.get(o as usize..end))
             {
                 thumbnail = Some(t);
-                entries.retain(|e| e.tag != TAG_THUMB_OFFSET && e.tag != TAG_THUMB_LENGTH);
             }
+            // Always drop the thumbnail offset/length tags. Like the IFD0 sub-IFD
+            // pointers, they are STRUCTURAL: `to_bytes` synthesizes them fresh
+            // (as LONG) whenever `thumbnail.is_some()`. Keeping a *dangling* pair
+            // (offset out-of-bounds → thumbnail not captured here) as data
+            // entries breaks the serializer fixpoint: a rewrite relocates the
+            // IFD so the stale offset lands in-bounds, and the NEXT parse then
+            // captures a thumbnail the first did not — `Some` thumbnail appears
+            // out of nowhere, with the tags flipping SHORT→LONG and the
+            // thumbnail bytes inflating the output (exif_author, fuzz
+            // zencodec#96). Strip unconditionally so presence is decided once.
+            entries.retain(|e| e.tag != TAG_THUMB_OFFSET && e.tag != TAG_THUMB_LENGTH);
             ifd1 = Some(entries);
         }
 
@@ -2557,6 +2567,47 @@ mod tests {
         let b1 = x.to_bytes();
         let y = Exif::parse(&b1).expect("must re-parse");
         assert_eq!(x.has_gps(), y.has_gps(), "gps presence must round-trip");
+        assert_eq!(b1, y.to_bytes(), "must be a serializer fixpoint");
+    }
+
+    /// Regression for fuzz zencodec#96 (`exif_author` non-fixpoint): a dangling
+    /// thumbnail offset/length pair (offset out of bounds → no thumbnail
+    /// captured) must NOT round-trip as data entries. If it does, a rewrite
+    /// relocates the IFD so the stale offset can land in-bounds, and the next
+    /// parse captures a thumbnail the first did not — `to_bytes` stops being a
+    /// fixpoint and a phantom thumbnail appears. The structural tags must be
+    /// stripped on parse regardless of capture.
+    #[test]
+    fn dangling_thumbnail_pointer_does_not_survive_96() {
+        // MM TIFF: IFD0 @ 8 (one orientation entry) → IFD1 @ 0x1a carrying
+        // THUMB_OFFSET (LONG, value 0xFF00 — far out of bounds for this 56-byte
+        // file) + THUMB_LENGTH. The thumbnail can't be captured; the tags must
+        // not survive as data.
+        let mut t = vec![b'M', b'M', 0, 0x2a, 0, 0, 0, 8];
+        t.extend_from_slice(&[0, 1]); // IFD0 count = 1
+        t.extend_from_slice(&[0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, 1, 0, 0]); // orientation SHORT 1
+        t.extend_from_slice(&[0, 0, 0, 0x1a]); // IFD0 next -> IFD1 @ 0x1a (26)
+        t.extend_from_slice(&[0, 2]); // IFD1 count = 2
+        t.extend_from_slice(&[0x02, 0x01, 0, 4, 0, 0, 0, 1, 0, 0, 0xFF, 0x00]); // THUMB_OFFSET = 0xFF00 (OOB)
+        t.extend_from_slice(&[0x02, 0x02, 0, 4, 0, 0, 0, 1, 0, 0, 0, 0x10]); // THUMB_LENGTH = 16
+        t.extend_from_slice(&[0, 0, 0, 0]); // IFD1 next = 0
+        let x = Exif::parse(&t).expect("fixture must parse");
+        assert!(!x.has_thumbnail(), "OOB thumbnail must not be captured");
+        // The dangling structural tags must be gone from IFD1, not kept as data.
+        if let Some(ifd1) = &x.ifd1 {
+            assert!(
+                !ifd1
+                    .iter()
+                    .any(|e| e.tag == TAG_THUMB_OFFSET || e.tag == TAG_THUMB_LENGTH),
+                "dangling thumbnail tags leaked into ifd1 as data"
+            );
+        }
+        let b1 = x.to_bytes();
+        let y = Exif::parse(&b1).expect("must re-parse");
+        assert!(
+            !y.has_thumbnail(),
+            "dangling thumbnail pointer resurrected after round-trip"
+        );
         assert_eq!(b1, y.to_bytes(), "must be a serializer fixpoint");
     }
 }
