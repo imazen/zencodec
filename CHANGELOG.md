@@ -42,6 +42,17 @@ All notable changes to zencodec are documented here.
   `tests/fuzz_regression.rs` so regression seeds replay on stable. Smoke
   run: 11.6M execs / 90 s, zero findings.
 
+### Documentation
+
+- README "Untrusted input" section now shows the **server-critical surface
+  worked end-to-end**, not just named: how to construct `ResourceLimits` (preset
+  / `none()` + `with_*` / direct public-field set), the units of every field, the
+  unlimited-by-default caveat, how to build and fire a `StopToken` from another
+  thread via `almost_enough::Stopper`, and — the gap an insulated external-dev
+  usability test flagged — a full decode-untrusted-bytes example that actually
+  **attaches** both to the job (`job().with_limits(..).with_stop(..).decoder(..)`).
+  Also pins the `with_generic_quality` scale as `0.0..=100.0` in the Quick Example.
+
 ### Changed
 
 - Public-API snapshots migrated to the shared `zenutils-apidoc` (format v3:
