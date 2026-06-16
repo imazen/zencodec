@@ -67,6 +67,42 @@ let decoded = config.job().decoder(Cow::Borrowed(&jpeg_bytes), &[])?.decode()?;
 let pixels = decoded.into_buffer();
 ```
 
+## Untrusted input: limits, cancellation, errors
+
+```rust,ignore
+use zencodec::{ResourceLimits, StopToken, CodecErrorExt};
+
+// `for_untrusted_input()` is a ready server preset (120 MP, 16384x16384,
+// 1 GB memory, 256 MB input, 65536 frames). Tighten with the `with_*` builders.
+let limits = ResourceLimits::for_untrusted_input().with_max_memory(256 * 1024 * 1024);
+
+// Probe the header, then validate BEFORE the codec allocates pixels:
+let info = config.job().probe(bytes)?;
+limits.check_image_info(&info)?;
+
+// Cancellation: `StopToken` is re-exported from the `almost-enough` crate
+// (`cargo add almost-enough`). Build one from a `Stopper` (which is `Clone`):
+let stopper = almost_enough::Stopper::new();
+let token = StopToken::new(stopper.clone()); // or `stopper.clone().into()`
+// pass `token` to the codec job's `.with_stop(token)`; call `stopper.cancel()`
+// from a deadline/disconnect watcher thread.
+
+// Each codec keeps its OWN opaque error type (there is no shared `CodecError`).
+// Classify one without naming the concrete enum, via `CodecErrorExt`:
+match config.job().decoder(Cow::Borrowed(bytes), &[]) {
+    Ok(_decoder) => { /* _decoder.decode()? */ }
+    Err(e) => {
+        if let Some(limit) = e.limit_exceeded() {
+            eprintln!("resource limit: {limit}"); // -> HTTP 413
+        } else if e.unsupported_operation().is_some() {
+            eprintln!("unsupported"); // -> HTTP 415
+        } else {
+            eprintln!("malformed input: {e}"); // -> HTTP 400
+        }
+    }
+}
+```
+
 ## Key Design Decisions
 
 **Color management is not the codec's job.** Decoders return native pixels with ICC/CICP metadata. Encoders accept pixels as-is and embed the provided metadata. The caller handles CMS transforms.
