@@ -31,6 +31,10 @@ All notable changes to zencodec are documented here.
 - `ResourceLimits::for_untrusted_input()` raises `max_pixels` from 100 MP to
   120 MP so common ~108 MP camera photos pass the recommended untrusted-input
   policy (`max_total_pixels` stays 200 MP). No API change.
+- Doc cleanup to match that 120 MP default: the `ResourceLimits` example now
+  uses `with_max_pixels(120_000_000)`, and the `for_untrusted_input()` doc
+  comment now states the `max_pixels` cap as 120 MP (it still claimed 100 MP).
+  Docs only — no behavior change.
 
 ### Added
 

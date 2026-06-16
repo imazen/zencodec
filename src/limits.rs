@@ -225,7 +225,7 @@ impl ThreadingPolicy {
 /// use zencodec::ResourceLimits;
 ///
 /// let limits = ResourceLimits::none()
-///     .with_max_pixels(100_000_000)
+///     .with_max_pixels(120_000_000) // admits ~108 MP photos
 ///     .with_max_memory(512 * 1024 * 1024);
 /// ```
 ///
@@ -312,7 +312,7 @@ impl ResourceLimits {
     /// not explicitly tuned by the caller.
     ///
     /// Caps applied (chosen conservatively for typical web image workloads):
-    /// - `max_pixels`: 100 MP per frame (covers e.g. 12000 × 8000 stills)
+    /// - `max_pixels`: 120 MP per frame (admits ~108 MP photos, e.g. 12000 × 9000)
     /// - `max_total_pixels`: 200 MP across all frames of an animation
     /// - `max_width` / `max_height`: 16384 each (typical decoder hardware ceiling)
     /// - `max_memory_bytes`: 1 GiB
