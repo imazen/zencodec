@@ -55,7 +55,9 @@ use zenjpeg::{JpegEncoderConfig, JpegDecoderConfig};
 use zencodec::encode::{EncoderConfig, EncodeJob, Encoder};
 use zencodec::decode::{DecoderConfig, DecodeJob, Decode};
 
-// Encode
+// Encode. `with_generic_quality` is the codec-agnostic knob on a calibrated
+// 0.0..=100.0 scale (NOT 0.0..=1.0); higher is better. Read it back with
+// `generic_quality()` — `None` means the codec has no quality dial.
 let config = JpegEncoderConfig::new().with_generic_quality(85.0);
 // (assuming pixels: PixelSlice from your pipeline)
 let output = config.job().encoder()?.encode(pixels.as_slice())?;
@@ -69,26 +71,104 @@ let pixels = decoded.into_buffer();
 
 ## Untrusted input: limits, cancellation, errors
 
+Two server-critical knobs — `ResourceLimits` and a cancellation `StopToken` — are
+attached to the **job**, not the config: `DecodeJob`/`EncodeJob` expose
+`.with_limits(limits)` and `.with_stop(token)` (both consume-and-return-`self`
+builders), so the per-request job carries them while the shared config stays
+immutable. Everything below is on the root: `use zencodec::{ResourceLimits, StopToken};`.
+
+### Constructing `ResourceLimits`
+
+`ResourceLimits` is a plain struct with `pub` `Option<_>` fields — build it three ways:
+
 ```rust,ignore
-use zencodec::{ResourceLimits, StopToken, CodecErrorExt};
+use zencodec::ResourceLimits;
 
-// `for_untrusted_input()` is a ready server preset (120 MP, 16384x16384,
-// 1 GB memory, 256 MB input, 65536 frames). Tighten with the `with_*` builders.
-let limits = ResourceLimits::for_untrusted_input().with_max_memory(256 * 1024 * 1024);
+// 1. Server preset. `for_untrusted_input()` fills generous-but-bounded caps:
+//    max_pixels 120 MP/frame, max_total_pixels 200 MP (all frames),
+//    max_width/max_height 16384 each, max_memory_bytes 1 GiB,
+//    max_input_bytes 256 MiB, max_frames 65 536, max_animation_ms 1 hour.
+//    (`Default`/`none()` is the OPPOSITE — every field `None`, i.e. UNLIMITED;
+//    use that only for trusted input.) Tighten any field with a `with_*` builder:
+let limits = ResourceLimits::for_untrusted_input()
+    .with_max_pixels(4_000_000)          // 4 MP cap for a thumbnail service
+    .with_max_memory(256 * 1024 * 1024); // 256 MiB
 
-// Probe the header, then validate BEFORE the codec allocates pixels:
-let info = config.job().probe(bytes)?;
-limits.check_image_info(&info)?;
+// 2. From scratch off the unlimited default, set only what you need:
+let limits = ResourceLimits::none()
+    .with_max_pixels(16_000_000)         // pixels = width × height (per frame)
+    .with_max_input_bytes(8 * 1024 * 1024); // bytes of encoded input (decode)
 
-// Cancellation: `StopToken` is re-exported from the `almost-enough` crate
-// (`cargo add almost-enough`). Build one from a `Stopper` (which is `Clone`):
+// 3. Direct field set (every field is public):
+let mut limits = ResourceLimits::default();
+limits.max_width = Some(8192);           // pixels
+limits.max_height = Some(8192);          // pixels
+```
+
+Units: `max_pixels` / `max_total_pixels` are pixel counts (`width × height`,
+the latter ×`frame_count`); `max_width` / `max_height` are pixels; `max_memory_bytes`,
+`max_input_bytes`, `max_output_bytes` are bytes; `max_frames` a count;
+`max_animation_ms` milliseconds. A `None` field means that dimension is unchecked.
+
+### Constructing a cancellation `StopToken`
+
+`StopToken` is re-exported from the [`almost-enough`](https://crates.io/crates/almost-enough)
+crate (`cargo add almost-enough`). Make a `Stopper` (cheap, `Clone`, 8 bytes), erase it
+into a `StopToken`, hold a clone of the `Stopper` to fire later from any thread:
+
+```rust,ignore
+use zencodec::StopToken;
+
 let stopper = almost_enough::Stopper::new();
-let token = StopToken::new(stopper.clone()); // or `stopper.clone().into()`
-// pass `token` to the codec job's `.with_stop(token)`; call `stopper.cancel()`
-// from a deadline/disconnect watcher thread.
+let token = StopToken::new(stopper.clone()); // or: stopper.clone().into()
 
-// Each codec keeps its OWN opaque error type (there is no shared `CodecError`).
-// Classify one without naming the concrete enum, via `CodecErrorExt`:
+// Fire from a deadline / client-disconnect watcher — `cancel()` signals every clone:
+std::thread::spawn({
+    let stopper = stopper.clone();
+    move || { /* on timeout or disconnect: */ stopper.cancel(); }
+});
+// (For a no-op token when you don't need cancellation, use `zencodec::Unstoppable`.)
+```
+
+### End-to-end: decode untrusted bytes with a limit + a stop token
+
+`.with_limits()` and `.with_stop()` chain onto the job before you ask for the
+decoder. `probe()` (also on the job) is an O(header) parse — validate against the
+limits **before** the codec allocates pixels, then attach both to the real decode:
+
+```rust,ignore
+use std::borrow::Cow;
+use zencodec::{ResourceLimits, StopToken, CodecErrorExt};
+use zencodec::decode::{DecoderConfig, DecodeJob, Decode};
+
+let limits = ResourceLimits::for_untrusted_input().with_max_memory(256 * 1024 * 1024);
+let stopper = almost_enough::Stopper::new();
+let token = StopToken::new(stopper.clone());
+
+// 1. Probe the header and reject oversized inputs before any pixel allocation.
+let info = config.clone().job().probe(bytes)?;
+limits.check_image_info(&info)?; // -> Err(LimitExceeded) if too big
+
+// 2. Attach BOTH to the job, then decode. Order is free; `decoder()` consumes the job.
+let decoded = config.job()
+    .with_limits(limits)
+    .with_stop(token)
+    .decoder(Cow::Borrowed(bytes), &[])? // &[] = native pixel format
+    .decode()?;
+let pixels = decoded.into_buffer();
+```
+
+`.with_stop()` is honored only by codecs whose `DecodeCapabilities::stop()` is
+true; on others it is a silent no-op (the decode still completes correctly, just
+not interruptibly). `check_image_info` only sees what the header reports — keep
+the `max_memory_bytes` cap so a codec that under-reports still can't over-allocate.
+
+### Classifying a codec's error for an HTTP response
+
+Each codec keeps its OWN opaque error type (there is no shared `CodecError`).
+Classify one without naming the concrete enum, via `CodecErrorExt`:
+
+```rust,ignore
 match config.job().decoder(Cow::Borrowed(bytes), &[]) {
     Ok(_decoder) => { /* _decoder.decode()? */ }
     Err(e) => {
