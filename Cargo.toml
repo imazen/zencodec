@@ -51,7 +51,7 @@ zenbench = "0.1.8"
 thiserror = "2"
 walkdir = "2.5.0"
 rayon = "1.10.0"
-moxcms = { version = "0.8.1", features = ["options"] }
+moxcms = { version = ">=0.8.1, <0.10", features = ["options"] }
 
 [[bench]]
 name = "exif_filter"
