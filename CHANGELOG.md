@@ -4,7 +4,15 @@ All notable changes to zencodec are documented here.
 
 ## [Unreleased]
 
+## [0.1.23] - 2026-06-18
+
 ### Fixed
+- **Construct the empty `ColorContext` via `ColorContext::default()`** instead of
+  a struct literal — zenpixels 0.2.14 sealed `ColorContext` as
+  `#[non_exhaustive]`, so the no-signaling fallback `ColorContext { icc: None,
+  cicp: None }` no longer compiles. `default()` is the no-arg constructor for
+  that case; bumps the `zenpixels` dependency to `^0.2.14` (`default()` was
+  added in 0.2.14).
 - EXIF authoring/serialization is now a true fixpoint for a dangling thumbnail
   pointer (fuzz zencodec#96). A thumbnail offset/length pair pointing out of
   bounds wasn't captured but was kept as data entries in IFD1; a rewrite

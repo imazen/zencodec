@@ -350,10 +350,7 @@ impl SourceColor {
                 } else if let Some(cicp) = self.cicp {
                     zenpixels::ColorContext::from_cicp(cicp)
                 } else {
-                    zenpixels::ColorContext {
-                        icc: None,
-                        cicp: None,
-                    }
+                    zenpixels::ColorContext::default()
                 }
             }
         }
