@@ -192,8 +192,10 @@ pub struct DecodeOutput {
     extensions: Extensions,
 }
 
+// (Carries ImageInfo, which gained the SourceColor diffuse_white anchor:
+// 352 → 360 on 64-bit.)
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(core::mem::size_of::<DecodeOutput>() == 352);
+const _: () = assert!(core::mem::size_of::<DecodeOutput>() == 360);
 
 impl DecodeOutput {
     /// Create a new decode output from a [`PixelBuffer`].

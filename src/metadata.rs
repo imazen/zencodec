@@ -35,7 +35,7 @@ use alloc::sync::Arc;
 
 use crate::Orientation;
 use crate::exif::{Exif, ExifPolicy, Retention};
-use crate::info::{Cicp, ContentLightLevel, MasteringDisplay};
+use crate::info::{Cicp, ContentLightLevel, DiffuseWhite, MasteringDisplay};
 use zenpixels::{ColorPrimaries, TransferFunction};
 
 /// Owned image metadata for encode/decode roundtrip.
@@ -58,14 +58,23 @@ pub struct Metadata {
     pub content_light_level: Option<ContentLightLevel>,
     /// Mastering Display Color Volume for HDR content.
     pub mastering_display: Option<MasteringDisplay>,
+    /// Absolute-luminance anchor — the nits that a relative-linear sample
+    /// value of `1.0` represents.
+    ///
+    /// Codec-side contract: same as [`SourceColor::diffuse_white`] — emit
+    /// `Some(value)` for explicit signals AND for format-defined implicit
+    /// defaults; reserve `None` for genuinely-ambiguous cases. See that
+    /// field for the per-format guidance.
+    pub diffuse_white: Option<DiffuseWhite>,
     /// EXIF orientation.
     pub orientation: Orientation,
 }
 
 // Metadata contains 3× Option<Arc<[u8]>> (fat pointers), so size varies by
 // pointer width. Catch unexpected growth from new fields or alignment changes.
+// (The diffuse_white Option<f32> anchor grew this 104 → 112 on 64-bit.)
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(core::mem::size_of::<Metadata>() == 104);
+const _: () = assert!(core::mem::size_of::<Metadata>() == 112);
 
 impl Metadata {
     /// Create empty metadata.
@@ -156,6 +165,24 @@ impl Metadata {
     /// Set the Content Light Level Info.
     pub fn with_content_light_level(mut self, clli: ContentLightLevel) -> Self {
         self.content_light_level = Some(clli);
+        self
+    }
+
+    /// Set the absolute-luminance anchor (the nits of relative-linear `1.0`).
+    pub fn with_diffuse_white(mut self, white: DiffuseWhite) -> Self {
+        self.diffuse_white = Some(white);
+        self
+    }
+
+    /// Clear the absolute-luminance anchor — drop back to "unsignalled" so a
+    /// downstream re-encoder knows there is no anchor to emit, or so the
+    /// converter falls through to its `DiffuseWhite::BT2408` default.
+    ///
+    /// Needed because `Metadata` is `#[non_exhaustive]`: callers can't reach
+    /// in with a struct literal to set the field back to `None`. Pairs with
+    /// [`with_diffuse_white`](Self::with_diffuse_white).
+    pub fn clear_diffuse_white(mut self) -> Self {
+        self.diffuse_white = None;
         self
     }
 
@@ -555,6 +582,7 @@ impl From<&crate::ImageInfo> for Metadata {
             cicp: info.source_color.cicp,
             content_light_level: info.source_color.content_light_level,
             mastering_display: info.source_color.mastering_display,
+            diffuse_white: info.source_color.diffuse_white,
             orientation: info.orientation,
         }
     }
