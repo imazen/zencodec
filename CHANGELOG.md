@@ -5,6 +5,10 @@ All notable changes to zencodec are documented here.
 ## [Unreleased]
 
 ### Added
+- `DynEncoderConfig::estimate_encode_resources` /
+  `DynDecoderConfig::estimate_decode_resources` — the dyn-dispatch wrappers now
+  forward the resource estimate, so codec-agnostic `&dyn DynEncoderConfig`
+  callers get the same `ResourceEstimate` as the generic path.
 - **Unified resource estimation** (`estimate` module): `ResourceEstimate`
   (peak memory min/typical/max + time + output bytes + threading),
   `ThreadingInformation` (measured CPU-core scaling — Amdahl `parallel_fraction`,

@@ -14,6 +14,7 @@ use core::any::Any;
 use crate::format::ImageFormat;
 use crate::orientation::OrientationHint;
 use crate::output::OwnedAnimationFrame;
+use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 use crate::{DecodeCapabilities, DecodeOutput, ImageInfo, OutputInfo, ResourceLimits, StopToken};
 use enough::Stop;
 use zenpixels::{PixelDescriptor, PixelSlice};
@@ -459,6 +460,15 @@ pub trait DynDecoderConfig: Send + Sync {
     /// Decoder capabilities (metadata support, cancellation, etc.).
     fn capabilities(&self) -> &'static DecodeCapabilities;
 
+    /// Predict peak memory / time / core-scaling for decoding an image with
+    /// the given `image` characteristics on `compute` (forwards to
+    /// [`DecoderConfig::estimate_decode_resources`](crate::decode::DecoderConfig::estimate_decode_resources)).
+    fn estimate_decode_resources(
+        &self,
+        image: &ImageCharacteristics,
+        compute: &ComputeEnvironment,
+    ) -> ResourceEstimate;
+
     /// Create a dyn-dispatched decode job.
     fn dyn_job(&self) -> Box<dyn DynDecodeJob<'_> + '_>;
 }
@@ -481,6 +491,14 @@ where
 
     fn capabilities(&self) -> &'static DecodeCapabilities {
         C::capabilities()
+    }
+
+    fn estimate_decode_resources(
+        &self,
+        image: &ImageCharacteristics,
+        compute: &ComputeEnvironment,
+    ) -> ResourceEstimate {
+        DecoderConfig::estimate_decode_resources(self, image, compute)
     }
 
     fn dyn_job(&self) -> Box<dyn DynDecodeJob<'_> + '_> {

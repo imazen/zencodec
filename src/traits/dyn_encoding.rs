@@ -23,6 +23,7 @@ use core::any::Any;
 
 use crate::StopToken;
 use crate::format::ImageFormat;
+use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 use crate::{EncodeCapabilities, EncodeOutput, Metadata, ResourceLimits};
 use enough::Stop;
 use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
@@ -398,6 +399,15 @@ pub trait DynEncoderConfig: Send + Sync {
     /// Encoder capabilities (metadata support, cancellation, etc.).
     fn capabilities(&self) -> &'static EncodeCapabilities;
 
+    /// Predict peak memory / time / core-scaling for encoding `image` on
+    /// `compute` (forwards to
+    /// [`EncoderConfig::estimate_encode_resources`](crate::encode::EncoderConfig::estimate_encode_resources)).
+    fn estimate_encode_resources(
+        &self,
+        image: &ImageCharacteristics,
+        compute: &ComputeEnvironment,
+    ) -> ResourceEstimate;
+
     /// Create a dyn-dispatched encode job.
     ///
     /// The job owns its config (cloned). The `'static` bound means
@@ -426,6 +436,14 @@ where
 
     fn capabilities(&self) -> &'static EncodeCapabilities {
         C::capabilities()
+    }
+
+    fn estimate_encode_resources(
+        &self,
+        image: &ImageCharacteristics,
+        compute: &ComputeEnvironment,
+    ) -> ResourceEstimate {
+        EncoderConfig::estimate_encode_resources(self, image, compute)
     }
 
     fn dyn_job(&self) -> Box<dyn DynEncodeJob + 'static> {
