@@ -3,7 +3,10 @@
 use alloc::boxed::Box;
 
 use crate::format::ImageFormat;
-use crate::{ComputeEnv, EncodeCapabilities, ImageChars, Metadata, ResourceEstimate, ResourceLimits};
+use crate::{
+    ComputeEnvironment, EncodeCapabilities, ImageCharacteristics, Metadata, ResourceEstimate,
+    ResourceLimits,
+};
 use zenpixels::PixelDescriptor;
 
 use super::BoxedError;
@@ -133,18 +136,19 @@ pub trait EncoderConfig: Clone + Send + Sync {
     ///
     /// The returned [`ResourceEstimate`] is already adjusted for
     /// `compute.cores()` (its `time_ms` and peak terms fold in the codec's
-    /// measured [`ThreadingInfo`](crate::ThreadingInfo)). The three inputs are
-    /// expandable: this config carries the encode knobs (effort / quality /
-    /// lossless / thread intent), [`ImageChars`] the image, and [`ComputeEnv`]
-    /// the hardware.
+    /// measured [`ThreadingInformation`](crate::ThreadingInformation)). The
+    /// three inputs are expandable: this config carries the encode knobs
+    /// (effort / quality / lossless / thread intent),
+    /// [`ImageCharacteristics`] the image, and [`ComputeEnvironment`] the
+    /// hardware.
     ///
     /// The default is a conservative, content- and codec-blind fallback
     /// ([`ResourceEstimate::conservative`]). Codecs with a calibrated
     /// `heuristics` model override this, reading their own config knobs.
     fn estimate_encode_resources(
         &self,
-        image: &ImageChars,
-        compute: &ComputeEnv,
+        image: &ImageCharacteristics,
+        compute: &ComputeEnvironment,
     ) -> ResourceEstimate {
         ResourceEstimate::conservative(image).at_cores(compute.cores())
     }

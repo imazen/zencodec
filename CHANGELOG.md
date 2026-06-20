@@ -6,18 +6,22 @@ All notable changes to zencodec are documented here.
 
 ### Added
 - **Unified resource estimation** (`estimate` module): `ResourceEstimate`
-  (peak memory min/typical/max + `time_ms` + `output_bytes` + `threading`),
-  `ThreadingInfo` (measured CPU-core scaling — `parallel`, `max_useful_threads`,
-  Amdahl `parallel_fraction`, `mem_bytes_per_thread`, with `speedup(cores)` /
-  `effective_threads(cores)`), and two sealed/expandable (`#[non_exhaustive]`)
-  builder inputs: `ComputeEnv` (hardware + conditions of computing — cores now,
-  RAM/SIMD/load expandable) and `ImageChars` (dimensions + `PixelDescriptor` +
-  frame count). Default trait methods `EncoderConfig::estimate_encode_resources`
-  and `DecoderConfig::estimate_decode_resources` take `(&ImageChars, &ComputeEnv)`
-  and return a core-adjusted `ResourceEstimate` (conservative content-blind
-  fallback by default; codecs override with their calibrated `heuristics`).
-  `ResourceEstimate::at_cores` folds the threading model into wall-time + peak.
-  Additive — existing impls keep compiling.
+  (peak memory min/typical/max + time + output bytes + threading),
+  `ThreadingInformation` (measured CPU-core scaling — Amdahl `parallel_fraction`,
+  `max_useful_threads`, per-thread memory, with `speedup(cores)` /
+  `effective_threads(cores)`), and two sealed/growable (`#[non_exhaustive]`,
+  private-fields + accessors) builder inputs: `ComputeEnvironment` (hardware +
+  conditions of computing — cores now; RAM/SIMD/load expandable) and
+  `ImageCharacteristics` (dimensions + `PixelDescriptor` + frame count; content
+  class/HDR tier expandable). Default trait methods
+  `EncoderConfig::estimate_encode_resources` and
+  `DecoderConfig::estimate_decode_resources` take
+  `(&ImageCharacteristics, &ComputeEnvironment)` and return a core-adjusted
+  `ResourceEstimate` (conservative content-blind fallback by default; codecs
+  override with their calibrated `heuristics`). `ResourceEstimate::at_cores`
+  folds the threading model into wall-time + peak. All four structs are
+  accessor-only with full (un-abbreviated) names so they grow without breaking
+  callers. Additive — existing impls keep compiling.
 
 ## [0.1.23] - 2026-06-18
 

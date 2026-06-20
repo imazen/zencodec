@@ -6,8 +6,8 @@ use alloc::boxed::Box;
 use crate::format::ImageFormat;
 use crate::orientation::OrientationHint;
 use crate::{
-    ComputeEnv, DecodeCapabilities, ImageChars, ImageInfo, OutputInfo, ResourceEstimate,
-    ResourceLimits, StopToken,
+    ComputeEnvironment, DecodeCapabilities, ImageCharacteristics, ImageInfo, OutputInfo,
+    ResourceEstimate, ResourceLimits, StopToken,
 };
 use zenpixels::PixelDescriptor;
 
@@ -63,7 +63,8 @@ pub trait DecoderConfig: Clone + Send + Sync {
     }
 
     /// Predict peak memory, wall time, and CPU-core scaling for decoding an
-    /// image with the given [`ImageChars`] on the `compute` environment.
+    /// image with the given [`ImageCharacteristics`] on the `compute`
+    /// environment.
     ///
     /// The returned [`ResourceEstimate`] is already adjusted for
     /// `compute.cores()`. The default is a conservative, content- and
@@ -71,8 +72,8 @@ pub trait DecoderConfig: Clone + Send + Sync {
     /// model override this.
     fn estimate_decode_resources(
         &self,
-        image: &ImageChars,
-        compute: &ComputeEnv,
+        image: &ImageCharacteristics,
+        compute: &ComputeEnvironment,
     ) -> ResourceEstimate {
         ResourceEstimate::conservative(image).at_cores(compute.cores())
     }

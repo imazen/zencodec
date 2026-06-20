@@ -3,17 +3,19 @@
 //! Predicts an operation's **peak memory**, **wall time**, and **CPU-core
 //! scaling** from three expandable inputs:
 //!
-//! 1. [`ImageChars`] — the image (dimensions + pixel format today; content
-//!    class, frame count, HDR tier are future additions).
+//! 1. [`ImageCharacteristics`] — the image (dimensions + pixel format today;
+//!    content class, frame count, HDR tier are future additions).
 //! 2. the codec **config** — the [`EncoderConfig`](crate::encode::EncoderConfig)
 //!    / [`DecoderConfig`](crate::decode::DecoderConfig) itself (it carries
 //!    effort / quality / lossless / speed / thread intent).
-//! 3. [`ComputeEnv`] — the hardware and conditions of computing (available
-//!    cores now; available RAM, SIMD tier, load are future additions).
+//! 3. [`ComputeEnvironment`] — the hardware and conditions of computing
+//!    (available cores now; available RAM, SIMD tier, load are future
+//!    additions).
 //!
-//! [`ImageChars`] and [`ComputeEnv`] are **sealed, expandable builders**
-//! (`#[non_exhaustive]`, constructed via `new` + `with_*`): new fields are
-//! additive, so callers built today keep compiling.
+//! All four types are **sealed and growable**: fields are private and the
+//! structs are `#[non_exhaustive]`, so new fields are additive — read through
+//! the accessor methods, construct through the builders. Callers built today
+//! keep compiling as the structs gain fields.
 //!
 //! The codec answers via
 //! [`EncoderConfig::estimate_encode_resources`](crate::encode::EncoderConfig::estimate_encode_resources)
@@ -22,24 +24,26 @@
 //! conservative content-blind fallback.
 //!
 //! Wall time does **not** scale as `1/cores`: each codec carries a
-//! [`ThreadingInfo`] (measured Amdahl fraction + the thread count beyond which
-//! there is no further speedup), and [`ResourceEstimate::at_cores`] folds it in.
+//! [`ThreadingInformation`] (measured Amdahl fraction + the thread count beyond
+//! which there is no further speedup), and [`ResourceEstimate::at_cores`] folds
+//! it in.
 
 use zenpixels::PixelDescriptor;
 
 /// Hardware + runtime conditions for a resource estimate.
 ///
-/// Sealed/expandable builder — construct via [`ComputeEnv::new`] and refine
-/// with the `with_*` setters. Carries the available core count today; new
-/// fields (RAM, SIMD tier, load factor, GPU) are additive.
+/// Sealed and growable — construct via [`ComputeEnvironment::new`] and refine
+/// with the `with_*` setters; read with the accessors. Carries the available
+/// core count today; new fields (RAM, SIMD tier, load factor, GPU) are
+/// additive.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct ComputeEnv {
+pub struct ComputeEnvironment {
     available_cores: usize,
     available_ram_bytes: Option<u64>,
 }
 
-impl ComputeEnv {
+impl ComputeEnvironment {
     /// A single-core environment with unknown RAM (the conservative default).
     #[must_use]
     pub fn new() -> Self {
@@ -49,8 +53,8 @@ impl ComputeEnv {
         }
     }
 
-    /// Number of CPU cores available to the operation (≥ 1). On `std` callers
-    /// typically pass `std::thread::available_parallelism()`.
+    /// Number of CPU cores available to the operation (clamped to ≥ 1). On
+    /// `std` callers typically pass `std::thread::available_parallelism()`.
     #[must_use]
     pub fn with_cores(mut self, cores: usize) -> Self {
         self.available_cores = cores.max(1);
@@ -77,7 +81,7 @@ impl ComputeEnv {
     }
 }
 
-impl Default for ComputeEnv {
+impl Default for ComputeEnvironment {
     fn default() -> Self {
         Self::new()
     }
@@ -85,19 +89,19 @@ impl Default for ComputeEnv {
 
 /// Characteristics of the image being encoded/decoded.
 ///
-/// Sealed/expandable builder. Carries the dimensions and pixel format today;
-/// future fields (content class, animation frame count, HDR tier depth) are
+/// Sealed and growable. Carries the dimensions and pixel format today; future
+/// fields (content class, animation frame count overrides, HDR tier depth) are
 /// additive.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct ImageChars {
+pub struct ImageCharacteristics {
     width: u32,
     height: u32,
     descriptor: PixelDescriptor,
     frame_count: u32,
 }
 
-impl ImageChars {
+impl ImageCharacteristics {
     /// A still image of `width` × `height` with the given pixel format.
     #[must_use]
     pub fn new(width: u32, height: u32, descriptor: PixelDescriptor) -> Self {
@@ -109,7 +113,7 @@ impl ImageChars {
         }
     }
 
-    /// Number of animation frames (≥ 1).
+    /// Number of animation frames (clamped to ≥ 1).
     #[must_use]
     pub fn with_frame_count(mut self, frames: u32) -> Self {
         self.frame_count = frames.max(1);
@@ -157,41 +161,67 @@ impl ImageChars {
 /// How an operation scales across CPU cores (measured per-codec).
 ///
 /// Wall time does **not** scale as `1/cores`: speedup saturates at
-/// `max_useful_threads` (set by the codec's tile / strategy / block count) and
-/// follows Amdahl's law with `parallel_fraction`. Peak working-set grows by
-/// `mem_bytes_per_thread` per added worker.
+/// [`max_useful_threads`](ThreadingInformation::max_useful_threads) (set by the
+/// codec's tile / strategy / block count) and follows Amdahl's law with
+/// [`parallel_fraction`](ThreadingInformation::parallel_fraction). Peak
+/// working-set grows by
+/// [`memory_bytes_per_thread`](ThreadingInformation::memory_bytes_per_thread)
+/// per added worker.
+///
+/// Sealed and growable: construct via [`ThreadingInformation::SERIAL`] or
+/// [`ThreadingInformation::parallel`], read with the accessors.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
-pub struct ThreadingInfo {
-    /// Whether the operation uses more than one core at all.
-    pub parallel: bool,
-    /// Threads beyond this yield no further speedup. 1 = serial.
-    pub max_useful_threads: u32,
-    /// Amdahl parallel fraction `p`; peak speedup is `1/(1-p)`. 0 = serial.
-    pub parallel_fraction: f32,
-    /// Extra peak working-set per added worker thread, in bytes.
-    pub mem_bytes_per_thread: u64,
+pub struct ThreadingInformation {
+    parallel: bool,
+    max_useful_threads: u32,
+    parallel_fraction: f32,
+    memory_bytes_per_thread: u64,
 }
 
-impl ThreadingInfo {
+impl ThreadingInformation {
     /// A serial operation (no multi-core speedup, no per-thread memory).
     pub const SERIAL: Self = Self {
         parallel: false,
         max_useful_threads: 1,
         parallel_fraction: 0.0,
-        mem_bytes_per_thread: 0,
+        memory_bytes_per_thread: 0,
     };
 
-    /// A parallel operation with the given saturation, Amdahl fraction, and
-    /// per-thread memory.
+    /// A parallel operation with the given saturation (`max_useful_threads`,
+    /// clamped to ≥ 1), Amdahl `parallel_fraction`, and per-thread memory.
     #[must_use]
-    pub fn parallel(max_useful_threads: u32, parallel_fraction: f32, mem_bytes_per_thread: u64) -> Self {
+    pub fn parallel(max_useful_threads: u32, parallel_fraction: f32, memory_bytes_per_thread: u64) -> Self {
         Self {
             parallel: true,
             max_useful_threads: max_useful_threads.max(1),
             parallel_fraction,
-            mem_bytes_per_thread,
+            memory_bytes_per_thread,
         }
+    }
+
+    /// Whether the operation uses more than one core at all.
+    #[must_use]
+    pub fn is_parallel(&self) -> bool {
+        self.parallel
+    }
+
+    /// Threads beyond which there is no further speedup (1 = serial).
+    #[must_use]
+    pub fn max_useful_threads(&self) -> u32 {
+        self.max_useful_threads
+    }
+
+    /// Amdahl parallel fraction `p` (peak speedup is `1/(1-p)`; 0 = serial).
+    #[must_use]
+    pub fn parallel_fraction(&self) -> f32 {
+        self.parallel_fraction
+    }
+
+    /// Extra peak working-set per added worker thread, in bytes.
+    #[must_use]
+    pub fn memory_bytes_per_thread(&self) -> u64 {
+        self.memory_bytes_per_thread
     }
 
     /// Threads that actually do work given `cores` available (clamped to
@@ -215,66 +245,116 @@ impl ThreadingInfo {
 
 /// Predicted resources for an encode (or decode) operation.
 ///
-/// `peak_memory_bytes*` and `time_ms` are the **single-thread** figures plus
-/// the carried [`ThreadingInfo`]; [`ResourceEstimate::at_cores`] re-scales them
-/// for a given core count. Compare against
+/// The peak-memory and time figures are the **single-thread** values plus the
+/// carried [`ThreadingInformation`]; [`ResourceEstimate::at_cores`] re-scales
+/// them for a given core count. Compare against
 /// [`ResourceLimits`](crate::ResourceLimits) to decide whether to admit a job.
+///
+/// Sealed and growable: build via [`ResourceEstimate::new`] + the `with_*`
+/// setters, read with the accessors.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct ResourceEstimate {
-    /// Best-case peak memory (simple / low-entropy content), bytes.
-    pub peak_memory_bytes_min: u64,
-    /// Typical (≈ p50) peak memory for natural content, bytes.
-    pub peak_memory_bytes: u64,
-    /// Conservative upper-bound peak memory (worst content + margin), bytes.
-    pub peak_memory_bytes_max: u64,
-    /// Single-thread wall time in milliseconds (use [`at_cores`] to scale).
-    ///
-    /// [`at_cores`]: ResourceEstimate::at_cores
-    pub time_ms: f32,
-    /// Estimated output size in bytes.
-    pub output_bytes: u64,
-    /// How the operation scales across cores.
-    pub threading: ThreadingInfo,
+    peak_memory_bytes_min: u64,
+    peak_memory_bytes: u64,
+    peak_memory_bytes_max: u64,
+    time_ms: f32,
+    output_bytes: u64,
+    threading: ThreadingInformation,
 }
 
 impl ResourceEstimate {
-    /// Construct from explicit single-thread figures + a threading model.
+    /// A single-thread estimate from the two essentials: the typical peak
+    /// memory and the single-thread wall time. Min/max peak default to the
+    /// typical value, output to 0, and threading to serial — refine with the
+    /// `with_*` setters.
     #[must_use]
-    pub fn new(
-        peak_memory_bytes_min: u64,
-        peak_memory_bytes: u64,
-        peak_memory_bytes_max: u64,
-        time_ms: f32,
-        output_bytes: u64,
-        threading: ThreadingInfo,
-    ) -> Self {
+    pub fn new(peak_memory_bytes: u64, time_ms: f32) -> Self {
         Self {
-            peak_memory_bytes_min,
+            peak_memory_bytes_min: peak_memory_bytes,
             peak_memory_bytes,
-            peak_memory_bytes_max,
+            peak_memory_bytes_max: peak_memory_bytes,
             time_ms,
-            output_bytes,
-            threading,
+            output_bytes: 0,
+            threading: ThreadingInformation::SERIAL,
         }
     }
 
+    /// Set the best-case and worst-case peak-memory bounds (bytes).
+    #[must_use]
+    pub fn with_peak_range(mut self, min: u64, max: u64) -> Self {
+        self.peak_memory_bytes_min = min;
+        self.peak_memory_bytes_max = max;
+        self
+    }
+
+    /// Set the estimated output size in bytes.
+    #[must_use]
+    pub fn with_output_bytes(mut self, bytes: u64) -> Self {
+        self.output_bytes = bytes;
+        self
+    }
+
+    /// Attach the operation's core-scaling model.
+    #[must_use]
+    pub fn with_threading(mut self, threading: ThreadingInformation) -> Self {
+        self.threading = threading;
+        self
+    }
+
+    /// Best-case peak memory (simple / low-entropy content), bytes.
+    #[must_use]
+    pub fn peak_memory_bytes_min(&self) -> u64 {
+        self.peak_memory_bytes_min
+    }
+
+    /// Typical (≈ p50) peak memory for natural content, bytes.
+    #[must_use]
+    pub fn peak_memory_bytes(&self) -> u64 {
+        self.peak_memory_bytes
+    }
+
+    /// Conservative upper-bound peak memory (worst content + margin), bytes.
+    #[must_use]
+    pub fn peak_memory_bytes_max(&self) -> u64 {
+        self.peak_memory_bytes_max
+    }
+
+    /// Wall time in milliseconds (single-thread unless produced by
+    /// [`at_cores`](ResourceEstimate::at_cores)).
+    #[must_use]
+    pub fn time_ms(&self) -> f32 {
+        self.time_ms
+    }
+
+    /// Estimated output size in bytes.
+    #[must_use]
+    pub fn output_bytes(&self) -> u64 {
+        self.output_bytes
+    }
+
+    /// How the operation scales across cores.
+    #[must_use]
+    pub fn threading(&self) -> ThreadingInformation {
+        self.threading
+    }
+
     /// Re-scale wall time and peak memory for `cores` available CPU cores
-    /// using the carried [`ThreadingInfo`]: `time_ms` is divided by the
+    /// using the carried [`ThreadingInformation`]: `time_ms` is divided by the
     /// measured (saturating) speedup and the peaks gain the per-thread working
-    /// set. `time_ms` on `self` must be the single-thread figure.
+    /// set. `self` must carry the single-thread time.
     #[must_use]
     pub fn at_cores(&self, cores: usize) -> Self {
-        let sp = self.threading.speedup(cores) as f64;
+        let speedup = self.threading.speedup(cores) as f64;
         let extra = self
             .threading
-            .mem_bytes_per_thread
+            .memory_bytes_per_thread
             .saturating_mul(self.threading.effective_threads(cores).saturating_sub(1));
         Self {
             peak_memory_bytes_min: self.peak_memory_bytes_min.saturating_add(extra),
             peak_memory_bytes: self.peak_memory_bytes.saturating_add(extra),
             peak_memory_bytes_max: self.peak_memory_bytes_max.saturating_add(extra),
-            time_ms: (self.time_ms as f64 / sp) as f32,
+            time_ms: (self.time_ms as f64 / speedup) as f32,
             output_bytes: self.output_bytes,
             threading: self.threading,
         }
@@ -286,21 +366,18 @@ impl ResourceEstimate {
     /// [`EncoderConfig::estimate_encode_resources`](crate::encode::EncoderConfig::estimate_encode_resources)
     /// with their `heuristics` model.
     #[must_use]
-    pub fn conservative(image: &ImageChars) -> Self {
+    pub fn conservative(image: &ImageCharacteristics) -> Self {
         let input = image.input_bytes().saturating_mul(image.frame_count() as u64);
-        // Fixed overhead + a few input-buffers of working set; deliberately loose.
         let fixed: u64 = 16 << 20;
         let typical = fixed.saturating_add(input.saturating_mul(3));
-        Self {
-            peak_memory_bytes_min: fixed.saturating_add(input.saturating_mul(2)),
-            peak_memory_bytes: typical,
-            peak_memory_bytes_max: fixed.saturating_add(input.saturating_mul(8)),
-            // ~50 Mpix/s placeholder throughput; codecs override with measured.
-            time_ms: (image.pixels().saturating_mul(image.frame_count() as u64) as f64
-                / 50_000.0) as f32,
-            output_bytes: input / 4,
-            threading: ThreadingInfo::SERIAL,
-        }
+        // ~50 Mpix/s placeholder throughput; codecs override with measured.
+        let time_ms = (image.pixels().saturating_mul(image.frame_count() as u64) as f64 / 50_000.0) as f32;
+        Self::new(typical, time_ms)
+            .with_peak_range(
+                fixed.saturating_add(input.saturating_mul(2)),
+                fixed.saturating_add(input.saturating_mul(8)),
+            )
+            .with_output_bytes(input / 4)
     }
 }
 
@@ -313,19 +390,21 @@ mod tests {
     }
 
     #[test]
-    fn compute_env_builder_clamps_and_defaults() {
-        assert_eq!(ComputeEnv::new().cores(), 1);
-        assert_eq!(ComputeEnv::new().with_cores(0).cores(), 1);
-        assert_eq!(ComputeEnv::default().with_cores(16).cores(), 16);
+    fn compute_environment_builder_clamps_and_defaults() {
+        assert_eq!(ComputeEnvironment::new().cores(), 1);
+        assert_eq!(ComputeEnvironment::new().with_cores(0).cores(), 1);
+        assert_eq!(ComputeEnvironment::default().with_cores(16).cores(), 16);
         assert_eq!(
-            ComputeEnv::new().with_available_ram_bytes(1 << 30).available_ram_bytes(),
+            ComputeEnvironment::new()
+                .with_available_ram_bytes(1 << 30)
+                .available_ram_bytes(),
             Some(1 << 30)
         );
     }
 
     #[test]
-    fn image_chars_sizes() {
-        let im = ImageChars::new(1024, 768, desc());
+    fn image_characteristics_sizes() {
+        let im = ImageCharacteristics::new(1024, 768, desc());
         assert_eq!(im.pixels(), 1024 * 768);
         assert_eq!(im.input_bytes(), 1024 * 768 * 3);
         assert_eq!(im.with_frame_count(0).frame_count(), 1);
@@ -333,15 +412,19 @@ mod tests {
 
     #[test]
     fn serial_speedup_is_one() {
-        let ti = ThreadingInfo::SERIAL;
+        let ti = ThreadingInformation::SERIAL;
         assert_eq!(ti.speedup(1), 1.0);
         assert_eq!(ti.speedup(28), 1.0);
         assert_eq!(ti.effective_threads(28), 1);
+        assert!(!ti.is_parallel());
     }
 
     #[test]
     fn parallel_speedup_saturates_and_clamps() {
-        let ti = ThreadingInfo::parallel(8, 0.9, 2_000_000);
+        let ti = ThreadingInformation::parallel(8, 0.9, 2_000_000);
+        assert!(ti.is_parallel());
+        assert_eq!(ti.max_useful_threads(), 8);
+        assert_eq!(ti.memory_bytes_per_thread(), 2_000_000);
         assert!(ti.speedup(1) == 1.0);
         // amdahl(0.9, 4) = 1/(0.1+0.225) ≈ 3.08
         let s4 = ti.speedup(4);
@@ -353,20 +436,22 @@ mod tests {
 
     #[test]
     fn at_cores_scales_time_and_grows_peak() {
-        let ti = ThreadingInfo::parallel(8, 0.9, 2_000_000);
-        let base = ResourceEstimate::new(100, 200, 400, 1000.0, 50, ti);
+        let ti = ThreadingInformation::parallel(8, 0.9, 2_000_000);
+        let base = ResourceEstimate::new(200, 1000.0)
+            .with_peak_range(100, 400)
+            .with_output_bytes(50)
+            .with_threading(ti);
         let scaled = base.at_cores(8);
-        // time drops by the speedup
-        assert!(scaled.time_ms < base.time_ms);
-        // peak grows by mem_bytes_per_thread * (8-1)
-        assert_eq!(scaled.peak_memory_bytes, 200 + 2_000_000 * 7);
+        assert!(scaled.time_ms() < base.time_ms());
+        // peak grows by memory_bytes_per_thread * (8-1)
+        assert_eq!(scaled.peak_memory_bytes(), 200 + 2_000_000 * 7);
     }
 
     #[test]
     fn conservative_is_serial_and_input_scaled() {
-        let est = ResourceEstimate::conservative(&ImageChars::new(1000, 1000, desc()));
-        assert!(!est.threading.parallel);
-        assert!(est.peak_memory_bytes >= 1000 * 1000 * 3);
-        assert_eq!(est.at_cores(28).time_ms, est.time_ms); // serial: no change
+        let est = ResourceEstimate::conservative(&ImageCharacteristics::new(1000, 1000, desc()));
+        assert!(!est.threading().is_parallel());
+        assert!(est.peak_memory_bytes() >= 1000 * 1000 * 3);
+        assert_eq!(est.at_cores(28).time_ms(), est.time_ms()); // serial: no change
     }
 }
