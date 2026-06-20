@@ -51,11 +51,16 @@ use zenpixels::PixelDescriptor;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum SimdTier {
-    /// The SIMD tier is unknown or indeterminate — estimates fall back to
-    /// their calibration-host assumption. (Most real targets have at least a
-    /// baseline vector ISA, so a pure-scalar tier is rarely worth modelling;
-    /// prefer the concrete variants when the tier is known.)
+    /// The SIMD tier is unknown — estimates use a conservative cross-tier
+    /// **baseline average** (no assumption about the running hardware). Use
+    /// [`CurrentHost`](SimdTier::CurrentHost) instead when estimating for the
+    /// local machine.
     Unknown,
+    /// The SIMD tier of the host actually running the estimate (≈ the
+    /// calibration host's native tier). Use this when estimating for the local
+    /// machine — distinct from [`Unknown`](SimdTier::Unknown), which assumes a
+    /// cross-tier baseline average rather than the running hardware.
+    CurrentHost,
     /// WebAssembly without SIMD128 (scalar wasm).
     Wasm,
     /// WebAssembly SIMD128.
