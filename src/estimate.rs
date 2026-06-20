@@ -51,9 +51,14 @@ use zenpixels::PixelDescriptor;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum SimdTier {
-    /// Portable scalar — no SIMD. Covers WebAssembly without SIMD128 and the
-    /// archmage `ScalarToken` baseline.
+    /// Native portable scalar — no SIMD (the archmage `ScalarToken` baseline
+    /// on a target without a vector ISA, or SIMD forced off). For WebAssembly
+    /// without SIMD128 use [`SimdTier::Wasm`] instead — it has a distinct
+    /// performance profile.
     Scalar,
+    /// WebAssembly without SIMD128 (scalar wasm) — kept distinct from native
+    /// [`Scalar`](SimdTier::Scalar) because wasm scalar throughput differs.
+    Wasm,
     /// WebAssembly SIMD128.
     Wasm128,
     /// AArch64 / ARM NEON (archmage `NeonToken`).
