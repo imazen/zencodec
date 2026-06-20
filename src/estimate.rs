@@ -51,13 +51,12 @@ use zenpixels::PixelDescriptor;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum SimdTier {
-    /// Native portable scalar — no SIMD (the archmage `ScalarToken` baseline
-    /// on a target without a vector ISA, or SIMD forced off). For WebAssembly
-    /// without SIMD128 use [`SimdTier::Wasm`] instead — it has a distinct
-    /// performance profile.
-    Scalar,
-    /// WebAssembly without SIMD128 (scalar wasm) — kept distinct from native
-    /// [`Scalar`](SimdTier::Scalar) because wasm scalar throughput differs.
+    /// The SIMD tier is unknown or indeterminate — estimates fall back to
+    /// their calibration-host assumption. (Most real targets have at least a
+    /// baseline vector ISA, so a pure-scalar tier is rarely worth modelling;
+    /// prefer the concrete variants when the tier is known.)
+    Unknown,
+    /// WebAssembly without SIMD128 (scalar wasm).
     Wasm,
     /// WebAssembly SIMD128.
     Wasm128,

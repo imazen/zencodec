@@ -5,7 +5,7 @@ All notable changes to zencodec are documented here.
 ## [Unreleased]
 
 ### Added
-- `estimate::SimdTier` (`Scalar`/`Wasm`/`Wasm128`/`Neon`/`X86V1`–`X86V4`, archmage /
+- `estimate::SimdTier` (`Unknown`/`Wasm`/`Wasm128`/`Neon`/`X86V1`–`X86V4`, archmage /
   `x86-64-vN`-aligned) + `ComputeEnvironment::with_simd_tier` / `simd_tier()` —
   an optional SIMD-tier hint on the compute environment, so a caller that
   detects a tier (e.g. via archmage tokens) can pass it for tier-aware
