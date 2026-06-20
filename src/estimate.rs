@@ -256,7 +256,11 @@ impl ThreadingInformation {
     /// A parallel operation with the given saturation (`max_useful_threads`,
     /// clamped to ≥ 1), Amdahl `parallel_fraction`, and per-thread memory.
     #[must_use]
-    pub fn parallel(max_useful_threads: u32, parallel_fraction: f32, memory_bytes_per_thread: u64) -> Self {
+    pub fn parallel(
+        max_useful_threads: u32,
+        parallel_fraction: f32,
+        memory_bytes_per_thread: u64,
+    ) -> Self {
         Self {
             parallel: true,
             max_useful_threads: max_useful_threads.max(1),
@@ -432,11 +436,14 @@ impl ResourceEstimate {
     /// with their `heuristics` model.
     #[must_use]
     pub fn conservative(image: &ImageCharacteristics) -> Self {
-        let input = image.input_bytes().saturating_mul(image.frame_count() as u64);
+        let input = image
+            .input_bytes()
+            .saturating_mul(image.frame_count() as u64);
         let fixed: u64 = 16 << 20;
         let typical = fixed.saturating_add(input.saturating_mul(3));
         // ~50 Mpix/s placeholder throughput; codecs override with measured.
-        let time_ms = (image.pixels().saturating_mul(image.frame_count() as u64) as f64 / 50_000.0) as f32;
+        let time_ms =
+            (image.pixels().saturating_mul(image.frame_count() as u64) as f64 / 50_000.0) as f32;
         Self::new(typical, time_ms)
             .with_peak_range(
                 fixed.saturating_add(input.saturating_mul(2)),
@@ -468,7 +475,9 @@ mod tests {
         // SIMD tier defaults to unspecified; the builder sets it.
         assert_eq!(ComputeEnvironment::new().simd_tier(), None);
         assert_eq!(
-            ComputeEnvironment::new().with_simd_tier(SimdTier::X86V3).simd_tier(),
+            ComputeEnvironment::new()
+                .with_simd_tier(SimdTier::X86V3)
+                .simd_tier(),
             Some(SimdTier::X86V3)
         );
     }

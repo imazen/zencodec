@@ -3,9 +3,9 @@
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 
+use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 use crate::format::ImageFormat;
 use crate::orientation::OrientationHint;
-use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 use crate::{DecodeCapabilities, ImageInfo, OutputInfo, ResourceLimits, StopToken};
 use zenpixels::PixelDescriptor;
 

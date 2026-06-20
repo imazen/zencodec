@@ -11,10 +11,10 @@ use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use core::any::Any;
 
+use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 use crate::format::ImageFormat;
 use crate::orientation::OrientationHint;
 use crate::output::OwnedAnimationFrame;
-use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 use crate::{DecodeCapabilities, DecodeOutput, ImageInfo, OutputInfo, ResourceLimits, StopToken};
 use enough::Stop;
 use zenpixels::{PixelDescriptor, PixelSlice};

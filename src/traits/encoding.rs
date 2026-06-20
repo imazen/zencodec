@@ -2,8 +2,8 @@
 
 use alloc::boxed::Box;
 
-use crate::format::ImageFormat;
 use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
+use crate::format::ImageFormat;
 use crate::{EncodeCapabilities, Metadata, ResourceLimits};
 use zenpixels::PixelDescriptor;
 

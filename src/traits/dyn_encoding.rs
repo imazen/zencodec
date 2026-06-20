@@ -22,8 +22,8 @@ use alloc::boxed::Box;
 use core::any::Any;
 
 use crate::StopToken;
-use crate::format::ImageFormat;
 use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
+use crate::format::ImageFormat;
 use crate::{EncodeCapabilities, EncodeOutput, Metadata, ResourceLimits};
 use enough::Stop;
 use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};

@@ -43,8 +43,8 @@ mod capabilities;
 mod color;
 mod cost;
 mod detect;
-pub mod estimate;
 mod error;
+pub mod estimate;
 /// Structured EXIF/TIFF parsing, pruning, and serialization.
 pub mod exif;
 mod extensions;
