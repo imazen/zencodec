@@ -708,6 +708,51 @@ pub enum LimitExceeded {
     },
 }
 
+/// Which resource cap a [`LimitExceeded`] refers to, without the actual/max
+/// values. Carried by
+/// [`ErrorCategory::LimitsExceeded`](crate::ErrorCategory::LimitsExceeded)
+/// for routing; obtain it from [`LimitExceeded::kind`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum LimitKind {
+    /// [`LimitExceeded::Width`].
+    Width,
+    /// [`LimitExceeded::Height`].
+    Height,
+    /// [`LimitExceeded::Pixels`].
+    Pixels,
+    /// [`LimitExceeded::Memory`].
+    Memory,
+    /// [`LimitExceeded::InputSize`].
+    InputSize,
+    /// [`LimitExceeded::OutputSize`].
+    OutputSize,
+    /// [`LimitExceeded::Frames`].
+    Frames,
+    /// [`LimitExceeded::Duration`].
+    Duration,
+    /// [`LimitExceeded::TotalPixels`].
+    TotalPixels,
+}
+
+impl LimitExceeded {
+    /// Which cap was exceeded, without the actual/max values — for coarse
+    /// routing via [`ErrorCategory`](crate::ErrorCategory).
+    pub fn kind(&self) -> LimitKind {
+        match self {
+            Self::Width { .. } => LimitKind::Width,
+            Self::Height { .. } => LimitKind::Height,
+            Self::Pixels { .. } => LimitKind::Pixels,
+            Self::Memory { .. } => LimitKind::Memory,
+            Self::InputSize { .. } => LimitKind::InputSize,
+            Self::OutputSize { .. } => LimitKind::OutputSize,
+            Self::Frames { .. } => LimitKind::Frames,
+            Self::Duration { .. } => LimitKind::Duration,
+            Self::TotalPixels { .. } => LimitKind::TotalPixels,
+        }
+    }
+}
+
 impl core::fmt::Display for LimitExceeded {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {

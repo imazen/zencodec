@@ -16,6 +16,9 @@ include = ["/src/**", "/README.md", "/LICENSE*"]
 zencodec = { path = "..", version = "0.1.21" }
 zenpixels = { version = "0.2.10", features = ["icc"] }
 enough = "0.4.4"
+# The `minimal` codec uses `type Error = At<CodecError>` (the envelope pattern),
+# the way real codecs do — they depend on whereat directly to name `At<…>`.
+whereat = "0.1.5"
 
 [dev-dependencies]
 # For the decode-parallelism examples (tests/decode_parallelism.rs) — exercises

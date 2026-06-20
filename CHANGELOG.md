@@ -45,6 +45,112 @@ All notable changes to zencodec are documented here.
   utility that consults `ColorProfileSource` and `HdrPolicy` together
   rather than inspecting raw CICP/ICC fields.
 
+### Added
+- **Unified error taxonomy: `ErrorCategory` enum + `CategorizedError` trait** —
+  a codec-agnostic way to classify any codec error for routing (HTTP status,
+  retry, logging) without naming the concrete enum (zencodec#99, superseding the
+  cancellation-only sketch). `ErrorCategory` (`#[non_exhaustive]`, `Copy`):
+  `MalformedImage`, `UnexpectedEof`, `UnsupportedImageType`,
+  `UnsupportedImageFeature`, `UnsupportedPixelFormat`, `UnsupportedOperation`,
+  `CmsRequired`, `PolicyRejected`, `Cancelled`, `TimedOut`,
+  `LimitsExceeded(LimitKind)`, `OutOfMemory`, `Io`, `InvalidParameters`,
+  `InvalidBuffer`, `InvalidState`, `Internal` — the set distilled from an
+  inventory of every zen codec's error enum (the "unsupported" axis splits into
+  type / image-feature / pixel-format-negotiation / API-operation; `CmsRequired`
+  covers e.g. zenwebp's ICC-synthesis-unavailable; `PolicyRejected` covers valid
+  input a configured policy declined, e.g. zenjxl's progressive-rejected;
+  `InvalidBuffer` is a wrong-geometry pixel buffer and `InvalidState` is API
+  misuse / wrong-sequence). `CategorizedError: Any { fn codec_name(&self) ->
+  Option<&'static str>; fn category(&self) -> ErrorCategory }` is **opt-in** (not
+  blanket-impl'd, not added to the `Error` bound), so adopting it is additive and
+  back-compatible. The `Any` supertrait keeps a `dyn CategorizedError` downcastable
+  (both methods take `&self`, so the trait is dyn-compatible); `codec_name()` is
+  required, returning `None` for the non-codec cause types. A blanket impl forwards
+  through `whereat::At<E>` so a located error keeps its category;
+  zencodec's own cause types implement it (`LimitExceeded` →
+  `LimitsExceeded(kind)`, `UnsupportedOperation` → `UnsupportedOperation` /
+  `UnsupportedPixelFormat`, `enough::StopReason` → `Cancelled`/`TimedOut`), making
+  a codec's mapping a one-line delegation per arm.
+  Adds `LimitKind` (the value-free discriminant of `LimitExceeded`, via
+  `LimitExceeded::kind()`). No new dependencies. The testkit `reference` codec
+  adopts the trait; `reference_cancellation_is_classifiable` proves end-to-end
+  classification through a real cancelled operation. The category set is backed
+  by a per-codec error inventory + right-sizing analysis in
+  `docs/error-taxonomy-inventory.md` (with `docs/error-types-ecosystem.md`
+  surveying the surrounding crates).
+- **`CodecError` envelope + `CodecErrorExt::{codec_error, error_category}`** — the
+  carrier that makes a category (and the originating codec) survive **type
+  erasure**, the gap `CategorizedError` alone can't close (after erasure you hold a
+  `dyn Error`, not a `dyn CategorizedError`). A codec returns it as
+  `whereat::At<CodecError>` — a single *concrete* type, so a consumer recovers the
+  category **and** the codec name from any `Box<dyn Error>` / `anyhow::Error` /
+  mapped wrapper.
+  - **Register-fittable.** `CodecError` is a one-word handle (`Box<Repr>`), so
+    `At<CodecError>` is two words (16 bytes) and `Result<_, At<CodecError>>` is two
+    words too (the box pointer's niche absorbs the discriminant) — returned in
+    registers, not spilled to the stack. The box is what makes that possible: the
+    detail is a *fat* `Box<dyn Error>` (16 bytes alone), so an unboxed envelope
+    would exceed the 16-byte ABI threshold and spill regardless of how thin the
+    other fields are. Trade: one cold-path alloc per error; `new` is no longer
+    `const`. A word-relative `error_types_stay_small` test guards it.
+  - Constructors: `new(codec, category)` (complete error, **no detail**),
+    `from_native(detail)` (bare envelope; reads *both* the category and the codec
+    name from the detail's `CategorizedError`), `of(located: At<E>) -> At<CodecError>`
+    (the located form — maps the inner error via whereat's trace-preserving
+    `map_error`, keeping the `At` on the outside), `from_parts(codec, category,
+    boxed)`, and `with_codec(self, Option<&'static str>)` — a builder to stamp or
+    clear the codec name on an envelope built without one. Accessors `category()` /
+    `codec() -> Option<&'static str>` +
+    `detail() -> Option<&dyn Error>`. `Display` = `"{codec}: {detail-or-category}"`
+    (adds a `Display` impl on `ErrorCategory`); `source()` = detail when present.
+  - **`of` forces location at the type level**: it takes an already-located `At<E>`,
+    so a codec that skipped whereat can't call it — the omission is a compile error,
+    not a silently trace-less error. (`from_native` + whereat's
+    `map_err_at(CodecError::from_native)` converts a bare `Result<_, E>` in one step.)
+  - The codec name lives on the trait as the **required** `codec_name(&self) ->
+    Option<&'static str>` method — no default, so every implementor answers it; the
+    cause types return `None`. It is a `&self` method rather than an associated const
+    precisely so the trait stays **dyn-compatible**: with the new `Any` supertrait a
+    `dyn CategorizedError` can be formed *and* downcast to its concrete type (an
+    associated const forbids the trait object outright). `from_native`/`of`
+    `debug_assert` the name is `Some`, so building an envelope from a bare shared
+    cause type (e.g. `UnsupportedOperation`) fails loudly in dev; wrap such causes in
+    your codec's error type first.
+  - **`ErrorCategory::Io(CodecIoKind)`** carries a `std::io::ErrorKind` under the new
+    opt-in `std` feature, empty under `no_std` (stable variant shape either way, so
+    matching `Io(_)` is portable), anticipating a future `core::io::ErrorKind`.
+  - `CodecErrorExt::codec_error() -> Option<&CodecError>` recovers the envelope by
+    downcast (`At<CodecError>` or a bare `CodecError`); `error_category()` is the
+    shortcut. Both defaulted (additive). Recovery also tolerates a single
+    consumer-applied `Box` layer (`Box<At<CodecError>>` / `At<Box<CodecError>>` /
+    `Box<CodecError>`).
+  - Adoption is one impl per codec — `impl From<MyError> for At<CodecError>` (body
+    `CodecError::of(e.start_at())`, with `fn codec_name(&self) { Some("mycodec") }`
+    on the error's `CategorizedError` impl) — after which `?` auto-wraps existing
+    fallible internals; reject stubs use `Unsupported<At<CodecError>>`.
+  - The testkit `minimal` codec is converted to this pattern;
+    `minimal_envelope_category_survives_dyn_erasure` proves the category **and the
+    codec name** are recovered after the dyn shim erases the error to `BoxedError`
+    (and that the native-enum `reference` path returns `None` once erased — the
+    contrast that motivates the envelope).
+  - All additive vs 0.1.25 (which has neither type) — these are new items; a
+    `cargo-semver-checks` run gates the eventual release (zencodec#99, zencodec#103).
+- **`StreamOffset(pub u64)`** — a shared, downcast-able newtype for the one piece
+  of context worth carrying generically: *where in the encoded input* a decode
+  failed. A codec attaches it to its `At<CodecError>` trace with `.at_data(||
+  StreamOffset(pos))` (rather than a per-locus `CodecError` field); a generic
+  consumer recovers it via `err.contexts().find_map(|c|
+  c.downcast_ref::<StreamOffset>())` — even after erasure to `Box<dyn Error>` — with
+  no codec-specific type named. Per-variant detail (dims, expected/actual, table
+  indices) stays in the native error; richer loci (marker / box fourcc / NAL /
+  frame index) ride the same `at_data` channel, with only the byte offset
+  standardized as a type today. Additive.
+- **Re-export `whereat::{At, ErrorAtExt, ResultAtExt}`** (and `pub use whereat;`) at
+  the crate root, so a codec can name `zencodec::At<zencodec::CodecError>` — the
+  recommended `Error` type — and reach `start_at()` / `.at()` without a direct
+  `whereat` dependency. No new coupling: `At` was already in the public API via the
+  blanket `impl CategorizedError for At<E>`. Additive.
+
 ### Changed
 - Docs: README overhauled to the shared zen\* README conventions — CI badge drops the
   `branch=` param and gains a `label`, an MSRV (1.88) badge is added, a `## Quick start`
