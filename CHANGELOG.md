@@ -5,6 +5,12 @@ All notable changes to zencodec are documented here.
 ## [Unreleased]
 
 ### Added
+- `estimate::SimdTier` (`Scalar`/`Wasm128`/`Neon`/`X86V1`–`X86V4`, archmage /
+  `x86-64-vN`-aligned) + `ComputeEnvironment::with_simd_tier` / `simd_tier()` —
+  an optional SIMD-tier hint on the compute environment, so a caller that
+  detects a tier (e.g. via archmage tokens) can pass it for tier-aware
+  estimates. Self-contained (no archmage dependency); the doc shows the
+  trivial token→tier mapping.
 - `DynEncoderConfig::estimate_encode_resources` /
   `DynDecoderConfig::estimate_decode_resources` — the dyn-dispatch wrappers now
   forward the resource estimate, so codec-agnostic `&dyn DynEncoderConfig`

@@ -30,26 +30,67 @@
 
 use zenpixels::PixelDescriptor;
 
+/// The SIMD instruction tier a codec will dispatch to.
+///
+/// An optional hint on [`ComputeEnvironment`]: a wider/newer tier generally
+/// means a faster encode/decode, so estimates can apply a per-tier time factor
+/// (today they assume the calibration host's tier; the field carries the hint
+/// for future tier-aware models). The variants mirror the `x86-64-vN`
+/// microarchitecture levels and the archmage / magetypes token vocabulary, so
+/// a caller that already detects a tier with archmage maps it trivially:
+///
+/// ```rust,ignore
+/// use zencodec::estimate::{ComputeEnvironment, SimdTier};
+/// // archmage tokens use the same x86-64-vN levels:
+/// let tier = if archmage::X64V4Token::summon().is_some() { SimdTier::X86V4 }
+///     else if archmage::X64V3Token::summon().is_some() { SimdTier::X86V3 }
+///     else if archmage::X64V2Token::summon().is_some() { SimdTier::X86V2 }
+///     else { SimdTier::X86V1 };
+/// let env = ComputeEnvironment::new().with_cores(8).with_simd_tier(tier);
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum SimdTier {
+    /// Portable scalar — no SIMD. Covers WebAssembly without SIMD128 and the
+    /// archmage `ScalarToken` baseline.
+    Scalar,
+    /// WebAssembly SIMD128.
+    Wasm128,
+    /// AArch64 / ARM NEON (archmage `NeonToken`).
+    Neon,
+    /// x86-64-v1 — SSE2 baseline.
+    X86V1,
+    /// x86-64-v2 — SSE4.2 (archmage `X64V2Token`).
+    X86V2,
+    /// x86-64-v3 — AVX2 + FMA (archmage `X64V3Token`).
+    X86V3,
+    /// x86-64-v4 — AVX-512 (archmage `X64V4Token`).
+    X86V4,
+}
+
 /// Hardware + runtime conditions for a resource estimate.
 ///
 /// Sealed and growable — construct via [`ComputeEnvironment::new`] and refine
 /// with the `with_*` setters; read with the accessors. Carries the available
-/// core count today; new fields (RAM, SIMD tier, load factor, GPU) are
-/// additive.
+/// core count + an optional [`SimdTier`] today; new fields (RAM, load factor,
+/// GPU) are additive.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct ComputeEnvironment {
     available_cores: usize,
     available_ram_bytes: Option<u64>,
+    simd_tier: Option<SimdTier>,
 }
 
 impl ComputeEnvironment {
-    /// A single-core environment with unknown RAM (the conservative default).
+    /// A single-core environment with unknown RAM and unspecified SIMD tier
+    /// (the conservative default).
     #[must_use]
     pub fn new() -> Self {
         Self {
             available_cores: 1,
             available_ram_bytes: None,
+            simd_tier: None,
         }
     }
 
@@ -68,6 +109,15 @@ impl ComputeEnvironment {
         self
     }
 
+    /// The SIMD instruction tier the codec will dispatch to (e.g. detected via
+    /// archmage on the caller's side). Estimates may use it to apply a
+    /// per-tier time factor.
+    #[must_use]
+    pub fn with_simd_tier(mut self, tier: SimdTier) -> Self {
+        self.simd_tier = Some(tier);
+        self
+    }
+
     /// Available CPU cores (≥ 1).
     #[must_use]
     pub fn cores(&self) -> usize {
@@ -78,6 +128,12 @@ impl ComputeEnvironment {
     #[must_use]
     pub fn available_ram_bytes(&self) -> Option<u64> {
         self.available_ram_bytes
+    }
+
+    /// The SIMD tier hint, if specified.
+    #[must_use]
+    pub fn simd_tier(&self) -> Option<SimdTier> {
+        self.simd_tier
     }
 }
 
@@ -399,6 +455,12 @@ mod tests {
                 .with_available_ram_bytes(1 << 30)
                 .available_ram_bytes(),
             Some(1 << 30)
+        );
+        // SIMD tier defaults to unspecified; the builder sets it.
+        assert_eq!(ComputeEnvironment::new().simd_tier(), None);
+        assert_eq!(
+            ComputeEnvironment::new().with_simd_tier(SimdTier::X86V3).simd_tier(),
+            Some(SimdTier::X86V3)
         );
     }
 
