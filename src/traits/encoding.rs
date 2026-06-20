@@ -3,7 +3,7 @@
 use alloc::boxed::Box;
 
 use crate::format::ImageFormat;
-use crate::{EncodeCapabilities, Metadata, ResourceLimits};
+use crate::{ComputeEnv, EncodeCapabilities, ImageChars, Metadata, ResourceEstimate, ResourceLimits};
 use zenpixels::PixelDescriptor;
 
 use super::BoxedError;
@@ -126,6 +126,27 @@ pub trait EncoderConfig: Clone + Send + Sync {
     /// Current alpha quality value, or `None` if unsupported.
     fn alpha_quality(&self) -> Option<f32> {
         None
+    }
+
+    /// Predict peak memory, wall time, and CPU-core scaling for encoding
+    /// `image` on the `compute` environment.
+    ///
+    /// The returned [`ResourceEstimate`] is already adjusted for
+    /// `compute.cores()` (its `time_ms` and peak terms fold in the codec's
+    /// measured [`ThreadingInfo`](crate::ThreadingInfo)). The three inputs are
+    /// expandable: this config carries the encode knobs (effort / quality /
+    /// lossless / thread intent), [`ImageChars`] the image, and [`ComputeEnv`]
+    /// the hardware.
+    ///
+    /// The default is a conservative, content- and codec-blind fallback
+    /// ([`ResourceEstimate::conservative`]). Codecs with a calibrated
+    /// `heuristics` model override this, reading their own config knobs.
+    fn estimate_encode_resources(
+        &self,
+        image: &ImageChars,
+        compute: &ComputeEnv,
+    ) -> ResourceEstimate {
+        ResourceEstimate::conservative(image).at_cores(compute.cores())
     }
 
     /// Create a per-operation job, consuming the config.

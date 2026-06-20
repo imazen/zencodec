@@ -5,7 +5,10 @@ use alloc::boxed::Box;
 
 use crate::format::ImageFormat;
 use crate::orientation::OrientationHint;
-use crate::{DecodeCapabilities, ImageInfo, OutputInfo, ResourceLimits, StopToken};
+use crate::{
+    ComputeEnv, DecodeCapabilities, ImageChars, ImageInfo, OutputInfo, ResourceEstimate,
+    ResourceLimits, StopToken,
+};
 use zenpixels::PixelDescriptor;
 
 use super::BoxedError;
@@ -57,6 +60,21 @@ pub trait DecoderConfig: Clone + Send + Sync {
     /// Returns a static reference describing what this decoder supports.
     fn capabilities() -> &'static DecodeCapabilities {
         &DecodeCapabilities::EMPTY
+    }
+
+    /// Predict peak memory, wall time, and CPU-core scaling for decoding an
+    /// image with the given [`ImageChars`] on the `compute` environment.
+    ///
+    /// The returned [`ResourceEstimate`] is already adjusted for
+    /// `compute.cores()`. The default is a conservative, content- and
+    /// codec-blind fallback; codecs with a calibrated decode `heuristics`
+    /// model override this.
+    fn estimate_decode_resources(
+        &self,
+        image: &ImageChars,
+        compute: &ComputeEnv,
+    ) -> ResourceEstimate {
+        ResourceEstimate::conservative(image).at_cores(compute.cores())
     }
 
     /// Create a per-operation job, consuming the config.
