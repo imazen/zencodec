@@ -6,33 +6,34 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1097 lines (supported surface) | zencodec.features.txt 0 added (features: none) | zencodec.internal.txt 56 lines (56 hidden + 0 excluded-feature)
+# files: zencodec.txt 1168 lines (supported surface) | zencodec.features.txt 0 added (features: none) | zencodec.internal.txt 65 lines (65 hidden + 0 excluded-feature)
 
 ## summary
 #
-#   pub modules                                 7
-#   pub types (struct/enum/trait/alias)       111
-#   pub consts/statics                        165
+#   pub modules                                 8
+#   pub types (struct/enum/trait/alias)       117
+#   pub consts/statics                        166
 #   free functions                             33
-#   inherent methods                          420
-#   struct fields                             190
-#   enum variants                             127
+#   inherent methods                          461
+#   struct fields                             194
+#   enum variants                             139
 #   re-exports                                  8
-#   trait roster entries (type × trait)       250
+#   trait roster entries (type × trait)       280
 #   conditional trait impls (verbatim)          2
-#   auto-trait-complete types                  48
+#   auto-trait-complete types                  54
 #   auto-trait exceptions                       5
 #
 # per-module pub lines:
-#   (root)                          600
-#   decode                          163
-#   encode                          102
+#   (root)                          611
+#   decode                          166
+#   encode                          104
+#   estimate                         49
 #   exif                             65
 #   gainmap                         117
 #   helpers                          13
 #   icc                               1
 
-## items (1031 lines)
+## items (1096 lines)
 
 pub mod zencodec
 pub use Cicp
@@ -182,6 +183,7 @@ pub decode::SourceColor::channel_count: core::option::Option<u8>
 pub decode::SourceColor::cicp: core::option::Option<zenpixels::cicp::Cicp>
 pub decode::SourceColor::color_authority: zenpixels::color::ColorAuthority
 pub decode::SourceColor::content_light_level: core::option::Option<zenpixels::hdr::ContentLightLevel>
+pub decode::SourceColor::diffuse_white: core::option::Option<zenpixels::hdr::DiffuseWhite>
 pub decode::SourceColor::icc_profile: core::option::Option<alloc::sync::Arc<[u8]>>
 pub decode::SourceColor::mastering_display: core::option::Option<zenpixels::hdr::MasteringDisplay>
 pub fn SourceColor::color_primaries(&self) -> zenpixels::descriptor::ColorPrimaries
@@ -240,6 +242,7 @@ pub trait decode::DecoderConfig: core::clone::Clone + core::marker::Send + core:
 pub type decode::DecoderConfig::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub type decode::DecoderConfig::Job<'a>: decode::DecodeJob<'a, Error = Self::Error> + 'static
 pub fn decode::DecoderConfig::capabilities() -> &'static decode::DecodeCapabilities
+pub fn decode::DecoderConfig::estimate_decode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
 pub fn decode::DecoderConfig::formats() -> &'static [ImageFormat]
 pub fn decode::DecoderConfig::job<'a>(self) -> Self::Job
 pub fn decode::DecoderConfig::supported_descriptors() -> &'static [zenpixels::descriptor::PixelDescriptor]
@@ -276,6 +279,7 @@ pub trait decode::DynDecoderConfig: core::marker::Send + core::marker::Sync
 pub fn decode::DynDecoderConfig::as_any(&self) -> &dyn core::any::Any
 pub fn decode::DynDecoderConfig::capabilities(&self) -> &'static decode::DecodeCapabilities
 pub fn decode::DynDecoderConfig::dyn_job(&self) -> alloc::boxed::Box<(dyn decode::DynDecodeJob<'_> + '_)>
+pub fn decode::DynDecoderConfig::estimate_decode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
 pub fn decode::DynDecoderConfig::formats(&self) -> &'static [ImageFormat]
 pub fn decode::DynDecoderConfig::supported_descriptors(&self) -> &'static [zenpixels::descriptor::PixelDescriptor]
 pub trait decode::DynStreamingDecoder: core::marker::Send
@@ -412,6 +416,7 @@ pub trait encode::DynEncoderConfig: core::marker::Send + core::marker::Sync
 pub fn encode::DynEncoderConfig::as_any(&self) -> &dyn core::any::Any
 pub fn encode::DynEncoderConfig::capabilities(&self) -> &'static encode::EncodeCapabilities
 pub fn encode::DynEncoderConfig::dyn_job(&self) -> alloc::boxed::Box<(dyn encode::DynEncodeJob + 'static)>
+pub fn encode::DynEncoderConfig::estimate_encode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
 pub fn encode::DynEncoderConfig::format(&self) -> ImageFormat
 pub fn encode::DynEncoderConfig::supported_descriptors(&self) -> &'static [zenpixels::descriptor::PixelDescriptor]
 pub trait encode::EncodeJob: core::marker::Sized
@@ -445,6 +450,7 @@ pub type encode::EncoderConfig::Error: core::error::Error + core::marker::Send +
 pub type encode::EncoderConfig::Job: encode::EncodeJob<Error = Self::Error>
 pub fn encode::EncoderConfig::alpha_quality(&self) -> core::option::Option<f32>
 pub fn encode::EncoderConfig::capabilities() -> &'static encode::EncodeCapabilities
+pub fn encode::EncoderConfig::estimate_encode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
 pub fn encode::EncoderConfig::format() -> ImageFormat
 pub fn encode::EncoderConfig::generic_effort(&self) -> core::option::Option<i32>
 pub fn encode::EncoderConfig::generic_quality(&self) -> core::option::Option<f32>
@@ -456,6 +462,56 @@ pub fn encode::EncoderConfig::with_generic_effort(self, i32) -> Self
 pub fn encode::EncoderConfig::with_generic_quality(self, f32) -> Self
 pub fn encode::EncoderConfig::with_lossless(self, bool) -> Self
 pub fn encode::best_encode_format(zenpixels::descriptor::PixelDescriptor, &[zenpixels::descriptor::PixelDescriptor]) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
+pub mod estimate
+#[non_exhaustive] pub enum estimate::SimdTier
+pub estimate::SimdTier::CurrentHost
+pub estimate::SimdTier::Neon
+pub estimate::SimdTier::Unknown
+pub estimate::SimdTier::Wasm
+pub estimate::SimdTier::Wasm128
+pub estimate::SimdTier::X86V1
+pub estimate::SimdTier::X86V2
+pub estimate::SimdTier::X86V3
+pub estimate::SimdTier::X86V4
+#[non_exhaustive] pub struct estimate::ComputeEnvironment
+pub fn estimate::ComputeEnvironment::available_ram_bytes(&self) -> core::option::Option<u64>
+pub fn estimate::ComputeEnvironment::cores(&self) -> usize
+pub fn estimate::ComputeEnvironment::new() -> Self
+pub fn estimate::ComputeEnvironment::simd_tier(&self) -> core::option::Option<estimate::SimdTier>
+pub fn estimate::ComputeEnvironment::with_available_ram_bytes(self, u64) -> Self
+pub fn estimate::ComputeEnvironment::with_cores(self, usize) -> Self
+pub fn estimate::ComputeEnvironment::with_simd_tier(self, estimate::SimdTier) -> Self
+#[non_exhaustive] pub struct estimate::ImageCharacteristics
+pub fn estimate::ImageCharacteristics::descriptor(&self) -> &zenpixels::descriptor::PixelDescriptor
+pub fn estimate::ImageCharacteristics::frame_count(&self) -> u32
+pub fn estimate::ImageCharacteristics::height(&self) -> u32
+pub fn estimate::ImageCharacteristics::input_bytes(&self) -> u64
+pub fn estimate::ImageCharacteristics::new(u32, u32, zenpixels::descriptor::PixelDescriptor) -> Self
+pub fn estimate::ImageCharacteristics::pixels(&self) -> u64
+pub fn estimate::ImageCharacteristics::width(&self) -> u32
+pub fn estimate::ImageCharacteristics::with_frame_count(self, u32) -> Self
+#[non_exhaustive] pub struct estimate::ResourceEstimate
+pub fn estimate::ResourceEstimate::at_cores(&self, usize) -> Self
+pub fn estimate::ResourceEstimate::conservative(&estimate::ImageCharacteristics) -> Self
+pub fn estimate::ResourceEstimate::new(u64, f32) -> Self
+pub fn estimate::ResourceEstimate::output_bytes(&self) -> u64
+pub fn estimate::ResourceEstimate::peak_memory_bytes(&self) -> u64
+pub fn estimate::ResourceEstimate::peak_memory_bytes_max(&self) -> u64
+pub fn estimate::ResourceEstimate::peak_memory_bytes_min(&self) -> u64
+pub fn estimate::ResourceEstimate::threading(&self) -> estimate::ThreadingInformation
+pub fn estimate::ResourceEstimate::time_ms(&self) -> f32
+pub fn estimate::ResourceEstimate::with_output_bytes(self, u64) -> Self
+pub fn estimate::ResourceEstimate::with_peak_range(self, u64, u64) -> Self
+pub fn estimate::ResourceEstimate::with_threading(self, estimate::ThreadingInformation) -> Self
+#[non_exhaustive] pub struct estimate::ThreadingInformation
+pub const estimate::ThreadingInformation::SERIAL: Self
+pub fn estimate::ThreadingInformation::effective_threads(&self, usize) -> u64
+pub fn estimate::ThreadingInformation::is_parallel(&self) -> bool
+pub fn estimate::ThreadingInformation::max_useful_threads(&self) -> u32
+pub fn estimate::ThreadingInformation::memory_bytes_per_thread(&self) -> u64
+pub fn estimate::ThreadingInformation::parallel(u32, f32, u64) -> Self
+pub fn estimate::ThreadingInformation::parallel_fraction(&self) -> f32
+pub fn estimate::ThreadingInformation::speedup(&self, usize) -> f32
 pub mod exif
 pub enum exif::ByteOrder
 pub exif::ByteOrder::Big
@@ -611,6 +667,10 @@ pub fn helpers::identify_well_known_icc(&[u8], helpers::IccMatchTolerance) -> co
 pub fn helpers::parse_exif_orientation(&[u8]) -> core::option::Option<zenpixels::orientation::Orientation>
 pub fn helpers::set_exif_orientation(&[u8], zenpixels::orientation::Orientation) -> core::option::Option<alloc::vec::Vec<u8>>
 pub mod icc
+#[non_exhaustive] pub enum AllocPreference
+pub AllocPreference::CodecDefault
+pub AllocPreference::Fallible
+pub AllocPreference::Infallible
 #[non_exhaustive] pub enum CicpEmission
 pub CicpEmission::Never
 pub CicpEmission::WhereValidCarrier
@@ -934,11 +994,13 @@ pub fn ImageInfo::with_xmp(self, impl core::convert::Into<alloc::sync::Arc<[u8]>
 #[non_exhaustive] pub struct Metadata
 pub Metadata::cicp: core::option::Option<zenpixels::cicp::Cicp>
 pub Metadata::content_light_level: core::option::Option<zenpixels::hdr::ContentLightLevel>
+pub Metadata::diffuse_white: core::option::Option<zenpixels::hdr::DiffuseWhite>
 pub Metadata::exif: core::option::Option<alloc::sync::Arc<[u8]>>
 pub Metadata::icc_profile: core::option::Option<alloc::sync::Arc<[u8]>>
 pub Metadata::mastering_display: core::option::Option<zenpixels::hdr::MasteringDisplay>
 pub Metadata::orientation: zenpixels::orientation::Orientation
 pub Metadata::xmp: core::option::Option<alloc::sync::Arc<[u8]>>
+pub fn Metadata::clear_diffuse_white(self) -> Self
 pub fn Metadata::color_primaries(&self) -> zenpixels::descriptor::ColorPrimaries
 pub fn Metadata::filtered(&self, &MetadataPolicy) -> Metadata
 pub fn Metadata::is_empty(&self) -> bool
@@ -948,6 +1010,7 @@ pub fn Metadata::with_artist(self, &str) -> Self
 pub fn Metadata::with_cicp(self, zenpixels::cicp::Cicp) -> Self
 pub fn Metadata::with_content_light_level(self, zenpixels::hdr::ContentLightLevel) -> Self
 pub fn Metadata::with_copyright(self, &str) -> Self
+pub fn Metadata::with_diffuse_white(self, zenpixels::hdr::DiffuseWhite) -> Self
 pub fn Metadata::with_exif(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
 pub fn Metadata::with_icc(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
 pub fn Metadata::with_mastering_display(self, zenpixels::hdr::MasteringDisplay) -> Self
@@ -993,6 +1056,7 @@ pub ResourceLimits::max_output_bytes: core::option::Option<u64>
 pub ResourceLimits::max_pixels: core::option::Option<u64>
 pub ResourceLimits::max_total_pixels: core::option::Option<u64>
 pub ResourceLimits::max_width: core::option::Option<u32>
+pub ResourceLimits::prefer_fallible_allocations: AllocPreference
 pub ResourceLimits::threading: ThreadingPolicy
 pub fn ResourceLimits::check_animation_ms(&self, u64) -> core::result::Result<(), LimitExceeded>
 pub fn ResourceLimits::check_dimensions(&self, u32, u32) -> core::result::Result<(), LimitExceeded>
@@ -1017,6 +1081,7 @@ pub fn ResourceLimits::with_max_output(self, u64) -> Self
 pub fn ResourceLimits::with_max_pixels(self, u64) -> Self
 pub fn ResourceLimits::with_max_total_pixels(self, u64) -> Self
 pub fn ResourceLimits::with_max_width(self, u32) -> Self
+pub fn ResourceLimits::with_prefer_fallible_allocations(self, AllocPreference) -> Self
 pub fn ResourceLimits::with_threading(self, ThreadingPolicy) -> Self
 #[non_exhaustive] pub struct SourceColor [also: decode]
 pub SourceColor::bit_depth: core::option::Option<u8>
@@ -1024,6 +1089,7 @@ pub SourceColor::channel_count: core::option::Option<u8>
 pub SourceColor::cicp: core::option::Option<zenpixels::cicp::Cicp>
 pub SourceColor::color_authority: zenpixels::color::ColorAuthority
 pub SourceColor::content_light_level: core::option::Option<zenpixels::hdr::ContentLightLevel>
+pub SourceColor::diffuse_white: core::option::Option<zenpixels::hdr::DiffuseWhite>
 pub SourceColor::icc_profile: core::option::Option<alloc::sync::Arc<[u8]>>
 pub SourceColor::mastering_display: core::option::Option<zenpixels::hdr::MasteringDisplay>
 pub fn SourceColor::color_primaries(&self) -> zenpixels::descriptor::ColorPrimaries
@@ -1066,12 +1132,13 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (58 types)
+## trait impls (64 types)
 
 (): encode::AnimationFrameEncoder
 (dyn core::error::Error + 'static): CodecErrorExt
 (dyn core::error::Error + core::marker::Send + 'static): CodecErrorExt
 (dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static): CodecErrorExt
+AllocPreference: Clone, Copy, Debug, Default, Eq, PartialEq
 AnimationFrame<'_>: Debug
 CicpEmission: Clone, Copy, Debug, Default, Eq, PartialEq
 ColorEmitFields: Clone, Copy, Debug, Default, Eq, PartialEq
@@ -1108,6 +1175,11 @@ decode::OutputInfo: Clone, Debug, Eq, PartialEq
 encode::EncodeCapabilities: Clone, Debug, Default, PartialEq
 encode::EncodeOutput: AsRef<[u8]>, Clone, Debug, Eq, PartialEq
 encode::EncodePolicy: Clone, Copy, Debug, Default, Eq, PartialEq
+estimate::ComputeEnvironment: Clone, Copy, Debug, Default, Eq, PartialEq
+estimate::ImageCharacteristics: Clone, Debug, Eq, PartialEq
+estimate::ResourceEstimate: Clone, Copy, Debug, PartialEq
+estimate::SimdTier: Clone, Copy, Debug, Eq, Hash, PartialEq
+estimate::ThreadingInformation: Clone, Copy, Debug, PartialEq
 exif::ByteOrder: Clone, Copy, Debug, Eq, PartialEq
 exif::Exif<'a>: Clone, Debug, Default, Eq, PartialEq
 exif::ExifPolicy: Clone, Copy, Debug, Eq, PartialEq
@@ -1131,7 +1203,7 @@ impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static,
 
 ## auto traits
 
-48 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+54 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 Extensions: !RefUnwindSafe !UnwindSafe
 ImageInfo: !RefUnwindSafe !UnwindSafe
 OwnedAnimationFrame: !RefUnwindSafe !UnwindSafe

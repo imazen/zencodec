@@ -273,12 +273,48 @@ pub struct ResourceLimits {
     ///
     /// Defaults to [`ThreadingPolicy::Parallel`].
     pub threading: ThreadingPolicy,
+    /// Caller preference for allocation fallibility on buffers sized from
+    /// untrusted input — see [`AllocPreference`].
+    ///
+    /// Defaults to [`AllocPreference::CodecDefault`] (each codec chooses:
+    /// decoders favour `Fallible` on untrusted input, encoders/trusted paths
+    /// favour the faster infallible `vec!`). Override with
+    /// [`with_prefer_fallible_allocations`](Self::with_prefer_fallible_allocations).
+    pub prefer_fallible_allocations: AllocPreference,
 }
 
 // All primitives, no pointers — but Option<u64> niche optimization and
 // enum discriminant alignment can differ between 32-bit and 64-bit.
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(core::mem::size_of::<ResourceLimits>() == 128);
+
+/// Caller preference for how a codec sizes buffers from untrusted input: the
+/// fallible `try_reserve` path (graceful out-of-memory error) or the faster
+/// infallible `vec!` / `Vec::with_capacity` path (aborts on OOM).
+///
+/// `try_reserve` is slower — LLVM lowers `vec![0u8; n]` to a single `calloc`,
+/// so the infallible path is the fast default for trusted sizes. This is a
+/// *preference*: a codec honours it where it controls the allocation and falls
+/// back where it physically cannot (e.g. a transitive allocation it does not
+/// own). Carried on [`ResourceLimits::prefer_fallible_allocations`] so the
+/// policy travels with the rest of the resource governance the codec already
+/// threads.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum AllocPreference {
+    /// Let the codec decide. Decoders favour [`Fallible`](Self::Fallible) for
+    /// untrusted input; encoders and trusted paths favour
+    /// [`Infallible`](Self::Infallible). Default — preserves existing behaviour.
+    #[default]
+    CodecDefault,
+    /// Force the fallible path: `try_reserve`, returning a graceful
+    /// out-of-memory error instead of aborting. Prefer for untrusted input.
+    Fallible,
+    /// Force the infallible path: `vec!` / `Vec::with_capacity` (faster — a
+    /// single `calloc` for the zeroed case) at the cost of aborting on OOM.
+    /// Prefer for trusted sizes and benchmarks.
+    Infallible,
+}
 
 impl Default for ResourceLimits {
     fn default() -> Self {
@@ -293,6 +329,7 @@ impl Default for ResourceLimits {
             max_animation_ms: None,
             max_total_pixels: None,
             threading: ThreadingPolicy::Parallel,
+            prefer_fallible_allocations: AllocPreference::CodecDefault,
         }
     }
 }
@@ -349,6 +386,7 @@ impl ResourceLimits {
             max_frames: Some(65_536),
             max_animation_ms: Some(60 * 60 * 1000),
             threading: ThreadingPolicy::Parallel,
+            prefer_fallible_allocations: AllocPreference::Fallible,
         }
     }
 
@@ -369,6 +407,16 @@ impl ResourceLimits {
     /// Set maximum memory allocation in bytes.
     pub fn with_max_memory(mut self, bytes: u64) -> Self {
         self.max_memory_bytes = Some(bytes);
+        self
+    }
+
+    /// Set the allocation-fallibility preference (see [`AllocPreference`]).
+    ///
+    /// `CodecDefault` lets each codec choose; `Fallible` forces `try_reserve`
+    /// (graceful OOM on untrusted input); `Infallible` forces the faster
+    /// `vec!` path. Default is [`AllocPreference::CodecDefault`].
+    pub fn with_prefer_fallible_allocations(mut self, pref: AllocPreference) -> Self {
+        self.prefer_fallible_allocations = pref;
         self
     }
 
@@ -677,6 +725,25 @@ mod tests {
     fn default_has_no_limits() {
         let limits = ResourceLimits::none();
         assert!(!limits.has_any());
+    }
+
+    #[test]
+    fn alloc_preference_defaults_and_builder() {
+        // Default / none() preserves existing behaviour: let the codec choose.
+        assert_eq!(AllocPreference::default(), AllocPreference::CodecDefault);
+        assert_eq!(
+            ResourceLimits::default().prefer_fallible_allocations,
+            AllocPreference::CodecDefault
+        );
+        // The untrusted preset opts into graceful (fallible) allocation.
+        assert_eq!(
+            ResourceLimits::for_untrusted_input().prefer_fallible_allocations,
+            AllocPreference::Fallible
+        );
+        // Builder overrides either way.
+        let l =
+            ResourceLimits::none().with_prefer_fallible_allocations(AllocPreference::Infallible);
+        assert_eq!(l.prefer_fallible_allocations, AllocPreference::Infallible);
     }
 
     #[test]

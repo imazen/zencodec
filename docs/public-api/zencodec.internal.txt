@@ -9,19 +9,21 @@
 
 ## summary
 #
-#   inherent methods                           30
-#   trait roster entries (type × trait)        26
+#   inherent methods                           34
+#   trait roster entries (type × trait)        31
 #
 # per-module pub lines:
-#   (root)                           16
+#   (root)                           17
 #   decode                            3
 #   encode                            1
+#   estimate                          3
 #   exif                              5
 #   gainmap                           4
 #   helpers                           1
 
-## items (30 lines)
+## items (34 lines)
 
+pub fn AllocPreference::assert_fields_are_eq(&self)
 pub fn CicpEmission::assert_fields_are_eq(&self)
 pub fn ColorEmitFields::assert_fields_are_eq(&self)
 pub fn ColorEmitPolicy::assert_fields_are_eq(&self)
@@ -42,6 +44,9 @@ pub fn decode::DecodeCapabilities::assert_fields_are_eq(&self)
 pub fn decode::DecodePolicy::assert_fields_are_eq(&self)
 pub fn decode::OutputInfo::assert_fields_are_eq(&self)
 pub fn encode::EncodePolicy::assert_fields_are_eq(&self)
+pub fn estimate::ComputeEnvironment::assert_fields_are_eq(&self)
+pub fn estimate::ImageCharacteristics::assert_fields_are_eq(&self)
+pub fn estimate::SimdTier::assert_fields_are_eq(&self)
 pub fn exif::ByteOrder::assert_fields_are_eq(&self)
 pub fn exif::Exif<'a>::assert_fields_are_eq(&self)
 pub fn exif::ExifPolicy::assert_fields_are_eq(&self)
@@ -53,8 +58,9 @@ pub fn gainmap::Iso21496Format::assert_fields_are_eq(&self)
 pub fn gainmap::UFraction::assert_fields_are_eq(&self)
 pub fn helpers::IccMatchTolerance::assert_fields_are_eq(&self)
 
-## trait impls (26 types)
+## trait impls (31 types)
 
+AllocPreference: TrivialClone
 CicpEmission: TrivialClone
 ColorEmitFields: TrivialClone
 ColorEmitPolicy: TrivialClone
@@ -70,6 +76,10 @@ ThreadingPolicy: TrivialClone
 UnsupportedOperation: TrivialClone
 decode::DecodePolicy: TrivialClone
 encode::EncodePolicy: TrivialClone
+estimate::ComputeEnvironment: TrivialClone
+estimate::ResourceEstimate: TrivialClone
+estimate::SimdTier: TrivialClone
+estimate::ThreadingInformation: TrivialClone
 exif::ByteOrder: TrivialClone
 exif::ExifPolicy: TrivialClone
 exif::Retention: TrivialClone

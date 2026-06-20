@@ -5,6 +5,12 @@ All notable changes to zencodec are documented here.
 ## [Unreleased]
 
 ### Added
+- **`AllocPreference`** (`#[non_exhaustive]` enum — `CodecDefault` / `Fallible` / `Infallible`) +
+  `ResourceLimits::prefer_fallible_allocations` field + `with_prefer_fallible_allocations(..)` builder:
+  a per-request caller preference for whether a codec sizes untrusted-input buffers via the fallible
+  `try_reserve` path (graceful OOM) or the faster infallible `vec!` path. `CodecDefault` (the default)
+  lets each codec choose and preserves existing behaviour; `for_untrusted_input()` now presets
+  `Fallible`. Additive — the policy travels with `ResourceLimits`; codecs consume it in a follow-up.
 - `estimate::SimdTier` (`Unknown`/`CurrentHost`/`Wasm`/`Wasm128`/`Neon`/`X86V1`–`X86V4`, archmage /
   `x86-64-vN`-aligned) + `ComputeEnvironment::with_simd_tier` / `simd_tier()` —
   an optional SIMD-tier hint on the compute environment, so a caller that
