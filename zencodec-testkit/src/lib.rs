@@ -1224,6 +1224,105 @@ mod tests {
         check_capability_honesty(e, d, &TestImage::rgba8_gradient(12, 9)).unwrap();
     }
 
+    /// A real reference-codec operation cancelled via its `Stop` token surfaces
+    /// an error whose [`ErrorCategory`] is `Cancelled` — classified through the
+    /// codec's opt-in [`CategorizedError`] impl, no concrete-enum match needed
+    /// (issue #99). This is what lets a server map a cancelled request to HTTP
+    /// 499 instead of treating it as malformed input.
+    #[test]
+    fn reference_cancellation_is_classifiable() {
+        use enough::{Stop, StopReason};
+        use zencodec::{CategorizedError, CodecErrorExt, ErrorCategory};
+
+        // A token already in the stopped state — the codec's first check fires.
+        struct Cancelled;
+        impl Stop for Cancelled {
+            fn check(&self) -> Result<(), StopReason> {
+                Err(StopReason::Cancelled)
+            }
+        }
+
+        let img = TestImage::rgba8_gradient(8, 8);
+        let mut a = ReferenceEncoderConfig::new()
+            .job()
+            .animation_frame_encoder()
+            .expect("animation encoder");
+        let err = a
+            .push_frame(img.as_slice(), 40, Some(&Cancelled))
+            .expect_err("a fired stop token must cancel the push");
+
+        // Classify it the way a generic consumer would, with no knowledge of RefError:
+        assert_eq!(err.category(), ErrorCategory::Cancelled);
+        // ...and it must NOT be mistaken for a limit or an unsupported operation.
+        assert!(err.limit_exceeded().is_none());
+        assert!(err.unsupported_operation().is_none());
+    }
+
+    /// The envelope pattern (`type Error = At<CodecError>`, the `minimal` codec)
+    /// lets a generic consumer recover the [`ErrorCategory`] *after dyn dispatch
+    /// erases the concrete error to `BoxedError`* — the case typed-only
+    /// classification (issue #99) can't reach, because the erased value is a
+    /// `dyn Error`, not a `dyn CategorizedError`. This is what the envelope buys.
+    #[test]
+    fn minimal_envelope_category_survives_dyn_erasure() {
+        use zencodec::decode::DynDecoderConfig;
+        use zencodec::{CodecError, CodecErrorExt, ErrorCategory};
+
+        // Drive the minimal codec entirely through the dyn surface; its
+        // `At<CodecError>` is erased to `Box<dyn Error>` by the shim.
+        let cfg = MinimalDecoderConfig::new();
+        let dyn_min: &dyn DynDecoderConfig = &cfg;
+        let erased = dyn_min
+            .dyn_job()
+            .probe(b"not a ZCR1 header")
+            .expect_err("malformed header must fail");
+        // A consumer holding only `Box<dyn Error>` recovers the category — and
+        // the originating codec name, so it can tell codecs apart generically.
+        assert_eq!(erased.error_category(), Some(ErrorCategory::MalformedImage));
+        assert_eq!(
+            erased.codec_error().and_then(CodecError::codec),
+            Some(crate::reference::MINIMAL_CODEC_NAME)
+        );
+
+        // Contrast: the reference codec (`type Error = RefError`) classifies fine
+        // on the *typed* path, but once dyn dispatch erases it there is no shared
+        // concrete type to downcast to — the gap the envelope closes.
+        let ref_cfg = ReferenceDecoderConfig;
+        let dyn_ref: &dyn DynDecoderConfig = &ref_cfg;
+        let erased_ref = dyn_ref
+            .dyn_job()
+            .probe(b"not a ZCR1 header")
+            .expect_err("malformed header must fail");
+        assert_eq!(erased_ref.error_category(), None);
+        assert!(erased_ref.codec_error().is_none());
+    }
+
+    /// On the typed path, `At<CodecError>` answers the category two ways — the
+    /// total inherent `category()` on the envelope and the `Option` recovery —
+    /// and carries a location trace (the `From` bridge starts it).
+    #[test]
+    fn minimal_envelope_typed_path_and_trace() {
+        use std::borrow::Cow;
+        use zencodec::decode::{DecodeJob, DecoderConfig};
+        use zencodec::{CodecErrorExt, ErrorCategory};
+
+        let err = MinimalDecoderConfig::new()
+            .job()
+            .decoder(Cow::Borrowed(b"not a ZCR1 header"), &[])
+            .expect_err("malformed header must fail");
+        // Total category + codec name via the concrete envelope:
+        assert_eq!(err.error().category(), ErrorCategory::MalformedImage);
+        assert_eq!(
+            err.error().codec(),
+            Some(crate::reference::MINIMAL_CODEC_NAME)
+        );
+        // Same category via the generic Option recovery:
+        assert_eq!(err.error_category(), Some(ErrorCategory::MalformedImage));
+        // The trace was started by the bridge's `.start_at()`.
+        let dbg = format!("{err:?}");
+        assert!(dbg.contains("at "), "expected a trace frame: {dbg}");
+    }
+
     /// The minimal codec declares every optional capability *false* and rejects
     /// those paths, so the false-direction branches must all pass.
     #[test]

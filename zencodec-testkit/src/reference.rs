@@ -25,6 +25,7 @@
 use std::borrow::Cow;
 
 use enough::{Stop, StopReason};
+use whereat::At;
 use zencodec::decode::{
     AnimationFrameDecoder, Decode, DecodeCapabilities, DecodeJob, DecodeOutput, DecodeRowSink,
     DecoderConfig, OutputInfo, SinkError, StreamingDecode,
@@ -33,8 +34,9 @@ use zencodec::encode::{
     AnimationFrameEncoder, EncodeCapabilities, EncodeJob, EncodeOutput, Encoder, EncoderConfig,
 };
 use zencodec::{
-    AnimationFrame, Cicp, ImageFormat, ImageInfo, ImageSequence, Metadata, Orientation,
-    ResourceLimits, StopToken, UnsupportedOperation,
+    AnimationFrame, CategorizedError, Cicp, CodecError, CodecIoKind, ErrorCategory, ImageFormat,
+    ImageInfo, ImageSequence, Metadata, Orientation, ResourceLimits, StopToken,
+    UnsupportedOperation,
 };
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
 
@@ -49,7 +51,8 @@ pub enum RefError {
     Unsupported(UnsupportedOperation),
     /// Malformed wire data.
     Invalid(String),
-    /// Cooperative cancellation fired.
+    /// Cooperative cancellation fired. The [`CategorizedError`] impl maps it
+    /// (and a timeout) to the right [`ErrorCategory`] without naming `RefError`.
     Cancelled(StopReason),
     /// A resource limit was exceeded.
     Limit(zencodec::LimitExceeded),
@@ -75,7 +78,8 @@ impl std::error::Error for RefError {
             Self::Unsupported(e) => Some(e),
             Self::Limit(e) => Some(e),
             Self::Sink(e) => Some(e.as_ref()),
-            _ => None,
+            // StopReason is not an Error, so cancellation isn't a source link.
+            Self::Cancelled(_) | Self::Invalid(_) => None,
         }
     }
 }
@@ -90,11 +94,51 @@ impl From<StopReason> for RefError {
         Self::Cancelled(r)
     }
 }
+
+/// Opt into the codec-agnostic error taxonomy: map each variant to a category,
+/// delegating to the zencodec cause types where they apply.
+impl CategorizedError for RefError {
+    fn codec_name(&self) -> Option<&'static str> {
+        Some(MINIMAL_CODEC_NAME)
+    }
+    fn category(&self) -> ErrorCategory {
+        match self {
+            Self::Unsupported(e) => e.category(),
+            Self::Invalid(_) => ErrorCategory::MalformedImage,
+            Self::Cancelled(r) => r.category(),
+            Self::Limit(e) => e.category(),
+            Self::Sink(_) => ErrorCategory::Io(CodecIoKind::opaque()),
+        }
+    }
+}
 impl From<zencodec::LimitExceeded> for RefError {
     fn from(e: zencodec::LimitExceeded) -> Self {
         Self::Limit(e)
     }
 }
+
+/// The one-impl bridge a codec adds to return the shared envelope as
+/// `At<CodecError>` (the [`minimal`](crate::minimal) codec does this; the
+/// [`reference`](crate::reference) keeps the simpler `type Error = RefError`).
+///
+/// `.start_at()` begins the location trace; `CodecError::of` then takes that
+/// `At<RefError>` and maps it to `At<CodecError>`, keeping the trace on the
+/// outside and reading the category *and* codec name
+/// ([`RefError::codec_name`](CategorizedError::codec_name)) from the value. With
+/// this in place, `?` on any `Result<_, RefError>` auto-wraps into
+/// `At<CodecError>`, so existing fallible internals need no rewrite.
+impl From<RefError> for At<CodecError> {
+    #[track_caller]
+    fn from(e: RefError) -> Self {
+        use whereat::ErrorAtExt;
+        CodecError::of(e.start_at())
+    }
+}
+
+/// Codec name the envelope reports (via [`RefError`]'s `codec_name`). The only
+/// consumer of the bridge is the [`minimal`](crate::minimal) codec (the
+/// `reference` returns `RefError` directly), so it names that codec.
+pub(crate) const MINIMAL_CODEC_NAME: &str = "zencodec-testkit/minimal";
 
 // ===========================================================================
 // Wire format

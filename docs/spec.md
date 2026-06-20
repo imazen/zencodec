@@ -938,14 +938,182 @@ color/orientation/metadata before a codec runs: `docs/correctness-model.md`.
 
 ## Error utilities
 
+### `ErrorCategory` (enum) + `CategorizedError` (trait)
+
+Coarse, codec-agnostic error classification for routing (HTTP status, retry,
+logging) without naming the concrete error enum.
+
+```rust
+#[non_exhaustive]
+enum ErrorCategory {
+    MalformedImage, UnexpectedEof,
+    UnsupportedImageType, UnsupportedImageFeature, UnsupportedPixelFormat,
+    UnsupportedOperation, CmsRequired, PolicyRejected,
+    Cancelled, TimedOut, LimitsExceeded(LimitKind), OutOfMemory,
+    Io(CodecIoKind), InvalidParameters, InvalidBuffer, InvalidState, Internal,
+}
+
+trait CategorizedError: core::any::Any {
+    fn codec_name(&self) -> Option<&'static str>;  // required; cause types return None
+    fn category(&self) -> ErrorCategory;
+}
+```
+
+The "unsupported" axis is split four ways: `UnsupportedImageType` (the format
+isn't handled at all), `UnsupportedImageFeature` (a bitstream feature within a
+handled format), `UnsupportedPixelFormat` (negotiation found no common
+`PixelDescriptor`), and `UnsupportedOperation` (the requested API operation).
+`CmsRequired` flags a colour-management transform the codec won't perform itself.
+`PolicyRejected` is valid input the codec *could* handle but a configured policy
+declined (e.g. progressive content rejected by a decode policy). `InvalidBuffer`
+is a wrong-geometry pixel buffer (size/stride/alignment/descriptor) and
+`InvalidState` is API misuse (called out of sequence) — both distinct from
+`InvalidParameters` (config/knobs). `Io` carries a `CodecIoKind` — a
+`std::io::ErrorKind` when the `std` feature is enabled, empty under `no_std` (the
+variant shape is stable either way, so matching `Io(_)` is portable), anticipating
+a future `core::io::ErrorKind`.
+The set is distilled from a per-codec inventory; see
+[`error-taxonomy-inventory.md`](error-taxonomy-inventory.md) for the
+variant→category mapping and right-sizing rationale, and
+[`error-types-ecosystem.md`](error-types-ecosystem.md) for the wider ecosystem.
+
+`CategorizedError` is **opt-in** (not blanket-implemented): a codec implements it
+on its error type, mapping each variant to one category. It is **not** required
+by the `EncoderConfig`/`DecoderConfig::Error` bound, so adopting it is additive
+and back-compatible. A blanket `impl<E: CategorizedError> CategorizedError for
+whereat::At<E>` forwards to the inner error, so a located error keeps its
+category. zencodec's own cause types implement it (`LimitExceeded` →
+`LimitsExceeded(kind)`, `UnsupportedOperation` → `UnsupportedOperation` /
+`UnsupportedPixelFormat` for its `PixelFormat` arm, `enough::StopReason` →
+`Cancelled`/`TimedOut`), so a codec's mapping is usually a one-line delegation
+per arm. `LimitKind` is the value-free discriminant of `LimitExceeded`
+(`LimitExceeded::kind()`).
+
+The `codec_name()` method is where a codec declares its name —
+`fn codec_name(&self) -> Option<&'static str> { Some("zenjpeg") }` — so
+[`CodecError::from_native`] / [`of`] tag the envelope from the value instead of
+taking a codec argument. It is **required** (no default), so every implementor
+answers it; the cause types return `None` (they aren't codecs); `At<E>` forwards
+the inner `codec_name()`. It is a `&self` method rather than an associated const
+specifically so the trait stays **dyn-compatible**: with the `Any` supertrait a
+`dyn CategorizedError` can be formed *and* downcast to its concrete type — an
+associated const would forbid the trait object outright.
+
+### `CodecError` (struct)
+
+The shared error envelope: a coarse `ErrorCategory`, the originating codec's name,
+and (optionally) the codec's own detail error. A codec returns it as
+`whereat::At<CodecError>` — the recommended (and only needed) form, with the
+cleanest `?` / `.at()` ergonomics.
+
+`CodecError` is a **one-word handle** — its fields live behind a `Box` — so
+`At<CodecError>` is **two words** (handle + trace, 16 bytes on 64-bit) and every
+`Result<_, At<CodecError>>` a codec threads through `?` is two words too (the box
+pointer's niche absorbs the `Result` discriminant). That is small enough to return
+in registers rather than spill to the stack — the reason for the box: the detail is
+a *fat* `Box<dyn Error>` (16 bytes alone), so an unboxed envelope would exceed the
+16-byte ABI threshold and spill regardless of how thin the other fields are. The
+trade is one cold-path allocation per error, fine for an error type; `new` is
+therefore no longer `const`. Recovery (`codec_error()` / `error_category()`) is
+downcast-based and additionally tolerates a single consumer-applied `Box` layer in
+either position (`Box<At<CodecError>>`, `At<Box<CodecError>>`, `Box<CodecError>`);
+deeper nesting isn't covered.
+
+The codec name is an `Option<&'static str>` (`None` when unset — honest, no
+sentinel). `from_native` / `of` read it from the detail's
+[`codec_name()`](#errorcategory-enum--categorizederror-trait); `new` / `from_parts`
+(no typed detail) take it directly. `codec()` reads it back.
+
+```rust
+struct CodecError(Box<Repr>);  // Repr { category, codec: Option<&'static str>, detail: Option<Box<dyn Error + Send + Sync>> }
+
+impl CodecError {
+    fn new(codec: Option<&'static str>, category: ErrorCategory) -> Self;                     // no detail
+    fn from_native<E: CategorizedError + Error + Send + Sync + 'static>(detail: E) -> Self;    // bare; name from detail.codec_name()
+    fn of<E: CategorizedError + Error + Send + Sync + 'static>(located: At<E>) -> At<CodecError>;  // located; trace preserved
+    fn from_parts(codec: Option<&'static str>, category: ErrorCategory, detail: Box<dyn Error + Send + Sync>) -> Self;
+    fn with_codec(self, codec: Option<&'static str>) -> Self;  // builder: stamp/clear the codec name on an existing envelope
+    fn category(&self) -> ErrorCategory;             // total, fixed at construction
+    fn codec(&self) -> Option<&'static str>;         // which codec produced it (None if unset)
+    fn detail(&self) -> Option<&(dyn Error + 'static)>;
+}
+```
+
+Two ways to surface a codec error, both routable by category:
+
+- **Native enum + `CategorizedError`** (`type Error = MyError`): `category()`
+  classifies on the *typed* path. Once erased to `Box<dyn Error>` the category is
+  unreachable — the erased value is a `dyn Error`, not a `dyn CategorizedError`.
+- **The envelope** (`type Error = whereat::At<CodecError>`): because
+  `At<CodecError>` is one *concrete* type, the category **and** the codec name
+  survive erasure. A consumer recovers them from any `Box<dyn Error>` /
+  `anyhow::Error` / mapped wrapper by downcast — see `CodecErrorExt::codec_error()`
+  / `error_category()`.
+
+The **`codec` name** (`&'static str`, e.g. `"zenjpeg"`) is how a consumer tells
+codecs apart without naming any codec-specific type — useful when several codecs
+feed one pipeline. The **`detail` is optional**: `CodecError::new(codec, category)`
+is a complete error for a codec that has no error enum of its own.
+
+`from_native` / `of` read the category *and* the codec name from the detail's
+`CategorizedError` impl at construction, so both are total and never re-derived
+from an opaque chain. `of` takes an **already-located** `At<E>` (not a bare `E`):
+location is mandatory at the type level — a codec that skipped whereat can't call
+it — and the trace stays on the *outside* (`At<CodecError>`, mapping the inner
+error via whereat's trace-preserving `map_error`), never buried in the detail.
+`Display` is `"{codec}: {detail-or-category}"`; `source()` is the detail (when
+present), so the typed extractors below still reach the underlying cause.
+
+**Adoption is one impl.** A codec keeping a native `MyError: CategorizedError`
+adds `impl From<MyError> for At<CodecError>` (body: `CodecError::of(e.start_at())`,
+with `fn codec_name(&self) { Some("mycodec") }` on the error's `CategorizedError`
+impl), after which `?` on any `Result<_, MyError>` auto-wraps into the envelope —
+existing fallible internals need no rewrite. (Or convert a bare `Result<_, MyError>`
+in one step with whereat's `map_err_at(CodecError::from_native)`.) Reject stubs use `Unsupported<At<CodecError>>`. `At` and the
+`start_at()` / `.at()` ext traits are **re-exported** from the crate root
+(`zencodec::{At, ErrorAtExt, ResultAtExt}`), so a codec can name
+`zencodec::At<zencodec::CodecError>` without depending on `whereat` directly. The
+testkit's `minimal` codec is a worked example; `reference` keeps the native-enum
+form for contrast.
+
+#### Attaching structural locus (`StreamOffset`)
+
+Per-variant detail (dimensions, expected/actual, table indices) stays in the
+native error — reachable via `detail` / `find_cause`. The one piece of context
+worth carrying *generically* is **where in the input** the failure was: best-in-
+class decoders report a byte offset, and zen decoders already track it internally.
+Rather than grow a per-locus field on `CodecError`, a codec attaches it to the
+`At<CodecError>` trace as typed context, and a generic consumer recovers it by
+downcast — no codec-specific type named:
+
+```rust
+// codec, at the failure site (offset = bytes consumed):
+Err(at!(CodecError::new(Some("zenjpeg"), ErrorCategory::MalformedImage))
+    .at_data(|| StreamOffset(reader.position())))
+
+// consumer, even after erasure to Box<dyn Error>:
+let off = err.contexts().find_map(|c| c.downcast_ref::<StreamOffset>().copied());
+```
+
+`StreamOffset(pub u64)` is a shared, downcast-able newtype (bytes from the start
+of the encoded input) so the "where" convention is cross-codec. Richer loci
+(marker, box fourcc, NAL type, frame index) ride the same `at_data` / `at_str`
+channel; only the offset is standardized as a type today.
+
 ### `CodecErrorExt` (trait)
 
-Extension trait for inspecting error chains without downcasting:
+Extension trait for inspecting error chains without downcasting — the *detail*
+layer beneath `ErrorCategory` (which cap, which operation, which cause), plus
+`codec_error()` / `error_category()` which recover the `CodecError` envelope (and
+hence the category + codec name) from any erased error (`Box<dyn Error>`,
+`anyhow`):
 
 ```rust
 trait CodecErrorExt {
     fn unsupported_operation(&self) -> Option<&UnsupportedOperation>;
     fn limit_exceeded(&self) -> Option<&LimitExceeded>;
+    fn codec_error(&self) -> Option<&CodecError>;       // recover the envelope post-erasure
+    fn error_category(&self) -> Option<ErrorCategory>;  // = codec_error().map(|c| c.category())
     fn find_cause<T: core::error::Error + 'static>(&self) -> Option<&T>;
 }
 ```

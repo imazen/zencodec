@@ -4,26 +4,46 @@
 //! It exists so the testkit can validate the *false-direction* branches of
 //! [`check_capability_honesty`](crate::check_capability_honesty) against a
 //! known-correct "supports nothing extra" codec — the mirror of the full
-//! [`reference`](crate::reference) codec, which exercises the true branches. It
-//! shares the reference's wire format and error type, and reuses the reference's
-//! executor types for the associated types it never constructs (it rejects those
-//! paths before building them).
+//! [`reference`](crate::reference) codec, which exercises the true branches.
+//!
+//! It also demonstrates the **envelope error pattern**: `type Error =
+//! At<CodecError>`. A generic consumer recovers the
+//! [`ErrorCategory`](zencodec::ErrorCategory) from a type-erased
+//! `Box<dyn Error>` — e.g. the `BoxedError` left after dyn dispatch — by
+//! downcasting to the concrete `At<CodecError>`. That is the contrast with
+//! [`reference`](crate::reference), whose `type Error = RefError` only
+//! classifies on the *typed* path: once erased, all you hold is a `dyn Error`,
+//! not a `dyn CategorizedError`, so there is no concrete type to downcast to.
+//!
+//! Adoption cost is one impl: it shares the reference's wire format and its
+//! [`RefError`] kind, bridged by `From<RefError> for At<CodecError>`, so every
+//! `?` on a `Result<_, RefError>` auto-wraps into the envelope with no rewrite.
+//! Rejected decode modes use the generic [`Unsupported`] stub.
 
 use std::borrow::Cow;
 
+use whereat::At;
 use zencodec::decode::{
     Decode, DecodeCapabilities, DecodeJob, DecodeOutput, DecodeRowSink, DecoderConfig, OutputInfo,
+    SinkError,
 };
 use zencodec::encode::{EncodeCapabilities, EncodeJob, EncodeOutput, Encoder, EncoderConfig};
 use zencodec::{
-    ImageFormat, ImageInfo, Metadata, Orientation, ResourceLimits, StopToken, UnsupportedOperation,
+    CodecError, ImageFormat, ImageInfo, Metadata, Orientation, ResourceLimits, StopToken,
+    Unsupported, UnsupportedOperation,
 };
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
 
 use crate::reference::{
-    Header, RefAnimDec, RefError, RefStreamDec, build_info, descriptor_for_bpp, encode_single,
-    frame_pixel_len, frame_pixels_offset, parse_header,
+    Header, RefError, build_info, descriptor_for_bpp, encode_single, frame_pixel_len,
+    frame_pixels_offset, parse_header,
 };
+
+/// Bridge a decode-sink error into the envelope. `copy_decode_to_sink` wants a
+/// `fn` pointer, so this is a named function rather than a closure.
+fn wrap_sink(e: SinkError) -> At<CodecError> {
+    RefError::Sink(e).into()
+}
 
 // Only the always-available capabilities are declared. Everything optional —
 // push_rows, encode_from, animation, lossless, stop, icc/exif/xmp/cicp — is
@@ -49,7 +69,7 @@ impl MinimalEncoderConfig {
 }
 
 impl EncoderConfig for MinimalEncoderConfig {
-    type Error = RefError;
+    type Error = At<CodecError>;
     type Job = MinEncodeJob;
 
     fn format() -> ImageFormat {
@@ -74,12 +94,12 @@ pub struct MinEncodeJob {
 }
 
 impl EncodeJob for MinEncodeJob {
-    type Error = RefError;
+    type Error = At<CodecError>;
     type Enc = MinEnc;
     // `()` is the standard rejection stub for a still-only codec (the shape real
     // codecs use). It also pins the testkit's animation bounds to NOT require
     // `AnimationFrameEnc::Error == E::Error` — `<() as AnimationFrameEncoder>::Error`
-    // is `UnsupportedOperation`, not `RefError`.
+    // is `UnsupportedOperation`, not the job's error.
     type AnimationFrameEnc = ();
 
     fn with_stop(self, _stop: StopToken) -> Self {
@@ -94,13 +114,13 @@ impl EncodeJob for MinEncodeJob {
         self.orientation = meta.orientation;
         self
     }
-    fn encoder(self) -> Result<MinEnc, RefError> {
+    fn encoder(self) -> Result<MinEnc, At<CodecError>> {
         Ok(MinEnc {
             orientation: self.orientation,
         })
     }
-    fn animation_frame_encoder(self) -> Result<(), RefError> {
-        Err(RefError::Unsupported(UnsupportedOperation::AnimationEncode))
+    fn animation_frame_encoder(self) -> Result<(), At<CodecError>> {
+        Err(RefError::Unsupported(UnsupportedOperation::AnimationEncode).into())
     }
 }
 
@@ -111,13 +131,13 @@ pub struct MinEnc {
 }
 
 impl Encoder for MinEnc {
-    type Error = RefError;
+    type Error = At<CodecError>;
 
-    fn reject(op: UnsupportedOperation) -> RefError {
-        RefError::Unsupported(op)
+    fn reject(op: UnsupportedOperation) -> At<CodecError> {
+        RefError::Unsupported(op).into()
     }
 
-    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, RefError> {
+    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, At<CodecError>> {
         // Orientation only — no metadata channels.
         let meta = Metadata::none().with_orientation(self.orientation);
         Ok(EncodeOutput::new(
@@ -143,7 +163,7 @@ impl MinimalDecoderConfig {
 }
 
 impl DecoderConfig for MinimalDecoderConfig {
-    type Error = RefError;
+    type Error = At<CodecError>;
     type Job<'a> = MinDecodeJob;
 
     fn formats() -> &'static [ImageFormat] {
@@ -164,11 +184,12 @@ impl DecoderConfig for MinimalDecoderConfig {
 pub struct MinDecodeJob;
 
 impl<'a> DecodeJob<'a> for MinDecodeJob {
-    type Error = RefError;
+    type Error = At<CodecError>;
     type Dec = MinDec<'a>;
-    // Never constructed — streaming/animation are declared false and rejected.
-    type StreamDec = RefStreamDec<'a>;
-    type AnimationFrameDec = RefAnimDec;
+    // Streaming / animation are declared false and rejected before any stub is
+    // built, so the generic `Unsupported` stub (Error = the job's error) suffices.
+    type StreamDec = Unsupported<At<CodecError>>;
+    type AnimationFrameDec = Unsupported<At<CodecError>>;
 
     fn with_stop(self, _stop: StopToken) -> Self {
         self
@@ -177,11 +198,11 @@ impl<'a> DecodeJob<'a> for MinDecodeJob {
         self
     }
 
-    fn probe(&self, data: &[u8]) -> Result<ImageInfo, RefError> {
+    fn probe(&self, data: &[u8]) -> Result<ImageInfo, At<CodecError>> {
         Ok(build_info(&parse_header(data)?))
     }
 
-    fn output_info(&self, data: &[u8]) -> Result<OutputInfo, RefError> {
+    fn output_info(&self, data: &[u8]) -> Result<OutputInfo, At<CodecError>> {
         let h = parse_header(data)?;
         Ok(OutputInfo::full_decode(
             h.width,
@@ -194,7 +215,7 @@ impl<'a> DecodeJob<'a> for MinDecodeJob {
         self,
         data: Cow<'a, [u8]>,
         _preferred: &[PixelDescriptor],
-    ) -> Result<MinDec<'a>, RefError> {
+    ) -> Result<MinDec<'a>, At<CodecError>> {
         parse_header(&data)?;
         Ok(MinDec { data })
     }
@@ -204,24 +225,24 @@ impl<'a> DecodeJob<'a> for MinDecodeJob {
         data: Cow<'a, [u8]>,
         sink: &mut dyn DecodeRowSink,
         preferred: &[PixelDescriptor],
-    ) -> Result<OutputInfo, RefError> {
-        zencodec::helpers::copy_decode_to_sink(self, data, sink, preferred, RefError::Sink)
+    ) -> Result<OutputInfo, At<CodecError>> {
+        zencodec::helpers::copy_decode_to_sink(self, data, sink, preferred, wrap_sink)
     }
 
     fn streaming_decoder(
         self,
         _data: Cow<'a, [u8]>,
         _preferred: &[PixelDescriptor],
-    ) -> Result<RefStreamDec<'a>, RefError> {
-        Err(RefError::Unsupported(UnsupportedOperation::RowLevelDecode))
+    ) -> Result<Unsupported<At<CodecError>>, At<CodecError>> {
+        Err(RefError::Unsupported(UnsupportedOperation::RowLevelDecode).into())
     }
 
     fn animation_frame_decoder(
         self,
         _data: Cow<'a, [u8]>,
         _preferred: &[PixelDescriptor],
-    ) -> Result<RefAnimDec, RefError> {
-        Err(RefError::Unsupported(UnsupportedOperation::AnimationDecode))
+    ) -> Result<Unsupported<At<CodecError>>, At<CodecError>> {
+        Err(RefError::Unsupported(UnsupportedOperation::AnimationDecode).into())
     }
 }
 
@@ -232,9 +253,9 @@ pub struct MinDec<'a> {
 }
 
 impl Decode for MinDec<'_> {
-    type Error = RefError;
+    type Error = At<CodecError>;
 
-    fn decode(self) -> Result<DecodeOutput, RefError> {
+    fn decode(self) -> Result<DecodeOutput, At<CodecError>> {
         let h: Header = parse_header(&self.data)?;
         let desc = descriptor_for_bpp(h.bpp)?;
         let start = frame_pixels_offset(&h, 0);

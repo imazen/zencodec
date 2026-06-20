@@ -186,23 +186,69 @@ the `max_memory_bytes` cap so a codec that under-reports still can't over-alloca
 
 ### Classifying a codec's error for an HTTP response
 
-Each codec keeps its OWN opaque error type (there is no shared `CodecError`).
-Classify one without naming the concrete enum, via `CodecErrorExt`:
+A codec surfaces errors one of two ways; both let you route on a coarse
+`ErrorCategory` instead of naming the concrete enum:
+
+- **Native enum + `CategorizedError`.** The codec keeps its own error type and
+  maps every variant to one category. `e.category()` classifies it on the typed
+  path, and a located `whereat::At<E>` keeps the inner error's category (the impl
+  forwards through `At`).
+- **The shared `CodecError` envelope.** The codec sets `type Error =
+  whereat::At<CodecError>`. Because that is a single *concrete* type, the category
+  — and the originating **codec name** (`"zenjpeg"`, so you can tell codecs apart)
+  — survive **type erasure**: after dyn dispatch hands back a `Box<dyn Error>` — or
+  you map into `anyhow` — `e.error_category()` / `e.codec_error()` recover them by
+  downcast (`None` only when the error isn't from a zen codec). A native enum can't
+  be recovered once erased — the erased value is a `dyn Error`, not a
+  `dyn CategorizedError` — so the envelope is what a codec-agnostic pipeline reaches
+  for. `CodecError` can also be used with no detail at all
+  (`CodecError::new(Some("zenpng"), ErrorCategory::MalformedImage)`) by a codec that
+  has no error enum of its own. `At` is re-exported
+  (`zencodec::At<zencodec::CodecError>`), so adopting it needs no direct `whereat`
+  dependency.
 
 ```rust,ignore
-match config.job().decoder(Cow::Borrowed(bytes), &[]) {
-    Ok(_decoder) => { /* _decoder.decode()? */ }
-    Err(e) => {
-        if let Some(limit) = e.limit_exceeded() {
-            eprintln!("resource limit: {limit}"); // -> HTTP 413
-        } else if e.unsupported_operation().is_some() {
-            eprintln!("unsupported"); // -> HTTP 415
-        } else {
-            eprintln!("malformed input: {e}"); // -> HTTP 400
-        }
-    }
-}
+use zencodec::{CategorizedError, CodecErrorExt, ErrorCategory};
+
+// Typed path shown here via `category()`; on a `Box<dyn Error>` from dyn dispatch
+// use `e.error_category()` and match `Some(..)` / `None` instead.
+let http = match config.job().with_stop(token).decoder(Cow::Borrowed(bytes), &[]) {
+    Ok(_decoder) => { /* _decoder.decode()? */ 200 }
+    Err(e) => match e.category() {
+        ErrorCategory::Cancelled            => 499, // client went away
+        ErrorCategory::TimedOut             => 504,
+        ErrorCategory::LimitsExceeded(_)    => 413,
+        ErrorCategory::UnsupportedImageType
+        | ErrorCategory::UnsupportedImageFeature
+        | ErrorCategory::UnsupportedPixelFormat
+        | ErrorCategory::UnsupportedOperation
+        | ErrorCategory::CmsRequired        => 415, // can't process this input/request
+        ErrorCategory::PolicyRejected       => 422, // valid, but a policy declined it
+        ErrorCategory::MalformedImage
+        | ErrorCategory::UnexpectedEof
+        | ErrorCategory::InvalidParameters
+        | ErrorCategory::InvalidBuffer      => 400, // the bytes / request are bad
+        ErrorCategory::OutOfMemory
+        | ErrorCategory::Io(_)
+        | ErrorCategory::InvalidState
+        | ErrorCategory::Internal           => 500, // server-side: resource, IO, bug, misuse
+        _ => 500, // ErrorCategory is #[non_exhaustive]
+    },
+};
 ```
+
+`ErrorCategory` is the coarse routing axis (it's `Copy`, and
+`LimitsExceeded(LimitKind)` even tells you *which* cap). When you need more
+detail than the category, the typed extractors on `CodecErrorExt` recover the
+cause from the `source()` chain — `e.limit_exceeded()` for the exact limit values,
+`e.unsupported_operation()` for which operation, or `e.find_cause::<T>()` for a
+codec-specific type. `category()` is available once a codec implements
+`CategorizedError`; the zencodec cause types (`LimitExceeded`,
+`UnsupportedOperation`, `enough::StopReason`) implement it, so a codec's mapping
+is usually a one-line delegation per variant. `CodecErrorExt::error_category()`
+is the same answer recovered through erasure — it works on any `Box<dyn Error>`
+holding a `CodecError` (bare or `At`-wrapped), so the routing survives dyn
+dispatch and `anyhow`.
 
 ## Controlling decode parallelism
 

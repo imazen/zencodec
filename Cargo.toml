@@ -38,6 +38,12 @@ include = [
 [lib]
 name = "zencodec"
 
+[features]
+# Opt-in: lets `ErrorCategory::Io`'s `CodecIoKind` carry a `std::io::ErrorKind`.
+# The crate is `#![no_std]` by default; this only pulls in `std` for that one
+# payload. When `core::io::ErrorKind` stabilizes this feature becomes a no-op.
+std = []
+
 [dependencies]
 # Published manifest uses crates.io versions (CI + `cargo publish` build the
 # real artifact). Local development builds against the in-tree zen sources via

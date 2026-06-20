@@ -35,6 +35,12 @@
 
 extern crate alloc;
 
+// Pulled in only by the `std` feature, solely so [`CodecIoKind`] can carry a
+// `std::io::ErrorKind` on the I/O category. The crate stays `#![no_std]`; when
+// `core::io::ErrorKind` stabilizes this can drop.
+#[cfg(feature = "std")]
+extern crate std;
+
 whereat::define_at_crate_info!();
 
 mod capabilities;
@@ -93,7 +99,7 @@ pub use info::{
     Cicp, ContentLightLevel, ImageInfo, ImageSequence, MasteringDisplay, Resolution,
     ResolutionUnit, SourceColor, Supplements,
 };
-pub use limits::{AllocPreference, LimitExceeded, ResourceLimits, ThreadingPolicy};
+pub use limits::{AllocPreference, LimitExceeded, LimitKind, ResourceLimits, ThreadingPolicy};
 pub use metadata::{IccRetention, Metadata, MetadataFields, MetadataPolicy};
 pub use orientation::{Orientation, OrientationHint};
 pub use output::{AnimationFrame, OwnedAnimationFrame};
@@ -101,7 +107,10 @@ pub use zenpixels::ColorAuthority;
 
 pub use capabilities::UnsupportedOperation;
 pub use detect::SourceEncodingDetails;
-pub use error::{CodecErrorExt, find_cause};
+pub use error::{
+    CategorizedError, CodecError, CodecErrorExt, CodecIoKind, ErrorCategory, StreamOffset,
+    find_cause,
+};
 pub use traits::Unsupported;
 
 // =========================================================================
@@ -116,6 +125,18 @@ pub use traits::Unsupported;
 pub use almost_enough::StopToken;
 pub use enough;
 pub use enough::Unstoppable;
+
+/// Location-tracing error wrapper, re-exported from [`whereat`].
+///
+/// `whereat::At` is already part of this crate's public surface (the blanket
+/// `impl CategorizedError for At<E>`), so re-exporting it adds no new coupling.
+/// It is re-exported because [`At<CodecError>`](crate::CodecError) is the
+/// recommended codec `Error` type: a codec can name
+/// `zencodec::At<zencodec::CodecError>` and reach `start_at()` / `.at()` (via the
+/// re-exported [`ErrorAtExt`] / [`ResultAtExt`]) without depending on `whereat`
+/// directly.
+pub use whereat;
+pub use whereat::{At, ErrorAtExt, ResultAtExt};
 
 // =========================================================================
 // pub(crate) re-exports — keep internal `use crate::Foo` paths working
