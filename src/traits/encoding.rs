@@ -3,10 +3,8 @@
 use alloc::boxed::Box;
 
 use crate::format::ImageFormat;
-use crate::{
-    ComputeEnvironment, EncodeCapabilities, ImageCharacteristics, Metadata, ResourceEstimate,
-    ResourceLimits,
-};
+use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
+use crate::{EncodeCapabilities, Metadata, ResourceLimits};
 use zenpixels::PixelDescriptor;
 
 use super::BoxedError;
@@ -136,7 +134,7 @@ pub trait EncoderConfig: Clone + Send + Sync {
     ///
     /// The returned [`ResourceEstimate`] is already adjusted for
     /// `compute.cores()` (its `time_ms` and peak terms fold in the codec's
-    /// measured [`ThreadingInformation`](crate::ThreadingInformation)). The
+    /// measured [`ThreadingInformation`](crate::estimate::ThreadingInformation)). The
     /// three inputs are expandable: this config carries the encode knobs
     /// (effort / quality / lossless / thread intent),
     /// [`ImageCharacteristics`] the image, and [`ComputeEnvironment`] the

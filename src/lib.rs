@@ -43,7 +43,7 @@ mod capabilities;
 mod color;
 mod cost;
 mod detect;
-mod estimate;
+pub mod estimate;
 mod error;
 /// Structured EXIF/TIFF parsing, pruning, and serialization.
 pub mod exif;
@@ -92,7 +92,6 @@ pub use info::{
     Cicp, ContentLightLevel, ImageInfo, ImageSequence, MasteringDisplay, Resolution,
     ResolutionUnit, SourceColor, Supplements,
 };
-pub use estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate, ThreadingInformation};
 pub use limits::{LimitExceeded, ResourceLimits, ThreadingPolicy};
 pub use metadata::{IccRetention, Metadata, MetadataFields, MetadataPolicy};
 pub use orientation::{Orientation, OrientationHint};

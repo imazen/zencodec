@@ -5,10 +5,8 @@ use alloc::boxed::Box;
 
 use crate::format::ImageFormat;
 use crate::orientation::OrientationHint;
-use crate::{
-    ComputeEnvironment, DecodeCapabilities, ImageCharacteristics, ImageInfo, OutputInfo,
-    ResourceEstimate, ResourceLimits, StopToken,
-};
+use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
+use crate::{DecodeCapabilities, ImageInfo, OutputInfo, ResourceLimits, StopToken};
 use zenpixels::PixelDescriptor;
 
 use super::BoxedError;
