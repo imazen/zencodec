@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1165 lines (supported surface) | zencodec.features.txt 0 added (features: none) | zencodec.internal.txt 65 lines (65 hidden + 0 excluded-feature)
+# files: zencodec.txt 1166 lines (supported surface) | zencodec.features.txt 0 added (features: none) | zencodec.internal.txt 65 lines (65 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -14,7 +14,7 @@
 #   pub types (struct/enum/trait/alias)       117
 #   pub consts/statics                        166
 #   free functions                             33
-#   inherent methods                          458
+#   inherent methods                          459
 #   struct fields                             194
 #   enum variants                             139
 #   re-exports                                  8
@@ -27,13 +27,13 @@
 #   (root)                          611
 #   decode                          166
 #   encode                          104
-#   estimate                         46
+#   estimate                         47
 #   exif                             65
 #   gainmap                         117
 #   helpers                          13
 #   icc                               1
 
-## items (1093 lines)
+## items (1094 lines)
 
 pub mod zencodec
 pub use Cicp
@@ -507,8 +507,9 @@ pub fn estimate::ResourceEstimate::with_threading(self, estimate::ThreadingInfor
 pub const estimate::ThreadingInformation::SERIAL: Self
 pub fn estimate::ThreadingInformation::effective_threads(&self, usize) -> u64
 pub fn estimate::ThreadingInformation::is_parallel(&self) -> bool
-pub fn estimate::ThreadingInformation::max_efficient_threads(&self) -> u32
+pub fn estimate::ThreadingInformation::max_efficient_threads(&self) -> core::option::Option<u32>
 pub fn estimate::ThreadingInformation::parallel(u32) -> Self
+pub fn estimate::ThreadingInformation::parallel_unknown_knee() -> Self
 pub mod exif
 pub enum exif::ByteOrder
 pub exif::ByteOrder::Big

@@ -26,8 +26,9 @@ All notable changes to zencodec are documented here.
   (all-`Option` fields — estimated + upper-bound peak memory, `wall_ms`,
   `cpu_ms` (all `u64`), and threading — with an `unknown()` all-`None` value for
   codecs that do not model resources),
-  `ThreadingInformation` (CPU-core scaling — `max_efficient_threads`, the knee of
-  the scaling curve, with `effective_threads(cores)`), and two sealed/growable
+  `ThreadingInformation` (CPU-core scaling — `max_efficient_threads: Option<u32>`,
+  the knee of the scaling curve; `None` = parallel with an unknown knee that
+  scales to all cores — with `effective_threads(cores)`), and two sealed/growable
   (`#[non_exhaustive]`, private-fields + accessors) builder inputs:
   `ComputeEnvironment` (hardware + conditions of computing — cores now;
   RAM/SIMD/load expandable) and `ImageCharacteristics` (dimensions +

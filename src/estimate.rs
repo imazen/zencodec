@@ -228,22 +228,25 @@ impl ImageCharacteristics {
 /// Wall time does **not** scale as `1/cores`: speedup saturates at
 /// [`max_efficient_threads`](ThreadingInformation::max_efficient_threads) — the
 /// knee of the scaling curve, set by the codec's tile / strategy / block count.
-/// Below the knee, treat speedup as ~linear; above it, flat.
+/// Below the knee, treat speedup as ~linear; above it, flat. The knee is
+/// `Option`: `None` means "parallel, but the knee is unknown", and `at_cores`
+/// then assumes linear scaling to all available cores.
 ///
-/// Sealed and growable: construct via [`ThreadingInformation::SERIAL`] or
-/// [`ThreadingInformation::parallel`], read with the accessors.
+/// Sealed and growable: construct via [`ThreadingInformation::SERIAL`],
+/// [`ThreadingInformation::parallel`], or
+/// [`ThreadingInformation::parallel_unknown_knee`]; read with the accessors.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct ThreadingInformation {
     parallel: bool,
-    max_efficient_threads: u32,
+    max_efficient_threads: Option<u32>,
 }
 
 impl ThreadingInformation {
     /// A serial operation (no multi-core speedup).
     pub const SERIAL: Self = Self {
         parallel: false,
-        max_efficient_threads: 1,
+        max_efficient_threads: Some(1),
     };
 
     /// A parallel operation whose speedup saturates at `max_efficient_threads`
@@ -252,7 +255,19 @@ impl ThreadingInformation {
     pub fn parallel(max_efficient_threads: u32) -> Self {
         Self {
             parallel: true,
-            max_efficient_threads: max_efficient_threads.max(1),
+            max_efficient_threads: Some(max_efficient_threads.max(1)),
+        }
+    }
+
+    /// A parallel operation with **no known knee**: it scales, but the codec
+    /// does not declare where added cores stop helping, so `effective_threads`
+    /// (and thus [`at_cores`](ResourceEstimate::at_cores)) assumes linear
+    /// scaling to all available cores.
+    #[must_use]
+    pub fn parallel_unknown_knee() -> Self {
+        Self {
+            parallel: true,
+            max_efficient_threads: None,
         }
     }
 
@@ -263,18 +278,23 @@ impl ThreadingInformation {
     }
 
     /// The knee of the scaling curve: threads beyond which added cores stop
-    /// yielding worthwhile speedup (1 = serial). This is the *efficient* cap,
-    /// not a hard concurrency limit.
+    /// yielding worthwhile speedup (`Some(1)` = serial, `None` = parallel with
+    /// an unknown knee). This is the *efficient* cap, not a hard concurrency
+    /// limit.
     #[must_use]
-    pub fn max_efficient_threads(&self) -> u32 {
+    pub fn max_efficient_threads(&self) -> Option<u32> {
         self.max_efficient_threads
     }
 
-    /// Threads that actually do useful work given `cores` available (clamped
-    /// to `max_efficient_threads`).
+    /// Threads that actually do useful work given `cores` available: clamped to
+    /// `max_efficient_threads` when the knee is known, else all `cores`.
     #[must_use]
     pub fn effective_threads(&self, cores: usize) -> u64 {
-        (cores.max(1) as u64).min(self.max_efficient_threads.max(1) as u64)
+        let cores = cores.max(1) as u64;
+        match self.max_efficient_threads {
+            Some(knee) => cores.min(knee.max(1) as u64),
+            None => cores,
+        }
     }
 }
 
@@ -282,10 +302,10 @@ impl ThreadingInformation {
 ///
 /// Every field is `Option` — a codec fills in what it models and leaves the
 /// rest `None` (the trait default is [`ResourceEstimate::unknown`], all-`None`).
-/// The peak-memory and wall-time figures are the **single-thread** values plus
-/// the carried [`ThreadingInformation`]; [`ResourceEstimate::at_cores`] re-scales
-/// the wall time for a given core count. Compare against
-/// [`ResourceLimits`](crate::ResourceLimits) to decide whether to admit a job.
+/// When a [`ThreadingInformation`] is carried, [`ResourceEstimate::at_cores`]
+/// re-scales `wall_ms` for a given core count (leaving `cpu_ms` and peak
+/// unchanged). Compare against [`ResourceLimits`](crate::ResourceLimits) to
+/// decide whether to admit a job.
 ///
 /// Sealed and growable: build via [`new`](ResourceEstimate::new) /
 /// [`unknown`](ResourceEstimate::unknown) + the `with_*` setters, read with the
@@ -316,18 +336,19 @@ impl ResourceEstimate {
         }
     }
 
-    /// A single-thread estimate from the two essentials: the typical
-    /// (estimated) peak memory and the single-thread wall time — which, being
-    /// single-thread, is also the CPU time. `peak_memory_bytes_max` is left
-    /// `None` and threading is serial; refine with the `with_*` setters.
+    /// An estimate from the two essentials: the typical (estimated) peak memory
+    /// and the wall time. Everything else — `peak_memory_bytes_max`, `cpu_ms`,
+    /// and `threading` — is left `None`; refine with the `with_*` setters. With
+    /// no `threading`, [`at_cores`](ResourceEstimate::at_cores) is a no-op until
+    /// you add one.
     #[must_use]
     pub fn new(peak_memory_bytes_est: u64, wall_ms: u64) -> Self {
         Self {
             peak_memory_bytes_est: Some(peak_memory_bytes_est),
             peak_memory_bytes_max: None,
             wall_ms: Some(wall_ms),
-            cpu_ms: Some(wall_ms),
-            threading: Some(ThreadingInformation::SERIAL),
+            cpu_ms: None,
+            threading: None,
         }
     }
 
@@ -416,7 +437,10 @@ impl ResourceEstimate {
         let typical = fixed.saturating_add(input.saturating_mul(3));
         // ~50 Mpix/s placeholder throughput; codecs override with measured.
         let wall_ms = image.pixels().saturating_mul(image.frame_count() as u64) / 50_000;
-        Self::new(typical, wall_ms).with_peak_max(fixed.saturating_add(input.saturating_mul(8)))
+        Self::new(typical, wall_ms)
+            .with_peak_max(fixed.saturating_add(input.saturating_mul(8)))
+            .with_cpu_ms(wall_ms)
+            .with_threading(ThreadingInformation::SERIAL)
     }
 }
 
@@ -461,7 +485,7 @@ mod tests {
     fn serial_threading_is_one_thread() {
         let ti = ThreadingInformation::SERIAL;
         assert_eq!(ti.effective_threads(28), 1);
-        assert_eq!(ti.max_efficient_threads(), 1);
+        assert_eq!(ti.max_efficient_threads(), Some(1));
         assert!(!ti.is_parallel());
     }
 
@@ -469,16 +493,29 @@ mod tests {
     fn parallel_effective_threads_saturate_at_the_knee() {
         let ti = ThreadingInformation::parallel(8);
         assert!(ti.is_parallel());
-        assert_eq!(ti.max_efficient_threads(), 8);
+        assert_eq!(ti.max_efficient_threads(), Some(8));
         assert_eq!(ti.effective_threads(4), 4); // below the knee
         assert_eq!(ti.effective_threads(28), 8); // clamped to the knee
-        assert_eq!(ThreadingInformation::parallel(0).max_efficient_threads(), 1); // >= 1
+        assert_eq!(
+            ThreadingInformation::parallel(0).max_efficient_threads(),
+            Some(1)
+        ); // >= 1
+    }
+
+    #[test]
+    fn parallel_unknown_knee_scales_to_all_cores() {
+        let ti = ThreadingInformation::parallel_unknown_knee();
+        assert!(ti.is_parallel());
+        assert_eq!(ti.max_efficient_threads(), None);
+        assert_eq!(ti.effective_threads(28), 28); // no knee -> all cores
+        assert_eq!(ti.effective_threads(1), 1);
     }
 
     #[test]
     fn at_cores_scales_wall_to_the_knee_and_leaves_peak_and_cpu() {
         let base = ResourceEstimate::new(200, 1000)
             .with_peak_max(400)
+            .with_cpu_ms(1000)
             .with_threading(ThreadingInformation::parallel(8));
         // wall / effective_threads(4) = 1000 / 4
         assert_eq!(base.at_cores(4).wall_ms(), Some(250));
@@ -488,6 +525,19 @@ mod tests {
         assert_eq!(base.at_cores(4).peak_memory_bytes_est(), Some(200));
         assert_eq!(base.at_cores(4).peak_memory_bytes_max(), Some(400));
         assert_eq!(base.at_cores(4).cpu_ms(), Some(1000));
+    }
+
+    #[test]
+    fn new_sets_only_peak_est_and_wall() {
+        let est = ResourceEstimate::new(200, 1000);
+        assert_eq!(est.peak_memory_bytes_est(), Some(200));
+        assert_eq!(est.wall_ms(), Some(1000));
+        // everything else opts in via setters
+        assert_eq!(est.peak_memory_bytes_max(), None);
+        assert_eq!(est.cpu_ms(), None);
+        assert_eq!(est.threading(), None);
+        // no threading -> at_cores is a no-op
+        assert_eq!(est.at_cores(8).wall_ms(), Some(1000));
     }
 
     #[test]
