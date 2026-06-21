@@ -61,7 +61,7 @@ pub struct Metadata {
     /// Absolute-luminance anchor — the nits that a relative-linear sample
     /// value of `1.0` represents.
     ///
-    /// Codec-side contract: same as [`SourceColor::diffuse_white`] — emit
+    /// Codec-side contract: same as [`crate::SourceColor::diffuse_white`] — emit
     /// `Some(value)` for explicit signals AND for format-defined implicit
     /// defaults; reserve `None` for genuinely-ambiguous cases. See that
     /// field for the per-format guidance.

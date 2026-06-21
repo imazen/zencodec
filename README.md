@@ -110,6 +110,13 @@ the latter ×`frame_count`); `max_width` / `max_height` are pixels; `max_memory_
 `max_input_bytes`, `max_output_bytes` are bytes; `max_frames` a count;
 `max_animation_ms` milliseconds. A `None` field means that dimension is unchecked.
 
+`ResourceLimits` also carries an allocation-fallibility *preference*,
+`prefer_fallible_allocations` (an `AllocPreference`: `CodecDefault` / `Fallible` /
+`Infallible`). `CodecDefault` (the default) lets each codec choose — decoders favour the
+fallible `try_reserve` path on untrusted input, encoders the faster infallible `vec!`;
+`for_untrusted_input()` presets `Fallible`. Override with
+`.with_prefer_fallible_allocations(AllocPreference::Fallible)`.
+
 ### Constructing a cancellation `StopToken`
 
 `StopToken` is re-exported from the [`almost-enough`](https://crates.io/crates/almost-enough)
@@ -244,10 +251,11 @@ let plan = resolve_color_emit(&source_color, &target_caps, ColorEmitPolicy::Bala
 |--------|----------|
 | `zencodec::encode` | `EncoderConfig`, `EncodeJob`, `Encoder`, `AnimationFrameEncoder`, `EncodeOutput`, `EncodeCapabilities`, `EncodePolicy`, `best_encode_format`, dyn dispatch traits (`DynEncoderConfig`, `DynEncodeJob`, `DynEncoder`, `DynAnimationFrameEncoder`) |
 | `zencodec::decode` | `DecoderConfig`, `DecodeJob`, `Decode`, `StreamingDecode`, `AnimationFrameDecoder`, `DecodeOutput`, `DecodeCapabilities`, `DecodePolicy`, `DecodeRowSink`, `SinkError`, `OutputInfo`, `SourceEncodingDetails`, `negotiate_pixel_format`, `is_format_available`, dyn dispatch traits (`DynDecoderConfig`, `DynDecodeJob`, `DynDecoder`, `DynStreamingDecoder`, `DynAnimationFrameDecoder`) |
+| `zencodec::estimate` | `ResourceEstimate` (predicted peak memory / time / core-scaling), `ComputeEnvironment` (cores, RAM, `SimdTier`), `ImageCharacteristics`, `SimdTier`, `ThreadingInformation` — codec-agnostic resource estimation, surfaced via `EncoderConfig::estimate_encode_resources` / `DecoderConfig::estimate_decode_resources` |
 | `zencodec::gainmap` | `GainMapInfo`, `GainMapParams`, `GainMapChannel`, `GainMapDirection`, `GainMapPresence`, `Iso21496Format` (wire-format variant: `AvifTmap`, `JxlJhgm`, `JpegApp2BodyWithUrn`; the original `JpegApp2` is deprecated since 0.1.20), `ISO_21496_1_URN`, `ISO_21496_1_PRIMARY_APP2_BODY`, `serialize_iso21496_fmt` / `serialize_iso21496_fmt_into` / `parse_iso21496_fmt`, `GainMapParseError` — cross-codec gain map types and wire-format helpers (ISO 21496-1) |
 | `zencodec::exif` | Structured EXIF/TIFF: `Exif` (borrowing parse → prune → serialize), `ExifPolicy` (7 keep/discard categories), `Retention`, `ByteOrder`, `retain` |
 | `zencodec::helpers` | Codec implementation helpers (not consumer API) — shared boilerplate for trait implementors, plus the lightweight `parse_exif_orientation` accessor |
-| root | `ImageFormat`, `ImageFormatDefinition`, `ImageFormatRegistry` (format detection via `ImageFormatRegistry::detect()`), `ImageInfo`, `Metadata`, `MetadataPolicy`, `MetadataFields`, `IccRetention`, `Exif`, `ExifPolicy`, `Retention`, `ByteOrder`, `Orientation`, `OrientationHint`, `ResourceLimits`, `LimitExceeded`, `ThreadingPolicy`, `UnsupportedOperation`, `CodecErrorExt`, `find_cause`, `Unsupported`, `Extensions`, `AnimationFrame`, `OwnedAnimationFrame`, `resolve_color_emit`, `ColorEmitPolicy`, `ColorEmitPlan`, `ColorEmitFields`, `IccDisposition`, `CicpEmission`, `ColorAuthority`, `Cicp`, `ContentLightLevel`, `MasteringDisplay`, `StopToken`, `Unstoppable` |
+| root | `ImageFormat`, `ImageFormatDefinition`, `ImageFormatRegistry` (format detection via `ImageFormatRegistry::detect()`), `ImageInfo`, `Metadata`, `MetadataPolicy`, `MetadataFields`, `IccRetention`, `Exif`, `ExifPolicy`, `Retention`, `ByteOrder`, `Orientation`, `OrientationHint`, `ResourceLimits`, `AllocPreference`, `LimitExceeded`, `ThreadingPolicy`, `UnsupportedOperation`, `CodecErrorExt`, `find_cause`, `Unsupported`, `Extensions`, `AnimationFrame`, `OwnedAnimationFrame`, `resolve_color_emit`, `ColorEmitPolicy`, `ColorEmitPlan`, `ColorEmitFields`, `IccDisposition`, `CicpEmission`, `ColorAuthority`, `Cicp`, `ContentLightLevel`, `MasteringDisplay`, `StopToken`, `Unstoppable` |
 
 zencodec has no feature flags. The full API is always available.
 
