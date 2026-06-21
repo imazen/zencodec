@@ -293,10 +293,10 @@ impl ThreadingInformation {
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct ResourceEstimate {
-    peak_memory_bytes_min: Option<u64>,
-    peak_memory_bytes: Option<u64>,
+    peak_memory_bytes_est: Option<u64>,
     peak_memory_bytes_max: Option<u64>,
-    wall_ms: Option<f32>,
+    wall_ms: Option<u64>,
+    cpu_ms: Option<u64>,
     threading: Option<ThreadingInformation>,
 }
 
@@ -308,34 +308,41 @@ impl ResourceEstimate {
     #[must_use]
     pub fn unknown() -> Self {
         Self {
-            peak_memory_bytes_min: None,
-            peak_memory_bytes: None,
+            peak_memory_bytes_est: None,
             peak_memory_bytes_max: None,
             wall_ms: None,
+            cpu_ms: None,
             threading: None,
         }
     }
 
-    /// A single-thread estimate from the two essentials: the typical peak
-    /// memory and the single-thread wall time. Min/max peak default to the
-    /// typical value and threading to serial — refine with the `with_*`
-    /// setters.
+    /// A single-thread estimate from the two essentials: the typical
+    /// (estimated) peak memory and the single-thread wall time — which, being
+    /// single-thread, is also the CPU time. `peak_memory_bytes_max` is left
+    /// `None` and threading is serial; refine with the `with_*` setters.
     #[must_use]
-    pub fn new(peak_memory_bytes: u64, wall_ms: f32) -> Self {
+    pub fn new(peak_memory_bytes_est: u64, wall_ms: u64) -> Self {
         Self {
-            peak_memory_bytes_min: Some(peak_memory_bytes),
-            peak_memory_bytes: Some(peak_memory_bytes),
-            peak_memory_bytes_max: Some(peak_memory_bytes),
+            peak_memory_bytes_est: Some(peak_memory_bytes_est),
+            peak_memory_bytes_max: None,
             wall_ms: Some(wall_ms),
+            cpu_ms: Some(wall_ms),
             threading: Some(ThreadingInformation::SERIAL),
         }
     }
 
-    /// Set the best-case and worst-case peak-memory bounds (bytes).
+    /// Set the conservative upper-bound peak memory (bytes).
     #[must_use]
-    pub fn with_peak_range(mut self, min: u64, max: u64) -> Self {
-        self.peak_memory_bytes_min = Some(min);
+    pub fn with_peak_max(mut self, max: u64) -> Self {
         self.peak_memory_bytes_max = Some(max);
+        self
+    }
+
+    /// Set the total CPU-time estimate in milliseconds (work summed across all
+    /// threads). Unlike `wall_ms`, it is **not** divided down by core count.
+    #[must_use]
+    pub fn with_cpu_ms(mut self, cpu_ms: u64) -> Self {
+        self.cpu_ms = Some(cpu_ms);
         self
     }
 
@@ -346,16 +353,10 @@ impl ResourceEstimate {
         self
     }
 
-    /// Best-case peak memory (simple / low-entropy content), bytes.
+    /// Typical (≈ p50) estimated peak memory for natural content, bytes.
     #[must_use]
-    pub fn peak_memory_bytes_min(&self) -> Option<u64> {
-        self.peak_memory_bytes_min
-    }
-
-    /// Typical (≈ p50) peak memory for natural content, bytes.
-    #[must_use]
-    pub fn peak_memory_bytes(&self) -> Option<u64> {
-        self.peak_memory_bytes
+    pub fn peak_memory_bytes_est(&self) -> Option<u64> {
+        self.peak_memory_bytes_est
     }
 
     /// Conservative upper-bound peak memory (worst content + margin), bytes.
@@ -367,8 +368,15 @@ impl ResourceEstimate {
     /// Predicted **wall-clock** time in milliseconds (single-thread unless
     /// produced by [`at_cores`](ResourceEstimate::at_cores)).
     #[must_use]
-    pub fn wall_ms(&self) -> Option<f32> {
+    pub fn wall_ms(&self) -> Option<u64> {
         self.wall_ms
+    }
+
+    /// Predicted total **CPU** time in milliseconds (work summed across all
+    /// threads). Unaffected by [`at_cores`](ResourceEstimate::at_cores).
+    #[must_use]
+    pub fn cpu_ms(&self) -> Option<u64> {
+        self.cpu_ms
     }
 
     /// How the operation scales across cores.
@@ -382,14 +390,14 @@ impl ResourceEstimate {
     /// effective thread count — linear speedup up to
     /// [`max_efficient_threads`](ThreadingInformation::max_efficient_threads),
     /// the knee of the scaling curve. `self` must carry the single-thread time.
-    /// Peak memory is unchanged. A `None` `wall_ms` or `None` threading is
-    /// returned unscaled.
+    /// Peak memory and CPU time are unchanged. A `None` `wall_ms` or `None`
+    /// threading is returned unscaled.
     #[must_use]
     pub fn at_cores(&self, cores: usize) -> Self {
         let mut out = *self;
         if let (Some(wall), Some(threading)) = (self.wall_ms, self.threading) {
             let n = threading.effective_threads(cores).max(1);
-            out.wall_ms = Some((wall as f64 / n as f64) as f32);
+            out.wall_ms = Some(wall / n);
         }
         out
     }
@@ -407,12 +415,8 @@ impl ResourceEstimate {
         let fixed: u64 = 16 << 20;
         let typical = fixed.saturating_add(input.saturating_mul(3));
         // ~50 Mpix/s placeholder throughput; codecs override with measured.
-        let wall_ms =
-            (image.pixels().saturating_mul(image.frame_count() as u64) as f64 / 50_000.0) as f32;
-        Self::new(typical, wall_ms).with_peak_range(
-            fixed.saturating_add(input.saturating_mul(2)),
-            fixed.saturating_add(input.saturating_mul(8)),
-        )
+        let wall_ms = image.pixels().saturating_mul(image.frame_count() as u64) / 50_000;
+        Self::new(typical, wall_ms).with_peak_max(fixed.saturating_add(input.saturating_mul(8)))
     }
 }
 
@@ -472,24 +476,27 @@ mod tests {
     }
 
     #[test]
-    fn at_cores_scales_wall_to_the_knee_and_leaves_peak() {
-        let base = ResourceEstimate::new(200, 1000.0)
-            .with_peak_range(100, 400)
+    fn at_cores_scales_wall_to_the_knee_and_leaves_peak_and_cpu() {
+        let base = ResourceEstimate::new(200, 1000)
+            .with_peak_max(400)
             .with_threading(ThreadingInformation::parallel(8));
         // wall / effective_threads(4) = 1000 / 4
-        assert_eq!(base.at_cores(4).wall_ms(), Some(250.0));
+        assert_eq!(base.at_cores(4).wall_ms(), Some(250));
         // beyond the knee, no further gain: / 8
-        assert_eq!(base.at_cores(28).wall_ms(), Some(125.0));
-        // peak memory is unchanged by at_cores
-        assert_eq!(base.at_cores(4).peak_memory_bytes(), Some(200));
-        assert_eq!(base.at_cores(4).peak_memory_bytes_min(), Some(100));
+        assert_eq!(base.at_cores(28).wall_ms(), Some(125));
+        // peak memory and CPU time are unchanged by at_cores
+        assert_eq!(base.at_cores(4).peak_memory_bytes_est(), Some(200));
+        assert_eq!(base.at_cores(4).peak_memory_bytes_max(), Some(400));
+        assert_eq!(base.at_cores(4).cpu_ms(), Some(1000));
     }
 
     #[test]
     fn unknown_is_all_none_and_at_cores_is_a_noop() {
         let est = ResourceEstimate::unknown();
-        assert_eq!(est.peak_memory_bytes(), None);
+        assert_eq!(est.peak_memory_bytes_est(), None);
+        assert_eq!(est.peak_memory_bytes_max(), None);
         assert_eq!(est.wall_ms(), None);
+        assert_eq!(est.cpu_ms(), None);
         assert_eq!(est.threading(), None);
         assert_eq!(est.at_cores(28), est);
     }
@@ -498,7 +505,7 @@ mod tests {
     fn conservative_is_serial_and_input_scaled() {
         let est = ResourceEstimate::conservative(&ImageCharacteristics::new(1000, 1000, desc()));
         assert_eq!(est.threading().map(|t| t.is_parallel()), Some(false));
-        assert!(est.peak_memory_bytes().unwrap() >= 1000 * 1000 * 3);
+        assert!(est.peak_memory_bytes_est().unwrap() >= 1000 * 1000 * 3);
         // serial: at_cores leaves wall unchanged
         assert_eq!(est.at_cores(28).wall_ms(), est.wall_ms());
     }

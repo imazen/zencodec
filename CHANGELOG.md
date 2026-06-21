@@ -23,8 +23,9 @@ All notable changes to zencodec are documented here.
   callers get the same `ResourceEstimate` as the generic path. Both default to
   `ResourceEstimate::unknown()`, so adding them stays semver-additive (no major bump).
 - **Unified resource estimation** (`estimate` module): `ResourceEstimate`
-  (all-`Option` fields — peak memory min/typical/max + `wall_ms` + threading —
-  with an `unknown()` all-`None` value for codecs that do not model resources),
+  (all-`Option` fields — estimated + upper-bound peak memory, `wall_ms`,
+  `cpu_ms` (all `u64`), and threading — with an `unknown()` all-`None` value for
+  codecs that do not model resources),
   `ThreadingInformation` (CPU-core scaling — `max_efficient_threads`, the knee of
   the scaling curve, with `effective_threads(cores)`), and two sealed/growable
   (`#[non_exhaustive]`, private-fields + accessors) builder inputs:
@@ -36,8 +37,8 @@ All notable changes to zencodec are documented here.
   `(&ImageCharacteristics, &ComputeEnvironment)` and return `unknown()` by
   default; codecs override with their calibrated `heuristics` (or
   `ResourceEstimate::conservative(image).at_cores(cores)`).
-  `ResourceEstimate::at_cores` rescales wall time (linear to the knee); peak is
-  unchanged. All four structs are accessor-only with full (un-abbreviated) names
+  `ResourceEstimate::at_cores` rescales wall time (linear to the knee); peak and
+  CPU time are unchanged. All four structs are accessor-only with full names
   so they grow without breaking callers. Additive — existing impls keep compiling.
 
 ## [0.1.23] - 2026-06-18

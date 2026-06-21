@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1164 lines (supported surface) | zencodec.features.txt 0 added (features: none) | zencodec.internal.txt 65 lines (65 hidden + 0 excluded-feature)
+# files: zencodec.txt 1165 lines (supported surface) | zencodec.features.txt 0 added (features: none) | zencodec.internal.txt 65 lines (65 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -14,7 +14,7 @@
 #   pub types (struct/enum/trait/alias)       117
 #   pub consts/statics                        166
 #   free functions                             33
-#   inherent methods                          457
+#   inherent methods                          458
 #   struct fields                             194
 #   enum variants                             139
 #   re-exports                                  8
@@ -27,13 +27,13 @@
 #   (root)                          611
 #   decode                          166
 #   encode                          104
-#   estimate                         45
+#   estimate                         46
 #   exif                             65
 #   gainmap                         117
 #   helpers                          13
 #   icc                               1
 
-## items (1092 lines)
+## items (1093 lines)
 
 pub mod zencodec
 pub use Cicp
@@ -493,14 +493,15 @@ pub fn estimate::ImageCharacteristics::with_frame_count(self, u32) -> Self
 #[non_exhaustive] pub struct estimate::ResourceEstimate
 pub fn estimate::ResourceEstimate::at_cores(&self, usize) -> Self
 pub fn estimate::ResourceEstimate::conservative(&estimate::ImageCharacteristics) -> Self
-pub fn estimate::ResourceEstimate::new(u64, f32) -> Self
-pub fn estimate::ResourceEstimate::peak_memory_bytes(&self) -> core::option::Option<u64>
+pub fn estimate::ResourceEstimate::cpu_ms(&self) -> core::option::Option<u64>
+pub fn estimate::ResourceEstimate::new(u64, u64) -> Self
+pub fn estimate::ResourceEstimate::peak_memory_bytes_est(&self) -> core::option::Option<u64>
 pub fn estimate::ResourceEstimate::peak_memory_bytes_max(&self) -> core::option::Option<u64>
-pub fn estimate::ResourceEstimate::peak_memory_bytes_min(&self) -> core::option::Option<u64>
 pub fn estimate::ResourceEstimate::threading(&self) -> core::option::Option<estimate::ThreadingInformation>
 pub fn estimate::ResourceEstimate::unknown() -> Self
-pub fn estimate::ResourceEstimate::wall_ms(&self) -> core::option::Option<f32>
-pub fn estimate::ResourceEstimate::with_peak_range(self, u64, u64) -> Self
+pub fn estimate::ResourceEstimate::wall_ms(&self) -> core::option::Option<u64>
+pub fn estimate::ResourceEstimate::with_cpu_ms(self, u64) -> Self
+pub fn estimate::ResourceEstimate::with_peak_max(self, u64) -> Self
 pub fn estimate::ResourceEstimate::with_threading(self, estimate::ThreadingInformation) -> Self
 #[non_exhaustive] pub struct estimate::ThreadingInformation
 pub const estimate::ThreadingInformation::SERIAL: Self
