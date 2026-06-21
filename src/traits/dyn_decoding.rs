@@ -467,7 +467,13 @@ pub trait DynDecoderConfig: Send + Sync {
         &self,
         image: &ImageCharacteristics,
         compute: &ComputeEnvironment,
-    ) -> ResourceEstimate;
+    ) -> ResourceEstimate {
+        // Default mirrors `DecoderConfig::estimate_decode_resources` — a
+        // conservative, content/codec-blind fallback. The blanket impl over
+        // `DecoderConfig` overrides this; the default keeps adding this method
+        // semver-additive for any direct implementor of the dyn trait.
+        ResourceEstimate::conservative(image).at_cores(compute.cores())
+    }
 
     /// Create a dyn-dispatched decode job.
     fn dyn_job(&self) -> Box<dyn DynDecodeJob<'_> + '_>;

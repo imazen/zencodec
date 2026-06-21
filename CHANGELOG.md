@@ -20,7 +20,8 @@ All notable changes to zencodec are documented here.
 - `DynEncoderConfig::estimate_encode_resources` /
   `DynDecoderConfig::estimate_decode_resources` — the dyn-dispatch wrappers now
   forward the resource estimate, so codec-agnostic `&dyn DynEncoderConfig`
-  callers get the same `ResourceEstimate` as the generic path.
+  callers get the same `ResourceEstimate` as the generic path. Both have a
+  conservative default body, so adding them stays semver-additive (no major bump).
 - **Unified resource estimation** (`estimate` module): `ResourceEstimate`
   (peak memory min/typical/max + time + output bytes + threading),
   `ThreadingInformation` (measured CPU-core scaling — Amdahl `parallel_fraction`,
@@ -428,6 +429,19 @@ All notable changes to zencodec are documented here.
 ### QUEUED BREAKING CHANGES
 <!-- Breaking changes that will ship together in the next 0.x minor release.
      Add items here as you discover them. Do NOT ship these piecemeal — batch them. -->
+- Rename `OutputInfo` → `PredictedOutputInfo` (`decode::PredictedOutputInfo`): it is the decoder's
+  *predicted* output shape, not a measured fact — the name should say so.
+- Ablate `ThreadingPolicy` to what codecs can actually honor — keep `Sequential` and `Parallel`,
+  remove the deprecated variants (`SingleThread`, `LimitOrSingle`, `LimitOrAny`, and the two
+  deprecated aliases that map to `Parallel`). Rayon codecs cannot reliably cap thread count from
+  inside, so those modes were never real.
+- Ablate `ResourceLimits` to the caps codecs actually enforce (per the 2026-06-20 enforcement
+  audit): **remove** the fields no codec honors — `max_animation_ms` (a duration, not a resource;
+  2 callers) and the running `max_output_bytes` cap (no encoder honors it mid-stream) — and the
+  never-called `check_image_info` / `check_output_info` omnibus helpers. Keep the load-bearing caps
+  (`max_pixels`, `max_memory_bytes`, `max_width` / `max_height`, `max_input_bytes`, `max_frames`),
+  `threading`, and `prefer_fallible_allocations`. (Non-breaking follow-up, done separately: wire
+  `max_total_pixels` + a per-cap `enforces_*` honesty flag.)
 - Remove `icc_extract_cicp` re-export and the top-level `icc` module.
   Callers should use `zenpixels::icc::extract_cicp`, which returns a typed
   `Cicp` instead of a `(u8, u8, u8, bool)` tuple.
