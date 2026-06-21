@@ -4,6 +4,8 @@ All notable changes to zencodec are documented here.
 
 ## [Unreleased]
 
+## [0.1.24] - 2026-06-21
+
 ### Added
 - **`AllocPreference`** (`#[non_exhaustive]` enum — `CodecDefault` / `Fallible` / `Infallible`) +
   `ResourceLimits::prefer_fallible_allocations` field + `with_prefer_fallible_allocations(..)` builder:
