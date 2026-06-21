@@ -407,12 +407,13 @@ pub trait DynEncoderConfig: Send + Sync {
         image: &ImageCharacteristics,
         compute: &ComputeEnvironment,
     ) -> ResourceEstimate {
-        // Default mirrors `EncoderConfig::estimate_encode_resources` — a
-        // conservative, content/codec-blind fallback. The blanket impl over
+        // Default mirrors `EncoderConfig::estimate_encode_resources` —
+        // `unknown()` (every field `None`). The blanket impl over
         // `EncoderConfig` overrides this with the codec's real estimate; the
         // default keeps adding this method semver-additive for any direct
         // implementor of the dyn trait.
-        ResourceEstimate::conservative(image).at_cores(compute.cores())
+        let _ = (image, compute);
+        ResourceEstimate::unknown()
     }
 
     /// Create a dyn-dispatched encode job.

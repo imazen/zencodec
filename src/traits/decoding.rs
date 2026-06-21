@@ -64,16 +64,17 @@ pub trait DecoderConfig: Clone + Send + Sync {
     /// image with the given [`ImageCharacteristics`] on the `compute`
     /// environment.
     ///
-    /// The returned [`ResourceEstimate`] is already adjusted for
-    /// `compute.cores()`. The default is a conservative, content- and
-    /// codec-blind fallback; codecs with a calibrated decode `heuristics`
-    /// model override this.
+    /// The default is [`ResourceEstimate::unknown`] — every field `None`,
+    /// i.e. "this codec does not model its resource use." Codecs with a
+    /// calibrated decode `heuristics` model override this (a quick option is
+    /// [`ResourceEstimate::conservative`]`(image).at_cores(compute.cores())`).
     fn estimate_decode_resources(
         &self,
         image: &ImageCharacteristics,
         compute: &ComputeEnvironment,
     ) -> ResourceEstimate {
-        ResourceEstimate::conservative(image).at_cores(compute.cores())
+        let _ = (image, compute);
+        ResourceEstimate::unknown()
     }
 
     /// Create a per-operation job, consuming the config.

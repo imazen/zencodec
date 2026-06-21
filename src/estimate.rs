@@ -223,15 +223,12 @@ impl ImageCharacteristics {
     }
 }
 
-/// How an operation scales across CPU cores (measured per-codec).
+/// How an operation scales across CPU cores.
 ///
 /// Wall time does **not** scale as `1/cores`: speedup saturates at
-/// [`max_useful_threads`](ThreadingInformation::max_useful_threads) (set by the
-/// codec's tile / strategy / block count) and follows Amdahl's law with
-/// [`parallel_fraction`](ThreadingInformation::parallel_fraction). Peak
-/// working-set grows by
-/// [`memory_bytes_per_thread`](ThreadingInformation::memory_bytes_per_thread)
-/// per added worker.
+/// [`max_efficient_threads`](ThreadingInformation::max_efficient_threads) — the
+/// knee of the scaling curve, set by the codec's tile / strategy / block count.
+/// Below the knee, treat speedup as ~linear; above it, flat.
 ///
 /// Sealed and growable: construct via [`ThreadingInformation::SERIAL`] or
 /// [`ThreadingInformation::parallel`], read with the accessors.
@@ -239,33 +236,23 @@ impl ImageCharacteristics {
 #[non_exhaustive]
 pub struct ThreadingInformation {
     parallel: bool,
-    max_useful_threads: u32,
-    parallel_fraction: f32,
-    memory_bytes_per_thread: u64,
+    max_efficient_threads: u32,
 }
 
 impl ThreadingInformation {
-    /// A serial operation (no multi-core speedup, no per-thread memory).
+    /// A serial operation (no multi-core speedup).
     pub const SERIAL: Self = Self {
         parallel: false,
-        max_useful_threads: 1,
-        parallel_fraction: 0.0,
-        memory_bytes_per_thread: 0,
+        max_efficient_threads: 1,
     };
 
-    /// A parallel operation with the given saturation (`max_useful_threads`,
-    /// clamped to ≥ 1), Amdahl `parallel_fraction`, and per-thread memory.
+    /// A parallel operation whose speedup saturates at `max_efficient_threads`
+    /// (the knee of the scaling curve; clamped to ≥ 1).
     #[must_use]
-    pub fn parallel(
-        max_useful_threads: u32,
-        parallel_fraction: f32,
-        memory_bytes_per_thread: u64,
-    ) -> Self {
+    pub fn parallel(max_efficient_threads: u32) -> Self {
         Self {
             parallel: true,
-            max_useful_threads: max_useful_threads.max(1),
-            parallel_fraction,
-            memory_bytes_per_thread,
+            max_efficient_threads: max_efficient_threads.max(1),
         }
     }
 
@@ -275,158 +262,136 @@ impl ThreadingInformation {
         self.parallel
     }
 
-    /// Threads beyond which there is no further speedup (1 = serial).
+    /// The knee of the scaling curve: threads beyond which added cores stop
+    /// yielding worthwhile speedup (1 = serial). This is the *efficient* cap,
+    /// not a hard concurrency limit.
     #[must_use]
-    pub fn max_useful_threads(&self) -> u32 {
-        self.max_useful_threads
+    pub fn max_efficient_threads(&self) -> u32 {
+        self.max_efficient_threads
     }
 
-    /// Amdahl parallel fraction `p` (peak speedup is `1/(1-p)`; 0 = serial).
-    #[must_use]
-    pub fn parallel_fraction(&self) -> f32 {
-        self.parallel_fraction
-    }
-
-    /// Extra peak working-set per added worker thread, in bytes.
-    #[must_use]
-    pub fn memory_bytes_per_thread(&self) -> u64 {
-        self.memory_bytes_per_thread
-    }
-
-    /// Threads that actually do work given `cores` available (clamped to
-    /// `max_useful_threads`).
+    /// Threads that actually do useful work given `cores` available (clamped
+    /// to `max_efficient_threads`).
     #[must_use]
     pub fn effective_threads(&self, cores: usize) -> u64 {
-        (cores.max(1) as u64).min(self.max_useful_threads.max(1) as u64)
-    }
-
-    /// Achieved wall-time speedup at `cores` (Amdahl, clamped). 1.0 = serial.
-    #[must_use]
-    pub fn speedup(&self, cores: usize) -> f32 {
-        let n = self.effective_threads(cores);
-        if !self.parallel || n <= 1 {
-            return 1.0;
-        }
-        let p = self.parallel_fraction as f64;
-        (1.0 / ((1.0 - p) + p / n as f64)) as f32
+        (cores.max(1) as u64).min(self.max_efficient_threads.max(1) as u64)
     }
 }
 
 /// Predicted resources for an encode (or decode) operation.
 ///
-/// The peak-memory and time figures are the **single-thread** values plus the
-/// carried [`ThreadingInformation`]; [`ResourceEstimate::at_cores`] re-scales
-/// them for a given core count. Compare against
+/// Every field is `Option` — a codec fills in what it models and leaves the
+/// rest `None` (the trait default is [`ResourceEstimate::unknown`], all-`None`).
+/// The peak-memory and wall-time figures are the **single-thread** values plus
+/// the carried [`ThreadingInformation`]; [`ResourceEstimate::at_cores`] re-scales
+/// the wall time for a given core count. Compare against
 /// [`ResourceLimits`](crate::ResourceLimits) to decide whether to admit a job.
 ///
-/// Sealed and growable: build via [`ResourceEstimate::new`] + the `with_*`
-/// setters, read with the accessors.
+/// Sealed and growable: build via [`new`](ResourceEstimate::new) /
+/// [`unknown`](ResourceEstimate::unknown) + the `with_*` setters, read with the
+/// accessors.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct ResourceEstimate {
-    peak_memory_bytes_min: u64,
-    peak_memory_bytes: u64,
-    peak_memory_bytes_max: u64,
-    time_ms: f32,
-    output_bytes: u64,
-    threading: ThreadingInformation,
+    peak_memory_bytes_min: Option<u64>,
+    peak_memory_bytes: Option<u64>,
+    peak_memory_bytes_max: Option<u64>,
+    wall_ms: Option<f32>,
+    threading: Option<ThreadingInformation>,
 }
 
 impl ResourceEstimate {
+    /// An empty estimate — every field `None`. This is what a codec that does
+    /// not model its resource use returns (and the trait default); codecs that
+    /// do model fill in what they can with the `with_*` setters. Read fields
+    /// back as `Option`.
+    #[must_use]
+    pub fn unknown() -> Self {
+        Self {
+            peak_memory_bytes_min: None,
+            peak_memory_bytes: None,
+            peak_memory_bytes_max: None,
+            wall_ms: None,
+            threading: None,
+        }
+    }
+
     /// A single-thread estimate from the two essentials: the typical peak
     /// memory and the single-thread wall time. Min/max peak default to the
-    /// typical value, output to 0, and threading to serial — refine with the
-    /// `with_*` setters.
+    /// typical value and threading to serial — refine with the `with_*`
+    /// setters.
     #[must_use]
-    pub fn new(peak_memory_bytes: u64, time_ms: f32) -> Self {
+    pub fn new(peak_memory_bytes: u64, wall_ms: f32) -> Self {
         Self {
-            peak_memory_bytes_min: peak_memory_bytes,
-            peak_memory_bytes,
-            peak_memory_bytes_max: peak_memory_bytes,
-            time_ms,
-            output_bytes: 0,
-            threading: ThreadingInformation::SERIAL,
+            peak_memory_bytes_min: Some(peak_memory_bytes),
+            peak_memory_bytes: Some(peak_memory_bytes),
+            peak_memory_bytes_max: Some(peak_memory_bytes),
+            wall_ms: Some(wall_ms),
+            threading: Some(ThreadingInformation::SERIAL),
         }
     }
 
     /// Set the best-case and worst-case peak-memory bounds (bytes).
     #[must_use]
     pub fn with_peak_range(mut self, min: u64, max: u64) -> Self {
-        self.peak_memory_bytes_min = min;
-        self.peak_memory_bytes_max = max;
-        self
-    }
-
-    /// Set the estimated output size in bytes.
-    #[must_use]
-    pub fn with_output_bytes(mut self, bytes: u64) -> Self {
-        self.output_bytes = bytes;
+        self.peak_memory_bytes_min = Some(min);
+        self.peak_memory_bytes_max = Some(max);
         self
     }
 
     /// Attach the operation's core-scaling model.
     #[must_use]
     pub fn with_threading(mut self, threading: ThreadingInformation) -> Self {
-        self.threading = threading;
+        self.threading = Some(threading);
         self
     }
 
     /// Best-case peak memory (simple / low-entropy content), bytes.
     #[must_use]
-    pub fn peak_memory_bytes_min(&self) -> u64 {
+    pub fn peak_memory_bytes_min(&self) -> Option<u64> {
         self.peak_memory_bytes_min
     }
 
     /// Typical (≈ p50) peak memory for natural content, bytes.
     #[must_use]
-    pub fn peak_memory_bytes(&self) -> u64 {
+    pub fn peak_memory_bytes(&self) -> Option<u64> {
         self.peak_memory_bytes
     }
 
     /// Conservative upper-bound peak memory (worst content + margin), bytes.
     #[must_use]
-    pub fn peak_memory_bytes_max(&self) -> u64 {
+    pub fn peak_memory_bytes_max(&self) -> Option<u64> {
         self.peak_memory_bytes_max
     }
 
-    /// Wall time in milliseconds (single-thread unless produced by
-    /// [`at_cores`](ResourceEstimate::at_cores)).
+    /// Predicted **wall-clock** time in milliseconds (single-thread unless
+    /// produced by [`at_cores`](ResourceEstimate::at_cores)).
     #[must_use]
-    pub fn time_ms(&self) -> f32 {
-        self.time_ms
-    }
-
-    /// Estimated output size in bytes.
-    #[must_use]
-    pub fn output_bytes(&self) -> u64 {
-        self.output_bytes
+    pub fn wall_ms(&self) -> Option<f32> {
+        self.wall_ms
     }
 
     /// How the operation scales across cores.
     #[must_use]
-    pub fn threading(&self) -> ThreadingInformation {
+    pub fn threading(&self) -> Option<ThreadingInformation> {
         self.threading
     }
 
-    /// Re-scale wall time and peak memory for `cores` available CPU cores
-    /// using the carried [`ThreadingInformation`]: `time_ms` is divided by the
-    /// measured (saturating) speedup and the peaks gain the per-thread working
-    /// set. `self` must carry the single-thread time.
+    /// Re-scale the predicted **wall** time for `cores` available CPU cores
+    /// using the carried [`ThreadingInformation`]: `wall_ms` is divided by the
+    /// effective thread count — linear speedup up to
+    /// [`max_efficient_threads`](ThreadingInformation::max_efficient_threads),
+    /// the knee of the scaling curve. `self` must carry the single-thread time.
+    /// Peak memory is unchanged. A `None` `wall_ms` or `None` threading is
+    /// returned unscaled.
     #[must_use]
     pub fn at_cores(&self, cores: usize) -> Self {
-        let speedup = self.threading.speedup(cores) as f64;
-        let extra = self
-            .threading
-            .memory_bytes_per_thread
-            .saturating_mul(self.threading.effective_threads(cores).saturating_sub(1));
-        Self {
-            peak_memory_bytes_min: self.peak_memory_bytes_min.saturating_add(extra),
-            peak_memory_bytes: self.peak_memory_bytes.saturating_add(extra),
-            peak_memory_bytes_max: self.peak_memory_bytes_max.saturating_add(extra),
-            time_ms: (self.time_ms as f64 / speedup) as f32,
-            output_bytes: self.output_bytes,
-            threading: self.threading,
+        let mut out = *self;
+        if let (Some(wall), Some(threading)) = (self.wall_ms, self.threading) {
+            let n = threading.effective_threads(cores).max(1);
+            out.wall_ms = Some((wall as f64 / n as f64) as f32);
         }
+        out
     }
 
     /// A conservative, content- and codec-blind fallback for operations
@@ -442,14 +407,12 @@ impl ResourceEstimate {
         let fixed: u64 = 16 << 20;
         let typical = fixed.saturating_add(input.saturating_mul(3));
         // ~50 Mpix/s placeholder throughput; codecs override with measured.
-        let time_ms =
+        let wall_ms =
             (image.pixels().saturating_mul(image.frame_count() as u64) as f64 / 50_000.0) as f32;
-        Self::new(typical, time_ms)
-            .with_peak_range(
-                fixed.saturating_add(input.saturating_mul(2)),
-                fixed.saturating_add(input.saturating_mul(8)),
-            )
-            .with_output_bytes(input / 4)
+        Self::new(typical, wall_ms).with_peak_range(
+            fixed.saturating_add(input.saturating_mul(2)),
+            fixed.saturating_add(input.saturating_mul(8)),
+        )
     }
 }
 
@@ -491,47 +454,52 @@ mod tests {
     }
 
     #[test]
-    fn serial_speedup_is_one() {
+    fn serial_threading_is_one_thread() {
         let ti = ThreadingInformation::SERIAL;
-        assert_eq!(ti.speedup(1), 1.0);
-        assert_eq!(ti.speedup(28), 1.0);
         assert_eq!(ti.effective_threads(28), 1);
+        assert_eq!(ti.max_efficient_threads(), 1);
         assert!(!ti.is_parallel());
     }
 
     #[test]
-    fn parallel_speedup_saturates_and_clamps() {
-        let ti = ThreadingInformation::parallel(8, 0.9, 2_000_000);
+    fn parallel_effective_threads_saturate_at_the_knee() {
+        let ti = ThreadingInformation::parallel(8);
         assert!(ti.is_parallel());
-        assert_eq!(ti.max_useful_threads(), 8);
-        assert_eq!(ti.memory_bytes_per_thread(), 2_000_000);
-        assert!(ti.speedup(1) == 1.0);
-        // amdahl(0.9, 4) = 1/(0.1+0.225) ≈ 3.08
-        let s4 = ti.speedup(4);
-        assert!(s4 > 3.0 && s4 < 3.2, "got {s4}");
-        // beyond max_useful_threads, no further gain
-        assert_eq!(ti.speedup(8), ti.speedup(28));
-        assert_eq!(ti.effective_threads(28), 8);
+        assert_eq!(ti.max_efficient_threads(), 8);
+        assert_eq!(ti.effective_threads(4), 4); // below the knee
+        assert_eq!(ti.effective_threads(28), 8); // clamped to the knee
+        assert_eq!(ThreadingInformation::parallel(0).max_efficient_threads(), 1); // >= 1
     }
 
     #[test]
-    fn at_cores_scales_time_and_grows_peak() {
-        let ti = ThreadingInformation::parallel(8, 0.9, 2_000_000);
+    fn at_cores_scales_wall_to_the_knee_and_leaves_peak() {
         let base = ResourceEstimate::new(200, 1000.0)
             .with_peak_range(100, 400)
-            .with_output_bytes(50)
-            .with_threading(ti);
-        let scaled = base.at_cores(8);
-        assert!(scaled.time_ms() < base.time_ms());
-        // peak grows by memory_bytes_per_thread * (8-1)
-        assert_eq!(scaled.peak_memory_bytes(), 200 + 2_000_000 * 7);
+            .with_threading(ThreadingInformation::parallel(8));
+        // wall / effective_threads(4) = 1000 / 4
+        assert_eq!(base.at_cores(4).wall_ms(), Some(250.0));
+        // beyond the knee, no further gain: / 8
+        assert_eq!(base.at_cores(28).wall_ms(), Some(125.0));
+        // peak memory is unchanged by at_cores
+        assert_eq!(base.at_cores(4).peak_memory_bytes(), Some(200));
+        assert_eq!(base.at_cores(4).peak_memory_bytes_min(), Some(100));
+    }
+
+    #[test]
+    fn unknown_is_all_none_and_at_cores_is_a_noop() {
+        let est = ResourceEstimate::unknown();
+        assert_eq!(est.peak_memory_bytes(), None);
+        assert_eq!(est.wall_ms(), None);
+        assert_eq!(est.threading(), None);
+        assert_eq!(est.at_cores(28), est);
     }
 
     #[test]
     fn conservative_is_serial_and_input_scaled() {
         let est = ResourceEstimate::conservative(&ImageCharacteristics::new(1000, 1000, desc()));
-        assert!(!est.threading().is_parallel());
-        assert!(est.peak_memory_bytes() >= 1000 * 1000 * 3);
-        assert_eq!(est.at_cores(28).time_ms(), est.time_ms()); // serial: no change
+        assert_eq!(est.threading().map(|t| t.is_parallel()), Some(false));
+        assert!(est.peak_memory_bytes().unwrap() >= 1000 * 1000 * 3);
+        // serial: at_cores leaves wall unchanged
+        assert_eq!(est.at_cores(28).wall_ms(), est.wall_ms());
     }
 }

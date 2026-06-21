@@ -140,15 +140,17 @@ pub trait EncoderConfig: Clone + Send + Sync {
     /// [`ImageCharacteristics`] the image, and [`ComputeEnvironment`] the
     /// hardware.
     ///
-    /// The default is a conservative, content- and codec-blind fallback
-    /// ([`ResourceEstimate::conservative`]). Codecs with a calibrated
-    /// `heuristics` model override this, reading their own config knobs.
+    /// The default is [`ResourceEstimate::unknown`] — every field `None`,
+    /// i.e. "this codec does not model its resource use." Codecs with a
+    /// calibrated `heuristics` model override this (a quick option is to return
+    /// [`ResourceEstimate::conservative`]`(image).at_cores(compute.cores())`).
     fn estimate_encode_resources(
         &self,
         image: &ImageCharacteristics,
         compute: &ComputeEnvironment,
     ) -> ResourceEstimate {
-        ResourceEstimate::conservative(image).at_cores(compute.cores())
+        let _ = (image, compute);
+        ResourceEstimate::unknown()
     }
 
     /// Create a per-operation job, consuming the config.

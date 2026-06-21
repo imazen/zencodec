@@ -20,25 +20,25 @@ All notable changes to zencodec are documented here.
 - `DynEncoderConfig::estimate_encode_resources` /
   `DynDecoderConfig::estimate_decode_resources` — the dyn-dispatch wrappers now
   forward the resource estimate, so codec-agnostic `&dyn DynEncoderConfig`
-  callers get the same `ResourceEstimate` as the generic path. Both have a
-  conservative default body, so adding them stays semver-additive (no major bump).
+  callers get the same `ResourceEstimate` as the generic path. Both default to
+  `ResourceEstimate::unknown()`, so adding them stays semver-additive (no major bump).
 - **Unified resource estimation** (`estimate` module): `ResourceEstimate`
-  (peak memory min/typical/max + time + output bytes + threading),
-  `ThreadingInformation` (measured CPU-core scaling — Amdahl `parallel_fraction`,
-  `max_useful_threads`, per-thread memory, with `speedup(cores)` /
-  `effective_threads(cores)`), and two sealed/growable (`#[non_exhaustive]`,
-  private-fields + accessors) builder inputs: `ComputeEnvironment` (hardware +
-  conditions of computing — cores now; RAM/SIMD/load expandable) and
-  `ImageCharacteristics` (dimensions + `PixelDescriptor` + frame count; content
-  class/HDR tier expandable). Default trait methods
-  `EncoderConfig::estimate_encode_resources` and
+  (all-`Option` fields — peak memory min/typical/max + `wall_ms` + threading —
+  with an `unknown()` all-`None` value for codecs that do not model resources),
+  `ThreadingInformation` (CPU-core scaling — `max_efficient_threads`, the knee of
+  the scaling curve, with `effective_threads(cores)`), and two sealed/growable
+  (`#[non_exhaustive]`, private-fields + accessors) builder inputs:
+  `ComputeEnvironment` (hardware + conditions of computing — cores now;
+  RAM/SIMD/load expandable) and `ImageCharacteristics` (dimensions +
+  `PixelDescriptor` + frame count; content class/HDR tier expandable). Default
+  trait methods `EncoderConfig::estimate_encode_resources` and
   `DecoderConfig::estimate_decode_resources` take
-  `(&ImageCharacteristics, &ComputeEnvironment)` and return a core-adjusted
-  `ResourceEstimate` (conservative content-blind fallback by default; codecs
-  override with their calibrated `heuristics`). `ResourceEstimate::at_cores`
-  folds the threading model into wall-time + peak. All four structs are
-  accessor-only with full (un-abbreviated) names so they grow without breaking
-  callers. Additive — existing impls keep compiling.
+  `(&ImageCharacteristics, &ComputeEnvironment)` and return `unknown()` by
+  default; codecs override with their calibrated `heuristics` (or
+  `ResourceEstimate::conservative(image).at_cores(cores)`).
+  `ResourceEstimate::at_cores` rescales wall time (linear to the knee); peak is
+  unchanged. All four structs are accessor-only with full (un-abbreviated) names
+  so they grow without breaking callers. Additive — existing impls keep compiling.
 
 ## [0.1.23] - 2026-06-18
 
