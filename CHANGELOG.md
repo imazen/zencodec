@@ -4,6 +4,47 @@ All notable changes to zencodec are documented here.
 
 ## [Unreleased]
 
+### QUEUED BREAKING CHANGES
+<!-- Breaking changes that will ship together in the next 0.x minor release.
+     Add items here as you discover them. Do NOT ship these piecemeal — batch them. -->
+- Rename `OutputInfo` → `PredictedOutputInfo` (`decode::PredictedOutputInfo`): it is the decoder's
+  *predicted* output shape, not a measured fact — the name should say so.
+- Ablate `ThreadingPolicy` to what codecs can actually honor — keep `Sequential` and `Parallel`,
+  remove the deprecated variants (`SingleThread`, `LimitOrSingle`, `LimitOrAny`, and the two
+  deprecated aliases that map to `Parallel`). Rayon codecs cannot reliably cap thread count from
+  inside, so those modes were never real.
+- Ablate `ResourceLimits` to the caps codecs actually enforce (per the 2026-06-20 enforcement
+  audit): **remove** the fields no codec honors — `max_animation_ms` (a duration, not a resource;
+  2 callers) and the running `max_output_bytes` cap (no encoder honors it mid-stream) — and the
+  never-called `check_image_info` / `check_output_info` omnibus helpers. Keep the load-bearing caps
+  (`max_pixels`, `max_memory_bytes`, `max_width` / `max_height`, `max_input_bytes`, `max_frames`),
+  `threading`, and `prefer_fallible_allocations`. (Non-breaking follow-up, done separately: wire
+  `max_total_pixels` + a per-cap `enforces_*` honesty flag.)
+- Remove `icc_extract_cicp` re-export and the top-level `icc` module.
+  Callers should use `zenpixels::icc::extract_cicp`, which returns a typed
+  `Cicp` instead of a `(u8, u8, u8, bool)` tuple.
+- Remove `helpers::IccMatchTolerance`, `helpers::identify_well_known_icc`,
+  and `helpers::icc_profile_is_srgb`. Callers should use
+  `zenpixels::icc::{identify_common, is_common_srgb}` which return the
+  richer `IccIdentification` (adds `valid_use: IdentificationUse` so
+  callers can distinguish metadata-only matches from matrix+TRC-safe
+  substitution). `descriptor_for_decoded_pixels` will drop its
+  `IccMatchTolerance` parameter — it is currently a placebo.
+- Remove `helpers::descriptor_for_decoded_pixels` (deprecated in 0.1.17).
+  Callers migrate to `descriptor_for_decoded_pixels_v2` which drops the
+  placebo `IccMatchTolerance` and widens `corrected_to` to
+  `Option<&ColorProfileSource>`.
+- Remove `gainmap::Fraction::from_f64` and `gainmap::UFraction::from_f64`
+  (deprecated since 0.1.12). Callers should use `from_f64_cf`, which
+  produces canonical continued-fraction encodings matching libultrahdr.
+- Remove `gainmap::parse_iso21496` and `gainmap::serialize_iso21496`
+  (deprecated since 0.1.12). Callers should use `parse_iso21496_fmt` /
+  `serialize_iso21496_fmt` with an explicit `Iso21496Format` (AvifTmap
+  vs. JpegApp2) to avoid the format ambiguity that motivated the rename.
+- Remove `SourceColor::has_hdr_transfer()` — moves to a pipeline-level
+  utility that consults `ColorProfileSource` and `HdrPolicy` together
+  rather than inspecting raw CICP/ICC fields.
+
 ## [0.1.24] - 2026-06-21
 
 ### Added
@@ -429,47 +470,6 @@ All notable changes to zencodec are documented here.
   use fully-qualified `zenpixels::ColorContext` paths, and
   crate-private `MAX_IFD_ENTRIES` / `resolve_color` symbols use plain
   code spans instead of intra-doc links (574de90).
-
-### QUEUED BREAKING CHANGES
-<!-- Breaking changes that will ship together in the next 0.x minor release.
-     Add items here as you discover them. Do NOT ship these piecemeal — batch them. -->
-- Rename `OutputInfo` → `PredictedOutputInfo` (`decode::PredictedOutputInfo`): it is the decoder's
-  *predicted* output shape, not a measured fact — the name should say so.
-- Ablate `ThreadingPolicy` to what codecs can actually honor — keep `Sequential` and `Parallel`,
-  remove the deprecated variants (`SingleThread`, `LimitOrSingle`, `LimitOrAny`, and the two
-  deprecated aliases that map to `Parallel`). Rayon codecs cannot reliably cap thread count from
-  inside, so those modes were never real.
-- Ablate `ResourceLimits` to the caps codecs actually enforce (per the 2026-06-20 enforcement
-  audit): **remove** the fields no codec honors — `max_animation_ms` (a duration, not a resource;
-  2 callers) and the running `max_output_bytes` cap (no encoder honors it mid-stream) — and the
-  never-called `check_image_info` / `check_output_info` omnibus helpers. Keep the load-bearing caps
-  (`max_pixels`, `max_memory_bytes`, `max_width` / `max_height`, `max_input_bytes`, `max_frames`),
-  `threading`, and `prefer_fallible_allocations`. (Non-breaking follow-up, done separately: wire
-  `max_total_pixels` + a per-cap `enforces_*` honesty flag.)
-- Remove `icc_extract_cicp` re-export and the top-level `icc` module.
-  Callers should use `zenpixels::icc::extract_cicp`, which returns a typed
-  `Cicp` instead of a `(u8, u8, u8, bool)` tuple.
-- Remove `helpers::IccMatchTolerance`, `helpers::identify_well_known_icc`,
-  and `helpers::icc_profile_is_srgb`. Callers should use
-  `zenpixels::icc::{identify_common, is_common_srgb}` which return the
-  richer `IccIdentification` (adds `valid_use: IdentificationUse` so
-  callers can distinguish metadata-only matches from matrix+TRC-safe
-  substitution). `descriptor_for_decoded_pixels` will drop its
-  `IccMatchTolerance` parameter — it is currently a placebo.
-- Remove `helpers::descriptor_for_decoded_pixels` (deprecated in 0.1.17).
-  Callers migrate to `descriptor_for_decoded_pixels_v2` which drops the
-  placebo `IccMatchTolerance` and widens `corrected_to` to
-  `Option<&ColorProfileSource>`.
-- Remove `gainmap::Fraction::from_f64` and `gainmap::UFraction::from_f64`
-  (deprecated since 0.1.12). Callers should use `from_f64_cf`, which
-  produces canonical continued-fraction encodings matching libultrahdr.
-- Remove `gainmap::parse_iso21496` and `gainmap::serialize_iso21496`
-  (deprecated since 0.1.12). Callers should use `parse_iso21496_fmt` /
-  `serialize_iso21496_fmt` with an explicit `Iso21496Format` (AvifTmap
-  vs. JpegApp2) to avoid the format ambiguity that motivated the rename.
-- Remove `SourceColor::has_hdr_transfer()` — moves to a pipeline-level
-  utility that consults `ColorProfileSource` and `HdrPolicy` together
-  rather than inspecting raw CICP/ICC fields.
 
 ## [0.1.18] - 2026-04-15
 
