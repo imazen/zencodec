@@ -3,6 +3,7 @@
 use alloc::boxed::Box;
 
 use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
+use crate::fidelity::{Fidelity, LossyTarget};
 use crate::format::ImageFormat;
 use crate::{EncodeCapabilities, Metadata, ResourceLimits};
 use zenpixels::PixelDescriptor;
@@ -122,6 +123,47 @@ pub trait EncoderConfig: Clone + Send + Sync {
     /// Current lossless setting, or `None` if the codec doesn't support it.
     fn is_lossless(&self) -> Option<bool> {
         None
+    }
+
+    /// Set the encode [`Fidelity`] — a lossy [`LossyTarget`], a near-lossless
+    /// [`NearLosslessBudget`](crate::encode::NearLosslessBudget), or lossless.
+    ///
+    /// Infallible and **best-effort**: the codec does what it can and silently
+    /// substitutes the rest. Read what it resolved to with
+    /// [`resolved_target_fidelity`](Self::resolved_target_fidelity).
+    ///
+    /// The default bridges to the legacy [`with_generic_quality`](Self::with_generic_quality)
+    /// / [`with_lossless`](Self::with_lossless) setters, so a codec that has not
+    /// implemented native fidelity still behaves sensibly — a near-lossless budget
+    /// promotes to exact lossless. Codecs override to honor budgets natively (e.g.
+    /// PNG's L∞ bit-rounding, WebP's near-lossless dial).
+    fn with_fidelity(self, fidelity: Fidelity) -> Self {
+        match fidelity {
+            // Default fallback: both lossy targets coarsely route through the
+            // generic quality dial. Codecs override to honor the SSIM2
+            // calibration / their native quality scale precisely.
+            Fidelity::Lossy(LossyTarget::ApproxSsim2(q) | LossyTarget::CodecSpecificQuality(q)) => {
+                self.with_lossless(false).with_generic_quality(q)
+            }
+            Fidelity::NearLossless(_) | Fidelity::Lossless => self.with_lossless(true),
+        }
+    }
+
+    /// The fidelity the codec actually resolved to, or `None` if it has no
+    /// fidelity control.
+    ///
+    /// The default derives from [`is_lossless`](Self::is_lossless) and
+    /// [`generic_quality`](Self::generic_quality), so codecs that only implement
+    /// the legacy getters still report a `Fidelity`. Codecs that honor a
+    /// near-lossless budget natively override this to report the budget they met.
+    fn resolved_target_fidelity(&self) -> Option<Fidelity> {
+        if self.is_lossless() == Some(true) {
+            return Some(Fidelity::Lossless);
+        }
+        // The default codec stored a generic quality; report it on the
+        // codec-specific scale. Codecs that honor a metric/budget natively
+        // override this to report precisely.
+        self.generic_quality().map(Fidelity::codec_quality)
     }
 
     /// Current alpha quality value, or `None` if unsupported.

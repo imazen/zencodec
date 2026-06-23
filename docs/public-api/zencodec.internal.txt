@@ -9,19 +9,19 @@
 
 ## summary
 #
-#   inherent methods                           34
-#   trait roster entries (type × trait)        31
+#   inherent methods                           35
+#   trait roster entries (type × trait)        34
 #
 # per-module pub lines:
 #   (root)                           17
 #   decode                            3
-#   encode                            1
+#   encode                            2
 #   estimate                          3
 #   exif                              5
 #   gainmap                           4
 #   helpers                           1
 
-## items (34 lines)
+## items (35 lines)
 
 pub fn AllocPreference::assert_fields_are_eq(&self)
 pub fn CicpEmission::assert_fields_are_eq(&self)
@@ -44,6 +44,7 @@ pub fn decode::DecodeCapabilities::assert_fields_are_eq(&self)
 pub fn decode::DecodePolicy::assert_fields_are_eq(&self)
 pub fn decode::OutputInfo::assert_fields_are_eq(&self)
 pub fn encode::EncodePolicy::assert_fields_are_eq(&self)
+pub fn encode::NearLosslessBudget::assert_fields_are_eq(&self)
 pub fn estimate::ComputeEnvironment::assert_fields_are_eq(&self)
 pub fn estimate::ImageCharacteristics::assert_fields_are_eq(&self)
 pub fn estimate::SimdTier::assert_fields_are_eq(&self)
@@ -58,7 +59,7 @@ pub fn gainmap::Iso21496Format::assert_fields_are_eq(&self)
 pub fn gainmap::UFraction::assert_fields_are_eq(&self)
 pub fn helpers::IccMatchTolerance::assert_fields_are_eq(&self)
 
-## trait impls (31 types)
+## trait impls (34 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -76,6 +77,9 @@ ThreadingPolicy: TrivialClone
 UnsupportedOperation: TrivialClone
 decode::DecodePolicy: TrivialClone
 encode::EncodePolicy: TrivialClone
+encode::Fidelity: TrivialClone
+encode::LossyTarget: TrivialClone
+encode::NearLosslessBudget: TrivialClone
 estimate::ComputeEnvironment: TrivialClone
 estimate::ResourceEstimate: TrivialClone
 estimate::SimdTier: TrivialClone
