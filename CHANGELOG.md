@@ -45,6 +45,8 @@ All notable changes to zencodec are documented here.
   utility that consults `ColorProfileSource` and `HdrPolicy` together
   rather than inspecting raw CICP/ICC fields.
 
+## [0.1.25] - 2026-06-23
+
 ### Added
 - **`Fidelity` API** (`encode::{Fidelity, LossyTarget}` +
   `EncoderConfig::with_fidelity` / `resolved_target_fidelity`):

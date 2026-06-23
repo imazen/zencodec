@@ -234,6 +234,39 @@ for the full model.
 
 > These patterns are exercised end-to-end in `zencodec-testkit/tests/decode_parallelism.rs`.
 
+## Encode fidelity
+
+`EncoderConfig::with_fidelity` is the codec-agnostic way to ask for a quality
+level — infallible and best-effort: the codec does what it can and substitutes
+the rest.
+
+```rust
+use zencodec::encode::{EncoderConfig, Fidelity};
+
+let cfg = my_encoder_config
+    .with_fidelity(Fidelity::Lossless);              // mathematically exact
+//  .with_fidelity(Fidelity::ssim2(90.0))            // aim at SSIMULACRA2 ~= 90
+//  .with_fidelity(Fidelity::butteraugli(1.0))       // aim at butteraugli max-norm ~= 1.0
+//  .with_fidelity(Fidelity::codec_quality(85.0));   // the codec's own native dial
+```
+
+`Fidelity` is either `Lossless` or `Lossy(LossyTarget)`, where a `LossyTarget` is:
+
+- **`ApproxSsim2(score)`** — a one-shot SSIMULACRA2 target (a real cross-codec metric).
+- **`ApproxButteraugli(distance)`** — a one-shot butteraugli max-norm distance.
+- **`CodecSpecificQuality(q)`** — the codec's own native quality scale (meaning differs per codec).
+
+These are **blind, single-pass**: the target maps to a native dial in one encode,
+no re-encode loop. A codec that hasn't implemented native fidelity still behaves
+sensibly — the default bridges to the legacy `with_lossless` / `with_generic_quality`
+setters. Read back what the codec resolved to with
+`resolved_target_fidelity() -> Option<Fidelity>`.
+
+> A `LosslessMode` container variant (lossless coding within a loss budget — the
+> screen-content path) and a fail-fast `try_with_fidelity` verdict are designed but
+> deferred while their semantics settle; see the reserved blocks in
+> `src/fidelity.rs` and [imazen/zencodec#104](https://github.com/imazen/zencodec/issues/104).
+
 ## Key Design Decisions
 
 **Color management is not the codec's job.** Decoders return native pixels with ICC/CICP metadata. Encoders accept pixels as-is and embed the provided metadata. The caller handles CMS transforms.
