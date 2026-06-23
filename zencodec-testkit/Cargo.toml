@@ -16,3 +16,8 @@ include = ["/src/**", "/README.md", "/LICENSE*"]
 zencodec = { path = "..", version = "0.1.21" }
 zenpixels = { version = "0.2.10", features = ["icc"] }
 enough = "0.4.4"
+
+[dev-dependencies]
+# For the decode-parallelism examples (tests/decode_parallelism.rs) — exercises
+# capping codec thread count via a sized rayon pool.
+rayon = "1.10.0"

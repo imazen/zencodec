@@ -190,6 +190,50 @@ match config.job().decoder(Cow::Borrowed(bytes), &[]) {
 }
 ```
 
+## Controlling decode parallelism
+
+Zen codecs parallelize with [rayon](https://docs.rs/rayon)'s **ambient** pool. The
+responsibility splits cleanly: the *codec* chooses sequential vs parallel
+(`ResourceLimits::threading` → `ThreadingPolicy::{Sequential, Parallel}`); the
+*caller* chooses the thread **count** by sizing a pool and running the decode
+inside `rayon::ThreadPool::install` — you don't ask the codec to cap threads from
+the inside.
+
+`DynDecoder` (one-shot) is intentionally **not `Send`** — it may borrow your input
+zero-copy. That is *not* an obstacle to capping threads: `decode()` returns an
+owned, `Send` `DecodeOutput`, so construct **and** consume the decoder *inside*
+the closure and only the result crosses back out. The codec's internal rayon work
+then runs on your sized pool:
+
+```rust
+use std::borrow::Cow;
+use rayon::ThreadPoolBuilder;
+use zencodec::decode::{DecodeOutput, DynDecoderConfig};
+
+let pool = ThreadPoolBuilder::new().num_threads(2).build()?;
+let out: DecodeOutput = pool.install(|| {
+    config.dyn_job()
+        .into_decoder(Cow::Borrowed(&bytes), &[])?   // Box<dyn DynDecoder> — not Send, but local
+        .decode()                                     // -> DecodeOutput (Send), consumes the decoder
+})?;
+// the non-Send decoder lived and died on a pool worker; only owned pixels came back
+```
+
+Run **many** decodes under one capped pool the same way:
+`pool.install(|| inputs.par_iter().map(decode_one).collect())`, each decoder built
+inside its own task. Need a **live decoder on another thread** (not just
+thread-capping)? Use the **streaming** path: `DynStreamingDecoder` *is* `Send` by
+contract (it owns/copies its data), so it can move across a thread boundary —
+one-shot trades that for zero-copy borrowing.
+
+**Exception — native-threaded codecs.** AV1 (`rav1d` / `zenrav1e` / AVIF) spawns
+OS threads, not rayon, so `install()` has no effect on them; cap those with
+codec-specific config (e.g. `AvifEncoderConfig::with_threads(4)`). See
+[`ThreadingPolicy`](https://docs.rs/zencodec/latest/zencodec/enum.ThreadingPolicy.html)
+for the full model.
+
+> These patterns are exercised end-to-end in `zencodec-testkit/tests/decode_parallelism.rs`.
+
 ## Key Design Decisions
 
 **Color management is not the codec's job.** Decoders return native pixels with ICC/CICP metadata. Encoders accept pixels as-is and embed the provided metadata. The caller handles CMS transforms.
