@@ -57,10 +57,13 @@ All notable changes to zencodec are documented here.
   `with_generic_quality` setters, so every codec behaves sensibly today; codecs
   override to honor targets natively, and `resolved_target_fidelity` reports what
   was actually honored. `try_with_fidelity` is the fail-fast counterpart,
-  returning a `FidelityMatch` (`Exact` / `Approximated(Fidelity)` / `Unsupported`)
-  up-front: a codec may resolve to *more* fidelity silently, but a downgrade
-  across the lossy↔lossless fence is always `Unsupported`, never silent. Scope is
-  **blind single-pass**.
+  returning a `FidelityMatch` (`Exact` / `RaisedTo(Fidelity)` /
+  `LoweredTo(Fidelity)` / `Translated(Fidelity)` / `Unsupported`; with
+  `is_honored` / `meets_or_exceeds` / `resolved`) up-front: a codec may resolve to
+  *higher* fidelity silently, but *lower* is always observable — `LoweredTo` when
+  the format can't reach the ask (e.g. GIF's 256-colour palette caps quality),
+  `Unsupported` across the lossy↔lossless fence (e.g. `Lossless` on JPEG). Never a
+  silent downgrade. Scope is **blind single-pass**.
 
   A third variant — **`LosslessMode`**: lossless *coding* (predictive, no DCT
   ringing) of pixels pre-quantized within a budget, which would make the

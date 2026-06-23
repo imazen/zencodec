@@ -158,11 +158,14 @@ pub trait EncoderConfig: Clone + Send + Sync {
     ///
     /// Unlike [`with_fidelity`](Self::with_fidelity) (infallible best-effort),
     /// this tells you immediately whether the request was honored exactly,
-    /// approximated (rounded / metric-translated / promoted to *more* fidelity),
-    /// or is [`Unsupported`](FidelityMatch::Unsupported) — i.e. only meetable by
-    /// crossing to *less* fidelity than asked. A cheap up-front resolution, no
-    /// encoding. The config is still mutated to the codec's best effort either
-    /// way, so a caller may proceed or select another codec.
+    /// [`RaisedTo`](FidelityMatch::RaisedTo) more fidelity,
+    /// [`LoweredTo`](FidelityMatch::LoweredTo) less (the format can't reach the
+    /// ask — e.g. GIF's 256-colour palette), metric-translated to the native
+    /// scale ([`Translated`](FidelityMatch::Translated)), or
+    /// [`Unsupported`](FidelityMatch::Unsupported) (only meetable by crossing to
+    /// *less* fidelity across the lossy↔lossless fence). A cheap up-front
+    /// resolution, no encoding. The config is still mutated to the codec's best
+    /// effort either way, so a caller may proceed or select another codec.
     ///
     /// The default applies via [`with_fidelity`](Self::with_fidelity) and
     /// classifies by comparing the request to

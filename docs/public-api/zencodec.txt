@@ -6,17 +6,17 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1189 lines (supported surface) | zencodec.features.txt 0 added (features: none) | zencodec.internal.txt 68 lines (68 hidden + 0 excluded-feature)
+# files: zencodec.txt 1192 lines (supported surface) | zencodec.features.txt 0 added (features: none) | zencodec.internal.txt 68 lines (68 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 8
 #   pub types (struct/enum/trait/alias)       120
-#   pub consts/statics                        172
+#   pub consts/statics                        173
 #   free functions                             33
 #   inherent methods                          462
 #   struct fields                             194
-#   enum variants                             147
+#   enum variants                             149
 #   re-exports                                  8
 #   trait roster entries (type × trait)       292
 #   conditional trait impls (verbatim)          2
@@ -24,16 +24,16 @@
 #   auto-trait exceptions                       5
 #
 # per-module pub lines:
-#   (root)                          617
+#   (root)                          618
 #   decode                          166
-#   encode                          118
+#   encode                          120
 #   estimate                         47
 #   exif                             65
 #   gainmap                         117
 #   helpers                          13
 #   icc                               1
 
-## items (1114 lines)
+## items (1117 lines)
 
 pub mod zencodec
 pub use Cicp
@@ -304,10 +304,13 @@ pub const fn encode::Fidelity::codec_quality(f32) -> Self
 pub const fn encode::Fidelity::is_lossless(self) -> bool
 pub const fn encode::Fidelity::ssim2(f32) -> Self
 #[non_exhaustive] pub enum encode::FidelityMatch
-pub encode::FidelityMatch::Approximated(encode::Fidelity)
 pub encode::FidelityMatch::Exact
+pub encode::FidelityMatch::LoweredTo(encode::Fidelity)
+pub encode::FidelityMatch::RaisedTo(encode::Fidelity)
+pub encode::FidelityMatch::Translated(encode::Fidelity)
 pub encode::FidelityMatch::Unsupported
 pub const fn encode::FidelityMatch::is_honored(self) -> bool
+pub const fn encode::FidelityMatch::meets_or_exceeds(self) -> bool
 pub const fn encode::FidelityMatch::resolved(self) -> core::option::Option<encode::Fidelity>
 #[non_exhaustive] pub enum encode::LossyTarget
 pub encode::LossyTarget::ApproxButteraugli(f32)
