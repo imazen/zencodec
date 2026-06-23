@@ -1,21 +1,30 @@
 //! Encode fidelity: how faithfully an encoder reproduces its input.
 //!
 //! [`Fidelity`] is the complete fidelity request — *exactly one of*:
-//! - **lossy**, aiming at a [`LossyTarget`] (today a SSIMULACRA2 score, a
-//!   butteraugli max-norm distance, or the codec's own native quality dial),
-//! - **near-lossless**, within a per-channel [`NearLosslessBudget`], or
-//! - **mathematically lossless**.
+//! - **[`Lossless`](Fidelity::Lossless)** — mathematically exact;
+//! - **[`LosslessMode`](Fidelity::LosslessMode)** — lossless *coding*
+//!   (predictive: PNG, VP8L, JXL-modular, GIF — no transform, no DCT ringing) of
+//!   pixels pre-quantized within a [`LosslessModeParams`] budget. Spans
+//!   near-lossless through aggressive (screen content: crisp + small), all
+//!   artifact-free;
+//! - **[`Lossy`](Fidelity::Lossy)** — lossy *coding* (transform/DCT: JPEG, VP8,
+//!   AVIF, VarDCT) aiming at a [`LossyTarget`].
 //!
-//! It is a sum type so each regime carries the parameter its own metric needs,
-//! illegal states (lossy ∧ lossless) are unrepresentable, and lossless is
-//! explicit rather than "quality == 100". See `docs/near-lossless-design.md`
-//! for the full rationale and per-codec mapping.
+//! **Container is the variant.** The choice of variant *is* the coding family —
+//! `Lossless`/`LosslessMode` are artifact-free predictive coding, `Lossy` is
+//! transform coding — so the container the caller cares about (PNG-style vs
+//! JPEG-style) is a direct, top-level choice, and illegal combinations (e.g.
+//! "exact transform") are unrepresentable. Bit depth, HDR, gamut, and color stay
+//! in the *input* `PixelDescriptor` and the color-emit layers — except
+//! *output-encode* directives that only make sense for a lossless encode (e.g.
+//! output bit depth), which the input descriptor can't express and so live in
+//! [`LosslessModeParams`].
 //!
 //! **Scope.** The initial surface is *blind, single-pass* fidelity: a calibrated
 //! target maps to a native dial in one encode, no re-encode loop. Iterative
-//! ("closed-loop") targeting — re-encoding until a *measured* metric/size is hit
-//! — is intentionally not shipped yet; [`LossyTarget`] reserves the names so it
-//! can be added later without renaming the one-shot arms.
+//! ("closed-loop") targeting is intentionally not shipped yet; [`LossyTarget`]
+//! reserves the names so it can be added later without renaming the one-shot
+//! arms.
 
 /// The complete fidelity request for an encode — exactly one of three things.
 ///
@@ -25,18 +34,19 @@
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Fidelity {
-    /// Lossy codestream. *What* it aims at is a [`LossyTarget`].
-    Lossy(LossyTarget),
-    /// Lossless codestream of pixels pre-quantized within a per-channel L∞
-    /// budget. [`NearLosslessBudget::EXACT`] is mathematically lossless.
-    ///
-    /// Few codecs honor a true L∞ ceiling natively (PNG exactly, WebP to the
-    /// nearest power-of-two step); others promote to exact lossless or
-    /// approximate perceptually. The codec reports what it did via
-    /// [`resolved_target_fidelity`](crate::encode::EncoderConfig::resolved_target_fidelity).
-    NearLossless(NearLosslessBudget),
     /// Mathematically exact — decode reproduces the input sample-for-sample.
+    /// Artifact-free predictive coding; preserves the input's depth and
+    /// representation.
     Lossless,
+    /// Lossless *coding* (predictive — no transform, no ringing) of pixels
+    /// pre-quantized within a [`LosslessModeParams`] budget. Spans near-lossless
+    /// to aggressive (screen content). Few codecs honor a precise budget
+    /// natively (PNG L∞ bit-rounding, WebP near-lossless dial); others promote to
+    /// exact lossless and report it via
+    /// [`resolved_target_fidelity`](crate::encode::EncoderConfig::resolved_target_fidelity).
+    LosslessMode(LosslessModeParams),
+    /// Lossy *coding* (transform/DCT). *What* it aims at is a [`LossyTarget`].
+    Lossy(LossyTarget),
 }
 
 impl Fidelity {
@@ -60,20 +70,87 @@ impl Fidelity {
         Self::Lossy(LossyTarget::CodecSpecificQuality(q))
     }
 
-    /// Convenience constructor for near-lossless within `budget`.
+    /// Near-lossless within an L∞-per-channel `budget` — a [`LosslessMode`]
+    /// convenience. `near_lossless(NearLosslessBudget::EXACT)` is equivalent to
+    /// [`Lossless`](Self::Lossless); prefer the plain variant for the exact case.
     #[must_use]
     pub const fn near_lossless(budget: NearLosslessBudget) -> Self {
-        Self::NearLossless(budget)
+        Self::LosslessMode(LosslessModeParams::new(LosslessBudget::MaxChannelError(
+            budget,
+        )))
     }
 
     /// Whether this request is mathematically lossless (exact `Lossless`, or a
-    /// near-lossless budget of [`NearLosslessBudget::EXACT`]).
+    /// `LosslessMode` whose budget permits no loss).
     #[must_use]
     pub const fn is_lossless(self) -> bool {
         match self {
             Self::Lossless => true,
-            Self::NearLossless(b) => b.is_exact(),
+            Self::LosslessMode(p) => p.budget.is_exact(),
             Self::Lossy(_) => false,
+        }
+    }
+}
+
+/// Parameters for a [`LosslessMode`](Fidelity::LosslessMode) encode — the loss
+/// budget, plus room for *output-encode* directives that only make sense for a
+/// lossless encode and that the *input* [`PixelDescriptor`](zenpixels::PixelDescriptor)
+/// cannot express.
+///
+/// A **struct** (not a bare budget) on purpose, matching the load-bearing
+/// descriptive structs elsewhere in the stack: it grows additively as codecs
+/// gain directives. Fields are private — construct via [`new`](Self::new) and
+/// the builders, read via the getters — so every new field is a non-breaking
+/// addition. **Reserved next fields** (added when a codec actually honors them):
+/// output bit depth (16-bit input → 12-bit lossless output, which PNG/JXL can
+/// honor — distinct from the *input* descriptor's depth) and lossless
+/// representation choices (reversible color transform, palette vs truecolor).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LosslessModeParams {
+    budget: LosslessBudget,
+    // Reserved — add when a codec honors it (each is additive on this struct):
+    //   output_depth: Option<OutputDepth>,   // PNG/JXL: encode at a chosen depth
+    //   representation: ReprChoice,           // RCT / palette / truecolor
+}
+
+impl LosslessModeParams {
+    /// New params for the given `budget`, with codec defaults for everything
+    /// else.
+    #[must_use]
+    pub const fn new(budget: LosslessBudget) -> Self {
+        Self { budget }
+    }
+
+    /// The loss budget for this lossless-coding encode.
+    #[must_use]
+    pub const fn budget(&self) -> LosslessBudget {
+        self.budget
+    }
+}
+
+/// The bound a [`LosslessMode`](Fidelity::LosslessMode) encode must respect — the
+/// kind of "near" in near-lossless.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum LosslessBudget {
+    /// L∞-per-channel ceiling: no channel of any pixel may change by more than
+    /// this. PNG LSB-rounding (exact), WebP near-lossless (capped). Broadly
+    /// supported — the one near-lossless contract every lossless codec can honor.
+    MaxChannelError(NearLosslessBudget),
+    //
+    // ─── Reserved ────────────────────────────────────────────────────────────
+    // Perceptual(f32) — bounded SSIMULACRA2 within a lossless container (PNG's
+    //   zenquant path, calibrated on 27k libjpeg-turbo + 1992 MPE↔SSIM2
+    //   measurements). PNG-only today; add (capability-gated) once VP8L /
+    //   JXL-modular-lossy are swept so the cross-codec promise is real.
+}
+
+impl LosslessBudget {
+    /// Whether the budget permits no loss (≡ [`Fidelity::Lossless`]).
+    #[must_use]
+    pub const fn is_exact(self) -> bool {
+        match self {
+            Self::MaxChannelError(b) => b.is_exact(),
         }
     }
 }
@@ -140,7 +217,7 @@ pub enum LossyTarget {
 
 /// The maximum a near-lossless encode may change **any single channel of any
 /// single pixel** — the L∞-per-channel ceiling — as a fraction of that
-/// channel's full range.
+/// channel's full range. The payload of [`LosslessBudget::MaxChannelError`].
 ///
 /// **Codec-agnostic and total: every value is valid for every lossless codec.**
 /// A codec resolves it to the largest native setting whose *guaranteed* error
@@ -155,15 +232,12 @@ pub enum LossyTarget {
 pub struct NearLosslessBudget {
     /// L∞-per-channel ceiling, as parts-per-65535 of full scale. Private — set
     /// via the constructors, read via [`as_fraction`](Self::as_fraction) /
-    /// [`max_error_at_depth`](Self::max_error_at_depth). A named struct (rather
-    /// than a bare newtype) so the budget can grow fields without churning the
-    /// public API; today the L∞ ceiling is the only parameter every lossless
-    /// codec supports uniformly.
+    /// [`max_error_at_depth`](Self::max_error_at_depth).
     max_channel_error_per65535: u16,
 }
 
 impl NearLosslessBudget {
-    /// Exact — identical to [`Fidelity::Lossless`].
+    /// Exact — `MaxChannelError(EXACT)` is equivalent to [`Fidelity::Lossless`].
     pub const EXACT: Self = Self {
         max_channel_error_per65535: 0,
     };
@@ -253,7 +327,6 @@ mod tests {
             NearLosslessBudget::DEFAULT,
             NearLosslessBudget::from_8bit_steps(2)
         );
-        // from_8bit_steps(1) is exactly one 8-bit LSB.
         assert_eq!(
             NearLosslessBudget::from_8bit_steps(1).max_error_at_depth(8),
             1
@@ -274,7 +347,6 @@ mod tests {
             NearLosslessBudget::from_fraction(2.0),
             NearLosslessBudget::MAX
         );
-        // ~2/255 ≈ 0.00784 → 2 at 8-bit.
         assert_eq!(
             NearLosslessBudget::from_fraction(2.0 / 255.0).max_error_at_depth(8),
             2
@@ -284,8 +356,9 @@ mod tests {
     #[test]
     fn fidelity_is_lossless() {
         assert!(Fidelity::Lossless.is_lossless());
-        assert!(Fidelity::NearLossless(NearLosslessBudget::EXACT).is_lossless());
-        assert!(!Fidelity::NearLossless(NearLosslessBudget::DEFAULT).is_lossless());
+        // near_lossless(EXACT) is a lossless spelling of LosslessMode.
+        assert!(Fidelity::near_lossless(NearLosslessBudget::EXACT).is_lossless());
+        assert!(!Fidelity::near_lossless(NearLosslessBudget::DEFAULT).is_lossless());
         assert!(!Fidelity::ssim2(90.0).is_lossless());
         assert!(!Fidelity::butteraugli(1.0).is_lossless());
         assert!(!Fidelity::codec_quality(90.0).is_lossless());
@@ -305,5 +378,18 @@ mod tests {
             Fidelity::codec_quality(85.0),
             Fidelity::Lossy(LossyTarget::CodecSpecificQuality(85.0))
         );
+    }
+
+    #[test]
+    fn near_lossless_builds_lossless_mode_with_budget() {
+        let f = Fidelity::near_lossless(NearLosslessBudget::DEFAULT);
+        let Fidelity::LosslessMode(p) = f else {
+            panic!("expected LosslessMode");
+        };
+        assert_eq!(
+            p.budget(),
+            LosslessBudget::MaxChannelError(NearLosslessBudget::DEFAULT)
+        );
+        assert!(!p.budget().is_exact());
     }
 }

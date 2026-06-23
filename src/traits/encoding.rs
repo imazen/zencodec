@@ -149,7 +149,10 @@ pub trait EncoderConfig: Clone + Send + Sync {
                 self.with_lossless(false).with_generic_quality(q)
             }
             Fidelity::Lossy(LossyTarget::ApproxButteraugli(_)) => self.with_lossless(false),
-            Fidelity::NearLossless(_) | Fidelity::Lossless => self.with_lossless(true),
+            // Lossless and lossless-mode both default to exact lossless — the
+            // generic default can't honor a budget or output directives. Codecs
+            // override to honor natively (PNG L∞ bit-rounding, WebP near-lossless).
+            Fidelity::Lossless | Fidelity::LosslessMode(_) => self.with_lossless(true),
         }
     }
 

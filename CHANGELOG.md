@@ -46,22 +46,34 @@ All notable changes to zencodec are documented here.
   rather than inspecting raw CICP/ICC fields.
 
 ### Added
-- **`Fidelity` API** (`encode::{Fidelity, LossyTarget, NearLosslessBudget}` +
-  `EncoderConfig::with_fidelity` / `resolved_target_fidelity`): a single
-  encode-fidelity request — **lossy** (`LossyTarget::ApproxSsim2(score)` a
-  one-shot SSIMULACRA2 target, `ApproxButteraugli(distance)` a one-shot
-  butteraugli max-norm target, or `CodecSpecificQuality(q)` the codec's own
-  native dial), **near-lossless** within an L∞-per-channel `NearLosslessBudget`
-  (stored parts-per-65535; `max_error_at_depth(depth)` gives the integer LSB
-  ceiling, e.g. ±2 at 8-bit), or mathematically **`Lossless`**. `with_fidelity`
-  defaults to bridging the legacy `with_lossless` / `with_generic_quality`
-  setters (a near-lossless budget promotes to exact lossless), so every codec
-  behaves sensibly today; codecs override to honor budgets natively (PNG L∞
-  bit-rounding, WebP near-lossless dial). Scope is **blind single-pass**:
-  closed-loop (iterative) targeting, a standardized generic-`Quality` arm, and
-  the butteraugli **3-norm** are reserved as commented names in `LossyTarget` so
-  they can be added later without renaming the one-shot arms. Additive — the two
-  trait methods have default impls (no major bump). (#12)
+- **`Fidelity` API** (`encode::{Fidelity, LosslessModeParams, LosslessBudget,
+  LossyTarget, NearLosslessBudget}` + `EncoderConfig::with_fidelity` /
+  `resolved_target_fidelity`): a single encode-fidelity request where **the
+  variant is the coding family** (container the caller cares about, PNG-style vs
+  JPEG-style, is a top-level choice; illegal combos like "exact transform" are
+  unrepresentable):
+  - **`Lossless`** — mathematically exact, artifact-free predictive coding.
+  - **`LosslessMode(LosslessModeParams)`** — lossless *coding* (predictive: PNG,
+    VP8L, JXL-modular, GIF) of pixels pre-quantized within a budget; spans
+    near-lossless to aggressive (screen content), all DCT-ringing-free. The
+    params are a **struct** (load-bearing, additively-growable) carrying the
+    `LosslessBudget` now (`MaxChannelError(NearLosslessBudget)` = L∞-per-channel
+    ceiling; a `Perceptual` budget is reserved, PNG-only until VP8L/modular are
+    swept) and reserved room for *output-encode* directives the input descriptor
+    can't express (output bit depth, lossless representation).
+  - **`Lossy(LossyTarget)`** — transform/DCT coding aiming at a one-shot target:
+    `ApproxSsim2(score)`, `ApproxButteraugli(distance)` (max-norm), or
+    `CodecSpecificQuality(q)`.
+
+  `NearLosslessBudget` stores parts-per-65535; `max_error_at_depth(depth)` gives
+  the integer LSB ceiling (e.g. ±2 at 8-bit). `with_fidelity` defaults to
+  bridging the legacy `with_lossless` / `with_generic_quality` setters
+  (lossless-mode promotes to exact lossless), so every codec behaves sensibly
+  today; codecs override to honor budgets natively (PNG L∞ bit-rounding, WebP
+  near-lossless dial). Scope is **blind single-pass**: closed-loop targeting, a
+  standardized generic-`Quality` arm, and the butteraugli **3-norm** are reserved
+  as commented names so they add later without renaming. Additive — the two trait
+  methods have default impls (no major bump). (#12)
 
 ## [0.1.24] - 2026-06-21
 
