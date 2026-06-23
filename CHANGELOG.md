@@ -45,6 +45,18 @@ All notable changes to zencodec are documented here.
   utility that consults `ColorProfileSource` and `HdrPolicy` together
   rather than inspecting raw CICP/ICC fields.
 
+### Added
+- **`metric` module** (`zencodec::metric`): approximate conversion between
+  perceptual quality metrics. `interpolate(table, x)` (generic piecewise-linear
+  table lookup, clamping, no extrapolation), a `Metric` enum (`Ssim2`,
+  `ButteraugliMax`, `ButteraugliPnorm3`), and `convert(value, from, to)` routing
+  through SSIMULACRA2. Backed by codec-agnostic calibration tables (published as
+  `SSIM2_TO_BUTTERAUGLI_MAX` / `SSIM2_TO_BUTTERAUGLI_PNORM3`) fit from the
+  zenmetrics omni fleet sweep (779k cells, 2026-06-23). Lets a codec translate a
+  SSIM2 target into the butteraugli max-norm distance `LossyTarget::ApproxButteraugli`
+  takes (and back). `no_std`, pure `core` arithmetic. Honest caveats in the docs:
+  max-norm is codec-dependent below ssim2 ~55; ssim2 saturates near 100.
+
 ## [0.1.25] - 2026-06-23
 
 ### Added

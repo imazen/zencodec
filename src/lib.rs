@@ -6,6 +6,7 @@
 //!
 //! - [`encode`] — encoder traits, dyn dispatch, output types
 //! - [`decode`] — decoder traits, streaming/animation decode, dyn dispatch, output types
+//! - [`metric`] — approximate conversion between perceptual quality metrics
 //! - Root — shared types used by both encode and decode paths
 //!
 //! # Shared types (root)
@@ -62,6 +63,9 @@ pub mod icc;
 mod info;
 mod limits;
 mod metadata;
+/// Approximate conversion between perceptual quality metrics (SSIMULACRA2 ↔
+/// butteraugli) via calibrated tables and interpolation.
+pub mod metric;
 mod negotiate;
 mod orientation;
 mod output;
