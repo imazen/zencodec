@@ -67,6 +67,68 @@ impl Fidelity {
     }
 }
 
+/// How a codec resolved a [`Fidelity`] request, returned by
+/// [`try_with_fidelity`](crate::encode::EncoderConfig::try_with_fidelity).
+///
+/// The contract: a codec may resolve to *equal or greater* fidelity silently,
+/// but a resolution to *less* fidelity across the lossy↔lossless fence is always
+/// observable as [`Unsupported`](Self::Unsupported) — never a silent downgrade.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum FidelityMatch {
+    /// Honored exactly as requested.
+    Exact,
+    /// Honored in the same (or a more faithful) regime, but resolved to a
+    /// *different* fidelity — a metric/quality target rounded or translated to
+    /// the codec's native scale, or a request promoted to exact lossless. The
+    /// applied fidelity is in the payload; it is never *less* faithful than
+    /// requested across the lossy↔lossless fence.
+    Approximated(Fidelity),
+    /// The codec cannot meet the requested regime without crossing to *less*
+    /// fidelity (e.g. `Lossless` on a lossy-only codec), or has no fidelity
+    /// control at all. [`with_fidelity`](crate::encode::EncoderConfig::with_fidelity)
+    /// still produces best-effort output; the request is not met — pick a codec
+    /// whose [capabilities](crate::EncodeCapabilities) cover it.
+    Unsupported,
+}
+
+impl FidelityMatch {
+    /// Whether the codec meets the request (anything but
+    /// [`Unsupported`](Self::Unsupported)).
+    #[must_use]
+    pub const fn is_honored(self) -> bool {
+        !matches!(self, Self::Unsupported)
+    }
+
+    /// The fidelity the codec resolved to when it differs from the request
+    /// ([`Approximated`](Self::Approximated)); `None` for `Exact` / `Unsupported`.
+    #[must_use]
+    pub const fn resolved(self) -> Option<Fidelity> {
+        match self {
+            Self::Approximated(f) => Some(f),
+            Self::Exact | Self::Unsupported => None,
+        }
+    }
+}
+
+/// Default classification for
+/// [`try_with_fidelity`](crate::encode::EncoderConfig::try_with_fidelity): compare
+/// the `requested` fidelity against what the codec `resolved` to.
+pub(crate) fn classify_fidelity_match(
+    requested: Fidelity,
+    resolved: Option<Fidelity>,
+) -> FidelityMatch {
+    match resolved {
+        // No fidelity control at all → can't claim to meet the request.
+        None => FidelityMatch::Unsupported,
+        Some(r) if r == requested => FidelityMatch::Exact,
+        // Requested exact but resolved to lossy → demoted across the fence.
+        Some(r) if requested.is_lossless() && !r.is_lossless() => FidelityMatch::Unsupported,
+        // Same regime (or promoted to lossless) → honored, just not identical.
+        Some(r) => FidelityMatch::Approximated(r),
+    }
+}
+
 /// What a lossy encode aims at.
 ///
 /// Three things we can target **today**, each in a single blind pass (no
@@ -192,6 +254,49 @@ mod tests {
         assert_eq!(
             Fidelity::codec_quality(85.0),
             Fidelity::Lossy(LossyTarget::CodecSpecificQuality(85.0))
+        );
+    }
+
+    #[test]
+    fn classify_exact_approximated_unsupported() {
+        let q = Fidelity::codec_quality(85.0);
+        let got = Fidelity::codec_quality(80.0);
+        // exact match
+        assert_eq!(classify_fidelity_match(q, Some(q)), FidelityMatch::Exact);
+        // no fidelity control → unsupported
+        assert_eq!(classify_fidelity_match(q, None), FidelityMatch::Unsupported);
+        // same regime, different value → approximated
+        assert_eq!(
+            classify_fidelity_match(q, Some(got)),
+            FidelityMatch::Approximated(got)
+        );
+        // metric request resolved to a native quality (same lossy regime)
+        assert_eq!(
+            classify_fidelity_match(Fidelity::ssim2(90.0), Some(got)),
+            FidelityMatch::Approximated(got)
+        );
+        // lossless requested, resolved lossy → demoted across the fence
+        assert_eq!(
+            classify_fidelity_match(Fidelity::Lossless, Some(got)),
+            FidelityMatch::Unsupported
+        );
+        // lossy requested, promoted to lossless → more faithful → approximated
+        assert_eq!(
+            classify_fidelity_match(q, Some(Fidelity::Lossless)),
+            FidelityMatch::Approximated(Fidelity::Lossless)
+        );
+    }
+
+    #[test]
+    fn fidelity_match_helpers() {
+        assert!(FidelityMatch::Exact.is_honored());
+        assert!(FidelityMatch::Approximated(Fidelity::Lossless).is_honored());
+        assert!(!FidelityMatch::Unsupported.is_honored());
+        assert_eq!(FidelityMatch::Exact.resolved(), None);
+        assert_eq!(FidelityMatch::Unsupported.resolved(), None);
+        assert_eq!(
+            FidelityMatch::Approximated(Fidelity::Lossless).resolved(),
+            Some(Fidelity::Lossless)
         );
     }
 }

@@ -6,34 +6,34 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1181 lines (supported surface) | zencodec.features.txt 0 added (features: none) | zencodec.internal.txt 67 lines (67 hidden + 0 excluded-feature)
+# files: zencodec.txt 1189 lines (supported surface) | zencodec.features.txt 0 added (features: none) | zencodec.internal.txt 68 lines (68 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 8
-#   pub types (struct/enum/trait/alias)       119
-#   pub consts/statics                        170
+#   pub types (struct/enum/trait/alias)       120
+#   pub consts/statics                        172
 #   free functions                             33
-#   inherent methods                          461
+#   inherent methods                          462
 #   struct fields                             194
-#   enum variants                             144
+#   enum variants                             147
 #   re-exports                                  8
-#   trait roster entries (type × trait)       288
+#   trait roster entries (type × trait)       292
 #   conditional trait impls (verbatim)          2
-#   auto-trait-complete types                  56
+#   auto-trait-complete types                  57
 #   auto-trait exceptions                       5
 #
 # per-module pub lines:
-#   (root)                          615
+#   (root)                          617
 #   decode                          166
-#   encode                          113
+#   encode                          118
 #   estimate                         47
 #   exif                             65
 #   gainmap                         117
 #   helpers                          13
 #   icc                               1
 
-## items (1107 lines)
+## items (1114 lines)
 
 pub mod zencodec
 pub use Cicp
@@ -303,6 +303,12 @@ pub const fn encode::Fidelity::butteraugli(f32) -> Self
 pub const fn encode::Fidelity::codec_quality(f32) -> Self
 pub const fn encode::Fidelity::is_lossless(self) -> bool
 pub const fn encode::Fidelity::ssim2(f32) -> Self
+#[non_exhaustive] pub enum encode::FidelityMatch
+pub encode::FidelityMatch::Approximated(encode::Fidelity)
+pub encode::FidelityMatch::Exact
+pub encode::FidelityMatch::Unsupported
+pub const fn encode::FidelityMatch::is_honored(self) -> bool
+pub const fn encode::FidelityMatch::resolved(self) -> core::option::Option<encode::Fidelity>
 #[non_exhaustive] pub enum encode::LossyTarget
 pub encode::LossyTarget::ApproxButteraugli(f32)
 pub encode::LossyTarget::ApproxSsim2(f32)
@@ -469,6 +475,7 @@ pub fn encode::EncoderConfig::is_lossless(&self) -> core::option::Option<bool>
 pub fn encode::EncoderConfig::job(self) -> Self::Job
 pub fn encode::EncoderConfig::resolved_target_fidelity(&self) -> core::option::Option<encode::Fidelity>
 pub fn encode::EncoderConfig::supported_descriptors() -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub fn encode::EncoderConfig::try_with_fidelity(&mut self, encode::Fidelity) -> encode::FidelityMatch
 pub fn encode::EncoderConfig::with_alpha_quality(self, f32) -> Self
 pub fn encode::EncoderConfig::with_fidelity(self, encode::Fidelity) -> Self
 pub fn encode::EncoderConfig::with_generic_effort(self, i32) -> Self
@@ -1143,7 +1150,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (66 types)
+## trait impls (67 types)
 
 (): encode::AnimationFrameEncoder
 (dyn core::error::Error + 'static): CodecErrorExt
@@ -1187,6 +1194,7 @@ encode::EncodeCapabilities: Clone, Debug, Default, PartialEq
 encode::EncodeOutput: AsRef<[u8]>, Clone, Debug, Eq, PartialEq
 encode::EncodePolicy: Clone, Copy, Debug, Default, Eq, PartialEq
 encode::Fidelity: Clone, Copy, Debug, PartialEq
+encode::FidelityMatch: Clone, Copy, Debug, PartialEq
 encode::LossyTarget: Clone, Copy, Debug, PartialEq
 estimate::ComputeEnvironment: Clone, Copy, Debug, Default, Eq, PartialEq
 estimate::ImageCharacteristics: Clone, Debug, Eq, PartialEq
@@ -1216,7 +1224,7 @@ impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static,
 
 ## auto traits
 
-56 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+57 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 Extensions: !RefUnwindSafe !UnwindSafe
 ImageInfo: !RefUnwindSafe !UnwindSafe
 OwnedAnimationFrame: !RefUnwindSafe !UnwindSafe

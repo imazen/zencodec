@@ -46,9 +46,9 @@ All notable changes to zencodec are documented here.
   rather than inspecting raw CICP/ICC fields.
 
 ### Added
-- **`Fidelity` API** (`encode::{Fidelity, LossyTarget}` +
-  `EncoderConfig::with_fidelity` / `resolved_target_fidelity`): a single
-  encode-fidelity request. Two variants ship:
+- **`Fidelity` API** (`encode::{Fidelity, FidelityMatch, LossyTarget}` +
+  `EncoderConfig::with_fidelity` / `try_with_fidelity` / `resolved_target_fidelity`):
+  a single encode-fidelity request. Two variants ship:
   - **`Lossless`** — mathematically exact.
   - **`Lossy(LossyTarget)`** — a one-shot target: `ApproxSsim2(score)`,
     `ApproxButteraugli(distance)` (max-norm), or `CodecSpecificQuality(q)`.
@@ -56,7 +56,11 @@ All notable changes to zencodec are documented here.
   `with_fidelity` defaults to bridging the legacy `with_lossless` /
   `with_generic_quality` setters, so every codec behaves sensibly today; codecs
   override to honor targets natively, and `resolved_target_fidelity` reports what
-  was actually honored. Scope is **blind single-pass**.
+  was actually honored. `try_with_fidelity` is the fail-fast counterpart,
+  returning a `FidelityMatch` (`Exact` / `Approximated(Fidelity)` / `Unsupported`)
+  up-front: a codec may resolve to *more* fidelity silently, but a downgrade
+  across the lossy↔lossless fence is always `Unsupported`, never silent. Scope is
+  **blind single-pass**.
 
   A third variant — **`LosslessMode`**: lossless *coding* (predictive, no DCT
   ringing) of pixels pre-quantized within a budget, which would make the
