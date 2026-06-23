@@ -300,13 +300,13 @@ pub mod encode
 pub encode::Fidelity::Lossless
 pub encode::Fidelity::Lossy(encode::LossyTarget)
 pub encode::Fidelity::NearLossless(encode::NearLosslessBudget)
-pub const fn encode::Fidelity::butteraugli_max(f32) -> Self
+pub const fn encode::Fidelity::butteraugli(f32) -> Self
 pub const fn encode::Fidelity::codec_quality(f32) -> Self
 pub const fn encode::Fidelity::is_lossless(self) -> bool
 pub const fn encode::Fidelity::near_lossless(encode::NearLosslessBudget) -> Self
 pub const fn encode::Fidelity::ssim2(f32) -> Self
 #[non_exhaustive] pub enum encode::LossyTarget
-pub encode::LossyTarget::ApproxButteraugliMax(f32)
+pub encode::LossyTarget::ApproxButteraugli(f32)
 pub encode::LossyTarget::ApproxSsim2(f32)
 pub encode::LossyTarget::CodecSpecificQuality(f32)
 #[non_exhaustive] pub struct encode::EncodeCapabilities
@@ -391,7 +391,7 @@ pub const fn encode::EncodePolicy::with_color(self, ColorEmitPolicy) -> Self
 pub const fn encode::EncodePolicy::with_embed_exif(self, bool) -> Self
 pub const fn encode::EncodePolicy::with_embed_icc(self, bool) -> Self
 pub const fn encode::EncodePolicy::with_embed_xmp(self, bool) -> Self
-pub struct encode::NearLosslessBudget(_)
+pub struct encode::NearLosslessBudget
 pub const encode::NearLosslessBudget::DEFAULT: Self
 pub const encode::NearLosslessBudget::EXACT: Self
 pub const encode::NearLosslessBudget::MAX: Self

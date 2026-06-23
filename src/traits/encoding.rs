@@ -3,7 +3,7 @@
 use alloc::boxed::Box;
 
 use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
-use crate::fidelity::{Fidelity, LossyTarget, butteraugli_max_distance_to_quality};
+use crate::fidelity::{Fidelity, LossyTarget};
 use crate::format::ImageFormat;
 use crate::{EncodeCapabilities, Metadata, ResourceLimits};
 use zenpixels::PixelDescriptor;
@@ -139,16 +139,16 @@ pub trait EncoderConfig: Clone + Send + Sync {
     /// PNG's L∞ bit-rounding, WebP's near-lossless dial).
     fn with_fidelity(self, fidelity: Fidelity) -> Self {
         match fidelity {
-            // Default fallback: resolve every lossy target to the generic
-            // quality dial (butteraugli distance via a coarse curve). Codecs
-            // override to honor SSIM2 / butteraugli / their native scale.
-            Fidelity::Lossy(target) => {
-                let quality = match target {
-                    LossyTarget::ApproxSsim2(q) | LossyTarget::CodecSpecificQuality(q) => q,
-                    LossyTarget::ApproxButteraugliMax(d) => butteraugli_max_distance_to_quality(d),
-                };
-                self.with_lossless(false).with_generic_quality(quality)
+            // Default fallback. Only the 0–100-scaled targets map to the generic
+            // quality dial — a butteraugli *distance* has no honest
+            // codec-agnostic → 0–100 conversion, so the default just selects
+            // lossy and leaves quality at the codec default (visible through
+            // `resolved_target_fidelity`). Codecs override to honor butteraugli
+            // / SSIM2 / their native scale precisely.
+            Fidelity::Lossy(LossyTarget::ApproxSsim2(q) | LossyTarget::CodecSpecificQuality(q)) => {
+                self.with_lossless(false).with_generic_quality(q)
             }
+            Fidelity::Lossy(LossyTarget::ApproxButteraugli(_)) => self.with_lossless(false),
             Fidelity::NearLossless(_) | Fidelity::Lossless => self.with_lossless(true),
         }
     }

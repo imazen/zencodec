@@ -49,8 +49,8 @@ impl Fidelity {
     /// Lossy, aiming at a butteraugli **max-norm** distance via a single
     /// calibrated pass (`distance` lower is better; ≈1.0 high quality).
     #[must_use]
-    pub const fn butteraugli_max(distance: f32) -> Self {
-        Self::Lossy(LossyTarget::ApproxButteraugliMax(distance))
+    pub const fn butteraugli(distance: f32) -> Self {
+        Self::Lossy(LossyTarget::ApproxButteraugli(distance))
     }
 
     /// Lossy, on the codec's own native quality scale (codec-specific meaning —
@@ -83,7 +83,7 @@ impl Fidelity {
 /// Three things we can target **today**, each in a single blind pass (no
 /// re-encode):
 /// - [`ApproxSsim2`](Self::ApproxSsim2) — a SSIMULACRA2 score.
-/// - [`ApproxButteraugliMax`](Self::ApproxButteraugliMax) — a butteraugli
+/// - [`ApproxButteraugli`](Self::ApproxButteraugli) — a butteraugli
 ///   **max-norm** distance (worst-region; lower is better).
 /// - [`CodecSpecificQuality`](Self::CodecSpecificQuality) — the codec's own
 ///   native quality dial, honest that its meaning differs per codec.
@@ -111,8 +111,10 @@ pub enum LossyTarget {
     /// Aim for a butteraugli **max-norm** distance (the worst-region p-norm,
     /// p→∞) in a single calibrated pass — no re-encode. Lower is better; ≈1.0
     /// is high quality, ≈0.5 near-visually-lossless. "Approx" marks it blind
-    /// one-shot; a closed-loop `ButteraugliMaxLoop` can be added later.
-    ApproxButteraugliMax(f32),
+    /// one-shot; a closed-loop `ButteraugliLoop` can be added later. Named
+    /// without a norm suffix — max-norm is the standardized butteraugli target;
+    /// the 3-norm aggregate is reserved as its own arm.
+    ApproxButteraugli(f32),
     /// The codec's **native** quality dial, on its own scale. The meaning is
     /// codec-specific — there is no cross-codec standard here (unlike a metric
     /// target). Use when you know the codec and want its raw knob.
@@ -131,18 +133,9 @@ pub enum LossyTarget {
     // Re-encode until a *measured* value is hit. Deferred — no closed-loop
     // machinery is wired yet:
     //     Ssim2Loop(f32),
-    //     ButteraugliMaxLoop(f32),
+    //     ButteraugliLoop(f32),
     //     TargetBytes(u64),               // hit an encoded-size budget
     //     Bitrate(f32),                   // hit a bits-per-pixel budget
-}
-
-/// Coarse butteraugli-distance → 0–100 quality fallback used by the default
-/// [`with_fidelity`](crate::encode::EncoderConfig::with_fidelity) when a codec
-/// has not implemented native butteraugli targeting. Inverse of the de-facto
-/// jpegli curve `d ≈ 0.1 + (100 − q)·0.09`, clamped. Codecs with native
-/// butteraugli targeting override `with_fidelity` and never reach this.
-pub(crate) fn butteraugli_max_distance_to_quality(distance: f32) -> f32 {
-    (100.0 - (distance - 0.1) / 0.09).clamp(0.0, 100.0)
 }
 
 /// The maximum a near-lossless encode may change **any single channel of any
@@ -159,13 +152,25 @@ pub(crate) fn butteraugli_max_distance_to_quality(distance: f32) -> f32 {
 /// math (no float-floor trap): `from_8bit_steps(2)` is `±2` at 8-bit and `±514`
 /// at 16-bit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct NearLosslessBudget(u16);
+pub struct NearLosslessBudget {
+    /// L∞-per-channel ceiling, as parts-per-65535 of full scale. Private — set
+    /// via the constructors, read via [`as_fraction`](Self::as_fraction) /
+    /// [`max_error_at_depth`](Self::max_error_at_depth). A named struct (rather
+    /// than a bare newtype) so the budget can grow fields without churning the
+    /// public API; today the L∞ ceiling is the only parameter every lossless
+    /// codec supports uniformly.
+    max_channel_error_per65535: u16,
+}
 
 impl NearLosslessBudget {
     /// Exact — identical to [`Fidelity::Lossless`].
-    pub const EXACT: Self = Self(0);
+    pub const EXACT: Self = Self {
+        max_channel_error_per65535: 0,
+    };
     /// The whole channel range (loosest possible budget).
-    pub const MAX: Self = Self(u16::MAX);
+    pub const MAX: Self = Self {
+        max_channel_error_per65535: u16::MAX,
+    };
     /// A sensible default (±2/255): visually transparent on photographic
     /// content, meaningfully smaller files. Use when you want "near-lossless"
     /// without choosing a number.
@@ -176,32 +181,38 @@ impl NearLosslessBudget {
     #[must_use]
     pub const fn from_8bit_steps(n: u8) -> Self {
         // n ≤ 255 ⇒ n*257 ≤ 65535, exact in u16.
-        Self(((n as u32) * 257) as u16)
+        Self {
+            max_channel_error_per65535: ((n as u32) * 257) as u16,
+        }
     }
 
     /// From the 0–65535 scale, for deep content.
     #[must_use]
     pub const fn from_16bit_steps(n: u16) -> Self {
-        Self(n)
+        Self {
+            max_channel_error_per65535: n,
+        }
     }
 
     /// From a fraction of full range (depth-independent). Clamped to `[0, 1]`.
     #[must_use]
     pub fn from_fraction(f: f32) -> Self {
         let v = (f.clamp(0.0, 1.0) * 65535.0 + 0.5) as u32;
-        Self(if v > 65535 { 65535 } else { v as u16 })
+        Self {
+            max_channel_error_per65535: if v > 65535 { 65535 } else { v as u16 },
+        }
     }
 
     /// Whether this is the exact (zero-error) budget.
     #[must_use]
     pub const fn is_exact(self) -> bool {
-        self.0 == 0
+        self.max_channel_error_per65535 == 0
     }
 
     /// The budget as a fraction of full scale (`0.0..=1.0`).
     #[must_use]
     pub fn as_fraction(self) -> f32 {
-        f32::from(self.0) / 65535.0
+        f32::from(self.max_channel_error_per65535) / 65535.0
     }
 
     /// The integer L∞ ceiling (in LSBs) a `depth`-bit codec may not exceed.
@@ -212,7 +223,7 @@ impl NearLosslessBudget {
     #[must_use]
     pub const fn max_error_at_depth(self, depth: u32) -> u32 {
         let full = (1u32 << depth) - 1;
-        ((self.0 as u32) * full) / 65535
+        ((self.max_channel_error_per65535 as u32) * full) / 65535
     }
 }
 
@@ -276,7 +287,7 @@ mod tests {
         assert!(Fidelity::NearLossless(NearLosslessBudget::EXACT).is_lossless());
         assert!(!Fidelity::NearLossless(NearLosslessBudget::DEFAULT).is_lossless());
         assert!(!Fidelity::ssim2(90.0).is_lossless());
-        assert!(!Fidelity::butteraugli_max(1.0).is_lossless());
+        assert!(!Fidelity::butteraugli(1.0).is_lossless());
         assert!(!Fidelity::codec_quality(90.0).is_lossless());
     }
 
@@ -287,25 +298,12 @@ mod tests {
             Fidelity::Lossy(LossyTarget::ApproxSsim2(90.0))
         );
         assert_eq!(
-            Fidelity::butteraugli_max(1.0),
-            Fidelity::Lossy(LossyTarget::ApproxButteraugliMax(1.0))
+            Fidelity::butteraugli(1.0),
+            Fidelity::Lossy(LossyTarget::ApproxButteraugli(1.0))
         );
         assert_eq!(
             Fidelity::codec_quality(85.0),
             Fidelity::Lossy(LossyTarget::CodecSpecificQuality(85.0))
         );
-    }
-
-    #[test]
-    fn butteraugli_fallback_curve_is_monotone_and_clamped() {
-        // d ≈ 1.0 → q ≈ 90 (the de-facto jpegli anchor); lower d → higher q.
-        assert!((butteraugli_max_distance_to_quality(1.0) - 90.0).abs() < 0.01);
-        assert_eq!(butteraugli_max_distance_to_quality(0.1), 100.0);
-        assert!(
-            butteraugli_max_distance_to_quality(0.5) > butteraugli_max_distance_to_quality(2.0)
-        );
-        // far ends clamp to [0, 100].
-        assert_eq!(butteraugli_max_distance_to_quality(-5.0), 100.0);
-        assert_eq!(butteraugli_max_distance_to_quality(100.0), 0.0);
     }
 }

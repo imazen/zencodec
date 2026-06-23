@@ -49,7 +49,7 @@ All notable changes to zencodec are documented here.
 - **`Fidelity` API** (`encode::{Fidelity, LossyTarget, NearLosslessBudget}` +
   `EncoderConfig::with_fidelity` / `resolved_target_fidelity`): a single
   encode-fidelity request — **lossy** (`LossyTarget::ApproxSsim2(score)` a
-  one-shot SSIMULACRA2 target, `ApproxButteraugliMax(distance)` a one-shot
+  one-shot SSIMULACRA2 target, `ApproxButteraugli(distance)` a one-shot
   butteraugli max-norm target, or `CodecSpecificQuality(q)` the codec's own
   native dial), **near-lossless** within an L∞-per-channel `NearLosslessBudget`
   (stored parts-per-65535; `max_error_at_depth(depth)` gives the integer LSB
