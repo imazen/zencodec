@@ -1,8 +1,8 @@
 //! Encode fidelity: how faithfully an encoder reproduces its input.
 //!
 //! [`Fidelity`] is the complete fidelity request — *exactly one of*:
-//! - **lossy**, aiming at a [`LossyTarget`] (today a SSIMULACRA2 score or the
-//!   codec's own native quality dial),
+//! - **lossy**, aiming at a [`LossyTarget`] (today a SSIMULACRA2 score, a
+//!   butteraugli max-norm distance, or the codec's own native quality dial),
 //! - **near-lossless**, within a per-channel [`NearLosslessBudget`], or
 //! - **mathematically lossless**.
 //!
@@ -46,6 +46,13 @@ impl Fidelity {
         Self::Lossy(LossyTarget::ApproxSsim2(score))
     }
 
+    /// Lossy, aiming at a butteraugli **max-norm** distance via a single
+    /// calibrated pass (`distance` lower is better; ≈1.0 high quality).
+    #[must_use]
+    pub const fn butteraugli_max(distance: f32) -> Self {
+        Self::Lossy(LossyTarget::ApproxButteraugliMax(distance))
+    }
+
     /// Lossy, on the codec's own native quality scale (codec-specific meaning —
     /// see [`LossyTarget::CodecSpecificQuality`]).
     #[must_use]
@@ -73,10 +80,11 @@ impl Fidelity {
 
 /// What a lossy encode aims at.
 ///
-/// Two things we can target **today**, both in a single blind pass (no
+/// Three things we can target **today**, each in a single blind pass (no
 /// re-encode):
-/// - [`ApproxSsim2`](Self::ApproxSsim2) — a SSIMULACRA2 score, the one
-///   perceptual metric we can calibrate reliably across codecs.
+/// - [`ApproxSsim2`](Self::ApproxSsim2) — a SSIMULACRA2 score.
+/// - [`ApproxButteraugliMax`](Self::ApproxButteraugliMax) — a butteraugli
+///   **max-norm** distance (worst-region; lower is better).
 /// - [`CodecSpecificQuality`](Self::CodecSpecificQuality) — the codec's own
 ///   native quality dial, honest that its meaning differs per codec.
 ///
@@ -89,10 +97,10 @@ impl Fidelity {
 /// The reserved arms split **one-shot** perceptual targets (`Approx*`, a single
 /// calibrated pass) from **closed-loop** targets (re-encode until a *measured*
 /// value is hit), so loop targeting can be added later without renaming the
-/// one-shot arms. Open decisions recorded here so they aren't lost: which
-/// **butteraugli norm** to target (max-norm vs 3-norm differ — a bare
-/// `Distance(f32)` is ambiguous and is never an arm), and standardizing
-/// `generic_quality`. zensim is deferred — no reliable metric yet.
+/// one-shot arms. We target the butteraugli **max-norm** here; the **3-norm**
+/// aggregate is reserved as a separate arm (the two norms differ — a bare
+/// `Distance(f32)` is ambiguous and is never an arm). zensim is deferred — no
+/// reliable metric yet.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum LossyTarget {
@@ -100,16 +108,19 @@ pub enum LossyTarget {
     /// calibrated pass — no re-encode. "Approx" marks it as blind one-shot; a
     /// closed-loop `Ssim2` variant can be added later without renaming this.
     ApproxSsim2(f32),
+    /// Aim for a butteraugli **max-norm** distance (the worst-region p-norm,
+    /// p→∞) in a single calibrated pass — no re-encode. Lower is better; ≈1.0
+    /// is high quality, ≈0.5 near-visually-lossless. "Approx" marks it blind
+    /// one-shot; a closed-loop `ButteraugliMaxLoop` can be added later.
+    ApproxButteraugliMax(f32),
     /// The codec's **native** quality dial, on its own scale. The meaning is
     /// codec-specific — there is no cross-codec standard here (unlike a metric
     /// target). Use when you know the codec and want its raw knob.
     CodecSpecificQuality(f32),
     //
     // ─── Reserved: blind one-shot perceptual targets ─────────────────────────
-    // Single calibrated pass (target → native dial), no re-encode. Butteraugli's
-    // two norms get distinct arms — pick/standardize before activating; never a
-    // bare `Distance(f32)`:
-    //     ApproxButteraugliMax(f32),      // max-norm (worst-region)
+    // Single calibrated pass (target → native dial), no re-encode. The 3-norm
+    // aggregate complements the active max-norm arm above:
     //     ApproxButteraugli3Norm(f32),    // 3-norm / pnorm (aggregate)
     //
     // ─── Reserved: standardized generic quality ──────────────────────────────
@@ -123,6 +134,15 @@ pub enum LossyTarget {
     //     ButteraugliMaxLoop(f32),
     //     TargetBytes(u64),               // hit an encoded-size budget
     //     Bitrate(f32),                   // hit a bits-per-pixel budget
+}
+
+/// Coarse butteraugli-distance → 0–100 quality fallback used by the default
+/// [`with_fidelity`](crate::encode::EncoderConfig::with_fidelity) when a codec
+/// has not implemented native butteraugli targeting. Inverse of the de-facto
+/// jpegli curve `d ≈ 0.1 + (100 − q)·0.09`, clamped. Codecs with native
+/// butteraugli targeting override `with_fidelity` and never reach this.
+pub(crate) fn butteraugli_max_distance_to_quality(distance: f32) -> f32 {
+    (100.0 - (distance - 0.1) / 0.09).clamp(0.0, 100.0)
 }
 
 /// The maximum a near-lossless encode may change **any single channel of any
@@ -256,6 +276,7 @@ mod tests {
         assert!(Fidelity::NearLossless(NearLosslessBudget::EXACT).is_lossless());
         assert!(!Fidelity::NearLossless(NearLosslessBudget::DEFAULT).is_lossless());
         assert!(!Fidelity::ssim2(90.0).is_lossless());
+        assert!(!Fidelity::butteraugli_max(1.0).is_lossless());
         assert!(!Fidelity::codec_quality(90.0).is_lossless());
     }
 
@@ -266,8 +287,25 @@ mod tests {
             Fidelity::Lossy(LossyTarget::ApproxSsim2(90.0))
         );
         assert_eq!(
+            Fidelity::butteraugli_max(1.0),
+            Fidelity::Lossy(LossyTarget::ApproxButteraugliMax(1.0))
+        );
+        assert_eq!(
             Fidelity::codec_quality(85.0),
             Fidelity::Lossy(LossyTarget::CodecSpecificQuality(85.0))
         );
+    }
+
+    #[test]
+    fn butteraugli_fallback_curve_is_monotone_and_clamped() {
+        // d ≈ 1.0 → q ≈ 90 (the de-facto jpegli anchor); lower d → higher q.
+        assert!((butteraugli_max_distance_to_quality(1.0) - 90.0).abs() < 0.01);
+        assert_eq!(butteraugli_max_distance_to_quality(0.1), 100.0);
+        assert!(
+            butteraugli_max_distance_to_quality(0.5) > butteraugli_max_distance_to_quality(2.0)
+        );
+        // far ends clamp to [0, 100].
+        assert_eq!(butteraugli_max_distance_to_quality(-5.0), 100.0);
+        assert_eq!(butteraugli_max_distance_to_quality(100.0), 0.0);
     }
 }

@@ -6,17 +6,17 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1192 lines (supported surface) | zencodec.features.txt 0 added (features: none) | zencodec.internal.txt 69 lines (69 hidden + 0 excluded-feature)
+# files: zencodec.txt 1194 lines (supported surface) | zencodec.features.txt 0 added (features: none) | zencodec.internal.txt 69 lines (69 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 8
 #   pub types (struct/enum/trait/alias)       120
-#   pub consts/statics                        177
+#   pub consts/statics                        178
 #   free functions                             33
 #   inherent methods                          463
 #   struct fields                             194
-#   enum variants                             144
+#   enum variants                             145
 #   re-exports                                  8
 #   trait roster entries (type × trait)       296
 #   conditional trait impls (verbatim)          2
@@ -24,16 +24,16 @@
 #   auto-trait exceptions                       5
 #
 # per-module pub lines:
-#   (root)                          619
+#   (root)                          620
 #   decode                          166
-#   encode                          119
+#   encode                          120
 #   estimate                         47
 #   exif                             65
 #   gainmap                         117
 #   helpers                          13
 #   icc                               1
 
-## items (1117 lines)
+## items (1119 lines)
 
 pub mod zencodec
 pub use Cicp
@@ -300,11 +300,13 @@ pub mod encode
 pub encode::Fidelity::Lossless
 pub encode::Fidelity::Lossy(encode::LossyTarget)
 pub encode::Fidelity::NearLossless(encode::NearLosslessBudget)
+pub const fn encode::Fidelity::butteraugli_max(f32) -> Self
 pub const fn encode::Fidelity::codec_quality(f32) -> Self
 pub const fn encode::Fidelity::is_lossless(self) -> bool
 pub const fn encode::Fidelity::near_lossless(encode::NearLosslessBudget) -> Self
 pub const fn encode::Fidelity::ssim2(f32) -> Self
 #[non_exhaustive] pub enum encode::LossyTarget
+pub encode::LossyTarget::ApproxButteraugliMax(f32)
 pub encode::LossyTarget::ApproxSsim2(f32)
 pub encode::LossyTarget::CodecSpecificQuality(f32)
 #[non_exhaustive] pub struct encode::EncodeCapabilities

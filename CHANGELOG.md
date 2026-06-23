@@ -48,8 +48,9 @@ All notable changes to zencodec are documented here.
 ### Added
 - **`Fidelity` API** (`encode::{Fidelity, LossyTarget, NearLosslessBudget}` +
   `EncoderConfig::with_fidelity` / `resolved_target_fidelity`): a single
-  encode-fidelity request — **lossy** (`LossyTarget::ApproxSsim2(score)`, a
-  one-shot SSIMULACRA2 target, or `CodecSpecificQuality(q)`, the codec's own
+  encode-fidelity request — **lossy** (`LossyTarget::ApproxSsim2(score)` a
+  one-shot SSIMULACRA2 target, `ApproxButteraugliMax(distance)` a one-shot
+  butteraugli max-norm target, or `CodecSpecificQuality(q)` the codec's own
   native dial), **near-lossless** within an L∞-per-channel `NearLosslessBudget`
   (stored parts-per-65535; `max_error_at_depth(depth)` gives the integer LSB
   ceiling, e.g. ±2 at 8-bit), or mathematically **`Lossless`**. `with_fidelity`
@@ -58,9 +59,9 @@ All notable changes to zencodec are documented here.
   behaves sensibly today; codecs override to honor budgets natively (PNG L∞
   bit-rounding, WebP near-lossless dial). Scope is **blind single-pass**:
   closed-loop (iterative) targeting, a standardized generic-`Quality` arm, and
-  butteraugli targets (norm TBD) are reserved as commented names in `LossyTarget`
-  so they can be added later without renaming the one-shot arms. Additive — the
-  two trait methods have default impls (no major bump). (#12)
+  the butteraugli **3-norm** are reserved as commented names in `LossyTarget` so
+  they can be added later without renaming the one-shot arms. Additive — the two
+  trait methods have default impls (no major bump). (#12)
 
 ## [0.1.24] - 2026-06-21
 
