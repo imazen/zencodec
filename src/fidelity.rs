@@ -67,117 +67,24 @@ impl Fidelity {
     }
 }
 
-/// How a codec resolved a [`Fidelity`] request, returned by
-/// [`try_with_fidelity`](crate::encode::EncoderConfig::try_with_fidelity).
-///
-/// The contract: a codec may resolve to *higher* fidelity silently
-/// ([`RaisedTo`](Self::RaisedTo)), but a resolution to *lower* fidelity is always
-/// observable — in the same regime as [`LoweredTo`](Self::LoweredTo) (the format
-/// can't reach the ask), or across the lossy↔lossless fence as
-/// [`Unsupported`](Self::Unsupported). Never a silent downgrade.
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[non_exhaustive]
-pub enum FidelityMatch {
-    /// Honored exactly as requested.
-    Exact,
-    /// Resolved to **higher** fidelity than requested (more faithful, larger
-    /// output) — the codec's achievable floor is above the target, or a request
-    /// was promoted to exact lossless. Never worse than asked.
-    RaisedTo(Fidelity),
-    /// Resolved to **lower** fidelity than requested, in the same regime — the
-    /// codec's achievable ceiling is below the target, so the format simply
-    /// cannot reach the requested quality (e.g. GIF's 256-colour palette caps
-    /// achievable quality below a high request).
-    LoweredTo(Fidelity),
-    /// A metric/distance target was **translated** to the codec's native quality
-    /// scale — a different axis, not comparable as higher/lower. The applied
-    /// fidelity (on the native scale) is in the payload.
-    Translated(Fidelity),
-    /// Cannot meet the requested regime: only honorable by crossing to *less*
-    /// fidelity across the lossy↔lossless fence (e.g. `Lossless` on a lossy-only
-    /// codec like JPEG, or GIF on full-colour input), or no fidelity control at
-    /// all. [`with_fidelity`](crate::encode::EncoderConfig::with_fidelity) still
-    /// produces best-effort output; the request is not met — pick a codec whose
-    /// [capabilities](crate::EncodeCapabilities) cover it.
-    Unsupported,
-}
-
-impl FidelityMatch {
-    /// Whether the codec meets the request (anything but
-    /// [`Unsupported`](Self::Unsupported)).
-    #[must_use]
-    pub const fn is_honored(self) -> bool {
-        !matches!(self, Self::Unsupported)
-    }
-
-    /// Whether the codec resolved to **at least** the requested fidelity — exact
-    /// or raised. `false` for a downgrade ([`LoweredTo`](Self::LoweredTo) /
-    /// [`Unsupported`](Self::Unsupported)) or a not-directly-comparable
-    /// [`Translated`](Self::Translated).
-    #[must_use]
-    pub const fn meets_or_exceeds(self) -> bool {
-        matches!(self, Self::Exact | Self::RaisedTo(_))
-    }
-
-    /// The fidelity the codec resolved to when it differs from the request
-    /// ([`RaisedTo`](Self::RaisedTo) / [`LoweredTo`](Self::LoweredTo) /
-    /// [`Translated`](Self::Translated)); `None` for `Exact` / `Unsupported`.
-    #[must_use]
-    pub const fn resolved(self) -> Option<Fidelity> {
-        match self {
-            Self::RaisedTo(f) | Self::LoweredTo(f) | Self::Translated(f) => Some(f),
-            Self::Exact | Self::Unsupported => None,
-        }
-    }
-}
-
-/// Default classification for
-/// [`try_with_fidelity`](crate::encode::EncoderConfig::try_with_fidelity): compare
-/// the `requested` fidelity against what the codec `resolved` to.
-pub(crate) fn classify_fidelity_match(
-    requested: Fidelity,
-    resolved: Option<Fidelity>,
-) -> FidelityMatch {
-    let Some(r) = resolved else {
-        // No fidelity control at all → can't claim to meet the request.
-        return FidelityMatch::Unsupported;
-    };
-    if r == requested {
-        return FidelityMatch::Exact;
-    }
-    match (requested, r) {
-        // Requested exact, resolved lossy → demoted across the fence.
-        (Fidelity::Lossless, Fidelity::Lossy(_)) => FidelityMatch::Unsupported,
-        // Requested lossy, resolved lossless → promoted (more faithful).
-        (Fidelity::Lossy(_), Fidelity::Lossless) => FidelityMatch::RaisedTo(r),
-        // Both lossy: compare on the same axis where possible.
-        (Fidelity::Lossy(a), Fidelity::Lossy(b)) => match faithfulness_cmp(a, b) {
-            Some(core::cmp::Ordering::Greater) => FidelityMatch::RaisedTo(r),
-            Some(core::cmp::Ordering::Less) => FidelityMatch::LoweredTo(r),
-            Some(core::cmp::Ordering::Equal) => FidelityMatch::Exact,
-            None => FidelityMatch::Translated(r),
-        },
-        // Lossless↔Lossless already returned Exact above.
-        (Fidelity::Lossless, Fidelity::Lossless) => FidelityMatch::Exact,
-    }
-}
-
-/// Compare two lossy targets by *faithfulness*: `Greater` = `b` is more faithful
-/// than `a`. `None` when they're on different axes (a perceptual metric vs a
-/// native quality — not comparable as higher/lower).
-fn faithfulness_cmp(a: LossyTarget, b: LossyTarget) -> Option<core::cmp::Ordering> {
-    use LossyTarget::{ApproxButteraugli, ApproxSsim2, CodecSpecificQuality};
-    match (a, b) {
-        // Higher score = more faithful.
-        (ApproxSsim2(x), ApproxSsim2(y)) | (CodecSpecificQuality(x), CodecSpecificQuality(y)) => {
-            y.partial_cmp(&x)
-        }
-        // Lower distance = more faithful (invert the comparison).
-        (ApproxButteraugli(x), ApproxButteraugli(y)) => x.partial_cmp(&y),
-        // Different axes — not comparable as higher/lower.
-        _ => None,
-    }
-}
+// ═════════════════════════════════════════════════════════════════════════════
+// DEFERRED — `try_with_fidelity` / `FidelityMatch` (insufficiently settled).
+//
+// A fail-fast counterpart to `with_fidelity` that reports how the codec resolved
+// the request. Deferred: the raised/lowered/translated + content-dependent
+// semantics aren't settled — a *config-time* verdict can't express GIF's
+// content-dependent lossless, nor the HDR/bit-depth "is it really lossless?"
+// question. Design + open questions: imazen/zencodec#104. Full prior impl in git
+// history (commit 44fe22e).
+//
+//   enum FidelityMatch { Exact, RaisedTo(Fidelity), LoweredTo(Fidelity),
+//                        Translated(Fidelity), Unsupported }
+//   //   is_honored() / meets_or_exceeds() / resolved()
+//   EncoderConfig::try_with_fidelity(&mut self, Fidelity) -> FidelityMatch
+//
+// What ships meanwhile: `with_fidelity` (infallible best-effort) +
+// `resolved_target_fidelity` (the simple `Option<Fidelity>` resolved report).
+// ═════════════════════════════════════════════════════════════════════════════
 
 /// What a lossy encode aims at.
 ///
@@ -305,76 +212,5 @@ mod tests {
             Fidelity::codec_quality(85.0),
             Fidelity::Lossy(LossyTarget::CodecSpecificQuality(85.0))
         );
-    }
-
-    #[test]
-    fn classify_exact_raised_lowered_translated_unsupported() {
-        let q90 = Fidelity::codec_quality(90.0);
-        let q70 = Fidelity::codec_quality(70.0);
-        let q50 = Fidelity::codec_quality(50.0);
-        let q60 = Fidelity::codec_quality(60.0);
-
-        // exact
-        assert_eq!(
-            classify_fidelity_match(q90, Some(q90)),
-            FidelityMatch::Exact
-        );
-        // no fidelity control → unsupported
-        assert_eq!(
-            classify_fidelity_match(q90, None),
-            FidelityMatch::Unsupported
-        );
-        // ceiling below ask: q90 wanted, q70 resolved → lowered (the GIF case)
-        assert_eq!(
-            classify_fidelity_match(q90, Some(q70)),
-            FidelityMatch::LoweredTo(q70)
-        );
-        // floor above ask: q50 wanted, q60 resolved → raised
-        assert_eq!(
-            classify_fidelity_match(q50, Some(q60)),
-            FidelityMatch::RaisedTo(q60)
-        );
-        // butteraugli is inverted (lower distance = more faithful)
-        assert_eq!(
-            classify_fidelity_match(Fidelity::butteraugli(1.0), Some(Fidelity::butteraugli(0.5))),
-            FidelityMatch::RaisedTo(Fidelity::butteraugli(0.5))
-        );
-        assert_eq!(
-            classify_fidelity_match(Fidelity::butteraugli(1.0), Some(Fidelity::butteraugli(2.0))),
-            FidelityMatch::LoweredTo(Fidelity::butteraugli(2.0))
-        );
-        // metric request → native quality (different axes) → translated
-        assert_eq!(
-            classify_fidelity_match(Fidelity::ssim2(90.0), Some(q70)),
-            FidelityMatch::Translated(q70)
-        );
-        // lossless wanted, lossy resolved → demoted across the fence
-        assert_eq!(
-            classify_fidelity_match(Fidelity::Lossless, Some(q70)),
-            FidelityMatch::Unsupported
-        );
-        // lossy wanted, lossless resolved → promoted (more faithful)
-        assert_eq!(
-            classify_fidelity_match(q90, Some(Fidelity::Lossless)),
-            FidelityMatch::RaisedTo(Fidelity::Lossless)
-        );
-    }
-
-    #[test]
-    fn fidelity_match_helpers() {
-        let lowered = FidelityMatch::LoweredTo(Fidelity::codec_quality(70.0));
-        assert!(FidelityMatch::Exact.is_honored());
-        assert!(FidelityMatch::RaisedTo(Fidelity::Lossless).is_honored());
-        assert!(lowered.is_honored());
-        assert!(!FidelityMatch::Unsupported.is_honored());
-
-        assert!(FidelityMatch::Exact.meets_or_exceeds());
-        assert!(FidelityMatch::RaisedTo(Fidelity::Lossless).meets_or_exceeds());
-        assert!(!lowered.meets_or_exceeds());
-        assert!(!FidelityMatch::Unsupported.meets_or_exceeds());
-
-        assert_eq!(FidelityMatch::Exact.resolved(), None);
-        assert_eq!(FidelityMatch::Unsupported.resolved(), None);
-        assert_eq!(lowered.resolved(), Some(Fidelity::codec_quality(70.0)));
     }
 }

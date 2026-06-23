@@ -161,7 +161,7 @@ pub mod encode {
 
     // Types
     pub use crate::capabilities::EncodeCapabilities;
-    pub use crate::fidelity::{Fidelity, FidelityMatch, LossyTarget};
+    pub use crate::fidelity::{Fidelity, LossyTarget};
     pub use crate::negotiate::best_encode_format;
     pub use crate::output::EncodeOutput;
     pub use crate::policy::EncodePolicy;

@@ -3,7 +3,7 @@
 use alloc::boxed::Box;
 
 use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
-use crate::fidelity::{Fidelity, FidelityMatch, LossyTarget};
+use crate::fidelity::{Fidelity, LossyTarget};
 use crate::format::ImageFormat;
 use crate::{EncodeCapabilities, Metadata, ResourceLimits};
 use zenpixels::PixelDescriptor;
@@ -128,10 +128,8 @@ pub trait EncoderConfig: Clone + Send + Sync {
     /// Set the encode [`Fidelity`] — a lossy [`LossyTarget`] or lossless.
     ///
     /// Infallible and **best-effort**: the codec does what it can and silently
-    /// substitutes the rest, but never resolves to *less* fidelity across the
-    /// lossy↔lossless fence without it being observable. Read what it resolved to
-    /// with [`resolved_target_fidelity`](Self::resolved_target_fidelity), or use
-    /// [`try_with_fidelity`](Self::try_with_fidelity) for a fail-fast verdict.
+    /// substitutes the rest. Read what it resolved to with
+    /// [`resolved_target_fidelity`](Self::resolved_target_fidelity).
     ///
     /// The default bridges to the legacy [`with_generic_quality`](Self::with_generic_quality)
     /// / [`with_lossless`](Self::with_lossless) setters, so a codec that has not
@@ -151,29 +149,6 @@ pub trait EncoderConfig: Clone + Send + Sync {
             Fidelity::Lossy(LossyTarget::ApproxButteraugli(_)) => self.with_lossless(false),
             Fidelity::Lossless => self.with_lossless(true),
         }
-    }
-
-    /// Set the encode [`Fidelity`], fail-fast, reporting how the codec resolved
-    /// the request as a [`FidelityMatch`].
-    ///
-    /// Unlike [`with_fidelity`](Self::with_fidelity) (infallible best-effort),
-    /// this tells you immediately whether the request was honored exactly,
-    /// [`RaisedTo`](FidelityMatch::RaisedTo) more fidelity,
-    /// [`LoweredTo`](FidelityMatch::LoweredTo) less (the format can't reach the
-    /// ask — e.g. GIF's 256-colour palette), metric-translated to the native
-    /// scale ([`Translated`](FidelityMatch::Translated)), or
-    /// [`Unsupported`](FidelityMatch::Unsupported) (only meetable by crossing to
-    /// *less* fidelity across the lossy↔lossless fence). A cheap up-front
-    /// resolution, no encoding. The config is still mutated to the codec's best
-    /// effort either way, so a caller may proceed or select another codec.
-    ///
-    /// The default applies via [`with_fidelity`](Self::with_fidelity) and
-    /// classifies by comparing the request to
-    /// [`resolved_target_fidelity`](Self::resolved_target_fidelity); codecs
-    /// override for fully precise reporting that knows their native quantization.
-    fn try_with_fidelity(&mut self, fidelity: Fidelity) -> FidelityMatch {
-        *self = self.clone().with_fidelity(fidelity);
-        crate::fidelity::classify_fidelity_match(fidelity, self.resolved_target_fidelity())
     }
 
     /// The fidelity the codec actually resolved to, or `None` if it has no

@@ -46,8 +46,8 @@ All notable changes to zencodec are documented here.
   rather than inspecting raw CICP/ICC fields.
 
 ### Added
-- **`Fidelity` API** (`encode::{Fidelity, FidelityMatch, LossyTarget}` +
-  `EncoderConfig::with_fidelity` / `try_with_fidelity` / `resolved_target_fidelity`):
+- **`Fidelity` API** (`encode::{Fidelity, LossyTarget}` +
+  `EncoderConfig::with_fidelity` / `resolved_target_fidelity`):
   a single encode-fidelity request. Two variants ship:
   - **`Lossless`** — mathematically exact.
   - **`Lossy(LossyTarget)`** — a one-shot target: `ApproxSsim2(score)`,
@@ -56,14 +56,12 @@ All notable changes to zencodec are documented here.
   `with_fidelity` defaults to bridging the legacy `with_lossless` /
   `with_generic_quality` setters, so every codec behaves sensibly today; codecs
   override to honor targets natively, and `resolved_target_fidelity` reports what
-  was actually honored. `try_with_fidelity` is the fail-fast counterpart,
-  returning a `FidelityMatch` (`Exact` / `RaisedTo(Fidelity)` /
-  `LoweredTo(Fidelity)` / `Translated(Fidelity)` / `Unsupported`; with
-  `is_honored` / `meets_or_exceeds` / `resolved`) up-front: a codec may resolve to
-  *higher* fidelity silently, but *lower* is always observable — `LoweredTo` when
-  the format can't reach the ask (e.g. GIF's 256-colour palette caps quality),
-  `Unsupported` across the lossy↔lossless fence (e.g. `Lossless` on JPEG). Never a
-  silent downgrade. Scope is **blind single-pass**.
+  was actually honored. Scope is **blind single-pass**. A fail-fast
+  `try_with_fidelity` → `FidelityMatch` (raised/lowered/translated/unsupported
+  verdict) is **designed but deferred** — its content-dependent semantics aren't
+  settled (a config-time verdict can't express GIF's content-dependent lossless or
+  the HDR/bit-depth question); preserved as a reserved block in `src/fidelity.rs`
+  + imazen/zencodec#104.
 
   A third variant — **`LosslessMode`**: lossless *coding* (predictive, no DCT
   ringing) of pixels pre-quantized within a budget, which would make the

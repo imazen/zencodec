@@ -10,7 +10,7 @@
 ## summary
 #
 #   inherent methods                           34
-#   trait roster entries (type × trait)        34
+#   trait roster entries (type × trait)        33
 #
 # per-module pub lines:
 #   (root)                           17
@@ -58,7 +58,7 @@ pub fn gainmap::Iso21496Format::assert_fields_are_eq(&self)
 pub fn gainmap::UFraction::assert_fields_are_eq(&self)
 pub fn helpers::IccMatchTolerance::assert_fields_are_eq(&self)
 
-## trait impls (34 types)
+## trait impls (33 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -77,7 +77,6 @@ UnsupportedOperation: TrivialClone
 decode::DecodePolicy: TrivialClone
 encode::EncodePolicy: TrivialClone
 encode::Fidelity: TrivialClone
-encode::FidelityMatch: TrivialClone
 encode::LossyTarget: TrivialClone
 estimate::ComputeEnvironment: TrivialClone
 estimate::ResourceEstimate: TrivialClone
