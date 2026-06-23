@@ -68,6 +68,20 @@ All notable changes to zencodec are documented here.
   reserved as commented names so they add later without renaming. Additive — the
   two trait methods have default impls (no major bump). (#12)
 
+### Documentation
+- Clarified `ResourceLimits::max_memory_bytes` and the `enforces_max_memory`
+  capability: documented the two enforcement strengths the flag spans — **live
+  cumulative tracking** (every significant allocation charged against a running
+  budget with RAII release; byte-accurate; only a minority of codecs) vs
+  **pre-flight estimate** (peak predicted from the header and rejected before
+  allocating; most codecs) — and that `enforces_max_memory == false` means the
+  codec does not guard memory at all (bound such input via `max_pixels` /
+  `max_width` / `max_height`).
+
+### Fixed
+- Fixed a broken intra-doc link to the deferred `NearLosslessBudget` (fidelity
+  refactor leftover) that failed `cargo doc -D warnings`.
+
 ## [0.1.24] - 2026-06-21
 
 ### Added

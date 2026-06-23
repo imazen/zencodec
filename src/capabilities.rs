@@ -263,7 +263,14 @@ impl EncodeCapabilities {
     pub const fn enforces_max_pixels(&self) -> bool {
         self.enforces_max_pixels
     }
-    /// Whether the codec enforces `max_memory_bytes` limits.
+    /// Whether the codec enforces
+    /// [`max_memory_bytes`](crate::ResourceLimits::max_memory_bytes) limits at all.
+    ///
+    /// `true` spans two enforcement strengths that this boolean does not
+    /// distinguish: byte-accurate *live cumulative tracking* and header-based
+    /// *pre-flight estimate* (see the field docs). `false` means the codec does
+    /// **not** guard memory at all; bound input via `max_pixels` / `max_width` /
+    /// `max_height` instead.
     pub const fn enforces_max_memory(&self) -> bool {
         self.enforces_max_memory
     }
@@ -662,7 +669,14 @@ impl DecodeCapabilities {
     pub const fn enforces_max_pixels(&self) -> bool {
         self.enforces_max_pixels
     }
-    /// Whether the codec enforces `max_memory_bytes` limits.
+    /// Whether the codec enforces
+    /// [`max_memory_bytes`](crate::ResourceLimits::max_memory_bytes) limits at all.
+    ///
+    /// `true` spans two enforcement strengths that this boolean does not
+    /// distinguish: byte-accurate *live cumulative tracking* and header-based
+    /// *pre-flight estimate* (see the field docs). `false` means the codec does
+    /// **not** guard memory at all; bound input via `max_pixels` / `max_width` /
+    /// `max_height` instead.
     pub const fn enforces_max_memory(&self) -> bool {
         self.enforces_max_memory
     }

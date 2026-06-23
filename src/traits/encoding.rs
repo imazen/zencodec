@@ -125,8 +125,7 @@ pub trait EncoderConfig: Clone + Send + Sync {
         None
     }
 
-    /// Set the encode [`Fidelity`] — a lossy [`LossyTarget`], a near-lossless
-    /// [`NearLosslessBudget`](crate::encode::NearLosslessBudget), or lossless.
+    /// Set the encode [`Fidelity`] — a lossy [`LossyTarget`] or lossless.
     ///
     /// Infallible and **best-effort**: the codec does what it can and silently
     /// substitutes the rest. Read what it resolved to with

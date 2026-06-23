@@ -245,7 +245,30 @@ pub struct ResourceLimits {
     /// independently. To limit the cumulative pixel count across all frames,
     /// use [`max_total_pixels`](Self::max_total_pixels).
     pub max_pixels: Option<u64>,
-    /// Maximum memory allocation in bytes.
+    /// Maximum peak working/output memory in bytes.
+    ///
+    /// **Enforcement strength varies by codec.** The
+    /// [`enforces_max_memory`](crate::decode::DecodeCapabilities::enforces_max_memory)
+    /// capability reports whether a codec enforces this limit *at all* — not how
+    /// precisely. Two models exist across the zen codecs:
+    ///
+    /// - **Live cumulative tracking** — every significant allocation is charged
+    ///   against a running budget (and released on drop), so the codec rejects
+    ///   the instant the *actual* in-flight total would cross the cap, catching
+    ///   memory that accumulates across passes and intermediate buffers.
+    ///   Byte-accurate, but only a minority of codecs implement it.
+    /// - **Pre-flight estimate** — the codec predicts peak memory from the image
+    ///   header and rejects *before* allocating. There is no running total, so it
+    ///   is only as accurate as that estimate: an under-counted working set can
+    ///   still over-allocate, and transient peaks are not observed. This is what
+    ///   most codecs do.
+    ///
+    /// A codec whose `enforces_max_memory` capability is `false` does **not**
+    /// guard this limit at all — bound such inputs with
+    /// [`max_pixels`](Self::max_pixels), [`max_width`](Self::max_width),
+    /// [`max_height`](Self::max_height), or
+    /// [`max_input_bytes`](Self::max_input_bytes), which are checked from the
+    /// header before any allocation.
     pub max_memory_bytes: Option<u64>,
     /// Maximum encoded output size in bytes (encode only).
     pub max_output_bytes: Option<u64>,
