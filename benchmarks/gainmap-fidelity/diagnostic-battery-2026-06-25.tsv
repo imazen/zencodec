@@ -1,0 +1,8 @@
+case	1064_castle	1228_stainedglass	1491_sunset	1227_stainedglass
+ref_vs_ref_SANITY(want=10)	10.0000	10.0000	10.0000	10.0000
+ref_vs_HALF_BRIGHT_negctrl	10.0000	10.0000	10.0000	9.9999
+ref_vs_BLACKHALF_negctrl	5.0438	4.9752	5.3992	4.9374
+ref_vs_BOOST1_noHDR	9.3514	9.6563	9.1254	9.8808
+ref_vs_gainmap_q2	9.7387	9.8816	9.8008	9.9229
+ref_vs_gainmap_ZEROED	9.3514	9.6563	9.1254	9.8808
+ref_vs_gainmap_MID128	9.3514	9.6564	9.1255	9.8809

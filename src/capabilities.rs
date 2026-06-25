@@ -43,6 +43,10 @@ pub enum UnsupportedOperation {
     PixelFormat,
     /// All `MultiPageDecoder` methods (multi-image decode).
     MultiImageDecode,
+    /// Gain-map embedding on encode
+    /// ([`with_gain_map_pixels`](crate::encode::EncodeJob::with_gain_map_pixels) /
+    /// [`with_gain_map_encoded`](crate::encode::EncodeJob::with_gain_map_encoded)).
+    GainMapEncode,
 }
 
 impl UnsupportedOperation {
@@ -57,6 +61,7 @@ impl UnsupportedOperation {
             Self::AnimationDecode => "animation_decode",
             Self::PixelFormat => "pixel_format",
             Self::MultiImageDecode => "multi_image_decode",
+            Self::GainMapEncode => "gain_map_encode",
         }
     }
 }
@@ -323,6 +328,7 @@ impl EncodeCapabilities {
             UnsupportedOperation::RowLevelEncode => self.push_rows,
             UnsupportedOperation::PullEncode => self.encode_from,
             UnsupportedOperation::AnimationEncode => self.animation,
+            UnsupportedOperation::GainMapEncode => self.gain_map,
             UnsupportedOperation::DecodeInto
             | UnsupportedOperation::RowLevelDecode
             | UnsupportedOperation::AnimationDecode
@@ -723,6 +729,7 @@ impl DecodeCapabilities {
             UnsupportedOperation::RowLevelEncode
             | UnsupportedOperation::PullEncode
             | UnsupportedOperation::AnimationEncode
+            | UnsupportedOperation::GainMapEncode
             | UnsupportedOperation::PixelFormat => false,
         }
     }
@@ -1035,6 +1042,12 @@ mod tests {
         assert!(caps.supports(UnsupportedOperation::RowLevelEncode));
         assert!(caps.supports(UnsupportedOperation::PullEncode));
         assert!(caps.supports(UnsupportedOperation::AnimationEncode));
+        assert!(!caps.supports(UnsupportedOperation::GainMapEncode));
+        assert!(
+            EncodeCapabilities::new()
+                .with_gain_map(true)
+                .supports(UnsupportedOperation::GainMapEncode)
+        );
         assert!(!caps.supports(UnsupportedOperation::DecodeInto));
         assert!(!caps.supports(UnsupportedOperation::RowLevelDecode));
         assert!(!caps.supports(UnsupportedOperation::AnimationDecode));
@@ -1067,6 +1080,7 @@ mod tests {
             UnsupportedOperation::DecodeInto,
             UnsupportedOperation::RowLevelDecode,
             UnsupportedOperation::AnimationDecode,
+            UnsupportedOperation::GainMapEncode,
             UnsupportedOperation::PixelFormat,
         ] {
             assert!(
@@ -1110,6 +1124,10 @@ mod tests {
         assert_eq!(
             UnsupportedOperation::AnimationDecode.name(),
             "animation_decode"
+        );
+        assert_eq!(
+            UnsupportedOperation::GainMapEncode.name(),
+            "gain_map_encode"
         );
     }
 
