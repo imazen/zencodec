@@ -151,13 +151,26 @@ All notable changes to zencodec are documented here.
   `whereat` dependency. No new coupling: `At` was already in the public API via the
   blanket `impl CategorizedError for At<E>`. Additive.
 
+- **Gain-map encode** on `EncodeJob`: fallible `with_gain_map_pixels` /
+  `with_gain_map_encoded` returning the codec's own `Self::Error` (reusing the owned
+  `DecodedGainMap` / `GainMapSource`). The default rejects with the new
+  `UnsupportedOperation::GainMapEncode` — so a codec that can't embed fails *loudly*,
+  not silently; codecs that can embed validate the gain map and return their own error
+  (e.g. an invalid channel count) for a bad one. Additive (no trait break): the default
+  builds `Self::Error` via the encoder's `reject` under a method `where` clause.
+- `GainMapInfo::bit_depth` (+ `with_bit_depth`, default 8) for 10/12-bit AVIF/JXL gain
+  maps; `DecodedGainMap::{width,height,channels}` accessors (buffer-derived, so the
+  1-vs-3-channel encode decision can't desync from the pixels).
+- Research: gain-map re-compression rate–distortion study fixing the fidelity default
+  at the **~q90 SSIM2 knee** — `docs/gainmap-fidelity-rd-2026-06.md` (+ raw data under
+  `benchmarks/gainmap-fidelity/`).
+
 ### Changed
 - Docs: README overhauled to the shared zen\* README conventions — CI badge drops the
   `branch=` param and gains a `label`, an MSRV (1.88) badge is added, a `## Quick start`
   with a `[dependencies]` block leads, in-repo doc links are absolutized, and the canonical
   crosslink footer is rendered. The crates.io README is now a generated, badge-free
   `README.crates.md` (`readme = "README.crates.md"`; `include` ships it instead of `README.md`).
-
 ## [0.1.25] - 2026-06-23
 
 ### Added

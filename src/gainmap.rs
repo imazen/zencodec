@@ -405,6 +405,12 @@ pub struct GainMapInfo {
     pub height: u32,
     /// Number of gain map channels: 1 (luminance) or 3 (per-channel RGB).
     pub channels: u8,
+    /// Bit depth of the gain map image's samples: 8, 10, or 12.
+    ///
+    /// The gain-map image can be deeper than 8-bit on AVIF/JXL, and carriers that
+    /// declare a sample depth (AVIF `av1C`, the JXL `jhgm` codestream) need it.
+    /// Defaults to 8 — the UltraHDR / JPEG-MPF norm.
+    pub bit_depth: u8,
     /// CICP color description of the alternate (typically HDR) rendition.
     pub alternate_cicp: Option<Cicp>,
     /// ICC profile of the alternate rendition.
@@ -412,16 +418,24 @@ pub struct GainMapInfo {
 }
 
 impl GainMapInfo {
-    /// Create with required fields. Optional fields default to `None`.
+    /// Create with required fields. `bit_depth` defaults to 8 and the optional
+    /// alternate-color fields to `None`; set them with the builders.
     pub fn new(params: GainMapParams, width: u32, height: u32, channels: u8) -> Self {
         Self {
             params,
             width,
             height,
             channels,
+            bit_depth: 8,
             alternate_cicp: None,
             alternate_icc: None,
         }
+    }
+
+    /// Set the gain map image's sample bit depth (8, 10, or 12). Defaults to 8.
+    pub fn with_bit_depth(mut self, bit_depth: u8) -> Self {
+        self.bit_depth = bit_depth;
+        self
     }
 
     /// Set the alternate rendition's CICP color description.
@@ -638,6 +652,12 @@ impl GainMapSource {
 ///
 /// Gain map decode is opt-in — this is only present when the caller
 /// explicitly requested gain map extraction.
+///
+/// It is also the **encode-input** type: the pixel form handed to the fallible
+/// [`EncodeJob::with_gain_map_pixels`](crate::encode::EncodeJob::with_gain_map_pixels).
+/// On that path [`pixels`](Self::pixels) is the authoritative geometry — use the
+/// [`width`](Self::width) / [`height`](Self::height) / [`channels`](Self::channels)
+/// accessors rather than the `metadata` copies.
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct DecodedGainMap {
@@ -651,6 +671,29 @@ impl DecodedGainMap {
     /// Create a new decoded gain map.
     pub fn new(pixels: zenpixels::PixelBuffer, metadata: GainMapInfo) -> Self {
         Self { pixels, metadata }
+    }
+
+    /// Gain-map image width, read from [`pixels`](Self::pixels) — the
+    /// authoritative geometry for the decoded-pixel form. The matching
+    /// [`metadata.width`](GainMapInfo::width) is advisory here (it is the sole
+    /// source only for the byte-carried [`GainMapSource`]).
+    pub fn width(&self) -> u32 {
+        self.pixels.width()
+    }
+
+    /// Gain-map image height, read from [`pixels`](Self::pixels).
+    pub fn height(&self) -> u32 {
+        self.pixels.height()
+    }
+
+    /// Gain-map channel count (1 = luminance, 3 = per-channel), read from the
+    /// [`pixels`](Self::pixels) descriptor.
+    ///
+    /// Encoders should branch on **this**, not
+    /// [`metadata.channels`](GainMapInfo::channels), so a 1-vs-3-channel decision
+    /// can never desync from the bytes actually present.
+    pub fn channels(&self) -> u8 {
+        self.pixels.descriptor().channels() as u8
     }
 }
 

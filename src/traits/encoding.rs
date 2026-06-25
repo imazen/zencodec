@@ -5,7 +5,7 @@ use alloc::boxed::Box;
 use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 use crate::fidelity::{Fidelity, LossyTarget};
 use crate::format::ImageFormat;
-use crate::{EncodeCapabilities, Metadata, ResourceLimits};
+use crate::{EncodeCapabilities, Metadata, ResourceLimits, UnsupportedOperation};
 use zenpixels::PixelDescriptor;
 
 use super::BoxedError;
@@ -302,6 +302,88 @@ pub trait EncodeJob: Sized {
     /// because formats write the loop count before frame data.
     fn with_loop_count(self, _count: Option<u32>) -> Self {
         self
+    }
+
+    /// Embed a gain map supplied as **decoded pixels** (UltraHDR / ISO 21496-1).
+    ///
+    /// The codec encodes [`gain_map.pixels`](crate::gainmap::DecodedGainMap::pixels)
+    /// in its own image codec, serializes
+    /// [`gain_map.metadata`](crate::gainmap::DecodedGainMap::metadata) via
+    /// [`serialize_iso21496_fmt`](crate::gainmap::serialize_iso21496_fmt) for the
+    /// target container, and muxes the result into the output. This is the
+    /// universal entry point — pass-through across formats and tone-map/generate
+    /// both reduce to it (decode/compute → pixels → here).
+    ///
+    /// # Errors
+    ///
+    /// **Fallible by design**, returning the codec's own [`Error`](Self::Error). The
+    /// default rejects with [`UnsupportedOperation::GainMapEncode`] (built via the
+    /// encoder's [`reject`](crate::encode::Encoder::reject)) — a codec (or build) that
+    /// can't embed a gain map fails *loudly* rather than silently dropping it (a dropped
+    /// gain map is lost HDR). Codecs that can embed override this to validate and store
+    /// the gain map, returning their own error (e.g. an invalid channel count or
+    /// dimension) for a bad one; the override is itself the support signal (query
+    /// [`EncodeCapabilities::gain_map`](crate::EncodeCapabilities::gain_map) to know in
+    /// advance). `self` is consumed on success, so the chain reads
+    /// `config.job().with_gain_map_pixels(gm)?.with_metadata_policy(..)`.
+    ///
+    /// **Geometry** comes from [`gain_map.pixels`](crate::gainmap::DecodedGainMap::pixels)
+    /// (use the [`width`](crate::gainmap::DecodedGainMap::width) /
+    /// [`height`](crate::gainmap::DecodedGainMap::height) /
+    /// [`channels`](crate::gainmap::DecodedGainMap::channels) accessors); the
+    /// `metadata` copies are advisory. **Fidelity**: the gain-map image is a smooth,
+    /// low-frequency, single-channel *control signal* with a shallow rate–distortion
+    /// knee around **q90** (measured: SSIM2 of the rendered HDR plateaus above ~q90,
+    /// and re-compression stays sub-JND under cvvdp even at 5-stop headroom). Encode
+    /// it at the base quality or near the knee — not lossless (wasted bytes) and not
+    /// far below ~q90 (the rendered HDR falls off) — and lean on **downsampling**,
+    /// the larger size lever. It is gain, not color — encode it **without** any
+    /// color transform.
+    fn with_gain_map_pixels(
+        self,
+        _gain_map: crate::gainmap::DecodedGainMap,
+    ) -> Result<Self, Self::Error>
+    where
+        Self::Enc: Encoder<Error = Self::Error>,
+    {
+        Err(<Self::Enc as Encoder>::reject(
+            UnsupportedOperation::GainMapEncode,
+        ))
+    }
+
+    /// Embed a gain map supplied as an **already-encoded image bitstream**.
+    ///
+    /// A fast path for pass-through: when
+    /// [`gain_map.format`](crate::gainmap::GainMapSource::format) matches the
+    /// codec's own image codec, the bytes are carried verbatim (re-muxed, with
+    /// metadata re-serialized for the target container). When the formats differ
+    /// the caller should decode the gain-map image to pixels and use
+    /// [`with_gain_map_pixels`](Self::with_gain_map_pixels) instead.
+    ///
+    /// # Errors
+    ///
+    /// Fallible like [`with_gain_map_pixels`](Self::with_gain_map_pixels), returning the
+    /// codec's own [`Error`](Self::Error): the default rejects with
+    /// [`UnsupportedOperation::GainMapEncode`]. Codecs override to byte-carry a gain-map
+    /// image in their own container and return `Ok` — returning their own error when the
+    /// gain map's `format` doesn't match (decode to pixels and use
+    /// [`with_gain_map_pixels`](Self::with_gain_map_pixels) then).
+    ///
+    /// **Base-invalidation hazard.** An encoded gain map is computed against one
+    /// *specific* base rendition; if the base is re-encoded at a different fidelity
+    /// the carried map can desync and reconstruct wrong HDR. Pass an encoded gain
+    /// map through only when the base bytes are unchanged — otherwise recompute and
+    /// use [`with_gain_map_pixels`](Self::with_gain_map_pixels).
+    fn with_gain_map_encoded(
+        self,
+        _gain_map: crate::gainmap::GainMapSource,
+    ) -> Result<Self, Self::Error>
+    where
+        Self::Enc: Encoder<Error = Self::Error>,
+    {
+        Err(<Self::Enc as Encoder>::reject(
+            UnsupportedOperation::GainMapEncode,
+        ))
     }
 
     /// Access codec-specific extensions for this job.
