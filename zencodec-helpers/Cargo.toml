@@ -1,0 +1,94 @@
+[package]
+name = "zencodec-helpers"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "Apache-2.0 OR MIT"
+description = "Shared picker runtime + training-loop helpers for zen* image codecs"
+categories = ["multimedia::images", "development-tools"]
+keywords = ["image", "codec", "picker", "rate-distortion"]
+repository = "https://github.com/imazen/zencodec"
+include = ["/src/**", "/README.md", "/LICENSE*"]
+
+# --- Two halves, independently feature-gated ---------------------------------
+#
+# 1. `topk-verify` (runtime): a generic "predict top-K configs, encode them,
+#    score them, return the min-bytes config meeting the quality target" helper.
+#    Realizes the proven ≤1% top-3-verify path that no per-codec picker reaches
+#    today. Needs zenpredict's `advanced`-gated top-K argmin API.
+#
+# 2. `loop-tools` (offline / training-loop glue): the reusable Rust port of the
+#    ad-hoc per-codec picker-loop steps (omni-merge across box sidecars, the
+#    variant_name + feat_<name> feature prep, parse_config_name robustness, the
+#    top-K-verify oracle-gap evaluation). Std-only; powers the `picker-loop` CLI.
+
+[features]
+default = ["topk-verify"]
+
+# Runtime top-K-verify helper. Pulls zenpredict (advanced) for the masked top-K
+# query. `std` is on by default so the encode/score closures and the optional
+# rayon-parallel verify can use the standard library; the core helper itself is
+# std-agnostic apart from the closure environment.
+topk-verify = ["dep:zenpredict"]
+
+# Offline loop glue + the `picker-loop` binary. Always std.
+loop-tools = ["std", "dep:csv", "dep:serde", "dep:serde_json", "dep:regex"]
+
+# Opt-in parallel verify (encode+score the K candidates concurrently).
+parallel = ["dep:rayon", "std"]
+
+std = ["zenpredict?/std"]
+
+[dependencies]
+# zenpredict — the ZNPR runtime + decision math (masked argmin, top-K).
+#
+# DEP NOTE (2026-06-26): the top-K API this crate consumes
+# (`argmin_masked_top_k::<K>` + `argmin_masked_top_k_in_range`) lives behind
+# zenpredict's `advanced` feature, which is present only in the in-tree
+# **0.2.0** (crates.io still has 0.1.0 / v2-only). The `advanced` surface is
+# explicitly "NOT YET STABILIZED — may change shape in a 0.2.x patch" (see the
+# zenpredict Cargo.toml feature comment), and a concurrent agent's PR is
+# stabilizing exactly this API. We design against the masked-top-K shape
+# (returns K output indices, ascending best-first) and pin the local sibling via
+# the build-local `[patch.crates-io]` at the bottom of THIS manifest (this crate
+# is its own workspace root — excluded from zencodec — so the patch never
+# reaches zencodec's CI). Bump to the real published `>=0.2` once it lands.
+zenpredict = { version = "0.2.0", optional = true, default-features = false, features = ["advanced"] }
+
+# loop-tools deps (offline; never pulled by the runtime half).
+csv = { version = "1.4.0", optional = true }
+serde = { version = "1.0.228", optional = true, features = ["derive"] }
+serde_json = { version = "1.0.150", optional = true }
+regex = { version = "1.12.4", optional = true }
+
+# parallel verify
+rayon = { version = "1.12.0", optional = true }
+
+[dev-dependencies]
+# Mint an in-memory ZNPR bake so the runtime tests exercise a real top-K query
+# without shipping a .bin fixture. Unpublished sibling (0.1.0); path for local
+# dev/validation. Tests are gated on `topk-verify` so a registry-only build that
+# can't reach the sibling never compiles them.
+zenpredict-bake = { path = "../../zenanalyze/zenpredict-bake" }
+
+[[bin]]
+name = "picker-loop"
+required-features = ["loop-tools"]
+path = "src/bin/picker_loop.rs"
+
+[package.metadata.docs.rs]
+all-features = true
+
+# DEV-ONLY patch (build-local; this crate is its own workspace root since it's
+# EXCLUDED from the zencodec workspace, so this patch never reaches zencodec's
+# CI). zenpredict 0.2 (the `advanced` top-K argmin API) is unpublished — the
+# legacy `.cargo/config.toml` `paths` override CAN'T inject a major that has no
+# registry candidate, so we patch it in per the global "unpublished dependency"
+# rule. zenpredict-bake (dev-dep, also unpublished) is patched too so its own
+# transitive zenpredict resolves to the same sibling.
+#
+# REMOVE both when zenpredict 0.2 + zenpredict-bake publish, and bump the deps
+# above to the real `>=0.2`.
+[patch.crates-io]
+zenpredict = { path = "../../zenanalyze/zenpredict" }
+zenpredict-bake = { path = "../../zenanalyze/zenpredict-bake" }
