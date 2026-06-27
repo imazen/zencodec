@@ -9,7 +9,14 @@ members = ["zencodec-testkit"]
 # `apidoc/` is the CI-free public-API snapshot runner: excluded so plain
 # `cargo test` and every CI job never compile its dependency tree or run
 # rustdoc. Regenerate via `just api-doc`.
-exclude = ["fuzz", "apidoc"]
+# `zencodec-helpers/` is a separate picker-runtime + training-loop-glue crate
+# that depends on the UNPUBLISHED zenpredict 0.2 (`advanced` top-K API). It is
+# EXCLUDED so zencodec's own CI (which doesn't clone the zenanalyze sibling)
+# never tries to resolve that dep. Build/test it standalone with the
+# `~/work/zen/.cargo/config.toml` `paths` override pointing at
+# `zenanalyze/zenpredict` + `zenanalyze/zenpredict-bake` — see
+# `zencodec-helpers/README.md`. Promote to `members` once zenpredict 0.2 ships.
+exclude = ["fuzz", "apidoc", "zencodec-helpers"]
 resolver = "3"
 
 [package]

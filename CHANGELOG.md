@@ -45,6 +45,32 @@ All notable changes to zencodec are documented here.
   utility that consults `ColorProfileSource` and `HdrPolicy` together
   rather than inspecting raw CICP/ICC fields.
 
+## zencodec-helpers
+
+New sibling crate (workspace-EXCLUDED — depends on unpublished zenpredict 0.2;
+see its README). Minimal runtime picker helper for the zen\* codecs. Not part of
+the published `zencodec` crate's CI/release.
+
+### Added
+- `topk_verify::pick_top_k_verify` / `pick_top_3_verify` — generic runtime
+  top-K-verify picker helper: rank a picker's predicted-cheapest cells, encode +
+  score the K cheapest via caller closures, return the min-bytes config meeting
+  the quality target. Realizes the proven ≤1% top-3-verify path that no per-codec
+  picker reached at runtime. `#![forbid(unsafe_code)]`, `no_std + alloc`.
+  (`topk-verify` feature, default.)
+- `topk_verify::select_top_k` — self-contained masked top-K selection over the
+  picker's output slice (same NaN / tie-break / mask-length contract as
+  zenpredict's `argmin_masked`), plus `tier_mask` (caller-supplied per-cell
+  effort tiers → allow-mask). The crate consumes zenpredict's **default** API
+  only — NO gated feature (`topk` / `advanced`) — so nothing needs adding to
+  zenpredict.
+
+The offline Rust port of the `zenmetrics/scripts/picker/` training-loop glue
+(omni-merge / feature-prep / cell-id parsing / origin-split / oracle-gap eval) is
+kept separately on the experimental branch
+`feat/zencodec-helpers-loop-tools-experimental`, out of this minimal crate, since
+it duplicates the working Python pipeline.
+
 ## [0.1.25] - 2026-06-23
 
 ### Added

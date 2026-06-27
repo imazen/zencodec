@@ -1,0 +1,73 @@
+[package]
+name = "zencodec-helpers"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "Apache-2.0 OR MIT"
+description = "Runtime top-K-verify picker helper for zen* image codecs"
+categories = ["multimedia::images"]
+keywords = ["image", "codec", "picker", "rate-distortion"]
+repository = "https://github.com/imazen/zencodec"
+include = ["/src/**", "/README.md", "/LICENSE*"]
+
+# A generic runtime "predict top-K configs, encode them, score them, return the
+# min-bytes config meeting the quality target" helper. Realizes the proven ≤1%
+# top-3-verify path that no per-codec picker reaches today (an audit found
+# top-K is unreachable at runtime). Needs zenpredict's stable top-K argmin.
+
+[features]
+default = ["topk-verify"]
+
+# The runtime top-K-verify helper. Pulls zenpredict for the masked top-K query.
+topk-verify = ["dep:zenpredict"]
+
+# Opt-in parallel verify (encode + score the K candidates concurrently).
+parallel = ["dep:rayon", "std"]
+
+# `std::error::Error` impls + std-using closure environments. The core helper is
+# no_std + alloc.
+std = ["zenpredict?/std"]
+
+[dependencies]
+# zenpredict — the ZNPR runtime: `Predictor::predict_transformed` (the per-cell
+# predicted-cost forward pass) + the decision-math primitives `AllowedMask`,
+# `ScoreTransform`, `ArgminOffsets`.
+#
+# DEP NOTE: this crate uses zenpredict's **DEFAULT** API ONLY — NO gated
+# feature (`topk` / `advanced`). The masked top-K *selection* is implemented in
+# THIS crate (`topk_verify::select_top_k`) over the default
+# `predict`/`predict_transformed` output slice, so nothing needs to be added to
+# zenpredict. zenpredict 0.2 is unpublished (crates.io has 0.1.0 / v2-only), so
+# the local sibling (at `main`) is pinned via the build-local
+# `[patch.crates-io]` at the bottom of THIS manifest (this crate is its own
+# workspace root — EXCLUDED from zencodec — so the patch never reaches
+# zencodec's CI). Bump to the real published `>=0.2` and drop the patch once it
+# lands; the dep stays default-features-only either way.
+zenpredict = { version = "0.2.0", optional = true, default-features = false, features = ["std"] }
+
+# parallel verify
+rayon = { version = "1.12.0", optional = true }
+
+[dev-dependencies]
+# Mint an in-memory ZNPR bake so the runtime tests exercise a real top-K query
+# without shipping a .bin fixture. Unpublished sibling (0.1.0); path for local
+# dev/validation. Tests are gated on `topk-verify` so a registry-only build that
+# can't reach the sibling never compiles them.
+zenpredict-bake = { path = "../../zenanalyze/zenpredict-bake" }
+
+[package.metadata.docs.rs]
+all-features = true
+
+# DEV-ONLY patch (build-local; this crate is its own workspace root since it's
+# EXCLUDED from the zencodec workspace, so this patch never reaches zencodec's
+# CI). zenpredict 0.2 (the stable `topk` argmin API) is unpublished — the legacy
+# `.cargo/config.toml` `paths` override CAN'T inject a major that has no
+# registry candidate, so we patch it in per the global "unpublished dependency"
+# rule. zenpredict-bake (dev-dep, also unpublished) is patched too so its own
+# transitive zenpredict resolves to the same sibling.
+#
+# REMOVE both when zenpredict 0.2 + zenpredict-bake publish, and bump the deps
+# above to the real `>=0.2`.
+[patch.crates-io]
+zenpredict = { path = "../../zenanalyze/zenpredict" }
+zenpredict-bake = { path = "../../zenanalyze/zenpredict-bake" }
