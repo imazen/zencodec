@@ -20,6 +20,12 @@
 //!   the structural paths and (where the decoder can observe them) the metadata
 //!   channels, so a codec can't claim a feature it lacks *or* hide one it has; see
 //!   the fn docs for the exact per-flag scope.
+//! - [`check_decode_error_envelope`] / [`assert_uses_codec_error_envelope`] — a
+//!   codec's [`ErrorCategory`](zencodec::ErrorCategory) and codec name survive
+//!   dyn-dispatch type erasure (the `At<CodecError>` envelope contract). Opt-in,
+//!   and *not* in [`check_all`]: only for codecs that return the envelope
+//!   `type Error` (the testkit's own [`reference`](mod@reference) is a Pattern-A
+//!   foil that deliberately fails it).
 //!
 //! [`check_all`] runs them all with default inputs — the one-call entry point.
 //!
@@ -33,14 +39,15 @@
 
 use std::borrow::Cow;
 
+use whereat::At;
 use zencodec::CodecErrorExt;
 use zencodec::decode::{
-    AnimationFrameDecoder, Decode, DecodeJob, DecodeRowSink, DecoderConfig, SinkError,
-    StreamingDecode,
+    AnimationFrameDecoder, Decode, DecodeJob, DecodeRowSink, DecoderConfig, DynDecoderConfig,
+    SinkError, StreamingDecode,
 };
 use zencodec::encode::{AnimationFrameEncoder, EncodeJob, Encoder, EncoderConfig};
 use zencodec::exif::Exif;
-use zencodec::{Cicp, Metadata, MetadataFields, MetadataPolicy, Orientation};
+use zencodec::{Cicp, CodecError, Metadata, MetadataFields, MetadataPolicy, Orientation};
 use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 
 pub mod fixtures;
@@ -1148,6 +1155,105 @@ where
     }
 }
 
+// ===========================================================================
+// Error-envelope conformance (the `At<CodecError>` Pattern-B contract)
+// ===========================================================================
+
+/// Statically assert a codec returns the shared **`At<CodecError>` envelope**
+/// from every encode/decode trait boundary — the Pattern-B error contract.
+///
+/// A zero-cost compile-time gate: it takes no arguments and runs no code. A codec
+/// invokes it once — `assert_uses_codec_error_envelope::<MyEncoderConfig, MyDecoderConfig>()`
+/// — and the bounds below make it a **compile error** for any codec whose
+/// `type Error` is its own native enum instead of `At<CodecError>` (Pattern A).
+///
+/// Why it matters: a native-enum `type Error` classifies only on the *typed*
+/// path. The moment it is erased — the `BoxedError` every `Dyn*` dispatch method
+/// produces, an `anyhow::Error`, a mapped wrapper — all you hold is a `dyn Error`,
+/// and you cannot downcast that to a `dyn CategorizedError`; the
+/// [`ErrorCategory`](zencodec::ErrorCategory) and codec name are gone.
+/// `At<CodecError>` is one concrete type, so it survives any erasure by a
+/// downcast. [`check_decode_error_envelope`] is the runtime companion that proves
+/// the category actually *flows* through erasure.
+///
+/// It bounds the config, job, and leaf executor on both sides. The optional stub
+/// associated types (`AnimationFrameEnc`, `StreamDec`, `AnimationFrameDec`) are
+/// intentionally *not* bound: a still-only codec legitimately uses `()` /
+/// [`Unsupported`](zencodec::Unsupported), whose `Error` is
+/// [`UnsupportedOperation`](zencodec::UnsupportedOperation), not the envelope.
+///
+/// Not part of [`check_all`] — the testkit's own [`reference`](mod@reference)
+/// codec is a deliberate Pattern-A foil, so this is opt-in for codecs that have
+/// adopted the envelope.
+pub fn assert_uses_codec_error_envelope<E, D>()
+where
+    E: EncoderConfig<Error = At<CodecError>>,
+    E::Job: EncodeJob<Error = At<CodecError>>,
+    <E::Job as EncodeJob>::Enc: Encoder<Error = At<CodecError>>,
+    D: DecoderConfig<Error = At<CodecError>>,
+    for<'a> D::Job<'a>: DecodeJob<'a, Error = At<CodecError>>,
+    for<'a> <D::Job<'a> as DecodeJob<'a>>::Dec: Decode<Error = At<CodecError>>,
+{
+}
+
+/// A codec's [`ErrorCategory`](zencodec::ErrorCategory) **and** originating codec
+/// name survive dyn-dispatch type erasure — the runtime half of the Pattern-B
+/// contract.
+///
+/// Drives the decoder through the dyn boundary (`&dyn DynDecoderConfig` →
+/// [`dyn_job`](zencodec::decode::DynDecoderConfig::dyn_job) → `probe`) on input
+/// the codec rejects, so the typed `At<CodecError>` is erased to the `BoxedError`
+/// a generic pipeline actually holds. It then recovers the envelope from that
+/// `Box<dyn Error>` and asserts both
+/// [`error_category`](zencodec::CodecErrorExt::error_category) and the
+/// [`codec`](zencodec::CodecError::codec) name come back.
+///
+/// A Pattern-A codec (native-enum `type Error`) **fails** here: its category may
+/// exist on the typed value, but it is unrecoverable once erased — which is the
+/// whole point of the envelope, and what this check exists to catch.
+/// [`assert_uses_codec_error_envelope`] is the compile-time companion; this proves
+/// the category genuinely propagates. Not part of [`check_all`] (see that note).
+///
+/// `malformed` must be bytes this codec rejects — any non-decodable input, a short
+/// garbage buffer is usually enough. If the codec *accepts* them, the check says so
+/// rather than passing silently.
+pub fn check_decode_error_envelope<D>(dec: D, malformed: &[u8]) -> Conformance
+where
+    D: DecoderConfig + 'static,
+{
+    const CHECK: &str = "decode_error_envelope";
+    let dyn_cfg: &dyn DynDecoderConfig = &dec;
+    let erased = match dyn_cfg.dyn_job().probe(malformed) {
+        Err(e) => e,
+        Ok(_) => {
+            return Err(fail(
+                CHECK,
+                "probe() accepted the supplied `malformed` input — pass bytes this codec rejects, \
+                 so an error is actually produced to inspect",
+            ));
+        }
+    };
+    if erased.error_category().is_none() {
+        return Err(fail(
+            CHECK,
+            format!(
+                "ErrorCategory did not survive dyn-dispatch erasure: the decoder's `type Error` is \
+                 not `At<CodecError>` (Pattern A — a native error enum erases to a bare `dyn Error`, \
+                 which cannot be downcast to recover the category). Switch the zencodec trait impls \
+                 to `type Error = At<CodecError>`. Erased error was: {erased}"
+            ),
+        ));
+    }
+    if erased.codec_error().and_then(CodecError::codec).is_none() {
+        return Err(fail(
+            CHECK,
+            "the CodecError envelope survived erasure but carries no codec name — make the native \
+             error's `CategorizedError::codec_name()` return `Some(\"<codec>\")`",
+        ));
+    }
+    Ok(())
+}
+
 /// Run every conformance check with sensible default inputs, returning the first
 /// failure. The one-call entry point for a codec's test suite; for control over
 /// image sizes or animation frames, call the individual `check_*` functions.
@@ -1343,6 +1449,42 @@ mod tests {
         check_pixel_roundtrip(e, d, &TestImage::rgb8_gradient(10, 7)).unwrap();
     }
 
+    // ---- error-envelope conformance (the `At<CodecError>` Pattern-B contract) ----
+
+    /// The envelope exemplar (`minimal`, `type Error = At<CodecError>`) carries its
+    /// category AND codec name through dyn-dispatch erasure to `BoxedError`.
+    #[test]
+    fn minimal_decode_error_envelope_survives_erasure() {
+        // 16 bytes of garbage: fails `parse_header` (short / bad magic) →
+        // RefError::Invalid → At<CodecError>{MalformedImage, "zencodec-testkit/minimal"}.
+        check_decode_error_envelope(MinimalDecoderConfig::new(), &[0xABu8; 16]).unwrap();
+    }
+
+    /// The negative case proves the check has teeth. `reference` is Pattern A
+    /// (`type Error = RefError`); its RefError *is* `CategorizedError`, but that
+    /// category is unrecoverable once erased to `BoxedError`, so the check must
+    /// FAIL — exactly the loss the envelope prevents. (Same underlying RefError as
+    /// `minimal` above: the only difference is the envelope `type Error`.)
+    #[test]
+    fn reference_pattern_a_fails_the_envelope_check() {
+        let err = check_decode_error_envelope(ReferenceDecoderConfig, &[0xABu8; 16])
+            .expect_err("Pattern A must fail the envelope-survival check");
+        assert_eq!(err.check, "decode_error_envelope");
+        assert!(
+            err.detail.contains("Pattern A"),
+            "the failure should name the Pattern-A cause: {}",
+            err.detail
+        );
+    }
+
+    /// The compile-time gate accepts the envelope codec. A Pattern-A codec here
+    /// would fail to *compile* (`type Error` ≠ `At<CodecError>`); that direction
+    /// can't live in a normal test, so the runtime check above covers it.
+    #[test]
+    fn minimal_satisfies_the_static_envelope_assertion() {
+        assert_uses_codec_error_envelope::<MinimalEncoderConfig, MinimalDecoderConfig>();
+    }
+
     /// The classifier underpinning the honesty check must flag both kinds of lie
     /// (declared-but-broken, and works-but-undeclared) while accepting an honest
     /// decline (undeclared + `UnsupportedOperation`).
@@ -1478,5 +1620,121 @@ mod tests {
             "Web keeps rights"
         );
         assert!(meta.xmp.is_none(), "Web strips XMP");
+    }
+
+    // ---- whereat trace: lines preserved up the stack + crate boundaries ----
+
+    /// A whereat trace preserves every `.at()` hop's file:line as an error climbs
+    /// the stack — and through the `BoxedError` erasure a dyn pipeline performs —
+    /// so a diagnostic can point at every layer, not just the last. Each frame is
+    /// attributable to its source file (hence its crate: `Location::file()` embeds
+    /// the crate directory), so the boundary between codec-internal frames and the
+    /// caller's is visible in the trace.
+    #[test]
+    fn error_trace_preserves_lines_all_the_way_up() {
+        use std::borrow::Cow;
+        use zencodec::decode::{DecodeJob, DecoderConfig};
+
+        // A real codec error, located inside the codec module (the `?` site in
+        // minimal.rs) by the bridge's track-caller `start_at` — exactly one frame.
+        let origin: At<CodecError> = MinimalDecoderConfig::new()
+            .job()
+            .decoder(Cow::Borrowed(b"not a ZCR1 header"), &[])
+            .expect_err("malformed header must fail");
+        assert_eq!(
+            origin.frame_count(),
+            1,
+            "the codec locates its error exactly once"
+        );
+        let f0 = origin
+            .frames()
+            .next()
+            .and_then(|f| f.location())
+            .expect("origin frame has a location");
+        let origin_line = f0.line();
+        assert!(
+            f0.file().contains("minimal.rs"),
+            "origin frame is attributed to the codec module, not the caller: {}",
+            f0.file()
+        );
+
+        // Climb the stack: each `.at()` is a distinct source line — the layers an
+        // error crosses on the way up (codec boundary → pipeline → app).
+        let l1 = line!() + 1;
+        let hop1 = origin.at();
+        let l2 = line!() + 1;
+        let climbed = hop1.at();
+
+        // Every hop is its own frame, oldest-first, none collapsed or lost.
+        let locs: Vec<(String, u32)> = climbed
+            .frames()
+            .filter_map(|f| f.location().map(|l| (l.file().to_string(), l.line())))
+            .collect();
+        assert_eq!(locs.len(), 3, "origin + 2 hops = 3 frames, none lost");
+        assert_eq!(
+            locs[0].1, origin_line,
+            "origin line preserved at the bottom of the trace"
+        );
+        assert!(locs[0].0.contains("minimal.rs"));
+        assert_eq!(
+            (locs[1].0.contains("lib.rs"), locs[1].1),
+            (true, l1),
+            "hop 1 file+line preserved"
+        );
+        assert_eq!(
+            (locs[2].0.contains("lib.rs"), locs[2].1),
+            (true, l2),
+            "hop 2 file+line preserved"
+        );
+        assert_ne!(
+            locs[0].0, locs[1].0,
+            "codec-origin and caller frames are distinguishable by file (the crate-boundary signal)"
+        );
+
+        // The whole trace survives dyn-dispatch erasure to Box<dyn Error> and back:
+        // no frame, no line is lost when the concrete type is hidden.
+        let boxed: Box<dyn std::error::Error + Send + Sync> = Box::new(climbed);
+        let recovered = boxed
+            .downcast_ref::<At<CodecError>>()
+            .expect("downcast the erased envelope");
+        let after: Vec<(String, u32)> = recovered
+            .frames()
+            .filter_map(|f| f.location().map(|l| (l.file().to_string(), l.line())))
+            .collect();
+        assert_eq!(
+            after, locs,
+            "every frame + line survives the BoxedError round-trip"
+        );
+    }
+
+    /// whereat records crate boundaries when an error crosses them
+    /// ([`At::at_crate`](whereat::At::at_crate) — the mechanism
+    /// `whereat::define_at_crate_info!()` wires into zencodec and every codec). The
+    /// rendered trace shows the crate transition, so a reader can see *which crate*
+    /// each leg of the propagation happened in.
+    #[test]
+    fn error_trace_marks_crate_boundaries() {
+        use whereat::AtCrateInfo;
+
+        // Two crates the error notionally crosses (codec → app).
+        static CODEC_CRATE: AtCrateInfo = AtCrateInfo::builder().name("demo-codec").build();
+        static APP_CRATE: AtCrateInfo = AtCrateInfo::builder().name("demo-app").build();
+
+        let err = At::wrap(CodecError::new(
+            Some("demo-codec"),
+            zencodec::ErrorCategory::MalformedImage,
+        ))
+        .at_crate(&CODEC_CRATE)
+        .at()
+        .at_crate(&APP_CRATE)
+        .at();
+
+        // Both boundaries are recorded as `AtContext::Crate` markers; the
+        // full-trace display walks them and names each crate at the transition.
+        let full = err.full_trace().to_string();
+        assert!(
+            full.contains("demo-codec") && full.contains("demo-app"),
+            "both crate boundaries should be recorded + visible in the full trace:\n{full}"
+        );
     }
 }

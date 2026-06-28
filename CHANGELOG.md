@@ -46,6 +46,19 @@ All notable changes to zencodec are documented here.
   rather than inspecting raw CICP/ICC fields.
 
 ### Added
+- **zencodec-testkit: error-envelope conformance + whereat-trace checks** —
+  `check_decode_error_envelope` (runtime: drives a decoder through dyn-dispatch
+  erasure on rejected input, asserts the `ErrorCategory` *and* codec name survive
+  to the `BoxedError`) and `assert_uses_codec_error_envelope` (compile-time,
+  zero-cost: bounds a codec's encode/decode `type Error` to `At<CodecError>`, so a
+  Pattern-A native-enum error type is a *compile error*). The testkit's `reference`
+  codec is a deliberate Pattern-A foil that **fails** the runtime check — proving
+  it has teeth — while `minimal` (the envelope exemplar) passes both. Opt-in; not
+  in `check_all` (the foil must stay free to be Pattern A). Adds trace coverage
+  too: a codec error's `At` trace preserves every `.at()` hop's file:line up the
+  stack and through `BoxedError` erasure (no frame lost or collapsed, each
+  attributable to its crate via `Location::file()`), and `At::at_crate` crate
+  boundaries are recorded and surfaced by `full_trace()`.
 - **Unified error taxonomy: `ErrorCategory` enum + `CategorizedError` trait** —
   a codec-agnostic way to classify any codec error for routing (HTTP status,
   retry, logging) without naming the concrete enum (zencodec#99, superseding the
