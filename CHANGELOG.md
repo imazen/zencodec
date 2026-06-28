@@ -45,6 +45,13 @@ All notable changes to zencodec are documented here.
   utility that consults `ColorProfileSource` and `HdrPolicy` together
   rather than inspecting raw CICP/ICC fields.
 
+### Changed
+- Docs: README overhauled to the shared zen\* README conventions — CI badge drops the
+  `branch=` param and gains a `label`, an MSRV (1.88) badge is added, a `## Quick start`
+  with a `[dependencies]` block leads, in-repo doc links are absolutized, and the canonical
+  crosslink footer is rendered. The crates.io README is now a generated, badge-free
+  `README.crates.md` (`readme = "README.crates.md"`; `include` ships it instead of `README.md`).
+
 ## [0.1.25] - 2026-06-23
 
 ### Added

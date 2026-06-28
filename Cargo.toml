@@ -22,11 +22,15 @@ description = "Shared traits and types for zen* image codecs"
 categories = ["multimedia::images"]
 keywords = ["image", "codec", "traits"]
 repository = "https://github.com/imazen/zencodec"
+# crates.io renders the trimmed, badge-free README.crates.md (generated from
+# README.md by zenutils gen-readme-crates.sh). The full GitHub README.md keeps
+# its badge row + nav and is not shipped in the published tarball.
+readme = "README.crates.md"
 include = [
     "/src/**",
     "/tests/**",
     "/examples/**",
-    "/README.md",
+    "/README.crates.md",
     "/CHANGELOG.md",
     "/LICENSE*",
 ]

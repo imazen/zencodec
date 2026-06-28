@@ -1,4 +1,6 @@
-# zencodec [![CI](https://img.shields.io/github/actions/workflow/status/imazen/zencodec/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/zencodec/actions/workflows/ci.yml) [![crates.io](https://img.shields.io/crates/v/zencodec?style=flat-square)](https://crates.io/crates/zencodec) [![lib.rs](https://img.shields.io/crates/v/zencodec?style=flat-square&label=lib.rs&color=blue)](https://lib.rs/crates/zencodec) [![docs.rs](https://img.shields.io/docsrs/zencodec?style=flat-square)](https://docs.rs/zencodec) [![MSRV](https://img.shields.io/badge/MSRV-1.88-blue?style=flat-square)](https://doc.rust-lang.org/cargo/reference/manifest.html#the-rust-version-field) [![license](https://img.shields.io/crates/l/zencodec?style=flat-square)](#license)
+<!-- GENERATED FROM README.md by zenutils gen-readme-crates.sh — DO NOT EDIT. -->
+
+# zencodec
 
 zencodec is the shared trait crate that defines the common API for all zen\* image codecs.
 
