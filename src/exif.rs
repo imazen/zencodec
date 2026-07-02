@@ -1077,6 +1077,29 @@ fn set_orientation_with(data: &[u8], exif: &Exif<'_>, value: Orientation) -> Opt
         TIFF_LONG => 4,
         _ => return None, // non-integer orientation carrier — leave untouched
     };
+    // Only patch an INLINE value (declared byte length <= 4, i.e. `count == 1`
+    // for SHORT/LONG). An inline value's offset is always `entry_start + 8` —
+    // entirely inside that entry's own 12-byte descriptor, which by
+    // construction (fixed-stride entry table) can't alias anything else, so
+    // the offset-preserving in-place patch below is provably safe.
+    //
+    // An OUT-OF-LINE value (malformed count, e.g. 256, or a spec-violating
+    // count > 1) stores its offset as a raw attacker-controlled `u32` read
+    // from the entry table — it can point ANYWHERE in the blob, including the
+    // 8-byte TIFF header's own `ifd0_off` field or a sibling entry's
+    // descriptor. This function does an offset-preserving byte patch — it
+    // doesn't re-derive structural fields afterward — so patching such a
+    // value can silently overwrite `ifd0_off` (making a re-parse read IFD0
+    // from a different location) or a sibling entry's tag/kind/count
+    // (making it resolve differently, or as a different tag, on re-parse).
+    // Either way breaks `retain_reconciled`'s idempotence contract (fuzz
+    // zencodec#96/#97 recurrence: `filtered EXIF not idempotent` /
+    // `authored output not a serializer fixpoint`). Refuse to patch a
+    // non-inline value — same fail-safe as an unusable (non-integer) carrier:
+    // leave the tag untouched rather than risk corrupting structural bytes.
+    if (entry.count as usize).saturating_mul(size) > 4 {
+        return None;
+    }
     // `value_offset` is relative to the TIFF; account for the optional prefix.
     let base = if exif.had_prefix {
         EXIF_PREFIX.len()
@@ -1408,7 +1431,7 @@ pub(crate) fn retain_reconciled<'a>(
         match want {
             Some(o) if exif.orientation() != Some(o) => match set_orientation_with(src, &exif, o) {
                 Some(v) => Some(Cow::Owned(v)),
-                None => Some(Cow::Borrowed(src)), // tag-less / non-integer → unchanged
+                None => Some(Cow::Borrowed(src)), // tag-less / non-integer / unsafe-to-patch → unchanged
             },
             _ => Some(Cow::Borrowed(src)), // already matches, or absent → unchanged
         }
