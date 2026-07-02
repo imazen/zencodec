@@ -421,14 +421,15 @@ impl<'a> Exif<'a> {
         // Extract sub-IFD pointers as tree edges. The Interop IFD (0xA005) is
         // not modeled — strip its pointer so a rewrite can't leave a dangling
         // offset (it survives only via the no-prune passthrough).
-        let exif_ifd = take_pointer(&mut ifd0, TAG_EXIF_IFD, order).and_then(|o| {
+        let exif_taken = take_pointer(&mut ifd0, TAG_EXIF_IFD, order);
+        let exif_ifd = exif_taken.and_then(|o| {
             parse_ifd(tiff, o, order).map(|(mut e, _)| {
                 take_pointer(&mut e, TAG_INTEROP_IFD, order);
                 e
             })
         });
-        let gps_ifd = take_pointer(&mut ifd0, TAG_GPS_IFD, order)
-            .and_then(|o| parse_ifd(tiff, o, order).map(|(e, _)| e));
+        let gps_taken = take_pointer(&mut ifd0, TAG_GPS_IFD, order);
+        let gps_ifd = gps_taken.and_then(|o| parse_ifd(tiff, o, order).map(|(e, _)| e));
 
         // IFD1 (thumbnail directory) follows IFD0's next pointer. The JPEG
         // thumbnail offset (0x0201) and length (0x0202) are peeked first and
@@ -480,10 +481,24 @@ impl<'a> Exif<'a> {
         // a structural tag whose value was too short to be a usable offset is
         // legitimately preserved as data by `take_pointer` (sub-IFD stays
         // `None`), and must keep round-tripping (`short_subifd_pointer_is_preserved`).
-        if exif_ifd.is_some() {
+        // Sweep on "`take_pointer` removed one occurrence" (`*_taken.is_some()`),
+        // NOT "extraction resolved to a usable sub-IFD" (`*_ifd.is_some()`). A
+        // duplicate structural-pointer tag whose first occurrence has an
+        // offset-shaped value (>= 4 bytes) that happens to point nowhere
+        // parseable is still consumed by `take_pointer` — extraction fails
+        // (`*_ifd = None`), but a second same-tag occurrence is left behind in
+        // `ifd0`. `write_ifd` then relocates that leftover's out-of-line bytes
+        // to a fresh, valid offset in the rewritten buffer, and `parse_ifd`
+        // accepts almost any bytes as a (possibly empty) IFD — so the leftover
+        // flips from "not a pointer" to "a real sub-IFD" purely from being
+        // rewritten (gps/exif presence drift, fuzz zencodec#30 recurrence).
+        // Only a value too short to be offset-shaped leaves `take_pointer`
+        // returning `None` *without* removing anything — that entry must keep
+        // round-tripping untouched (`short_subifd_pointer_is_preserved`).
+        if exif_taken.is_some() {
             ifd0.retain(|e| e.tag != TAG_EXIF_IFD);
         }
-        if gps_ifd.is_some() {
+        if gps_taken.is_some() {
             ifd0.retain(|e| e.tag != TAG_GPS_IFD);
         }
 
