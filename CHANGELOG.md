@@ -184,6 +184,38 @@ All notable changes to zencodec are documented here.
   with a `[dependencies]` block leads, in-repo doc links are absolutized, and the canonical
   crosslink footer is rendered. The crates.io README is now a generated, badge-free
   `README.crates.md` (`readme = "README.crates.md"`; `include` ships it instead of `README.md`).
+
+### Fixed
+- EXIF duplicate-pointer dedup was gated on whether extraction *resolved* a
+  usable sub-IFD (`gps_ifd.is_some()`/`exif_ifd.is_some()`) rather than on
+  whether `take_pointer` *removed* an entry from IFD0. A GPS/Exif pointer tag
+  whose value was offset-shaped but failed to parse as a sub-IFD left a stale
+  duplicate entry behind; a rewrite then relocated that entry's out-of-line
+  bytes to a valid offset, and the next parse resolved it as a real sub-IFD —
+  flipping presence (`None` → `Some`) purely from being rewritten. Same
+  file:line:col signature as the closed zencodec#30, so the fuzz farm's
+  sig-dedup ledger silently swallowed ~10k fresh crashes as "already known."
+  Fix: gate the duplicate sweep on `*_taken.is_some()` instead of
+  `*_ifd.is_some()`. Regression:
+  `fuzz/regression/exif_roundtrip_gps_drift_dup_unresolved_pointer`. (2ed32cf7)
+- `Metadata::filtered`'s orientation-reconcile path (`retain_reconciled` /
+  `set_orientation_with`) could corrupt structural TIFF bytes when the source
+  Orientation tag had a malformed `count` (fuzzer-found: 256 or 3). The
+  in-place patch reuses the parsed entry's `value_offset`, which is safe only
+  when the value is inline (well-formed `count == 1`); a malformed count makes
+  the value out-of-line, turning the offset into an attacker-controlled `u32`
+  that can point anywhere in the blob — observed corrupting the TIFF header's
+  `ifd0_off` and, separately, a sibling entry's descriptor. Broke
+  `retain_reconciled`'s idempotence contract (same policy applied twice
+  produced different bytes). Same file:line:col signature as the closed
+  zencodec#96/#97, so the fuzz farm's sig-dedup ledger silently swallowed the
+  recurrence (~2,421 `metadata_filtered` + ~22,017 `exif_author` crashes) for
+  2.5 weeks. Fix: refuse the in-place patch unless the value is provably inline
+  (`count * type_size <= 4`), matching the existing non-integer-carrier
+  fail-safe. Regressions:
+  `fuzz/regression/metadata_filtered_orientation_entry_overlap`,
+  `fuzz/regression/metadata_filtered_orientation_header_overlap`. (bea2f94c)
+
 ## [0.1.25] - 2026-06-23
 
 ### Added
