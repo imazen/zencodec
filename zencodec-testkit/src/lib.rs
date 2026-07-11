@@ -21,11 +21,18 @@
 //!   channels, so a codec can't claim a feature it lacks *or* hide one it has; see
 //!   the fn docs for the exact per-flag scope.
 //! - [`check_decode_error_envelope`] / [`assert_uses_codec_error_envelope`] — a
-//!   codec's [`ErrorCategory`](zencodec::ErrorCategory) and codec name survive
+//!   codec's [`ErrorCategory`] and codec name survive
 //!   dyn-dispatch type erasure (the `At<CodecError>` envelope contract). Opt-in,
 //!   and *not* in [`check_all`]: only for codecs that return the envelope
 //!   `type Error` (the testkit's own [`reference`](mod@reference) is a Pattern-A
 //!   foil that deliberately fails it).
+//! - [`check_decode_truncation_series`] — a truncated (incomplete) input must
+//!   categorize as an *incomplete-input* category (never an `Internal` 5xx, an
+//!   `OutOfMemory`, an `Io` error, or a caller-fault), and must never panic or
+//!   silently decode a truncated header. Enforces the one part of the taxonomy
+//!   that is broadly distinguishable. Opt-in, *not* in [`check_all`]; on the
+//!   dyn-erased path a Pattern-A codec fails it the same way the envelope check
+//!   does (see [`is_incomplete_input_category`] for the allowed/denied policy).
 //!
 //! [`check_all`] runs them all with default inputs — the one-call entry point.
 //!
@@ -47,7 +54,9 @@ use zencodec::decode::{
 };
 use zencodec::encode::{AnimationFrameEncoder, EncodeJob, Encoder, EncoderConfig};
 use zencodec::exif::Exif;
-use zencodec::{Cicp, CodecError, Metadata, MetadataFields, MetadataPolicy, Orientation};
+use zencodec::{
+    Cicp, CodecError, ErrorCategory, Metadata, MetadataFields, MetadataPolicy, Orientation,
+};
 use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 
 pub mod fixtures;
@@ -1171,7 +1180,7 @@ where
 /// path. The moment it is erased — the `BoxedError` every `Dyn*` dispatch method
 /// produces, an `anyhow::Error`, a mapped wrapper — all you hold is a `dyn Error`,
 /// and you cannot downcast that to a `dyn CategorizedError`; the
-/// [`ErrorCategory`](zencodec::ErrorCategory) and codec name are gone.
+/// [`ErrorCategory`] and codec name are gone.
 /// `At<CodecError>` is one concrete type, so it survives any erasure by a
 /// downcast. [`check_decode_error_envelope`] is the runtime companion that proves
 /// the category actually *flows* through erasure.
@@ -1196,7 +1205,7 @@ where
 {
 }
 
-/// A codec's [`ErrorCategory`](zencodec::ErrorCategory) **and** originating codec
+/// A codec's [`ErrorCategory`] **and** originating codec
 /// name survive dyn-dispatch type erasure — the runtime half of the Pattern-B
 /// contract.
 ///
@@ -1252,6 +1261,190 @@ where
         ));
     }
     Ok(())
+}
+
+// ===========================================================================
+// EOF / truncation-series conformance
+// ===========================================================================
+
+/// Whether `cat` is an acceptable category for a truncated / incomplete input.
+///
+/// TRUE for the incomplete-input set — [`UnexpectedEof`](ErrorCategory::UnexpectedEof)
+/// (the ideal) plus [`MalformedImage`](ErrorCategory::MalformedImage),
+/// [`UnsupportedImageType`](ErrorCategory::UnsupportedImageType), and
+/// [`UnsupportedImageFeature`](ErrorCategory::UnsupportedImageFeature), since a
+/// truncated prefix can legitimately look malformed or unrecognizable (a codec that
+/// can't yet tell "cut short" from "corrupt" this early is still safe — all four
+/// read as *client-supplied incomplete data*, an HTTP 4xx).
+///
+/// FALSE for every category that MISATTRIBUTES a client-side truncation:
+/// [`Internal`](ErrorCategory::Internal) (reads as a codec bug / 5xx),
+/// [`OutOfMemory`](ErrorCategory::OutOfMemory) (the codec allocated from an
+/// unvalidated length in truncated data),
+/// [`LimitsExceeded`](ErrorCategory::LimitsExceeded), [`Io`](ErrorCategory::Io)
+/// (there is no I/O on an in-memory slice), the caller-fault set
+/// ([`InvalidParameters`](ErrorCategory::InvalidParameters) /
+/// [`InvalidBuffer`](ErrorCategory::InvalidBuffer) /
+/// [`InvalidState`](ErrorCategory::InvalidState)),
+/// [`Cancelled`](ErrorCategory::Cancelled) / [`TimedOut`](ErrorCategory::TimedOut),
+/// and the not-applicable
+/// [`UnsupportedPixelFormat`](ErrorCategory::UnsupportedPixelFormat) /
+/// [`UnsupportedOperation`](ErrorCategory::UnsupportedOperation) /
+/// [`CmsRequired`](ErrorCategory::CmsRequired) /
+/// [`PolicyRejected`](ErrorCategory::PolicyRejected).
+pub fn is_incomplete_input_category(cat: ErrorCategory) -> bool {
+    // Default-DENY: `ErrorCategory` is `#[non_exhaustive]`, so any *future* variant
+    // falls through to `false` and is conservatively flagged for review rather than
+    // silently accepted as a valid truncation category.
+    matches!(
+        cat,
+        ErrorCategory::UnexpectedEof
+            | ErrorCategory::MalformedImage
+            | ErrorCategory::UnsupportedImageType
+            | ErrorCategory::UnsupportedImageFeature
+    )
+}
+
+/// Deterministic series of truncation lengths spanning a `len`-byte bitstream: the
+/// small absolute sizes `{0,1,2,3,4,8,16}` (header region) unioned with the
+/// fractions `{1/8,1/4,3/8,1/2,5/8,3/4,7/8, len-1}` of `len`. Deduped, sorted
+/// ascending, and clamped to `n < len` (a full-length "truncation" is the original
+/// image, not a truncation). `0` — the empty input — is a legitimate truncation.
+fn truncation_lengths(len: usize) -> Vec<usize> {
+    let mut lens: Vec<usize> = vec![0, 1, 2, 3, 4, 8, 16];
+    for (num, den) in [(1, 8), (1, 4), (3, 8), (1, 2), (5, 8), (3, 4), (7, 8)] {
+        lens.push(len * num / den);
+    }
+    lens.push(len.saturating_sub(1));
+    lens.retain(|&n| n < len);
+    lens.sort_unstable();
+    lens.dedup();
+    lens
+}
+
+/// A truncated (incomplete) input is categorized as *incomplete client data* —
+/// never mis-attributed as an internal bug, an OOM, an I/O error, or a caller
+/// fault — and never panics or silently decodes.
+///
+/// This enforces the one part of the [`ErrorCategory`] taxonomy that IS broadly
+/// distinguishable: whatever a codec's exact error, cutting a known-good image
+/// short must land in the *incomplete-input* set
+/// ([`is_incomplete_input_category`] — [`UnexpectedEof`](ErrorCategory::UnexpectedEof)
+/// is ideal, but [`MalformedImage`](ErrorCategory::MalformedImage) /
+/// `UnsupportedImageType` / `UnsupportedImageFeature` are tolerated because a
+/// truncated prefix can genuinely look malformed). It catches the real bug class
+/// where a codec reads a length field out of truncated data and OOMs, or funnels a
+/// truncation into [`Internal`](ErrorCategory::Internal) — a 5xx for a 4xx-class
+/// client error.
+///
+/// `valid` is a KNOWN-GOOD encoded image the codec supplies (at least a few bytes).
+/// The check builds a deterministic series of prefixes and, for each, runs a **full
+/// decode through the dyn-erased boundary** —
+/// [`DynDecodeJob::push_decode`](zencodec::decode::DynDecodeJob::push_decode) into a
+/// throwaway sink. That is the dyn full-decode path, so the pixel **body** is
+/// actually read and *body* truncation is exercised, not just the header a `probe`
+/// would parse. Each decode is wrapped in [`catch_unwind`](std::panic::catch_unwind)
+/// so a codec panic on truncated input becomes a named failure, not a process abort.
+/// Every offending offset is collected and reported together.
+///
+/// Per offset `n` of `len`:
+/// - **panic** → failure (truncated input must never panic).
+/// - **`Ok`** (decode succeeded) when `n <= len/4` (header/early region) → failure:
+///   a truncated valid image must not silently decode. For `n > len/4` a success is
+///   *tolerated* (trailing-marker / already-complete-payload leniency).
+/// - **`Err`** → the erased [`ErrorCategory`] is read back: an incomplete-input
+///   category passes; any other category fails, naming the offset. If the category
+///   did not survive erasure at all, the codec is **Pattern A** (native-enum
+///   `type Error`, not `At<CodecError>`) — reported once, exactly as
+///   [`check_decode_error_envelope`] reports it.
+///
+/// Like the envelope checks, this is **opt-in and NOT part of [`check_all`]**: the
+/// testkit's own [`reference`](mod@reference) codec is a Pattern-A foil that fails
+/// it on the erased path, while the [`minimal`] envelope exemplar passes (its
+/// truncations classify as `MalformedImage`).
+pub fn check_decode_truncation_series<D>(dec: D, valid: &[u8]) -> Conformance
+where
+    D: DecoderConfig + 'static,
+{
+    const CHECK: &str = "decode_truncation_series";
+    let len = valid.len();
+    if len < 2 {
+        return Err(fail(
+            CHECK,
+            "supply a real encoded image of at least a few bytes",
+        ));
+    }
+
+    let mut violations: Vec<String> = Vec::new();
+    let mut reported_pattern_a = false;
+
+    for n in truncation_lengths(len) {
+        let truncated = &valid[..n];
+        // Drive a FULL decode through the dyn-erased boundary into a throwaway sink.
+        // `push_decode` reads the pixel body (via the copy-to-sink helper), so this
+        // exercises *body* truncation, not just the header a `probe` parses.
+        // `catch_unwind` turns a codec panic into a reported failure naming the
+        // offset; `AssertUnwindSafe` is sound because the torn sink is discarded.
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let dyn_cfg: &dyn DynDecoderConfig = &dec;
+            let mut sink = CollectSink::default();
+            dyn_cfg
+                .dyn_job()
+                .push_decode(Cow::Borrowed(truncated), &mut sink, &[])
+        }));
+
+        match outcome {
+            Err(_panic) => violations.push(format!(
+                "decode panicked on truncation at {n}/{len} bytes — truncated input must never panic"
+            )),
+            Ok(Ok(_output)) => {
+                if n <= len / 4 {
+                    violations.push(format!(
+                        "decode SUCCEEDED on a truncated header ({n} of {len} bytes) — a truncated \
+                         valid image must not silently decode (pixels are sacred)"
+                    ));
+                }
+                // n > len/4: trailing-marker / already-complete-payload leniency — tolerated.
+            }
+            Ok(Err(erased)) => match erased.error_category() {
+                None => {
+                    // Pattern A: the category is unrecoverable once erased. Report it
+                    // once (the same loss `check_decode_error_envelope` catches) —
+                    // every subsequent Err is None too, so don't spam per-offset.
+                    if !reported_pattern_a {
+                        reported_pattern_a = true;
+                        violations.push(format!(
+                            "ErrorCategory did not survive dyn-dispatch erasure: the decoder's \
+                             `type Error` is not `At<CodecError>` (Pattern A — a native error enum \
+                             erases to a bare `dyn Error`, which cannot be downcast to recover the \
+                             category). Switch the zencodec trait impls to `type Error = \
+                             At<CodecError>`. First erased error (truncation at {n}/{len} bytes) \
+                             was: {erased}"
+                        ));
+                    }
+                }
+                Some(cat) => {
+                    if !is_incomplete_input_category(cat) {
+                        violations.push(format!(
+                            "truncation at {n}/{len} bytes categorized as {cat:?}; a truncated input \
+                             is incomplete client data and must map to an incomplete-input category \
+                             (UnexpectedEof/MalformedImage/UnsupportedImageType/UnsupportedImageFeature), \
+                             never {cat:?} — that misattributes it (e.g. Internal reads as a codec \
+                             bug/5xx; OutOfMemory means the codec allocated from an unvalidated length \
+                             in truncated data)"
+                        ));
+                    }
+                    // incomplete-input category: OK (kept silent on success).
+                }
+            },
+        }
+    }
+
+    if violations.is_empty() {
+        Ok(())
+    } else {
+        Err(fail(CHECK, violations.join("; ")))
+    }
 }
 
 /// Run every conformance check with sensible default inputs, returning the first
@@ -1483,6 +1676,136 @@ mod tests {
     #[test]
     fn minimal_satisfies_the_static_envelope_assertion() {
         assert_uses_codec_error_envelope::<MinimalEncoderConfig, MinimalDecoderConfig>();
+    }
+
+    // ---- EOF / truncation-series conformance ----
+
+    /// The allowed/denied policy of [`is_incomplete_input_category`] over ALL 17
+    /// current [`ErrorCategory`] variants: the four incomplete-input categories
+    /// pass; every other variant — including the misattribution traps `OutOfMemory`,
+    /// `Internal`, `LimitsExceeded`, and `Io` — is denied.
+    #[test]
+    fn incomplete_input_category_policy() {
+        use zencodec::{CodecIoKind, ErrorCategory as E, LimitKind};
+
+        // The four allowed (UnexpectedEof ideal; the malformed/unrecognizable trio
+        // tolerated because a truncated prefix can look that way).
+        for c in [
+            E::UnexpectedEof,
+            E::MalformedImage,
+            E::UnsupportedImageType,
+            E::UnsupportedImageFeature,
+        ] {
+            assert!(
+                is_incomplete_input_category(c),
+                "{c:?} must be an allowed truncation category"
+            );
+        }
+
+        // Every other current variant is denied (13 → 4 + 13 = all 17 variants).
+        for c in [
+            E::UnsupportedPixelFormat,
+            E::UnsupportedOperation,
+            E::CmsRequired,
+            E::PolicyRejected,
+            E::Cancelled,
+            E::TimedOut,
+            E::LimitsExceeded(LimitKind::Pixels),
+            E::OutOfMemory,
+            E::Io(CodecIoKind::opaque()),
+            E::InvalidParameters,
+            E::InvalidBuffer,
+            E::InvalidState,
+            E::Internal,
+        ] {
+            assert!(
+                !is_incomplete_input_category(c),
+                "{c:?} misattributes a client-side truncation and must be denied"
+            );
+        }
+    }
+
+    /// The series generator: small header sizes + fractions all present, every value
+    /// `< len`, strictly increasing (sorted + deduped), and correct for tiny `len`.
+    #[test]
+    fn truncation_series_generator() {
+        let len = 279usize; // a realistic small reference-image length
+        let s = truncation_lengths(len);
+
+        assert!(
+            s.windows(2).all(|w| w[0] < w[1]),
+            "strictly increasing (sorted + deduped): {s:?}"
+        );
+        assert!(s.iter().all(|&n| n < len), "every value < len: {s:?}");
+        for n in [0usize, 1, 2, 3, 4, 8, 16] {
+            assert!(s.contains(&n), "small header size {n} present: {s:?}");
+        }
+        for (num, den) in [(1, 8), (1, 4), (3, 8), (1, 2), (5, 8), (3, 4), (7, 8)] {
+            assert!(
+                s.contains(&(len * num / den)),
+                "fraction {num}/{den} present: {s:?}"
+            );
+        }
+        assert!(s.contains(&(len - 1)), "len-1 present: {s:?}");
+
+        // Tiny lengths: everything clamps to `< len`, deduped, no underflow panic.
+        assert_eq!(truncation_lengths(5), vec![0, 1, 2, 3, 4]);
+        assert_eq!(truncation_lengths(2), vec![0, 1]);
+    }
+
+    /// End-to-end foil: `reference` is Pattern A (`type Error = RefError`). Its
+    /// truncations classify fine on the typed path, but the category is
+    /// unrecoverable once the dyn boundary erases it to `BoxedError`, so every
+    /// truncated offset yields a `None` category and the check FAILs — naming the
+    /// Pattern-A cause exactly once (not once per offset), the same limitation
+    /// [`check_decode_error_envelope`] catches.
+    #[test]
+    fn reference_pattern_a_fails_truncation_series() {
+        let (e, d) = ref_codecs();
+        let img = TestImage::rgba8_gradient(9, 6);
+        let valid = enc_oneshot(&e, &img, Metadata::none(), MetadataPolicy::PreserveExact).unwrap();
+        assert!(valid.len() > 16, "reference image should be non-trivial");
+
+        let err = check_decode_truncation_series(d, &valid)
+            .expect_err("Pattern A must fail the truncation-series check on the erased path");
+        assert_eq!(err.check, "decode_truncation_series");
+        assert!(
+            err.detail.contains("Pattern A"),
+            "the failure should name the Pattern-A cause: {}",
+            err.detail
+        );
+        assert_eq!(
+            err.detail.matches("Pattern A").count(),
+            1,
+            "the Pattern-A limitation is reported once, not per truncated offset: {}",
+            err.detail
+        );
+    }
+
+    /// End-to-end positive: `minimal` is Pattern B (`type Error = At<CodecError>`).
+    /// Every truncation classifies as `MalformedImage` — an allowed incomplete-input
+    /// category that survives dyn erasure — with no panic and no silent decode of a
+    /// truncated header, so the check PASSES.
+    #[test]
+    fn minimal_passes_truncation_series() {
+        let img = TestImage::rgba8_gradient(9, 6);
+        let valid = enc_oneshot(
+            &MinimalEncoderConfig::new(),
+            &img,
+            Metadata::none(),
+            MetadataPolicy::PreserveExact,
+        )
+        .unwrap();
+        check_decode_truncation_series(MinimalDecoderConfig::new(), &valid).unwrap();
+    }
+
+    /// A too-short `valid` is rejected up front — the check needs a real encoded
+    /// image to truncate, not a stray byte.
+    #[test]
+    fn truncation_series_rejects_tiny_valid() {
+        let err = check_decode_truncation_series(MinimalDecoderConfig::new(), &[0x00])
+            .expect_err("a 1-byte `valid` cannot be a real encoded image");
+        assert_eq!(err.check, "decode_truncation_series");
     }
 
     /// The classifier underpinning the honesty check must flag both kinds of lie
