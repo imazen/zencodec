@@ -35,6 +35,11 @@ include = [
     "/LICENSE*",
 ]
 
+[package.metadata.docs.rs]
+# Build docs with `std` so the `CodecIoKind::kind` accessor and the
+# `From<std::io::*>` impls are documented and the gated intra-doc link resolves.
+all-features = true
+
 [lib]
 name = "zencodec"
 

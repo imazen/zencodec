@@ -186,6 +186,12 @@ All notable changes to zencodec are documented here.
   `README.crates.md` (`readme = "README.crates.md"`; `include` ships it instead of `README.md`).
 
 ### Fixed
+- `CodecIoKind`'s doc comment linked to the `std`-gated `kind` accessor
+  (`[`kind`](Self::kind)`) from always-compiled text, so a `no_std` doc build —
+  which is what docs.rs runs, since `std` is not a default feature — hit an
+  unresolved intra-doc link. Gate the linking doc line to `std`, and add
+  `[package.metadata.docs.rs] all-features = true` so docs.rs builds with `std`
+  and documents the `kind()` accessor + `From<std::io::*>` impls.
 - EXIF duplicate-pointer dedup was gated on whether extraction *resolved* a
   usable sub-IFD (`gps_ifd.is_some()`/`exif_ifd.is_some()`) rather than on
   whether `take_pointer` *removed* an entry from IFD0. A GPS/Exif pointer tag

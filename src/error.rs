@@ -113,9 +113,16 @@ impl core::fmt::Display for ErrorCategory {
 /// `std::io::ErrorKind` **only when the `std` feature is enabled**, and is empty
 /// otherwise. The [`ErrorCategory::Io`] variant shape stays stable across builds
 /// — only this payload's internals are feature-gated — so matching `Io(_)` is
-/// portable, and `std` consumers read the [`kind`](Self::kind) when present. When
-/// `core::io::ErrorKind` stabilizes the `cfg` drops and this works under
-/// `no_std` too, with no API change.
+/// portable. When `core::io::ErrorKind` stabilizes the `cfg` drops and this works
+/// under `no_std` too, with no API change.
+///
+// The `kind` accessor only exists under `std`, so gate the doc line that links
+// to it — otherwise a `no_std` doc build (which is what docs.rs runs here, since
+// `std` is not a default feature) hits an unresolved intra-doc link and fails.
+#[cfg_attr(
+    feature = "std",
+    doc = "`std` consumers read the [`kind`](Self::kind) accessor when present."
+)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct CodecIoKind {
     #[cfg(feature = "std")]
