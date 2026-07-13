@@ -46,6 +46,21 @@ All notable changes to zencodec are documented here.
   rather than inspecting raw CICP/ICC fields.
 
 ### Added
+- **`Fidelity::zensim_b` / `LossyTarget::ApproxZensimB(f32)`** — a fourth
+  one-shot lossy target, aiming at a zensim score (≈0–100, higher is better) in
+  a single calibrated pass. Pinned to `zensim::ZensimProfile::B` specifically
+  (the deterministic linear generation-B profile — a closed-form lasso fit,
+  byte-reproducible with no training seed) rather than "whichever zensim
+  profile is latest," so the target stays stable across zensim patch releases
+  the same way `ApproxSsim2` / `ApproxButteraugli` do. zensim was previously
+  noted as deferred ("no reliable metric yet") pending exactly this kind of
+  deterministic, non-MLP profile; `B` (shipped in zensim 0.3.0) is what
+  unblocks it. Additive: new enum variant on the already-`#[non_exhaustive]`
+  `LossyTarget`, new constructor, no signature changes. The default
+  `with_fidelity` fallback treats it like `ApproxSsim2` (passes the raw 0–100
+  score through to `with_generic_quality`) since zencodec has no built-in
+  zensim-to-generic-quality calibration curve — codecs override to honor it
+  natively, same as the other metric targets.
 - **zencodec-testkit: error-envelope conformance + whereat-trace checks** —
   `check_decode_error_envelope` (runtime: drives a decoder through dyn-dispatch
   erasure on rejected input, asserts the `ErrorCategory` *and* codec name survive

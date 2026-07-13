@@ -307,6 +307,7 @@ let cfg = my_encoder_config
     .with_fidelity(Fidelity::Lossless);              // mathematically exact
 //  .with_fidelity(Fidelity::ssim2(90.0))            // aim at SSIMULACRA2 ~= 90
 //  .with_fidelity(Fidelity::butteraugli(1.0))       // aim at butteraugli max-norm ~= 1.0
+//  .with_fidelity(Fidelity::zensim_b(90.0))         // aim at zensim (ZensimProfile::B) ~= 90
 //  .with_fidelity(Fidelity::codec_quality(85.0));   // the codec's own native dial
 ```
 
@@ -314,6 +315,9 @@ let cfg = my_encoder_config
 
 - **`ApproxSsim2(score)`** — a one-shot SSIMULACRA2 target (a real cross-codec metric).
 - **`ApproxButteraugli(distance)`** — a one-shot butteraugli max-norm distance.
+- **`ApproxZensimB(score)`** — a one-shot zensim target, pinned to `ZensimProfile::B` (the
+  deterministic linear profile — stable across zensim patch releases, unlike the
+  deprecated MLP-based `A`).
 - **`CodecSpecificQuality(q)`** — the codec's own native quality scale (meaning differs per codec).
 
 These are **blind, single-pass**: the target maps to a native dial in one encode,

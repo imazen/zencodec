@@ -140,7 +140,7 @@ fn detect_jxl(data: &[u8]) -> bool {
     // Container: 00 00 00 0C 4A 58 4C 20 0D 0A 87 0A
     data.len() >= 12
         && data[..4] == [0x00, 0x00, 0x00, 0x0C]
-        && data[4..8] == [b'J', b'X', b'L', b' ']
+        && data[4..8] == *b"JXL "
         && data[8..12] == [0x0D, 0x0A, 0x87, 0x0A]
 }
 
