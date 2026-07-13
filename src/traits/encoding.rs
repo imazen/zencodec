@@ -142,10 +142,12 @@ pub trait EncoderConfig: Clone + Send + Sync {
             // codec-agnostic → 0–100 conversion, so the default just selects
             // lossy and leaves quality at the codec default (visible through
             // `resolved_target_fidelity`). Codecs override to honor butteraugli
-            // / SSIM2 / their native scale precisely.
-            Fidelity::Lossy(LossyTarget::ApproxSsim2(q) | LossyTarget::CodecSpecificQuality(q)) => {
-                self.with_lossless(false).with_generic_quality(q)
-            }
+            // / SSIM2 / zensim / their native scale precisely.
+            Fidelity::Lossy(
+                LossyTarget::ApproxSsim2(q)
+                | LossyTarget::ApproxZensimB(q)
+                | LossyTarget::CodecSpecificQuality(q),
+            ) => self.with_lossless(false).with_generic_quality(q),
             Fidelity::Lossy(LossyTarget::ApproxButteraugli(_)) => self.with_lossless(false),
             Fidelity::Lossless => self.with_lossless(true),
         }

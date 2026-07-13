@@ -3,8 +3,8 @@
 //! [`Fidelity`] is the encode-fidelity request. Two variants ship today:
 //! - **[`Lossless`](Fidelity::Lossless)** — mathematically exact.
 //! - **[`Lossy`](Fidelity::Lossy)** — aiming at a one-shot [`LossyTarget`] (a
-//!   SSIMULACRA2 score, a butteraugli max-norm distance, or the codec's own
-//!   native quality dial).
+//!   SSIMULACRA2 score, a butteraugli max-norm distance, a zensim score, or the
+//!   codec's own native quality dial).
 //!
 //! A third variant — **`LosslessMode`**: lossless *coding* (predictive, no DCT
 //! ringing) of pixels pre-quantized within a budget — is **designed but
@@ -50,6 +50,13 @@ impl Fidelity {
         Self::Lossy(LossyTarget::ApproxButteraugli(distance))
     }
 
+    /// Lossy, aiming at a zensim score (`zensim::ZensimProfile::B`) via a single
+    /// calibrated pass.
+    #[must_use]
+    pub const fn zensim_b(score: f32) -> Self {
+        Self::Lossy(LossyTarget::ApproxZensimB(score))
+    }
+
     /// Lossy, on the codec's own native quality scale (codec-specific meaning —
     /// see [`LossyTarget::CodecSpecificQuality`]).
     #[must_use]
@@ -88,11 +95,13 @@ impl Fidelity {
 
 /// What a lossy encode aims at.
 ///
-/// Three things we can target **today**, each in a single blind pass (no
+/// Four things we can target **today**, each in a single blind pass (no
 /// re-encode):
 /// - [`ApproxSsim2`](Self::ApproxSsim2) — a SSIMULACRA2 score.
 /// - [`ApproxButteraugli`](Self::ApproxButteraugli) — a butteraugli
 ///   **max-norm** distance (worst-region; lower is better).
+/// - [`ApproxZensimB`](Self::ApproxZensimB) — a zensim score on the
+///   `ZensimProfile::B` scale.
 /// - [`CodecSpecificQuality`](Self::CodecSpecificQuality) — the codec's own
 ///   native quality dial, honest that its meaning differs per codec.
 ///
@@ -107,8 +116,7 @@ impl Fidelity {
 /// value is hit), so loop targeting can be added later without renaming the
 /// one-shot arms. We target the butteraugli **max-norm** here; the **3-norm**
 /// aggregate is reserved as a separate arm (the two norms differ — a bare
-/// `Distance(f32)` is ambiguous and is never an arm). zensim is deferred — no
-/// reliable metric yet.
+/// `Distance(f32)` is ambiguous and is never an arm).
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum LossyTarget {
@@ -123,6 +131,18 @@ pub enum LossyTarget {
     /// without a norm suffix — max-norm is the standardized butteraugli target;
     /// the 3-norm aggregate is reserved as its own arm.
     ApproxButteraugli(f32),
+    /// Aim for a zensim score (≈0–100, higher is better) in a single calibrated
+    /// pass — no re-encode. Pinned to `zensim::ZensimProfile::B` specifically
+    /// (not "whichever profile is latest"): `B` is a **deterministic linear**
+    /// profile — a closed-form lasso fit, byte-reproducible with no training
+    /// seed — unlike the deprecated MLP-based `A`, so a target expressed
+    /// against it is stable across zensim patch releases the way this crate's
+    /// other metric targets are. "Approx" marks it blind one-shot, matching
+    /// `ApproxSsim2` / `ApproxButteraugli`; a closed-loop variant can be added
+    /// later without renaming this. If a future zensim generation supersedes
+    /// `B` as the recommended profile, that becomes a new sibling arm here —
+    /// this one keeps meaning "generation-B" for as long as it exists.
+    ApproxZensimB(f32),
     /// The codec's **native** quality dial, on its own scale. The meaning is
     /// codec-specific — there is no cross-codec standard here (unlike a metric
     /// target). Use when you know the codec and want its raw knob.
@@ -195,6 +215,7 @@ mod tests {
         assert!(Fidelity::Lossless.is_lossless());
         assert!(!Fidelity::ssim2(90.0).is_lossless());
         assert!(!Fidelity::butteraugli(1.0).is_lossless());
+        assert!(!Fidelity::zensim_b(90.0).is_lossless());
         assert!(!Fidelity::codec_quality(90.0).is_lossless());
     }
 
@@ -207,6 +228,10 @@ mod tests {
         assert_eq!(
             Fidelity::butteraugli(1.0),
             Fidelity::Lossy(LossyTarget::ApproxButteraugli(1.0))
+        );
+        assert_eq!(
+            Fidelity::zensim_b(90.0),
+            Fidelity::Lossy(LossyTarget::ApproxZensimB(90.0))
         );
         assert_eq!(
             Fidelity::codec_quality(85.0),
