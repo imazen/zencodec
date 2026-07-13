@@ -202,36 +202,50 @@ A codec surfaces errors one of two ways; both let you route on a coarse
   be recovered once erased — the erased value is a `dyn Error`, not a
   `dyn CategorizedError` — so the envelope is what a codec-agnostic pipeline reaches
   for. `CodecError` can also be used with no detail at all
-  (`CodecError::new(Some("zenpng"), ErrorCategory::MalformedImage)`) by a codec that
+  (`CodecError::new(Some("zenpng"), ErrorCategory::Image(ImageError::Malformed))`) by a codec that
   has no error enum of its own. `At` is re-exported
   (`zencodec::At<zencodec::CodecError>`), so adopting it needs no direct `whereat`
   dependency.
 
 ```rust,ignore
-use zencodec::{CategorizedError, CodecErrorExt, ErrorCategory};
+use zencodec::enough::StopReason;
+use zencodec::{
+    CategorizedError, CodecErrorExt, ErrorCategory, ImageError, InvalidKind, RequestError,
+    ResourceError,
+};
 
 // Typed path shown here via `category()`; on a `Box<dyn Error>` from dyn dispatch
-// use `e.error_category()` and match `Some(..)` / `None` instead.
+// use `e.error_category()` and match `Some(..)` / `None` instead. The origin-first
+// shape lets you route on the outer arm (`Image` / `Request` / `Resource` /
+// `Lifecycle`) and only destructure when a sub-kind changes the answer.
 let http = match config.job().with_stop(token).decoder(Cow::Borrowed(bytes), &[]) {
     Ok(_decoder) => { /* _decoder.decode()? */ 200 }
     Err(e) => match e.category() {
-        ErrorCategory::Cancelled            => 499, // client went away
-        ErrorCategory::TimedOut             => 504,
-        ErrorCategory::LimitsExceeded(_)    => 413,
-        ErrorCategory::UnsupportedImageType
-        | ErrorCategory::UnsupportedImageFeature
-        | ErrorCategory::UnsupportedPixelFormat
-        | ErrorCategory::UnsupportedOperation
-        | ErrorCategory::CmsRequired        => 415, // can't process this input/request
-        ErrorCategory::PolicyRejected       => 422, // valid, but a policy declined it
-        ErrorCategory::MalformedImage
-        | ErrorCategory::UnexpectedEof
-        | ErrorCategory::InvalidParameters
-        | ErrorCategory::InvalidBuffer      => 400, // the bytes / request are bad
-        ErrorCategory::OutOfMemory
+        // Lifecycle — the operation was stopped via its Stop token.
+        ErrorCategory::Lifecycle(StopReason::Cancelled) => 499, // client went away
+        ErrorCategory::Lifecycle(StopReason::TimedOut)  => 504,
+        // A configured resource cap was hit.
+        ErrorCategory::Resource(ResourceError::Limits(_)) => 413,
+        // "Can't process this" — the bytes need a different codec, or the request
+        // asked for an op / pixel format / CMS transform this codec doesn't do.
+        ErrorCategory::Image(ImageError::Unsupported(_))
+        | ErrorCategory::Request(RequestError::Unsupported(_))
+        | ErrorCategory::Request(RequestError::CmsRequired) => 415,
+        // Valid input, but a policy declined it — Decode vs Encode only matters
+        // if you want to word the message differently; both are 422 here.
+        ErrorCategory::Policy(_) => 422,
+        // Bad client-supplied bytes (malformed / truncated), or a bad request.
+        ErrorCategory::Image(_) => 400,
+        ErrorCategory::Request(RequestError::Invalid(
+            InvalidKind::Parameters | InvalidKind::Buffer,
+        )) => 400,
+        // Server-side: API misuse (out-of-sequence call), OOM, I/O, or a bug.
+        // `Internal(Bug)` vs `Internal(Dependency)` both still read as 500 for
+        // HTTP purposes; the split pays off in telemetry, not routing.
+        ErrorCategory::Request(RequestError::Invalid(InvalidKind::State))
+        | ErrorCategory::Resource(ResourceError::OutOfMemory)
         | ErrorCategory::Io(_)
-        | ErrorCategory::InvalidState
-        | ErrorCategory::Internal           => 500, // server-side: resource, IO, bug, misuse
+        | ErrorCategory::Internal(_) => 500,
         _ => 500, // ErrorCategory is #[non_exhaustive]
     },
 };

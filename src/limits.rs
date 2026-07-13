@@ -710,8 +710,9 @@ pub enum LimitExceeded {
 
 /// Which resource cap a [`LimitExceeded`] refers to, without the actual/max
 /// values. Carried by
-/// [`ErrorCategory::LimitsExceeded`](crate::ErrorCategory::LimitsExceeded)
-/// for routing; obtain it from [`LimitExceeded::kind`].
+/// [`ResourceError::Limits`](crate::ResourceError::Limits) (the payload of
+/// [`ErrorCategory::Resource`](crate::ErrorCategory::Resource)) for routing;
+/// obtain it from [`LimitExceeded::kind`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum LimitKind {
@@ -733,6 +734,18 @@ pub enum LimitKind {
     Duration,
     /// [`LimitExceeded::TotalPixels`].
     TotalPixels,
+    /// A structural per-image cap on the number of coded passes / scans was
+    /// exceeded — e.g. a progressive-JPEG scan-count ceiling. An anti-DoS
+    /// bound on decode work, not a pixel/byte size. No [`LimitExceeded`]
+    /// variant carries actual/max for this; codecs route it directly via
+    /// [`ErrorCategory::Resource`](crate::ErrorCategory::Resource).
+    Scans,
+    /// A decompression-ratio ("compression bomb") ceiling was exceeded — the
+    /// declared/expanding output is disproportionate to the input size. A
+    /// security-relevant anti-DoS bound distinct from an absolute
+    /// [`Memory`](LimitKind::Memory) cap. Codecs route it directly via
+    /// [`ErrorCategory::Resource`](crate::ErrorCategory::Resource).
+    DecompressionRatio,
 }
 
 impl LimitExceeded {

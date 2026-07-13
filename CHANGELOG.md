@@ -62,35 +62,68 @@ All notable changes to zencodec are documented here.
 - **Unified error taxonomy: `ErrorCategory` enum + `CategorizedError` trait** —
   a codec-agnostic way to classify any codec error for routing (HTTP status,
   retry, logging) without naming the concrete enum (zencodec#99, superseding the
-  cancellation-only sketch). `ErrorCategory` (`#[non_exhaustive]`, `Copy`):
-  `MalformedImage`, `UnexpectedEof`, `UnsupportedImageType`,
-  `UnsupportedImageFeature`, `UnsupportedPixelFormat`, `UnsupportedOperation`,
-  `CmsRequired`, `PolicyRejected`, `Cancelled`, `TimedOut`,
-  `LimitsExceeded(LimitKind)`, `OutOfMemory`, `Io`, `InvalidParameters`,
-  `InvalidBuffer`, `InvalidState`, `Internal` — the set distilled from an
-  inventory of every zen codec's error enum (the "unsupported" axis splits into
-  type / image-feature / pixel-format-negotiation / API-operation; `CmsRequired`
-  covers e.g. zenwebp's ICC-synthesis-unavailable; `PolicyRejected` covers valid
-  input a configured policy declined, e.g. zenjxl's progressive-rejected;
-  `InvalidBuffer` is a wrong-geometry pixel buffer and `InvalidState` is API
-  misuse / wrong-sequence). `CategorizedError: Any { fn codec_name(&self) ->
-  Option<&'static str>; fn category(&self) -> ErrorCategory }` is **opt-in** (not
-  blanket-impl'd, not added to the `Error` bound), so adopting it is additive and
-  back-compatible. The `Any` supertrait keeps a `dyn CategorizedError` downcastable
-  (both methods take `&self`, so the trait is dyn-compatible); `codec_name()` is
-  required, returning `None` for the non-codec cause types. A blanket impl forwards
-  through `whereat::At<E>` so a located error keeps its category;
-  zencodec's own cause types implement it (`LimitExceeded` →
-  `LimitsExceeded(kind)`, `UnsupportedOperation` → `UnsupportedOperation` /
-  `UnsupportedPixelFormat`, `enough::StopReason` → `Cancelled`/`TimedOut`), making
-  a codec's mapping a one-line delegation per arm.
+  cancellation-only sketch). `ErrorCategory` (`#[non_exhaustive]`, `Copy`) is
+  **origin-first, two-level**: `Image(ImageError)` (the bytes are the problem —
+  `Malformed` / `UnexpectedEof` / `Unsupported(UnsupportedImageKind::{Type,
+  Feature})`), `Request(RequestError)` (the caller's request is the problem —
+  `Invalid(InvalidKind::{Parameters,Buffer,State})` /
+  `Unsupported(UnsupportedOperation)` / `CmsRequired`), `Resource(ResourceError)`
+  (`Limits(LimitKind)` / `OutOfMemory`), `Policy(PolicyKind)` (valid input a
+  configured policy declined — `PolicyKind::{Decode,Encode}` mirrors the crate's
+  existing `DecodePolicy`/`EncodePolicy` split, so the call site already knows
+  which one), `Lifecycle(enough::StopReason)` (stopped via the `Stop` token — the
+  reason *is* the payload, no re-derived enum), `Io(CodecIoKind)`, and
+  `Internal(InternalKind)` (`InternalKind::Bug` — a broken invariant in the
+  codec's own logic, never retryable — vs `InternalKind::Dependency` — an
+  unclassified error surfaced from a sub-component/foreign library; both still
+  mean "500" for routing, the split is for telemetry/triage: it lets a generic
+  consumer that only carries the category forward, without a per-codec downcast,
+  tell "we have a code defect" from "we have a classification gap" from
+  production traffic). The set is distilled from an inventory of every zen codec's
+  error enum, then reshaped so the top level answers "who owns the fault" before
+  any sub-kind: `Image` is untouchable by the caller (a *different* codec might
+  handle the bytes); `Request` is the caller's to fix. This is also what makes
+  the whole `Image(_)` arm exactly the incomplete-input-tolerable set for
+  `zencodec-testkit::check_decode_truncation_series` (zencodec#112) — one
+  `matches!(cat, ErrorCategory::Image(_))` instead of enumerating four flat
+  variants. Sub-enums carry `From` shortcuts into `ErrorCategory` (and the leaf
+  kinds `UnsupportedImageKind` / `InvalidKind` / `LimitKind` shortcut into their
+  parent too), so a codec's `category()` arm reads `ImageError::Malformed.into()`
+  rather than spelling the outer wrapper. `CategorizedError: Any { fn
+  codec_name(&self) -> Option<&'static str>; fn category(&self) -> ErrorCategory
+  }` is **opt-in** (not blanket-impl'd, not added to the `Error` bound), so
+  adopting it is additive and back-compatible. The `Any` supertrait keeps a `dyn
+  CategorizedError` downcastable (both methods take `&self`, so the trait is
+  dyn-compatible); `codec_name()` is required, returning `None` for the
+  non-codec cause types. A blanket impl forwards through `whereat::At<E>` so a
+  located error keeps its category; zencodec's own cause types implement it
+  (`LimitExceeded` → `Resource(Limits(kind))`, `UnsupportedOperation` →
+  `Request(Unsupported(self))`, `enough::StopReason` → `Lifecycle(self)` — a
+  direct passthrough, not a lossy remap), making a codec's mapping a one-line
+  delegation per arm.
   Adds `LimitKind` (the value-free discriminant of `LimitExceeded`, via
-  `LimitExceeded::kind()`). No new dependencies. The testkit `reference` codec
-  adopts the trait; `reference_cancellation_is_classifiable` proves end-to-end
-  classification through a real cancelled operation. The category set is backed
-  by a per-codec error inventory + right-sizing analysis in
+  `LimitExceeded::kind()`) plus two structural variants with no corresponding
+  `LimitExceeded` payload: `Scans` (a progressive-decode scan-count ceiling) and
+  `DecompressionRatio` (a compression-bomb ceiling, security-relevant — distinct
+  from an absolute `Memory` cap). No new dependencies. The testkit `reference`
+  codec adopts the trait; `reference_cancellation_is_classifiable` proves
+  end-to-end classification through a real cancelled operation. The category set
+  is backed by a per-codec error inventory + right-sizing analysis in
   `docs/error-taxonomy-inventory.md` (with `docs/error-types-ecosystem.md`
-  surveying the surrounding crates).
+  surveying the surrounding crates) — both carry a superseded-shape note pointing
+  at this reshape and `docs/spec.md` for the current form.
+- **zencodec-testkit: `check_decode_truncation_series` EOF/truncation conformance
+  check** (zencodec#112) — feeds a known-good encoded image, builds a
+  deterministic series of truncation lengths (small absolute header sizes unioned
+  with fractions of the full length), and for each prefix runs a **full decode
+  through the dyn-erased boundary** (`DynDecodeJob::push_decode` into a throwaway
+  sink — so pixel-body truncation is exercised, not just what a `probe` reads).
+  Asserts every resulting `ErrorCategory` is in the allowed incomplete-input set
+  via the new `is_incomplete_input_category` (see the taxonomy reshape above —
+  the whole `Image(_)` arm). Catches the real bug class where a codec reads a
+  length field out of truncated data and OOMs, or funnels a truncation into
+  `Internal` (5xx for what should read as a 4xx client error) — exactly the
+  misattribution the origin-first taxonomy exists to make checkable in one line.
 - **`CodecError` envelope + `CodecErrorExt::{codec_error, error_category}`** — the
   carrier that makes a category (and the originating codec) survive **type
   erasure**, the gap `CategorizedError` alone can't close (after erasure you hold a

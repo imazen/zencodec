@@ -108,8 +108,9 @@ pub use zenpixels::ColorAuthority;
 pub use capabilities::UnsupportedOperation;
 pub use detect::SourceEncodingDetails;
 pub use error::{
-    CategorizedError, CodecError, CodecErrorExt, CodecIoKind, ErrorCategory, StreamOffset,
-    find_cause,
+    CategorizedError, CodecError, CodecErrorExt, CodecIoKind, ErrorCategory, ImageError,
+    InternalKind, InvalidKind, PolicyKind, RequestError, ResourceError, StreamOffset,
+    UnsupportedImageKind, find_cause,
 };
 pub use traits::Unsupported;
 
