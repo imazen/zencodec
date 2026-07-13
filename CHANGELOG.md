@@ -71,7 +71,7 @@ All notable changes to zencodec are documented here.
   (`Limits(LimitKind)` / `OutOfMemory`), `Policy(PolicyKind)` (valid input a
   configured policy declined — `PolicyKind::{Decode,Encode}` mirrors the crate's
   existing `DecodePolicy`/`EncodePolicy` split, so the call site already knows
-  which one), `Lifecycle(enough::StopReason)` (stopped via the `Stop` token — the
+  which one), `Stopped(enough::StopReason)` (stopped via the `Stop` token — the
   reason *is* the payload, no re-derived enum), `Io(CodecIoKind)`, and
   `Internal(InternalKind)` (`InternalKind::Bug` — a broken invariant in the
   codec's own logic, never retryable — vs `InternalKind::Dependency` — an
@@ -98,7 +98,7 @@ All notable changes to zencodec are documented here.
   non-codec cause types. A blanket impl forwards through `whereat::At<E>` so a
   located error keeps its category; zencodec's own cause types implement it
   (`LimitExceeded` → `Resource(Limits(kind))`, `UnsupportedOperation` →
-  `Request(Unsupported(self))`, `enough::StopReason` → `Lifecycle(self)` — a
+  `Request(Unsupported(self))`, `enough::StopReason` → `Stopped(self)` — a
   direct passthrough, not a lossy remap), making a codec's mapping a one-line
   delegation per arm.
   Adds `LimitKind` (the value-free discriminant of `LimitExceeded`, via

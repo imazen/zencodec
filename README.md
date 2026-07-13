@@ -217,13 +217,13 @@ use zencodec::{
 // Typed path shown here via `category()`; on a `Box<dyn Error>` from dyn dispatch
 // use `e.error_category()` and match `Some(..)` / `None` instead. The origin-first
 // shape lets you route on the outer arm (`Image` / `Request` / `Resource` /
-// `Lifecycle`) and only destructure when a sub-kind changes the answer.
+// `Stopped`) and only destructure when a sub-kind changes the answer.
 let http = match config.job().with_stop(token).decoder(Cow::Borrowed(bytes), &[]) {
     Ok(_decoder) => { /* _decoder.decode()? */ 200 }
     Err(e) => match e.category() {
-        // Lifecycle — the operation was stopped via its Stop token.
-        ErrorCategory::Lifecycle(StopReason::Cancelled) => 499, // client went away
-        ErrorCategory::Lifecycle(StopReason::TimedOut)  => 504,
+        // Stopped via its Stop token.
+        ErrorCategory::Stopped(StopReason::Cancelled) => 499, // client went away
+        ErrorCategory::Stopped(StopReason::TimedOut)  => 504,
         // A configured resource cap was hit.
         ErrorCategory::Resource(ResourceError::Limits(_)) => 413,
         // "Can't process this" — the bytes need a different codec, or the request

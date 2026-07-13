@@ -1,7 +1,7 @@
 # Zen ecosystem error types (non-codec) — survey
 
 > **Note (2026-07-13).** `ErrorCategory` has since been reshaped into an
-> origin-first two-level enum (`Image / Request / Resource / Policy / Lifecycle /
+> origin-first two-level enum (`Image / Request / Resource / Policy / Stopped /
 > Io / Internal` + sub-enums); flat variant names used below (`MalformedImage`,
 > `PolicyRejected`, …) map per the key in
 > [`error-taxonomy-inventory.md`](error-taxonomy-inventory.md). See

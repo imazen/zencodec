@@ -3,7 +3,7 @@
 > **Superseded shape (2026-07-13).** `ErrorCategory` was reshaped from the flat
 > 17-variant set below into an **origin-first two-level** enum —
 > `Image(ImageError) / Request(RequestError) / Resource(ResourceError) / Policy /
-> Lifecycle(StopReason) / Io(CodecIoKind) / Internal`, with sub-enums
+> Stopped(StopReason) / Io(CodecIoKind) / Internal`, with sub-enums
 > (`ImageError`, `RequestError`, `InvalidKind`, `UnsupportedImageKind`,
 > `ResourceError`) — before the 0.1.26 freeze. See [`spec.md`](spec.md#errorcategory-enum--categorizederror-trait)
 > for the current canonical shape. The old→new key: `MalformedImage`→`Image(Malformed)`,
@@ -11,7 +11,7 @@
 > `Image(Unsupported(Type/Feature))`, `UnsupportedPixelFormat/Operation`→
 > `Request(Unsupported(op))`, `CmsRequired`→`Request(CmsRequired)`,
 > `InvalidParameters/Buffer/State`→`Request(Invalid(Parameters/Buffer/State))`,
-> `PolicyRejected`→`Policy`, `Cancelled/TimedOut`→`Lifecycle(StopReason)`,
+> `PolicyRejected`→`Policy`, `Cancelled/TimedOut`→`Stopped(StopReason)`,
 > `LimitsExceeded(k)`→`Resource(Limits(k))`, `OutOfMemory`→`Resource(OutOfMemory)`,
 > `Io`/`Internal` unchanged. The per-codec mapping table below is retained as the
 > **historical basis** for the category set (the audit that justified each
