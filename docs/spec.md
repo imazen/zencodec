@@ -950,7 +950,7 @@ enum ErrorCategory {
     Request(RequestError),    // the caller's request is the problem
     Resource(ResourceError),  // a cap was hit, or allocation failed
     Policy(PolicyKind),        // valid input a configured policy declined
-    Lifecycle(StopReason),    // stopped via the Stop token (Cancelled / TimedOut)
+    Stopped(StopReason),    // stopped via the Stop token (Cancelled / TimedOut)
     Io(CodecIoKind),          // an I/O or output-sink failure
     Internal(InternalKind),   // a bug / broken invariant / unclassified dependency error
 }
@@ -1021,7 +1021,7 @@ and back-compatible. A blanket `impl<E: CategorizedError> CategorizedError for
 whereat::At<E>` forwards to the inner error, so a located error keeps its
 category. zencodec's own cause types implement it (`LimitExceeded` →
 `Resource(Limits(kind))`, `UnsupportedOperation` → `Request(Unsupported(self))`,
-`enough::StopReason` → `Lifecycle(self)` — the reason IS the payload, no lossy
+`enough::StopReason` → `Stopped(self)` — the reason IS the payload, no lossy
 collapse), so a codec's mapping is usually a one-line delegation per arm.
 `LimitKind` is the value-free discriminant of `LimitExceeded`
 (`LimitExceeded::kind()`).

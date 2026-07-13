@@ -44,7 +44,7 @@ pub enum ErrorCategory {
     /// The operation was stopped via its [`Stop`](enough::Stop) token — cancelled
     /// by the caller or past its deadline. Carries the
     /// [`StopReason`](enough::StopReason) (`Cancelled` / `TimedOut`).
-    Lifecycle(StopReason),
+    Stopped(StopReason),
     /// An underlying I/O or output-sink operation failed. Carries a
     /// [`CodecIoKind`] — a `std::io::ErrorKind` when the `std` feature is
     /// enabled, empty under `no_std` (the variant shape is stable across builds).
@@ -194,7 +194,7 @@ impl From<ResourceError> for ErrorCategory {
 impl From<StopReason> for ErrorCategory {
     #[inline]
     fn from(r: StopReason) -> Self {
-        Self::Lifecycle(r)
+        Self::Stopped(r)
     }
 }
 impl From<UnsupportedImageKind> for ErrorCategory {
@@ -237,7 +237,7 @@ impl core::fmt::Display for ErrorCategory {
             Self::Request(e) => write!(f, "{e}"),
             Self::Resource(e) => write!(f, "{e}"),
             Self::Policy(k) => write!(f, "{k}"),
-            Self::Lifecycle(e) => write!(f, "{e}"),
+            Self::Stopped(e) => write!(f, "{e}"),
             Self::Io(_) => f.write_str("I/O error"),
             Self::Internal(k) => write!(f, "{k}"),
         }
@@ -444,7 +444,7 @@ impl CategorizedError for StopReason {
     fn category(&self) -> ErrorCategory {
         // The stop reason IS the payload — no lossy collapse; a future
         // `#[non_exhaustive]` reason flows through unchanged.
-        ErrorCategory::Lifecycle(*self)
+        ErrorCategory::Stopped(*self)
     }
 }
 
@@ -1103,11 +1103,11 @@ mod tests {
         );
         assert_eq!(
             TestCodecError::Cancelled(StopReason::Cancelled).category(),
-            ErrorCategory::Lifecycle(StopReason::Cancelled)
+            ErrorCategory::Stopped(StopReason::Cancelled)
         );
         assert_eq!(
             TestCodecError::Cancelled(StopReason::TimedOut).category(),
-            ErrorCategory::Lifecycle(StopReason::TimedOut)
+            ErrorCategory::Stopped(StopReason::TimedOut)
         );
         assert_eq!(
             TestCodecError::Limit(LimitExceeded::Pixels { actual: 9, max: 4 }).category(),
@@ -1119,11 +1119,11 @@ mod tests {
     fn zencodec_cause_types_categorize() {
         assert_eq!(
             StopReason::Cancelled.category(),
-            ErrorCategory::Lifecycle(StopReason::Cancelled)
+            ErrorCategory::Stopped(StopReason::Cancelled)
         );
         assert_eq!(
             StopReason::TimedOut.category(),
-            ErrorCategory::Lifecycle(StopReason::TimedOut)
+            ErrorCategory::Stopped(StopReason::TimedOut)
         );
         // The operation axis splits: a plain operation vs the pixel-format arm.
         assert_eq!(
@@ -1149,7 +1149,7 @@ mod tests {
         let located = At::wrap(TestCodecError::Cancelled(StopReason::TimedOut));
         assert_eq!(
             located.category(),
-            ErrorCategory::Lifecycle(StopReason::TimedOut)
+            ErrorCategory::Stopped(StopReason::TimedOut)
         );
         assert!(matches!(
             located.error(),
@@ -1205,7 +1205,7 @@ mod tests {
         let boxed: Box<dyn core::error::Error + Send + Sync> = Box::new(located);
         assert_eq!(
             boxed.error_category(),
-            Some(ErrorCategory::Lifecycle(StopReason::Cancelled))
+            Some(ErrorCategory::Stopped(StopReason::Cancelled))
         );
         assert_eq!(
             boxed.codec_error().and_then(CodecError::codec),

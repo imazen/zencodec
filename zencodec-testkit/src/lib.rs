@@ -1282,7 +1282,7 @@ where
 /// [`Resource`](ErrorCategory::Resource) (OOM from an unvalidated length in truncated
 /// data, or a limit), [`Io`](ErrorCategory::Io) (there is no I/O on an in-memory slice),
 /// the caller-fault [`Request`](ErrorCategory::Request) set, the operation
-/// [`Lifecycle`](ErrorCategory::Lifecycle) set, and [`Policy`](ErrorCategory::Policy).
+/// [`Stopped`](ErrorCategory::Stopped) set, and [`Policy`](ErrorCategory::Policy).
 pub fn is_incomplete_input_category(cat: ErrorCategory) -> bool {
     // Default-DENY: `ErrorCategory` is `#[non_exhaustive]`, so any *future* variant
     // falls through to `false` and is conservatively flagged for review rather than
@@ -1540,7 +1540,7 @@ mod tests {
         // Classify it the way a generic consumer would, with no knowledge of RefError:
         assert_eq!(
             err.category(),
-            ErrorCategory::Lifecycle(zencodec::enough::StopReason::Cancelled)
+            ErrorCategory::Stopped(zencodec::enough::StopReason::Cancelled)
         );
         // ...and it must NOT be mistaken for a limit or an unsupported operation.
         assert!(err.limit_exceeded().is_none());
@@ -1718,8 +1718,8 @@ mod tests {
             E::Request(RequestError::Invalid(InvalidKind::State)),
             E::Policy(PolicyKind::Decode),
             E::Policy(PolicyKind::Encode),
-            E::Lifecycle(StopReason::Cancelled),
-            E::Lifecycle(StopReason::TimedOut),
+            E::Stopped(StopReason::Cancelled),
+            E::Stopped(StopReason::TimedOut),
             E::Resource(ResourceError::Limits(LimitKind::Pixels)),
             E::Resource(ResourceError::OutOfMemory),
             E::Io(CodecIoKind::opaque()),
