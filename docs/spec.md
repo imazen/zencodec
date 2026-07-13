@@ -946,12 +946,23 @@ logging) without naming the concrete error enum.
 ```rust
 #[non_exhaustive]
 enum ErrorCategory {
-    MalformedImage, UnexpectedEof,
-    UnsupportedImageType, UnsupportedImageFeature, UnsupportedPixelFormat,
-    UnsupportedOperation, CmsRequired, PolicyRejected,
-    Cancelled, TimedOut, LimitsExceeded(LimitKind), OutOfMemory,
-    Io(CodecIoKind), InvalidParameters, InvalidBuffer, InvalidState, Internal,
+    Image(ImageError),        // the bytes are the problem
+    Request(RequestError),    // the caller's request is the problem
+    Resource(ResourceError),  // a cap was hit, or allocation failed
+    Policy(PolicyKind),        // valid input a configured policy declined
+    Lifecycle(StopReason),    // stopped via the Stop token (Cancelled / TimedOut)
+    Io(CodecIoKind),          // an I/O or output-sink failure
+    Internal(InternalKind),   // a bug / broken invariant / unclassified dependency error
 }
+
+#[non_exhaustive] enum ImageError { Malformed, UnexpectedEof, Unsupported(UnsupportedImageKind) }
+#[non_exhaustive] enum UnsupportedImageKind { Type, Feature }
+#[non_exhaustive] enum RequestError { Invalid(InvalidKind), Unsupported(UnsupportedOperation), CmsRequired }
+#[non_exhaustive] enum InvalidKind { Parameters, Buffer, State }
+#[non_exhaustive] enum ResourceError { Limits(LimitKind), OutOfMemory }
+#[non_exhaustive] enum PolicyKind { Decode, Encode }      // mirrors DecodePolicy / EncodePolicy
+#[non_exhaustive] enum InternalKind { Bug, Dependency }   // Bug = our defect; Dependency = unclassified foreign error
+// StopReason is enough::StopReason { Cancelled, TimedOut } — reused, not re-defined.
 
 trait CategorizedError: core::any::Any {
     fn codec_name(&self) -> Option<&'static str>;  // required; cause types return None
@@ -959,16 +970,36 @@ trait CategorizedError: core::any::Any {
 }
 ```
 
-The "unsupported" axis is split four ways: `UnsupportedImageType` (the format
-isn't handled at all), `UnsupportedImageFeature` (a bitstream feature within a
-handled format), `UnsupportedPixelFormat` (negotiation found no common
-`PixelDescriptor`), and `UnsupportedOperation` (the requested API operation).
-`CmsRequired` flags a colour-management transform the codec won't perform itself.
-`PolicyRejected` is valid input the codec *could* handle but a configured policy
-declined (e.g. progressive content rejected by a decode policy). `InvalidBuffer`
-is a wrong-geometry pixel buffer (size/stride/alignment/descriptor) and
-`InvalidState` is API misuse (called out of sequence) — both distinct from
-`InvalidParameters` (config/knobs). `Io` carries a `CodecIoKind` — a
+**Origin-first shape.** The top level splits by *who owns the fault*, so a generic
+consumer can route on the outer arm and only destructure when a sub-kind changes
+the answer. `Image(_)` is "the bytes are the problem" (a *different* codec might
+handle them; the caller can't fix it by changing parameters) — this whole arm is
+the client-supplied-data / incomplete-input set a truncation check tolerates.
+`Request(_)` is "the *request* is the problem" (the caller can change config,
+buffer, call sequence, or the operation/format asked for).
+
+The "unsupported" axis is split by origin: `Image(Unsupported(Type))` (the format
+isn't handled at all), `Image(Unsupported(Feature))` (a bitstream feature within a
+handled format), and — on the request side — `Request(Unsupported(op))` (an API
+operation this codec doesn't do, including its `PixelFormat` arm when negotiation
+found no common `PixelDescriptor`). `Request(CmsRequired)` flags a
+colour-management transform the codec won't perform itself.
+`Policy(kind)` is valid input the codec *could* handle but a configured policy
+declined — `PolicyKind` mirrors the crate's existing `DecodePolicy` / `EncodePolicy`
+split (e.g. progressive content rejected by a decode policy, or alpha removal
+forbidden by an encode policy), so the call site already knows which one.
+`Internal(kind)` splits similarly for telemetry/triage, not routing: `Bug` is a
+broken invariant in the codec's own logic (never retryable, always alert-worthy);
+`Dependency` is an error surfaced from a sub-component/foreign library the codec
+hasn't classified into `Image`/`Request`/`Resource` — an honest "unclassified",
+not a permanent home. Both `Internal` variants still mean "500" for routing; the
+split only pays off when telemetry carries the category forward without a
+per-codec downcast.
+`Request(Invalid(Buffer))` is a wrong-geometry pixel buffer
+(size/stride/alignment/descriptor) and `Request(Invalid(State))` is API misuse
+(called out of sequence) — both distinct from `Request(Invalid(Parameters))`
+(config/knobs). `Resource(Limits(kind))` is a configured cap; `Resource(OutOfMemory)`
+is genuine allocation exhaustion. `Io` carries a `CodecIoKind` — a
 `std::io::ErrorKind` when the `std` feature is enabled, empty under `no_std` (the
 variant shape is stable either way, so matching `Io(_)` is portable), anticipating
 a future `core::io::ErrorKind`.
@@ -977,16 +1008,22 @@ The set is distilled from a per-codec inventory; see
 variant→category mapping and right-sizing rationale, and
 [`error-types-ecosystem.md`](error-types-ecosystem.md) for the wider ecosystem.
 
+Sub-enums carry `From` shortcuts into `ErrorCategory` (`ImageError`, `RequestError`,
+`ResourceError`, `StopReason`, and the leaf kinds `UnsupportedImageKind` /
+`InvalidKind` / `LimitKind`), so a codec's `category()` arm reads
+`ImageError::Malformed.into()` or `InvalidKind::Buffer.into()` rather than spelling
+the outer wrapper each time.
+
 `CategorizedError` is **opt-in** (not blanket-implemented): a codec implements it
 on its error type, mapping each variant to one category. It is **not** required
 by the `EncoderConfig`/`DecoderConfig::Error` bound, so adopting it is additive
 and back-compatible. A blanket `impl<E: CategorizedError> CategorizedError for
 whereat::At<E>` forwards to the inner error, so a located error keeps its
 category. zencodec's own cause types implement it (`LimitExceeded` →
-`LimitsExceeded(kind)`, `UnsupportedOperation` → `UnsupportedOperation` /
-`UnsupportedPixelFormat` for its `PixelFormat` arm, `enough::StopReason` →
-`Cancelled`/`TimedOut`), so a codec's mapping is usually a one-line delegation
-per arm. `LimitKind` is the value-free discriminant of `LimitExceeded`
+`Resource(Limits(kind))`, `UnsupportedOperation` → `Request(Unsupported(self))`,
+`enough::StopReason` → `Lifecycle(self)` — the reason IS the payload, no lossy
+collapse), so a codec's mapping is usually a one-line delegation per arm.
+`LimitKind` is the value-free discriminant of `LimitExceeded`
 (`LimitExceeded::kind()`).
 
 The `codec_name()` method is where a codec declares its name —
@@ -1088,7 +1125,7 @@ downcast — no codec-specific type named:
 
 ```rust
 // codec, at the failure site (offset = bytes consumed):
-Err(at!(CodecError::new(Some("zenjpeg"), ErrorCategory::MalformedImage))
+Err(at!(CodecError::new(Some("zenjpeg"), ErrorCategory::Image(ImageError::Malformed)))
     .at_data(|| StreamOffset(reader.position())))
 
 // consumer, even after erasure to Box<dyn Error>:

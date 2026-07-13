@@ -1,5 +1,23 @@
 # Codec error inventory → `ErrorCategory` mapping
 
+> **Superseded shape (2026-07-13).** `ErrorCategory` was reshaped from the flat
+> 17-variant set below into an **origin-first two-level** enum —
+> `Image(ImageError) / Request(RequestError) / Resource(ResourceError) / Policy /
+> Lifecycle(StopReason) / Io(CodecIoKind) / Internal`, with sub-enums
+> (`ImageError`, `RequestError`, `InvalidKind`, `UnsupportedImageKind`,
+> `ResourceError`) — before the 0.1.26 freeze. See [`spec.md`](spec.md#errorcategory-enum--categorizederror-trait)
+> for the current canonical shape. The old→new key: `MalformedImage`→`Image(Malformed)`,
+> `UnexpectedEof`→`Image(UnexpectedEof)`, `UnsupportedImageType/Feature`→
+> `Image(Unsupported(Type/Feature))`, `UnsupportedPixelFormat/Operation`→
+> `Request(Unsupported(op))`, `CmsRequired`→`Request(CmsRequired)`,
+> `InvalidParameters/Buffer/State`→`Request(Invalid(Parameters/Buffer/State))`,
+> `PolicyRejected`→`Policy`, `Cancelled/TimedOut`→`Lifecycle(StopReason)`,
+> `LimitsExceeded(k)`→`Resource(Limits(k))`, `OutOfMemory`→`Resource(OutOfMemory)`,
+> `Io`/`Internal` unchanged. The per-codec mapping table below is retained as the
+> **historical basis** for the category set (the audit that justified each
+> category); the per-codec `category()` maps themselves are being rewritten to
+> the two-level form in the codec crates (Phases 2–3 of the reshape).
+
 Point-in-time reference (snapshot **2026-06-24**) backing the
 [`ErrorCategory`](../src/error.rs) / `CategorizedError` design (issue #99). It
 records the **actual error enum of every zen image codec**, maps every variant

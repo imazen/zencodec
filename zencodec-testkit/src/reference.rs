@@ -104,7 +104,7 @@ impl CategorizedError for RefError {
     fn category(&self) -> ErrorCategory {
         match self {
             Self::Unsupported(e) => e.category(),
-            Self::Invalid(_) => ErrorCategory::MalformedImage,
+            Self::Invalid(_) => ErrorCategory::Image(zencodec::ImageError::Malformed),
             Self::Cancelled(r) => r.category(),
             Self::Limit(e) => e.category(),
             Self::Sink(_) => ErrorCategory::Io(CodecIoKind::opaque()),

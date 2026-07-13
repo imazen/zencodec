@@ -1269,40 +1269,27 @@ where
 
 /// Whether `cat` is an acceptable category for a truncated / incomplete input.
 ///
-/// TRUE for the incomplete-input set — [`UnexpectedEof`](ErrorCategory::UnexpectedEof)
-/// (the ideal) plus [`MalformedImage`](ErrorCategory::MalformedImage),
-/// [`UnsupportedImageType`](ErrorCategory::UnsupportedImageType), and
-/// [`UnsupportedImageFeature`](ErrorCategory::UnsupportedImageFeature), since a
-/// truncated prefix can legitimately look malformed or unrecognizable (a codec that
-/// can't yet tell "cut short" from "corrupt" this early is still safe — all four
-/// read as *client-supplied incomplete data*, an HTTP 4xx).
+/// TRUE for the whole image-bytes-origin cluster — [`ErrorCategory::Image`] with any
+/// [`ImageError`](zencodec::ImageError): [`UnexpectedEof`](zencodec::ImageError::UnexpectedEof)
+/// (the ideal), [`Malformed`](zencodec::ImageError::Malformed), or
+/// [`Unsupported`](zencodec::ImageError::Unsupported). A truncated prefix legitimately
+/// reads as *client-supplied incomplete data* (an HTTP 4xx): this early it may look
+/// cut-short, corrupt, or unrecognizable, and a codec that can't yet tell those apart
+/// is still safe as long as it stays inside the `Image` arm.
 ///
-/// FALSE for every category that MISATTRIBUTES a client-side truncation:
-/// [`Internal`](ErrorCategory::Internal) (reads as a codec bug / 5xx),
-/// [`OutOfMemory`](ErrorCategory::OutOfMemory) (the codec allocated from an
-/// unvalidated length in truncated data),
-/// [`LimitsExceeded`](ErrorCategory::LimitsExceeded), [`Io`](ErrorCategory::Io)
-/// (there is no I/O on an in-memory slice), the caller-fault set
-/// ([`InvalidParameters`](ErrorCategory::InvalidParameters) /
-/// [`InvalidBuffer`](ErrorCategory::InvalidBuffer) /
-/// [`InvalidState`](ErrorCategory::InvalidState)),
-/// [`Cancelled`](ErrorCategory::Cancelled) / [`TimedOut`](ErrorCategory::TimedOut),
-/// and the not-applicable
-/// [`UnsupportedPixelFormat`](ErrorCategory::UnsupportedPixelFormat) /
-/// [`UnsupportedOperation`](ErrorCategory::UnsupportedOperation) /
-/// [`CmsRequired`](ErrorCategory::CmsRequired) /
-/// [`PolicyRejected`](ErrorCategory::PolicyRejected).
+/// FALSE for every other origin, each of which MISATTRIBUTES a client-side truncation:
+/// [`Internal`](ErrorCategory::Internal) (a codec bug / 5xx),
+/// [`Resource`](ErrorCategory::Resource) (OOM from an unvalidated length in truncated
+/// data, or a limit), [`Io`](ErrorCategory::Io) (there is no I/O on an in-memory slice),
+/// the caller-fault [`Request`](ErrorCategory::Request) set, the operation
+/// [`Lifecycle`](ErrorCategory::Lifecycle) set, and [`Policy`](ErrorCategory::Policy).
 pub fn is_incomplete_input_category(cat: ErrorCategory) -> bool {
     // Default-DENY: `ErrorCategory` is `#[non_exhaustive]`, so any *future* variant
     // falls through to `false` and is conservatively flagged for review rather than
-    // silently accepted as a valid truncation category.
-    matches!(
-        cat,
-        ErrorCategory::UnexpectedEof
-            | ErrorCategory::MalformedImage
-            | ErrorCategory::UnsupportedImageType
-            | ErrorCategory::UnsupportedImageFeature
-    )
+    // silently accepted as a valid truncation category. The image-bytes-origin arm
+    // (`Image(_)`) IS exactly the incomplete-input-tolerable set — a truncated prefix
+    // is always a client-supplied-data fault, never a codec bug or caller-request fault.
+    matches!(cat, ErrorCategory::Image(_))
 }
 
 /// Deterministic series of truncation lengths spanning a `len`-byte bitstream: the
@@ -1329,10 +1316,10 @@ fn truncation_lengths(len: usize) -> Vec<usize> {
 /// This enforces the one part of the [`ErrorCategory`] taxonomy that IS broadly
 /// distinguishable: whatever a codec's exact error, cutting a known-good image
 /// short must land in the *incomplete-input* set
-/// ([`is_incomplete_input_category`] — [`UnexpectedEof`](ErrorCategory::UnexpectedEof)
-/// is ideal, but [`MalformedImage`](ErrorCategory::MalformedImage) /
-/// `UnsupportedImageType` / `UnsupportedImageFeature` are tolerated because a
-/// truncated prefix can genuinely look malformed). It catches the real bug class
+/// ([`is_incomplete_input_category`] — [`UnexpectedEof`](zencodec::ImageError::UnexpectedEof)
+/// is ideal, but the rest of the image-bytes-origin [`Image`](ErrorCategory::Image) arm
+/// ([`Malformed`](zencodec::ImageError::Malformed) / [`Unsupported`](zencodec::ImageError::Unsupported))
+/// is tolerated because a truncated prefix can genuinely look malformed). It catches the real bug class
 /// where a codec reads a length field out of truncated data and OOMs, or funnels a
 /// truncation into [`Internal`](ErrorCategory::Internal) — a 5xx for a 4xx-class
 /// client error.
@@ -1551,7 +1538,10 @@ mod tests {
             .expect_err("a fired stop token must cancel the push");
 
         // Classify it the way a generic consumer would, with no knowledge of RefError:
-        assert_eq!(err.category(), ErrorCategory::Cancelled);
+        assert_eq!(
+            err.category(),
+            ErrorCategory::Lifecycle(zencodec::enough::StopReason::Cancelled)
+        );
         // ...and it must NOT be mistaken for a limit or an unsupported operation.
         assert!(err.limit_exceeded().is_none());
         assert!(err.unsupported_operation().is_none());
@@ -1577,7 +1567,10 @@ mod tests {
             .expect_err("malformed header must fail");
         // A consumer holding only `Box<dyn Error>` recovers the category — and
         // the originating codec name, so it can tell codecs apart generically.
-        assert_eq!(erased.error_category(), Some(ErrorCategory::MalformedImage));
+        assert_eq!(
+            erased.error_category(),
+            Some(ErrorCategory::Image(zencodec::ImageError::Malformed))
+        );
         assert_eq!(
             erased.codec_error().and_then(CodecError::codec),
             Some(crate::reference::MINIMAL_CODEC_NAME)
@@ -1610,13 +1603,19 @@ mod tests {
             .decoder(Cow::Borrowed(b"not a ZCR1 header"), &[])
             .expect_err("malformed header must fail");
         // Total category + codec name via the concrete envelope:
-        assert_eq!(err.error().category(), ErrorCategory::MalformedImage);
+        assert_eq!(
+            err.error().category(),
+            ErrorCategory::Image(zencodec::ImageError::Malformed)
+        );
         assert_eq!(
             err.error().codec(),
             Some(crate::reference::MINIMAL_CODEC_NAME)
         );
         // Same category via the generic Option recovery:
-        assert_eq!(err.error_category(), Some(ErrorCategory::MalformedImage));
+        assert_eq!(
+            err.error_category(),
+            Some(ErrorCategory::Image(zencodec::ImageError::Malformed))
+        );
         // The trace was started by the bridge's `.start_at()`.
         let dbg = format!("{err:?}");
         assert!(dbg.contains("at "), "expected a trace frame: {dbg}");
@@ -1680,21 +1679,26 @@ mod tests {
 
     // ---- EOF / truncation-series conformance ----
 
-    /// The allowed/denied policy of [`is_incomplete_input_category`] over ALL 17
-    /// current [`ErrorCategory`] variants: the four incomplete-input categories
-    /// pass; every other variant — including the misattribution traps `OutOfMemory`,
-    /// `Internal`, `LimitsExceeded`, and `Io` — is denied.
+    /// The allowed/denied policy of [`is_incomplete_input_category`] over the
+    /// origin-first [`ErrorCategory`] taxonomy: the entire image-bytes-origin
+    /// [`Image`](ErrorCategory::Image) arm passes; every other origin — including the
+    /// misattribution traps [`Resource`](ErrorCategory::Resource) (OOM / limits),
+    /// [`Internal`](ErrorCategory::Internal), and [`Io`](ErrorCategory::Io) — is denied.
     #[test]
     fn incomplete_input_category_policy() {
-        use zencodec::{CodecIoKind, ErrorCategory as E, LimitKind};
+        use zencodec::enough::StopReason;
+        use zencodec::{
+            CodecIoKind, ErrorCategory as E, ImageError, InternalKind, InvalidKind, LimitKind,
+            PolicyKind, RequestError, ResourceError, UnsupportedImageKind, UnsupportedOperation,
+        };
 
-        // The four allowed (UnexpectedEof ideal; the malformed/unrecognizable trio
-        // tolerated because a truncated prefix can look that way).
+        // The whole `Image(_)` arm is allowed (UnexpectedEof ideal; Malformed and both
+        // Unsupported kinds tolerated because a truncated prefix can look that way).
         for c in [
-            E::UnexpectedEof,
-            E::MalformedImage,
-            E::UnsupportedImageType,
-            E::UnsupportedImageFeature,
+            E::Image(ImageError::UnexpectedEof),
+            E::Image(ImageError::Malformed),
+            E::Image(ImageError::Unsupported(UnsupportedImageKind::Type)),
+            E::Image(ImageError::Unsupported(UnsupportedImageKind::Feature)),
         ] {
             assert!(
                 is_incomplete_input_category(c),
@@ -1702,21 +1706,25 @@ mod tests {
             );
         }
 
-        // Every other current variant is denied (13 → 4 + 13 = all 17 variants).
+        // Every non-`Image` origin is denied (representative payload per arm).
         for c in [
-            E::UnsupportedPixelFormat,
-            E::UnsupportedOperation,
-            E::CmsRequired,
-            E::PolicyRejected,
-            E::Cancelled,
-            E::TimedOut,
-            E::LimitsExceeded(LimitKind::Pixels),
-            E::OutOfMemory,
+            E::Request(RequestError::Unsupported(UnsupportedOperation::PixelFormat)),
+            E::Request(RequestError::Unsupported(
+                UnsupportedOperation::AnimationEncode,
+            )),
+            E::Request(RequestError::CmsRequired),
+            E::Request(RequestError::Invalid(InvalidKind::Parameters)),
+            E::Request(RequestError::Invalid(InvalidKind::Buffer)),
+            E::Request(RequestError::Invalid(InvalidKind::State)),
+            E::Policy(PolicyKind::Decode),
+            E::Policy(PolicyKind::Encode),
+            E::Lifecycle(StopReason::Cancelled),
+            E::Lifecycle(StopReason::TimedOut),
+            E::Resource(ResourceError::Limits(LimitKind::Pixels)),
+            E::Resource(ResourceError::OutOfMemory),
             E::Io(CodecIoKind::opaque()),
-            E::InvalidParameters,
-            E::InvalidBuffer,
-            E::InvalidState,
-            E::Internal,
+            E::Internal(InternalKind::Bug),
+            E::Internal(InternalKind::Dependency),
         ] {
             assert!(
                 !is_incomplete_input_category(c),
@@ -2045,7 +2053,7 @@ mod tests {
 
         let err = At::wrap(CodecError::new(
             Some("demo-codec"),
-            zencodec::ErrorCategory::MalformedImage,
+            zencodec::ErrorCategory::Image(zencodec::ImageError::Malformed),
         ))
         .at_crate(&CODEC_CRATE)
         .at()

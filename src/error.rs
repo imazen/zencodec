@@ -24,60 +24,208 @@ use whereat::At;
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ErrorCategory {
-    /// The encoded image is invalid or corrupt — bad bitstream content.
-    MalformedImage,
-    /// Input ended before a complete image could be read (truncated / insufficient).
-    UnexpectedEof,
-    /// The format / container / codec / profile itself is not handled at all
-    /// (e.g. "not a PNG", an unknown variant, an unsupported HEVC profile).
-    UnsupportedImageType,
-    /// The format *is* handled, but the bitstream uses a feature this codec
-    /// hasn't implemented (e.g. arithmetic-coded JPEG, an unsupported chunk).
-    UnsupportedImageFeature,
-    /// No acceptable pixel format: format negotiation found no common
-    /// [`PixelDescriptor`](zenpixels::PixelDescriptor) between what the caller
-    /// requested and what the codec can produce/accept without lossy conversion.
-    UnsupportedPixelFormat,
-    /// The requested *API operation* is not supported by this codec — the
-    /// [`UnsupportedOperation`] axis (animation, row-level, multi-image, …).
-    UnsupportedOperation,
-    /// The codec needs a colour-management transform / ICC profile it will not
-    /// perform itself (CMS is the caller's job) — e.g. an encode target whose
-    /// ICC profile cannot be synthesized. The caller must supply the transform.
-    CmsRequired,
+    /// The failure originates in the **image bytes** — corrupt, truncated, or a
+    /// well-formed image using a type/feature this codec doesn't implement. A
+    /// *different* codec might handle it; the caller can't fix it by changing
+    /// parameters. See [`ImageError`].
+    Image(ImageError),
+    /// The failure originates in the **caller's request** — invalid
+    /// config/buffer/call-sequence, or a well-formed request for an operation /
+    /// pixel format this codec doesn't support. The caller *can* change the
+    /// request. See [`RequestError`].
+    Request(RequestError),
+    /// A resource ceiling — a configured [`ResourceLimits`](crate::ResourceLimits)
+    /// cap, or genuine allocation exhaustion. See [`ResourceError`].
+    Resource(ResourceError),
     /// The input is valid and the codec *could* handle it, but a configured
-    /// policy refused it — e.g. a decode policy rejecting progressive content,
-    /// or a conversion policy forbidding alpha removal / depth reduction. The
-    /// request was understood and *declined*, so it is neither malformed nor
-    /// unsupported; often maps to HTTP 422.
-    PolicyRejected,
-    /// Cooperatively cancelled via the operation's [`Stop`](enough::Stop) token.
-    Cancelled,
-    /// The operation exceeded its deadline (a [`Stop`](enough::Stop) timeout).
-    TimedOut,
-    /// A [`ResourceLimits`](crate::ResourceLimits) cap was (or would be) exceeded.
-    LimitsExceeded(LimitKind),
-    /// A memory allocation failed — distinct from a configured resource limit.
-    OutOfMemory,
+    /// policy refused it. Understood and *declined*; often maps to HTTP 422.
+    /// See [`PolicyKind`].
+    Policy(PolicyKind),
+    /// The operation was stopped via its [`Stop`](enough::Stop) token — cancelled
+    /// by the caller or past its deadline. Carries the
+    /// [`StopReason`](enough::StopReason) (`Cancelled` / `TimedOut`).
+    Lifecycle(StopReason),
     /// An underlying I/O or output-sink operation failed. Carries a
     /// [`CodecIoKind`] — a `std::io::ErrorKind` when the `std` feature is
     /// enabled, empty under `no_std` (the variant shape is stable across builds).
     Io(CodecIoKind),
-    /// Caller-supplied configuration or parameters were invalid — not the image's fault.
-    InvalidParameters,
+    /// An internal failure not attributable to the input or the request. See
+    /// [`InternalKind`].
+    Internal(InternalKind),
+}
+
+/// Which side of the encode/decode boundary a [`ErrorCategory::Policy`] rejection
+/// applies to — mirrors the crate's existing
+/// [`DecodePolicy`](crate::decode::DecodePolicy) /
+/// [`EncodePolicy`](crate::encode::EncodePolicy) split, so a codec constructing
+/// the error already knows which one at the call site.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum PolicyKind {
+    /// A [`DecodePolicy`](crate::decode::DecodePolicy) refused otherwise-decodable
+    /// input — e.g. rejecting progressive content in strict mode.
+    Decode,
+    /// An [`EncodePolicy`](crate::encode::EncodePolicy) refused an
+    /// otherwise-performable transform — e.g. forbidding alpha removal, or an ICC
+    /// downgrade.
+    Encode,
+}
+
+/// Which kind of [`ErrorCategory::Internal`] failure — a coarse split for
+/// telemetry/triage, not a replacement for the downcast-recoverable detail
+/// error (`CodecErrorExt::find_cause`, the `At` trace).
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum InternalKind {
+    /// A broken invariant or assertion inside this codec's own logic. Always a
+    /// code defect: never retryable, always alert-worthy, will recur on the same
+    /// input.
+    Bug,
+    /// An error surfaced from a sub-component or foreign library that this codec
+    /// hasn't (or structurally can't) classify into [`ErrorCategory::Image`] /
+    /// [`ErrorCategory::Request`] / [`ErrorCategory::Resource`]. An honest
+    /// "unclassified", not a permanent home — a call site that only ever produces
+    /// `Dependency` is a taxonomy gap worth closing, not a fact about the world.
+    Dependency,
+}
+
+/// Image-bytes-origin failure kind — the payload of [`ErrorCategory::Image`].
+///
+/// Everything here is "the bytes are the problem": a generic consumer treats the
+/// whole [`Image`](ErrorCategory::Image) arm as a client-supplied-data fault (a
+/// truncated/incomplete request is `UnexpectedEof`; the rest are 4xx-class
+/// unprocessable content). This is exactly the set a truncation-conformance check
+/// tolerates.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ImageError {
+    /// The encoded bytes are invalid or corrupt — bad bitstream content.
+    Malformed,
+    /// Input ended before a complete image could be read (truncated / insufficient).
+    UnexpectedEof,
+    /// The bytes are a *well-formed* image this codec doesn't handle — an
+    /// unrecognized format/profile, or an encoded feature it hasn't implemented.
+    /// See [`UnsupportedImageKind`].
+    Unsupported(UnsupportedImageKind),
+}
+
+/// Which image-bytes-origin "unsupported" — the payload of [`ImageError::Unsupported`].
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum UnsupportedImageKind {
+    /// The format / container / codec / profile itself is not handled
+    /// (e.g. "not a PNG", an unknown variant, an unsupported HEVC profile).
+    Type,
+    /// The format *is* handled, but the bitstream uses a feature this codec
+    /// hasn't implemented (e.g. arithmetic-coded JPEG, an unsupported chunk).
+    Feature,
+}
+
+/// Caller-request-origin failure kind — the payload of [`ErrorCategory::Request`].
+///
+/// Everything here is "the *request* is the problem, not the bytes": the caller
+/// can change config, buffer, call sequence, or the operation/format it asked for.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum RequestError {
+    /// The request is malformed at the API level — bad config, pixel buffer, or
+    /// call sequence. See [`InvalidKind`].
+    Invalid(InvalidKind),
+    /// The request is *well-formed* but asks for an API operation or pixel format
+    /// this codec doesn't support — the [`UnsupportedOperation`] axis (animation,
+    /// row-level, multi-image, pixel-format negotiation, …). Carries which one.
+    Unsupported(UnsupportedOperation),
+    /// The codec needs a colour-management transform / ICC profile it will not
+    /// perform itself (CMS is the caller's job) — e.g. an encode target whose ICC
+    /// profile cannot be synthesized. The caller must supply the transform.
+    CmsRequired,
+}
+
+/// Which caller-request "invalid" — the payload of [`RequestError::Invalid`].
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum InvalidKind {
+    /// Caller-supplied configuration or parameters were invalid — not the image's
+    /// fault (knobs, quality, scan script, …).
+    Parameters,
     /// A caller-supplied pixel buffer has an invalid layout — wrong size, stride,
     /// alignment, or [`PixelDescriptor`](zenpixels::PixelDescriptor) for the
-    /// operation. Distinct from [`InvalidParameters`](Self::InvalidParameters)
-    /// (config/knobs): this is specifically the pixel-data buffer's geometry.
-    InvalidBuffer,
+    /// operation. Specifically the pixel-data buffer's geometry.
+    Buffer,
     /// The operation was invoked in an invalid state or out of sequence — e.g.
-    /// pushing rows after `finish()`, a streaming ring-buffer overflow, or using
-    /// a cached reference before it was set. An API-protocol violation by the
-    /// caller, not bad image data.
-    InvalidState,
-    /// An internal failure: a bug, a broken invariant, or a sub-component error
-    /// not attributable to the input.
-    Internal,
+    /// pushing rows after `finish()`, a streaming ring-buffer overflow, or using a
+    /// cached reference before it was set. An API-protocol violation by the caller.
+    State,
+}
+
+/// Resource-origin failure kind — the payload of [`ErrorCategory::Resource`].
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ResourceError {
+    /// A [`ResourceLimits`](crate::ResourceLimits) cap was (or would be) exceeded.
+    /// Carries which [`LimitKind`].
+    Limits(LimitKind),
+    /// A memory allocation failed — distinct from a configured cap (retry with a
+    /// smaller input / more RAM may help; a cap is a policy the caller set).
+    OutOfMemory,
+}
+
+// Ergonomic lifts so a codec's `category()` map reads `ImageError::Malformed.into()`
+// / `RequestError::Invalid(InvalidKind::Buffer).into()` instead of spelling the
+// outer wrapper at every arm.
+impl From<ImageError> for ErrorCategory {
+    #[inline]
+    fn from(e: ImageError) -> Self {
+        Self::Image(e)
+    }
+}
+impl From<RequestError> for ErrorCategory {
+    #[inline]
+    fn from(e: RequestError) -> Self {
+        Self::Request(e)
+    }
+}
+impl From<ResourceError> for ErrorCategory {
+    #[inline]
+    fn from(e: ResourceError) -> Self {
+        Self::Resource(e)
+    }
+}
+impl From<StopReason> for ErrorCategory {
+    #[inline]
+    fn from(r: StopReason) -> Self {
+        Self::Lifecycle(r)
+    }
+}
+impl From<UnsupportedImageKind> for ErrorCategory {
+    #[inline]
+    fn from(k: UnsupportedImageKind) -> Self {
+        Self::Image(ImageError::Unsupported(k))
+    }
+}
+impl From<InvalidKind> for ErrorCategory {
+    #[inline]
+    fn from(k: InvalidKind) -> Self {
+        Self::Request(RequestError::Invalid(k))
+    }
+}
+impl From<PolicyKind> for ErrorCategory {
+    #[inline]
+    fn from(k: PolicyKind) -> Self {
+        Self::Policy(k)
+    }
+}
+impl From<InternalKind> for ErrorCategory {
+    #[inline]
+    fn from(k: InternalKind) -> Self {
+        Self::Internal(k)
+    }
+}
+impl From<LimitKind> for ErrorCategory {
+    #[inline]
+    fn from(k: LimitKind) -> Self {
+        Self::Resource(ResourceError::Limits(k))
+    }
 }
 
 impl core::fmt::Display for ErrorCategory {
@@ -85,23 +233,67 @@ impl core::fmt::Display for ErrorCategory {
     /// detail error to render.
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::MalformedImage => f.write_str("malformed image"),
-            Self::UnexpectedEof => f.write_str("unexpected end of input"),
-            Self::UnsupportedImageType => f.write_str("unsupported image type"),
-            Self::UnsupportedImageFeature => f.write_str("unsupported image feature"),
-            Self::UnsupportedPixelFormat => f.write_str("no acceptable pixel format"),
-            Self::UnsupportedOperation => f.write_str("unsupported operation"),
-            Self::CmsRequired => f.write_str("colour-management transform required"),
-            Self::PolicyRejected => f.write_str("rejected by policy"),
-            Self::Cancelled => f.write_str("cancelled"),
-            Self::TimedOut => f.write_str("timed out"),
-            Self::LimitsExceeded(kind) => write!(f, "resource limit exceeded ({kind:?})"),
-            Self::OutOfMemory => f.write_str("out of memory"),
+            Self::Image(e) => write!(f, "{e}"),
+            Self::Request(e) => write!(f, "{e}"),
+            Self::Resource(e) => write!(f, "{e}"),
+            Self::Policy(k) => write!(f, "{k}"),
+            Self::Lifecycle(e) => write!(f, "{e}"),
             Self::Io(_) => f.write_str("I/O error"),
-            Self::InvalidParameters => f.write_str("invalid parameters"),
-            Self::InvalidBuffer => f.write_str("invalid pixel buffer"),
-            Self::InvalidState => f.write_str("invalid state"),
-            Self::Internal => f.write_str("internal error"),
+            Self::Internal(k) => write!(f, "{k}"),
+        }
+    }
+}
+
+impl core::fmt::Display for PolicyKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Decode => f.write_str("rejected by decode policy"),
+            Self::Encode => f.write_str("rejected by encode policy"),
+        }
+    }
+}
+
+impl core::fmt::Display for InternalKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Bug => f.write_str("internal error (bug)"),
+            Self::Dependency => f.write_str("internal error (unclassified dependency failure)"),
+        }
+    }
+}
+
+impl core::fmt::Display for ImageError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Malformed => f.write_str("malformed image"),
+            Self::UnexpectedEof => f.write_str("unexpected end of input"),
+            Self::Unsupported(UnsupportedImageKind::Type) => f.write_str("unsupported image type"),
+            Self::Unsupported(UnsupportedImageKind::Feature) => {
+                f.write_str("unsupported image feature")
+            }
+        }
+    }
+}
+
+impl core::fmt::Display for RequestError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Invalid(InvalidKind::Parameters) => f.write_str("invalid parameters"),
+            Self::Invalid(InvalidKind::Buffer) => f.write_str("invalid pixel buffer"),
+            Self::Invalid(InvalidKind::State) => f.write_str("invalid state"),
+            // `UnsupportedOperation`'s own Display already reads "unsupported
+            // operation: <op>" (and "no acceptable pixel format" for PixelFormat).
+            Self::Unsupported(op) => write!(f, "{op}"),
+            Self::CmsRequired => f.write_str("colour-management transform required"),
+        }
+    }
+}
+
+impl core::fmt::Display for ResourceError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Limits(kind) => write!(f, "resource limit exceeded ({kind:?})"),
+            Self::OutOfMemory => f.write_str("out of memory"),
         }
     }
 }
@@ -188,7 +380,7 @@ impl From<&std::io::Error> for CodecIoKind {
 /// # Example
 ///
 /// ```rust
-/// use zencodec::{CategorizedError, ErrorCategory, UnsupportedOperation};
+/// use zencodec::{CategorizedError, ErrorCategory, ImageError, UnsupportedOperation};
 ///
 /// #[derive(Debug)]
 /// enum MyError {
@@ -201,13 +393,13 @@ impl From<&std::io::Error> for CodecIoKind {
 ///     fn codec_name(&self) -> Option<&'static str> { Some("mycodec") } // declared once
 ///     fn category(&self) -> ErrorCategory {
 ///         match self {
-///             MyError::Corrupt => ErrorCategory::MalformedImage,
-///             MyError::Truncated => ErrorCategory::UnexpectedEof,
+///             MyError::Corrupt => ErrorCategory::Image(ImageError::Malformed),
+///             MyError::Truncated => ErrorCategory::Image(ImageError::UnexpectedEof),
 ///             MyError::Unsupported(op) => op.category(), // delegate to the zencodec arm
 ///         }
 ///     }
 /// }
-/// assert_eq!(MyError::Corrupt.category(), ErrorCategory::MalformedImage);
+/// assert_eq!(MyError::Corrupt.category(), ErrorCategory::Image(ImageError::Malformed));
 /// assert_eq!(MyError::Corrupt.codec_name(), Some("mycodec"));
 /// ```
 pub trait CategorizedError: core::any::Any {
@@ -250,11 +442,9 @@ impl CategorizedError for StopReason {
     }
     #[inline]
     fn category(&self) -> ErrorCategory {
-        match self {
-            StopReason::TimedOut => ErrorCategory::TimedOut,
-            // `Cancelled`, plus any future `#[non_exhaustive]` reason, is a cancellation.
-            _ => ErrorCategory::Cancelled,
-        }
+        // The stop reason IS the payload — no lossy collapse; a future
+        // `#[non_exhaustive]` reason flows through unchanged.
+        ErrorCategory::Lifecycle(*self)
     }
 }
 
@@ -265,12 +455,10 @@ impl CategorizedError for UnsupportedOperation {
     }
     #[inline]
     fn category(&self) -> ErrorCategory {
-        match self {
-            // The "no acceptable pixel format" arm is a negotiation failure, not
-            // an API-operation gap.
-            UnsupportedOperation::PixelFormat => ErrorCategory::UnsupportedPixelFormat,
-            _ => ErrorCategory::UnsupportedOperation,
-        }
+        // The whole operation axis (including `PixelFormat`) is a caller-request
+        // fault. Carry *which* op through as the payload instead of flattening it
+        // to a single coarse category — the audit found all delegators lost it.
+        ErrorCategory::Request(RequestError::Unsupported(*self))
     }
 }
 
@@ -281,7 +469,7 @@ impl CategorizedError for LimitExceeded {
     }
     #[inline]
     fn category(&self) -> ErrorCategory {
-        ErrorCategory::LimitsExceeded(self.kind())
+        ErrorCategory::Resource(ResourceError::Limits(self.kind()))
     }
 }
 
@@ -318,7 +506,10 @@ impl CategorizedError for LimitExceeded {
 /// # Example
 ///
 /// ```rust
-/// use zencodec::{At, CategorizedError, CodecError, ErrorAtExt, ErrorCategory, UnsupportedOperation};
+/// use zencodec::{
+///     At, CategorizedError, CodecError, ErrorAtExt, ErrorCategory, ImageError, RequestError,
+///     UnsupportedOperation,
+/// };
 ///
 /// // A codec's native error declares its name once and maps its variants:
 /// #[derive(Debug)]
@@ -336,17 +527,17 @@ impl CategorizedError for LimitExceeded {
 /// // reads the category AND the codec name from the type — no codec arg:
 /// let e: At<CodecError> =
 ///     CodecError::of(JpegError(UnsupportedOperation::AnimationEncode).start_at());
-/// assert_eq!(e.category(), ErrorCategory::UnsupportedOperation); // via At's CategorizedError
+/// assert_eq!(e.category(), ErrorCategory::Request(RequestError::Unsupported(UnsupportedOperation::AnimationEncode))); // via At's CategorizedError
 /// assert_eq!(e.error().codec(), Some("zenjpeg"));
 ///
 /// // `new` is the fundamental form — codec name passed, no detail:
-/// let bare = CodecError::new(Some("zenjpeg"), ErrorCategory::MalformedImage);
+/// let bare = CodecError::new(Some("zenjpeg"), ErrorCategory::Image(ImageError::Malformed));
 /// assert!(bare.detail().is_none());
 ///
 /// // Everything survives erasure to a trait object — recover by concrete downcast:
 /// let boxed: Box<dyn core::error::Error + Send + Sync> = Box::new(e);
 /// let recovered = boxed.downcast_ref::<At<CodecError>>().unwrap();
-/// assert_eq!(recovered.category(), ErrorCategory::UnsupportedOperation);
+/// assert_eq!(recovered.category(), ErrorCategory::Request(RequestError::Unsupported(UnsupportedOperation::AnimationEncode)));
 /// assert_eq!(recovered.error().codec(), Some("zenjpeg"));
 /// ```
 pub struct CodecError(Box<Repr>);
@@ -543,10 +734,10 @@ impl core::error::Error for CodecError {
 /// "where did it fail". The unit is bytes from the start of the encoded input.
 ///
 /// ```rust
-/// use zencodec::{At, CodecError, ErrorAtExt, ErrorCategory, StreamOffset};
+/// use zencodec::{At, CodecError, ErrorAtExt, ErrorCategory, ImageError, StreamOffset};
 ///
 /// // A codec attaches the offset where parsing failed to its error's trace:
-/// let err: At<CodecError> = CodecError::new(Some("zenjpeg"), ErrorCategory::MalformedImage)
+/// let err: At<CodecError> = CodecError::new(Some("zenjpeg"), ErrorCategory::Image(ImageError::Malformed))
 ///     .start_at()
 ///     .at_data(|| StreamOffset(42));
 ///
@@ -808,10 +999,14 @@ mod tests {
                 Self::Limit(e) => e.category(),
                 Self::Unsupported(e) => e.category(),
                 Self::Cancelled(r) => r.category(),
-                Self::Malformed(_) => ErrorCategory::MalformedImage,
-                Self::RejectedByPolicy => ErrorCategory::PolicyRejected,
-                Self::BadBuffer => ErrorCategory::InvalidBuffer,
-                Self::WrongState => ErrorCategory::InvalidState,
+                Self::Malformed(_) => ErrorCategory::Image(ImageError::Malformed),
+                Self::RejectedByPolicy => ErrorCategory::Policy(PolicyKind::Decode),
+                Self::BadBuffer => {
+                    ErrorCategory::Request(RequestError::Invalid(InvalidKind::Buffer))
+                }
+                Self::WrongState => {
+                    ErrorCategory::Request(RequestError::Invalid(InvalidKind::State))
+                }
             }
         }
     }
@@ -886,54 +1081,64 @@ mod tests {
     fn category_maps_each_codec_variant() {
         assert_eq!(
             TestCodecError::Malformed("x".into()).category(),
-            ErrorCategory::MalformedImage
+            ErrorCategory::Image(ImageError::Malformed)
         );
         assert_eq!(
             TestCodecError::RejectedByPolicy.category(),
-            ErrorCategory::PolicyRejected
+            ErrorCategory::Policy(PolicyKind::Decode)
         );
         assert_eq!(
             TestCodecError::BadBuffer.category(),
-            ErrorCategory::InvalidBuffer
+            ErrorCategory::Request(RequestError::Invalid(InvalidKind::Buffer))
         );
         assert_eq!(
             TestCodecError::WrongState.category(),
-            ErrorCategory::InvalidState
+            ErrorCategory::Request(RequestError::Invalid(InvalidKind::State))
         );
         assert_eq!(
             TestCodecError::Unsupported(UnsupportedOperation::AnimationEncode).category(),
-            ErrorCategory::UnsupportedOperation
+            ErrorCategory::Request(RequestError::Unsupported(
+                UnsupportedOperation::AnimationEncode
+            ))
         );
         assert_eq!(
             TestCodecError::Cancelled(StopReason::Cancelled).category(),
-            ErrorCategory::Cancelled
+            ErrorCategory::Lifecycle(StopReason::Cancelled)
         );
         assert_eq!(
             TestCodecError::Cancelled(StopReason::TimedOut).category(),
-            ErrorCategory::TimedOut
+            ErrorCategory::Lifecycle(StopReason::TimedOut)
         );
         assert_eq!(
             TestCodecError::Limit(LimitExceeded::Pixels { actual: 9, max: 4 }).category(),
-            ErrorCategory::LimitsExceeded(LimitKind::Pixels)
+            ErrorCategory::Resource(ResourceError::Limits(LimitKind::Pixels))
         );
     }
 
     #[test]
     fn zencodec_cause_types_categorize() {
-        assert_eq!(StopReason::Cancelled.category(), ErrorCategory::Cancelled);
-        assert_eq!(StopReason::TimedOut.category(), ErrorCategory::TimedOut);
+        assert_eq!(
+            StopReason::Cancelled.category(),
+            ErrorCategory::Lifecycle(StopReason::Cancelled)
+        );
+        assert_eq!(
+            StopReason::TimedOut.category(),
+            ErrorCategory::Lifecycle(StopReason::TimedOut)
+        );
         // The operation axis splits: a plain operation vs the pixel-format arm.
         assert_eq!(
             UnsupportedOperation::AnimationDecode.category(),
-            ErrorCategory::UnsupportedOperation
+            ErrorCategory::Request(RequestError::Unsupported(
+                UnsupportedOperation::AnimationDecode
+            ))
         );
         assert_eq!(
             UnsupportedOperation::PixelFormat.category(),
-            ErrorCategory::UnsupportedPixelFormat
+            ErrorCategory::Request(RequestError::Unsupported(UnsupportedOperation::PixelFormat))
         );
         assert_eq!(
             LimitExceeded::Memory { actual: 2, max: 1 }.category(),
-            ErrorCategory::LimitsExceeded(LimitKind::Memory)
+            ErrorCategory::Resource(ResourceError::Limits(LimitKind::Memory))
         );
     }
 
@@ -942,7 +1147,10 @@ mod tests {
         // A located error (the form heic/zenbitmaps return) keeps its category,
         // and the inner error is still reachable for its detail.
         let located = At::wrap(TestCodecError::Cancelled(StopReason::TimedOut));
-        assert_eq!(located.category(), ErrorCategory::TimedOut);
+        assert_eq!(
+            located.category(),
+            ErrorCategory::Lifecycle(StopReason::TimedOut)
+        );
         assert!(matches!(
             located.error(),
             TestCodecError::Cancelled(StopReason::TimedOut)
@@ -955,7 +1163,7 @@ mod tests {
     fn codec_error_from_native_and_of_capture_category_and_codec() {
         // `from_native` reads both the category and the codec name from the type.
         let e = CodecError::from_native(TestCodecError::Malformed("bad".into()));
-        assert_eq!(e.category(), ErrorCategory::MalformedImage);
+        assert_eq!(e.category(), ErrorCategory::Image(ImageError::Malformed));
         assert_eq!(e.codec(), Some("test-codec")); // TestCodecError::codec_name
         assert!(e.detail().is_some());
         // Display is "{codec}: {detail message}".
@@ -963,7 +1171,10 @@ mod tests {
         // `of` is the located form: takes At<E>, keeps the trace on the outside.
         let located: At<CodecError> =
             CodecError::of(At::wrap(TestCodecError::Malformed("bad".into())));
-        assert_eq!(located.category(), ErrorCategory::MalformedImage);
+        assert_eq!(
+            located.category(),
+            ErrorCategory::Image(ImageError::Malformed)
+        );
         assert_eq!(located.error().codec(), Some("test-codec"));
         // from_parts takes an explicit category + codec name (no typed detail):
         let e2 = CodecError::from_parts(
@@ -978,8 +1189,8 @@ mod tests {
     #[test]
     fn codec_error_new_is_detail_free() {
         // The fundamental form: a codec with no error enum of its own.
-        let e = CodecError::new(Some("zenpng"), ErrorCategory::MalformedImage);
-        assert_eq!(e.category(), ErrorCategory::MalformedImage);
+        let e = CodecError::new(Some("zenpng"), ErrorCategory::Image(ImageError::Malformed));
+        assert_eq!(e.category(), ErrorCategory::Image(ImageError::Malformed));
         assert_eq!(e.codec(), Some("zenpng"));
         assert!(e.detail().is_none());
         // With no detail, Display falls back to the category's phrase.
@@ -992,7 +1203,10 @@ mod tests {
         // category AND the originating codec name survive erasure.
         let located = CodecError::of(At::wrap(TestCodecError::Cancelled(StopReason::Cancelled)));
         let boxed: Box<dyn core::error::Error + Send + Sync> = Box::new(located);
-        assert_eq!(boxed.error_category(), Some(ErrorCategory::Cancelled));
+        assert_eq!(
+            boxed.error_category(),
+            Some(ErrorCategory::Lifecycle(StopReason::Cancelled))
+        );
         assert_eq!(
             boxed.codec_error().and_then(CodecError::codec),
             Some("test-codec")
@@ -1000,7 +1214,12 @@ mod tests {
         // A bare CodecError (no At) recovers too.
         let bare: Box<dyn core::error::Error + Send + Sync> =
             Box::new(CodecError::from_native(TestCodecError::WrongState));
-        assert_eq!(bare.error_category(), Some(ErrorCategory::InvalidState));
+        assert_eq!(
+            bare.error_category(),
+            Some(ErrorCategory::Request(RequestError::Invalid(
+                InvalidKind::State
+            )))
+        );
         assert_eq!(
             bare.codec_error().and_then(CodecError::codec),
             Some("test-codec")
@@ -1033,7 +1252,9 @@ mod tests {
         ))));
         assert_eq!(
             wrapped.error_category(),
-            Some(ErrorCategory::LimitsExceeded(LimitKind::Pixels))
+            Some(ErrorCategory::Resource(ResourceError::Limits(
+                LimitKind::Pixels
+            )))
         );
         assert_eq!(
             wrapped.codec_error().and_then(CodecError::codec),
@@ -1050,7 +1271,9 @@ mod tests {
         assert_eq!(located.limit_exceeded(), Some(&inner));
         assert_eq!(
             located.error_category(),
-            Some(ErrorCategory::LimitsExceeded(LimitKind::Memory))
+            Some(ErrorCategory::Resource(ResourceError::Limits(
+                LimitKind::Memory
+            )))
         );
     }
 
@@ -1071,7 +1294,7 @@ mod tests {
         // recovered generically (no codec-specific type named) after erasure.
         let err = At::wrap(CodecError::new(
             Some("zenjpeg"),
-            ErrorCategory::MalformedImage,
+            ErrorCategory::Image(ImageError::Malformed),
         ))
         .at_data(|| StreamOffset(1234));
         let boxed: Box<dyn core::error::Error + Send + Sync> = Box::new(err);
@@ -1083,7 +1306,10 @@ mod tests {
             .find_map(|c| c.downcast_ref::<StreamOffset>().copied());
         assert_eq!(offset, Some(StreamOffset(1234)));
         // The category recovers alongside the locus.
-        assert_eq!(boxed.error_category(), Some(ErrorCategory::MalformedImage));
+        assert_eq!(
+            boxed.error_category(),
+            Some(ErrorCategory::Image(ImageError::Malformed))
+        );
     }
 
     #[test]
@@ -1120,13 +1346,13 @@ mod tests {
         // Recovery is downcast-based, but probes a single `Box` layer in either
         // position too, so a consumer that boxed the (already one-word) envelope is
         // still classifiable.
-        let mk = || CodecError::new(Some("zenjpeg"), ErrorCategory::MalformedImage);
+        let mk = || CodecError::new(Some("zenjpeg"), ErrorCategory::Image(ImageError::Malformed));
 
         // Canonical `At<CodecError>`.
         let canonical: Box<dyn core::error::Error + Send + Sync> = Box::new(At::wrap(mk()));
         assert_eq!(
             canonical.error_category(),
-            Some(ErrorCategory::MalformedImage)
+            Some(ErrorCategory::Image(ImageError::Malformed))
         );
         assert_eq!(
             canonical.codec_error().and_then(CodecError::codec),
@@ -1138,7 +1364,7 @@ mod tests {
             Box::new(Box::new(At::wrap(mk())) as Box<At<CodecError>>);
         assert_eq!(
             boxed_at.error_category(),
-            Some(ErrorCategory::MalformedImage)
+            Some(ErrorCategory::Image(ImageError::Malformed))
         );
         assert_eq!(
             boxed_at.codec_error().and_then(CodecError::codec),
@@ -1150,7 +1376,7 @@ mod tests {
             Box::new(At::wrap(Box::new(mk()) as Box<CodecError>));
         assert_eq!(
             at_boxed.error_category(),
-            Some(ErrorCategory::MalformedImage)
+            Some(ErrorCategory::Image(ImageError::Malformed))
         );
 
         // `Box<CodecError>` (no `At`).
@@ -1158,7 +1384,7 @@ mod tests {
             Box::new(Box::new(mk()) as Box<CodecError>);
         assert_eq!(
             bare_boxed.error_category(),
-            Some(ErrorCategory::MalformedImage)
+            Some(ErrorCategory::Image(ImageError::Malformed))
         );
 
         // The fallback is one layer deep — a pathological double box is not covered.
@@ -1187,7 +1413,10 @@ mod tests {
         use core::any::Any;
         let err = TestCodecError::WrongState;
         let dynamic: &dyn CategorizedError = &err;
-        assert_eq!(dynamic.category(), ErrorCategory::InvalidState);
+        assert_eq!(
+            dynamic.category(),
+            ErrorCategory::Request(RequestError::Invalid(InvalidKind::State))
+        );
         let any: &dyn Any = dynamic; // trait upcasting (Rust 1.86+)
         assert!(any.downcast_ref::<TestCodecError>().is_some());
     }
@@ -1197,7 +1426,7 @@ mod tests {
         // A foreign error wrapped with no codec name, then stamped via the builder.
         let e = CodecError::from_parts(
             None,
-            ErrorCategory::Internal,
+            ErrorCategory::Internal(InternalKind::Bug),
             Box::new(TestCodecError::Malformed("x".into())),
         );
         assert_eq!(e.codec(), None);
