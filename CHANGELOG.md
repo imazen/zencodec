@@ -281,6 +281,23 @@ All notable changes to zencodec are documented here.
   see their closing comments, not a new bug). Fix: apply the same "gate the
   duplicate sweep on removal" pattern to Interop. Regression:
   `fuzz/regression/exif_roundtrip_dup_interop_pointer`.
+- zencodec#113 (fuzz-farm "RECURRED" filing of the `exif_author` fixpoint
+  signature `49851dd8d959a652`, x86_64 — previously #96/#108) does NOT
+  reproduce on current main: replayed all 15,773 x86_64 + 6,276 arm64 mirrored
+  crash artifacts through the `exif_author` logic in release and
+  debug-assertions+overflow-checks builds, and the exact meta.json-cited
+  artifact plus both full mirror directories through the real libFuzzer
+  binary (`-runs=0`) — zero failures. Root cause of the false filing: R2
+  shows the x86_64 farm box uploaded nothing after 2026-07-02T00:27Z (its
+  binary predates the 2ed32cf7 fix — the BuildId in #113's trace matches the
+  07-02 meta.json), but a local mirror re-sync on 07-12 refreshed file
+  mtimes, and triage-crashes.sh's re-open heuristic compares the *local
+  mtime* against the prior issue's closedAt — its "s5cmd sync preserves the
+  R2 object's timestamp" design assumption is false (s5cmd v2.3.0 has no
+  timestamp-preserve option). The heuristic now queries the R2 object's
+  actual `LastModified` (fixed workstation-side in zenfuzz-farm, outside
+  this repo). Cited artifact kept as a permanent regression seed:
+  `fuzz/regression/exif_author_issue_113_farm_artifact`.
 
 ## [0.1.25] - 2026-06-23
 
