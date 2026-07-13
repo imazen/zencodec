@@ -221,6 +221,18 @@ All notable changes to zencodec are documented here.
   fail-safe. Regressions:
   `fuzz/regression/metadata_filtered_orientation_entry_overlap`,
   `fuzz/regression/metadata_filtered_orientation_header_overlap`. (bea2f94c)
+- A *duplicate* Interop (0xA005) pointer tag inside the Exif sub-IFD was never
+  swept the way duplicate GPS/Exif sub-IFD pointers are (zencodec#30/#107):
+  `take_pointer` only ever removed the FIRST occurrence, so a second 0xA005
+  entry survived as ordinary data and got consumed one occurrence at a time on
+  each subsequent parse — `exif_ifd`'s entry count silently shrank by one on
+  every round-trip until empty. Invisible to `orientation`/`has_gps`/
+  `has_thumbnail` (nothing reads Interop content), so no existing fuzz target
+  assertion could catch it; found by code audit while investigating the
+  fuzz-farm-filed zencodec#114/#115 (which turned out to already be fixed —
+  see their closing comments, not a new bug). Fix: apply the same "gate the
+  duplicate sweep on removal" pattern to Interop. Regression:
+  `fuzz/regression/exif_roundtrip_dup_interop_pointer`.
 
 ## [0.1.25] - 2026-06-23
 

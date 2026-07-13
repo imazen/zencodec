@@ -424,7 +424,24 @@ impl<'a> Exif<'a> {
         let exif_taken = take_pointer(&mut ifd0, TAG_EXIF_IFD, order);
         let exif_ifd = exif_taken.and_then(|o| {
             parse_ifd(tiff, o, order).map(|(mut e, _)| {
-                take_pointer(&mut e, TAG_INTEROP_IFD, order);
+                // Interop (0xA005) isn't modeled (see module doc): its pointer is
+                // stripped so a rewrite can't leave a dangling offset, and
+                // `to_bytes` never re-synthesizes it (unlike Exif/GPS, there is
+                // no `interop_ifd` field to write back). But a *duplicate*
+                // Interop tag needs the same "gate on removal" sweep as the
+                // GPS/Exif sub-IFD pointers (zencodec#30/#107): `take_pointer`
+                // only removes the FIRST match, so a second 0xA005 entry
+                // survives as ordinary data. On the next `to_bytes`/parse cycle
+                // it resolves as an ordinary entry, gets consumed by *this same*
+                // call one occurrence at a time, and `exif_ifd`'s entry count
+                // silently shrinks by one on every round-trip until it empties
+                // out — a serializer non-fixpoint invisible to
+                // `orientation`/`has_gps`/`has_thumbnail` (nothing reads
+                // Interop), but a real bug under `filtered`/`exif_filter`
+                // idempotence. Strip any remaining occurrence in the same pass.
+                if take_pointer(&mut e, TAG_INTEROP_IFD, order).is_some() {
+                    e.retain(|entry| entry.tag != TAG_INTEROP_IFD);
+                }
                 e
             })
         });
@@ -2605,6 +2622,45 @@ mod tests {
         let b1 = x.to_bytes();
         let y = Exif::parse(&b1).expect("must re-parse");
         assert_eq!(x.has_gps(), y.has_gps(), "gps presence must round-trip");
+        assert_eq!(b1, y.to_bytes(), "must be a serializer fixpoint");
+    }
+
+    /// Regression: a *duplicate* Interop (0xA005) pointer tag inside the Exif
+    /// sub-IFD silently shrank `exif_ifd` by one entry on every round-trip
+    /// instead of stopping at a fixpoint. Interop isn't modeled (see module
+    /// doc) and `to_bytes` never re-synthesizes it, so this isn't the
+    /// GPS/Exif "shadows the synthesized pointer" mechanism (zencodec#30/#107)
+    /// — `take_pointer` only ever removed the FIRST 0xA005 match, leaving a
+    /// second occurrence as ordinary data that got consumed one-at-a-time on
+    /// each subsequent parse. Not caught by `orientation`/`has_gps`/
+    /// `has_thumbnail` (nothing reads Interop content) — found by code audit
+    /// while investigating the same "which pointer tags get the duplicate
+    /// sweep" question for zencodec#114/#115 (which turned out unrelated: see
+    /// their closing comments), not a fuzz finding.
+    #[test]
+    fn duplicate_interop_pointer_stripped_on_parse() {
+        // MM TIFF, IFD0 @ 8 with one Exif-IFD pointer -> 0x1a (26). The Exif
+        // sub-IFD there carries TWO Interop (0xA005) entries with different
+        // (deliberately unresolvable) garbage values, so we can tell which one
+        // survives if the sweep doesn't fire.
+        let mut t = vec![b'M', b'M', 0, 0x2a, 0, 0, 0, 8];
+        t.extend_from_slice(&[0, 1]); // IFD0 count = 1
+        t.extend_from_slice(&[0x87, 0x69, 0, 4, 0, 0, 0, 1, 0, 0, 0, 0x1a]); // EXIF_IFD LONG -> 0x1a
+        t.extend_from_slice(&[0, 0, 0, 0]); // IFD0 next = 0
+        t.extend_from_slice(&[0, 2]); // Exif sub-IFD count = 2
+        t.extend_from_slice(&[0xA0, 0x05, 0, 4, 0, 0, 0, 1, 0xAA, 0xAA, 0xAA, 0xAA]); // Interop dup #1
+        t.extend_from_slice(&[0xA0, 0x05, 0, 4, 0, 0, 0, 1, 0xBB, 0xBB, 0xBB, 0xBB]); // Interop dup #2
+        t.extend_from_slice(&[0, 0, 0, 0]); // Exif sub-IFD next = 0
+        assert_eq!(t.len(), 56);
+
+        let x = Exif::parse(&t).expect("fixture must parse");
+        let exif_ifd = x.exif_ifd.as_ref().expect("Exif sub-IFD must be extracted");
+        assert!(
+            !exif_ifd.iter().any(|e| e.tag == TAG_INTEROP_IFD),
+            "duplicate Interop structural tag leaked into exif_ifd as data"
+        );
+        let b1 = x.to_bytes();
+        let y = Exif::parse(&b1).expect("must re-parse");
         assert_eq!(b1, y.to_bytes(), "must be a serializer fixpoint");
     }
 
