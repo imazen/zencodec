@@ -10,13 +10,16 @@
 ## summary
 #
 #   pub consts/statics                          1
+#   inherent methods                            1
 #   trait roster entries (type × trait)         2
 #
 # per-module pub lines:
 #   (root)                            1
+#   estimate                          1
 
-## items (1 lines)
+## items (2 lines)
 
+pub fn estimate::ComputeEnvironment::host() -> Self
 pub const fn CodecIoKind::kind(&self) -> core::option::Option<core::io::error::ErrorKind>
 
 ## trait impls (1 types)

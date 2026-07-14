@@ -447,6 +447,22 @@ pub trait EncodeJob: Sized {
     /// Create a one-shot encoder for a single image.
     fn encoder(self) -> Result<Self::Enc, Self::Error>;
 
+    /// One-shot: encode `pixels` with this job's configuration.
+    ///
+    /// The common tail after `with_metadata_policy` / `with_limits` /
+    /// `with_policy` — equivalent to `self.encoder()?.encode(pixels)`. This is
+    /// the job-level analog of [`EncoderConfig::encode`], which encodes with
+    /// *default* job settings; use this when you have configured the job first.
+    /// For streaming row-push or animation, take the encoder yourself with
+    /// [`encoder()`](Self::encoder) /
+    /// [`animation_frame_encoder()`](Self::animation_frame_encoder).
+    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error>
+    where
+        Self::Enc: Encoder<Error = Self::Error>,
+    {
+        self.encoder()?.encode(pixels)
+    }
+
     /// Create a full-frame animation encoder.
     ///
     /// Set loop count and canvas size before calling this.

@@ -104,6 +104,9 @@ trait EncodeJob: Sized {
 
     fn encoder(self) -> Result<Self::Enc, Self::Error>;
     fn animation_frame_encoder(self) -> Result<Self::AnimationFrameEnc, Self::Error>;
+    // One-shot: encode with this job's config (== self.encoder()?.encode(pixels))
+    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error>
+        where Self::Enc: Encoder<Error = Self::Error>;
 
     // Type-erased convenience (default impls via shims)
     fn dyn_encoder(self) -> Result<Box<dyn DynEncoder>, BoxedError>
@@ -321,6 +324,8 @@ trait DynEncodeJob {
     fn set_loop_count(&mut self, count: Option<u32>);
     fn extensions(&self) -> Option<&dyn Any>;
     fn extensions_mut(&mut self) -> Option<&mut dyn Any>;
+    // One-shot: encode with this job's config (== self.into_encoder()?.encode(pixels))
+    fn encode(self: Box<Self>, pixels: PixelSlice<'_>) -> Result<EncodeOutput, BoxedError>;
     fn into_encoder(self: Box<Self>) -> Result<Box<dyn DynEncoder>, BoxedError>;
     fn into_animation_frame_encoder(self: Box<Self>) -> Result<Box<dyn DynAnimationFrameEncoder>, BoxedError>;
 }

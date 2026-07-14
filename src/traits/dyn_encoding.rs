@@ -257,6 +257,18 @@ pub trait DynEncodeJob {
     /// Mutable access to codec-specific extensions.
     fn extensions_mut(&mut self) -> Option<&mut dyn Any>;
 
+    /// One-shot: encode `pixels` with this job's configuration and return the
+    /// output — the common tail after `set_metadata_policy` / `set_limits` /
+    /// `set_policy`. Equivalent to `self.into_encoder()?.encode(pixels)`.
+    ///
+    /// Provided method (adding it broke no implementor). For streaming row-push
+    /// or animation, take the encoder yourself with
+    /// [`into_encoder`](Self::into_encoder) /
+    /// [`into_animation_frame_encoder`](Self::into_animation_frame_encoder).
+    fn encode(self: Box<Self>, pixels: PixelSlice<'_>) -> Result<EncodeOutput, BoxedError> {
+        self.into_encoder()?.encode(pixels)
+    }
+
     /// Create the single-image encoder (consumes this job).
     fn into_encoder(self: Box<Self>) -> Result<Box<dyn DynEncoder>, BoxedError>;
 

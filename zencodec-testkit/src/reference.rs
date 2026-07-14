@@ -57,8 +57,8 @@ use zencodec::gainmap::{
 };
 use zencodec::{
     AnimationFrame, CategorizedError, Cicp, CodecError, CodecIoKind, ContentLightLevel,
-    ErrorCategory, ImageFormat, ImageInfo, ImageSequence, MasteringDisplay, Metadata, Orientation,
-    ResourceLimits, StopToken, UnsupportedOperation,
+    ErrorCategory, ImageFormat, ImageFormatDefinition, ImageInfo, ImageSequence, MasteringDisplay,
+    Metadata, Orientation, ResourceLimits, StopToken, UnsupportedOperation,
 };
 use zenpixels::{
     ColorContext, ColorModel, PixelBuffer, PixelDescriptor, PixelSlice, TransferFunction,
@@ -943,6 +943,65 @@ impl DecoderConfig for ReferenceDecoderConfig {
         RefDecodeJob {
             render: GainMapRender::BaseOnly,
         }
+    }
+}
+
+fn detect_zcr(data: &[u8]) -> bool {
+    data.starts_with(MAGIC)
+}
+
+/// An [`ImageFormatDefinition`] whose `detect` matches the reference codec's
+/// `ZCR1` wire magic — the piece [`ReferenceDecoderConfig`] lacks.
+///
+/// The reference decoder registers under [`ImageFormat::Pnm`] (standing in for
+/// "a real codec"), but the bytes it produces are its own `ZCR1` container, not
+/// PNM — so [`CodecSet::detect`](zencodec::CodecSet::detect) can't route encoded
+/// reference bytes back to it. Register [`ReferenceZcrDecoderConfig`] under this
+/// format and detection-based decode (`decode` / `probe` / `estimate_decode_of`)
+/// works end to end, without every example hand-rolling its own custom format.
+pub static ZCR_FORMAT: ImageFormatDefinition = ImageFormatDefinition::new(
+    "zcr",
+    None,
+    "ZCR (reference codec wire format)",
+    "zcr",
+    &["zcr"],
+    "image/x-zcr",
+    &["image/x-zcr"],
+    true,  // alpha
+    true,  // animation
+    true,  // lossless
+    false, // lossy
+    MAGIC.len(),
+    detect_zcr,
+);
+
+static ZCR_FORMATS: &[ImageFormat] = &[ImageFormat::Custom(&ZCR_FORMAT)];
+
+/// The reference decoder registered under the self-detecting [`ZCR_FORMAT`]
+/// instead of [`ImageFormat::Pnm`].
+///
+/// Drop-in for [`ReferenceDecoderConfig`] on a [`CodecSet`](zencodec::CodecSet)
+/// when you want `set.decode(bytes)` / `set.probe(bytes)` to detect the
+/// reference codec's own bytes. Decode behavior is identical — only the
+/// registration format differs.
+#[derive(Clone, Debug, Default)]
+pub struct ReferenceZcrDecoderConfig;
+
+impl DecoderConfig for ReferenceZcrDecoderConfig {
+    type Error = RefError;
+    type Job<'a> = RefDecodeJob;
+
+    fn formats() -> &'static [ImageFormat] {
+        ZCR_FORMATS
+    }
+    fn supported_descriptors() -> &'static [PixelDescriptor] {
+        ReferenceDecoderConfig::supported_descriptors()
+    }
+    fn capabilities() -> &'static DecodeCapabilities {
+        ReferenceDecoderConfig::capabilities()
+    }
+    fn job<'a>(self) -> Self::Job<'a> {
+        ReferenceDecoderConfig.job()
     }
 }
 

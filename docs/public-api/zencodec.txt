@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1481 lines (supported surface) | zencodec.features.txt 2 added (features: std) | zencodec.internal.txt 89 lines (89 hidden + 0 excluded-feature)
+# files: zencodec.txt 1490 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 89 lines (89 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -14,7 +14,7 @@
 #   pub types (struct/enum/trait/alias)       169
 #   pub consts/statics                        172
 #   free functions                             42
-#   inherent methods                          653
+#   inherent methods                          662
 #   struct fields                             196
 #   enum variants                             185
 #   re-exports                                 12
@@ -24,17 +24,17 @@
 #   auto-trait exceptions                       8
 #
 # per-module pub lines:
-#   (root)                          727
+#   (root)                          731
 #   decode                          168
-#   encode                          117
-#   estimate                         47
+#   encode                          119
+#   estimate                         48
 #   exif                             65
 #   gainmap                         126
 #   helpers                          13
 #   icc                               1
-#   prelude                         174
+#   prelude                         176
 
-## items (1386 lines)
+## items (1395 lines)
 
 pub mod zencodec
 pub use At
@@ -417,6 +417,7 @@ pub fn encode::DynAnimationFrameEncoder::finish(alloc::boxed::Box<Self>, core::o
 pub fn encode::DynAnimationFrameEncoder::into_any(alloc::boxed::Box<Self>) -> alloc::boxed::Box<dyn core::any::Any>
 pub fn encode::DynAnimationFrameEncoder::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), encode::BoxedError>
 pub trait encode::DynEncodeJob [also: prelude]
+pub fn encode::DynEncodeJob::encode(alloc::boxed::Box<Self>, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
 pub fn encode::DynEncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn encode::DynEncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
 pub fn encode::DynEncodeJob::into_animation_frame_encoder(alloc::boxed::Box<Self>) -> core::result::Result<alloc::boxed::Box<dyn encode::DynAnimationFrameEncoder>, encode::BoxedError>
@@ -449,6 +450,7 @@ pub type encode::EncodeJob::Error: core::error::Error + core::marker::Send + cor
 pub fn encode::EncodeJob::animation_frame_encoder(self) -> core::result::Result<Self::AnimationFrameEnc, Self::Error>
 pub fn encode::EncodeJob::dyn_animation_frame_encoder(self) -> core::result::Result<alloc::boxed::Box<dyn encode::DynAnimationFrameEncoder>, encode::BoxedError> where Self::AnimationFrameEnc: encode::AnimationFrameEncoder + core::marker::Send
 pub fn encode::EncodeJob::dyn_encoder(self) -> core::result::Result<alloc::boxed::Box<dyn encode::DynEncoder>, encode::BoxedError> where Self::Enc: encode::Encoder + core::marker::Send
+pub fn encode::EncodeJob::encode(self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, Self::Error> where Self::Enc: encode::Encoder<Error = Self::Error>
 pub fn encode::EncodeJob::encoder(self) -> core::result::Result<Self::Enc, Self::Error>
 pub fn encode::EncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn encode::EncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
@@ -503,6 +505,7 @@ pub estimate::SimdTier::X86V3
 pub estimate::SimdTier::X86V4
 #[non_exhaustive] pub struct estimate::ComputeEnvironment
 pub fn estimate::ComputeEnvironment::available_ram_bytes(&self) -> core::option::Option<u64>
+pub fn estimate::ComputeEnvironment::conservative() -> Self
 pub fn estimate::ComputeEnvironment::cores(&self) -> usize
 pub fn estimate::ComputeEnvironment::new() -> Self
 pub fn estimate::ComputeEnvironment::simd_tier(&self) -> core::option::Option<estimate::SimdTier>
@@ -783,6 +786,7 @@ pub fn prelude::DynDecoderConfig::dyn_job(&self) -> alloc::boxed::Box<(dyn decod
 pub fn prelude::DynDecoderConfig::estimate_decode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
 pub fn prelude::DynDecoderConfig::formats(&self) -> &'static [ImageFormat]
 pub fn prelude::DynDecoderConfig::supported_descriptors(&self) -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub fn prelude::DynEncodeJob::encode(alloc::boxed::Box<Self>, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
 pub fn prelude::DynEncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn prelude::DynEncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
 pub fn prelude::DynEncodeJob::into_animation_frame_encoder(alloc::boxed::Box<Self>) -> core::result::Result<alloc::boxed::Box<dyn encode::DynAnimationFrameEncoder>, encode::BoxedError>
@@ -814,6 +818,7 @@ pub type prelude::EncodeJob::Error: core::error::Error + core::marker::Send + co
 pub fn prelude::EncodeJob::animation_frame_encoder(self) -> core::result::Result<Self::AnimationFrameEnc, Self::Error>
 pub fn prelude::EncodeJob::dyn_animation_frame_encoder(self) -> core::result::Result<alloc::boxed::Box<dyn encode::DynAnimationFrameEncoder>, encode::BoxedError> where Self::AnimationFrameEnc: encode::AnimationFrameEncoder + core::marker::Send
 pub fn prelude::EncodeJob::dyn_encoder(self) -> core::result::Result<alloc::boxed::Box<dyn encode::DynEncoder>, encode::BoxedError> where Self::Enc: encode::Encoder + core::marker::Send
+pub fn prelude::EncodeJob::encode(self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, Self::Error> where Self::Enc: encode::Encoder<Error = Self::Error>
 pub fn prelude::EncodeJob::encoder(self) -> core::result::Result<Self::Enc, Self::Error>
 pub fn prelude::EncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn prelude::EncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
@@ -1109,6 +1114,10 @@ pub fn CodecSet::encode_job(&self, ImageFormat) -> core::result::Result<alloc::b
 pub fn CodecSet::encode_job_with(&self, ImageFormat, encode::Fidelity) -> core::result::Result<alloc::boxed::Box<dyn encode::DynEncodeJob>, CodecSetError>
 pub fn CodecSet::encode_with(&self, ImageFormat, encode::Fidelity, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, CodecSetError>
 pub fn CodecSet::encoder_for(&self, ImageFormat) -> core::option::Option<&dyn encode::DynEncoderConfig>
+pub fn CodecSet::estimate_decode(&self, ImageFormat, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> core::result::Result<estimate::ResourceEstimate, CodecSetError>
+pub fn CodecSet::estimate_decode_of(&self, &[u8], &estimate::ComputeEnvironment) -> core::result::Result<estimate::ResourceEstimate, CodecSetError>
+pub fn CodecSet::estimate_encode(&self, ImageFormat, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> core::result::Result<estimate::ResourceEstimate, CodecSetError>
+pub fn CodecSet::estimate_encode_of(&self, ImageFormat, zenpixels::buffer::PixelSlice<'_>, &estimate::ComputeEnvironment) -> core::result::Result<estimate::ResourceEstimate, CodecSetError>
 pub fn CodecSet::new() -> Self
 pub fn CodecSet::probe<'a>(&'a self, &'a [u8]) -> core::result::Result<ImageInfo, CodecSetError>
 pub fn CodecSet::push_decode<'a>(&'a self, &'a [u8], &mut dyn decode::DecodeRowSink, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<decode::OutputInfo, CodecSetError>
