@@ -531,6 +531,25 @@ impl CodecSet {
             .estimate_encode_resources(image, compute))
     }
 
+    /// Predict encode resources for the `pixels` you are about to hand the
+    /// encoder, reading their dimensions and format straight off the slice —
+    /// the pixels-based counterpart to [`estimate_encode`](Self::estimate_encode)
+    /// (as [`estimate_decode_of`](Self::estimate_decode_of) is to
+    /// [`estimate_decode`](Self::estimate_decode)).
+    ///
+    /// Saves building an [`ImageCharacteristics`] by hand when you already hold
+    /// the pixel slice. Errors only with [`NoEncoder`](CodecSetError::NoEncoder)
+    /// when no encoder for `format` is registered.
+    pub fn estimate_encode_of(
+        &self,
+        format: ImageFormat,
+        pixels: PixelSlice<'_>,
+        compute: &ComputeEnvironment,
+    ) -> Result<ResourceEstimate, CodecSetError> {
+        let image = ImageCharacteristics::new(pixels.width(), pixels.rows(), pixels.descriptor());
+        self.estimate_encode(format, &image, compute)
+    }
+
     /// Predict the peak memory and wall-time of **decoding** an image with the
     /// given [`ImageCharacteristics`] as `format` on `compute`, without
     /// decoding anything.
