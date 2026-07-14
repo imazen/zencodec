@@ -12,7 +12,7 @@ use std::sync::LazyLock;
 
 use zencodec::encode::Fidelity;
 use zencodec::estimate::ComputeEnvironment;
-use zencodec::{CodecSet, ImageFormat, Metadata, MetadataPolicy};
+use zencodec::{CodecSet, ColorEmitPolicy, ImageFormat, Metadata, MetadataPolicy};
 use zencodec_testkit::{ReferenceEncoderConfig, ReferenceZcrDecoderConfig};
 use zenpixels::{PixelDescriptor, PixelSlice};
 
@@ -69,6 +69,32 @@ fn share_one_set_app_wide() {
 
     let file = CODECS.encode(ImageFormat::Pnm, rgb8(&RGB)).unwrap();
     assert!(CODECS.probe(file.data()).is_ok());
+}
+
+// ── The one-call transcode ──────────────────────────────────────────────────
+
+#[test]
+fn transcode_in_one_call() {
+    let codecs = codecs();
+
+    // A source file (here the reference bytes stand in for, say, a JPEG).
+    let source = codecs.encode(ImageFormat::Pnm, rgb8(&RGB)).unwrap();
+
+    // decode → carry the source's metadata → re-encode, in one call — the
+    // headline proxy operation. `metadata` decides retention (`Web` strips
+    // GPS/camera/timestamps/XMP, keeps orientation + rights + color); `color`
+    // decides how color *signaling* is emitted (not a pixel CMS conversion).
+    let out = codecs
+        .transcode(
+            source.data(),
+            ImageFormat::Pnm,
+            Fidelity::Lossless,
+            MetadataPolicy::Web,
+            ColorEmitPolicy::Balanced,
+        )
+        .unwrap();
+
+    assert!(codecs.probe(out.data()).is_ok());
 }
 
 // ── Encode / decode controls ────────────────────────────────────────────────
