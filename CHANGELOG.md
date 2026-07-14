@@ -85,7 +85,9 @@ removes that whole class).
   estimate (peak memory / wall-time / core-scaling) forwarding to the
   registered codec's `estimate_{encode,decode}_resources`, so a `CodecSet`
   covers estimation too; `NoEncoder` / `NoDecoder` when the format has no
-  registered codec.
+  registered codec. `estimate_decode_of(data, compute)` probes the input
+  first (format + dimensions) and estimates in the decoder's native output
+  format — the bytes-based convenience, as one-call as `probe`.
 - One-shot provided methods on the config traits: `DecoderConfig::decode`,
   `DecoderConfig::probe`, and `EncoderConfig::encode` — single-line
   config→result use with default job settings (08dabea).

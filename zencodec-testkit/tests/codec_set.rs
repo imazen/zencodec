@@ -359,3 +359,43 @@ fn estimate_dispatches_to_the_registered_codec() {
         other => panic!("expected NoDecoder(Jpeg), got {other:?}"),
     }
 }
+
+#[test]
+fn estimate_decode_of_probes_then_estimates() {
+    // Zcr set so probe (detect + header parse) succeeds on the encoded bytes.
+    let set = CodecSet::new()
+        .with_decoder(ZcrDecoderConfig)
+        .with_encoder(ReferenceEncoderConfig::new());
+    let compute = ComputeEnvironment::new();
+
+    let encoded = set
+        .encode(ImageFormat::Pnm, rgb_pixels(&PIXELS, W, H))
+        .expect("encode");
+
+    // Bytes-based path == the explicit path built from the same probe, in the
+    // decoder's native output descriptor.
+    let est = set
+        .estimate_decode_of(encoded.data(), &compute)
+        .expect("estimate_decode_of");
+    // Mirror it explicitly: detected (registration) format + native descriptor.
+    let format = set.detect(encoded.data()).expect("detect");
+    let info = set.probe(encoded.data()).expect("probe");
+    let descriptor = set
+        .decoder_for(format)
+        .and_then(|d| d.supported_descriptors().first().copied())
+        .expect("native descriptor");
+    let explicit = set
+        .estimate_decode(
+            format,
+            &ImageCharacteristics::new(info.width, info.height, descriptor),
+            &compute,
+        )
+        .expect("estimate_decode");
+    assert_eq!(est, explicit);
+
+    // Unrecognized input → the same error probe() would raise.
+    match set.estimate_decode_of(b"not a known image at all", &compute) {
+        Err(CodecSetError::UnrecognizedFormat) => {}
+        other => panic!("expected UnrecognizedFormat, got {other:?}"),
+    }
+}

@@ -557,6 +557,44 @@ impl CodecSet {
             .estimate_decode_resources(image, compute))
     }
 
+    /// Predict the peak memory and wall-time of **decoding** `data`, probing it
+    /// for the format and dimensions first — the bytes-based counterpart to
+    /// [`estimate_decode`](Self::estimate_decode), as convenient as
+    /// [`probe`](Self::probe).
+    ///
+    /// This detects and header-parses the input like [`probe`](Self::probe)
+    /// (same `UnrecognizedFormat` / codec errors), then estimates a still frame
+    /// at the probed canvas dimensions in the decoder's native output format —
+    /// its first
+    /// [`supported_descriptors`](DynDecoderConfig::supported_descriptors), which
+    /// carries the real channel count and bit depth (falling back to RGBA8 /
+    /// RGB8 from the probed alpha only if the decoder lists none). Animations
+    /// are costed as one canvas frame; for per-frame or full-sequence cost, or
+    /// a specific output pixel format, build [`ImageCharacteristics`] yourself
+    /// and call [`estimate_decode`](Self::estimate_decode).
+    pub fn estimate_decode_of(
+        &self,
+        data: &[u8],
+        compute: &ComputeEnvironment,
+    ) -> Result<ResourceEstimate, CodecSetError> {
+        // Key off the *detected* (registration) format, which is what
+        // `decoder_for` / `estimate_decode` index on — not `info.format`, the
+        // format the decoder *reports*, which can differ (e.g. a decoder
+        // registered under a custom format).
+        let format = self.detect(data).ok_or(CodecSetError::UnrecognizedFormat)?;
+        let info = self.decode_job(format)?.probe(data)?;
+        let descriptor = self
+            .decoder_for(format)
+            .and_then(|d| d.supported_descriptors().first().copied())
+            .unwrap_or(if info.has_alpha {
+                PixelDescriptor::RGBA8_SRGB
+            } else {
+                PixelDescriptor::RGB8_SRGB
+            });
+        let image = ImageCharacteristics::new(info.width, info.height, descriptor);
+        self.estimate_decode(format, &image, compute)
+    }
+
     // --- Internals ----------------------------------------------------------
 
     fn decoder_entry(&self, format: ImageFormat) -> Option<&dyn DecoderEntry> {
