@@ -879,6 +879,9 @@ impl CodecSet {
         compute: &ComputeEnvironment) -> Result<ResourceEstimate, CodecSetError>;
     fn estimate_decode(&self, format: ImageFormat, image: &ImageCharacteristics,
         compute: &ComputeEnvironment) -> Result<ResourceEstimate, CodecSetError>;
+    // Pixels-based: reads dims + descriptor off the slice, then estimate_encode.
+    fn estimate_encode_of(&self, format: ImageFormat, pixels: PixelSlice<'_>,
+        compute: &ComputeEnvironment) -> Result<ResourceEstimate, CodecSetError>;
     // Bytes-based: probe → estimate_decode at the decoder's native output.
     fn estimate_decode_of(&self, data: &[u8], compute: &ComputeEnvironment)
         -> Result<ResourceEstimate, CodecSetError>;

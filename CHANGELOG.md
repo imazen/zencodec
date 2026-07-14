@@ -90,6 +90,9 @@ removes that whole class).
   registered codec. `estimate_decode_of(data, compute)` probes the input
   first (format + dimensions) and estimates in the decoder's native output
   format — the bytes-based convenience, as one-call as `probe`.
+  `estimate_encode_of(format, pixels, compute)` is the encode analog — it
+  reads the dimensions and format straight off the pixel slice you already
+  hold, no `ImageCharacteristics` to build by hand.
 - `ComputeEnvironment::conservative()` / `ComputeEnvironment::host()` — explicit
   estimate-environment constructors. `conservative()` is the single-core
   baseline (the old `new()` behavior, now explicitly named); `host()` (std)
@@ -103,6 +106,12 @@ removes that whole class).
 - testkit: `CodecSet` behavior suite against the reference codec — roundtrip,
   registration-scoped detection, custom-format detect→decode, static
   `LazyLock` sharing across threads, template cloning, typed errors (a4fec14).
+- testkit: `tests/usage.rs` — worked, runnable examples of the common
+  `CodecSet` usages (encode / decode / probe / app-wide sharing / fidelity +
+  metadata / pixel-format request / strip streaming / estimate) plus two
+  `zenpixels-convert`-assisted paths: adapting a foreign pixel format into an
+  encoder's supported set (`adapt_for_encode`) and converting a decoded buffer
+  to a caller-chosen format (`convert_to`).
 
 ### Deprecated
 - `ComputeEnvironment::new()` — construction should be explicit. Use
