@@ -6,25 +6,26 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec-testkit.txt 60 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 0 lines (0 hidden + 0 excluded-feature)
+# files: zencodec-testkit.txt 63 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 0 lines (0 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 2
-#   pub types (struct/enum/trait/alias)        16
+#   pub types (struct/enum/trait/alias)        18
+#   pub consts/statics                          2
 #   free functions                             10
 #   inherent methods                            6
 #   struct fields                               2
 #   enum variants                              10
-#   trait roster entries (type × trait)        28
-#   auto-trait-complete types                   9
+#   trait roster entries (type × trait)        32
+#   auto-trait-complete types                  10
 #   auto-trait exceptions                       3
 #
 # per-module pub lines:
-#   (root)                           29
-#   reference                        17
+#   (root)                           31
+#   reference                        19
 
-## items (43 lines)
+## items (45 lines)
 
 pub mod zencodec_testkit
 pub mod reference
@@ -53,11 +54,13 @@ pub Failure::detail: alloc::string::String
 pub struct ReferenceDecoderConfig [also: reference]
 pub struct ReferenceEncoderConfig [also: reference]
 pub fn reference::ReferenceEncoderConfig::new() -> Self
+pub struct ReferenceZcrDecoderConfig [also: reference]
 pub struct TestImage
 pub fn TestImage::as_slice(&self) -> zenpixels::buffer::PixelSlice<'_>
 pub fn TestImage::rgb8_gradient(u32, u32) -> Self
 pub fn TestImage::rgba8_gradient(u32, u32) -> Self
 pub fn TestImage::rgba8_gradient_seeded(u32, u32, u8) -> Self
+pub static ZCR_FORMAT: zencodec::format::ImageFormatDefinition [also: reference]
 pub fn assert_uses_codec_error_envelope<E, D>() where E: zencodec::traits::encoding::EncoderConfig<Error = whereat::at::At<zencodec::error::CodecError>>, <E as zencodec::traits::encoding::EncoderConfig>::Job: zencodec::traits::encoding::EncodeJob<Error = whereat::at::At<zencodec::error::CodecError>>, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = whereat::at::At<zencodec::error::CodecError>>, D: zencodec::traits::decoding::DecoderConfig<Error = whereat::at::At<zencodec::error::CodecError>>, for<'a> <D as zencodec::traits::decoding::DecoderConfig>::Job: zencodec::traits::decoding::DecodeJob<'a, Error = whereat::at::At<zencodec::error::CodecError>>, for<'a> <<D as zencodec::traits::decoding::DecoderConfig>::Job as zencodec::traits::decoding::DecodeJob<'a>>::Dec: zencodec::traits::decoder::Decode<Error = whereat::at::At<zencodec::error::CodecError>>
 pub fn check_all<E, D>(E, D) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
 pub fn check_animation_cross_path_equivalence<E, D>(E, D, &[TestImage]) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
@@ -70,7 +73,7 @@ pub fn check_orientation_roundtrip<E, D>(E, D, &TestImage) -> Conformance where 
 pub fn check_pixel_roundtrip<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
 pub type Conformance = core::result::Result<(), Failure>
 
-## trait impls (13 types)
+## trait impls (14 types)
 
 Failure: Clone, Debug, Display, Error
 reference::RefAnimDec: zencodec::traits::decoder::AnimationFrameDecoder
@@ -84,11 +87,12 @@ reference::RefError: Debug, Display, Error, From<enough::reason::StopReason>, Fr
 reference::RefStreamDec<'_>: zencodec::traits::decoder::StreamingDecode
 reference::ReferenceDecoderConfig: Clone, Debug, Default, zencodec::traits::decoding::DecoderConfig
 reference::ReferenceEncoderConfig: Clone, Debug, Default, zencodec::traits::encoding::EncoderConfig
+reference::ReferenceZcrDecoderConfig: Clone, Debug, Default, zencodec::traits::decoding::DecoderConfig
 whereat::at::At<zencodec::error::CodecError>: From<reference::RefError>
 
 ## auto traits
 
-9 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+10 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 reference::RefAnimDec: !RefUnwindSafe !UnwindSafe
 reference::RefError: !RefUnwindSafe !UnwindSafe
 reference::RefStreamDec<'a>: !RefUnwindSafe !UnwindSafe

@@ -12,54 +12,14 @@ use std::sync::LazyLock;
 
 use zencodec::encode::Fidelity;
 use zencodec::estimate::ComputeEnvironment;
-use zencodec::prelude::*;
-use zencodec::{CodecSet, ImageFormat, ImageFormatDefinition, Metadata, MetadataPolicy};
-use zencodec_testkit::{RefError, ReferenceDecoderConfig, ReferenceEncoderConfig};
+use zencodec::{CodecSet, ImageFormat, Metadata, MetadataPolicy};
+use zencodec_testkit::{ReferenceEncoderConfig, ReferenceZcrDecoderConfig};
 use zenpixels::{PixelDescriptor, PixelSlice};
 
-// ── Scaffolding ────────────────────────────────────────────────────────────
-// A real codec's format detects its own bytes. The reference encoder emits a
-// "ZCR1" wire format, so we register the decoder under a custom format whose
-// `detect` matches it — that's all it takes to make the detection-based APIs
-// (`decode`, `probe`, `estimate_decode_of`) work end to end below.
-
-fn detect_zcr(data: &[u8]) -> bool {
-    data.len() >= 4 && &data[..4] == b"ZCR1"
-}
-
-static ZCR: ImageFormatDefinition = ImageFormatDefinition::new(
-    "zcr",
-    None,
-    "ZCR (reference wire format)",
-    "zcr",
-    &["zcr"],
-    "image/x-zcr",
-    &["image/x-zcr"],
-    true,
-    true,
-    true,
-    false,
-    4,
-    detect_zcr,
-);
-static ZCR_FORMATS: &[ImageFormat] = &[ImageFormat::Custom(&ZCR)];
-
-#[derive(Clone, Debug, Default)]
-struct ZcrDecoderConfig;
-
-impl DecoderConfig for ZcrDecoderConfig {
-    type Error = RefError;
-    type Job<'a> = <ReferenceDecoderConfig as DecoderConfig>::Job<'a>;
-    fn formats() -> &'static [ImageFormat] {
-        ZCR_FORMATS
-    }
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
-        <ReferenceDecoderConfig as DecoderConfig>::supported_descriptors()
-    }
-    fn job<'a>(self) -> Self::Job<'a> {
-        ReferenceDecoderConfig.job()
-    }
-}
+// The reference codec stands in for a real one. Its encoder emits a "ZCR1" wire
+// format; `ReferenceZcrDecoderConfig` registers the decoder under a format whose
+// `detect` matches those bytes, so the detection-based APIs (`decode`, `probe`,
+// `estimate_decode_of`) work end to end below with no custom-format boilerplate.
 
 const W: u32 = 2;
 const H: u32 = 2;
@@ -73,7 +33,7 @@ fn rgb8(bytes: &[u8]) -> PixelSlice<'_> {
 /// One codec set, built once. Real code registers real codecs here.
 fn codecs() -> CodecSet {
     CodecSet::new()
-        .with_decoder(ZcrDecoderConfig)
+        .with_decoder(ReferenceZcrDecoderConfig)
         .with_encoder(ReferenceEncoderConfig::new())
 }
 
@@ -123,13 +83,14 @@ fn encode_with_fidelity_and_metadata() {
         .unwrap();
     assert!(codecs.probe(file.data()).is_ok());
 
-    // Metadata (ICC/EXIF/XMP) rides along via the escape-hatch job.
+    // Metadata (ICC/EXIF/XMP) rides along via the job. Configure it, then
+    // `encode` straight off the job — no `into_encoder()` step.
     let mut job = codecs.encode_job(ImageFormat::Pnm).unwrap();
     job.set_metadata_policy(
         Metadata::none().with_icc(vec![1, 2, 3, 4]),
         MetadataPolicy::PreserveExact,
     );
-    let with_icc = job.into_encoder().unwrap().encode(rgb8(&RGB)).unwrap();
+    let with_icc = job.encode(rgb8(&RGB)).unwrap();
     let info = codecs.probe(with_icc.data()).unwrap();
     assert!(info.source_color.icc_profile.is_some());
 }

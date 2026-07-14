@@ -101,17 +101,29 @@ removes that whole class).
 - One-shot provided methods on the config traits: `DecoderConfig::decode`,
   `DecoderConfig::probe`, and `EncoderConfig::encode` — single-line
   config→result use with default job settings (08dabea).
+- Job-level one-shot encode: `EncodeJob::encode(pixels)` /
+  `DynEncodeJob::encode(pixels)` — configure a job (metadata, limits, policy),
+  then encode in one call instead of the two-step `job.encoder()?.encode(pixels)`
+  / `job.into_encoder()?.encode(pixels)`. Provided methods (adding them broke no
+  implementor); the job-level analog of `EncoderConfig::encode`, which encodes
+  with *default* settings.
 - `zencodec::prelude` — one-import bundle of every encode/decode trait,
   generic and dyn (0edaf64).
 - testkit: `CodecSet` behavior suite against the reference codec — roundtrip,
   registration-scoped detection, custom-format detect→decode, static
   `LazyLock` sharing across threads, template cloning, typed errors (a4fec14).
+- testkit: `ReferenceZcrDecoderConfig` + `ZCR_FORMAT` — the reference decoder
+  registered under a self-detecting format (matches the codec's own `ZCR1` wire
+  magic) instead of `ImageFormat::Pnm`. Drop-in for `ReferenceDecoderConfig` so
+  detection-based decode (`decode` / `probe` / `estimate_decode_of`) works end to
+  end; removes the ~35-line custom-format scaffolding each detect→decode test and
+  example previously hand-rolled.
 - testkit: `tests/usage.rs` — worked, runnable examples of the common
   `CodecSet` usages (encode / decode / probe / app-wide sharing / fidelity +
-  metadata / pixel-format request / strip streaming / estimate) plus two
-  `zenpixels-convert`-assisted paths: adapting a foreign pixel format into an
-  encoder's supported set (`adapt_for_encode`) and converting a decoded buffer
-  to a caller-chosen format (`convert_to`).
+  metadata via the job's direct `encode` / pixel-format request / strip
+  streaming / estimate) plus two `zenpixels-convert`-assisted paths: adapting a
+  foreign pixel format into an encoder's supported set (`adapt_for_encode`) and
+  converting a decoded buffer to a caller-chosen format (`convert_to`).
 
 ### Deprecated
 - `ComputeEnvironment::new()` — construction should be explicit. Use

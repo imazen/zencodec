@@ -2,66 +2,20 @@
 //!
 //! The reference codec registers under `ImageFormat::Pnm` but uses its own
 //! `ZCR1` wire format, so magic-byte *detection* tests either use real PNM
-//! magic (detection only — the bytes aren't decodable) or the `Zcr` wrapper
-//! below, which re-registers the reference decoder under a custom
-//! `ImageFormatDefinition` whose `detect` matches the actual wire format —
-//! exercising the full detect → decode path end to end.
+//! magic (detection only — the bytes aren't decodable) or
+//! `ReferenceZcrDecoderConfig` (from the testkit), which registers the decoder
+//! under a format whose `detect` matches the actual wire format — exercising
+//! the full detect → decode path end to end.
 
 use std::sync::LazyLock;
 
 use zencodec::estimate::{ComputeEnvironment, ImageCharacteristics};
 use zencodec::prelude::*;
-use zencodec::{
-    CodecSet, CodecSetError, ImageFormat, ImageFormatDefinition, Metadata, MetadataPolicy,
-    ResourceLimits,
+use zencodec::{CodecSet, CodecSetError, ImageFormat, Metadata, MetadataPolicy, ResourceLimits};
+use zencodec_testkit::{
+    ReferenceDecoderConfig, ReferenceEncoderConfig, ReferenceZcrDecoderConfig, ZCR_FORMAT,
 };
-use zencodec_testkit::{RefError, ReferenceDecoderConfig, ReferenceEncoderConfig};
 use zenpixels::{PixelDescriptor, PixelSlice};
-
-// ===========================================================================
-// A custom-format registration of the reference decoder
-// ===========================================================================
-
-fn detect_zcr(data: &[u8]) -> bool {
-    data.len() >= 4 && &data[..4] == b"ZCR1"
-}
-
-static ZCR_FORMAT: ImageFormatDefinition = ImageFormatDefinition::new(
-    "zcr-test",
-    None,
-    "ZCR (testkit reference wire format)",
-    "zcr",
-    &["zcr"],
-    "image/x-zcr-test",
-    &["image/x-zcr-test"],
-    true,  // alpha
-    true,  // animation
-    true,  // lossless
-    false, // lossy
-    4,
-    detect_zcr,
-);
-
-static ZCR_FORMATS: &[ImageFormat] = &[ImageFormat::Custom(&ZCR_FORMAT)];
-
-/// The reference decoder re-registered under the custom `zcr-test` format.
-#[derive(Clone, Debug, Default)]
-struct ZcrDecoderConfig;
-
-impl DecoderConfig for ZcrDecoderConfig {
-    type Error = RefError;
-    type Job<'a> = <ReferenceDecoderConfig as DecoderConfig>::Job<'a>;
-
-    fn formats() -> &'static [ImageFormat] {
-        ZCR_FORMATS
-    }
-    fn supported_descriptors() -> &'static [PixelDescriptor] {
-        <ReferenceDecoderConfig as DecoderConfig>::supported_descriptors()
-    }
-    fn job<'a>(self) -> Self::Job<'a> {
-        ReferenceDecoderConfig.job()
-    }
-}
 
 // ===========================================================================
 // Helpers
@@ -115,6 +69,42 @@ fn encode_then_decode_as_roundtrips_pixels() {
 }
 
 #[test]
+fn job_level_encode_matches_the_two_step_form() {
+    // The provided `EncodeJob::encode` / `DynEncodeJob::encode` one-shots must
+    // equal configuring the job then taking the encoder by hand — they are the
+    // common tail, folded into one call.
+
+    // Typed job: `.job().encode()` == `.job().encoder()?.encode()`.
+    let direct = ReferenceEncoderConfig::new()
+        .job()
+        .encode(rgb_pixels(&PIXELS, W, H))
+        .expect("typed job encode");
+    let two_step = ReferenceEncoderConfig::new()
+        .job()
+        .encoder()
+        .expect("encoder")
+        .encode(rgb_pixels(&PIXELS, W, H))
+        .expect("encode");
+    assert_eq!(direct.data(), two_step.data());
+
+    // Dyn job (what CodecSet hands back): `.encode()` == `.into_encoder()?.encode()`.
+    let set = reference_set();
+    let dyn_direct = set
+        .encode_job(ImageFormat::Pnm)
+        .expect("job")
+        .encode(rgb_pixels(&PIXELS, W, H))
+        .expect("dyn job encode");
+    let dyn_two_step = set
+        .encode_job(ImageFormat::Pnm)
+        .expect("job")
+        .into_encoder()
+        .expect("into_encoder")
+        .encode(rgb_pixels(&PIXELS, W, H))
+        .expect("encode");
+    assert_eq!(dyn_direct.data(), dyn_two_step.data());
+}
+
+#[test]
 fn detect_consults_only_registered_formats() {
     let set = reference_set();
 
@@ -134,7 +124,7 @@ fn detect_consults_only_registered_formats() {
 fn custom_format_detect_and_decode_end_to_end() {
     // Encoder emits ZCR1 bytes; the Zcr wrapper's custom format detects them.
     let set = CodecSet::new()
-        .with_decoder(ZcrDecoderConfig)
+        .with_decoder(ReferenceZcrDecoderConfig)
         .with_encoder(ReferenceEncoderConfig::new());
 
     let encoded = set
@@ -157,7 +147,7 @@ fn custom_format_detect_and_decode_end_to_end() {
 fn shared_static_set_decodes_from_many_threads() {
     static CODECS: LazyLock<CodecSet> = LazyLock::new(|| {
         CodecSet::new()
-            .with_decoder(ZcrDecoderConfig)
+            .with_decoder(ReferenceZcrDecoderConfig)
             .with_encoder(ReferenceEncoderConfig::new())
             .with_limits(ResourceLimits::default())
     });
@@ -224,7 +214,7 @@ fn encode_job_carries_metadata() {
 #[test]
 fn animation_roundtrip_through_set() {
     let set = CodecSet::new()
-        .with_decoder(ZcrDecoderConfig)
+        .with_decoder(ReferenceZcrDecoderConfig)
         .with_encoder(ReferenceEncoderConfig::new());
 
     let frame_a = [255u8; 12];
@@ -261,7 +251,7 @@ fn animation_roundtrip_through_set() {
 #[test]
 fn streaming_decoder_borrowing_the_set() {
     let set = CodecSet::new()
-        .with_decoder(ZcrDecoderConfig)
+        .with_decoder(ReferenceZcrDecoderConfig)
         .with_encoder(ReferenceEncoderConfig::new());
 
     let encoded = set
@@ -364,7 +354,7 @@ fn estimate_dispatches_to_the_registered_codec() {
 fn estimate_decode_of_probes_then_estimates() {
     // Zcr set so probe (detect + header parse) succeeds on the encoded bytes.
     let set = CodecSet::new()
-        .with_decoder(ZcrDecoderConfig)
+        .with_decoder(ReferenceZcrDecoderConfig)
         .with_encoder(ReferenceEncoderConfig::new());
     let compute = ComputeEnvironment::conservative();
 
