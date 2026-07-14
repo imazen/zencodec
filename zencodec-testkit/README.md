@@ -1,4 +1,4 @@
-# zencodec-testkit
+# zencodec-testkit [![CI](https://img.shields.io/github/actions/workflow/status/imazen/zencodec/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/zencodec/actions/workflows/ci.yml) [![crates.io](https://img.shields.io/crates/v/zencodec-testkit?style=flat-square)](https://crates.io/crates/zencodec-testkit) [![lib.rs](https://img.shields.io/crates/v/zencodec-testkit?style=flat-square&label=lib.rs&color=blue)](https://lib.rs/crates/zencodec-testkit) [![docs.rs](https://img.shields.io/docsrs/zencodec-testkit?style=flat-square)](https://docs.rs/zencodec-testkit) [![license](https://img.shields.io/crates/l/zencodec-testkit?style=flat-square)](#license)
 
 Conformance test harness for [`zencodec`](https://crates.io/crates/zencodec) codec
 implementations. A codec crate (`zenjpeg`, `zenpng`, `zenwebp`, …) adds this as a
@@ -29,12 +29,20 @@ expensive to ship wrong:
   rather than panicking or silently succeeding. All violations are reported
   together, so one run names every dishonest flag. (Cancellation and the lossy
   flag are out of scope — see the function docs for why.)
+- **Orientation.** `check_orientation_roundtrip` asserts an EXIF orientation
+  survives a keeping policy exactly once — no loss, no double-application.
+- **Error classification.** `check_decode_truncation_series` feeds a
+  deterministic series of truncated prefixes of a known-good image and requires
+  every failure to classify as *incomplete input* (never `Internal`, OOM, or an
+  I/O error) without panicking. `check_decode_error_envelope` /
+  `assert_uses_codec_error_envelope` verify a codec's `ErrorCategory` and codec
+  name survive dyn-dispatch type erasure (both opt-in, not part of `check_all`).
 
-The crate ships two codecs the harness is validated against in this crate's own
-tests, both worked examples of implementing the traits: `reference`, a faithful
-in-memory codec that round-trips pixels *and* metadata and declares/honors every
-capability; and `minimal`, its opposite — one-shot only, declaring every optional
-capability false — which exercises the false-direction branches.
+The crate ships `reference`, a faithful in-memory codec that round-trips pixels
+*and* metadata and declares/honors every capability — the harness is validated
+against it in this crate's own tests, and it doubles as a worked example of
+implementing the traits. (An internal `minimal` codec — one-shot only, every
+optional capability declared false — exercises the false-direction branches.)
 
 [`MetadataPolicy`]: https://docs.rs/zencodec/latest/zencodec/enum.MetadataPolicy.html
 

@@ -32,14 +32,15 @@
 //!   silently decode a truncated header. Enforces the one part of the taxonomy
 //!   that is broadly distinguishable. Opt-in, *not* in [`check_all`]; on the
 //!   dyn-erased path a Pattern-A codec fails it the same way the envelope check
-//!   does (see [`is_incomplete_input_category`] for the allowed/denied policy).
+//!   does (the allowed/denied category policy is documented on
+//!   [`check_decode_truncation_series`]).
 //!
 //! [`check_all`] runs them all with default inputs — the one-call entry point.
 //!
 //! The [`reference`](mod@reference) module ships a faithful codec (declares and
-//! honors every capability) the harness is validated against; the [`minimal`] module ships its
-//! opposite (declares every optional capability false) so the false-direction
-//! branches are validated too. Both double as worked examples.
+//! honors every capability) the harness is validated against — it doubles as a
+//! worked example; an internal `minimal` codec (every optional capability
+//! declared false) validates the false-direction branches.
 //!
 //! [`EncoderConfig`]: zencodec::encode::EncoderConfig
 //! [`DecoderConfig`]: zencodec::decode::DecoderConfig
@@ -59,11 +60,15 @@ use zencodec::{
 };
 use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 
-pub mod fixtures;
-pub mod minimal;
+pub(crate) mod fixtures;
+/// The false-direction exemplar codec — consumed only by this crate's own
+/// tests, so it is compiled only with them.
+#[cfg(test)]
+pub(crate) mod minimal;
 pub mod reference;
 
-pub use minimal::{MinimalDecoderConfig, MinimalEncoderConfig};
+#[cfg(test)]
+pub(crate) use minimal::{MinimalDecoderConfig, MinimalEncoderConfig};
 pub use reference::{RefError, ReferenceDecoderConfig, ReferenceEncoderConfig};
 
 // ===========================================================================
@@ -1283,7 +1288,7 @@ where
 /// data, or a limit), [`Io`](ErrorCategory::Io) (there is no I/O on an in-memory slice),
 /// the caller-fault [`Request`](ErrorCategory::Request) set, the operation
 /// [`Stopped`](ErrorCategory::Stopped) set, and [`Policy`](ErrorCategory::Policy).
-pub fn is_incomplete_input_category(cat: ErrorCategory) -> bool {
+pub(crate) fn is_incomplete_input_category(cat: ErrorCategory) -> bool {
     // Default-DENY: `ErrorCategory` is `#[non_exhaustive]`, so any *future* variant
     // falls through to `false` and is conservatively flagged for review rather than
     // silently accepted as a valid truncation category. The image-bytes-origin arm
@@ -1316,7 +1321,7 @@ fn truncation_lengths(len: usize) -> Vec<usize> {
 /// This enforces the one part of the [`ErrorCategory`] taxonomy that IS broadly
 /// distinguishable: whatever a codec's exact error, cutting a known-good image
 /// short must land in the *incomplete-input* set
-/// ([`is_incomplete_input_category`] — [`UnexpectedEof`](zencodec::ImageError::UnexpectedEof)
+/// ([`UnexpectedEof`](zencodec::ImageError::UnexpectedEof)
 /// is ideal, but the rest of the image-bytes-origin [`Image`](ErrorCategory::Image) arm
 /// ([`Malformed`](zencodec::ImageError::Malformed) / [`Unsupported`](zencodec::ImageError::Unsupported))
 /// is tolerated because a truncated prefix can genuinely look malformed). It catches the real bug class
@@ -1347,7 +1352,7 @@ fn truncation_lengths(len: usize) -> Vec<usize> {
 ///
 /// Like the envelope checks, this is **opt-in and NOT part of [`check_all`]**: the
 /// testkit's own [`reference`](mod@reference) codec is a Pattern-A foil that fails
-/// it on the erased path, while the [`minimal`] envelope exemplar passes (its
+/// it on the erased path, while the internal `minimal` envelope exemplar passes (its
 /// truncations classify as `MalformedImage`).
 pub fn check_decode_truncation_series<D>(dec: D, valid: &[u8]) -> Conformance
 where

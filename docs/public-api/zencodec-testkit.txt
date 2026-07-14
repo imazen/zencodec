@@ -6,40 +6,27 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec-testkit.txt 78 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 0 lines (0 hidden + 0 excluded-feature)
+# files: zencodec-testkit.txt 60 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 0 lines (0 hidden + 0 excluded-feature)
 
 ## summary
 #
-#   pub modules                                 4
-#   pub types (struct/enum/trait/alias)        24
+#   pub modules                                 2
+#   pub types (struct/enum/trait/alias)        16
 #   free functions                             10
-#   inherent methods                           10
+#   inherent methods                            6
 #   struct fields                               2
 #   enum variants                              10
-#   trait roster entries (type × trait)        39
-#   auto-trait-complete types                  15
+#   trait roster entries (type × trait)        28
+#   auto-trait-complete types                   9
 #   auto-trait exceptions                       3
 #
 # per-module pub lines:
-#   (root)                           30
-#   fixtures                          3
-#   minimal                          10
+#   (root)                           29
 #   reference                        17
 
-## items (55 lines)
+## items (43 lines)
 
 pub mod zencodec_testkit
-pub mod fixtures
-pub fn fixtures::rich_exif_le() -> alloc::vec::Vec<u8>
-pub fn fixtures::sample_icc() -> alloc::vec::Vec<u8>
-pub fn fixtures::sample_xmp() -> alloc::vec::Vec<u8>
-pub mod minimal
-pub struct minimal::MinDec<'a>
-pub struct minimal::MinDecodeJob
-pub struct minimal::MinEnc
-pub struct minimal::MinEncodeJob
-pub fn minimal::MinimalDecoderConfig::new() -> Self
-pub fn minimal::MinimalEncoderConfig::new() -> Self
 pub mod reference
 pub reference::RefError::Cancelled(enough::reason::StopReason)
 pub reference::RefError::Invalid(alloc::string::String)
@@ -63,10 +50,6 @@ pub RefError::Unsupported(zencodec::capabilities::UnsupportedOperation)
 pub struct Failure
 pub Failure::check: &'static str
 pub Failure::detail: alloc::string::String
-pub struct MinimalDecoderConfig [also: minimal]
-pub fn minimal::MinimalDecoderConfig::new() -> Self
-pub struct MinimalEncoderConfig [also: minimal]
-pub fn minimal::MinimalEncoderConfig::new() -> Self
 pub struct ReferenceDecoderConfig [also: reference]
 pub struct ReferenceEncoderConfig [also: reference]
 pub fn reference::ReferenceEncoderConfig::new() -> Self
@@ -75,25 +58,21 @@ pub fn TestImage::as_slice(&self) -> zenpixels::buffer::PixelSlice<'_>
 pub fn TestImage::rgb8_gradient(u32, u32) -> Self
 pub fn TestImage::rgba8_gradient(u32, u32) -> Self
 pub fn TestImage::rgba8_gradient_seeded(u32, u32, u8) -> Self
+pub fn assert_uses_codec_error_envelope<E, D>() where E: zencodec::traits::encoding::EncoderConfig<Error = whereat::at::At<zencodec::error::CodecError>>, <E as zencodec::traits::encoding::EncoderConfig>::Job: zencodec::traits::encoding::EncodeJob<Error = whereat::at::At<zencodec::error::CodecError>>, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = whereat::at::At<zencodec::error::CodecError>>, D: zencodec::traits::decoding::DecoderConfig<Error = whereat::at::At<zencodec::error::CodecError>>, for<'a> <D as zencodec::traits::decoding::DecoderConfig>::Job: zencodec::traits::decoding::DecodeJob<'a, Error = whereat::at::At<zencodec::error::CodecError>>, for<'a> <<D as zencodec::traits::decoding::DecoderConfig>::Job as zencodec::traits::decoding::DecodeJob<'a>>::Dec: zencodec::traits::decoder::Decode<Error = whereat::at::At<zencodec::error::CodecError>>
 pub fn check_all<E, D>(E, D) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
 pub fn check_animation_cross_path_equivalence<E, D>(E, D, &[TestImage]) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
 pub fn check_capability_honesty<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
 pub fn check_cross_path_pixel_equivalence<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
+pub fn check_decode_error_envelope<D>(D, &[u8]) -> Conformance where D: zencodec::traits::decoding::DecoderConfig + 'static
+pub fn check_decode_truncation_series<D>(D, &[u8]) -> Conformance where D: zencodec::traits::decoding::DecoderConfig + 'static
 pub fn check_metadata_no_leak<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
 pub fn check_orientation_roundtrip<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
 pub fn check_pixel_roundtrip<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
 pub type Conformance = core::result::Result<(), Failure>
 
-## trait impls (19 types)
+## trait impls (13 types)
 
 Failure: Clone, Debug, Display, Error
-minimal::MinDec<'_>: zencodec::traits::decoder::Decode
-minimal::MinDec<'a>: Debug
-minimal::MinDecodeJob: zencodec::traits::decoding::DecodeJob<'a>
-minimal::MinEnc: zencodec::traits::encoder::Encoder
-minimal::MinEncodeJob: zencodec::traits::encoding::EncodeJob
-minimal::MinimalDecoderConfig: Clone, Debug, Default, zencodec::traits::decoding::DecoderConfig
-minimal::MinimalEncoderConfig: Clone, Debug, Default, zencodec::traits::encoding::EncoderConfig
 reference::RefAnimDec: zencodec::traits::decoder::AnimationFrameDecoder
 reference::RefAnimEnc: zencodec::traits::encoder::AnimationFrameEncoder
 reference::RefDec<'_>: zencodec::traits::decoder::Decode
@@ -101,14 +80,15 @@ reference::RefDec<'a>: Debug
 reference::RefDecodeJob: zencodec::traits::decoding::DecodeJob<'a>
 reference::RefEnc: zencodec::traits::encoder::Encoder
 reference::RefEncodeJob: zencodec::traits::encoding::EncodeJob
-reference::RefError: Debug, Display, Error, From<enough::reason::StopReason>, From<zencodec::capabilities::UnsupportedOperation>, From<zencodec::limits::LimitExceeded>
+reference::RefError: Debug, Display, Error, From<enough::reason::StopReason>, From<zencodec::capabilities::UnsupportedOperation>, From<zencodec::limits::LimitExceeded>, zencodec::error::CategorizedError
 reference::RefStreamDec<'_>: zencodec::traits::decoder::StreamingDecode
 reference::ReferenceDecoderConfig: Clone, Debug, Default, zencodec::traits::decoding::DecoderConfig
 reference::ReferenceEncoderConfig: Clone, Debug, Default, zencodec::traits::encoding::EncoderConfig
+whereat::at::At<zencodec::error::CodecError>: From<reference::RefError>
 
 ## auto traits
 
-15 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+9 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 reference::RefAnimDec: !RefUnwindSafe !UnwindSafe
 reference::RefError: !RefUnwindSafe !UnwindSafe
 reference::RefStreamDec<'a>: !RefUnwindSafe !UnwindSafe

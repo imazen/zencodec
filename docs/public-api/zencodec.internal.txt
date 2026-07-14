@@ -9,11 +9,11 @@
 
 ## summary
 #
-#   inherent methods                           34
-#   trait roster entries (type × trait)        33
+#   inherent methods                           45
+#   trait roster entries (type × trait)        44
 #
 # per-module pub lines:
-#   (root)                           17
+#   (root)                           28
 #   decode                            3
 #   encode                            1
 #   estimate                          3
@@ -21,24 +21,35 @@
 #   gainmap                           4
 #   helpers                           1
 
-## items (34 lines)
+## items (45 lines)
 
 pub fn AllocPreference::assert_fields_are_eq(&self)
 pub fn CicpEmission::assert_fields_are_eq(&self)
+pub fn CodecIoKind::assert_fields_are_eq(&self)
 pub fn ColorEmitFields::assert_fields_are_eq(&self)
 pub fn ColorEmitPolicy::assert_fields_are_eq(&self)
+pub fn ErrorCategory::assert_fields_are_eq(&self)
 pub fn IccDisposition::assert_fields_are_eq(&self)
 pub fn IccRetention::assert_fields_are_eq(&self)
+pub fn ImageError::assert_fields_are_eq(&self)
 pub fn ImageFormat::assert_fields_are_eq(&self)
 pub fn ImageSequence::assert_fields_are_eq(&self)
+pub fn InternalKind::assert_fields_are_eq(&self)
+pub fn InvalidKind::assert_fields_are_eq(&self)
 pub fn LimitExceeded::assert_fields_are_eq(&self)
+pub fn LimitKind::assert_fields_are_eq(&self)
 pub fn MetadataFields::assert_fields_are_eq(&self)
 pub fn MetadataPolicy::assert_fields_are_eq(&self)
 pub fn OrientationHint::assert_fields_are_eq(&self)
+pub fn PolicyKind::assert_fields_are_eq(&self)
+pub fn RequestError::assert_fields_are_eq(&self)
 pub fn ResolutionUnit::assert_fields_are_eq(&self)
+pub fn ResourceError::assert_fields_are_eq(&self)
 pub fn ResourceLimits::assert_fields_are_eq(&self)
+pub fn StreamOffset::assert_fields_are_eq(&self)
 pub fn Supplements::assert_fields_are_eq(&self)
 pub fn ThreadingPolicy::assert_fields_are_eq(&self)
+pub fn UnsupportedImageKind::assert_fields_are_eq(&self)
 pub fn UnsupportedOperation::assert_fields_are_eq(&self)
 pub fn decode::DecodeCapabilities::assert_fields_are_eq(&self)
 pub fn decode::DecodePolicy::assert_fields_are_eq(&self)
@@ -58,21 +69,32 @@ pub fn gainmap::Iso21496Format::assert_fields_are_eq(&self)
 pub fn gainmap::UFraction::assert_fields_are_eq(&self)
 pub fn helpers::IccMatchTolerance::assert_fields_are_eq(&self)
 
-## trait impls (33 types)
+## trait impls (44 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
+CodecIoKind: TrivialClone
 ColorEmitFields: TrivialClone
 ColorEmitPolicy: TrivialClone
+ErrorCategory: TrivialClone
 IccRetention: TrivialClone
+ImageError: TrivialClone
 ImageFormat: TrivialClone
+InternalKind: TrivialClone
+InvalidKind: TrivialClone
+LimitKind: TrivialClone
 MetadataFields: TrivialClone
 MetadataPolicy: TrivialClone
 OrientationHint: TrivialClone
+PolicyKind: TrivialClone
+RequestError: TrivialClone
 Resolution: TrivialClone
 ResolutionUnit: TrivialClone
+ResourceError: TrivialClone
 ResourceLimits: TrivialClone
+StreamOffset: TrivialClone
 ThreadingPolicy: TrivialClone
+UnsupportedImageKind: TrivialClone
 UnsupportedOperation: TrivialClone
 decode::DecodePolicy: TrivialClone
 encode::EncodePolicy: TrivialClone

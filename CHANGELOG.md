@@ -1,6 +1,31 @@
 # Changelog
 
-All notable changes to zencodec are documented here.
+All notable changes to zencodec are documented here. Sections below the
+`zencodec-testkit` heading refer to the root `zencodec` crate.
+
+## zencodec-testkit
+
+### [0.1.0] - 2026-07-14
+
+First crates.io release of the conformance harness (previously an unpublished
+workspace member consumed via git pins — which forced every consumer to carry a
+`[patch.crates-io]` zencodec entry to avoid a duplicate-crate graph; publishing
+removes that whole class).
+
+- Public API ablated to the consumed + designed-for-adoption surface before
+  first publish: the `check_*` conformance functions, `check_all`,
+  `assert_uses_codec_error_envelope`, `Conformance` / `Failure` / `TestImage`,
+  and the `reference` worked-example codec. Now `pub(crate)`: the `minimal`
+  false-direction codec, the `fixtures` module, and
+  `is_incomplete_input_category` (all unused by any external consumer;
+  re-exposing later is an additive change).
+- zencodec dependency requirement raised to `0.1.26` (the API the harness
+  actually targets: two-level `ErrorCategory`, `Stopped`, truncation-series
+  check).
+- README: badge row, orientation + error-classification check descriptions,
+  `minimal` reframed as internal; LICENSE files included in the package.
+
+## zencodec
 
 ## [Unreleased]
 

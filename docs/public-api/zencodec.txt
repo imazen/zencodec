@@ -6,44 +6,48 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1181 lines (supported surface) | zencodec.features.txt 0 added (features: none) | zencodec.internal.txt 67 lines (67 hidden + 0 excluded-feature)
+# files: zencodec.txt 1283 lines (supported surface) | zencodec.features.txt 2 added (features: std) | zencodec.internal.txt 89 lines (89 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 8
-#   pub types (struct/enum/trait/alias)       119
-#   pub consts/statics                        170
-#   free functions                             33
-#   inherent methods                          461
-#   struct fields                             194
-#   enum variants                             144
-#   re-exports                                  8
-#   trait roster entries (type × trait)       288
+#   pub types (struct/enum/trait/alias)       132
+#   pub consts/statics                        172
+#   free functions                             39
+#   inherent methods                          484
+#   struct fields                             196
+#   enum variants                             181
+#   re-exports                                 12
+#   trait roster entries (type × trait)       379
 #   conditional trait impls (verbatim)          2
-#   auto-trait-complete types                  56
-#   auto-trait exceptions                       5
+#   auto-trait-complete types                  67
+#   auto-trait exceptions                       6
 #
 # per-module pub lines:
-#   (root)                          615
+#   (root)                          690
 #   decode                          166
-#   encode                          113
+#   encode                          116
 #   estimate                         47
 #   exif                             65
-#   gainmap                         117
+#   gainmap                         126
 #   helpers                          13
 #   icc                               1
 
-## items (1107 lines)
+## items (1194 lines)
 
 pub mod zencodec
+pub use At
 pub use Cicp
 pub use ColorAuthority
 pub use ContentLightLevel
+pub use ErrorAtExt
 pub use MasteringDisplay
 pub use Orientation
+pub use ResultAtExt
 pub use StopToken
 pub use Unstoppable
 pub use enough
+pub use whereat
 pub mod decode
 pub decode::GainMapRender::BaseOnly
 pub decode::GainMapRender::Components
@@ -147,7 +151,10 @@ pub const fn decode::DecodePolicy::with_strict(self, bool) -> Self
 #[non_exhaustive] pub struct decode::DecodedGainMap [also: gainmap]
 pub decode::DecodedGainMap::metadata: gainmap::GainMapInfo
 pub decode::DecodedGainMap::pixels: zenpixels::buffer::PixelBuffer
+pub fn gainmap::DecodedGainMap::channels(&self) -> u8
+pub fn gainmap::DecodedGainMap::height(&self) -> u32
 pub fn gainmap::DecodedGainMap::new(zenpixels::buffer::PixelBuffer, gainmap::GainMapInfo) -> Self
+pub fn gainmap::DecodedGainMap::width(&self) -> u32
 #[non_exhaustive] pub struct decode::EmbeddedMetadata
 pub decode::EmbeddedMetadata::exif: core::option::Option<alloc::sync::Arc<[u8]>>
 pub decode::EmbeddedMetadata::xmp: core::option::Option<alloc::sync::Arc<[u8]>>
@@ -303,9 +310,11 @@ pub const fn encode::Fidelity::butteraugli(f32) -> Self
 pub const fn encode::Fidelity::codec_quality(f32) -> Self
 pub const fn encode::Fidelity::is_lossless(self) -> bool
 pub const fn encode::Fidelity::ssim2(f32) -> Self
+pub const fn encode::Fidelity::zensim_b(f32) -> Self
 #[non_exhaustive] pub enum encode::LossyTarget
 pub encode::LossyTarget::ApproxButteraugli(f32)
 pub encode::LossyTarget::ApproxSsim2(f32)
+pub encode::LossyTarget::ApproxZensimB(f32)
 pub encode::LossyTarget::CodecSpecificQuality(f32)
 #[non_exhaustive] pub struct encode::EncodeCapabilities
 pub const encode::EncodeCapabilities::EMPTY: Self
@@ -441,6 +450,8 @@ pub fn encode::EncodeJob::encoder(self) -> core::result::Result<Self::Enc, Self:
 pub fn encode::EncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn encode::EncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
 pub fn encode::EncodeJob::with_canvas_size(self, u32, u32) -> Self
+pub fn encode::EncodeJob::with_gain_map_encoded(self, gainmap::GainMapSource) -> core::result::Result<Self, Self::Error> where Self::Enc: encode::Encoder<Error = Self::Error>
+pub fn encode::EncodeJob::with_gain_map_pixels(self, gainmap::DecodedGainMap) -> core::result::Result<Self, Self::Error> where Self::Enc: encode::Encoder<Error = Self::Error>
 pub fn encode::EncodeJob::with_limits(self, ResourceLimits) -> Self
 pub fn encode::EncodeJob::with_loop_count(self, core::option::Option<u32>) -> Self
 pub fn encode::EncodeJob::with_metadata(self, Metadata) -> Self
@@ -610,7 +621,10 @@ pub gainmap::Iso21496Format::JpegApp2BodyWithUrn = 3
 pub gainmap::Iso21496Format::JxlJhgm = 2
 pub gainmap::DecodedGainMap::metadata: gainmap::GainMapInfo
 pub gainmap::DecodedGainMap::pixels: zenpixels::buffer::PixelBuffer
+pub fn gainmap::DecodedGainMap::channels(&self) -> u8
+pub fn gainmap::DecodedGainMap::height(&self) -> u32
 pub fn gainmap::DecodedGainMap::new(zenpixels::buffer::PixelBuffer, gainmap::GainMapInfo) -> Self
+pub fn gainmap::DecodedGainMap::width(&self) -> u32
 pub struct gainmap::Fraction
 pub gainmap::Fraction::denominator: u32
 pub gainmap::Fraction::numerator: i32
@@ -627,6 +641,7 @@ pub fn gainmap::GainMapChannel::linear_max(&self) -> f64
 pub fn gainmap::GainMapChannel::linear_min(&self) -> f64
 pub gainmap::GainMapInfo::alternate_cicp: core::option::Option<zenpixels::cicp::Cicp>
 pub gainmap::GainMapInfo::alternate_icc: core::option::Option<alloc::sync::Arc<[u8]>>
+pub gainmap::GainMapInfo::bit_depth: u8
 pub gainmap::GainMapInfo::channels: u8
 pub gainmap::GainMapInfo::height: u32
 pub gainmap::GainMapInfo::params: gainmap::GainMapParams
@@ -634,6 +649,7 @@ pub gainmap::GainMapInfo::width: u32
 pub fn gainmap::GainMapInfo::new(gainmap::GainMapParams, u32, u32, u8) -> Self
 pub fn gainmap::GainMapInfo::with_alternate_cicp(self, zenpixels::cicp::Cicp) -> Self
 pub fn gainmap::GainMapInfo::with_alternate_icc(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn gainmap::GainMapInfo::with_bit_depth(self, u8) -> Self
 pub gainmap::GainMapParams::alternate_hdr_headroom: f64
 pub gainmap::GainMapParams::backward_direction: bool
 pub gainmap::GainMapParams::base_hdr_headroom: f64
@@ -693,6 +709,14 @@ pub ColorEmitPolicy::Compatibility
 pub ColorEmitPolicy::Custom(ColorEmitFields)
 pub ColorEmitPolicy::Verbatim
 pub const fn ColorEmitPolicy::fields(&self) -> ColorEmitFields
+#[non_exhaustive] pub enum ErrorCategory
+pub ErrorCategory::Image(ImageError)
+pub ErrorCategory::Internal(InternalKind)
+pub ErrorCategory::Io(CodecIoKind)
+pub ErrorCategory::Policy(PolicyKind)
+pub ErrorCategory::Request(RequestError)
+pub ErrorCategory::Resource(ResourceError)
+pub ErrorCategory::Stopped(enough::reason::StopReason)
 pub enum GainMapDirection [also: gainmap]
 pub GainMapDirection::BaseIsHdr
 pub GainMapDirection::BaseIsSdr
@@ -720,6 +744,10 @@ pub IccRetention::DropIfCicpRepresentable
 pub IccRetention::DropIfCicpSafeSoleCarrier
 pub IccRetention::Keep
 pub IccRetention::KeepNonSrgb
+#[non_exhaustive] pub enum ImageError
+pub ImageError::Malformed
+pub ImageError::UnexpectedEof
+pub ImageError::Unsupported(UnsupportedImageKind)
 #[non_exhaustive] pub enum ImageFormat
 pub ImageFormat::Avif
 pub ImageFormat::Bmp
@@ -768,6 +796,13 @@ pub fn ImageSequence::count(&self) -> core::option::Option<u32>
 pub fn ImageSequence::is_animation(&self) -> bool
 pub fn ImageSequence::is_multi(&self) -> bool
 pub fn ImageSequence::random_access(&self) -> bool
+#[non_exhaustive] pub enum InternalKind
+pub InternalKind::Bug
+pub InternalKind::Dependency
+#[non_exhaustive] pub enum InvalidKind
+pub InvalidKind::Buffer
+pub InvalidKind::Parameters
+pub InvalidKind::State
 #[non_exhaustive] pub enum Iso21496Format [also: gainmap]
 pub Iso21496Format::AvifTmap = 1
 pub Iso21496Format::JpegApp2 = 0
@@ -801,6 +836,19 @@ pub LimitExceeded::TotalPixels::max: u64
 pub LimitExceeded::Width
 pub LimitExceeded::Width::actual: u32
 pub LimitExceeded::Width::max: u32
+pub fn LimitExceeded::kind(&self) -> LimitKind
+#[non_exhaustive] pub enum LimitKind
+pub LimitKind::DecompressionRatio
+pub LimitKind::Duration
+pub LimitKind::Frames
+pub LimitKind::Height
+pub LimitKind::InputSize
+pub LimitKind::Memory
+pub LimitKind::OutputSize
+pub LimitKind::Pixels
+pub LimitKind::Scans
+pub LimitKind::TotalPixels
+pub LimitKind::Width
 #[non_exhaustive] pub enum MetadataPolicy
 pub MetadataPolicy::ColorAndRotation
 pub MetadataPolicy::Custom(MetadataFields)
@@ -814,11 +862,21 @@ pub OrientationHint::CorrectAndTransform(zenpixels::orientation::Orientation)
 pub OrientationHint::ExactTransform(zenpixels::orientation::Orientation)
 pub OrientationHint::Preserve
 pub const fn OrientationHint::bakes(self) -> bool
+#[non_exhaustive] pub enum PolicyKind
+pub PolicyKind::Decode
+pub PolicyKind::Encode
+#[non_exhaustive] pub enum RequestError
+pub RequestError::CmsRequired
+pub RequestError::Invalid(InvalidKind)
+pub RequestError::Unsupported(UnsupportedOperation)
 #[non_exhaustive] pub enum ResolutionUnit
 pub ResolutionUnit::Centimeter
 pub ResolutionUnit::Inch
 pub ResolutionUnit::Meter
 pub ResolutionUnit::Unknown
+#[non_exhaustive] pub enum ResourceError
+pub ResourceError::Limits(LimitKind)
+pub ResourceError::OutOfMemory
 #[non_exhaustive] pub enum Retention [also: exif]
 pub Retention::Discard
 pub Retention::Keep
@@ -837,10 +895,14 @@ pub ThreadingPolicy::SingleThread
 pub ThreadingPolicy::Unlimited
 pub fn ThreadingPolicy::is_parallel(self) -> bool
 pub fn ThreadingPolicy::resolve_thread_count(self) -> u32
+#[non_exhaustive] pub enum UnsupportedImageKind
+pub UnsupportedImageKind::Feature
+pub UnsupportedImageKind::Type
 #[non_exhaustive] pub enum UnsupportedOperation
 pub UnsupportedOperation::AnimationDecode
 pub UnsupportedOperation::AnimationEncode
 pub UnsupportedOperation::DecodeInto
+pub UnsupportedOperation::GainMapEncode
 pub UnsupportedOperation::MultiImageDecode
 pub UnsupportedOperation::PixelFormat
 pub UnsupportedOperation::PullEncode
@@ -853,6 +915,17 @@ pub fn AnimationFrame<'a>::frame_index(&self) -> u32
 pub fn AnimationFrame<'a>::new(zenpixels::buffer::PixelSlice<'a>, u32, u32) -> Self
 pub fn AnimationFrame<'a>::pixels(&self) -> &zenpixels::buffer::PixelSlice<'a>
 pub fn AnimationFrame<'a>::to_owned_frame(&self) -> OwnedAnimationFrame
+pub struct CodecError(_)
+pub fn CodecError::category(&self) -> ErrorCategory
+pub fn CodecError::codec(&self) -> core::option::Option<&'static str>
+pub fn CodecError::detail(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+pub fn CodecError::from_native<E>(E) -> Self where E: CategorizedError + core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn CodecError::from_parts(core::option::Option<&'static str>, ErrorCategory, alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>) -> Self
+pub fn CodecError::new(core::option::Option<&'static str>, ErrorCategory) -> Self
+pub fn CodecError::of<E>(whereat::at::At<E>) -> whereat::at::At<CodecError> where E: CategorizedError + core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn CodecError::with_codec(self, core::option::Option<&'static str>) -> Self
+pub struct CodecIoKind
+pub const fn CodecIoKind::opaque() -> Self
 #[non_exhaustive] pub struct ColorEmitFields
 pub ColorEmitFields::cicp: CicpEmission
 pub ColorEmitFields::icc: IccRetention
@@ -911,6 +984,7 @@ pub fn gainmap::GainMapChannel::linear_min(&self) -> f64
 #[non_exhaustive] pub struct GainMapInfo [also: gainmap]
 pub GainMapInfo::alternate_cicp: core::option::Option<zenpixels::cicp::Cicp>
 pub GainMapInfo::alternate_icc: core::option::Option<alloc::sync::Arc<[u8]>>
+pub GainMapInfo::bit_depth: u8
 pub GainMapInfo::channels: u8
 pub GainMapInfo::height: u32
 pub GainMapInfo::params: gainmap::GainMapParams
@@ -918,6 +992,7 @@ pub GainMapInfo::width: u32
 pub fn gainmap::GainMapInfo::new(gainmap::GainMapParams, u32, u32, u8) -> Self
 pub fn gainmap::GainMapInfo::with_alternate_cicp(self, zenpixels::cicp::Cicp) -> Self
 pub fn gainmap::GainMapInfo::with_alternate_icc(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn gainmap::GainMapInfo::with_bit_depth(self, u8) -> Self
 #[non_exhaustive] pub struct GainMapParams [also: gainmap]
 pub GainMapParams::alternate_hdr_headroom: f64
 pub GainMapParams::backward_direction: bool
@@ -1114,6 +1189,7 @@ pub fn SourceColor::with_color_authority(self, zenpixels::color::ColorAuthority)
 pub fn SourceColor::with_content_light_level(self, zenpixels::hdr::ContentLightLevel) -> Self
 pub fn SourceColor::with_icc_profile(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
 pub fn SourceColor::with_mastering_display(self, zenpixels::hdr::MasteringDisplay) -> Self
+pub struct StreamOffset(pub u64)
 #[non_exhaustive] pub struct Supplements
 pub Supplements::auxiliary: bool
 pub Supplements::depth_map: bool
@@ -1123,16 +1199,27 @@ pub Supplements::segmentation_mattes: bool
 pub struct Unsupported<E>(_)
 pub const ISO_21496_1_PRIMARY_APP2_BODY: &[u8; 32] [also: gainmap]
 pub const ISO_21496_1_URN: &[u8; 28] [also: gainmap]
+pub trait CategorizedError: core::any::Any
+pub fn CategorizedError::category(&self) -> ErrorCategory
+pub fn CategorizedError::codec_name(&self) -> core::option::Option<&'static str>
 pub trait CodecErrorExt
+pub fn CodecErrorExt::codec_error(&self) -> core::option::Option<&CodecError>
+pub fn CodecErrorExt::error_category(&self) -> core::option::Option<ErrorCategory>
 pub fn CodecErrorExt::find_cause<T: core::error::Error + 'static>(&self) -> core::option::Option<&T>
 pub fn CodecErrorExt::limit_exceeded(&self) -> core::option::Option<&LimitExceeded>
 pub fn CodecErrorExt::unsupported_operation(&self) -> core::option::Option<&UnsupportedOperation>
+pub fn (dyn core::error::Error + 'static)::codec_error(&self) -> core::option::Option<&CodecError>
+pub fn (dyn core::error::Error + 'static)::error_category(&self) -> core::option::Option<ErrorCategory>
 pub fn (dyn core::error::Error + 'static)::find_cause<T: core::error::Error + 'static>(&self) -> core::option::Option<&T>
 pub fn (dyn core::error::Error + 'static)::limit_exceeded(&self) -> core::option::Option<&LimitExceeded>
 pub fn (dyn core::error::Error + 'static)::unsupported_operation(&self) -> core::option::Option<&UnsupportedOperation>
+pub fn (dyn core::error::Error + core::marker::Send + 'static)::codec_error(&self) -> core::option::Option<&CodecError>
+pub fn (dyn core::error::Error + core::marker::Send + 'static)::error_category(&self) -> core::option::Option<ErrorCategory>
 pub fn (dyn core::error::Error + core::marker::Send + 'static)::find_cause<T: core::error::Error + 'static>(&self) -> core::option::Option<&T>
 pub fn (dyn core::error::Error + core::marker::Send + 'static)::limit_exceeded(&self) -> core::option::Option<&LimitExceeded>
 pub fn (dyn core::error::Error + core::marker::Send + 'static)::unsupported_operation(&self) -> core::option::Option<&UnsupportedOperation>
+pub fn (dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)::codec_error(&self) -> core::option::Option<&CodecError>
+pub fn (dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)::error_category(&self) -> core::option::Option<ErrorCategory>
 pub fn (dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)::find_cause<T: core::error::Error + 'static>(&self) -> core::option::Option<&T>
 pub fn (dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)::limit_exceeded(&self) -> core::option::Option<&LimitExceeded>
 pub fn (dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)::unsupported_operation(&self) -> core::option::Option<&UnsupportedOperation>
@@ -1143,7 +1230,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (66 types)
+## trait impls (80 types)
 
 (): encode::AnimationFrameEncoder
 (dyn core::error::Error + 'static): CodecErrorExt
@@ -1152,32 +1239,44 @@ pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPo
 AllocPreference: Clone, Copy, Debug, Default, Eq, PartialEq
 AnimationFrame<'_>: Debug
 CicpEmission: Clone, Copy, Debug, Default, Eq, PartialEq
+CodecError: CategorizedError, Debug, Display, Error
+CodecIoKind: Clone, Copy, Debug, Default, Eq, Hash, PartialEq
 ColorEmitFields: Clone, Copy, Debug, Default, Eq, PartialEq
 ColorEmitPlan: Clone, Debug, PartialEq
 ColorEmitPolicy: Clone, Copy, Debug, Default, Eq, PartialEq
 E: CodecErrorExt
+ErrorCategory: Clone, Copy, Debug, Display, Eq, From<ImageError>, From<InternalKind>, From<InvalidKind>, From<LimitKind>, From<PolicyKind>, From<RequestError>, From<ResourceError>, From<UnsupportedImageKind>, From<enough::reason::StopReason>, Hash, PartialEq
 Extensions: Clone, Debug, Default
 IccDisposition: Clone, Debug, Eq, PartialEq
 IccRetention: Clone, Copy, Debug, Eq, PartialEq
+ImageError: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
 ImageFormat: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
 ImageFormatDefinition: Debug, Eq, Hash, PartialEq
 ImageFormatRegistry: Clone, Debug, Default
 ImageInfo: Clone, Debug, PartialEq
 ImageSequence: Clone, Debug, Default, Eq, PartialEq
-LimitExceeded: Clone, Debug, Display, Eq, Error, PartialEq
+InternalKind: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
+InvalidKind: Clone, Copy, Debug, Eq, Hash, PartialEq
+LimitExceeded: CategorizedError, Clone, Debug, Display, Eq, Error, PartialEq
+LimitKind: Clone, Copy, Debug, Eq, Hash, PartialEq
 Metadata: Clone, Debug, Default, From<&ImageInfo>, PartialEq
 MetadataFields: Clone, Copy, Debug, Eq, PartialEq
 MetadataPolicy: Clone, Copy, Debug, Eq, PartialEq
 OrientationHint: Clone, Copy, Debug, Default, Eq, Hash, PartialEq
 OwnedAnimationFrame: Debug
+PolicyKind: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
+RequestError: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
 Resolution: Clone, Copy, Debug, PartialEq
 ResolutionUnit: Clone, Copy, Debug, Default, Eq, Hash, PartialEq
+ResourceError: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
 ResourceLimits: Clone, Copy, Debug, Default, Eq, PartialEq
 SourceColor: Clone, Debug, Default, PartialEq
+StreamOffset: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
 Supplements: Clone, Debug, Default, Eq, PartialEq
 ThreadingPolicy: Clone, Copy, Debug, Default, Eq, PartialEq
 Unsupported<E>: decode::AnimationFrameDecoder, decode::StreamingDecode
-UnsupportedOperation: Clone, Copy, Debug, Display, Eq, Error, Hash, PartialEq
+UnsupportedImageKind: Clone, Copy, Debug, Eq, Hash, PartialEq
+UnsupportedOperation: CategorizedError, Clone, Copy, Debug, Display, Eq, Error, Hash, PartialEq
 decode::DecodeCapabilities: Clone, Debug, Default, Eq, PartialEq
 decode::DecodeOutput: Debug
 decode::DecodePolicy: Clone, Copy, Debug, Default, Eq, PartialEq
@@ -1188,6 +1287,7 @@ encode::EncodeOutput: AsRef<[u8]>, Clone, Debug, Eq, PartialEq
 encode::EncodePolicy: Clone, Copy, Debug, Default, Eq, PartialEq
 encode::Fidelity: Clone, Copy, Debug, PartialEq
 encode::LossyTarget: Clone, Copy, Debug, PartialEq
+enough::reason::StopReason: CategorizedError
 estimate::ComputeEnvironment: Clone, Copy, Debug, Default, Eq, PartialEq
 estimate::ImageCharacteristics: Clone, Debug, Eq, PartialEq
 estimate::ResourceEstimate: Clone, Copy, Debug, PartialEq
@@ -1211,12 +1311,14 @@ gainmap::GainMapSource: Clone, Debug
 gainmap::Iso21496Format: Clone, Copy, Debug, Eq, PartialEq
 gainmap::UFraction: Clone, Copy, Debug, Default, Eq, PartialEq
 helpers::IccMatchTolerance: Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd
+whereat::at::At<E>: CategorizedError
 impl<C> decode::DynDecoderConfig for C where C: decode::DecoderConfig + 'static
 impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::Enc: encode::Encoder + core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::AnimationFrameEnc: encode::AnimationFrameEncoder
 
 ## auto traits
 
-56 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+67 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+CodecError: !RefUnwindSafe !UnwindSafe
 Extensions: !RefUnwindSafe !UnwindSafe
 ImageInfo: !RefUnwindSafe !UnwindSafe
 OwnedAnimationFrame: !RefUnwindSafe !UnwindSafe
