@@ -455,7 +455,7 @@ impl CodecSet {
         format: ImageFormat,
         pixels: PixelSlice<'_>,
     ) -> Result<EncodeOutput, CodecSetError> {
-        Ok(self.encode_job(format)?.into_encoder()?.encode(pixels)?)
+        Ok(self.encode_job(format)?.encode(pixels)?)
     }
 
     /// Encode `pixels` to `format` at a per-call [`Fidelity`], overriding the
@@ -469,10 +469,7 @@ impl CodecSet {
         fidelity: Fidelity,
         pixels: PixelSlice<'_>,
     ) -> Result<EncodeOutput, CodecSetError> {
-        Ok(self
-            .encode_job_with(format, fidelity)?
-            .into_encoder()?
-            .encode(pixels)?)
+        Ok(self.encode_job_with(format, fidelity)?.encode(pixels)?)
     }
 
     /// An encode job for `format` with this set's defaults stamped on.
