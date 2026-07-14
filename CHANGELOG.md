@@ -164,6 +164,45 @@ removes that whole class).
 - Remove `SourceColor::has_hdr_transfer()` — moves to a pipeline-level
   utility that consults `ColorProfileSource` and `HdrPolicy` together
   rather than inspecting raw CICP/ICC fields.
+- Remove `ComputeEnvironment::new()` (deprecated in 0.1.27) — construction
+  goes through the explicit `conservative()` / `host()` constructors.
+
+### Added
+- `CodecSet` / `CodecSetError` — multi-codec registry: register decoder /
+  encoder configs one line each and get detect→decode, `probe`, push /
+  streaming / animation decode, and format-keyed encode through one
+  `Send + Sync + 'static` handle whose operations all take `&self` — build it
+  once and share it app-wide (`LazyLock` / `OnceLock` / `Arc`). Detection
+  derives from the registered decoders in `ImageFormatRegistry::common()`
+  priority order (custom formats after, in registration order); set-level
+  limits / stop / policies are stamped onto every job; `encode_with(Fidelity)`
+  clones the registered encoder template per call; `decode_job` / `encode_job`
+  expose the stamped jobs for per-operation control (0edaf64).
+- `CodecSet::estimate_encode` / `estimate_decode` — by-format resource
+  estimate (peak memory / wall-time / core-scaling) forwarding to the
+  registered codec's `estimate_{encode,decode}_resources`, so a `CodecSet`
+  covers estimation too; `NoEncoder` / `NoDecoder` when the format has no
+  registered codec. `estimate_decode_of(data, compute)` probes the input
+  first (format + dimensions) and estimates in the decoder's native output
+  format — the bytes-based convenience, as one-call as `probe`.
+- `ComputeEnvironment::conservative()` / `ComputeEnvironment::host()` — explicit
+  estimate-environment constructors. `conservative()` is the single-core
+  baseline (the old `new()` behavior, now explicitly named); `host()` (std)
+  detects the running machine (`available_parallelism()` cores +
+  `SimdTier::CurrentHost`; RAM left unknown — std has no portable query).
+- One-shot provided methods on the config traits: `DecoderConfig::decode`,
+  `DecoderConfig::probe`, and `EncoderConfig::encode` — single-line
+  config→result use with default job settings (08dabea).
+- `zencodec::prelude` — one-import bundle of every encode/decode trait,
+  generic and dyn (0edaf64).
+- testkit: `CodecSet` behavior suite against the reference codec — roundtrip,
+  registration-scoped detection, custom-format detect→decode, static
+  `LazyLock` sharing across threads, template cloning, typed errors (a4fec14).
+
+### Deprecated
+- `ComputeEnvironment::new()` — construction should be explicit. Use
+  `conservative()` (the single-core baseline, identical behavior) or `host()`
+  (std, detect the running machine). Removal is queued for the next 0.x minor.
 
 ### Added
 - CI: a `Fuzz` workflow that compile-gates the `fuzz/` workspace on every push
@@ -217,33 +256,6 @@ removes that whole class).
   named in `EXPECTED_SEEDS` is present — the 12 committed seeds each guard a
   fixed bug, so retiring one is a deliberate edit rather than a silent loss of
   coverage. Verified by hiding a seed and watching the suite fail.
-
-### Added
-- `CodecSet` / `CodecSetError` — multi-codec registry: register decoder /
-  encoder configs one line each and get detect→decode, `probe`, push /
-  streaming / animation decode, and format-keyed encode through one
-  `Send + Sync + 'static` handle whose operations all take `&self` — build it
-  once and share it app-wide (`LazyLock` / `OnceLock` / `Arc`). Detection
-  derives from the registered decoders in `ImageFormatRegistry::common()`
-  priority order (custom formats after, in registration order); set-level
-  limits / stop / policies are stamped onto every job; `encode_with(Fidelity)`
-  clones the registered encoder template per call; `decode_job` / `encode_job`
-  expose the stamped jobs for per-operation control (0edaf64).
-- `CodecSet::estimate_encode` / `estimate_decode` — by-format resource
-  estimate (peak memory / wall-time / core-scaling) forwarding to the
-  registered codec's `estimate_{encode,decode}_resources`, so a `CodecSet`
-  covers estimation too; `NoEncoder` / `NoDecoder` when the format has no
-  registered codec. `estimate_decode_of(data, compute)` probes the input
-  first (format + dimensions) and estimates in the decoder's native output
-  format — the bytes-based convenience, as one-call as `probe`.
-- One-shot provided methods on the config traits: `DecoderConfig::decode`,
-  `DecoderConfig::probe`, and `EncoderConfig::encode` — single-line
-  config→result use with default job settings (08dabea).
-- `zencodec::prelude` — one-import bundle of every encode/decode trait,
-  generic and dyn (0edaf64).
-- testkit: `CodecSet` behavior suite against the reference codec — roundtrip,
-  registration-scoped detection, custom-format detect→decode, static
-  `LazyLock` sharing across threads, template cloning, typed errors (a4fec14).
 
 ## [0.1.26] - 2026-07-14
 
