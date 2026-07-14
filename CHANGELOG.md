@@ -229,6 +229,11 @@ removes that whole class).
   limits / stop / policies are stamped onto every job; `encode_with(Fidelity)`
   clones the registered encoder template per call; `decode_job` / `encode_job`
   expose the stamped jobs for per-operation control (0edaf64).
+- `CodecSet::estimate_encode` / `estimate_decode` — by-format resource
+  estimate (peak memory / wall-time / core-scaling) forwarding to the
+  registered codec's `estimate_{encode,decode}_resources`, so a `CodecSet`
+  covers estimation too; `NoEncoder` / `NoDecoder` when the format has no
+  registered codec.
 - One-shot provided methods on the config traits: `DecoderConfig::decode`,
   `DecoderConfig::probe`, and `EncoderConfig::encode` — single-line
   config→result use with default job settings (08dabea).

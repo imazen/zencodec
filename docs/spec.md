@@ -872,6 +872,13 @@ impl CodecSet {
     fn encode_job(&self, format: ImageFormat) -> Result<Box<dyn DynEncodeJob>, CodecSetError>;
     fn encode_job_with(&self, format: ImageFormat, fidelity: Fidelity)
         -> Result<Box<dyn DynEncodeJob>, CodecSetError>;
+
+    // Resource estimation: forward to the registered codec's cost model
+    // (unknown() if it has none); NoEncoder / NoDecoder if unregistered.
+    fn estimate_encode(&self, format: ImageFormat, image: &ImageCharacteristics,
+        compute: &ComputeEnvironment) -> Result<ResourceEstimate, CodecSetError>;
+    fn estimate_decode(&self, format: ImageFormat, image: &ImageCharacteristics,
+        compute: &ComputeEnvironment) -> Result<ResourceEstimate, CodecSetError>;
 }
 
 enum CodecSetError {
