@@ -877,6 +877,11 @@ impl CodecSet {
     fn encode_job(&self, format: ImageFormat) -> Result<Box<dyn DynEncodeJob>, CodecSetError>;
     fn encode_job_with(&self, format: ImageFormat, fidelity: Fidelity)
         -> Result<Box<dyn DynEncodeJob>, CodecSetError>;
+    // One-call proxy op: decode -> carry source metadata (filtered) -> encode.
+    // Single-image, no pixel processing, no descriptor adaptation.
+    fn transcode(&self, input: &[u8], target: ImageFormat, fidelity: Fidelity,
+        metadata: MetadataPolicy, color: ColorEmitPolicy)
+        -> Result<EncodeOutput, CodecSetError>;
 
     // Resource estimation: forward to the registered codec's cost model
     // (unknown() if it has none); NoEncoder / NoDecoder if unregistered.
