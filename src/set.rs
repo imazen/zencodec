@@ -521,15 +521,17 @@ impl CodecSet {
     ///   [`animation_decoder`](Self::animation_decoder) + [`encode_job`](Self::encode_job).
     /// - **No pixel processing** — recompresses at the decoded dimensions and
     ///   pixel format; no resize, crop, or CMS conversion.
-    /// - **No descriptor adaptation** — the decoder's output pixels go straight
-    ///   to the encoder. If the decoder emits a [`PixelDescriptor`] the `target`
-    ///   encoder does not list in
+    /// - **Meets on a shared pixel format, no adaptation** — the decoder is
+    ///   asked (via [`decode_preferring`](Self::decode_preferring)) to emit a
+    ///   [`PixelDescriptor`] the `target` encoder lists in
     ///   [`supported_descriptors`](crate::traits::EncoderConfig::supported_descriptors),
-    ///   the encoder's error surfaces rather than a silent conversion (this
-    ///   crate carries no pixel-conversion dependency). The common zen codecs
-    ///   decode to and encode from sRGB `RGBA8` / `RGB8`, so those pairs bridge;
-    ///   a decoder whose only outputs are disjoint from the target's inputs
-    ///   errors instead of corrupting.
+    ///   so decoder and encoder meet without any pixel conversion (this crate
+    ///   carries no conversion dependency). It errors — rather than corrupting —
+    ///   only when the two supported sets are disjoint (e.g. a RAW decoder that
+    ///   emits 16-bit / f32-linear only, into an encoder that accepts 8-bit
+    ///   only) or when a decoder ignores the preference and emits a native
+    ///   descriptor the encoder rejects. Since every common raster codec both
+    ///   decodes to and encodes from sRGB `RGB8` / `RGBA8`, those pairs bridge.
     ///
     /// Errors with [`NoDecoder`](CodecSetError::NoDecoder) when `input`'s
     /// detected format has no registered decoder, [`NoEncoder`](CodecSetError::NoEncoder)
@@ -543,7 +545,14 @@ impl CodecSet {
         metadata: MetadataPolicy,
         color: ColorEmitPolicy,
     ) -> Result<EncodeOutput, CodecSetError> {
-        let decoded = self.decode(input)?;
+        // Ask the decoder to emit a descriptor the target encoder accepts, so
+        // the two meet on a shared pixel format with no adaptation. A decoder
+        // that can't honor the preference falls back to its native format.
+        let target_inputs = self
+            .encoder_for(target)
+            .ok_or(CodecSetError::NoEncoder(target))?
+            .supported_descriptors();
+        let decoded = self.decode_preferring(input, target_inputs)?;
         let source_metadata = Metadata::from(decoded.info());
         let mut job = self.encode_job_with(target, fidelity)?;
         job.set_metadata_policy(source_metadata, metadata);

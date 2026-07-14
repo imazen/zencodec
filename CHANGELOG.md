@@ -89,10 +89,11 @@ removes that whole class).
   result (via `Metadata::from(&ImageInfo)`, with orientation reconciliation),
   re-embeds under the `MetadataPolicy` (`Web` strips privacy / `PreserveExact`
   keeps all), and applies a `ColorEmitPolicy` for color signaling. Single-image,
-  no pixel processing, no descriptor adaptation — a source→target pair whose
-  decoder-output and encoder-input descriptors are disjoint surfaces the
-  encoder's error rather than corrupting (this crate carries no pixel-conversion
-  dep; the common zen codecs bridge on sRGB RGBA8/RGB8).
+  no pixel processing. Decodes *preferring* the target encoder's input
+  descriptors, so decoder and encoder meet on a shared pixel format with no
+  adaptation; a pair errors (rather than corrupting) only when their supported
+  descriptor sets are disjoint (this crate carries no pixel-conversion dep — the
+  common raster codecs bridge on sRGB RGB8/RGBA8).
 - `CodecSet::estimate_encode` / `estimate_decode` — by-format resource
   estimate (peak memory / wall-time / core-scaling) forwarding to the
   registered codec's `estimate_{encode,decode}_resources`, so a `CodecSet`
