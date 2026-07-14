@@ -188,23 +188,83 @@ the `max_memory_bytes` cap so a codec that under-reports still can't over-alloca
 
 ### Classifying a codec's error for an HTTP response
 
-Each codec keeps its OWN opaque error type (there is no shared `CodecError`).
-Classify one without naming the concrete enum, via `CodecErrorExt`:
+A codec surfaces errors one of two ways; both let you route on a coarse
+`ErrorCategory` instead of naming the concrete enum:
+
+- **Native enum + `CategorizedError`.** The codec keeps its own error type and
+  maps every variant to one category. `e.category()` classifies it on the typed
+  path, and a located `whereat::At<E>` keeps the inner error's category (the impl
+  forwards through `At`).
+- **The shared `CodecError` envelope.** The codec sets `type Error =
+  whereat::At<CodecError>`. Because that is a single *concrete* type, the category
+  — and the originating **codec name** (`"zenjpeg"`, so you can tell codecs apart)
+  — survive **type erasure**: after dyn dispatch hands back a `Box<dyn Error>` — or
+  you map into `anyhow` — `e.error_category()` / `e.codec_error()` recover them by
+  downcast (`None` only when the error isn't from a zen codec). A native enum can't
+  be recovered once erased — the erased value is a `dyn Error`, not a
+  `dyn CategorizedError` — so the envelope is what a codec-agnostic pipeline reaches
+  for. `CodecError` can also be used with no detail at all
+  (`CodecError::new(Some("zenpng"), ErrorCategory::Image(ImageError::Malformed))`) by a codec that
+  has no error enum of its own. `At` is re-exported
+  (`zencodec::At<zencodec::CodecError>`), so adopting it needs no direct `whereat`
+  dependency.
 
 ```rust,ignore
-match config.job().decoder(Cow::Borrowed(bytes), &[]) {
-    Ok(_decoder) => { /* _decoder.decode()? */ }
-    Err(e) => {
-        if let Some(limit) = e.limit_exceeded() {
-            eprintln!("resource limit: {limit}"); // -> HTTP 413
-        } else if e.unsupported_operation().is_some() {
-            eprintln!("unsupported"); // -> HTTP 415
-        } else {
-            eprintln!("malformed input: {e}"); // -> HTTP 400
-        }
-    }
-}
+use zencodec::enough::StopReason;
+use zencodec::{
+    CategorizedError, CodecErrorExt, ErrorCategory, ImageError, InvalidKind, RequestError,
+    ResourceError,
+};
+
+// Typed path shown here via `category()`; on a `Box<dyn Error>` from dyn dispatch
+// use `e.error_category()` and match `Some(..)` / `None` instead. The origin-first
+// shape lets you route on the outer arm (`Image` / `Request` / `Resource` /
+// `Stopped`) and only destructure when a sub-kind changes the answer.
+let http = match config.job().with_stop(token).decoder(Cow::Borrowed(bytes), &[]) {
+    Ok(_decoder) => { /* _decoder.decode()? */ 200 }
+    Err(e) => match e.category() {
+        // Stopped via its Stop token.
+        ErrorCategory::Stopped(StopReason::Cancelled) => 499, // client went away
+        ErrorCategory::Stopped(StopReason::TimedOut)  => 504,
+        // A configured resource cap was hit.
+        ErrorCategory::Resource(ResourceError::Limits(_)) => 413,
+        // "Can't process this" — the bytes need a different codec, or the request
+        // asked for an op / pixel format / CMS transform this codec doesn't do.
+        ErrorCategory::Image(ImageError::Unsupported(_))
+        | ErrorCategory::Request(RequestError::Unsupported(_))
+        | ErrorCategory::Request(RequestError::CmsRequired) => 415,
+        // Valid input, but a policy declined it — Decode vs Encode only matters
+        // if you want to word the message differently; both are 422 here.
+        ErrorCategory::Policy(_) => 422,
+        // Bad client-supplied bytes (malformed / truncated), or a bad request.
+        ErrorCategory::Image(_) => 400,
+        ErrorCategory::Request(RequestError::Invalid(
+            InvalidKind::Parameters | InvalidKind::Buffer,
+        )) => 400,
+        // Server-side: API misuse (out-of-sequence call), OOM, I/O, or a bug.
+        // `Internal(Bug)` vs `Internal(Dependency)` both still read as 500 for
+        // HTTP purposes; the split pays off in telemetry, not routing.
+        ErrorCategory::Request(RequestError::Invalid(InvalidKind::State))
+        | ErrorCategory::Resource(ResourceError::OutOfMemory)
+        | ErrorCategory::Io(_)
+        | ErrorCategory::Internal(_) => 500,
+        _ => 500, // ErrorCategory is #[non_exhaustive]
+    },
+};
 ```
+
+`ErrorCategory` is the coarse routing axis (it's `Copy`, and
+`LimitsExceeded(LimitKind)` even tells you *which* cap). When you need more
+detail than the category, the typed extractors on `CodecErrorExt` recover the
+cause from the `source()` chain — `e.limit_exceeded()` for the exact limit values,
+`e.unsupported_operation()` for which operation, or `e.find_cause::<T>()` for a
+codec-specific type. `category()` is available once a codec implements
+`CategorizedError`; the zencodec cause types (`LimitExceeded`,
+`UnsupportedOperation`, `enough::StopReason`) implement it, so a codec's mapping
+is usually a one-line delegation per variant. `CodecErrorExt::error_category()`
+is the same answer recovered through erasure — it works on any `Box<dyn Error>`
+holding a `CodecError` (bare or `At`-wrapped), so the routing survives dyn
+dispatch and `anyhow`.
 
 ## Controlling decode parallelism
 
@@ -263,6 +323,7 @@ let cfg = my_encoder_config
     .with_fidelity(Fidelity::Lossless);              // mathematically exact
 //  .with_fidelity(Fidelity::ssim2(90.0))            // aim at SSIMULACRA2 ~= 90
 //  .with_fidelity(Fidelity::butteraugli(1.0))       // aim at butteraugli max-norm ~= 1.0
+//  .with_fidelity(Fidelity::zensim_b(90.0))         // aim at zensim (ZensimProfile::B) ~= 90
 //  .with_fidelity(Fidelity::codec_quality(85.0));   // the codec's own native dial
 ```
 
@@ -270,6 +331,9 @@ let cfg = my_encoder_config
 
 - **`ApproxSsim2(score)`** — a one-shot SSIMULACRA2 target (a real cross-codec metric).
 - **`ApproxButteraugli(distance)`** — a one-shot butteraugli max-norm distance.
+- **`ApproxZensimB(score)`** — a one-shot zensim target, pinned to `ZensimProfile::B` (the
+  deterministic linear profile — stable across zensim patch releases, unlike the
+  deprecated MLP-based `A`).
 - **`CodecSpecificQuality(q)`** — the codec's own native quality scale (meaning differs per codec).
 
 These are **blind, single-pass**: the target maps to a native dial in one encode,

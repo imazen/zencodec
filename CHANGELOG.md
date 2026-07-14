@@ -45,6 +45,8 @@ All notable changes to zencodec are documented here.
   utility that consults `ColorProfileSource` and `HdrPolicy` together
   rather than inspecting raw CICP/ICC fields.
 
+## [0.1.26] - 2026-07-14
+
 ### Added
 - **`Fidelity::zensim_b` / `LossyTarget::ApproxZensimB(f32)`** — a fourth
   one-shot lossy target, aiming at a zensim score (≈0–100, higher is better) in
@@ -234,6 +236,19 @@ All notable changes to zencodec are documented here.
   `README.crates.md` (`readme = "README.crates.md"`; `include` ships it instead of `README.md`).
 
 ### Fixed
+- **32-bit (i686/wasm32) EXIF parse could panic in debug builds** — `rd16` /
+  `rd32` computed `offset + 2` / `offset + 4` with unchecked arithmetic on
+  offsets that come straight from attacker-controlled u32 fields (e.g. the
+  TIFF header's `ifd0_off`); on 32-bit targets an offset near `u32::MAX`
+  overflows `usize` — `attempt to add with overflow` under
+  `debug_assertions`, silent (behaviorally-benign, still-rejecting) wrap in
+  release. Unreachable on 64-bit, so the all-64-bit fuzz farm could never
+  find it: caught by the i686 CI lane replaying the
+  `metadata_filtered_issue_111_farm_artifact` regression seed within an hour
+  of that seed landing. Both helpers now use `checked_add` (reject, not
+  overflow); the regression seed stays as the permanent guard, and
+  `tests/fuzz_regression.rs` now names each seed as it runs so a failing
+  seed is identifiable from CI output alone.
 - `CodecIoKind`'s doc comment linked to the `std`-gated `kind` accessor
   (`[`kind`](Self::kind)`) from always-compiled text, so a `no_std` doc build —
   which is what docs.rs runs, since `std` is not a default feature — hit an
