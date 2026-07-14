@@ -72,8 +72,8 @@ use crate::traits::{
     EncoderConfig,
 };
 use crate::{
-    DecodeOutput, DecodePolicy, DecodeRowSink, EncodeOutput, EncodePolicy, ImageInfo, OutputInfo,
-    ResourceLimits, StopToken,
+    ColorEmitPolicy, DecodeOutput, DecodePolicy, DecodeRowSink, EncodeOutput, EncodePolicy,
+    ImageInfo, Metadata, MetadataPolicy, OutputInfo, ResourceLimits, StopToken,
 };
 
 // ===========================================================================
@@ -498,6 +498,61 @@ impl CodecSet {
             .ok_or(CodecSetError::NoEncoder(format))?;
         let tuned = entry.clone_entry().with_fidelity_entry(fidelity);
         Ok(self.stamped_encode_job(tuned.as_dyn()))
+    }
+
+    /// Decode `input` and re-encode it to `target` at `fidelity` — the one-call
+    /// recompress / reformat, carrying the source's metadata under an explicit
+    /// retention policy and applying a color-emission policy.
+    ///
+    /// The headline proxy operation: `decode → carry source metadata → encode`.
+    /// The source's ICC / EXIF / XMP / CICP / HDR / orientation are read off the
+    /// decode result and re-embedded, filtered by `metadata`
+    /// ([`Web`](MetadataPolicy::Web) strips GPS / camera / timestamps / XMP and
+    /// keeps orientation + rights + color; [`PreserveExact`](MetadataPolicy::PreserveExact)
+    /// carries everything verbatim). `color` ([`ColorEmitPolicy`]) governs how
+    /// color *signaling* (ICC vs CICP) is emitted — it is **not** a pixel-level
+    /// color-space conversion. The color policy merges onto the set-level
+    /// [`EncodePolicy`] (overriding only its color field).
+    ///
+    /// # Scope and failure modes
+    ///
+    /// - **Single image** — decodes the first frame only, like
+    ///   [`decode`](Self::decode); for animation use
+    ///   [`animation_decoder`](Self::animation_decoder) + [`encode_job`](Self::encode_job).
+    /// - **No pixel processing** — recompresses at the decoded dimensions and
+    ///   pixel format; no resize, crop, or CMS conversion.
+    /// - **No descriptor adaptation** — the decoder's output pixels go straight
+    ///   to the encoder. If the decoder emits a [`PixelDescriptor`] the `target`
+    ///   encoder does not list in
+    ///   [`supported_descriptors`](crate::traits::EncoderConfig::supported_descriptors),
+    ///   the encoder's error surfaces rather than a silent conversion (this
+    ///   crate carries no pixel-conversion dependency). The common zen codecs
+    ///   decode to and encode from sRGB `RGBA8` / `RGB8`, so those pairs bridge;
+    ///   a decoder whose only outputs are disjoint from the target's inputs
+    ///   errors instead of corrupting.
+    ///
+    /// Errors with [`NoDecoder`](CodecSetError::NoDecoder) when `input`'s
+    /// detected format has no registered decoder, [`NoEncoder`](CodecSetError::NoEncoder)
+    /// when `target` has no registered encoder, and forwards any decode or
+    /// encode error.
+    pub fn transcode(
+        &self,
+        input: &[u8],
+        target: ImageFormat,
+        fidelity: Fidelity,
+        metadata: MetadataPolicy,
+        color: ColorEmitPolicy,
+    ) -> Result<EncodeOutput, CodecSetError> {
+        let decoded = self.decode(input)?;
+        let source_metadata = Metadata::from(decoded.info());
+        let mut job = self.encode_job_with(target, fidelity)?;
+        job.set_metadata_policy(source_metadata, metadata);
+        job.set_policy(
+            self.encode_policy
+                .unwrap_or_else(EncodePolicy::none)
+                .with_color(color),
+        );
+        Ok(job.encode(decoded.pixels())?)
     }
 
     // --- Resource estimation ------------------------------------------------

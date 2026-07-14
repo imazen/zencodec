@@ -83,6 +83,16 @@ removes that whole class).
   limits / stop / policies are stamped onto every job; `encode_with(Fidelity)`
   clones the registered encoder template per call; `decode_job` / `encode_job`
   expose the stamped jobs for per-operation control (0edaf64).
+- `CodecSet::transcode(input, target, fidelity, metadata_policy, color_policy)`
+  — the one-call proxy operation: decode → carry the source's metadata → encode.
+  Reads the source's ICC / EXIF / XMP / CICP / HDR / orientation off the decode
+  result (via `Metadata::from(&ImageInfo)`, with orientation reconciliation),
+  re-embeds under the `MetadataPolicy` (`Web` strips privacy / `PreserveExact`
+  keeps all), and applies a `ColorEmitPolicy` for color signaling. Single-image,
+  no pixel processing, no descriptor adaptation — a source→target pair whose
+  decoder-output and encoder-input descriptors are disjoint surfaces the
+  encoder's error rather than corrupting (this crate carries no pixel-conversion
+  dep; the common zen codecs bridge on sRGB RGBA8/RGB8).
 - `CodecSet::estimate_encode` / `estimate_decode` — by-format resource
   estimate (peak memory / wall-time / core-scaling) forwarding to the
   registered codec's `estimate_{encode,decode}_resources`, so a `CodecSet`

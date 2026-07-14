@@ -11,7 +11,9 @@ use std::sync::LazyLock;
 
 use zencodec::estimate::{ComputeEnvironment, ImageCharacteristics};
 use zencodec::prelude::*;
-use zencodec::{CodecSet, CodecSetError, ImageFormat, Metadata, MetadataPolicy, ResourceLimits};
+use zencodec::{
+    CodecSet, CodecSetError, ColorEmitPolicy, ImageFormat, Metadata, MetadataPolicy, ResourceLimits,
+};
 use zencodec_testkit::{
     ReferenceDecoderConfig, ReferenceEncoderConfig, ReferenceZcrDecoderConfig, ZCR_FORMAT,
 };
@@ -208,6 +210,52 @@ fn encode_job_carries_metadata() {
     assert_eq!(
         decoded.info().source_color.icc_profile.as_deref(),
         Some(&[1u8, 2, 3, 4][..])
+    );
+}
+
+#[test]
+fn transcode_roundtrips_pixels_and_carries_metadata() {
+    use zencodec::encode::Fidelity;
+
+    let set = CodecSet::new()
+        .with_decoder(ReferenceZcrDecoderConfig)
+        .with_encoder(ReferenceEncoderConfig::new());
+
+    // A source bitstream that carries an ICC profile.
+    let mut job = set.encode_job(ImageFormat::Pnm).expect("encode_job");
+    job.set_metadata_policy(
+        Metadata::none().with_icc(vec![9, 8, 7, 6]),
+        MetadataPolicy::PreserveExact,
+    );
+    let source = job
+        .encode(rgb_pixels(&PIXELS, W, H))
+        .expect("encode source");
+
+    // One call: decode → carry source metadata → re-encode.
+    let out = set
+        .transcode(
+            source.data(),
+            ImageFormat::Pnm,
+            Fidelity::Lossless,
+            MetadataPolicy::PreserveExact,
+            ColorEmitPolicy::Verbatim,
+        )
+        .expect("transcode");
+
+    // Pixels survive the round trip.
+    let decoded = set.decode(out.data()).expect("decode transcoded");
+    assert_eq!((decoded.width(), decoded.height()), (W, H));
+    let mut round = Vec::new();
+    let px = decoded.pixels();
+    for y in 0..px.rows() {
+        round.extend_from_slice(px.row(y));
+    }
+    assert_eq!(round, PIXELS);
+
+    // The ICC rode through under PreserveExact.
+    assert_eq!(
+        decoded.info().source_color.icc_profile.as_deref(),
+        Some(&[9u8, 8, 7, 6][..])
     );
 }
 

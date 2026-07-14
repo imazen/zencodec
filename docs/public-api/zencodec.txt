@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1490 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 89 lines (89 hidden + 0 excluded-feature)
+# files: zencodec.txt 1491 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 89 lines (89 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -14,7 +14,7 @@
 #   pub types (struct/enum/trait/alias)       169
 #   pub consts/statics                        172
 #   free functions                             42
-#   inherent methods                          662
+#   inherent methods                          663
 #   struct fields                             196
 #   enum variants                             185
 #   re-exports                                 12
@@ -24,7 +24,7 @@
 #   auto-trait exceptions                       8
 #
 # per-module pub lines:
-#   (root)                          731
+#   (root)                          732
 #   decode                          168
 #   encode                          119
 #   estimate                         48
@@ -34,7 +34,7 @@
 #   icc                               1
 #   prelude                         176
 
-## items (1395 lines)
+## items (1396 lines)
 
 pub mod zencodec
 pub use At
@@ -1122,6 +1122,7 @@ pub fn CodecSet::new() -> Self
 pub fn CodecSet::probe<'a>(&'a self, &'a [u8]) -> core::result::Result<ImageInfo, CodecSetError>
 pub fn CodecSet::push_decode<'a>(&'a self, &'a [u8], &mut dyn decode::DecodeRowSink, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<decode::OutputInfo, CodecSetError>
 pub fn CodecSet::streaming_decoder<'a>(&'a self, &'a [u8], &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynStreamingDecoder + 'a)>, CodecSetError>
+pub fn CodecSet::transcode(&self, &[u8], ImageFormat, encode::Fidelity, MetadataPolicy, ColorEmitPolicy) -> core::result::Result<encode::EncodeOutput, CodecSetError>
 pub fn CodecSet::with_decode_policy(self, decode::DecodePolicy) -> Self
 pub fn CodecSet::with_decoder(self, impl decode::DecoderConfig + 'static) -> Self
 pub fn CodecSet::with_encode_policy(self, encode::EncodePolicy) -> Self
