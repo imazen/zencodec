@@ -70,6 +70,26 @@ removes that whole class).
   utility that consults `ColorProfileSource` and `HdrPolicy` together
   rather than inspecting raw CICP/ICC fields.
 
+### Added
+- `CodecSet` / `CodecSetError` — multi-codec registry: register decoder /
+  encoder configs one line each and get detect→decode, `probe`, push /
+  streaming / animation decode, and format-keyed encode through one
+  `Send + Sync + 'static` handle whose operations all take `&self` — build it
+  once and share it app-wide (`LazyLock` / `OnceLock` / `Arc`). Detection
+  derives from the registered decoders in `ImageFormatRegistry::common()`
+  priority order (custom formats after, in registration order); set-level
+  limits / stop / policies are stamped onto every job; `encode_with(Fidelity)`
+  clones the registered encoder template per call; `decode_job` / `encode_job`
+  expose the stamped jobs for per-operation control (0edaf64).
+- One-shot provided methods on the config traits: `DecoderConfig::decode`,
+  `DecoderConfig::probe`, and `EncoderConfig::encode` — single-line
+  config→result use with default job settings (08dabea).
+- `zencodec::prelude` — one-import bundle of every encode/decode trait,
+  generic and dyn (0edaf64).
+- testkit: `CodecSet` behavior suite against the reference codec — roundtrip,
+  registration-scoped detection, custom-format detect→decode, static
+  `LazyLock` sharing across threads, template cloning, typed errors (a4fec14).
+
 ## [0.1.26] - 2026-07-14
 
 ### Added
