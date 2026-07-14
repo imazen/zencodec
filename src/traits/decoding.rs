@@ -6,7 +6,7 @@ use alloc::boxed::Box;
 use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 use crate::format::ImageFormat;
 use crate::orientation::OrientationHint;
-use crate::{DecodeCapabilities, ImageInfo, OutputInfo, ResourceLimits, StopToken};
+use crate::{DecodeCapabilities, DecodeOutput, ImageInfo, OutputInfo, ResourceLimits, StopToken};
 use zenpixels::PixelDescriptor;
 
 use super::BoxedError;
@@ -82,6 +82,40 @@ pub trait DecoderConfig: Clone + Send + Sync {
     /// The job owns the config and all configuration set on it.
     /// The lifetime parameter is the data lifetime, inferred from usage.
     fn job<'a>(self) -> Self::Job<'a>;
+
+    /// One-shot convenience: decode `data` to owned pixels in the decoder's
+    /// native pixel format, with default job settings.
+    ///
+    /// Equivalent to `self.job().decoder(Cow::Borrowed(data), &[])?.decode()`.
+    /// For limits, cancellation, decode hints, or pixel-format preferences, go
+    /// through [`job()`](DecoderConfig::job).
+    ///
+    /// ```rust,ignore
+    /// let image = zenjpeg::JpegDecoderConfig::new().decode(&bytes)?;
+    /// ```
+    fn decode(self, data: &[u8]) -> Result<DecodeOutput, Self::Error>
+    where
+        Self: Sized,
+    {
+        self.job().decoder(Cow::Borrowed(data), &[])?.decode()
+    }
+
+    /// One-shot convenience: probe image metadata (header parse only, cheap)
+    /// with default job settings.
+    ///
+    /// Equivalent to `self.clone().job().probe(data)`. For limits or
+    /// cancellation context, go through [`job()`](DecoderConfig::job).
+    ///
+    /// ```rust,ignore
+    /// let info = zenjpeg::JpegDecoderConfig::new().probe(&bytes)?;
+    /// println!("{}x{}", info.width, info.height);
+    /// ```
+    fn probe(&self, data: &[u8]) -> Result<ImageInfo, Self::Error>
+    where
+        Self: Sized,
+    {
+        self.clone().job().probe(data)
+    }
 }
 
 // ===========================================================================

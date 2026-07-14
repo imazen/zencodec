@@ -5,8 +5,8 @@ use alloc::boxed::Box;
 use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 use crate::fidelity::{Fidelity, LossyTarget};
 use crate::format::ImageFormat;
-use crate::{EncodeCapabilities, Metadata, ResourceLimits, UnsupportedOperation};
-use zenpixels::PixelDescriptor;
+use crate::{EncodeCapabilities, EncodeOutput, Metadata, ResourceLimits, UnsupportedOperation};
+use zenpixels::{PixelDescriptor, PixelSlice};
 
 use super::BoxedError;
 use super::dyn_encoding::{AnimationFrameEncoderShim, DynAnimationFrameEncoder, DynEncoder};
@@ -204,6 +204,25 @@ pub trait EncoderConfig: Clone + Send + Sync {
     /// The job owns the config and all configuration set on it
     /// (stop token, limits, metadata).
     fn job(self) -> Self::Job;
+
+    /// One-shot convenience: encode `pixels` with default job settings.
+    ///
+    /// Equivalent to `self.job().encoder()?.encode(pixels)`. For metadata,
+    /// limits, cancellation, or streaming/animation encode, go through
+    /// [`job()`](EncoderConfig::job).
+    ///
+    /// ```rust,ignore
+    /// let out = zenjpeg::JpegEncoderConfig::new()
+    ///     .with_generic_quality(85.0)
+    ///     .encode(pixels)?;
+    /// ```
+    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error>
+    where
+        Self: Sized,
+        <Self::Job as EncodeJob>::Enc: Encoder<Error = Self::Error>,
+    {
+        self.job().encoder()?.encode(pixels)
+    }
 }
 
 // ===========================================================================
