@@ -69,6 +69,8 @@ removes that whole class).
 - Remove `SourceColor::has_hdr_transfer()` — moves to a pipeline-level
   utility that consults `ColorProfileSource` and `HdrPolicy` together
   rather than inspecting raw CICP/ICC fields.
+- Remove `ComputeEnvironment::new()` (deprecated in 0.1.27) — construction
+  goes through the explicit `conservative()` / `host()` constructors.
 
 ### Added
 - `CodecSet` / `CodecSetError` — multi-codec registry: register decoder /
@@ -88,6 +90,11 @@ removes that whole class).
   registered codec. `estimate_decode_of(data, compute)` probes the input
   first (format + dimensions) and estimates in the decoder's native output
   format — the bytes-based convenience, as one-call as `probe`.
+- `ComputeEnvironment::conservative()` / `ComputeEnvironment::host()` — explicit
+  estimate-environment constructors. `conservative()` is the single-core
+  baseline (the old `new()` behavior, now explicitly named); `host()` (std)
+  detects the running machine (`available_parallelism()` cores +
+  `SimdTier::CurrentHost`; RAM left unknown — std has no portable query).
 - One-shot provided methods on the config traits: `DecoderConfig::decode`,
   `DecoderConfig::probe`, and `EncoderConfig::encode` — single-line
   config→result use with default job settings (08dabea).
@@ -96,6 +103,11 @@ removes that whole class).
 - testkit: `CodecSet` behavior suite against the reference codec — roundtrip,
   registration-scoped detection, custom-format detect→decode, static
   `LazyLock` sharing across threads, template cloning, typed errors (a4fec14).
+
+### Deprecated
+- `ComputeEnvironment::new()` — construction should be explicit. Use
+  `conservative()` (the single-core baseline, identical behavior) or `host()`
+  (std, detect the running machine). Removal is queued for the next 0.x minor.
 
 ## [0.1.26] - 2026-07-14
 

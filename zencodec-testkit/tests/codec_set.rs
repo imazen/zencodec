@@ -335,7 +335,7 @@ fn one_shot_trait_methods_work_directly() {
 fn estimate_dispatches_to_the_registered_codec() {
     let set = reference_set();
     let image = ImageCharacteristics::new(W, H, PixelDescriptor::RGB8_SRGB);
-    let compute = ComputeEnvironment::new();
+    let compute = ComputeEnvironment::conservative();
 
     // Registered format → forwards to the codec's estimator and succeeds
     // (even when the codec reports `unknown()`).
@@ -366,7 +366,7 @@ fn estimate_decode_of_probes_then_estimates() {
     let set = CodecSet::new()
         .with_decoder(ZcrDecoderConfig)
         .with_encoder(ReferenceEncoderConfig::new());
-    let compute = ComputeEnvironment::new();
+    let compute = ComputeEnvironment::conservative();
 
     let encoded = set
         .encode(ImageFormat::Pnm, rgb_pixels(&PIXELS, W, H))
