@@ -135,9 +135,9 @@ pub enum LossyTarget {
     /// pass — no re-encode. Pinned to `zensim::ZensimProfile::B` specifically
     /// (not "whichever profile is latest"): `B` is a **deterministic linear**
     /// profile — a closed-form lasso fit, byte-reproducible with no training
-    /// seed — unlike the deprecated MLP-based `A`, so a target expressed
-    /// against it is stable across zensim patch releases the way this crate's
-    /// other metric targets are. "Approx" marks it blind one-shot, matching
+    /// seed — so a target expressed against it is stable across zensim patch
+    /// releases the way this crate's other metric targets are. "Approx" marks
+    /// it blind one-shot, matching
     /// `ApproxSsim2` / `ApproxButteraugli`; a closed-loop variant can be added
     /// later without renaming this. If a future zensim generation supersedes
     /// `B` as the recommended profile, that becomes a new sibling arm here —

@@ -329,9 +329,7 @@ let cfg = my_encoder_config
 
 - **`ApproxSsim2(score)`** — a one-shot SSIMULACRA2 target (a real cross-codec metric).
 - **`ApproxButteraugli(distance)`** — a one-shot butteraugli max-norm distance.
-- **`ApproxZensimB(score)`** — a one-shot zensim target, pinned to `ZensimProfile::B` (the
-  deterministic linear profile — stable across zensim patch releases, unlike the
-  deprecated MLP-based `A`).
+- **`ApproxZensimB(score)`** — a one-shot zensim target, pinned to `ZensimProfile::B`.
 - **`CodecSpecificQuality(q)`** — the codec's own native quality scale (meaning differs per codec).
 
 These are **blind, single-pass**: the target maps to a native dial in one encode,
