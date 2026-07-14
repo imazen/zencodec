@@ -9,6 +9,7 @@
 
 use std::sync::LazyLock;
 
+use zencodec::estimate::{ComputeEnvironment, ImageCharacteristics};
 use zencodec::prelude::*;
 use zencodec::{
     CodecSet, CodecSetError, ImageFormat, ImageFormatDefinition, Metadata, MetadataPolicy,
@@ -328,4 +329,33 @@ fn one_shot_trait_methods_work_directly() {
         .decode(out.data())
         .expect("one-shot decode");
     assert_eq!((decoded.width(), decoded.height()), (W, H));
+}
+
+#[test]
+fn estimate_dispatches_to_the_registered_codec() {
+    let set = reference_set();
+    let image = ImageCharacteristics::new(W, H, PixelDescriptor::RGB8_SRGB);
+    let compute = ComputeEnvironment::new();
+
+    // Registered format → forwards to the codec's estimator and succeeds
+    // (even when the codec reports `unknown()`).
+    assert!(
+        set.estimate_encode(ImageFormat::Pnm, &image, &compute)
+            .is_ok()
+    );
+    assert!(
+        set.estimate_decode(ImageFormat::Pnm, &image, &compute)
+            .is_ok()
+    );
+
+    // Unregistered format → typed error, mirroring encode/decode dispatch.
+    let decode_only = CodecSet::new().with_decoder(ReferenceDecoderConfig);
+    match decode_only.estimate_encode(ImageFormat::Pnm, &image, &compute) {
+        Err(CodecSetError::NoEncoder(ImageFormat::Pnm)) => {}
+        other => panic!("expected NoEncoder(Pnm), got {other:?}"),
+    }
+    match set.estimate_decode(ImageFormat::Jpeg, &image, &compute) {
+        Err(CodecSetError::NoDecoder(ImageFormat::Jpeg)) => {}
+        other => panic!("expected NoDecoder(Jpeg), got {other:?}"),
+    }
 }
