@@ -3,8 +3,8 @@
 //! A [`CodecSet`] holds any number of decoder and encoder configs behind the
 //! object-safe [`DynDecoderConfig`] / [`DynEncoderConfig`] traits and gives
 //! them one entry point per operation: detect-and-decode, probe, push decode,
-//! animation decode, and format-keyed encode. Registration is one line per
-//! codec — each config announces its own formats
+//! animation decode, format-keyed encode, and resource estimation.
+//! Registration is one line per codec — each config announces its own formats
 //! ([`DecoderConfig::formats()`] / [`EncoderConfig::format()`]), so the set
 //! needs no per-codec wiring.
 //!
@@ -63,6 +63,7 @@ use core::fmt;
 
 use zenpixels::{PixelDescriptor, PixelSlice};
 
+use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 use crate::fidelity::Fidelity;
 use crate::format::{ImageFormat, ImageFormatRegistry};
 use crate::traits::{
@@ -500,6 +501,60 @@ impl CodecSet {
             .ok_or(CodecSetError::NoEncoder(format))?;
         let tuned = entry.clone_entry().with_fidelity_entry(fidelity);
         Ok(self.stamped_encode_job(tuned.as_dyn()))
+    }
+
+    // --- Resource estimation ------------------------------------------------
+
+    /// Predict the peak memory and wall-time of **encoding** an image with the
+    /// given [`ImageCharacteristics`] as `format` on `compute`, without
+    /// encoding anything.
+    ///
+    /// Forwards to the registered encoder's
+    /// [`estimate_encode_resources`](DynEncoderConfig::estimate_encode_resources).
+    /// A codec without a calibrated cost model returns
+    /// [`ResourceEstimate::unknown`] (every field `None`) rather than failing;
+    /// the call errors only with [`NoEncoder`](CodecSetError::NoEncoder) when no
+    /// encoder for `format` is registered.
+    ///
+    /// Unlike [`probe`](Self::probe), this takes explicit characteristics
+    /// instead of input bytes: an encode has no input image yet, so the caller
+    /// describes the pixels it is about to hand the encoder.
+    pub fn estimate_encode(
+        &self,
+        format: ImageFormat,
+        image: &ImageCharacteristics,
+        compute: &ComputeEnvironment,
+    ) -> Result<ResourceEstimate, CodecSetError> {
+        Ok(self
+            .encoder_for(format)
+            .ok_or(CodecSetError::NoEncoder(format))?
+            .estimate_encode_resources(image, compute))
+    }
+
+    /// Predict the peak memory and wall-time of **decoding** an image with the
+    /// given [`ImageCharacteristics`] as `format` on `compute`, without
+    /// decoding anything.
+    ///
+    /// Forwards to the registered decoder's
+    /// [`estimate_decode_resources`](DynDecoderConfig::estimate_decode_resources).
+    /// A codec without a calibrated cost model returns
+    /// [`ResourceEstimate::unknown`]; the call errors only with
+    /// [`NoDecoder`](CodecSetError::NoDecoder) when no decoder for `format` is
+    /// registered.
+    ///
+    /// To estimate straight from encoded bytes, pair with [`probe`](Self::probe):
+    /// probe for the real dimensions and pixel format, build
+    /// [`ImageCharacteristics`] from them, then call this.
+    pub fn estimate_decode(
+        &self,
+        format: ImageFormat,
+        image: &ImageCharacteristics,
+        compute: &ComputeEnvironment,
+    ) -> Result<ResourceEstimate, CodecSetError> {
+        Ok(self
+            .decoder_for(format)
+            .ok_or(CodecSetError::NoDecoder(format))?
+            .estimate_decode_resources(image, compute))
     }
 
     // --- Internals ----------------------------------------------------------
