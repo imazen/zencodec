@@ -11,7 +11,7 @@ types (metadata, limits, format detection, color emission) at the root.
 
 ```toml
 [dependencies]
-zencodec = "0.1.25"
+zencodec = "0.1.26"
 ```
 
 zencodec defines the traits; a concrete codec crate (here `zenjpeg`) supplies the
@@ -41,6 +41,58 @@ let pixels = decoded.into_buffer();
 
 For untrusted input, attach a resource limit and a cancellation token to the
 **job** — see [Untrusted input](#untrusted-input-limits-cancellation-errors) below.
+
+## Codec-generic code, in practice
+
+Because every codec exposes the same `Config → Job → Encoder/Decoder` shape,
+downstream code is written once against the trait bounds and reused across the
+whole family — today 17 zen\* crates integrate through these traits. A function
+generic over any (encoder, decoder) pair looks like this:
+
+```rust,ignore
+use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
+use zencodec::decode::DecoderConfig;
+
+/// Encode → decode → compare, for ANY codec pair.
+fn pixel_roundtrip<E, D>(enc: E, dec: D, img: &TestImage) -> Result<(), String>
+where
+    E: EncoderConfig,
+    D: DecoderConfig,
+    <E::Job as EncodeJob>::Enc: Encoder<Error = E::Error>,
+{
+    // ...one implementation, every codec...
+}
+
+// The same call, any format:
+pixel_roundtrip(JpegEncoderConfig::new(), JpegDecoderConfig::new(), &img)?;
+pixel_roundtrip(WebpEncoderConfig::new(), WebpDecoderConfig::new(), &img)?;
+```
+
+That signature isn't hypothetical — it's how this repo's
+[`zencodec-testkit`](https://github.com/imazen/zencodec/tree/main/zencodec-testkit)
+conformance suite is built:
+`check_pixel_roundtrip`, `check_cross_path_pixel_equivalence`,
+`check_metadata_no_leak`, `check_orientation_roundtrip`, and
+`check_capability_honesty` are each written once and run by every zen\* codec
+against its own configs.
+
+When the codec choice is a **runtime** value instead of a type parameter, the
+`Dyn*` layer (`DynEncoderConfig` / `DynDecoderConfig`) erases the types. Two
+real consumers:
+
+- **`zencodecs`** dispatches on magic bytes — decode without naming a format,
+  re-encode to any target:
+
+  ```rust,ignore
+  let decoded = DecodeRequest::new(bytes).decode_full_frame()?;      // any format in
+  let webp = EncodeRequest::new(ImageFormat::WebP)
+      .with_quality(85.0)
+      .encode(decoded.as_slice(), false)?;                           // one format out
+  ```
+
+- **`zenpipe`** slots any codec into a streaming pipeline as
+  `Box<dyn DynStreamingDecoder>` / `Box<dyn DynEncoder>` — decoder → transform
+  → encoder strips flow with no per-format code in the pipeline itself.
 
 ## Crates in the zen\* family
 
