@@ -265,7 +265,11 @@ fn type_size(kind: u16) -> Option<usize> {
 }
 
 fn rd16(d: &[u8], o: usize, order: ByteOrder) -> Option<u16> {
-    let b = d.get(o..o + 2)?;
+    // checked_add: `o` can be a raw attacker-controlled u32 offset (e.g.
+    // `ifd0_off`), which on 32-bit targets sits at the top of `usize` range —
+    // `o + 2` must reject, not overflow (panics in debug, found by the i686
+    // CI lane replaying fuzz regression seeds).
+    let b = d.get(o..o.checked_add(2)?)?;
     Some(match order {
         ByteOrder::Big => u16::from_be_bytes([b[0], b[1]]),
         ByteOrder::Little => u16::from_le_bytes([b[0], b[1]]),
@@ -273,7 +277,7 @@ fn rd16(d: &[u8], o: usize, order: ByteOrder) -> Option<u16> {
 }
 
 fn rd32(d: &[u8], o: usize, order: ByteOrder) -> Option<u32> {
-    let b = d.get(o..o + 4)?;
+    let b = d.get(o..o.checked_add(4)?)?;
     Some(match order {
         ByteOrder::Big => u32::from_be_bytes([b[0], b[1], b[2], b[3]]),
         ByteOrder::Little => u32::from_le_bytes([b[0], b[1], b[2], b[3]]),

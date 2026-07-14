@@ -223,6 +223,10 @@ fn fuzz_regression_seeds() {
             continue;
         }
         let data = fs::read(&path).expect("read seed");
+        // Name the seed as it runs: test output is captured on success, so
+        // this only surfaces on failure — where the panic itself doesn't say
+        // which seed (or which target mirror) tripped it.
+        eprintln!("fuzz_regression: seed {}", path.display());
         run_parse(&data);
         run_roundtrip(&data);
         run_filter(&data);
