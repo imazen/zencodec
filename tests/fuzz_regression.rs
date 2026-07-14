@@ -1,10 +1,10 @@
 //! Fuzz crash regression suite.
 //!
 //! Runs every file in `fuzz/regression/` through the same logic as the
-//! `exif_parse`, `exif_roundtrip`, `exif_filter`, and `exif_author` fuzz
-//! targets, but as a regular `cargo test` — no nightly toolchain needed. Each
-//! seed is a previously-found crash that has been fixed; a failure here is a
-//! regression.
+//! `exif_parse`, `exif_roundtrip`, `exif_filter`, `exif_author`, and
+//! `metadata_filtered` fuzz targets, but as a regular `cargo test` — no
+//! nightly toolchain needed. Each seed is a previously-found crash that has
+//! been fixed; a failure here is a regression.
 //!
 //! To add a seed: drop the (minimized) crash file into `fuzz/regression/` with
 //! a `crash-<sha>` name. The working corpus and unminimized artifacts live in
@@ -13,8 +13,8 @@
 use std::fs;
 use std::path::PathBuf;
 
-use zencodec::Orientation;
 use zencodec::exif::{Exif, ExifPolicy, Retention, TextEncoding};
+use zencodec::{IccRetention, Metadata, MetadataFields, MetadataPolicy, Orientation};
 
 fn regression_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fuzz/regression")
@@ -167,6 +167,40 @@ fn run_author(data: &[u8]) {
     );
 }
 
+/// Mirror of `metadata_filtered`: `Metadata::filtered` never panics and is
+/// idempotent (re-filtering the output under the same policy is stable) for
+/// every policy the fuzz target drives.
+fn run_metadata_filtered(data: &[u8]) {
+    let (sel, rest) = match data.split_first() {
+        Some(x) => x,
+        None => return,
+    };
+    let meta = Metadata::none()
+        .with_exif(rest.to_vec())
+        .with_xmp(rest.to_vec())
+        .with_icc(rest.to_vec());
+
+    let policy = match sel % 6 {
+        0 => MetadataPolicy::PreserveExact,
+        1 => MetadataPolicy::Preserve,
+        2 => MetadataPolicy::Web,
+        3 => MetadataPolicy::ColorAndRotation,
+        4 => MetadataPolicy::Custom(
+            MetadataFields::KEEP_ALL.with_exif(ExifPolicy::KEEP_ALL.with_gps(Retention::Discard)),
+        ),
+        _ => MetadataPolicy::Custom(
+            MetadataFields::DISCARD_ALL
+                .with_icc(IccRetention::KeepNonSrgb)
+                .with_exif(ExifPolicy::ATTRIBUTED_ORIENTATION),
+        ),
+    };
+
+    let out = meta.filtered(&policy);
+    let out2 = out.filtered(&policy);
+    assert_eq!(out.exif, out2.exif, "filtered EXIF not idempotent");
+    assert_eq!(out.orientation, out2.orientation);
+}
+
 #[test]
 fn fuzz_regression_seeds() {
     let dir = regression_dir();
@@ -193,6 +227,7 @@ fn fuzz_regression_seeds() {
         run_roundtrip(&data);
         run_filter(&data);
         run_author(&data);
+        run_metadata_filtered(&data);
         count += 1;
     }
     eprintln!("fuzz_regression: replayed {count} seed(s)");

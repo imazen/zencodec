@@ -298,6 +298,21 @@ All notable changes to zencodec are documented here.
   actual `LastModified` (fixed workstation-side in zenfuzz-farm, outside
   this repo). Cited artifact kept as a permanent regression seed:
   `fuzz/regression/exif_author_issue_113_farm_artifact`.
+- zencodec#111 (the `metadata_filtered` idempotence recurrence of #97, fixed
+  by bea2f94c and filed as its documentation record) verified CLOSED against
+  current main: replayed all 1,855 x86_64 + 673 arm64 mirrored crash
+  artifacts — including the ones the still-pre-fix farm box kept uploading
+  until 11:10Z, two hours *after* the fix landed — through the
+  `metadata_filtered` logic in release and debug-assertions+overflow-checks
+  builds, plus the exact meta.json-cited artifact and both full mirror
+  directories through the real libFuzzer binary (`-runs=0`): zero failures.
+  Closed a coverage gap found during verification: `tests/fuzz_regression.rs`
+  never mirrored the `metadata_filtered` target, so the
+  `metadata_filtered_*` regression seeds added by #97/bea2f94c were not
+  exercising `Metadata::filtered` idempotence on stable CI — added a
+  `run_metadata_filtered` mirror so every seed now runs through it. Cited
+  artifact kept as a permanent regression seed:
+  `fuzz/regression/metadata_filtered_issue_111_farm_artifact`.
 
 ## [0.1.25] - 2026-06-23
 
