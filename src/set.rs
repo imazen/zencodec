@@ -521,17 +521,22 @@ impl CodecSet {
     ///   [`animation_decoder`](Self::animation_decoder) + [`encode_job`](Self::encode_job).
     /// - **No pixel processing** — recompresses at the decoded dimensions and
     ///   pixel format; no resize, crop, or CMS conversion.
-    /// - **Meets on a shared pixel format, no adaptation** — the decoder is
-    ///   asked (via [`decode_preferring`](Self::decode_preferring)) to emit a
-    ///   [`PixelDescriptor`] the `target` encoder lists in
-    ///   [`supported_descriptors`](crate::traits::EncoderConfig::supported_descriptors),
-    ///   so decoder and encoder meet without any pixel conversion (this crate
-    ///   carries no conversion dependency). It errors — rather than corrupting —
-    ///   only when the two supported sets are disjoint (e.g. a RAW decoder that
-    ///   emits 16-bit / f32-linear only, into an encoder that accepts 8-bit
-    ///   only) or when a decoder ignores the preference and emits a native
-    ///   descriptor the encoder rejects. Since every common raster codec both
-    ///   decodes to and encodes from sRGB `RGB8` / `RGBA8`, those pairs bridge.
+    /// - **Precision-preserving, no adaptation** — it decodes at the source's
+    ///   native descriptor first and, when the `target` encoder accepts that
+    ///   descriptor (per its
+    ///   [`supported_descriptors`](crate::traits::EncoderConfig::supported_descriptors)),
+    ///   encodes it verbatim — so a 16-bit or HDR source is **not** flattened to
+    ///   8-bit when the target can carry it. Only when the native descriptor is
+    ///   unsupported does it re-decode (via
+    ///   [`decode_preferring`](Self::decode_preferring)) asking the decoder to
+    ///   bridge to a descriptor the encoder accepts: a second decode, and a
+    ///   precision drop only where the target genuinely can't hold the source's
+    ///   format (this crate carries no pixel-conversion dependency). It errors —
+    ///   rather than corrupting — only when the decoder and encoder supported
+    ///   sets are disjoint (e.g. a RAW decoder that emits 16-bit / f32-linear
+    ///   only, into an encoder that accepts 8-bit only). Since every common
+    ///   raster codec both decodes to and encodes from sRGB `RGB8` / `RGBA8`,
+    ///   those pairs bridge.
     ///
     /// Errors with [`NoDecoder`](CodecSetError::NoDecoder) when `input`'s
     /// detected format has no registered decoder, [`NoEncoder`](CodecSetError::NoEncoder)
@@ -545,14 +550,24 @@ impl CodecSet {
         metadata: MetadataPolicy,
         color: ColorEmitPolicy,
     ) -> Result<EncodeOutput, CodecSetError> {
-        // Ask the decoder to emit a descriptor the target encoder accepts, so
-        // the two meet on a shared pixel format with no adaptation. A decoder
-        // that can't honor the preference falls back to its native format.
         let target_inputs = self
             .encoder_for(target)
             .ok_or(CodecSetError::NoEncoder(target))?
             .supported_descriptors();
-        let decoded = self.decode_preferring(input, target_inputs)?;
+        // Decode at the source's native precision first. If the target encoder
+        // accepts that descriptor, encode it verbatim — a 16-bit / HDR source is
+        // not thrown down to 8-bit when the target can hold it. Only when the
+        // native descriptor is unsupported do we re-decode asking the decoder to
+        // bridge to a descriptor the encoder takes (a second decode; loses
+        // precision only where the target can't carry the source's format). The
+        // encoders list 8-bit descriptors first, so preferring that list up
+        // front would otherwise flatten every multi-depth source to 8-bit.
+        let decoded = self.decode(input)?;
+        let decoded = if target_inputs.contains(&decoded.pixels().descriptor()) {
+            decoded
+        } else {
+            self.decode_preferring(input, target_inputs)?
+        };
         let source_metadata = Metadata::from(decoded.info());
         let mut job = self.encode_job_with(target, fidelity)?;
         job.set_metadata_policy(source_metadata, metadata);
