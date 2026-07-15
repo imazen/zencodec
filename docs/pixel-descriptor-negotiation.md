@@ -280,3 +280,207 @@ PNG-vs-JXL divergence and any regression.
   `farbfeld_codec.rs:33-38,310-325`, `hdr_codec.rs:29,357-367`,
   `tga_codec.rs:34-38,373-393`, `qoi_codec.rs:31-32,403-416`; all
   `decoder()` ignore `preferred` (source-driven).
+
+---
+
+# PHASE 2 — convert paths, multi-page, and color management
+
+**Provenance:** 4 further surveys (zenpixels-convert; TIFF/PDF multi-page; the
+color-emit decision layer; moxcms), 2026-07-14. This section **revises §5–§6**:
+the "lift JXL's `choose_pixel_format` into a new shared helper" plan is superseded
+— a richer classifier already exists and should be *relocated*, not reinvented.
+
+## 8. Fidelity is a per-image PIPELINE, not a single descriptor pick
+
+A transcode is a chain, and end-to-end fidelity is the **composition** of three
+arrows (worst link dominates), each with its own per-image `DescriptorSupport`:
+
+```
+source ─[decode]→ decoded ─[convert / CMS]→ adapted ─[encode]→ output
+        arrow 1            arrow 2                    arrow 3
+                                              (+ color signaling: a parallel
+                                               metadata channel on arrow 3)
+```
+
+The middle arrow — **convert (`zenpixels-convert`)** — is a first-class fidelity
+actor the Phase-1 survey didn't examine. The negotiator's job is not "pick one
+descriptor" but "choose the path that minimizes total loss," per page.
+
+## 9. The classifier already exists — relocate, don't reinvent
+
+`zenpixels-convert` already contains a **provenance-aware, descriptor-only fidelity
+classifier** far richer than JXL's decode-only slice or zencodec's naive
+`negotiate_pixel_format`:
+
+- **`conversion_cost_with_provenance(from, to, prov) -> ConversionCost{effort, loss}`**
+  (`negotiate.rs:493`). **`loss == 0` IS the lossless predicate.**
+- **`LossBucket::from_model_loss`** (`pipeline/path.rs:41`): `Lossless ≤10 ·
+  NearLossless ≤50 · LowLoss ≤150 · Moderate ≤400 · High`.
+- Supporting: `PixelDescriptor::layout_compatible`, `descriptors_match`
+  (`output.rs:520`), `requires_cms`, `ConvertStep::Identity`.
+
+### The fidelity map (loss = 0 ⇒ lossless)
+
+| Conversion | Class | Condition |
+|---|---|---|
+| BGRA↔RGBA swizzle, add-alpha, Gray→RGB/RGBA replicate | **Lossless** | always |
+| drop-alpha | Lossy(50) | **Lossless iff alpha Opaque/Undefined** |
+| RGB→Gray (Y′ luma) | Lossy(500) | exact only if R==G==B |
+| precision widen U8→U16→F32 | **Lossless** | `target_bits ≥ origin_bits` |
+| precision narrow | Lossy | **Lossless iff provenance origin already fit** |
+| transfer sRGB↔Linear / gamma | **Lossless** (f32) | always |
+| transfer **PQ/HLG** | Lossy(300) | *blanket over-charge* — decode is actually lossless |
+| gamut map | Lossless | **iff `dst.contains(src)`** (widening); clip = Lossy(80–200) |
+| alpha premul/unpremul | NearLossless(5/10) | division rounding |
+| Oklab round-trip (f32) | **Lossless** | known primaries |
+| HDR tone-map | Lossy | irreversible; `hdr-experimental` only |
+
+The **provenance round-trip rule** is the important subtlety: narrowing F32→U8 is
+`Lossless` when the data *originated* as U8 (widened earlier in the chain). This is
+exactly what a decode→convert→encode pipeline needs to avoid double-counting.
+
+### Where it belongs
+
+The classifier reads **only descriptor fields** (`primaries, transfer,
+channel_type, layout, alpha, signal_range`) + a `Provenance` derived from the
+source — it never touches `ColorContext`, so it is **`no_std`-able**. Today it's
+trapped in the `std`/CMS convert crate, which zencodec (no_std) can't depend on.
+
+**Recommendation: move the classifier down into `zenpixels`** (its natural home —
+the fidelity relationship between two `PixelDescriptor`s is a `PixelDescriptor`
+concern), e.g. `zenpixels::fidelity::conversion_cost(from, to, prov)` or
+`PixelDescriptor::fidelity_to(target, prov)`. Then **one** classifier serves
+zencodec's decode/encode negotiation, every decoder, and zenpixels-convert's
+`best_match`. zencodec's naive `negotiate_pixel_format` becomes a thin call into it
+(or is deleted). This is a *move + small API*, not a from-scratch build.
+
+### Two-tier: descriptor classifier + CMS resolution (the ICC caveat)
+
+The classifier is **blind to custom-ICC-vs-custom-ICC**: two different ICC profiles
+sharing `(primaries, transfer)` score as identity/lossless, even when moxcms would
+gamut-clip between them (`color_profile_source()` is a `const fn` returning only a
+`PrimariesTransferPair` — it structurally cannot carry ICC bytes). So fidelity is
+two-tier:
+- **Tier 1 — descriptor classifier** (no_std, fast): exact for named/CICP
+  colorimetry — the common case.
+- **Tier 2 — CMS `ColorContext` check** (std, moxcms): required only when both
+  sides carry custom ICCs with matching descriptors. Resolve at the CMS boundary.
+
+## 10. `StorageFidelity` is still needed — the classifier can't derive it
+
+The per-image classifier (arrow-2 and the source↔candidate part of arrows 1/3)
+does **not** replace the static encode tag, because a codec's *internal*
+downconvert is invisible in the descriptor: WebP advertises `RGBF32` but stores
+8-bit. That is a codec-implementation fact, not a descriptor relationship.
+
+So the two-arrows split stands:
+- **Static, encode-side** — `StorageFidelity { Exact, Lossless, Downconverts }` on
+  each `SupportedDescriptor` in the encode list (candidate→codec-storage;
+  source-independent). Filters the candidate set to the fidelity envelope.
+- **Computed, both sides / all arrows** — the classifier returns the per-image
+  `DescriptorSupport` (source→candidate). This is the "native/lossless changes per
+  image" result; it must never be baked into a static list.
+
+Decode `supported_descriptors()` stays `&[PixelDescriptor]` (nativeness is
+source-relative → computed). Only the encode list gains the static tag.
+
+## 11. Multi-page (TIFF, PDF) — the pipeline runs PER PAGE
+
+- **Pages genuinely differ.** TIFF IFDs each independently declare
+  depth/channels/photometric/alpha/ICC (image-tiff does *not* inherit tags across
+  IFDs — `image.rs:180`); page 1 gray-8, page 2 RGB-16, page 3 CMYK, page 4 RGBA
+  are all valid. PDF pages differ in dims + source color spaces.
+- **But both decoders flatten.** TIFF keeps 8/16/f32 gray/RGB/RGBA, **collapses
+  CMYK/YCbCr/Lab/Palette → RGB(A)** (CMYK is absent from `TIFF_DECODE_DESCRIPTORS`).
+  PDF renders **every page to RGBA8** (hayro→vello_cpu). TIFF is at
+  `zenextras/zentiff` (fully wired decode+encode); PDF at `zenextras/zenpdf`
+  (decode-only, `Custom` format).
+- **`MultiPageDecoder` is vaporware** — zero code; only a sketch in
+  `docs/multi-image-design.md:368` (`page_info(index) -> ImageInfo`,
+  `decode_page(index, preferred, stop) -> DecodeOutput`, per-page `preferred`).
+- **The model gap:** `ImageInfo` is single-valued (one `source_color`, one
+  `has_alpha` = "primary image only", `info.rs:434`). Per-page descriptors have
+  nowhere to go and no enumeration API. `DecodeJob::with_start_frame_index` exists
+  (no-op default); PDF overrides it (page-select), **TIFF does not** (locked to
+  IFD0 through zencodec despite image-tiff's `seek_to_image` random access).
+- **CMYK→CMYK transcode is impossible today.** `PixelDescriptor` models CMYK
+  first-class (`ChannelLayout::Cmyk`, `CMYK8`), but neither decoder emits it — the
+  channels are RGB-ified before any encoder sees them, and probe never reports
+  CMYK. Preserving it needs (a) a CMYK-preserving decode mode via `preferred` (TIFF
+  ignores `preferred` today), and (b) per-page descriptor reporting.
+
+**Requirement:** implement the sketched `MultiPageDecoder` so the source-aware
+pipeline (decode→convert→encode, §8) runs per page with per-page `preferred`. The
+negotiator is already per-image; multi-page just iterates it with a per-page
+source descriptor.
+
+## 12. Color management — retag vs CMS, and a live corruption hazard
+
+Color splits cleanly into the two-arrows model, but **both halves are landed-yet-
+unwired for transcode**:
+
+- **Signaling retag (arrow-3 metadata) — LOSSLESS.** `resolve_color_emit`
+  (`color.rs:247`) decides ICC-vs-CICP emission; "orthogonal to which pixels are
+  written." Handles CMYK/gray terminals (keep ICC, suppress RGB CICP). Every policy
+  (Compatibility/Balanced/Compact/Verbatim/Custom) is a retag — **no policy
+  recolors** P3/PQ→sRGB. **Zero production callers today.**
+- **Pixel CMS (arrow-2) — Lossless or Lossy.** Gamut-widen = Lossless; gamut-clip,
+  TRC remap w/ quantization, HDR→SDR tone-map = Lossy. Lives in zenpixels-convert
+  (moxcms wired behind `cms-moxcms`). But `finalize_for_output*` (the lowering that
+  would consume a `ColorEmitPlan` and run source-driven CMS) has **zero production
+  callers**; only zenpipe's *explicit* ICC→ICC `IccTransform` node runs CMS. There
+  is **no decode-side `ConvertToSrgb`/`ColorIntent` knob** in zencodec at all.
+
+**Retag-vs-Lossy rule:** a transfer/primaries change is a **Native retag** iff the
+pixels already carry the target's transfer AND primaries (`descriptors_match` →
+byte copy) or you are only relabeling metadata. It is a **Lossy transform** when
+primaries narrow (gamut clip), a TRC is remapped with quantization, or an HDR
+transfer meets an SDR target (tone-map). Widening depth/gamut without clip is the
+only Lossless-transform middle ground. HDR→HDR (PQ→PQ, same primaries) = lossless
+retag.
+
+### ⚠ Live corruption hazard — HDR→SDR fails OPEN
+
+On a default (non-`hdr-experimental`) build, a PQ/HLG→sRGB `RowConverter` takes the
+no-tone-map arms and **hard-clips every highlight to 1.0 silently**
+(`convert.rs:549-566,1835-1844`); the refusal guard that would stop it is itself
+feature-gated. Runner-up: the gamut step is skipped when either primaries is
+`Unknown` (`convert.rs:664`), silently relabeling wide-gamut pixels as sRGB. Both
+violate "the user's pixels are sacred" for any transcode that crosses HDR→SDR or
+wide→narrow gamut.
+
+**Design rule for the negotiator:** an HDR→SDR or gamut-narrowing descriptor
+transition must route through an explicit (tone-map / gamut-map) convert step and
+be reported as `Lossy` — or the transcode must **refuse** (error), never silently
+clip. The negotiator's transfer/primaries gates (§5.2) are exactly this boundary;
+they must be enforced, not bypassed.
+
+## 13. Revised architecture & trait changes (supersedes §6)
+
+1. **Relocate the fidelity classifier** `conversion_cost`/`LossBucket`/component
+   fns from `zenpixels-convert` into **`zenpixels`** (no_std). One classifier for
+   decode negotiation, encode negotiation, decoders, and convert.
+2. **zencodec `negotiate_pixel_format(source, preferred, available)`** becomes a
+   thin wrapper over the relocated classifier (widen-only, native fallback, never
+   flatten — §5.2), returning `Negotiated { descriptor, fidelity: DescriptorSupport }`.
+   Delete the precision-blind version.
+3. **Encode `supported_descriptors() -> &[SupportedDescriptor]`** with the static
+   `StorageFidelity` tag (§10). Decode list unchanged. `From<PixelDescriptor>`
+   defaults to `Exact` for mechanical migration; codecs downgrade their
+   accept-convert entries.
+4. **`ImageInfo.source_descriptor: Option<PixelDescriptor>`** — best-effort
+   transparency (Phase-1 §1 tiers); authoritative source is the decoder-native
+   descriptor.
+5. **`MultiPageDecoder`** (the sketched trait) — per-page `page_info` +
+   `decode_page(index, preferred)`, so the pipeline runs per page. Wire TIFF's
+   `seek_to_image` page selector; add CMYK-preserving decode via `preferred`.
+6. **Color: wire the decision→mechanism path.** Call `resolve_color_emit` on the
+   transcode encode side (signaling), and route pixel color changes through the
+   convert stage's CMS with the Tier-2 `ColorContext` check for custom ICCs. Close
+   the HDR→SDR fail-open (§12) — tone-map or refuse, never silent-clip.
+7. **Two-tier fidelity** — descriptor classifier (no_std, Tier 1) + moxcms
+   `ColorContext` resolution (std, Tier 2) for custom-ICC pairs.
+
+**Rollout stays additive** where possible; the classifier relocation + encode
+`SupportedDescriptor` type change are the two breaking pieces (pre-0.1, allowed).
+The testkit conformance check (§6) extends to a per-page + HDR-refusal case.
