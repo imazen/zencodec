@@ -555,24 +555,41 @@ fn has_ifd0_tag(data: &[u8], target_tag: u16) -> bool {
     } else {
         u32::from_le_bytes([data[4], data[5], data[6], data[7]]) as usize
     };
-    if ifd_offset + 2 > data.len() {
+    // Bounds-check every offset with checked arithmetic + `.get()`. `ifd_offset`
+    // and the per-entry offset are attacker-controlled and can overflow `usize`
+    // on 32-bit targets (wasm32/i686): `ifd_offset + 2` wraps past `data.len()`
+    // in release — bypassing a `>` guard, then panicking on the OOB index — and
+    // panics on the add itself in debug. `detect_dng`/`detect_raw` run on
+    // untrusted bytes, so this must never panic.
+    let Some(count_end) = ifd_offset.checked_add(2) else {
         return false;
-    }
-    let entry_count = if big_endian {
-        u16::from_be_bytes([data[ifd_offset], data[ifd_offset + 1]]) as usize
-    } else {
-        u16::from_le_bytes([data[ifd_offset], data[ifd_offset + 1]]) as usize
     };
-    let entries_start = ifd_offset + 2;
+    let Some(count_bytes) = data.get(ifd_offset..count_end) else {
+        return false;
+    };
+    let entry_count = if big_endian {
+        u16::from_be_bytes([count_bytes[0], count_bytes[1]]) as usize
+    } else {
+        u16::from_le_bytes([count_bytes[0], count_bytes[1]]) as usize
+    };
+    let entries_start = count_end;
     for i in 0..entry_count {
-        let off = entries_start + i * 12;
-        if off + 2 > data.len() {
+        let Some(off) = i
+            .checked_mul(12)
+            .and_then(|delta| entries_start.checked_add(delta))
+        else {
             break;
-        }
+        };
+        let Some(end) = off.checked_add(2) else {
+            break;
+        };
+        let Some(tag_bytes) = data.get(off..end) else {
+            break;
+        };
         let tag = if big_endian {
-            u16::from_be_bytes([data[off], data[off + 1]])
+            u16::from_be_bytes([tag_bytes[0], tag_bytes[1]])
         } else {
-            u16::from_le_bytes([data[off], data[off + 1]])
+            u16::from_le_bytes([tag_bytes[0], tag_bytes[1]])
         };
         if tag == target_tag {
             return true;
@@ -583,6 +600,27 @@ fn has_ifd0_tag(data: &[u8], target_tag: u16) -> bool {
         }
     }
     false
+}
+
+#[cfg(test)]
+mod ifd_overflow_tests {
+    use super::has_ifd0_tag;
+
+    // Regression: a crafted TIFF IFD offset must not overflow `usize` on 32-bit
+    // targets and panic. On 64-bit these merely return false; the guard is what
+    // keeps i686/wasm32 from panicking on the OOB index.
+    #[test]
+    fn crafted_ifd_offset_does_not_panic() {
+        // IFD0 offset = 0xFFFFFFFF (II/42 and MM/42).
+        let le = [b'I', b'I', 0x2A, 0x00, 0xFF, 0xFF, 0xFF, 0xFF];
+        assert!(!has_ifd0_tag(&le, 0xC612));
+        let be = [b'M', b'M', 0x00, 0x2A, 0xFF, 0xFF, 0xFF, 0xFF];
+        assert!(!has_ifd0_tag(&be, 0xC612));
+        // ifd_offset=8, entry_count=0xFFFF but only one (mismatching) entry:
+        // the per-entry `entries_start + i*12` offset must break, not overflow.
+        let entry_overflow = [b'I', b'I', 0x2A, 0x00, 8, 0, 0, 0, 0xFF, 0xFF, 0, 0];
+        assert!(!has_ifd0_tag(&entry_overflow, 0xC612));
+    }
 }
 
 /// Detect SVG or SVGZ from byte content.
