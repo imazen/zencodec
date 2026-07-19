@@ -69,7 +69,9 @@ pub mod reference;
 
 #[cfg(test)]
 pub(crate) use minimal::{MinimalDecoderConfig, MinimalEncoderConfig};
-pub use reference::{RefError, ReferenceDecoderConfig, ReferenceEncoderConfig};
+pub use reference::{
+    RefError, ReferenceDecoderConfig, ReferenceEncoderConfig, ReferenceZcrDecoderConfig, ZCR_FORMAT,
+};
 
 // ===========================================================================
 // Result types

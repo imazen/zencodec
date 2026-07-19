@@ -11,9 +11,12 @@
 //! # Shared types (root)
 //!
 //! - [`ImageFormat`] — format detection from magic bytes
+//! - [`CodecSet`] — multi-codec registry: register configs once, then
+//!   detect-and-decode or encode-by-format through one shared `&self` handle
 //! - [`ImageInfo`] / [`Metadata`] / [`Orientation`] / [`OrientationHint`] — image metadata
 //! - [`ResourceLimits`] / [`ThreadingPolicy`] — resource limit and threading configuration
 //! - [`UnsupportedOperation`] / [`CodecErrorExt`] — standard unsupported operation reporting and error chain inspection
+//! - [`prelude`] — one-import bundle of all encode/decode traits
 //!
 //! # Re-exported crates
 //!
@@ -72,6 +75,7 @@ mod negotiate;
 mod orientation;
 mod output;
 mod policy;
+mod set;
 mod sink;
 mod traits;
 
@@ -103,6 +107,7 @@ pub use limits::{AllocPreference, LimitExceeded, LimitKind, ResourceLimits, Thre
 pub use metadata::{IccRetention, Metadata, MetadataFields, MetadataPolicy};
 pub use orientation::{Orientation, OrientationHint};
 pub use output::{AnimationFrame, OwnedAnimationFrame};
+pub use set::{CodecSet, CodecSetError};
 pub use zenpixels::ColorAuthority;
 
 pub use capabilities::UnsupportedOperation;
@@ -236,4 +241,21 @@ pub mod decode {
 
     // Gain-map decode intent + decoded payloads (the math stays in `ultrahdr-core`).
     pub use crate::gainmap::{DecodedGainMap, GainMapRender};
+}
+
+/// One-import trait bundle: `use zencodec::prelude::*;`.
+///
+/// Brings every encode/decode trait into scope so `.job()`, `.decoder()`,
+/// `.encode()`, `.next_batch()`, and the other trait methods resolve without
+/// hunting down individual `use` lines. Types are *not* included — import
+/// those from the crate root or the [`encode`]/[`decode`] modules.
+pub mod prelude {
+    pub use crate::decode::{
+        AnimationFrameDecoder, Decode, DecodeJob, DecoderConfig, DynAnimationFrameDecoder,
+        DynDecodeJob, DynDecoder, DynDecoderConfig, DynStreamingDecoder, StreamingDecode,
+    };
+    pub use crate::encode::{
+        AnimationFrameEncoder, DynAnimationFrameEncoder, DynEncodeJob, DynEncoder,
+        DynEncoderConfig, EncodeJob, Encoder, EncoderConfig,
+    };
 }

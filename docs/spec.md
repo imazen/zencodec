@@ -72,6 +72,10 @@ trait EncoderConfig: Clone + Send + Sync {
     fn alpha_quality(&self) -> Option<f32>;     // default: None
 
     fn job(self) -> Self::Job;
+
+    // Provided one-shot (default body; requires Job::Enc: Encoder<Error = Self::Error>):
+    // job() → encoder() → encode(pixels) with default job settings.
+    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error>;
 }
 ```
 
@@ -100,6 +104,9 @@ trait EncodeJob: Sized {
 
     fn encoder(self) -> Result<Self::Enc, Self::Error>;
     fn animation_frame_encoder(self) -> Result<Self::AnimationFrameEnc, Self::Error>;
+    // One-shot: encode with this job's config (== self.encoder()?.encode(pixels))
+    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error>
+        where Self::Enc: Encoder<Error = Self::Error>;
 
     // Type-erased convenience (default impls via shims)
     fn dyn_encoder(self) -> Result<Box<dyn DynEncoder>, BoxedError>
@@ -172,6 +179,10 @@ trait DecoderConfig: Clone + Send + Sync {
     fn capabilities() -> &'static DecodeCapabilities;  // default: EMPTY
 
     fn job<'a>(self) -> Self::Job<'a>;
+
+    // Provided one-shots (default bodies) with default job settings:
+    fn decode(self, data: &[u8]) -> Result<DecodeOutput, Self::Error>;  // native pixel format
+    fn probe(&self, data: &[u8]) -> Result<ImageInfo, Self::Error>;     // header parse only
 }
 ```
 
@@ -313,6 +324,8 @@ trait DynEncodeJob {
     fn set_loop_count(&mut self, count: Option<u32>);
     fn extensions(&self) -> Option<&dyn Any>;
     fn extensions_mut(&mut self) -> Option<&mut dyn Any>;
+    // One-shot: encode with this job's config (== self.into_encoder()?.encode(pixels))
+    fn encode(self: Box<Self>, pixels: PixelSlice<'_>) -> Result<EncodeOutput, BoxedError>;
     fn into_encoder(self: Box<Self>) -> Result<Box<dyn DynEncoder>, BoxedError>;
     fn into_animation_frame_encoder(self: Box<Self>) -> Result<Box<dyn DynAnimationFrameEncoder>, BoxedError>;
 }
@@ -801,6 +814,115 @@ Metadata for a format: name, extensions, MIME types, capability flags, detection
 ### `ImageFormatRegistry`
 
 Thread-safe registry for custom formats. `common()` returns built-in formats.
+
+---
+
+## CodecSet (multi-codec registry)
+
+Runtime set of registered codec configs with one entry point per operation.
+`Send + Sync + 'static`, `Clone`, `Debug`, `Default`; every operation takes
+`&self`, so one instance can be shared app-wide (`LazyLock` / `OnceLock` /
+`Arc`, or `Box::leak` in `no_std`).
+
+```rust
+struct CodecSet { /* private */ }
+
+impl CodecSet {
+    fn new() -> Self;
+
+    // Registration — self-describing via DecoderConfig::formats() /
+    // EncoderConfig::format(); first registered wins per format.
+    fn with_decoder(self, config: impl DecoderConfig + 'static) -> Self;
+    fn with_encoder<C>(self, config: C) -> Self
+        where C: EncoderConfig + 'static,
+              <C::Job as EncodeJob>::Enc: Encoder + Send,
+              <C::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder;
+
+    // Defaults stamped onto every job the set creates.
+    fn with_limits(self, limits: ResourceLimits) -> Self;
+    fn with_stop(self, stop: StopToken) -> Self;
+    fn with_decode_policy(self, policy: DecodePolicy) -> Self;
+    fn with_encode_policy(self, policy: EncodePolicy) -> Self;
+
+    // Queries.
+    fn detect(&self, data: &[u8]) -> Option<ImageFormat>;
+    fn can_decode(&self, format: ImageFormat) -> bool;
+    fn can_encode(&self, format: ImageFormat) -> bool;
+    fn decoder_for(&self, format: ImageFormat) -> Option<&dyn DynDecoderConfig>;
+    fn encoder_for(&self, format: ImageFormat) -> Option<&dyn DynEncoderConfig>;
+    fn decodable_formats(&self) -> impl Iterator<Item = ImageFormat> + '_;
+    fn encodable_formats(&self) -> impl Iterator<Item = ImageFormat> + '_;
+
+    // Decode: detect → stamped job → run.
+    fn probe<'a>(&'a self, data: &'a [u8]) -> Result<ImageInfo, CodecSetError>;
+    fn decode<'a>(&'a self, data: &'a [u8]) -> Result<DecodeOutput, CodecSetError>;
+    fn decode_preferring<'a>(&'a self, data: &'a [u8], preferred: &[PixelDescriptor])
+        -> Result<DecodeOutput, CodecSetError>;
+    fn decode_as<'a>(&'a self, format: ImageFormat, data: &'a [u8], preferred: &[PixelDescriptor])
+        -> Result<DecodeOutput, CodecSetError>;
+    fn push_decode<'a>(&'a self, data: &'a [u8], sink: &mut dyn DecodeRowSink,
+        preferred: &[PixelDescriptor]) -> Result<OutputInfo, CodecSetError>;
+    fn animation_decoder<'a>(&'a self, data: &'a [u8], preferred: &[PixelDescriptor])
+        -> Result<Box<dyn DynAnimationFrameDecoder>, CodecSetError>;   // 'static result
+    fn streaming_decoder<'a>(&'a self, data: &'a [u8], preferred: &[PixelDescriptor])
+        -> Result<Box<dyn DynStreamingDecoder + 'a>, CodecSetError>;   // borrows set + data
+    fn decode_job<'a>(&'a self, format: ImageFormat)
+        -> Result<Box<dyn DynDecodeJob<'a> + 'a>, CodecSetError>;      // escape hatch (hints, etc.)
+
+    // Encode: format-keyed; the registered config is a template.
+    fn encode(&self, format: ImageFormat, pixels: PixelSlice<'_>)
+        -> Result<EncodeOutput, CodecSetError>;
+    fn encode_with(&self, format: ImageFormat, fidelity: Fidelity, pixels: PixelSlice<'_>)
+        -> Result<EncodeOutput, CodecSetError>;                        // clones the template
+    fn encode_job(&self, format: ImageFormat) -> Result<Box<dyn DynEncodeJob>, CodecSetError>;
+    fn encode_job_with(&self, format: ImageFormat, fidelity: Fidelity)
+        -> Result<Box<dyn DynEncodeJob>, CodecSetError>;
+    // One-call proxy op: decode -> carry source metadata (filtered) -> encode.
+    // Single-image, no pixel processing, no descriptor adaptation.
+    fn transcode(&self, input: &[u8], target: ImageFormat, fidelity: Fidelity,
+        metadata: MetadataPolicy, color: ColorEmitPolicy)
+        -> Result<EncodeOutput, CodecSetError>;
+
+    // Resource estimation: forward to the registered codec's cost model
+    // (unknown() if it has none); NoEncoder / NoDecoder if unregistered.
+    fn estimate_encode(&self, format: ImageFormat, image: &ImageCharacteristics,
+        compute: &ComputeEnvironment) -> Result<ResourceEstimate, CodecSetError>;
+    fn estimate_decode(&self, format: ImageFormat, image: &ImageCharacteristics,
+        compute: &ComputeEnvironment) -> Result<ResourceEstimate, CodecSetError>;
+    // Pixels-based: reads dims + descriptor off the slice, then estimate_encode.
+    fn estimate_encode_of(&self, format: ImageFormat, pixels: PixelSlice<'_>,
+        compute: &ComputeEnvironment) -> Result<ResourceEstimate, CodecSetError>;
+    // Bytes-based: probe → estimate_decode at the decoder's native output.
+    fn estimate_decode_of(&self, data: &[u8], compute: &ComputeEnvironment)
+        -> Result<ResourceEstimate, CodecSetError>;
+}
+
+enum CodecSetError {
+    UnrecognizedFormat,        // detect() matched nothing registered
+    NoDecoder(ImageFormat),    // known format, nothing registered for it
+    NoEncoder(ImageFormat),
+    Codec(BoxedError),         // codec failure; source() exposes the chain
+}
+```
+
+Semantics:
+
+- **Detection** consults only formats with a registered decoder: built-ins in
+  `ImageFormatRegistry::common()` priority order (so AVIF-before-HEIC and
+  DNG-before-TIFF disambiguation is preserved regardless of registration
+  order), then `Custom` formats in registration order.
+- **Encoder templates**: codec-specific options are set on the concrete config
+  before registration; `encode_with` / `encode_job_with` clone the template
+  and apply a per-call `Fidelity` to the clone.
+- **Job escape hatches**: `decode_job` / `encode_job` return the stamped
+  `Dyn*Job` for per-operation control (decode hints, metadata, canvas/loop
+  settings) before running an executor.
+
+## Prelude
+
+`zencodec::prelude::*` imports every encode/decode trait (generic and dyn
+variants) so `.job()`, `.decoder()`, `.encode()`, `.next_batch()`, … resolve
+with one `use`. Types are not included.
 
 ---
 

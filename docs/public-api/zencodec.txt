@@ -6,34 +6,35 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1283 lines (supported surface) | zencodec.features.txt 2 added (features: std) | zencodec.internal.txt 89 lines (89 hidden + 0 excluded-feature)
+# files: zencodec.txt 1491 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 89 lines (89 hidden + 0 excluded-feature)
 
 ## summary
 #
-#   pub modules                                 8
-#   pub types (struct/enum/trait/alias)       132
+#   pub modules                                 9
+#   pub types (struct/enum/trait/alias)       169
 #   pub consts/statics                        172
-#   free functions                             39
-#   inherent methods                          484
+#   free functions                             42
+#   inherent methods                          663
 #   struct fields                             196
-#   enum variants                             181
+#   enum variants                             185
 #   re-exports                                 12
-#   trait roster entries (type × trait)       379
-#   conditional trait impls (verbatim)          2
+#   trait roster entries (type × trait)       386
+#   conditional trait impls (verbatim)          4
 #   auto-trait-complete types                  67
-#   auto-trait exceptions                       6
+#   auto-trait exceptions                       8
 #
 # per-module pub lines:
-#   (root)                          690
-#   decode                          166
-#   encode                          116
-#   estimate                         47
+#   (root)                          732
+#   decode                          168
+#   encode                          119
+#   estimate                         48
 #   exif                             65
 #   gainmap                         126
 #   helpers                          13
 #   icc                               1
+#   prelude                         176
 
-## items (1194 lines)
+## items (1396 lines)
 
 pub mod zencodec
 pub use At
@@ -204,7 +205,7 @@ pub fn SourceColor::with_color_authority(self, zenpixels::color::ColorAuthority)
 pub fn SourceColor::with_content_light_level(self, zenpixels::hdr::ContentLightLevel) -> Self
 pub fn SourceColor::with_icc_profile(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
 pub fn SourceColor::with_mastering_display(self, zenpixels::hdr::MasteringDisplay) -> Self
-pub trait decode::AnimationFrameDecoder: core::marker::Sized
+pub trait decode::AnimationFrameDecoder: core::marker::Sized [also: prelude]
 pub type decode::AnimationFrameDecoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn decode::AnimationFrameDecoder::frame_count(&self) -> core::option::Option<u32>
 pub fn decode::AnimationFrameDecoder::info(&self) -> &ImageInfo
@@ -213,10 +214,10 @@ pub fn decode::AnimationFrameDecoder::render_next_frame(&mut self, core::option:
 pub fn decode::AnimationFrameDecoder::render_next_frame_owned(&mut self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<core::option::Option<OwnedAnimationFrame>, Self::Error>
 pub fn decode::AnimationFrameDecoder::render_next_frame_to_sink(&mut self, core::option::Option<&dyn enough::Stop>, &mut dyn decode::DecodeRowSink) -> core::result::Result<core::option::Option<decode::OutputInfo>, Self::Error>
 pub fn decode::AnimationFrameDecoder::wrap_sink_error(decode::SinkError) -> Self::Error
-pub trait decode::Decode: core::marker::Sized
+pub trait decode::Decode: core::marker::Sized [also: prelude]
 pub type decode::Decode::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn decode::Decode::decode(self) -> core::result::Result<decode::DecodeOutput, Self::Error>
-pub trait decode::DecodeJob<'a>: core::marker::Sized
+pub trait decode::DecodeJob<'a>: core::marker::Sized [also: prelude]
 pub type decode::DecodeJob::AnimationFrameDec: decode::AnimationFrameDecoder<Error = Self::Error> + core::marker::Send + 'static
 pub type decode::DecodeJob::Dec: decode::Decode<Error = Self::Error>
 pub type decode::DecodeJob::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
@@ -245,15 +246,17 @@ pub trait decode::DecodeRowSink
 pub fn decode::DecodeRowSink::begin(&mut self, u32, u32, zenpixels::descriptor::PixelDescriptor) -> core::result::Result<(), decode::SinkError>
 pub fn decode::DecodeRowSink::finish(&mut self) -> core::result::Result<(), decode::SinkError>
 pub fn decode::DecodeRowSink::provide_next_buffer(&mut self, u32, u32, u32, zenpixels::descriptor::PixelDescriptor) -> core::result::Result<zenpixels::buffer::PixelSliceMut<'_>, decode::SinkError>
-pub trait decode::DecoderConfig: core::clone::Clone + core::marker::Send + core::marker::Sync
+pub trait decode::DecoderConfig: core::clone::Clone + core::marker::Send + core::marker::Sync [also: prelude]
 pub type decode::DecoderConfig::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub type decode::DecoderConfig::Job<'a>: decode::DecodeJob<'a, Error = Self::Error> + 'static
 pub fn decode::DecoderConfig::capabilities() -> &'static decode::DecodeCapabilities
+pub fn decode::DecoderConfig::decode(self, &[u8]) -> core::result::Result<decode::DecodeOutput, Self::Error> where Self: core::marker::Sized
 pub fn decode::DecoderConfig::estimate_decode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
 pub fn decode::DecoderConfig::formats() -> &'static [ImageFormat]
 pub fn decode::DecoderConfig::job<'a>(self) -> Self::Job
+pub fn decode::DecoderConfig::probe(&self, &[u8]) -> core::result::Result<ImageInfo, Self::Error> where Self: core::marker::Sized
 pub fn decode::DecoderConfig::supported_descriptors() -> &'static [zenpixels::descriptor::PixelDescriptor]
-pub trait decode::DynAnimationFrameDecoder: core::marker::Send
+pub trait decode::DynAnimationFrameDecoder: core::marker::Send [also: prelude]
 pub fn decode::DynAnimationFrameDecoder::as_any(&self) -> &dyn core::any::Any
 pub fn decode::DynAnimationFrameDecoder::as_any_mut(&mut self) -> &mut dyn core::any::Any
 pub fn decode::DynAnimationFrameDecoder::frame_count(&self) -> core::option::Option<u32>
@@ -262,7 +265,7 @@ pub fn decode::DynAnimationFrameDecoder::into_any(alloc::boxed::Box<Self>) -> al
 pub fn decode::DynAnimationFrameDecoder::loop_count(&self) -> core::option::Option<u32>
 pub fn decode::DynAnimationFrameDecoder::render_next_frame_owned(&mut self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<core::option::Option<OwnedAnimationFrame>, encode::BoxedError>
 pub fn decode::DynAnimationFrameDecoder::render_next_frame_to_sink(&mut self, core::option::Option<&dyn enough::Stop>, &mut dyn decode::DecodeRowSink) -> core::result::Result<core::option::Option<decode::OutputInfo>, encode::BoxedError>
-pub trait decode::DynDecodeJob<'a>
+pub trait decode::DynDecodeJob<'a> [also: prelude]
 pub fn decode::DynDecodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn decode::DynDecodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
 pub fn decode::DynDecodeJob::into_animation_frame_decoder(alloc::boxed::Box<Self>, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<dyn decode::DynAnimationFrameDecoder>, encode::BoxedError>
@@ -280,21 +283,21 @@ pub fn decode::DynDecodeJob::set_orientation(&mut self, OrientationHint)
 pub fn decode::DynDecodeJob::set_policy(&mut self, decode::DecodePolicy)
 pub fn decode::DynDecodeJob::set_start_frame_index(&mut self, u32)
 pub fn decode::DynDecodeJob::set_stop(&mut self, almost_enough::stop_token::StopToken)
-pub trait decode::DynDecoder
+pub trait decode::DynDecoder [also: prelude]
 pub fn decode::DynDecoder::decode(alloc::boxed::Box<Self>) -> core::result::Result<decode::DecodeOutput, encode::BoxedError>
-pub trait decode::DynDecoderConfig: core::marker::Send + core::marker::Sync
+pub trait decode::DynDecoderConfig: core::marker::Send + core::marker::Sync [also: prelude]
 pub fn decode::DynDecoderConfig::as_any(&self) -> &dyn core::any::Any
 pub fn decode::DynDecoderConfig::capabilities(&self) -> &'static decode::DecodeCapabilities
 pub fn decode::DynDecoderConfig::dyn_job(&self) -> alloc::boxed::Box<(dyn decode::DynDecodeJob<'_> + '_)>
 pub fn decode::DynDecoderConfig::estimate_decode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
 pub fn decode::DynDecoderConfig::formats(&self) -> &'static [ImageFormat]
 pub fn decode::DynDecoderConfig::supported_descriptors(&self) -> &'static [zenpixels::descriptor::PixelDescriptor]
-pub trait decode::DynStreamingDecoder: core::marker::Send
+pub trait decode::DynStreamingDecoder: core::marker::Send [also: prelude]
 pub fn decode::DynStreamingDecoder::info(&self) -> &ImageInfo
 pub fn decode::DynStreamingDecoder::next_batch(&mut self) -> core::result::Result<core::option::Option<(u32, zenpixels::buffer::PixelSlice<'_>)>, encode::BoxedError>
 pub fn decode::SourceEncodingDetails::is_lossless(&self) -> bool
 pub fn decode::SourceEncodingDetails::source_generic_quality(&self) -> core::option::Option<f32>
-pub trait decode::StreamingDecode
+pub trait decode::StreamingDecode [also: prelude]
 pub type decode::StreamingDecode::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn decode::StreamingDecode::info(&self) -> &ImageInfo
 pub fn decode::StreamingDecode::next_batch(&mut self) -> core::result::Result<core::option::Option<(u32, zenpixels::buffer::PixelSlice<'_>)>, Self::Error>
@@ -398,22 +401,23 @@ pub const fn encode::EncodePolicy::with_color(self, ColorEmitPolicy) -> Self
 pub const fn encode::EncodePolicy::with_embed_exif(self, bool) -> Self
 pub const fn encode::EncodePolicy::with_embed_icc(self, bool) -> Self
 pub const fn encode::EncodePolicy::with_embed_xmp(self, bool) -> Self
-pub trait encode::AnimationFrameEncoder: core::marker::Sized
+pub trait encode::AnimationFrameEncoder: core::marker::Sized [also: prelude]
 pub type encode::AnimationFrameEncoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn encode::AnimationFrameEncoder::finish(self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, Self::Error>
 pub fn encode::AnimationFrameEncoder::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error>
 pub fn encode::AnimationFrameEncoder::reject(UnsupportedOperation) -> Self::Error
-pub type ()::Error = UnsupportedOperation
-pub fn ()::finish(self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, Self::Error>
-pub fn ()::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error>
-pub fn ()::reject(UnsupportedOperation) -> Self::Error
-pub trait encode::DynAnimationFrameEncoder: core::marker::Send
+pub type ()::Error = UnsupportedOperation [also: (root)]
+pub fn ()::finish(self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, Self::Error> [also: (root)]
+pub fn ()::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error> [also: (root)]
+pub fn ()::reject(UnsupportedOperation) -> Self::Error [also: (root)]
+pub trait encode::DynAnimationFrameEncoder: core::marker::Send [also: prelude]
 pub fn encode::DynAnimationFrameEncoder::as_any(&self) -> &dyn core::any::Any
 pub fn encode::DynAnimationFrameEncoder::as_any_mut(&mut self) -> &mut dyn core::any::Any
 pub fn encode::DynAnimationFrameEncoder::finish(alloc::boxed::Box<Self>, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
 pub fn encode::DynAnimationFrameEncoder::into_any(alloc::boxed::Box<Self>) -> alloc::boxed::Box<dyn core::any::Any>
 pub fn encode::DynAnimationFrameEncoder::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), encode::BoxedError>
-pub trait encode::DynEncodeJob
+pub trait encode::DynEncodeJob [also: prelude]
+pub fn encode::DynEncodeJob::encode(alloc::boxed::Box<Self>, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
 pub fn encode::DynEncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn encode::DynEncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
 pub fn encode::DynEncodeJob::into_animation_frame_encoder(alloc::boxed::Box<Self>) -> core::result::Result<alloc::boxed::Box<dyn encode::DynAnimationFrameEncoder>, encode::BoxedError>
@@ -425,27 +429,28 @@ pub fn encode::DynEncodeJob::set_metadata(&mut self, Metadata)
 pub fn encode::DynEncodeJob::set_metadata_policy(&mut self, Metadata, MetadataPolicy)
 pub fn encode::DynEncodeJob::set_policy(&mut self, encode::EncodePolicy)
 pub fn encode::DynEncodeJob::set_stop(&mut self, almost_enough::stop_token::StopToken)
-pub trait encode::DynEncoder: core::marker::Send
+pub trait encode::DynEncoder: core::marker::Send [also: prelude]
 pub fn encode::DynEncoder::encode(alloc::boxed::Box<Self>, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
 pub fn encode::DynEncoder::encode_from(alloc::boxed::Box<Self>, &mut dyn core::ops::function::FnMut(u32, zenpixels::buffer::PixelSliceMut<'_>) -> usize) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
 pub fn encode::DynEncoder::encode_srgba8(alloc::boxed::Box<Self>, &mut [u8], bool, u32, u32, u32) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
 pub fn encode::DynEncoder::finish(alloc::boxed::Box<Self>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
 pub fn encode::DynEncoder::preferred_strip_height(&self) -> u32
 pub fn encode::DynEncoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), encode::BoxedError>
-pub trait encode::DynEncoderConfig: core::marker::Send + core::marker::Sync
+pub trait encode::DynEncoderConfig: core::marker::Send + core::marker::Sync [also: prelude]
 pub fn encode::DynEncoderConfig::as_any(&self) -> &dyn core::any::Any
 pub fn encode::DynEncoderConfig::capabilities(&self) -> &'static encode::EncodeCapabilities
 pub fn encode::DynEncoderConfig::dyn_job(&self) -> alloc::boxed::Box<(dyn encode::DynEncodeJob + 'static)>
 pub fn encode::DynEncoderConfig::estimate_encode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
 pub fn encode::DynEncoderConfig::format(&self) -> ImageFormat
 pub fn encode::DynEncoderConfig::supported_descriptors(&self) -> &'static [zenpixels::descriptor::PixelDescriptor]
-pub trait encode::EncodeJob: core::marker::Sized
+pub trait encode::EncodeJob: core::marker::Sized [also: prelude]
 pub type encode::EncodeJob::AnimationFrameEnc: core::marker::Sized + core::marker::Send + 'static
 pub type encode::EncodeJob::Enc: core::marker::Sized + 'static
 pub type encode::EncodeJob::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn encode::EncodeJob::animation_frame_encoder(self) -> core::result::Result<Self::AnimationFrameEnc, Self::Error>
 pub fn encode::EncodeJob::dyn_animation_frame_encoder(self) -> core::result::Result<alloc::boxed::Box<dyn encode::DynAnimationFrameEncoder>, encode::BoxedError> where Self::AnimationFrameEnc: encode::AnimationFrameEncoder + core::marker::Send
 pub fn encode::EncodeJob::dyn_encoder(self) -> core::result::Result<alloc::boxed::Box<dyn encode::DynEncoder>, encode::BoxedError> where Self::Enc: encode::Encoder + core::marker::Send
+pub fn encode::EncodeJob::encode(self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, Self::Error> where Self::Enc: encode::Encoder<Error = Self::Error>
 pub fn encode::EncodeJob::encoder(self) -> core::result::Result<Self::Enc, Self::Error>
 pub fn encode::EncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn encode::EncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
@@ -458,7 +463,7 @@ pub fn encode::EncodeJob::with_metadata(self, Metadata) -> Self
 pub fn encode::EncodeJob::with_metadata_policy(self, Metadata, MetadataPolicy) -> Self
 pub fn encode::EncodeJob::with_policy(self, encode::EncodePolicy) -> Self
 pub fn encode::EncodeJob::with_stop(self, almost_enough::stop_token::StopToken) -> Self
-pub trait encode::Encoder: core::marker::Sized
+pub trait encode::Encoder: core::marker::Sized [also: prelude]
 pub type encode::Encoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn encode::Encoder::encode(self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, Self::Error>
 pub fn encode::Encoder::encode_from(self, &mut dyn core::ops::function::FnMut(u32, zenpixels::buffer::PixelSliceMut<'_>) -> usize) -> core::result::Result<encode::EncodeOutput, Self::Error>
@@ -467,11 +472,12 @@ pub fn encode::Encoder::finish(self) -> core::result::Result<encode::EncodeOutpu
 pub fn encode::Encoder::preferred_strip_height(&self) -> u32
 pub fn encode::Encoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), Self::Error>
 pub fn encode::Encoder::reject(UnsupportedOperation) -> Self::Error
-pub trait encode::EncoderConfig: core::clone::Clone + core::marker::Send + core::marker::Sync
+pub trait encode::EncoderConfig: core::clone::Clone + core::marker::Send + core::marker::Sync [also: prelude]
 pub type encode::EncoderConfig::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub type encode::EncoderConfig::Job: encode::EncodeJob<Error = Self::Error>
 pub fn encode::EncoderConfig::alpha_quality(&self) -> core::option::Option<f32>
 pub fn encode::EncoderConfig::capabilities() -> &'static encode::EncodeCapabilities
+pub fn encode::EncoderConfig::encode(self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, Self::Error> where Self: core::marker::Sized, <Self::Job as encode::EncodeJob>::Enc: encode::Encoder<Error = Self::Error>
 pub fn encode::EncoderConfig::estimate_encode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
 pub fn encode::EncoderConfig::format() -> ImageFormat
 pub fn encode::EncoderConfig::generic_effort(&self) -> core::option::Option<i32>
@@ -499,6 +505,7 @@ pub estimate::SimdTier::X86V3
 pub estimate::SimdTier::X86V4
 #[non_exhaustive] pub struct estimate::ComputeEnvironment
 pub fn estimate::ComputeEnvironment::available_ram_bytes(&self) -> core::option::Option<u64>
+pub fn estimate::ComputeEnvironment::conservative() -> Self
 pub fn estimate::ComputeEnvironment::cores(&self) -> usize
 pub fn estimate::ComputeEnvironment::new() -> Self
 pub fn estimate::ComputeEnvironment::simd_tier(&self) -> core::option::Option<estimate::SimdTier>
@@ -694,6 +701,165 @@ pub fn helpers::identify_well_known_icc(&[u8], helpers::IccMatchTolerance) -> co
 pub fn helpers::parse_exif_orientation(&[u8]) -> core::option::Option<zenpixels::orientation::Orientation>
 pub fn helpers::set_exif_orientation(&[u8], zenpixels::orientation::Orientation) -> core::option::Option<alloc::vec::Vec<u8>>
 pub mod icc
+pub mod prelude
+pub type prelude::AnimationFrameDecoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn prelude::AnimationFrameDecoder::frame_count(&self) -> core::option::Option<u32>
+pub fn prelude::AnimationFrameDecoder::info(&self) -> &ImageInfo
+pub fn prelude::AnimationFrameDecoder::loop_count(&self) -> core::option::Option<u32>
+pub fn prelude::AnimationFrameDecoder::render_next_frame(&mut self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<core::option::Option<AnimationFrame<'_>>, Self::Error>
+pub fn prelude::AnimationFrameDecoder::render_next_frame_owned(&mut self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<core::option::Option<OwnedAnimationFrame>, Self::Error>
+pub fn prelude::AnimationFrameDecoder::render_next_frame_to_sink(&mut self, core::option::Option<&dyn enough::Stop>, &mut dyn decode::DecodeRowSink) -> core::result::Result<core::option::Option<decode::OutputInfo>, Self::Error>
+pub fn prelude::AnimationFrameDecoder::wrap_sink_error(decode::SinkError) -> Self::Error
+pub type prelude::AnimationFrameEncoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn prelude::AnimationFrameEncoder::finish(self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, Self::Error>
+pub fn prelude::AnimationFrameEncoder::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error>
+pub fn prelude::AnimationFrameEncoder::reject(UnsupportedOperation) -> Self::Error
+pub type prelude::Decode::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn prelude::Decode::decode(self) -> core::result::Result<decode::DecodeOutput, Self::Error>
+pub type prelude::DecodeJob::AnimationFrameDec: decode::AnimationFrameDecoder<Error = Self::Error> + core::marker::Send + 'static
+pub type prelude::DecodeJob::Dec: decode::Decode<Error = Self::Error>
+pub type prelude::DecodeJob::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub type prelude::DecodeJob::StreamDec: decode::StreamingDecode<Error = Self::Error> + core::marker::Send
+pub fn prelude::DecodeJob::animation_frame_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<Self::AnimationFrameDec, Self::Error>
+pub fn prelude::DecodeJob::decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<Self::Dec, Self::Error>
+pub fn prelude::DecodeJob::dyn_animation_frame_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<dyn decode::DynAnimationFrameDecoder>, encode::BoxedError> where Self: 'a, Self::AnimationFrameDec: core::marker::Send
+pub fn prelude::DecodeJob::dyn_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynDecoder + 'a)>, encode::BoxedError> where Self: 'a
+pub fn prelude::DecodeJob::dyn_streaming_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynStreamingDecoder + 'a)>, encode::BoxedError> where Self: 'a, Self::StreamDec: core::marker::Send
+pub fn prelude::DecodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
+pub fn prelude::DecodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn prelude::DecodeJob::output_info(&self, &[u8]) -> core::result::Result<decode::OutputInfo, Self::Error>
+pub fn prelude::DecodeJob::probe(&self, &[u8]) -> core::result::Result<ImageInfo, Self::Error>
+pub fn prelude::DecodeJob::probe_full(&self, &[u8]) -> core::result::Result<ImageInfo, Self::Error>
+pub fn prelude::DecodeJob::push_decoder(self, alloc::borrow::Cow<'a, [u8]>, &mut dyn decode::DecodeRowSink, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<decode::OutputInfo, Self::Error>
+pub fn prelude::DecodeJob::streaming_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<Self::StreamDec, Self::Error>
+pub fn prelude::DecodeJob::with_crop_hint(self, u32, u32, u32, u32) -> Self
+pub fn prelude::DecodeJob::with_extract_gain_map(self, bool) -> Self
+pub fn prelude::DecodeJob::with_gain_map_render(self, gainmap::GainMapRender) -> Self
+pub fn prelude::DecodeJob::with_limits(self, ResourceLimits) -> Self
+pub fn prelude::DecodeJob::with_orientation(self, OrientationHint) -> Self
+pub fn prelude::DecodeJob::with_policy(self, decode::DecodePolicy) -> Self
+pub fn prelude::DecodeJob::with_start_frame_index(self, u32) -> Self
+pub fn prelude::DecodeJob::with_stop(self, almost_enough::stop_token::StopToken) -> Self
+pub type prelude::DecoderConfig::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub type prelude::DecoderConfig::Job<'a>: decode::DecodeJob<'a, Error = Self::Error> + 'static
+pub fn prelude::DecoderConfig::capabilities() -> &'static decode::DecodeCapabilities
+pub fn prelude::DecoderConfig::decode(self, &[u8]) -> core::result::Result<decode::DecodeOutput, Self::Error> where Self: core::marker::Sized
+pub fn prelude::DecoderConfig::estimate_decode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
+pub fn prelude::DecoderConfig::formats() -> &'static [ImageFormat]
+pub fn prelude::DecoderConfig::job<'a>(self) -> Self::Job
+pub fn prelude::DecoderConfig::probe(&self, &[u8]) -> core::result::Result<ImageInfo, Self::Error> where Self: core::marker::Sized
+pub fn prelude::DecoderConfig::supported_descriptors() -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub fn prelude::DynAnimationFrameDecoder::as_any(&self) -> &dyn core::any::Any
+pub fn prelude::DynAnimationFrameDecoder::as_any_mut(&mut self) -> &mut dyn core::any::Any
+pub fn prelude::DynAnimationFrameDecoder::frame_count(&self) -> core::option::Option<u32>
+pub fn prelude::DynAnimationFrameDecoder::info(&self) -> &ImageInfo
+pub fn prelude::DynAnimationFrameDecoder::into_any(alloc::boxed::Box<Self>) -> alloc::boxed::Box<dyn core::any::Any>
+pub fn prelude::DynAnimationFrameDecoder::loop_count(&self) -> core::option::Option<u32>
+pub fn prelude::DynAnimationFrameDecoder::render_next_frame_owned(&mut self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<core::option::Option<OwnedAnimationFrame>, encode::BoxedError>
+pub fn prelude::DynAnimationFrameDecoder::render_next_frame_to_sink(&mut self, core::option::Option<&dyn enough::Stop>, &mut dyn decode::DecodeRowSink) -> core::result::Result<core::option::Option<decode::OutputInfo>, encode::BoxedError>
+pub fn prelude::DynAnimationFrameEncoder::as_any(&self) -> &dyn core::any::Any
+pub fn prelude::DynAnimationFrameEncoder::as_any_mut(&mut self) -> &mut dyn core::any::Any
+pub fn prelude::DynAnimationFrameEncoder::finish(alloc::boxed::Box<Self>, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
+pub fn prelude::DynAnimationFrameEncoder::into_any(alloc::boxed::Box<Self>) -> alloc::boxed::Box<dyn core::any::Any>
+pub fn prelude::DynAnimationFrameEncoder::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), encode::BoxedError>
+pub fn prelude::DynDecodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
+pub fn prelude::DynDecodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn prelude::DynDecodeJob::into_animation_frame_decoder(alloc::boxed::Box<Self>, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<dyn decode::DynAnimationFrameDecoder>, encode::BoxedError>
+pub fn prelude::DynDecodeJob::into_decoder(alloc::boxed::Box<Self>, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynDecoder + 'a)>, encode::BoxedError>
+pub fn prelude::DynDecodeJob::into_streaming_decoder(alloc::boxed::Box<Self>, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynStreamingDecoder + 'a)>, encode::BoxedError>
+pub fn prelude::DynDecodeJob::output_info(&self, &[u8]) -> core::result::Result<decode::OutputInfo, encode::BoxedError>
+pub fn prelude::DynDecodeJob::probe(&self, &[u8]) -> core::result::Result<ImageInfo, encode::BoxedError>
+pub fn prelude::DynDecodeJob::probe_full(&self, &[u8]) -> core::result::Result<ImageInfo, encode::BoxedError>
+pub fn prelude::DynDecodeJob::push_decode(alloc::boxed::Box<Self>, alloc::borrow::Cow<'a, [u8]>, &mut dyn decode::DecodeRowSink, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<decode::OutputInfo, encode::BoxedError>
+pub fn prelude::DynDecodeJob::set_crop_hint(&mut self, u32, u32, u32, u32)
+pub fn prelude::DynDecodeJob::set_extract_gain_map(&mut self, bool)
+pub fn prelude::DynDecodeJob::set_gain_map_render(&mut self, gainmap::GainMapRender)
+pub fn prelude::DynDecodeJob::set_limits(&mut self, ResourceLimits)
+pub fn prelude::DynDecodeJob::set_orientation(&mut self, OrientationHint)
+pub fn prelude::DynDecodeJob::set_policy(&mut self, decode::DecodePolicy)
+pub fn prelude::DynDecodeJob::set_start_frame_index(&mut self, u32)
+pub fn prelude::DynDecodeJob::set_stop(&mut self, almost_enough::stop_token::StopToken)
+pub fn prelude::DynDecoder::decode(alloc::boxed::Box<Self>) -> core::result::Result<decode::DecodeOutput, encode::BoxedError>
+pub fn prelude::DynDecoderConfig::as_any(&self) -> &dyn core::any::Any
+pub fn prelude::DynDecoderConfig::capabilities(&self) -> &'static decode::DecodeCapabilities
+pub fn prelude::DynDecoderConfig::dyn_job(&self) -> alloc::boxed::Box<(dyn decode::DynDecodeJob<'_> + '_)>
+pub fn prelude::DynDecoderConfig::estimate_decode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
+pub fn prelude::DynDecoderConfig::formats(&self) -> &'static [ImageFormat]
+pub fn prelude::DynDecoderConfig::supported_descriptors(&self) -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub fn prelude::DynEncodeJob::encode(alloc::boxed::Box<Self>, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
+pub fn prelude::DynEncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
+pub fn prelude::DynEncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn prelude::DynEncodeJob::into_animation_frame_encoder(alloc::boxed::Box<Self>) -> core::result::Result<alloc::boxed::Box<dyn encode::DynAnimationFrameEncoder>, encode::BoxedError>
+pub fn prelude::DynEncodeJob::into_encoder(alloc::boxed::Box<Self>) -> core::result::Result<alloc::boxed::Box<dyn encode::DynEncoder>, encode::BoxedError>
+pub fn prelude::DynEncodeJob::set_canvas_size(&mut self, u32, u32)
+pub fn prelude::DynEncodeJob::set_limits(&mut self, ResourceLimits)
+pub fn prelude::DynEncodeJob::set_loop_count(&mut self, core::option::Option<u32>)
+pub fn prelude::DynEncodeJob::set_metadata(&mut self, Metadata)
+pub fn prelude::DynEncodeJob::set_metadata_policy(&mut self, Metadata, MetadataPolicy)
+pub fn prelude::DynEncodeJob::set_policy(&mut self, encode::EncodePolicy)
+pub fn prelude::DynEncodeJob::set_stop(&mut self, almost_enough::stop_token::StopToken)
+pub fn prelude::DynEncoder::encode(alloc::boxed::Box<Self>, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
+pub fn prelude::DynEncoder::encode_from(alloc::boxed::Box<Self>, &mut dyn core::ops::function::FnMut(u32, zenpixels::buffer::PixelSliceMut<'_>) -> usize) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
+pub fn prelude::DynEncoder::encode_srgba8(alloc::boxed::Box<Self>, &mut [u8], bool, u32, u32, u32) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
+pub fn prelude::DynEncoder::finish(alloc::boxed::Box<Self>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
+pub fn prelude::DynEncoder::preferred_strip_height(&self) -> u32
+pub fn prelude::DynEncoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), encode::BoxedError>
+pub fn prelude::DynEncoderConfig::as_any(&self) -> &dyn core::any::Any
+pub fn prelude::DynEncoderConfig::capabilities(&self) -> &'static encode::EncodeCapabilities
+pub fn prelude::DynEncoderConfig::dyn_job(&self) -> alloc::boxed::Box<(dyn encode::DynEncodeJob + 'static)>
+pub fn prelude::DynEncoderConfig::estimate_encode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
+pub fn prelude::DynEncoderConfig::format(&self) -> ImageFormat
+pub fn prelude::DynEncoderConfig::supported_descriptors(&self) -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub fn prelude::DynStreamingDecoder::info(&self) -> &ImageInfo
+pub fn prelude::DynStreamingDecoder::next_batch(&mut self) -> core::result::Result<core::option::Option<(u32, zenpixels::buffer::PixelSlice<'_>)>, encode::BoxedError>
+pub type prelude::EncodeJob::AnimationFrameEnc: core::marker::Sized + core::marker::Send + 'static
+pub type prelude::EncodeJob::Enc: core::marker::Sized + 'static
+pub type prelude::EncodeJob::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn prelude::EncodeJob::animation_frame_encoder(self) -> core::result::Result<Self::AnimationFrameEnc, Self::Error>
+pub fn prelude::EncodeJob::dyn_animation_frame_encoder(self) -> core::result::Result<alloc::boxed::Box<dyn encode::DynAnimationFrameEncoder>, encode::BoxedError> where Self::AnimationFrameEnc: encode::AnimationFrameEncoder + core::marker::Send
+pub fn prelude::EncodeJob::dyn_encoder(self) -> core::result::Result<alloc::boxed::Box<dyn encode::DynEncoder>, encode::BoxedError> where Self::Enc: encode::Encoder + core::marker::Send
+pub fn prelude::EncodeJob::encode(self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, Self::Error> where Self::Enc: encode::Encoder<Error = Self::Error>
+pub fn prelude::EncodeJob::encoder(self) -> core::result::Result<Self::Enc, Self::Error>
+pub fn prelude::EncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
+pub fn prelude::EncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn prelude::EncodeJob::with_canvas_size(self, u32, u32) -> Self
+pub fn prelude::EncodeJob::with_gain_map_encoded(self, gainmap::GainMapSource) -> core::result::Result<Self, Self::Error> where Self::Enc: encode::Encoder<Error = Self::Error>
+pub fn prelude::EncodeJob::with_gain_map_pixels(self, gainmap::DecodedGainMap) -> core::result::Result<Self, Self::Error> where Self::Enc: encode::Encoder<Error = Self::Error>
+pub fn prelude::EncodeJob::with_limits(self, ResourceLimits) -> Self
+pub fn prelude::EncodeJob::with_loop_count(self, core::option::Option<u32>) -> Self
+pub fn prelude::EncodeJob::with_metadata(self, Metadata) -> Self
+pub fn prelude::EncodeJob::with_metadata_policy(self, Metadata, MetadataPolicy) -> Self
+pub fn prelude::EncodeJob::with_policy(self, encode::EncodePolicy) -> Self
+pub fn prelude::EncodeJob::with_stop(self, almost_enough::stop_token::StopToken) -> Self
+pub type prelude::Encoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn prelude::Encoder::encode(self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, Self::Error>
+pub fn prelude::Encoder::encode_from(self, &mut dyn core::ops::function::FnMut(u32, zenpixels::buffer::PixelSliceMut<'_>) -> usize) -> core::result::Result<encode::EncodeOutput, Self::Error>
+pub fn prelude::Encoder::encode_srgba8(self, &mut [u8], bool, u32, u32, u32) -> core::result::Result<encode::EncodeOutput, Self::Error>
+pub fn prelude::Encoder::finish(self) -> core::result::Result<encode::EncodeOutput, Self::Error>
+pub fn prelude::Encoder::preferred_strip_height(&self) -> u32
+pub fn prelude::Encoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), Self::Error>
+pub fn prelude::Encoder::reject(UnsupportedOperation) -> Self::Error
+pub type prelude::EncoderConfig::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub type prelude::EncoderConfig::Job: encode::EncodeJob<Error = Self::Error>
+pub fn prelude::EncoderConfig::alpha_quality(&self) -> core::option::Option<f32>
+pub fn prelude::EncoderConfig::capabilities() -> &'static encode::EncodeCapabilities
+pub fn prelude::EncoderConfig::encode(self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, Self::Error> where Self: core::marker::Sized, <Self::Job as encode::EncodeJob>::Enc: encode::Encoder<Error = Self::Error>
+pub fn prelude::EncoderConfig::estimate_encode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
+pub fn prelude::EncoderConfig::format() -> ImageFormat
+pub fn prelude::EncoderConfig::generic_effort(&self) -> core::option::Option<i32>
+pub fn prelude::EncoderConfig::generic_quality(&self) -> core::option::Option<f32>
+pub fn prelude::EncoderConfig::is_lossless(&self) -> core::option::Option<bool>
+pub fn prelude::EncoderConfig::job(self) -> Self::Job
+pub fn prelude::EncoderConfig::resolved_target_fidelity(&self) -> core::option::Option<encode::Fidelity>
+pub fn prelude::EncoderConfig::supported_descriptors() -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub fn prelude::EncoderConfig::with_alpha_quality(self, f32) -> Self
+pub fn prelude::EncoderConfig::with_fidelity(self, encode::Fidelity) -> Self
+pub fn prelude::EncoderConfig::with_generic_effort(self, i32) -> Self
+pub fn prelude::EncoderConfig::with_generic_quality(self, f32) -> Self
+pub fn prelude::EncoderConfig::with_lossless(self, bool) -> Self
+pub type prelude::StreamingDecode::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn prelude::StreamingDecode::info(&self) -> &ImageInfo
+pub fn prelude::StreamingDecode::next_batch(&mut self) -> core::result::Result<core::option::Option<(u32, zenpixels::buffer::PixelSlice<'_>)>, Self::Error>
 #[non_exhaustive] pub enum AllocPreference
 pub AllocPreference::CodecDefault
 pub AllocPreference::Fallible
@@ -702,6 +868,11 @@ pub AllocPreference::Infallible
 pub CicpEmission::Never
 pub CicpEmission::WhereValidCarrier
 pub CicpEmission::WhereverSupported
+#[non_exhaustive] pub enum CodecSetError
+pub CodecSetError::Codec(encode::BoxedError)
+pub CodecSetError::NoDecoder(ImageFormat)
+pub CodecSetError::NoEncoder(ImageFormat)
+pub CodecSetError::UnrecognizedFormat
 #[non_exhaustive] pub enum ColorEmitPolicy
 pub ColorEmitPolicy::Balanced
 pub ColorEmitPolicy::Compact
@@ -926,6 +1097,38 @@ pub fn CodecError::of<E>(whereat::at::At<E>) -> whereat::at::At<CodecError> wher
 pub fn CodecError::with_codec(self, core::option::Option<&'static str>) -> Self
 pub struct CodecIoKind
 pub const fn CodecIoKind::opaque() -> Self
+pub struct CodecSet
+pub fn CodecSet::animation_decoder<'a>(&'a self, &'a [u8], &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<dyn decode::DynAnimationFrameDecoder>, CodecSetError>
+pub fn CodecSet::can_decode(&self, ImageFormat) -> bool
+pub fn CodecSet::can_encode(&self, ImageFormat) -> bool
+pub fn CodecSet::decodable_formats(&self) -> impl core::iter::traits::iterator::Iterator<Item = ImageFormat> + '_
+pub fn CodecSet::decode<'a>(&'a self, &'a [u8]) -> core::result::Result<decode::DecodeOutput, CodecSetError>
+pub fn CodecSet::decode_as<'a>(&'a self, ImageFormat, &'a [u8], &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<decode::DecodeOutput, CodecSetError>
+pub fn CodecSet::decode_job<'a>(&'a self, ImageFormat) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynDecodeJob<'a> + 'a)>, CodecSetError>
+pub fn CodecSet::decode_preferring<'a>(&'a self, &'a [u8], &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<decode::DecodeOutput, CodecSetError>
+pub fn CodecSet::decoder_for(&self, ImageFormat) -> core::option::Option<&dyn decode::DynDecoderConfig>
+pub fn CodecSet::detect(&self, &[u8]) -> core::option::Option<ImageFormat>
+pub fn CodecSet::encodable_formats(&self) -> impl core::iter::traits::iterator::Iterator<Item = ImageFormat> + '_
+pub fn CodecSet::encode(&self, ImageFormat, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, CodecSetError>
+pub fn CodecSet::encode_job(&self, ImageFormat) -> core::result::Result<alloc::boxed::Box<dyn encode::DynEncodeJob>, CodecSetError>
+pub fn CodecSet::encode_job_with(&self, ImageFormat, encode::Fidelity) -> core::result::Result<alloc::boxed::Box<dyn encode::DynEncodeJob>, CodecSetError>
+pub fn CodecSet::encode_with(&self, ImageFormat, encode::Fidelity, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, CodecSetError>
+pub fn CodecSet::encoder_for(&self, ImageFormat) -> core::option::Option<&dyn encode::DynEncoderConfig>
+pub fn CodecSet::estimate_decode(&self, ImageFormat, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> core::result::Result<estimate::ResourceEstimate, CodecSetError>
+pub fn CodecSet::estimate_decode_of(&self, &[u8], &estimate::ComputeEnvironment) -> core::result::Result<estimate::ResourceEstimate, CodecSetError>
+pub fn CodecSet::estimate_encode(&self, ImageFormat, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> core::result::Result<estimate::ResourceEstimate, CodecSetError>
+pub fn CodecSet::estimate_encode_of(&self, ImageFormat, zenpixels::buffer::PixelSlice<'_>, &estimate::ComputeEnvironment) -> core::result::Result<estimate::ResourceEstimate, CodecSetError>
+pub fn CodecSet::new() -> Self
+pub fn CodecSet::probe<'a>(&'a self, &'a [u8]) -> core::result::Result<ImageInfo, CodecSetError>
+pub fn CodecSet::push_decode<'a>(&'a self, &'a [u8], &mut dyn decode::DecodeRowSink, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<decode::OutputInfo, CodecSetError>
+pub fn CodecSet::streaming_decoder<'a>(&'a self, &'a [u8], &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynStreamingDecoder + 'a)>, CodecSetError>
+pub fn CodecSet::transcode(&self, &[u8], ImageFormat, encode::Fidelity, MetadataPolicy, ColorEmitPolicy) -> core::result::Result<encode::EncodeOutput, CodecSetError>
+pub fn CodecSet::with_decode_policy(self, decode::DecodePolicy) -> Self
+pub fn CodecSet::with_decoder(self, impl decode::DecoderConfig + 'static) -> Self
+pub fn CodecSet::with_encode_policy(self, encode::EncodePolicy) -> Self
+pub fn CodecSet::with_encoder<C>(self, C) -> Self where C: encode::EncoderConfig + 'static, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::Enc: encode::Encoder + core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::AnimationFrameEnc: encode::AnimationFrameEncoder
+pub fn CodecSet::with_limits(self, ResourceLimits) -> Self
+pub fn CodecSet::with_stop(self, almost_enough::stop_token::StopToken) -> Self
 #[non_exhaustive] pub struct ColorEmitFields
 pub ColorEmitFields::cicp: CicpEmission
 pub ColorEmitFields::icc: IccRetention
@@ -1230,7 +1433,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (80 types)
+## trait impls (82 types)
 
 (): encode::AnimationFrameEncoder
 (dyn core::error::Error + 'static): CodecErrorExt
@@ -1241,6 +1444,8 @@ AnimationFrame<'_>: Debug
 CicpEmission: Clone, Copy, Debug, Default, Eq, PartialEq
 CodecError: CategorizedError, Debug, Display, Error
 CodecIoKind: Clone, Copy, Debug, Default, Eq, Hash, PartialEq
+CodecSet: Clone, Debug, Default
+CodecSetError: Debug, Display, Error, From<alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>>
 ColorEmitFields: Clone, Copy, Debug, Default, Eq, PartialEq
 ColorEmitPlan: Clone, Debug, PartialEq
 ColorEmitPolicy: Clone, Copy, Debug, Default, Eq, PartialEq
@@ -1314,11 +1519,15 @@ helpers::IccMatchTolerance: Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd
 whereat::at::At<E>: CategorizedError
 impl<C> decode::DynDecoderConfig for C where C: decode::DecoderConfig + 'static
 impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::Enc: encode::Encoder + core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::AnimationFrameEnc: encode::AnimationFrameEncoder
+impl<C> decode::DynDecoderConfig for C where C: decode::DecoderConfig + 'static
+impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::Enc: encode::Encoder + core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::AnimationFrameEnc: encode::AnimationFrameEncoder
 
 ## auto traits
 
 67 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
+CodecSet: !RefUnwindSafe !UnwindSafe
+CodecSetError: !RefUnwindSafe !UnwindSafe
 Extensions: !RefUnwindSafe !UnwindSafe
 ImageInfo: !RefUnwindSafe !UnwindSafe
 OwnedAnimationFrame: !RefUnwindSafe !UnwindSafe

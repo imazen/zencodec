@@ -5,8 +5,8 @@ use alloc::boxed::Box;
 use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 use crate::fidelity::{Fidelity, LossyTarget};
 use crate::format::ImageFormat;
-use crate::{EncodeCapabilities, Metadata, ResourceLimits, UnsupportedOperation};
-use zenpixels::PixelDescriptor;
+use crate::{EncodeCapabilities, EncodeOutput, Metadata, ResourceLimits, UnsupportedOperation};
+use zenpixels::{PixelDescriptor, PixelSlice};
 
 use super::BoxedError;
 use super::dyn_encoding::{AnimationFrameEncoderShim, DynAnimationFrameEncoder, DynEncoder};
@@ -204,6 +204,25 @@ pub trait EncoderConfig: Clone + Send + Sync {
     /// The job owns the config and all configuration set on it
     /// (stop token, limits, metadata).
     fn job(self) -> Self::Job;
+
+    /// One-shot convenience: encode `pixels` with default job settings.
+    ///
+    /// Equivalent to `self.job().encoder()?.encode(pixels)`. For metadata,
+    /// limits, cancellation, or streaming/animation encode, go through
+    /// [`job()`](EncoderConfig::job).
+    ///
+    /// ```rust,ignore
+    /// let out = zenjpeg::JpegEncoderConfig::new()
+    ///     .with_generic_quality(85.0)
+    ///     .encode(pixels)?;
+    /// ```
+    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error>
+    where
+        Self: Sized,
+        <Self::Job as EncodeJob>::Enc: Encoder<Error = Self::Error>,
+    {
+        self.job().encoder()?.encode(pixels)
+    }
 }
 
 // ===========================================================================
@@ -427,6 +446,22 @@ pub trait EncodeJob: Sized {
 
     /// Create a one-shot encoder for a single image.
     fn encoder(self) -> Result<Self::Enc, Self::Error>;
+
+    /// One-shot: encode `pixels` with this job's configuration.
+    ///
+    /// The common tail after `with_metadata_policy` / `with_limits` /
+    /// `with_policy` — equivalent to `self.encoder()?.encode(pixels)`. This is
+    /// the job-level analog of [`EncoderConfig::encode`], which encodes with
+    /// *default* job settings; use this when you have configured the job first.
+    /// For streaming row-push or animation, take the encoder yourself with
+    /// [`encoder()`](Self::encoder) /
+    /// [`animation_frame_encoder()`](Self::animation_frame_encoder).
+    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error>
+    where
+        Self::Enc: Encoder<Error = Self::Error>,
+    {
+        self.encoder()?.encode(pixels)
+    }
 
     /// Create a full-frame animation encoder.
     ///

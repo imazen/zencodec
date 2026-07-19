@@ -69,6 +69,79 @@ removes that whole class).
 - Remove `SourceColor::has_hdr_transfer()` — moves to a pipeline-level
   utility that consults `ColorProfileSource` and `HdrPolicy` together
   rather than inspecting raw CICP/ICC fields.
+- Remove `ComputeEnvironment::new()` (deprecated in 0.1.27) — construction
+  goes through the explicit `conservative()` / `host()` constructors.
+
+### Added
+- `CodecSet` / `CodecSetError` — multi-codec registry: register decoder /
+  encoder configs one line each and get detect→decode, `probe`, push /
+  streaming / animation decode, and format-keyed encode through one
+  `Send + Sync + 'static` handle whose operations all take `&self` — build it
+  once and share it app-wide (`LazyLock` / `OnceLock` / `Arc`). Detection
+  derives from the registered decoders in `ImageFormatRegistry::common()`
+  priority order (custom formats after, in registration order); set-level
+  limits / stop / policies are stamped onto every job; `encode_with(Fidelity)`
+  clones the registered encoder template per call; `decode_job` / `encode_job`
+  expose the stamped jobs for per-operation control (0edaf64).
+- `CodecSet::transcode(input, target, fidelity, metadata_policy, color_policy)`
+  — the one-call proxy operation: decode → carry the source's metadata → encode.
+  Reads the source's ICC / EXIF / XMP / CICP / HDR / orientation off the decode
+  result (via `Metadata::from(&ImageInfo)`, with orientation reconciliation),
+  re-embeds under the `MetadataPolicy` (`Web` strips privacy / `PreserveExact`
+  keeps all), and applies a `ColorEmitPolicy` for color signaling. Single-image,
+  no pixel processing. Precision-preserving: decodes at the source's native
+  descriptor and encodes it verbatim when the target accepts it (a 16-bit / HDR
+  source is not flattened to 8-bit when the target can carry it), re-decoding to
+  bridge only when the native descriptor is unsupported. A pair errors (rather
+  than corrupting) only when the decoder and encoder supported descriptor sets
+  are disjoint (this crate carries no pixel-conversion dep — the common raster
+  codecs bridge on sRGB RGB8/RGBA8).
+- `CodecSet::estimate_encode` / `estimate_decode` — by-format resource
+  estimate (peak memory / wall-time / core-scaling) forwarding to the
+  registered codec's `estimate_{encode,decode}_resources`, so a `CodecSet`
+  covers estimation too; `NoEncoder` / `NoDecoder` when the format has no
+  registered codec. `estimate_decode_of(data, compute)` probes the input
+  first (format + dimensions) and estimates in the decoder's native output
+  format — the bytes-based convenience, as one-call as `probe`.
+  `estimate_encode_of(format, pixels, compute)` is the encode analog — it
+  reads the dimensions and format straight off the pixel slice you already
+  hold, no `ImageCharacteristics` to build by hand.
+- `ComputeEnvironment::conservative()` / `ComputeEnvironment::host()` — explicit
+  estimate-environment constructors. `conservative()` is the single-core
+  baseline (the old `new()` behavior, now explicitly named); `host()` (std)
+  detects the running machine (`available_parallelism()` cores +
+  `SimdTier::CurrentHost`; RAM left unknown — std has no portable query).
+- One-shot provided methods on the config traits: `DecoderConfig::decode`,
+  `DecoderConfig::probe`, and `EncoderConfig::encode` — single-line
+  config→result use with default job settings (08dabea).
+- Job-level one-shot encode: `EncodeJob::encode(pixels)` /
+  `DynEncodeJob::encode(pixels)` — configure a job (metadata, limits, policy),
+  then encode in one call instead of the two-step `job.encoder()?.encode(pixels)`
+  / `job.into_encoder()?.encode(pixels)`. Provided methods (adding them broke no
+  implementor); the job-level analog of `EncoderConfig::encode`, which encodes
+  with *default* settings.
+- `zencodec::prelude` — one-import bundle of every encode/decode trait,
+  generic and dyn (0edaf64).
+- testkit: `CodecSet` behavior suite against the reference codec — roundtrip,
+  registration-scoped detection, custom-format detect→decode, static
+  `LazyLock` sharing across threads, template cloning, typed errors (a4fec14).
+- testkit: `ReferenceZcrDecoderConfig` + `ZCR_FORMAT` — the reference decoder
+  registered under a self-detecting format (matches the codec's own `ZCR1` wire
+  magic) instead of `ImageFormat::Pnm`. Drop-in for `ReferenceDecoderConfig` so
+  detection-based decode (`decode` / `probe` / `estimate_decode_of`) works end to
+  end; removes the ~35-line custom-format scaffolding each detect→decode test and
+  example previously hand-rolled.
+- testkit: `tests/usage.rs` — worked, runnable examples of the common
+  `CodecSet` usages (encode / decode / probe / app-wide sharing / fidelity +
+  metadata via the job's direct `encode` / pixel-format request / strip
+  streaming / estimate) plus two `zenpixels-convert`-assisted paths: adapting a
+  foreign pixel format into an encoder's supported set (`adapt_for_encode`) and
+  converting a decoded buffer to a caller-chosen format (`convert_to`).
+
+### Deprecated
+- `ComputeEnvironment::new()` — construction should be explicit. Use
+  `conservative()` (the single-core baseline, identical behavior) or `host()`
+  (std, detect the running machine). Removal is queued for the next 0.x minor.
 
 ## [0.1.26] - 2026-07-14
 

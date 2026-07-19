@@ -46,7 +46,7 @@ use zenpixels::PixelDescriptor;
 ///     else if archmage::X64V3Token::summon().is_some() { SimdTier::X86V3 }
 ///     else if archmage::X64V2Token::summon().is_some() { SimdTier::X86V2 }
 ///     else { SimdTier::X86V1 };
-/// let env = ComputeEnvironment::new().with_cores(8).with_simd_tier(tier);
+/// let env = ComputeEnvironment::conservative().with_cores(8).with_simd_tier(tier);
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
@@ -79,8 +79,10 @@ pub enum SimdTier {
 
 /// Hardware + runtime conditions for a resource estimate.
 ///
-/// Sealed and growable — construct via [`ComputeEnvironment::new`] and refine
-/// with the `with_*` setters; read with the accessors. Carries the available
+/// Sealed and growable — construct via
+/// [`conservative()`](ComputeEnvironment::conservative) (or
+/// [`host()`](ComputeEnvironment::host) on `std`) and refine with the `with_*`
+/// setters; read with the accessors. Carries the available
 /// core count + an optional [`SimdTier`] today; new fields (RAM, load factor,
 /// GPU) are additive.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -92,15 +94,47 @@ pub struct ComputeEnvironment {
 }
 
 impl ComputeEnvironment {
-    /// A single-core environment with unknown RAM and unspecified SIMD tier
-    /// (the conservative default).
+    /// The conservative baseline: a single core, unknown RAM, unspecified SIMD
+    /// tier. Estimates built on it assume serial execution on unknown hardware —
+    /// safe (never over-counts cores) but pessimistic on wall time.
+    ///
+    /// Refine with the `with_*` setters, or use [`host()`](Self::host) to detect
+    /// the running machine.
     #[must_use]
-    pub fn new() -> Self {
+    pub fn conservative() -> Self {
         Self {
             available_cores: 1,
             available_ram_bytes: None,
             simd_tier: None,
         }
+    }
+
+    /// Detect the machine running this call: [`available_parallelism`] cores and
+    /// [`SimdTier::CurrentHost`]. RAM is left unknown — `std` exposes no portable
+    /// query; set it with
+    /// [`with_available_ram_bytes`](Self::with_available_ram_bytes) if you have
+    /// it (e.g. via the `sysinfo` crate).
+    ///
+    /// Requires the `std` feature; in `no_std`, build from
+    /// [`conservative()`](Self::conservative) + the `with_*` setters instead.
+    ///
+    /// [`available_parallelism`]: std::thread::available_parallelism
+    #[cfg(feature = "std")]
+    #[must_use]
+    pub fn host() -> Self {
+        Self::conservative()
+            .with_cores(std::thread::available_parallelism().map_or(1, |n| n.get()))
+            .with_simd_tier(SimdTier::CurrentHost)
+    }
+
+    /// A single-core environment with unknown RAM and unspecified SIMD tier.
+    #[must_use]
+    #[deprecated(
+        since = "0.1.27",
+        note = "make construction explicit: `conservative()` for the single-core baseline, or `host()` (std) to detect the running machine"
+    )]
+    pub fn new() -> Self {
+        Self::conservative()
     }
 
     /// Number of CPU cores available to the operation (clamped to ≥ 1). On
@@ -148,7 +182,7 @@ impl ComputeEnvironment {
 
 impl Default for ComputeEnvironment {
     fn default() -> Self {
-        Self::new()
+        Self::conservative()
     }
 }
 
@@ -454,23 +488,43 @@ mod tests {
 
     #[test]
     fn compute_environment_builder_clamps_and_defaults() {
-        assert_eq!(ComputeEnvironment::new().cores(), 1);
-        assert_eq!(ComputeEnvironment::new().with_cores(0).cores(), 1);
+        assert_eq!(ComputeEnvironment::conservative().cores(), 1);
+        assert_eq!(ComputeEnvironment::conservative().with_cores(0).cores(), 1);
         assert_eq!(ComputeEnvironment::default().with_cores(16).cores(), 16);
         assert_eq!(
-            ComputeEnvironment::new()
+            ComputeEnvironment::conservative()
                 .with_available_ram_bytes(1 << 30)
                 .available_ram_bytes(),
             Some(1 << 30)
         );
         // SIMD tier defaults to unspecified; the builder sets it.
-        assert_eq!(ComputeEnvironment::new().simd_tier(), None);
+        assert_eq!(ComputeEnvironment::conservative().simd_tier(), None);
         assert_eq!(
-            ComputeEnvironment::new()
+            ComputeEnvironment::conservative()
                 .with_simd_tier(SimdTier::X86V3)
                 .simd_tier(),
             Some(SimdTier::X86V3)
         );
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn deprecated_new_still_delegates_to_conservative() {
+        assert_eq!(
+            ComputeEnvironment::new(),
+            ComputeEnvironment::conservative()
+        );
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn host_detects_cores_and_current_simd() {
+        let env = ComputeEnvironment::host();
+        // available_parallelism() is >= 1; host() clamps and records it.
+        assert!(env.cores() >= 1);
+        assert_eq!(env.simd_tier(), Some(SimdTier::CurrentHost));
+        // RAM stays unknown — std has no portable query.
+        assert_eq!(env.available_ram_bytes(), None);
     }
 
     #[test]
