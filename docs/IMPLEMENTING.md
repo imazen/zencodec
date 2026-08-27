@@ -492,6 +492,99 @@ fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, MyError> {
 }
 ```
 
+## Colour on the Decoded Buffer (`ColorContext`)
+
+Decoders SHOULD attach a `zenpixels::ColorContext` to every buffer they emit, so
+the pixels are self-describing for any stage that sees only the buffer (a CMS, the
+zenpixels-convert load-bearing reduction, a re-encoder). Adopted first by
+zenavif; this section is the cross-codec convention (zencodec#25).
+
+**Why the descriptor is not enough.** The pixel descriptor carries *enum-folded*
+transfer/primaries — raw H.273 code points the enums don't model (BT.601 = 6,
+SMPTE 240M = 7, …) are lost. `ColorContext.cicp` keeps the raw codes, and
+`ColorContext.icc` carries the profile bytes. `ImageInfo.source_color` has both,
+but it travels *beside* the buffer, so anything handed just the pixels has to
+guess.
+
+**Who carries which axis:**
+
+| Carrier | Holds | Describes |
+|---|---|---|
+| `PixelDescriptor` (on the buffer, `Copy`) | folded transfer/primaries enums, range, depth | the current pixels, cheaply |
+| `ColorContext` (on the buffer, `Arc`) | raw CICP + a class-valid ICC — the **authoritative** field only | the current pixels, for CMS |
+| `ImageInfo.source_color` | raw CICP **and** ICC, authority flag, HDR envelope | the *source*, pre-negotiation, for provenance |
+
+Consumers doing colour management read the buffer's context; consumers describing
+provenance (or a re-encoder that needs the non-authoritative field the drop-dupe
+context dropped) read `source_color`, which keeps both.
+
+**Attach point.** After the output descriptor is final, before format
+negotiation, so the reductions see it:
+
+```rust
+use zenpixels::ColorModel;
+
+let mut ctx = info.source_color.to_color_context(); // authoritative field only
+// Class gate: an ICC rides only a layout its device class describes.
+if let Some(icc) = ctx
+    .icc
+    .take_if(|icc| zenpixels::icc::profile_color_space(icc) != Some(desc.color_model()))
+{
+    // Derive the profile's CICP (embedded cICP tag, then well-known identification)
+    // and carry that alone; fall back to the signaled CICP.
+    ctx.cicp = zenpixels::icc::extract_cicp(&icc)
+        .or_else(|| zenpixels::icc::identify_common(&icc).and_then(|id| id.to_cicp()))
+        .or(ctx.cicp)
+        .or(info.source_color.cicp);
+}
+if ctx.icc.is_some() || ctx.cicp.is_some() {
+    buf = buf.with_color_context(Arc::new(ctx));
+}
+```
+
+(`zencodec-testkit::reference::class_gated_context` is this snippet, runnable.)
+
+**The rules, ranked:**
+
+1. **A class-matching profile rides as-is.** The ICC device class — header bytes
+   16..20, `zenpixels::icc::profile_color_space` — must match the buffer's colour
+   model: `RGB ` ↔ Rgb/Rgba/Bgr/Bgra, `GRAY` ↔ Gray/GrayAlpha, `CMYK` ↔ Cmyk.
+   Crosswise pairing is invalid signaling (libpng rejects it).
+2. **A derivable, class-mismatched profile → CICP-only context on the preferred
+   layout.** Gray files carrying RGB-class profiles are common, and CICP is valid
+   signaling for grayscale. Derive the profile's CICP (embedded `cICP` tag → 
+   normalized-hash identification) and emit the gray layout with that alone —
+   accurate colour, no RGB expansion, no class violation.
+3. **An underivable, class-mismatched profile → keep a layout the profile
+   describes.** Prefer choosing an output layout the profile describes over
+   stripping the profile; a gray *preference* then resolves through the
+   load-bearing reduction's ICC rules (gray-class swap when derivable, honest
+   suppression otherwise). The class gate stays as defense-in-depth for codecs
+   that cannot change layout.
+4. **Derived/synthetic outputs carry a synthesized description, not the source's.**
+   HDR reconstruction (linear f32) must not inherit an SDR profile; it *is*
+   describable — source primaries, H.273 transfer 8 (linear), identity matrix,
+   full range — so attach that CICP-only context. Inherit nothing that no longer
+   describes the pixels; synthesize what does.
+5. **Never attach an empty context.** `None` means "nothing known"; a context with
+   neither field means "described as nothing" and confuses every consumer.
+6. **Re-attach at every emission.** Streaming strips, per-batch scratch buffers,
+   and owned frame copies are fresh slices — they are where a context silently
+   dies. Compute it once, apply it on every `next_batch` / `render_next_frame`.
+   (`AnimationFrame::to_owned_frame` carries it for you.)
+
+`ImageInfo.source_color` stays the *source* description. After a gray collapse the
+two legitimately differ (profile swapped or dropped on the buffer) — that is the
+point.
+
+**Testing.** `zencodec-testkit::check_color_context_consistency` (in `check_all`)
+verifies class validity and that the one-shot, streaming, and animation
+(borrowed + owned) paths carry identical contexts — the cheap way to catch both
+the strip-drop bug and a probe-era vs frame-era CICP divergence.
+`check_color_context_attached` (opt-in) is the strict positive direction: a
+decoder that read colour back must attach it. Run it once your codec adopts the
+convention.
+
 ## Dyn Dispatch: Free
 
 You don't implement `DynEncoderConfig`, `DynEncodeJob`, etc. Blanket implementations generate the object-safe wrappers automatically from your generic trait impls. Once you implement `EncoderConfig`, your codec works with `&dyn DynEncoderConfig` — no extra code.

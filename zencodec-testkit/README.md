@@ -31,6 +31,14 @@ expensive to ship wrong:
   flag are out of scope — see the function docs for why.)
 - **Orientation.** `check_orientation_roundtrip` asserts an EXIF orientation
   survives a keeping policy exactly once — no loss, no double-application.
+- **Buffer colour context.** Decoders should attach a class-gated
+  `zenpixels::ColorContext` to the buffers they emit so the pixels are
+  self-describing. `check_color_context_consistency` asserts whatever is attached
+  is class-valid (an ICC only rides a layout its device class describes) and
+  identical across the one-shot, streaming, and animation (borrowed + owned)
+  paths — strip/scratch buffers are where a context silently dies.
+  `check_color_context_attached` (opt-in) is the strict positive direction for
+  codecs that have adopted the convention.
 - **Error classification.** `check_decode_truncation_series` feeds a
   deterministic series of truncated prefixes of a known-good image and requires
   every failure to classify as *incomplete input* (never `Internal`, OOM, or an

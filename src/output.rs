@@ -377,6 +377,10 @@ impl<'a> AnimationFrame<'a> {
     }
 
     /// Copy pixel data to produce an owned frame.
+    ///
+    /// The frame's [`ColorContext`](zenpixels::ColorContext), if any, rides
+    /// along: the copy is a staging buffer, and staging buffers are where
+    /// buffer-level color signaling silently dies (zencodec#25).
     pub fn to_owned_frame(&self) -> OwnedAnimationFrame {
         let ps = &self.pixels;
         let w = ps.width();
@@ -391,8 +395,11 @@ impl<'a> AnimationFrame<'a> {
             data.extend_from_slice(ps.row(y));
         }
 
-        let pixels = PixelBuffer::from_vec(data, w, h, desc)
+        let mut pixels = PixelBuffer::from_vec(data, w, h, desc)
             .expect("to_owned_frame: buffer sized correctly");
+        if let Some(ctx) = ps.color_context() {
+            pixels = pixels.with_color_context(ctx.clone());
+        }
 
         OwnedAnimationFrame {
             pixels,
@@ -520,6 +527,32 @@ mod tests {
 
     fn make_gray8_buffer(w: u32, h: u32) -> PixelBuffer {
         PixelBuffer::new(w, h, PixelDescriptor::GRAY8_SRGB)
+    }
+
+    /// Regression for zencodec#25: `to_owned_frame` copies pixels into a fresh
+    /// buffer, and that copy used to drop the frame's `ColorContext` — so the
+    /// default `render_next_frame_owned` path yielded context-free frames while
+    /// the borrowed path carried one.
+    #[test]
+    fn to_owned_frame_keeps_color_context() {
+        use alloc::sync::Arc;
+        let ctx = Arc::new(zenpixels::ColorContext::from_cicp(
+            zenpixels::Cicp::BT2100_PQ,
+        ));
+        let src = make_rgb8_buffer(3, 2).with_color_context(ctx.clone());
+        let frame = AnimationFrame::new(src.as_slice(), 40, 0);
+        assert_eq!(frame.pixels().color_context(), Some(&ctx));
+
+        let owned = frame.to_owned_frame();
+        assert_eq!(
+            owned.pixels().color_context().map(|c| &**c),
+            Some(&*ctx),
+            "the owned copy must carry the same ColorContext as the borrowed frame"
+        );
+        // A context-free frame stays context-free (no invented signaling).
+        let plain = make_rgb8_buffer(3, 2);
+        let bare = AnimationFrame::new(plain.as_slice(), 40, 1);
+        assert!(bare.to_owned_frame().pixels().color_context().is_none());
     }
 
     #[test]

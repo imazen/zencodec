@@ -14,6 +14,13 @@
 //!   (borrowed, owned, push-sink) must yield identical frames, matching the input.
 //! - [`check_orientation_roundtrip`] — an orientation survives a keeping policy
 //!   exactly once (no loss, no double-application).
+//! - [`check_color_context_consistency`] — whatever `ColorContext` a decoder
+//!   attaches to its output buffers is class-valid (an ICC only rides a layout
+//!   its device class describes) and identical across the one-shot, streaming,
+//!   and animation (borrowed + owned) paths — strip/scratch buffers are where a
+//!   context silently dies. Lenient about *whether* one is attached;
+//!   [`check_color_context_attached`] is the strict, opt-in positive direction
+//!   (a decoder that read colour back must attach it).
 //! - [`check_capability_honesty`] — every declared capability works and every
 //!   undeclared optional path cleanly returns
 //!   [`UnsupportedOperation`](zencodec::UnsupportedOperation). Both directions for
@@ -46,19 +53,21 @@
 //! [`DecoderConfig`]: zencodec::decode::DecoderConfig
 
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use whereat::At;
 use zencodec::CodecErrorExt;
 use zencodec::decode::{
-    AnimationFrameDecoder, Decode, DecodeJob, DecodeRowSink, DecoderConfig, DynDecoderConfig,
-    SinkError, StreamingDecode,
+    AnimationFrameDecoder, Decode, DecodeJob, DecodeOutput, DecodeRowSink, DecoderConfig,
+    DynDecoderConfig, SinkError, StreamingDecode,
 };
 use zencodec::encode::{AnimationFrameEncoder, EncodeJob, Encoder, EncoderConfig};
 use zencodec::exif::Exif;
 use zencodec::{
-    Cicp, CodecError, ErrorCategory, Metadata, MetadataFields, MetadataPolicy, Orientation,
+    Cicp, CodecError, ColorAuthority, ErrorCategory, Metadata, MetadataFields, MetadataPolicy,
+    Orientation,
 };
-use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
+use zenpixels::{ColorContext, PixelDescriptor, PixelSlice, PixelSliceMut};
 
 pub(crate) mod fixtures;
 /// The false-direction exemplar codec — consumed only by this crate's own
@@ -518,7 +527,7 @@ where
     Ok(())
 }
 
-fn encode_animation<E>(cfg: &E, frames: &[TestImage]) -> Result<Vec<u8>, String>
+fn encode_animation<E>(cfg: &E, frames: &[TestImage], meta: Metadata) -> Result<Vec<u8>, String>
 where
     E: EncoderConfig,
     <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
@@ -526,6 +535,7 @@ where
     let mut a = cfg
         .clone()
         .job()
+        .with_metadata_policy(meta, MetadataPolicy::PreserveExact)
         .with_loop_count(Some(0))
         .animation_frame_encoder()
         .map_err(|e| e.to_string())?;
@@ -612,7 +622,8 @@ where
         return Err(fail(CHECK, "no frames supplied"));
     }
 
-    let bytes = encode_animation(&enc, frames).map_err(|e| fail(CHECK, format!("encode: {e}")))?;
+    let bytes = encode_animation(&enc, frames, Metadata::none())
+        .map_err(|e| fail(CHECK, format!("encode: {e}")))?;
     let want: Vec<Pixels> = frames.iter().map(|f| f.pixels()).collect();
 
     let paths = [
@@ -862,6 +873,337 @@ where
                     ),
                 ));
             }
+        }
+    }
+    Ok(())
+}
+
+// ===========================================================================
+// Buffer colour-context conformance (zencodec#25)
+// ===========================================================================
+
+/// The colour every context check encodes with: an RGB-class ICC (the test
+/// images are RGB/RGBA, so the profile is class-valid for the decoded layout)
+/// plus sRGB CICP. `SourceColor`'s default authority is ICC, so a faithful
+/// decoder's drop-dupe context carries the ICC alone.
+fn color_context_metadata() -> Metadata {
+    Metadata::none()
+        .with_icc(fixtures::sample_icc())
+        .with_cicp(Cicp::SRGB)
+}
+
+fn dec_output<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<DecodeOutput, String> {
+    cfg.clone()
+        .job()
+        .decoder(Cow::Borrowed(bytes), &[])
+        .map_err(|e| e.to_string())?
+        .decode()
+        .map_err(|e| e.to_string())
+}
+
+fn describe_ctx(ctx: Option<&ColorContext>) -> String {
+    match ctx {
+        None => "no ColorContext".into(),
+        Some(c) => format!(
+            "ColorContext {{ icc: {}, cicp: {:?} }}",
+            c.icc
+                .as_ref()
+                .map_or("none".to_string(), |i| format!("{} bytes", i.len())),
+            c.cicp
+        ),
+    }
+}
+
+fn same_ctx(a: Option<&Arc<ColorContext>>, b: Option<&Arc<ColorContext>>) -> bool {
+    a.map(|x| &**x) == b.map(|x| &**x)
+}
+
+/// The two rules every *attached* context must satisfy, for one emitted
+/// buffer or slice. `None` (nothing attached) is always acceptable here.
+///
+/// 1. **Non-empty** — a context with neither ICC nor CICP is noise; attach
+///    nothing instead.
+/// 2. **Class gate** — an ICC rides a buffer only when its device class (header
+///    bytes 16..20) matches the buffer's colour model: `RGB ` ↔ Rgb/Rgba/Bgra,
+///    `GRAY` ↔ Gray/GrayAlpha, `CMYK` ↔ Cmyk. Crosswise pairing is invalid
+///    signaling (libpng rejects it); an unreadable class is not valid for any
+///    layout.
+fn validate_buffer_context(
+    ctx: Option<&ColorContext>,
+    desc: PixelDescriptor,
+) -> Result<(), String> {
+    let Some(ctx) = ctx else {
+        return Ok(());
+    };
+    if ctx.icc.is_none() && ctx.cicp.is_none() {
+        return Err(
+            "an attached ColorContext carries neither ICC nor CICP — attach nothing rather \
+             than an empty description"
+                .into(),
+        );
+    }
+    if let Some(icc) = &ctx.icc {
+        let model = desc.color_model();
+        match zenpixels::icc::profile_color_space(icc) {
+            Some(class) if class == model => {}
+            Some(class) => {
+                return Err(format!(
+                    "an ICC of device class {class:?} is attached to a {model:?} buffer ({desc:?}) — \
+                     an ICC only rides a layout its class describes (RGB ↔ Rgb/Rgba/Bgra, GRAY ↔ \
+                     Gray/GrayAlpha); derive its CICP and carry that alone, or emit a layout the \
+                     profile describes"
+                ));
+            }
+            None => {
+                return Err(format!(
+                    "an ICC whose device class (header bytes 16..20) is unreadable is attached to a \
+                     {model:?} buffer — it is not class-valid for any layout; do not attach it"
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Whatever [`ColorContext`] a decoder attaches to its output pixels is
+/// class-valid and the same on every decode path.
+///
+/// The decoded-buffer convention (zencodec `docs/IMPLEMENTING.md`, "Colour on the
+/// decoded buffer"): a decoder SHOULD attach `SourceColor::to_color_context()` to
+/// the buffers it emits, class-gated so an ICC only rides a layout its device
+/// class describes. This check enforces the two invariants that hold whether or
+/// not a codec has adopted the convention yet:
+///
+/// - **Class-valid and non-empty** — see the rules on the ICC device class in the
+///   module docs; an attached context must describe *these* pixels.
+/// - **Path equivalence** — the one-shot buffer, every streaming strip (when
+///   streaming is advertised), and every animation frame on both the borrowed and
+///   the owned path (when animation is advertised) carry *identical* contexts. Strip
+///   and scratch buffers are rebuilt per batch and are where a context silently
+///   dies; a probe-era vs frame-era CICP divergence between paths shows up here too.
+///
+/// It does **not** require a context to be attached — a codec that attaches
+/// nothing passes (the pixels stay described by `ImageInfo.source_color`). Run
+/// [`check_color_context_attached`] for the strict positive direction once the
+/// codec has adopted the convention. Part of [`check_all`].
+pub fn check_color_context_consistency<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
+where
+    E: EncoderConfig,
+    D: DecoderConfig,
+    <E::Job as EncodeJob>::Enc: Encoder<Error = E::Error>,
+    <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
+{
+    const CHECK: &str = "color_context_consistency";
+    let meta = color_context_metadata();
+    let bytes = enc_oneshot(&enc, img, meta.clone(), MetadataPolicy::PreserveExact)
+        .map_err(|e| fail(CHECK, format!("encode: {e}")))?;
+    let out = dec_output(&dec, &bytes).map_err(|e| fail(CHECK, format!("decode: {e}")))?;
+    let desc = out.pixels().descriptor();
+    let oneshot = out.into_buffer().color_context().cloned();
+    validate_buffer_context(oneshot.as_deref(), desc)
+        .map_err(|e| fail(CHECK, format!("one-shot decode: {e}")))?;
+
+    if D::capabilities().streaming() {
+        let mut sd = dec
+            .clone()
+            .job()
+            .streaming_decoder(Cow::Borrowed(&bytes), &[])
+            .map_err(|e| fail(CHECK, format!("streaming decoder: {e}")))?;
+        while let Some((y, strip)) = sd
+            .next_batch()
+            .map_err(|e| fail(CHECK, format!("streaming next_batch: {e}")))?
+        {
+            validate_buffer_context(strip.color_context().map(|c| &**c), strip.descriptor())
+                .map_err(|e| fail(CHECK, format!("streaming strip at y={y}: {e}")))?;
+            if !same_ctx(strip.color_context(), oneshot.as_ref()) {
+                return Err(fail(
+                    CHECK,
+                    format!(
+                        "streaming strip at y={y} carries {} but the one-shot decode carries {} — \
+                         strip/scratch buffers must re-attach the context at emission",
+                        describe_ctx(strip.color_context().map(|c| &**c)),
+                        describe_ctx(oneshot.as_deref())
+                    ),
+                ));
+            }
+        }
+    }
+
+    if E::capabilities().animation() && D::capabilities().animation() {
+        let frames = [
+            TestImage::rgba8_gradient_seeded(img.width, img.height, 0),
+            TestImage::rgba8_gradient_seeded(img.width, img.height, 90),
+        ];
+        let anim = encode_animation(&enc, &frames, meta)
+            .map_err(|e| fail(CHECK, format!("animation encode: {e}")))?;
+        let primary = dec_output(&dec, &anim)
+            .map_err(|e| fail(CHECK, format!("one-shot decode of the animation: {e}")))?;
+        let pdesc = primary.pixels().descriptor();
+        let primary_ctx = primary.into_buffer().color_context().cloned();
+        validate_buffer_context(primary_ctx.as_deref(), pdesc)
+            .map_err(|e| fail(CHECK, format!("one-shot decode of the animation: {e}")))?;
+
+        let mismatch = |path: &str, i: u32, got: Option<&Arc<ColorContext>>| {
+            fail(
+                CHECK,
+                format!(
+                    "{path} frame {i} carries {} but the one-shot decode of the same file carries {} — \
+                     every frame must carry the context its pixels are described by",
+                    describe_ctx(got.map(|c| &**c)),
+                    describe_ctx(primary_ctx.as_deref())
+                ),
+            )
+        };
+
+        let mut d = dec
+            .clone()
+            .job()
+            .animation_frame_decoder(Cow::Borrowed(&anim), &[])
+            .map_err(|e| fail(CHECK, format!("animation decoder: {e}")))?;
+        while let Some(frame) = d
+            .render_next_frame(None)
+            .map_err(|e| fail(CHECK, format!("render_next_frame: {e}")))?
+        {
+            let i = frame.frame_index();
+            let px = frame.pixels();
+            validate_buffer_context(px.color_context().map(|c| &**c), px.descriptor())
+                .map_err(|e| fail(CHECK, format!("render_next_frame frame {i}: {e}")))?;
+            if !same_ctx(px.color_context(), primary_ctx.as_ref()) {
+                return Err(mismatch("render_next_frame", i, px.color_context()));
+            }
+        }
+
+        let mut d = dec
+            .clone()
+            .job()
+            .animation_frame_decoder(Cow::Borrowed(&anim), &[])
+            .map_err(|e| fail(CHECK, format!("animation decoder: {e}")))?;
+        while let Some(frame) = d
+            .render_next_frame_owned(None)
+            .map_err(|e| fail(CHECK, format!("render_next_frame_owned: {e}")))?
+        {
+            let i = frame.frame_index();
+            let px = frame.pixels();
+            validate_buffer_context(px.color_context().map(|c| &**c), px.descriptor())
+                .map_err(|e| fail(CHECK, format!("render_next_frame_owned frame {i}: {e}")))?;
+            if !same_ctx(px.color_context(), primary_ctx.as_ref()) {
+                return Err(mismatch("render_next_frame_owned", i, px.color_context()));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// A decoder that read colour back attaches it to the output buffer — the
+/// strict, positive direction of the decoded-buffer convention.
+///
+/// Encodes with an RGB-class ICC + sRGB CICP under `PreserveExact`, decodes, and
+/// looks at what the decoder reported in `ImageInfo.source_color`. If it read
+/// back neither ICC nor CICP there is nothing to attach and the check passes
+/// (whether it *should* have read them is [`check_capability_honesty`]'s job).
+/// Otherwise the output buffer must carry a [`ColorContext`], and it must carry
+/// the **authoritative** field: under [`ColorAuthority::Icc`] with a class-valid
+/// profile, the ICC bytes ride as-is (rank 1 of the convention); under
+/// [`ColorAuthority::Cicp`], the CICP. A class-invalid ICC only has to be
+/// replaced by *some* description (the derived-CICP fallback), which the
+/// class-gate rules in [`check_color_context_consistency`] verify. When streaming
+/// is advertised, the first strip must carry a context too.
+///
+/// Opt-in — **not** part of [`check_all`] — because the convention is a SHOULD
+/// that codecs adopt one at a time; run it once yours does.
+pub fn check_color_context_attached<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
+where
+    E: EncoderConfig,
+    D: DecoderConfig,
+    <E::Job as EncodeJob>::Enc: Encoder<Error = E::Error>,
+{
+    const CHECK: &str = "color_context_attached";
+    let bytes = enc_oneshot(
+        &enc,
+        img,
+        color_context_metadata(),
+        MetadataPolicy::PreserveExact,
+    )
+    .map_err(|e| fail(CHECK, format!("encode: {e}")))?;
+    let out = dec_output(&dec, &bytes).map_err(|e| fail(CHECK, format!("decode: {e}")))?;
+    let src = out.info().source_color.clone();
+    let desc = out.pixels().descriptor();
+    let ctx = out.into_buffer().color_context().cloned();
+
+    if src.icc_profile.is_none() && src.cicp.is_none() {
+        return Ok(()); // the decoder read no colour back — nothing to attach
+    }
+    let Some(ctx) = ctx else {
+        return Err(fail(
+            CHECK,
+            format!(
+                "the decoder read colour back into ImageInfo.source_color (icc: {}, cicp: {:?}) \
+                 but attached no ColorContext to the output buffer — attach \
+                 SourceColor::to_color_context(), class-gated, after the descriptor is final",
+                src.icc_profile
+                    .as_ref()
+                    .map_or("none".to_string(), |i| format!("{} bytes", i.len())),
+                src.cicp
+            ),
+        ));
+    };
+    validate_buffer_context(Some(&ctx), desc)
+        .map_err(|e| fail(CHECK, format!("one-shot decode: {e}")))?;
+
+    let src_icc_class_valid = src
+        .icc_profile
+        .as_deref()
+        .is_some_and(|icc| zenpixels::icc::profile_color_space(icc) == Some(desc.color_model()));
+    match src.color_authority {
+        ColorAuthority::Icc if src_icc_class_valid => {
+            if ctx.icc.as_deref() != src.icc_profile.as_deref() {
+                return Err(fail(
+                    CHECK,
+                    format!(
+                        "ICC is the authority and the source profile is class-valid for the {:?} \
+                         output, so the buffer context must carry those ICC bytes as-is; it carries {}",
+                        desc.color_model(),
+                        describe_ctx(Some(&ctx))
+                    ),
+                ));
+            }
+        }
+        ColorAuthority::Cicp if src.cicp.is_some() => {
+            if ctx.cicp != src.cicp {
+                return Err(fail(
+                    CHECK,
+                    format!(
+                        "CICP is the authority ({:?}) but the buffer context carries {}",
+                        src.cicp,
+                        describe_ctx(Some(&ctx))
+                    ),
+                ));
+            }
+        }
+        // Authority field absent, or an ICC the output layout can't carry: any
+        // non-empty, class-valid description (already validated) is acceptable.
+        ColorAuthority::Icc | ColorAuthority::Cicp => {}
+    }
+
+    if D::capabilities().streaming() {
+        let mut sd = dec
+            .clone()
+            .job()
+            .streaming_decoder(Cow::Borrowed(&bytes), &[])
+            .map_err(|e| fail(CHECK, format!("streaming decoder: {e}")))?;
+        let first = sd
+            .next_batch()
+            .map_err(|e| fail(CHECK, format!("streaming next_batch: {e}")))?;
+        if let Some((y, strip)) = first
+            && strip.color_context().is_none()
+        {
+            return Err(fail(
+                CHECK,
+                format!(
+                    "the one-shot buffer carries a ColorContext but the streaming strip at y={y} \
+                     carries none — re-attach the context on every emitted strip"
+                ),
+            ));
         }
     }
     Ok(())
@@ -1455,6 +1797,7 @@ where
     check_orientation_roundtrip(enc.clone(), dec.clone(), &img)?;
     check_metadata_no_leak(enc.clone(), dec.clone(), &img)?;
     check_capability_honesty(enc.clone(), dec.clone(), &img)?;
+    check_color_context_consistency(enc.clone(), dec.clone(), &img)?;
     let frames = [
         TestImage::rgba8_gradient_seeded(24, 16, 0),
         TestImage::rgba8_gradient_seeded(24, 16, 60),
@@ -1903,6 +2246,114 @@ mod tests {
             &frames,
         )
         .unwrap();
+    }
+
+    // ---- buffer colour-context conformance (zencodec#25) ----
+
+    /// The reference attaches a class-gated context on every path, so both the
+    /// lenient consistency check and the strict attached check pass.
+    #[test]
+    fn reference_color_context_consistency() {
+        let (e, d) = ref_codecs();
+        check_color_context_consistency(e, d, &TestImage::rgba8_gradient(11, 9)).unwrap();
+    }
+
+    #[test]
+    fn reference_color_context_attached() {
+        let (e, d) = ref_codecs();
+        check_color_context_attached(e, d, &TestImage::rgb8_gradient(11, 9)).unwrap();
+    }
+
+    /// The minimal codec drops every colour channel, so it attaches nothing and
+    /// reads nothing back: the lenient check passes (nothing to validate) and the
+    /// strict check passes (nothing to attach).
+    #[test]
+    fn minimal_color_context_checks_pass_without_color() {
+        let img = TestImage::rgba8_gradient(8, 6);
+        check_color_context_consistency(
+            MinimalEncoderConfig::new(),
+            MinimalDecoderConfig::new(),
+            &img,
+        )
+        .unwrap();
+        check_color_context_attached(
+            MinimalEncoderConfig::new(),
+            MinimalDecoderConfig::new(),
+            &img,
+        )
+        .unwrap();
+    }
+
+    /// The class gate has teeth: an ICC rides only a layout its device class
+    /// describes, an unreadable class rides nothing, and an empty context is
+    /// rejected — while class-matching and CICP-only contexts pass.
+    #[test]
+    fn buffer_context_class_gate() {
+        use zenpixels::PixelDescriptor as P;
+        let rgb_icc = ColorContext::from_icc(fixtures::sample_icc_with_class(b"RGB "));
+        let gray_icc = ColorContext::from_icc(fixtures::sample_icc_with_class(b"GRAY"));
+        let junk_icc = ColorContext::from_icc(fixtures::sample_icc_with_class(b"????"));
+        let cicp_only = ColorContext::from_cicp(Cicp::BT2100_PQ);
+
+        assert!(validate_buffer_context(None, P::RGB8_SRGB).is_ok());
+        assert!(validate_buffer_context(Some(&rgb_icc), P::RGB8_SRGB).is_ok());
+        assert!(validate_buffer_context(Some(&rgb_icc), P::RGBA8_SRGB).is_ok());
+        assert!(validate_buffer_context(Some(&gray_icc), P::GRAY8_SRGB).is_ok());
+        assert!(validate_buffer_context(Some(&cicp_only), P::GRAY8_SRGB).is_ok());
+
+        let e = validate_buffer_context(Some(&gray_icc), P::RGB8_SRGB).unwrap_err();
+        assert!(e.contains("device class Gray"), "{e}");
+        let e = validate_buffer_context(Some(&rgb_icc), P::GRAY8_SRGB).unwrap_err();
+        assert!(e.contains("device class Rgb"), "{e}");
+        let e = validate_buffer_context(Some(&junk_icc), P::RGB8_SRGB).unwrap_err();
+        assert!(e.contains("unreadable"), "{e}");
+        let e = validate_buffer_context(Some(&ColorContext::default()), P::RGB8_SRGB).unwrap_err();
+        assert!(e.contains("neither ICC nor CICP"), "{e}");
+    }
+
+    /// The reference's worked-example gate: a class-matching ICC rides as-is
+    /// (drop-dupe: the CICP is dropped under ICC authority); a class-mismatched
+    /// one is replaced by a CICP-only description (the signaled CICP, since the
+    /// synthetic fixture has no derivable CICP); nothing describable → `None`.
+    #[test]
+    fn reference_class_gate_ranks_the_fallbacks() {
+        use zencodec::decode::SourceColor;
+        use zenpixels::ColorModel;
+
+        let rgb = Arc::<[u8]>::from(fixtures::sample_icc_with_class(b"RGB "));
+        let gray = Arc::<[u8]>::from(fixtures::sample_icc_with_class(b"GRAY"));
+
+        let both = SourceColor::default()
+            .with_icc_profile(rgb.clone())
+            .with_cicp(Cicp::SRGB);
+        let ctx = crate::reference::class_gated_context(&both, ColorModel::Rgb).expect("attached");
+        assert_eq!(
+            ctx.icc.as_deref(),
+            Some(&*rgb),
+            "class-matching ICC rides as-is"
+        );
+        assert_eq!(ctx.cicp, None, "drop-dupe: ICC is the authority");
+
+        let mismatched = SourceColor::default()
+            .with_icc_profile(gray.clone())
+            .with_cicp(Cicp::SRGB);
+        let ctx = crate::reference::class_gated_context(&mismatched, ColorModel::Rgb)
+            .expect("falls back to a CICP-only description");
+        assert_eq!(
+            ctx.icc, None,
+            "a GRAY-class profile never rides an RGB buffer"
+        );
+        assert_eq!(ctx.cicp, Some(Cicp::SRGB));
+
+        let underivable = SourceColor::default().with_icc_profile(gray);
+        assert!(
+            crate::reference::class_gated_context(&underivable, ColorModel::Rgb).is_none(),
+            "nothing describable → no context (not an empty one)"
+        );
+        assert!(
+            crate::reference::class_gated_context(&SourceColor::default(), ColorModel::Rgb)
+                .is_none()
+        );
     }
 
     #[test]

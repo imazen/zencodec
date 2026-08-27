@@ -5,6 +5,22 @@ All notable changes to zencodec are documented here. Sections below the
 
 ## zencodec-testkit
 
+### [Unreleased]
+
+#### Added
+- **`check_color_context_consistency`** (in `check_all`) — whatever
+  `zenpixels::ColorContext` a decoder attaches to its output buffers must be
+  class-valid (an ICC only rides a layout its device class, header bytes 16..20,
+  describes) and identical across the one-shot, streaming, and animation
+  (borrowed + owned) decode paths. Lenient about *whether* a context is attached,
+  so codecs that have not adopted the convention still pass.
+  **`check_color_context_attached`** (opt-in) is the strict positive direction: a
+  decoder that read colour back into `ImageInfo.source_color` must attach the
+  authoritative field to the buffer (#25).
+- The `reference` codec now attaches a class-gated context on every path
+  (`reference::class_gated_context` is the runnable form of the convention's
+  ranked rules) and the ICC fixture carries a real `RGB ` device class.
+
 ### [0.1.0] - 2026-07-14
 
 First crates.io release of the conformance harness (previously an unpublished
@@ -70,7 +86,21 @@ removes that whole class).
   utility that consults `ColorProfileSource` and `HdrPolicy` together
   rather than inspecting raw CICP/ICC fields.
 
+### Added
+- Docs: the decoded-buffer `ColorContext` convention — decoders SHOULD attach
+  `SourceColor::to_color_context()` to every emitted buffer, class-gated (ICC
+  device class ↔ buffer colour model), with the ranked fallbacks (class-matching
+  profile rides as-is → derivable profile becomes a CICP-only context → keep a
+  layout the profile describes), synthesized descriptions for derived outputs,
+  and re-attach-at-every-emission. Carrier table (descriptor / context /
+  `source_color`) settles who owns which axis. `docs/IMPLEMENTING.md` "Colour on
+  the Decoded Buffer" + `docs/correctness-model.md` (#25).
+
 ### Fixed
+- `AnimationFrame::to_owned_frame` dropped the frame's `ColorContext` when
+  copying pixels into the owned buffer, so the default `render_next_frame_owned`
+  path yielded context-free frames while the borrowed path carried one. The copy
+  now carries the context (#25).
 - Docs: `ColorEmitPolicy`'s "Lowering the plan" rustdoc and
   `docs/color-emit-model.md` claimed the pixel-encode path lowers a
   `ColorEmitPlan` "through `zenpixels_convert`'s atomic

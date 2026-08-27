@@ -23,12 +23,13 @@
 //! ```
 
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use enough::{Stop, StopReason};
 use whereat::At;
 use zencodec::decode::{
     AnimationFrameDecoder, Decode, DecodeCapabilities, DecodeJob, DecodeOutput, DecodeRowSink,
-    DecoderConfig, OutputInfo, SinkError, StreamingDecode,
+    DecoderConfig, OutputInfo, SinkError, SourceColor, StreamingDecode,
 };
 use zencodec::encode::{
     AnimationFrameEncoder, EncodeCapabilities, EncodeJob, EncodeOutput, Encoder, EncoderConfig,
@@ -38,7 +39,7 @@ use zencodec::{
     ImageInfo, ImageSequence, Metadata, Orientation, ResourceLimits, StopToken,
     UnsupportedOperation,
 };
-use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
+use zenpixels::{ColorContext, ColorModel, PixelBuffer, PixelDescriptor, PixelSlice};
 
 // ===========================================================================
 // Error
@@ -309,6 +310,48 @@ pub(crate) fn build_info(h: &Header) -> ImageInfo {
         });
     }
     info
+}
+
+/// The buffer-level colour description a decoder attaches to its output
+/// pixels — the worked example of the convention in `docs/IMPLEMENTING.md`
+/// ("Colour on the decoded buffer"):
+///
+/// 1. Start from the authoritative field only
+///    ([`SourceColor::to_color_context`] — drop-dupe: ICC *or* CICP, never a
+///    duplicated pair the CMS would have to arbitrate).
+/// 2. **Class-gate the ICC.** A profile rides a buffer only when its device
+///    class (header bytes 16..20, read via `zenpixels::icc::profile_color_space`)
+///    matches the buffer's colour model — `RGB ` on Rgb/Rgba/Bgr/Bgra, `GRAY` on
+///    Gray/GrayAlpha, `CMYK` on Cmyk. Crosswise pairing is invalid signaling.
+/// 3. On a mismatch, **derive the profile's CICP** (embedded `cICP` tag, then
+///    well-known-profile identification) and carry that alone; fall back to the
+///    signaled CICP. A decoder that can choose its output layout should prefer
+///    a layout the profile describes over reaching this branch (the reference
+///    can't — it only emits RGB/RGBA — so it documents the fallback instead).
+/// 4. An empty description is not attached at all — `None` means "nothing
+///    known", not "described as nothing".
+///
+/// Shared by every emission path (one-shot buffer, streaming strips, animation
+/// frames) because scratch/strip buffers are where a context silently dies;
+/// `check_color_context_consistency` diffs the paths to prove it didn't.
+pub(crate) fn class_gated_context(
+    source: &SourceColor,
+    model: ColorModel,
+) -> Option<Arc<ColorContext>> {
+    let mut ctx = source.to_color_context();
+    if let Some(icc) = ctx
+        .icc
+        .take_if(|icc| zenpixels::icc::profile_color_space(icc) != Some(model))
+    {
+        ctx.cicp = zenpixels::icc::extract_cicp(&icc)
+            .or_else(|| zenpixels::icc::identify_common(&icc).and_then(|id| id.to_cicp()))
+            .or(ctx.cicp)
+            .or(source.cicp);
+    }
+    if ctx.icc.is_none() && ctx.cicp.is_none() {
+        return None;
+    }
+    Some(Arc::new(ctx))
 }
 
 pub(crate) fn encode_single(pixels: PixelSlice<'_>, meta: &Metadata) -> Vec<u8> {
@@ -632,6 +675,7 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
     ) -> Result<RefStreamDec<'a>, RefError> {
         let h = parse_header(&data)?;
         let info = build_info(&h);
+        let ctx = class_gated_context(&info.source_color, descriptor_for_bpp(h.bpp)?.color_model());
         Ok(RefStreamDec {
             data,
             info,
@@ -640,6 +684,7 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
             bpp: h.bpp,
             pixels_offset: frame_pixels_offset(&h, 0),
             next_row: 0,
+            ctx,
         })
     }
 
@@ -650,6 +695,7 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
     ) -> Result<RefAnimDec, RefError> {
         let h = parse_header(&data)?;
         let info = build_info(&h);
+        let ctx = class_gated_context(&info.source_color, descriptor_for_bpp(h.bpp)?.color_model());
         Ok(RefAnimDec {
             data: data.into_owned(),
             info,
@@ -659,6 +705,7 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
             bpp: h.bpp,
             frames_offset: h.frames_offset,
             next_frame: 0,
+            ctx,
         })
     }
 }
@@ -681,9 +728,14 @@ impl Decode for RefDec<'_> {
             .data
             .get(start..start + len)
             .ok_or_else(|| RefError::Invalid("truncated pixels".into()))?;
-        let buf = PixelBuffer::from_vec(pixels.to_vec(), h.width, h.height, desc)
+        let mut buf = PixelBuffer::from_vec(pixels.to_vec(), h.width, h.height, desc)
             .map_err(|e| RefError::Invalid(format!("buffer: {e}")))?;
-        Ok(DecodeOutput::new(buf, build_info(&h)))
+        let info = build_info(&h);
+        // Attach after the descriptor is final, before anyone negotiates on it.
+        if let Some(ctx) = class_gated_context(&info.source_color, desc.color_model()) {
+            buf = buf.with_color_context(ctx);
+        }
+        Ok(DecodeOutput::new(buf, info))
     }
 }
 
@@ -696,6 +748,9 @@ pub struct RefStreamDec<'a> {
     bpp: u8,
     pixels_offset: usize,
     next_row: u32,
+    /// Computed once; re-applied to every emitted strip (strips are fresh
+    /// slices, so the context has to be attached at emission).
+    ctx: Option<Arc<ColorContext>>,
 }
 
 impl StreamingDecode for RefStreamDec<'_> {
@@ -714,8 +769,11 @@ impl StreamingDecode for RefStreamDec<'_> {
             .get(off..off + span)
             .ok_or_else(|| RefError::Invalid("truncated strip".into()))?;
         let desc = descriptor_for_bpp(self.bpp)?;
-        let ps = PixelSlice::new(bytes, self.width, strip, row_bytes, desc)
+        let mut ps = PixelSlice::new(bytes, self.width, strip, row_bytes, desc)
             .map_err(|e| RefError::Invalid(format!("slice: {e}")))?;
+        if let Some(ctx) = &self.ctx {
+            ps = ps.with_color_context(ctx.clone());
+        }
         let y = self.next_row;
         self.next_row += strip;
         Ok(Some((y, ps)))
@@ -736,6 +794,9 @@ pub struct RefAnimDec {
     bpp: u8,
     frames_offset: usize,
     next_frame: u32,
+    /// Re-applied to every yielded frame slice (same reason as the streaming
+    /// decoder's).
+    ctx: Option<Arc<ColorContext>>,
 }
 
 impl AnimationFrameDecoder for RefAnimDec {
@@ -776,8 +837,11 @@ impl AnimationFrameDecoder for RefAnimDec {
             .get(start..start + span)
             .ok_or_else(|| RefError::Invalid("truncated frame".into()))?;
         let desc = descriptor_for_bpp(self.bpp)?;
-        let ps = PixelSlice::new(bytes, self.width, self.height, row_bytes, desc)
+        let mut ps = PixelSlice::new(bytes, self.width, self.height, row_bytes, desc)
             .map_err(|e| RefError::Invalid(format!("frame slice: {e}")))?;
+        if let Some(ctx) = &self.ctx {
+            ps = ps.with_color_context(ctx.clone());
+        }
         let frame = AnimationFrame::new(ps, dur, self.next_frame);
         self.next_frame += 1;
         Ok(Some(frame))

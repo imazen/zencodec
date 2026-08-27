@@ -85,7 +85,16 @@ pub fn sample_xmp() -> Vec<u8> {
 /// A tiny but valid-enough ICC-shaped blob (not a real profile; opaque bytes the
 /// codec is expected to carry verbatim or drop, never inspect).
 pub fn sample_icc() -> Vec<u8> {
+    sample_icc_with_class(b"RGB ")
+}
+
+/// A minimal ICC header (132 bytes, `acsp` signature) whose data colour space
+/// field (header bytes 16..20) is `class` — `b"RGB "`, `b"GRAY"`, `b"CMYK"`, or
+/// garbage for an unclassifiable profile. The device class is what the
+/// buffer-context class gate reads, so the fixtures must carry a real one.
+pub fn sample_icc_with_class(class: &[u8; 4]) -> Vec<u8> {
     let mut v = std::vec![0u8; 132];
+    v[16..20].copy_from_slice(class); // data colour space (device class)
     v[36..40].copy_from_slice(b"acsp"); // ICC signature at offset 36
     v
 }

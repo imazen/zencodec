@@ -117,6 +117,28 @@ reads the envelope off `Metadata`. Skipping this silently drops the envelope on 
 gain-map → native-HDR transcode. (Gain-map → *gain-map* transcode is
 `GainMapRender::Components` and reconstructs nothing — no envelope step.)
 
+## Colour on the decoded buffer: attached, class-gated, identical on every path
+
+The descriptor folds transfer/primaries into enums; the raw H.273 code points and
+the ICC bytes live in `ImageInfo.source_color`, *beside* the buffer. A stage that
+sees only the pixels (CMS, load-bearing reduction, re-encoder) would have to
+guess — so decoders SHOULD attach `SourceColor::to_color_context()` to every
+buffer they emit, **class-gated**: an ICC rides only a layout its device class
+describes (`RGB ` ↔ Rgb/Rgba/Bgra, `GRAY` ↔ Gray/GrayAlpha). On a mismatch,
+derive the profile's CICP and carry that alone, or pick a layout the profile
+describes — never pair them crosswise, never strip the most accurate description
+when a derivable one exists. Derived outputs (HDR reconstruction) get a
+synthesized description, not the source's. The full ranked rules and the carrier
+table (descriptor / context / `source_color`) are in
+[IMPLEMENTING.md](IMPLEMENTING.md#colour-on-the-decoded-buffer-colorcontext).
+
+The invariant the framework can check without knowing a codec's format: whatever
+is attached is class-valid and **identical across the one-shot, streaming, and
+animation paths**. Strip and scratch buffers are rebuilt per batch and are where
+a context silently dies (zenavif's streaming strips shipped context-free while
+its one-shot buffer carried one; `AnimationFrame::to_owned_frame` dropped it on
+the owned-frame path until zencodec#25).
+
 ## Verifying a codec: zencodec-testkit
 
 The contract above is only worth anything if codecs actually honor it. The
@@ -141,6 +163,12 @@ codec crate adds it as a `dev-dependency` and runs the checks against its own
   that composites in place can leak the wrong frame.
 - `check_orientation_roundtrip` — confirms an orientation survives a keeping
   policy exactly once, catching both loss and double-application.
+- `check_color_context_consistency` — whatever `ColorContext` the decoder
+  attaches is class-valid (ICC device class matches the buffer's colour model)
+  and identical on the one-shot, streaming, and animation (borrowed + owned)
+  paths. Lenient about whether one is attached at all, so it is in `check_all`;
+  `check_color_context_attached` is the strict, opt-in positive direction (a
+  decoder that read colour back must attach the authoritative field).
 - `check_capability_honesty` — every declared capability (the encode paths
   `push_rows`/`encode_from`/animation, the decode paths streaming/animation, the
   `lossless` knob, `cheap_probe`, the `icc`/`exif`/`xmp`/`cicp` metadata channels,
