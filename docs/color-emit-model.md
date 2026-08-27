@@ -53,19 +53,37 @@ produces (decode → `ImageInfo.source_color`; the bridge to encode is a flat
 
 ## Lowering the plan (where the bytes happen)
 
-A codec or the pipeline lowers `ColorEmitPlan` to bytes through **zenpixels-convert's
-`finalize_for_output_with`** — which already converts pixels *and* emits matching
-`OutputMetadata` atomically (pixels and embedded color cannot diverge):
+A codec or the pipeline lowers `ColorEmitPlan` to bytes **by hand, per codec** —
+each codec maps the plan's fields onto its own container carriers:
 
-- `ColorEmitPlan.cicp` → the format's native CICP carrier.
-- `IccDisposition::KeepSource` → `OutputProfile::SameAsOrigin` (re-embed source ICC).
-- `IccDisposition::SynthesizeFrom(cicp)` → `zenpixels_convert::icc_profile_for_primaries`
-  (a `const fn` table of bundled profiles — **no CMS, no allocation**; returns
-  `None` for BT.709/sRGB so the assumed default is never embedded).
+- `ColorEmitPlan.cicp` → the format's native CICP carrier (JXL enum colour,
+  AVIF/HEIC `nclx`, PNG `cICP`).
+- `IccDisposition::KeepSource` → re-embed the source ICC bytes unchanged.
+- `IccDisposition::SynthesizeFrom(cicp)` →
+  `zenpixels_convert::icc_profiles::synthesize_icc_for_cicp(cicp)`, which is
+  transfer-aware and returns a typed `SynthesizedIcc`: embed the bytes on
+  `Profile`; on `NotNeeded` (sRGB) / `NeedsCms` / `CmsUnsupported` embed no ICC
+  and let `cicp` carry the colour. The bundled `const` set (no CMS) reaches
+  Display-P3 and SDR BT.2020; the `cms-moxcms` feature generates the rest.
 - `IccDisposition::Drop` → no ICC.
 
-So "synthesize an ICC" can never silently lose color and never needs a CMS in the
-codec — it's a table lookup.
+**What this is not:** a type-enforced atomic step. zenpixels-convert does ship
+`finalize_for_output_with` / `EncodeReady` (convert pixels *and* emit matching
+output metadata in one call, so they cannot diverge), but as of 2026-08 no codec
+or pipeline crate calls it — a consumer audit across the zen workspace found its
+only callers inside zenpixels-convert itself (zencodec#119). The real path is
+weaker and by convention: `resolve_color_emit` reads its `SourceColor` from the
+caller-supplied `Metadata { cicp, icc }`, a separate input from the pixel buffer
+that is never cross-checked against the buffer's descriptor or `ColorContext`. If
+upstream mislabels the source, the codec emits that label faithfully wrong. The
+pipeline keeps the two in agreement by building `Metadata` from the same decode
+that produced the pixels. Routing encode through `finalize_for_output_with` to
+get the atomic guarantee is a possible cross-crate change, not something this
+model relies on today.
+
+"Synthesize an ICC" therefore never silently loses colour — the typed
+`SynthesizedIcc` names every case where no profile is embedded — and never needs a
+CMS in the codec for the bundled set.
 
 ## Orientation (separate, tiny)
 
@@ -113,8 +131,9 @@ piece**, tracked separately.
   aesthetic, not grounded. `MetadataPolicy` (#17) and `ColorEmitPolicy` are fine
   apart; orientation is a one-helper correctness fix, not a policy axis.
 - **A resolver that produces final `Metadata` bytes** — a third metadata producer
-  alongside `Metadata::filtered` and `OutputMetadata`. Atomicity is already
-  `finalize_for_output_with`'s job.
+  alongside `Metadata::filtered` and `OutputMetadata`. The plan stays a pure
+  description; the codec writes the carriers (see "Lowering the plan" above for
+  why there is no atomic pixels+colour step on the encode path today).
 
 ## What landed (the surviving red-team fixes)
 

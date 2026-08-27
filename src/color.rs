@@ -42,15 +42,19 @@ use crate::metadata::IccRetention;
 ///
 /// # Lowering the plan
 ///
-/// A codec (or the pipeline) lowers a [`ColorEmitPlan`] to the bytes it writes — for
-/// the pixel-encode path, through `zenpixels_convert`'s atomic
-/// `finalize_for_output_with` (which guarantees pixels and embedded color cannot
-/// diverge):
+/// A codec (or the pipeline) lowers a [`ColorEmitPlan`] to the bytes it writes.
+/// The lowering is **per-codec and by convention**: each codec maps the plan's
+/// fields onto its own container carriers as listed below. No type-enforced
+/// atomic step ties the emitted color to the pixel buffer — the `SourceColor`
+/// handed to [`resolve_color_emit`] comes from the caller's `Metadata`, a
+/// separate input from the pixels, and is not cross-checked against the
+/// buffer's descriptor or `ColorContext`. Keeping the two in agreement is the
+/// caller's job (the pipeline builds `Metadata` from the same decode that
+/// produced the pixels); a mislabeled source is emitted faithfully wrong.
 ///
 /// - [`ColorEmitPlan::cicp`] → the format's native CICP carrier (JXL enum color,
 ///   AVIF/HEIC `nclx`, PNG `cICP`).
-/// - [`IccDisposition::KeepSource`] → re-embed the source ICC bytes
-///   (`OutputProfile::SameAsOrigin`).
+/// - [`IccDisposition::KeepSource`] → re-embed the source ICC bytes unchanged.
 /// - [`IccDisposition::SynthesizeFrom`]`(cicp)` → lower through
 ///   `zenpixels_convert::icc_profiles::synthesize_icc_for_cicp(cicp)`, which is
 ///   **transfer-aware** (it won't hand a BT.2020-PQ source the SDR-TRC Rec.2020

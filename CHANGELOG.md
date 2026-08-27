@@ -70,6 +70,15 @@ removes that whole class).
   utility that consults `ColorProfileSource` and `HdrPolicy` together
   rather than inspecting raw CICP/ICC fields.
 
+### Fixed
+- Docs: `ColorEmitPolicy`'s "Lowering the plan" rustdoc and
+  `docs/color-emit-model.md` claimed the pixel-encode path lowers a
+  `ColorEmitPlan` "through `zenpixels_convert`'s atomic
+  `finalize_for_output_with`". It does not — no codec or pipeline crate calls
+  it. Both now describe the real per-codec, by-convention lowering and state
+  plainly that the caller-supplied `Metadata` is never cross-checked against
+  the pixel buffer (#119).
+
 ## [0.1.26] - 2026-07-14
 
 ### Added
