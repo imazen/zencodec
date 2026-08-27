@@ -602,27 +602,6 @@ fn has_ifd0_tag(data: &[u8], target_tag: u16) -> bool {
     false
 }
 
-#[cfg(test)]
-mod ifd_overflow_tests {
-    use super::has_ifd0_tag;
-
-    // Regression: a crafted TIFF IFD offset must not overflow `usize` on 32-bit
-    // targets and panic. On 64-bit these merely return false; the guard is what
-    // keeps i686/wasm32 from panicking on the OOB index.
-    #[test]
-    fn crafted_ifd_offset_does_not_panic() {
-        // IFD0 offset = 0xFFFFFFFF (II/42 and MM/42).
-        let le = [b'I', b'I', 0x2A, 0x00, 0xFF, 0xFF, 0xFF, 0xFF];
-        assert!(!has_ifd0_tag(&le, 0xC612));
-        let be = [b'M', b'M', 0x00, 0x2A, 0xFF, 0xFF, 0xFF, 0xFF];
-        assert!(!has_ifd0_tag(&be, 0xC612));
-        // ifd_offset=8, entry_count=0xFFFF but only one (mismatching) entry:
-        // the per-entry `entries_start + i*12` offset must break, not overflow.
-        let entry_overflow = [b'I', b'I', 0x2A, 0x00, 8, 0, 0, 0, 0xFF, 0xFF, 0, 0];
-        assert!(!has_ifd0_tag(&entry_overflow, 0xC612));
-    }
-}
-
 /// Detect SVG or SVGZ from byte content.
 fn detect_svg(data: &[u8]) -> bool {
     // SVGZ: gzip magic
@@ -728,3 +707,24 @@ pub static ALL: &[&ImageFormatDefinition] = &[
     &JPEG, &PNG, &GIF, &WEBP, &AVIF, &JXL, &HEIC, &BMP, &FARBFELD, &PNM, &DNG, &RAW, &TIFF, &ICO,
     &QOI, &PDF, &EXR, &HDR, &JP2, &TGA, &SVG,
 ];
+
+#[cfg(test)]
+mod ifd_overflow_tests {
+    use super::has_ifd0_tag;
+
+    // Regression: a crafted TIFF IFD offset must not overflow `usize` on 32-bit
+    // targets and panic. On 64-bit these merely return false; the guard is what
+    // keeps i686/wasm32 from panicking on the OOB index.
+    #[test]
+    fn crafted_ifd_offset_does_not_panic() {
+        // IFD0 offset = 0xFFFFFFFF (II/42 and MM/42).
+        let le = [b'I', b'I', 0x2A, 0x00, 0xFF, 0xFF, 0xFF, 0xFF];
+        assert!(!has_ifd0_tag(&le, 0xC612));
+        let be = [b'M', b'M', 0x00, 0x2A, 0xFF, 0xFF, 0xFF, 0xFF];
+        assert!(!has_ifd0_tag(&be, 0xC612));
+        // ifd_offset=8, entry_count=0xFFFF but only one (mismatching) entry:
+        // the per-entry `entries_start + i*12` offset must break, not overflow.
+        let entry_overflow = [b'I', b'I', 0x2A, 0x00, 8, 0, 0, 0, 0xFF, 0xFF, 0, 0];
+        assert!(!has_ifd0_tag(&entry_overflow, 0xC612));
+    }
+}
