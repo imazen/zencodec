@@ -169,6 +169,12 @@ codec crate adds it as a `dev-dependency` and runs the checks against its own
   paths. Lenient about whether one is attached at all, so it is in `check_all`;
   `check_color_context_attached` is the strict, opt-in positive direction (a
   decoder that read colour back must attach the authoritative field).
+- `check_native_hdr_roundtrip` — when both ends declare `hdr`, BT.2100 PQ and
+  HLG survive `PreserveExact`: CICP, the HDR envelope (CLLI exactly, MDCV within
+  container fixed-point precision), 16-bit pixels where both ends declare
+  `native_16bit`, and the decoded descriptor is labelled PQ/HLG, not sRGB. This
+  is what makes the "envelope on the info" contract above testable — a codec
+  that declares `hdr` and drops MaxCLL/MDCV fails here, not in production.
 - `check_capability_honesty` — every declared capability (the encode paths
   `push_rows`/`encode_from`/animation, the decode paths streaming/animation, the
   `lossless` knob, `cheap_probe`, the `icc`/`exif`/`xmp`/`cicp` metadata channels,

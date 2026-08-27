@@ -21,6 +21,11 @@
 //!   context silently dies. Lenient about *whether* one is attached;
 //!   [`check_color_context_attached`] is the strict, opt-in positive direction
 //!   (a decoder that read colour back must attach it).
+//! - [`check_native_hdr_roundtrip`] — when both ends declare `hdr`, BT.2100 PQ
+//!   and HLG survive a `PreserveExact` round trip: the CICP, the HDR envelope
+//!   (content light level + mastering display), 16-bit pixels where both ends
+//!   are natively 16-bit, and the decoded buffer is *labelled* PQ/HLG rather
+//!   than sRGB. Phase 0 of the gain-map/HDR delivery scope.
 //! - [`check_capability_honesty`] — every declared capability works and every
 //!   undeclared optional path cleanly returns
 //!   [`UnsupportedOperation`](zencodec::UnsupportedOperation). Both directions for
@@ -64,10 +69,10 @@ use zencodec::decode::{
 use zencodec::encode::{AnimationFrameEncoder, EncodeJob, Encoder, EncoderConfig};
 use zencodec::exif::Exif;
 use zencodec::{
-    Cicp, CodecError, ColorAuthority, ErrorCategory, Metadata, MetadataFields, MetadataPolicy,
-    Orientation,
+    Cicp, CodecError, ColorAuthority, ContentLightLevel, ErrorCategory, MasteringDisplay, Metadata,
+    MetadataFields, MetadataPolicy, Orientation,
 };
-use zenpixels::{ColorContext, PixelDescriptor, PixelSlice, PixelSliceMut};
+use zenpixels::{ColorContext, PixelDescriptor, PixelSlice, PixelSliceMut, TransferFunction};
 
 pub(crate) mod fixtures;
 /// The false-direction exemplar codec — consumed only by this crate's own
@@ -139,6 +144,37 @@ impl TestImage {
     /// animation tests) differ in content and a frame-ordering bug is visible.
     pub fn rgba8_gradient_seeded(width: u32, height: u32, seed: u8) -> Self {
         Self::gradient(width, height, PixelDescriptor::RGBA8_SRGB, 4, seed)
+    }
+
+    /// A 16-bit RGB gradient carrying `desc`'s colour labelling (a U16 RGB
+    /// descriptor such as `RGB16_BT2100_PQ`). Samples span the full 16-bit range
+    /// with distinct high and low bytes, so a byte-order bug or an 8-bit
+    /// truncation shows up as a pixel diff.
+    pub(crate) fn rgb16_gradient(width: u32, height: u32, desc: PixelDescriptor) -> Self {
+        assert!(width > 0 && height > 0, "test image must be non-empty");
+        assert_eq!(
+            desc.bytes_per_pixel(),
+            6,
+            "rgb16_gradient needs a U16 RGB descriptor"
+        );
+        let mut data = vec![0u8; width as usize * height as usize * 6];
+        for y in 0..height as usize {
+            for x in 0..width as usize {
+                let p = (y * width as usize + x) * 6;
+                let r = (x * 1031 + y * 517) as u16;
+                let g = (x * 257 + y * 3079) as u16;
+                let b = ((x ^ y) * 4111 + 12345) as u16;
+                data[p..p + 2].copy_from_slice(&r.to_ne_bytes());
+                data[p + 2..p + 4].copy_from_slice(&g.to_ne_bytes());
+                data[p + 4..p + 6].copy_from_slice(&b.to_ne_bytes());
+            }
+        }
+        Self {
+            width,
+            height,
+            desc,
+            data,
+        }
     }
 
     fn gradient(width: u32, height: u32, desc: PixelDescriptor, bpp: usize, seed: u8) -> Self {
@@ -870,6 +906,182 @@ where
                         "[{name}] orientation {ori:?}: displayed image not preserved (decoded orientation = {:?}; \
                          a reader applying the tag would show loss, or a double-rotation if the codec also baked it)",
                         decoded.orientation
+                    ),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+// ===========================================================================
+// Native HDR conformance (zencodec#24, Phase 0)
+// ===========================================================================
+
+/// The HDR envelope the native-HDR check encodes with — values a dropped or
+/// zeroed field can't be mistaken for.
+fn hdr_envelope() -> (ContentLightLevel, MasteringDisplay) {
+    (
+        ContentLightLevel::new(1000, 400),
+        MasteringDisplay::HDR10_REFERENCE,
+    )
+}
+
+/// Container fixed-point tolerance: |Δ| ≤ 2e-5 for sub-unit values (xy
+/// chromaticities are stored in 1/50000 units by AVIF/HEIF, luminances in
+/// 1/10000), relative 1e-5 above 1.0 (peak luminance).
+fn hdr_close(got: f32, want: f32) -> bool {
+    let tol = if want.abs() < 1.0 {
+        2e-5
+    } else {
+        want.abs() * 1e-5
+    };
+    (got - want).abs() <= tol
+}
+
+fn mastering_display_matches(got: &MasteringDisplay, want: &MasteringDisplay) -> bool {
+    got.primaries_xy
+        .iter()
+        .zip(&want.primaries_xy)
+        .all(|(g, w)| hdr_close(g[0], w[0]) && hdr_close(g[1], w[1]))
+        && hdr_close(got.white_point_xy[0], want.white_point_xy[0])
+        && hdr_close(got.white_point_xy[1], want.white_point_xy[1])
+        && hdr_close(got.max_luminance, want.max_luminance)
+        && hdr_close(got.min_luminance, want.min_luminance)
+}
+
+/// Native HDR survives a round trip: for BT.2100 **PQ** and **HLG**, the CICP,
+/// the HDR envelope (content light level + mastering display), the pixels, and
+/// the decoded buffer's HDR *labelling* all come back from a `PreserveExact`
+/// encode → decode.
+///
+/// Skipped (`Ok`) unless **both** ends declare
+/// [`hdr`](zencodec::encode::EncodeCapabilities::hdr). For each transfer:
+///
+/// - encodes `Cicp::BT2100_PQ` / `Cicp::BT2100_HLG` with `ContentLightLevel(1000, 400)`
+///   and `MasteringDisplay::HDR10_REFERENCE`, using a 16-bit RGB gradient when both
+///   ends declare `native_16bit` (the 8-bit RGB gradient otherwise — the
+///   signaling path is exercised either way);
+/// - the decoded pixels must equal the input byte-for-byte;
+/// - the decoded descriptor must carry the HDR transfer (`Pq` / `Hlg`) — a PQ
+///   decode labelled sRGB is exactly the mislabel the descriptor exists to
+///   prevent — and on the 16-bit path must equal `RGB16_BT2100_PQ` / `_HLG`;
+/// - when both ends declare the `cicp` channel, `Metadata.cicp` must equal the
+///   input;
+/// - `content_light_level` must survive exactly and `mastering_display` within
+///   container fixed-point precision (2e-5 on xy, 1e-5 relative on luminance).
+///   `hdr` on both ends means the envelope reaches the encoder and comes back —
+///   silently dropping it is the "gain-map → native-HDR transcode loses the
+///   envelope" hazard in `docs/correctness-model.md`.
+///
+/// This is Phase 0 of the gain-map / HDR delivery scope
+/// (`docs/gainmap-pipeline-scope-2026-06-08.md`): prove native HDR works with
+/// zero new API before any gain-map encode surface is added. Part of
+/// [`check_all`].
+pub fn check_native_hdr_roundtrip<E, D>(enc: E, dec: D) -> Conformance
+where
+    E: EncoderConfig,
+    D: DecoderConfig,
+    <E::Job as EncodeJob>::Enc: Encoder<Error = E::Error>,
+{
+    const CHECK: &str = "native_hdr_roundtrip";
+    let (ec, dc) = (E::capabilities(), D::capabilities());
+    if !ec.hdr() || !dc.hdr() {
+        return Ok(()); // not applicable to an SDR-only codec
+    }
+    let sixteen = ec.native_16bit() && dc.native_16bit();
+    let (cll, md) = hdr_envelope();
+    let cases = [
+        (
+            "PQ",
+            Cicp::BT2100_PQ,
+            PixelDescriptor::RGB16_BT2100_PQ,
+            TransferFunction::Pq,
+        ),
+        (
+            "HLG",
+            Cicp::BT2100_HLG,
+            PixelDescriptor::RGB16_BT2100_HLG,
+            TransferFunction::Hlg,
+        ),
+    ];
+    for (name, cicp, desc16, transfer) in cases {
+        let img = if sixteen {
+            TestImage::rgb16_gradient(20, 14, desc16)
+        } else {
+            TestImage::rgb8_gradient(20, 14)
+        };
+        let meta = Metadata::none()
+            .with_cicp(cicp)
+            .with_content_light_level(cll)
+            .with_mastering_display(md);
+        let bytes = enc_oneshot(&enc, &img, meta, MetadataPolicy::PreserveExact)
+            .map_err(|e| fail(CHECK, format!("[{name}] encode: {e}")))?;
+        let out =
+            dec_output(&dec, &bytes).map_err(|e| fail(CHECK, format!("[{name}] decode: {e}")))?;
+
+        let got_px = grab(out.pixels());
+        let want_px = img.pixels();
+        if (got_px.width, got_px.rows) != (want_px.width, want_px.rows)
+            || got_px.bytes != want_px.bytes
+        {
+            return Err(fail(
+                CHECK,
+                format!(
+                    "[{name}] decoded {}-bit pixels differ from the input",
+                    if sixteen { 16 } else { 8 }
+                ),
+            ));
+        }
+        let desc = got_px.desc;
+        if desc.transfer() != transfer {
+            return Err(fail(
+                CHECK,
+                format!(
+                    "[{name}] the decoded buffer is labelled {:?}, not {transfer:?} — the descriptor \
+                     must describe the current pixels; stamp it from the file's CICP",
+                    desc.transfer()
+                ),
+            ));
+        }
+        if sixteen && desc != desc16 {
+            return Err(fail(
+                CHECK,
+                format!("[{name}] 16-bit decode descriptor is {desc:?}, expected {desc16:?}"),
+            ));
+        }
+
+        let got = out.metadata();
+        if ec.cicp() && dc.cicp() && got.cicp != Some(cicp) {
+            return Err(fail(
+                CHECK,
+                format!(
+                    "[{name}] CICP {cicp:?} did not survive PreserveExact (decoded {:?})",
+                    got.cicp
+                ),
+            ));
+        }
+        match got.content_light_level {
+            Some(c) if c == cll => {}
+            other => {
+                return Err(fail(
+                    CHECK,
+                    format!(
+                        "[{name}] content_light_level {cll:?} did not survive PreserveExact \
+                         (decoded {other:?}) — hdr is declared on both ends, so the HDR envelope \
+                         must reach the encoder and come back"
+                    ),
+                ));
+            }
+        }
+        match got.mastering_display {
+            Some(m) if mastering_display_matches(&m, &md) => {}
+            other => {
+                return Err(fail(
+                    CHECK,
+                    format!(
+                        "[{name}] mastering_display {md:?} did not survive PreserveExact within \
+                         container precision (decoded {other:?})"
                     ),
                 ));
             }
@@ -1798,6 +2010,7 @@ where
     check_metadata_no_leak(enc.clone(), dec.clone(), &img)?;
     check_capability_honesty(enc.clone(), dec.clone(), &img)?;
     check_color_context_consistency(enc.clone(), dec.clone(), &img)?;
+    check_native_hdr_roundtrip(enc.clone(), dec.clone())?;
     let frames = [
         TestImage::rgba8_gradient_seeded(24, 16, 0),
         TestImage::rgba8_gradient_seeded(24, 16, 60),
@@ -2246,6 +2459,58 @@ mod tests {
             &frames,
         )
         .unwrap();
+    }
+
+    // ---- native HDR conformance (zencodec#24, Phase 0) ----
+
+    /// The reference declares `hdr` + `native_16bit` on both ends and stores
+    /// CLLI/MDCV + 16-bit samples raw, stamping the descriptor from CICP, so PQ
+    /// and HLG round-trip in full.
+    #[test]
+    fn reference_native_hdr_roundtrip() {
+        let (e, d) = ref_codecs();
+        check_native_hdr_roundtrip(e, d).unwrap();
+    }
+
+    /// An SDR-only codec (no `hdr`) is out of scope, not a failure.
+    #[test]
+    fn minimal_native_hdr_roundtrip_skipped() {
+        check_native_hdr_roundtrip(MinimalEncoderConfig::new(), MinimalDecoderConfig::new())
+            .unwrap();
+    }
+
+    /// The 16-bit HDR decode is labelled exactly `RGB16_BT2100_PQ` — the
+    /// stamped descriptor equals the constant, so downstream `==` checks on the
+    /// canonical descriptors hold.
+    #[test]
+    fn reference_hdr_decode_is_labelled_pq() {
+        let (e, d) = ref_codecs();
+        let img = TestImage::rgb16_gradient(6, 5, PixelDescriptor::RGB16_BT2100_PQ);
+        let meta = Metadata::none().with_cicp(Cicp::BT2100_PQ);
+        let bytes = enc_oneshot(&e, &img, meta, MetadataPolicy::PreserveExact).unwrap();
+        let out = dec_output(&d, &bytes).unwrap();
+        assert_eq!(out.pixels().descriptor(), PixelDescriptor::RGB16_BT2100_PQ);
+        assert_eq!(grab(out.pixels()), img.pixels());
+    }
+
+    /// Tolerance is container fixed-point, not slack: a 1/50000 xy step passes,
+    /// a real drift fails, and luminance is relative.
+    #[test]
+    fn mastering_display_tolerance_is_fixed_point_tight() {
+        let want = MasteringDisplay::HDR10_REFERENCE;
+        let mut quantized = want;
+        quantized.primaries_xy[0][0] += 1e-5; // within one 1/50000 step
+        quantized.max_luminance = 10000.05; // 5e-6 relative
+        assert!(mastering_display_matches(&quantized, &want));
+        let mut drifted = want;
+        drifted.primaries_xy[0][0] += 1e-3;
+        assert!(!mastering_display_matches(&drifted, &want));
+        let mut dark = want;
+        dark.min_luminance = 0.0;
+        assert!(
+            !mastering_display_matches(&dark, &want),
+            "a zeroed min luminance (0.0001 → 0) is a drop, not precision"
+        );
     }
 
     // ---- buffer colour-context conformance (zencodec#25) ----

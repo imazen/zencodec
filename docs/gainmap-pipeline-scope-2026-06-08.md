@@ -4,6 +4,45 @@ How to make HDR output (gain-map *and* native) reachable through the codec-agnos
 zencodec encode path, so a `DynEncoder` pipeline can emit HDR without per-codec
 native API calls. Scoping only — no implementation here.
 
+## Status (2026-08-27, tracked in zencodec#24)
+
+What landed vs the phasing below — read this before the design sections, which
+still describe the *proposed* shapes:
+
+- **Phase 0 — native HDR: checkable.** `zencodec-testkit::check_native_hdr_roundtrip`
+  (in `check_all`) proves PQ/HLG CICP + CLLI/MDCV + 16-bit pixels survive
+  `PreserveExact` and that the decoded buffer is labelled PQ/HLG. Validated
+  against the testkit's reference codec. **Not yet run against zenavif / zenjxl /
+  zenpng** — wiring it into each codec's conformance test is the remaining
+  Phase 0 work, in those repos.
+- **Phase 1 — shipped in a different shape.** No `GainMapEncodeSource`, no
+  `HdrEmitPolicy`, no testkit `check_gain_map_*`. What exists:
+  `EncodeJob::with_gain_map_pixels(DecodedGainMap)` and
+  `with_gain_map_encoded(GainMapSource)` (both fallible, default-reject with
+  `UnsupportedOperation::GainMapEncode`; the override is the support signal, with
+  `EncodeCapabilities::gain_map` the advance query), `GainMapInfo::bit_depth`,
+  and the decode-side `GainMapRender` intent + `reconstructs_hdr` capability. The
+  existing decoded types are the input contract; the "mirror" type in §Layering
+  was not needed.
+- **Phases 2–4 — demand-gated, not started.** Per the 2026-06-11 scope audit
+  (gainmap-spec-status `REVIEW-2026-06-11-forever-api.md` §7b): additive public
+  surface on a 0.1.x crate is forever-maintenance, so per-codec `with_gain_map_*`
+  implementations, `encode_hdr` + the emit policy, and the `Components →
+  with_gain_map_pixels` transcode wait for a named consumer (imageflow /
+  photo-dam wanting UltraHDR output, or a real transcode-preservation request).
+  When one materialises, Phase 4's layer-transit passthrough is the demand-backed
+  core; Phase 3 needs its own justification. No codec implements
+  `with_gain_map_pixels` today (zencodecs still carries per-codec
+  `encode_with_precomputed_gainmap` glue that should sink into the adapters once
+  they do). zenavif/zenjxl decode-side `GainMapRender` wiring also waits — neither
+  declares the caps, so no capability dishonesty exists.
+- **Type-design input for when Phase 1 is revisited:** gain maps are no longer the
+  only adaptation payload (SMPTE ST 2094-50 "AGTM" tone-curve sets ship
+  experimentally in Skia/Chromium); any gain-map input/intent vocabulary should
+  be `#[non_exhaustive]` with semantic names. The Phase 2 test matrix must include
+  3-channel gain maps, backward-direction files (HDR base + SDR gain map), and
+  application-colour-space round-trip.
+
 ---
 
 ## HDR delivery in 2026: native vs gain map (what's typical)

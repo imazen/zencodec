@@ -20,6 +20,18 @@ All notable changes to zencodec are documented here. Sections below the
 - The `reference` codec now attaches a class-gated context on every path
   (`reference::class_gated_context` is the runnable form of the convention's
   ranked rules) and the ICC fixture carries a real `RGB ` device class.
+- **`check_native_hdr_roundtrip`** (in `check_all`) — Phase 0 of the gain-map /
+  HDR delivery scope (`docs/gainmap-pipeline-scope-2026-06-08.md`): when both
+  ends declare `hdr`, BT.2100 PQ and HLG must survive a `PreserveExact` round
+  trip — the CICP (where both ends declare the channel), `content_light_level`
+  exactly, `mastering_display` within container fixed-point precision, 16-bit
+  pixels where both ends declare `native_16bit`, and a decoded descriptor
+  labelled `Pq`/`Hlg` (equal to `RGB16_BT2100_PQ`/`_HLG` on the 16-bit path)
+  rather than sRGB. Skipped for SDR-only codecs (#24).
+- The `reference` codec declares `hdr` + `native_16bit` on both ends: its wire
+  format carries CLLI (`flags` bit 4) and MDCV (bit 5) and RGB16/RGBA16 samples
+  (`bpp` 6/8), and the decoded descriptor is stamped from the file's CICP
+  transfer/primaries.
 
 ### [0.1.0] - 2026-07-14
 

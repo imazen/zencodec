@@ -12,15 +12,21 @@
 //! width   : u32
 //! height  : u32
 //! frames  : u32     frame count (>= 1)
-//! bpp     : u8      3 = RGB8, 4 = RGBA8
+//! bpp     : u8      3 = RGB8, 4 = RGBA8, 6 = RGB16, 8 = RGBA16
 //! orient  : u8      EXIF orientation 1..=8
-//! flags   : u8      bit0 icc, bit1 exif, bit2 xmp, bit3 cicp
+//! flags   : u8      bit0 icc, bit1 exif, bit2 xmp, bit3 cicp, bit4 clli, bit5 mdcv
 //! [icc ]  : u32 len + bytes
 //! [exif]  : u32 len + bytes
 //! [xmp ]  : u32 len + bytes
 //! [cicp]  : cp:u8 tc:u8 mc:u8 range:u8
+//! [clli]  : max_cll:u16 max_fall:u16
+//! [mdcv]  : 10 × f32 (rx ry gx gy bx by wx wy max_lum min_lum)
 //! per frame: duration:u32 + pixels (width*height*bpp)
 //! ```
+//!
+//! The decoded descriptor is stamped from the CICP transfer/primaries when
+//! present (a PQ file decodes to a PQ-labelled buffer, never an sRGB-labelled
+//! one) — the "descriptor describes the current pixels" rule.
 
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -35,11 +41,13 @@ use zencodec::encode::{
     AnimationFrameEncoder, EncodeCapabilities, EncodeJob, EncodeOutput, Encoder, EncoderConfig,
 };
 use zencodec::{
-    AnimationFrame, CategorizedError, Cicp, CodecError, CodecIoKind, ErrorCategory, ImageFormat,
-    ImageInfo, ImageSequence, Metadata, Orientation, ResourceLimits, StopToken,
-    UnsupportedOperation,
+    AnimationFrame, CategorizedError, Cicp, CodecError, CodecIoKind, ContentLightLevel,
+    ErrorCategory, ImageFormat, ImageInfo, ImageSequence, MasteringDisplay, Metadata, Orientation,
+    ResourceLimits, StopToken, UnsupportedOperation,
 };
-use zenpixels::{ColorContext, ColorModel, PixelBuffer, PixelDescriptor, PixelSlice};
+use zenpixels::{
+    ColorContext, ColorModel, PixelBuffer, PixelDescriptor, PixelSlice, TransferFunction,
+};
 
 // ===========================================================================
 // Error
@@ -119,7 +127,7 @@ impl From<zencodec::LimitExceeded> for RefError {
 }
 
 /// The one-impl bridge a codec adds to return the shared envelope as
-/// `At<CodecError>` (the [`minimal`](crate::minimal) codec does this; the
+/// `At<CodecError>` (the internal `minimal` codec does this; the
 /// [`reference`](crate::reference) keeps the simpler `type Error = RefError`).
 ///
 /// `.start_at()` begins the location trace; `CodecError::of` then takes that
@@ -137,7 +145,7 @@ impl From<RefError> for At<CodecError> {
 }
 
 /// Codec name the envelope reports (via [`RefError`]'s `codec_name`). The only
-/// consumer of the bridge is the [`minimal`](crate::minimal) codec (the
+/// consumer of the bridge is the internal `minimal` codec (the
 /// `reference` returns `RefError` directly), so it names that codec.
 pub(crate) const MINIMAL_CODEC_NAME: &str = "zencodec-testkit/minimal";
 
@@ -151,8 +159,27 @@ pub(crate) fn descriptor_for_bpp(bpp: u8) -> Result<PixelDescriptor, RefError> {
     match bpp {
         3 => Ok(PixelDescriptor::RGB8_SRGB),
         4 => Ok(PixelDescriptor::RGBA8_SRGB),
+        6 => Ok(PixelDescriptor::RGB16_SRGB),
+        8 => Ok(PixelDescriptor::RGBA16_SRGB),
         b => Err(RefError::Invalid(format!("unsupported bpp {b}"))),
     }
+}
+
+/// The output descriptor for a parsed header: the layout from `bpp`, with the
+/// transfer function and primaries stamped from the file's CICP when it has
+/// one. This is what makes a PQ/HLG file decode to a PQ/HLG-labelled buffer.
+pub(crate) fn descriptor_for_header(h: &Header) -> Result<PixelDescriptor, RefError> {
+    let base = descriptor_for_bpp(h.bpp)?;
+    Ok(match h.meta.cicp {
+        Some(c) => {
+            let with_transfer = match TransferFunction::from_cicp(c.transfer_characteristics) {
+                Some(t) => base.with_transfer(t),
+                None => base,
+            };
+            with_transfer.with_primaries(c.color_primaries_enum())
+        }
+        None => base,
+    })
 }
 
 /// Parsed header plus the byte offset where frame data starts.
@@ -196,6 +223,12 @@ fn write_header(out: &mut Vec<u8>, w: u32, h: u32, frames: u32, bpp: u8, meta: &
     if meta.cicp.is_some() {
         flags |= 8;
     }
+    if meta.content_light_level.is_some() {
+        flags |= 16;
+    }
+    if meta.mastering_display.is_some() {
+        flags |= 32;
+    }
     out.push(flags);
 
     if let Some(icc) = &meta.icc_profile {
@@ -216,6 +249,26 @@ fn write_header(out: &mut Vec<u8>, w: u32, h: u32, frames: u32, bpp: u8, meta: &
         out.push(c.matrix_coefficients);
         out.push(c.full_range as u8);
     }
+    if let Some(cll) = &meta.content_light_level {
+        out.extend_from_slice(&cll.max_content_light_level.to_le_bytes());
+        out.extend_from_slice(&cll.max_frame_average_light_level.to_le_bytes());
+    }
+    if let Some(md) = &meta.mastering_display {
+        for xy in md.primaries_xy {
+            out.extend_from_slice(&xy[0].to_le_bytes());
+            out.extend_from_slice(&xy[1].to_le_bytes());
+        }
+        out.extend_from_slice(&md.white_point_xy[0].to_le_bytes());
+        out.extend_from_slice(&md.white_point_xy[1].to_le_bytes());
+        out.extend_from_slice(&md.max_luminance.to_le_bytes());
+        out.extend_from_slice(&md.min_luminance.to_le_bytes());
+    }
+}
+
+fn read_f32(data: &[u8], at: usize) -> Result<f32, RefError> {
+    data.get(at..at + 4)
+        .map(|s| f32::from_le_bytes(s.try_into().unwrap()))
+        .ok_or_else(|| RefError::Invalid("truncated f32".into()))
 }
 
 pub(crate) fn parse_header(data: &[u8]) -> Result<Header, RefError> {
@@ -266,6 +319,29 @@ pub(crate) fn parse_header(data: &[u8]) -> Result<Header, RefError> {
         meta = meta.with_cicp(Cicp::new(c[0], c[1], c[2], c[3] != 0));
         at += 4;
     }
+    if flags & 16 != 0 {
+        let c = data
+            .get(at..at + 4)
+            .ok_or_else(|| RefError::Invalid("truncated clli".into()))?;
+        meta = meta.with_content_light_level(ContentLightLevel::new(
+            u16::from_le_bytes([c[0], c[1]]),
+            u16::from_le_bytes([c[2], c[3]]),
+        ));
+        at += 4;
+    }
+    if flags & 32 != 0 {
+        let mut f = [0f32; 10];
+        for (i, v) in f.iter_mut().enumerate() {
+            *v = read_f32(data, at + i * 4)?;
+        }
+        at += 40;
+        meta = meta.with_mastering_display(MasteringDisplay::new(
+            [[f[0], f[1]], [f[2], f[3]], [f[4], f[5]]],
+            [f[6], f[7]],
+            f[8],
+            f[9],
+        ));
+    }
 
     Ok(Header {
         width,
@@ -301,6 +377,12 @@ pub(crate) fn build_info(h: &Header) -> ImageInfo {
     }
     if let Some(c) = h.meta.cicp {
         info = info.with_cicp(c);
+    }
+    if let Some(cll) = h.meta.content_light_level {
+        info = info.with_content_light_level(cll);
+    }
+    if let Some(md) = h.meta.mastering_display {
+        info = info.with_mastering_display(md);
     }
     if h.frame_count > 1 {
         info = info.with_sequence(ImageSequence::Animation {
@@ -377,6 +459,8 @@ pub(crate) fn encode_single(pixels: PixelSlice<'_>, meta: &Metadata) -> Vec<u8> 
 static ENCODE_CAPS: EncodeCapabilities = EncodeCapabilities::new()
     .with_lossless(true)
     .with_native_alpha(true)
+    .with_native_16bit(true)
+    .with_hdr(true) // PQ/HLG CICP + CLLI/MDCV round-trip (check_native_hdr_roundtrip)
     .with_animation(true)
     .with_push_rows(true)
     .with_encode_from(false) // reference declines the pull path (see encoder)
@@ -389,7 +473,20 @@ static DECODE_CAPS: DecodeCapabilities = DecodeCapabilities::new()
     .with_cheap_probe(true)
     .with_animation(true)
     .with_streaming(true)
-    .with_native_alpha(true);
+    .with_native_alpha(true)
+    .with_native_16bit(true)
+    .with_hdr(true);
+
+/// Every layout the reference stores raw: 8- and 16-bit RGB/RGBA, with the
+/// 16-bit HDR-labelled variants listed so a PQ/HLG caller negotiates natively.
+static DESCRIPTORS: [PixelDescriptor; 6] = [
+    PixelDescriptor::RGB8_SRGB,
+    PixelDescriptor::RGBA8_SRGB,
+    PixelDescriptor::RGB16_SRGB,
+    PixelDescriptor::RGBA16_SRGB,
+    PixelDescriptor::RGB16_BT2100_PQ,
+    PixelDescriptor::RGB16_BT2100_HLG,
+];
 
 // ===========================================================================
 // Encode: Config -> Job -> Encoder / AnimationFrameEncoder
@@ -416,7 +513,7 @@ impl EncoderConfig for ReferenceEncoderConfig {
         ImageFormat::Pnm
     }
     fn supported_descriptors() -> &'static [PixelDescriptor] {
-        &[PixelDescriptor::RGB8_SRGB, PixelDescriptor::RGBA8_SRGB]
+        &DESCRIPTORS
     }
     fn capabilities() -> &'static EncodeCapabilities {
         &ENCODE_CAPS
@@ -611,7 +708,7 @@ impl DecoderConfig for ReferenceDecoderConfig {
         &[ImageFormat::Pnm]
     }
     fn supported_descriptors() -> &'static [PixelDescriptor] {
-        &[PixelDescriptor::RGB8_SRGB, PixelDescriptor::RGBA8_SRGB]
+        &DESCRIPTORS
     }
     fn capabilities() -> &'static DecodeCapabilities {
         &DECODE_CAPS
@@ -646,7 +743,7 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
         Ok(OutputInfo::full_decode(
             h.width,
             h.height,
-            descriptor_for_bpp(h.bpp)?,
+            descriptor_for_header(&h)?,
         ))
     }
 
@@ -675,13 +772,15 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
     ) -> Result<RefStreamDec<'a>, RefError> {
         let h = parse_header(&data)?;
         let info = build_info(&h);
-        let ctx = class_gated_context(&info.source_color, descriptor_for_bpp(h.bpp)?.color_model());
+        let desc = descriptor_for_header(&h)?;
+        let ctx = class_gated_context(&info.source_color, desc.color_model());
         Ok(RefStreamDec {
             data,
             info,
             width: h.width,
             height: h.height,
             bpp: h.bpp,
+            desc,
             pixels_offset: frame_pixels_offset(&h, 0),
             next_row: 0,
             ctx,
@@ -695,7 +794,8 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
     ) -> Result<RefAnimDec, RefError> {
         let h = parse_header(&data)?;
         let info = build_info(&h);
-        let ctx = class_gated_context(&info.source_color, descriptor_for_bpp(h.bpp)?.color_model());
+        let desc = descriptor_for_header(&h)?;
+        let ctx = class_gated_context(&info.source_color, desc.color_model());
         Ok(RefAnimDec {
             data: data.into_owned(),
             info,
@@ -703,6 +803,7 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
             height: h.height,
             frame_count: h.frame_count,
             bpp: h.bpp,
+            desc,
             frames_offset: h.frames_offset,
             next_frame: 0,
             ctx,
@@ -721,7 +822,7 @@ impl Decode for RefDec<'_> {
 
     fn decode(self) -> Result<DecodeOutput, RefError> {
         let h = parse_header(&self.data)?;
-        let desc = descriptor_for_bpp(h.bpp)?;
+        let desc = descriptor_for_header(&h)?;
         let start = frame_pixels_offset(&h, 0);
         let len = frame_pixel_len(&h);
         let pixels = self
@@ -746,6 +847,7 @@ pub struct RefStreamDec<'a> {
     width: u32,
     height: u32,
     bpp: u8,
+    desc: PixelDescriptor,
     pixels_offset: usize,
     next_row: u32,
     /// Computed once; re-applied to every emitted strip (strips are fresh
@@ -768,8 +870,7 @@ impl StreamingDecode for RefStreamDec<'_> {
             .data
             .get(off..off + span)
             .ok_or_else(|| RefError::Invalid("truncated strip".into()))?;
-        let desc = descriptor_for_bpp(self.bpp)?;
-        let mut ps = PixelSlice::new(bytes, self.width, strip, row_bytes, desc)
+        let mut ps = PixelSlice::new(bytes, self.width, strip, row_bytes, self.desc)
             .map_err(|e| RefError::Invalid(format!("slice: {e}")))?;
         if let Some(ctx) = &self.ctx {
             ps = ps.with_color_context(ctx.clone());
@@ -792,6 +893,7 @@ pub struct RefAnimDec {
     height: u32,
     frame_count: u32,
     bpp: u8,
+    desc: PixelDescriptor,
     frames_offset: usize,
     next_frame: u32,
     /// Re-applied to every yielded frame slice (same reason as the streaming
@@ -836,8 +938,7 @@ impl AnimationFrameDecoder for RefAnimDec {
             .data
             .get(start..start + span)
             .ok_or_else(|| RefError::Invalid("truncated frame".into()))?;
-        let desc = descriptor_for_bpp(self.bpp)?;
-        let mut ps = PixelSlice::new(bytes, self.width, self.height, row_bytes, desc)
+        let mut ps = PixelSlice::new(bytes, self.width, self.height, row_bytes, self.desc)
             .map_err(|e| RefError::Invalid(format!("frame slice: {e}")))?;
         if let Some(ctx) = &self.ctx {
             ps = ps.with_color_context(ctx.clone());

@@ -39,6 +39,13 @@ expensive to ship wrong:
   paths — strip/scratch buffers are where a context silently dies.
   `check_color_context_attached` (opt-in) is the strict positive direction for
   codecs that have adopted the convention.
+- **Native HDR.** When both ends declare `hdr`, `check_native_hdr_roundtrip`
+  proves BT.2100 PQ and HLG survive a `PreserveExact` round trip: the CICP, the
+  HDR envelope (content light level + mastering display, within container
+  fixed-point precision), 16-bit pixels where both ends are natively 16-bit, and
+  a decoded buffer *labelled* PQ/HLG rather than sRGB. Phase 0 of the
+  gain-map/HDR delivery scope — prove native HDR before adding any gain-map
+  encode surface.
 - **Error classification.** `check_decode_truncation_series` feeds a
   deterministic series of truncated prefixes of a known-good image and requires
   every failure to classify as *incomplete input* (never `Internal`, OOM, or an
