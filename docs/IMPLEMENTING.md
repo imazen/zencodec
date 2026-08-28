@@ -116,6 +116,32 @@ impl EncoderConfig for MyEncoderConfig {
 
 The `with_*` / getter pairs follow a pattern: if your codec doesn't support a knob (e.g., effort), don't override the defaults. The getter returns `None`, telling callers the codec ignored the setting.
 
+#### Fidelity: honour what you can, report what you did
+
+`with_fidelity(Fidelity)` is the cross-codec entry point for "how lossy"
+(`Lossless`, or `Lossy(LossyTarget)` — a codec-scale quality, or an
+SSIMULACRA2 / butteraugli / zensim target). It is infallible and best-effort;
+the contract lives entirely in `resolved_target_fidelity()`, which must tell
+the truth. The defaults bridge to `with_lossless` / `with_generic_quality`
+and derive the report from `is_lossless()` / `generic_quality()`, so a codec
+that only implements the legacy knobs already behaves. Override both when you
+honour a target natively (JPEG's `ApproxSsim2` picker, JXL distance) or when
+the bridge would misreport. The rules `check_fidelity_honesty` enforces:
+
+| you declare | `Lossless` request | any `Lossy(_)` request |
+|---|---|---|
+| `lossless` | resolves `Some(Lossless)`; decoded pixels byte-exact | — |
+| no `lossless` | must not resolve `Some(Lossless)` | — |
+| `lossy` | — | never resolves `Lossless`; with a `quality_range`, resolves `Some(Lossy(_))` (the target you mapped it to), not `None` |
+| no `lossy` | — | **promote and say so**: resolve `Some(Lossless)` (or `None` if you have no fidelity control at all) — never `Some(Lossy(_))` |
+
+Whatever you report as `Lossless` must decode exactly, and when both are
+`Some`, `is_lossless()` must agree with `resolved_target_fidelity()`. A
+lossless-only codec (the testkit `reference`) returns `Some(true)` from
+`is_lossless()` unconditionally, so a `Lossy` request promotes through the
+default bridge. A butteraugli *distance* has no honest codec-agnostic 0–100
+mapping — if you cannot honour it, report the target you actually used.
+
 ### Step 2: EncodeJob
 
 ```rust
@@ -673,6 +699,7 @@ Before calling your implementation complete:
 - [ ] `EncoderConfig` and `DecoderConfig` are `Clone + Send + Sync`
 - [ ] Error type implements `From<UnsupportedOperation>`
 - [ ] Capabilities accurately reflect what you support
+- [ ] `resolved_target_fidelity()` reports honestly (promote → say `Lossless`; never claim a mode you don't declare)
 - [ ] `supported_descriptors()` lists every format you handle without lossy conversion
 - [ ] Unsupported paths return the correct `UnsupportedOperation` variant
 - [ ] `probe()` only reads headers (mark `with_cheap_probe(true)` if so)

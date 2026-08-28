@@ -31,6 +31,11 @@
 //!   (content light level + mastering display), 16-bit pixels where both ends
 //!   are natively 16-bit, and the decoded buffer is *labelled* PQ/HLG rather
 //!   than sRGB. Phase 0 of the gain-map/HDR delivery scope.
+//! - [`check_fidelity_honesty`] — `resolved_target_fidelity()` tells the truth:
+//!   a declared `lossless` honours a `Lossless` request byte-exactly, a codec
+//!   without `lossy` never reports `Lossy` (it promotes and says so), a codec
+//!   with `lossy` never answers a lossy request with `Lossless`, and the legacy
+//!   `is_lossless()` agrees. The cross-codec `Fidelity` contract.
 //! - [`check_capability_honesty`] — every declared capability works and every
 //!   undeclared optional path cleanly returns
 //!   [`UnsupportedOperation`](zencodec::UnsupportedOperation). Both directions for
@@ -71,7 +76,7 @@ use zencodec::decode::{
     AnimationFrameDecoder, Decode, DecodeJob, DecodeOutput, DecodeRowSink, DecoderConfig,
     DynDecoderConfig, SinkError, StreamingDecode,
 };
-use zencodec::encode::{AnimationFrameEncoder, EncodeJob, Encoder, EncoderConfig};
+use zencodec::encode::{AnimationFrameEncoder, EncodeJob, Encoder, EncoderConfig, Fidelity};
 use zencodec::exif::Exif;
 use zencodec::{
     Cicp, CodecError, ColorAuthority, ContentLightLevel, ErrorCategory, ImageFormat,
@@ -1887,6 +1892,138 @@ where
 }
 
 // ===========================================================================
+// Fidelity honesty (issue #26 — the per-codec `Fidelity` contract)
+// ===========================================================================
+
+/// The resolved [`Fidelity`] report is honest against the declared capabilities
+/// and against the pixels that actually come back.
+///
+/// [`with_fidelity`](EncoderConfig::with_fidelity) is best-effort and
+/// infallible, so the whole cross-codec contract rests on
+/// [`resolved_target_fidelity`](EncoderConfig::resolved_target_fidelity) telling
+/// the truth. For each request — `Lossless`, then every [`LossyTarget`] arm
+/// (`CodecSpecificQuality` at the middle of the declared `quality_range`,
+/// `ApproxSsim2`, `ApproxButteraugli`, `ApproxZensimB`), each applied on top of a
+/// prior `Lossless` request so a stale setting cannot leak through — the
+/// check asserts:
+///
+/// - **`lossless` declared** ⇒ a `Lossless` request resolves to
+///   `Some(Lossless)` **and** the decoded pixels are byte-identical to the
+///   input. Undeclared ⇒ it must not resolve to `Some(Lossless)` (a codec
+///   cannot claim a mode it does not declare).
+/// - **`lossy` declared** ⇒ a lossy request never resolves to `Lossless` (a
+///   codec with a lossy mode must use it when asked), and — when it also
+///   declares a `quality_range` — resolves to `Some(Lossy(_))` rather than
+///   `None`. Undeclared ⇒ it must not resolve to `Some(Lossy(_))`: the honest
+///   outcomes are promotion to `Some(Lossless)` (as the
+///   [`reference`](mod@reference) codec does) or `None`.
+/// - Every request still encodes and decodes, and whenever the codec *reports*
+///   `Lossless` the pixels are exact — whatever was asked for.
+/// - The legacy getter agrees: when both `is_lossless()` and the resolved
+///   fidelity are `Some`, `is_lossless()` equals `resolved.is_lossless()`.
+///
+/// All violations are collected and reported together. Not covered: whether a
+/// metric target was *hit* (needs the metric), and the deferred
+/// `LosslessMode`/near-lossless arm (not in the shipped enum).
+pub fn check_fidelity_honesty<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
+where
+    E: EncoderConfig,
+    D: DecoderConfig,
+    <E::Job as EncodeJob>::Enc: Encoder<Error = E::Error>,
+{
+    const CHECK: &str = "fidelity_honesty";
+    let ec = E::capabilities();
+    let mut v: Vec<String> = Vec::new();
+
+    // Round-trip a configured encoder; on success, report whether the pixels
+    // came back exact.
+    let exact = |cfg: &E| -> Result<bool, String> {
+        let bytes = enc_oneshot(cfg, img, Metadata::none(), MetadataPolicy::PreserveExact)?;
+        let (px, _) = dec_oneshot(&dec, &bytes)?;
+        Ok(px == img.pixels())
+    };
+    let legacy_agrees = |name: &str, cfg: &E, resolved: Option<Fidelity>, v: &mut Vec<String>| {
+        if let (Some(legacy), Some(f)) = (cfg.is_lossless(), resolved)
+            && legacy != f.is_lossless()
+        {
+            v.push(format!(
+                "{name}: is_lossless() = Some({legacy}) disagrees with resolved_target_fidelity() = {f:?}"
+            ));
+        }
+    };
+
+    // --- Lossless ---
+    let ll = enc.clone().with_fidelity(Fidelity::Lossless);
+    let r = ll.resolved_target_fidelity();
+    if ec.lossless() {
+        if r != Some(Fidelity::Lossless) {
+            v.push(format!(
+                "Lossless: `lossless` is declared, but the request resolved to {r:?} (expected Some(Lossless))"
+            ));
+        }
+    } else if r == Some(Fidelity::Lossless) {
+        v.push(
+            "Lossless: `lossless` is NOT declared, yet the request resolved to Some(Lossless)"
+                .into(),
+        );
+    }
+    legacy_agrees("Lossless", &ll, r, &mut v);
+    match exact(&ll) {
+        Err(e) => v.push(format!("Lossless: round trip failed: {e}")),
+        Ok(false) if r == Some(Fidelity::Lossless) => v.push(
+            "Lossless: resolved to Lossless but the decoded pixels differ from the input".into(),
+        ),
+        Ok(_) => {}
+    }
+
+    // --- every lossy arm, applied after a Lossless request (last write wins) ---
+    let q = ec.quality_range().map_or(75.0, |[lo, hi]| (lo + hi) / 2.0);
+    let requests = [
+        ("Lossy(CodecSpecificQuality)", Fidelity::codec_quality(q)),
+        ("Lossy(ApproxSsim2)", Fidelity::ssim2(80.0)),
+        ("Lossy(ApproxButteraugli)", Fidelity::butteraugli(1.5)),
+        ("Lossy(ApproxZensimB)", Fidelity::zensim_b(80.0)),
+    ];
+    for (name, req) in requests {
+        let cfg = enc
+            .clone()
+            .with_fidelity(Fidelity::Lossless)
+            .with_fidelity(req);
+        let r = cfg.resolved_target_fidelity();
+        if ec.lossy() {
+            match r {
+                Some(Fidelity::Lossy(_)) => {}
+                Some(Fidelity::Lossless) => v.push(format!(
+                    "{name}: `lossy` is declared, but the request resolved to Lossless (a prior Lossless request leaked, or lossy is not honored)"
+                )),
+                None if ec.quality_range().is_some() => v.push(format!(
+                    "{name}: `lossy` + a quality_range are declared, but the request resolved to None (report the target it mapped to)"
+                )),
+                _ => {}
+            }
+        } else if let Some(Fidelity::Lossy(t)) = r {
+            v.push(format!(
+                "{name}: `lossy` is NOT declared, yet the request resolved to Lossy({t:?}) — promote to Lossless (and report it) or report None"
+            ));
+        }
+        legacy_agrees(name, &cfg, r, &mut v);
+        match exact(&cfg) {
+            Err(e) => v.push(format!("{name}: round trip failed: {e}")),
+            Ok(false) if r == Some(Fidelity::Lossless) => v.push(format!(
+                "{name}: resolved to Lossless but the decoded pixels differ from the input"
+            )),
+            Ok(_) => {}
+        }
+    }
+
+    if v.is_empty() {
+        Ok(())
+    } else {
+        Err(fail(CHECK, v.join("; ")))
+    }
+}
+
+// ===========================================================================
 // Error-envelope conformance (the `At<CodecError>` Pattern-B contract)
 // ===========================================================================
 
@@ -2172,6 +2309,7 @@ where
     check_orientation_roundtrip(enc.clone(), dec.clone(), &img)?;
     check_metadata_no_leak(enc.clone(), dec.clone(), &img)?;
     check_capability_honesty(enc.clone(), dec.clone(), &img)?;
+    check_fidelity_honesty(enc.clone(), dec.clone(), &img)?;
     check_color_context_consistency(enc.clone(), dec.clone(), &img)?;
     check_color_authority_spec(enc.clone(), dec.clone(), &img)?;
     check_native_hdr_roundtrip(enc.clone(), dec.clone())?;
@@ -2356,6 +2494,35 @@ mod tests {
             &TestImage::rgba8_gradient(12, 9),
         )
         .unwrap();
+    }
+
+    /// A lossless-only codec: `Lossless` is exact, every lossy arm promotes to
+    /// `Lossless` and reports it, and the legacy getter agrees.
+    #[test]
+    fn reference_fidelity_honesty() {
+        let (e, d) = ref_codecs();
+        check_fidelity_honesty(e, d, &TestImage::rgba8_gradient(12, 9)).unwrap();
+        let cfg = ReferenceEncoderConfig::new().with_fidelity(Fidelity::ssim2(70.0));
+        assert_eq!(cfg.resolved_target_fidelity(), Some(Fidelity::Lossless));
+        assert_eq!(cfg.is_lossless(), Some(true));
+    }
+
+    /// No `lossless`, no `lossy`, no quality dial: every request resolves to
+    /// `None` and the pixels still round-trip.
+    #[test]
+    fn minimal_fidelity_honesty() {
+        check_fidelity_honesty(
+            MinimalEncoderConfig::new(),
+            MinimalDecoderConfig::new(),
+            &TestImage::rgba8_gradient(12, 9),
+        )
+        .unwrap();
+        assert_eq!(
+            MinimalEncoderConfig::new()
+                .with_fidelity(Fidelity::Lossless)
+                .resolved_target_fidelity(),
+            None
+        );
     }
 
     #[test]

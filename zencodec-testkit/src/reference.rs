@@ -494,9 +494,7 @@ static DESCRIPTORS: [PixelDescriptor; 6] = [
 
 /// Reference encoder configuration. Accepts RGB8 and RGBA8.
 #[derive(Clone, Debug, Default)]
-pub struct ReferenceEncoderConfig {
-    lossless: Option<bool>,
-}
+pub struct ReferenceEncoderConfig {}
 
 impl ReferenceEncoderConfig {
     /// Construct a fresh config.
@@ -518,14 +516,19 @@ impl EncoderConfig for ReferenceEncoderConfig {
     fn capabilities() -> &'static EncodeCapabilities {
         &ENCODE_CAPS
     }
-    // The reference is always lossless; it records the request so `is_lossless()`
-    // honors the declared `lossless` capability (output is raw either way).
-    fn with_lossless(mut self, lossless: bool) -> Self {
-        self.lossless = Some(lossless);
+    // The reference stores raw pixels, so it is lossless whatever was asked
+    // for: `is_lossless()` is `Some(true)` unconditionally, and a `Lossy`
+    // fidelity request resolves — honestly — to `Fidelity::Lossless` through
+    // the trait's default `resolved_target_fidelity`. This is the exemplar of
+    // the "promote and report" rule for a codec with no lossy mode
+    // (`check_fidelity_honesty`); a no-op `with_lossless` that left
+    // `is_lossless()` at `None` would deny the declared `lossless` capability,
+    // and recording `Some(false)` would claim a lossy mode it does not have.
+    fn with_lossless(self, _lossless: bool) -> Self {
         self
     }
     fn is_lossless(&self) -> Option<bool> {
-        self.lossless
+        Some(true)
     }
     fn job(self) -> RefEncodeJob {
         RefEncodeJob {

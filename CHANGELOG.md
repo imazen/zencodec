@@ -8,6 +8,17 @@ All notable changes to zencodec are documented here. Sections below the
 ### [Unreleased]
 
 #### Added
+- **`check_fidelity_honesty`** (in `check_all`) — the per-codec `Fidelity`
+  contract: a declared `lossless` honours a `Lossless` request with
+  `Some(Lossless)` and byte-exact pixels; a codec without `lossy` never reports
+  `Lossy` (it promotes to `Lossless` and says so, or reports `None`); a codec
+  with `lossy` never answers a lossy request with `Lossless` (and, with a
+  `quality_range`, reports the `Lossy` target it mapped to); anything reported
+  `Lossless` decodes exactly; `is_lossless()` agrees with the resolved report.
+  Every `LossyTarget` arm is exercised on top of a prior `Lossless` request.
+  The `reference` codec is now unconditionally lossless (`is_lossless()` =
+  `Some(true)`, so a `Lossy` request promotes through the default bridge) —
+  the exemplar of the promote-and-report rule (#26).
 - **`check_color_authority_spec`** (in `check_all`) — the `ColorAuthority` a
   decoder names in `ImageInfo.source_color` must be the one its format's spec
   assigns for the colour fields it read back, on every metadata mix the encoder
@@ -109,6 +120,10 @@ removes that whole class).
   rather than inspecting raw CICP/ICC fields.
 
 ### Added
+- Docs: `docs/IMPLEMENTING.md` "Fidelity: honour what you can, report what you
+  did" — the `with_fidelity` / `resolved_target_fidelity` contract per declared
+  capability (the table `check_fidelity_honesty` enforces) + a checklist entry
+  (#26).
 - Docs: `ImageInfo::is_progressive` now has a definition (a *refinement* order —
   a coarse whole image renderable before the last byte — never a spatial
   partition) and a per-format table settling the open design call from the
