@@ -14,19 +14,30 @@
 //! frames  : u32     frame count (>= 1)
 //! bpp     : u8      3 = RGB8, 4 = RGBA8, 6 = RGB16, 8 = RGBA16
 //! orient  : u8      EXIF orientation 1..=8
-//! flags   : u8      bit0 icc, bit1 exif, bit2 xmp, bit3 cicp, bit4 clli, bit5 mdcv
+//! flags   : u8      bit0 icc, bit1 exif, bit2 xmp, bit3 cicp, bit4 clli, bit5 mdcv, bit6 gain map
 //! [icc ]  : u32 len + bytes
 //! [exif]  : u32 len + bytes
 //! [xmp ]  : u32 len + bytes
 //! [cicp]  : cp:u8 tc:u8 mc:u8 range:u8
 //! [clli]  : max_cll:u16 max_fall:u16
 //! [mdcv]  : 10 × f32 (rx ry gx gy bx by wx wy max_lum min_lum)
+//! [gmap]  : w:u32 h:u32 channels:u8 (1 or 3) alt_cicp:u8 [cp tc mc range]
+//!           iso_len:u32 + ISO 21496-1 bytes (bare `JxlJhgm` payload)
+//!           pixels (w*h*channels, 8-bit)
 //! per frame: duration:u32 + pixels (width*height*bpp)
 //! ```
 //!
 //! The decoded descriptor is stamped from the CICP transfer/primaries when
 //! present (a PQ file decodes to a PQ-labelled buffer, never an sRGB-labelled
 //! one) — the "descriptor describes the current pixels" rule.
+//!
+//! The gain map is the worked example of the encode-side contract
+//! ([`EncodeJob::with_gain_map_pixels`] / [`with_gain_map_encoded`](EncodeJob::with_gain_map_encoded)):
+//! the job validates and stores it, the wire carries the pixels and the ISO
+//! 21496-1 metadata, and the decoder surfaces it as a [`DecodedGainMap`] only
+//! when asked ([`GainMapRender::Components`], or `ReconstructHdr` — which the
+//! reference cannot honour, so it falls back to surfacing the components, as
+//! the `reconstructs_hdr = false` contract says).
 
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -39,6 +50,10 @@ use zencodec::decode::{
 };
 use zencodec::encode::{
     AnimationFrameEncoder, EncodeCapabilities, EncodeJob, EncodeOutput, Encoder, EncoderConfig,
+};
+use zencodec::gainmap::{
+    DecodedGainMap, GainMapInfo, GainMapPresence, GainMapRender, GainMapSource, Iso21496Format,
+    parse_iso21496_fmt, serialize_iso21496_fmt,
 };
 use zencodec::{
     AnimationFrame, CategorizedError, Cicp, CodecError, CodecIoKind, ContentLightLevel,
@@ -182,6 +197,64 @@ pub(crate) fn descriptor_for_header(h: &Header) -> Result<PixelDescriptor, RefEr
     })
 }
 
+/// A gain map as the wire carries it: the ISO 21496-1 description plus the
+/// 8-bit pixel bytes (`width * height * channels`, tightly packed).
+#[derive(Clone, Debug)]
+pub(crate) struct GainMapWire {
+    pub(crate) info: GainMapInfo,
+    pub(crate) pixels: Vec<u8>,
+}
+
+impl GainMapWire {
+    /// The reference stores 8-bit gain maps with 1 (luminance) or 3
+    /// (per-channel) samples per pixel. Geometry and channel count come from
+    /// the pixels — the authoritative source on the decoded-pixel path — and
+    /// are stamped back into the metadata so the two can never disagree.
+    fn from_decoded(gm: DecodedGainMap) -> Result<Self, RefError> {
+        let ps = gm.pixels.as_slice();
+        let channels = gm.channels();
+        let bytes_per_sample = ps.descriptor().bytes_per_pixel() / channels.max(1) as usize;
+        if !matches!(channels, 1 | 3) || bytes_per_sample != 1 {
+            return Err(RefError::Invalid(format!(
+                "gain map must be 8-bit with 1 or 3 channels, got {:?}",
+                ps.descriptor()
+            )));
+        }
+        let mut pixels =
+            Vec::with_capacity(ps.width() as usize * ps.rows() as usize * channels as usize);
+        let rb = ps.width() as usize * channels as usize;
+        for y in 0..ps.rows() {
+            pixels.extend_from_slice(&ps.row(y)[..rb]);
+        }
+        let mut info = gm.metadata;
+        info.width = ps.width();
+        info.height = ps.rows();
+        info.channels = channels;
+        info.bit_depth = 8;
+        Ok(Self { info, pixels })
+    }
+
+    fn descriptor(&self) -> PixelDescriptor {
+        // Gain, not colour: the transfer is deliberately `Unknown`.
+        if self.info.channels == 1 {
+            PixelDescriptor::GRAY8
+        } else {
+            PixelDescriptor::RGB8
+        }
+    }
+
+    fn to_decoded(&self) -> Result<DecodedGainMap, RefError> {
+        let buf = PixelBuffer::from_vec(
+            self.pixels.clone(),
+            self.info.width,
+            self.info.height,
+            self.descriptor(),
+        )
+        .map_err(|e| RefError::Invalid(format!("gain map buffer: {e}")))?;
+        Ok(DecodedGainMap::new(buf, self.info.clone()))
+    }
+}
+
 /// Parsed header plus the byte offset where frame data starts.
 pub(crate) struct Header {
     pub(crate) width: u32,
@@ -189,6 +262,7 @@ pub(crate) struct Header {
     pub(crate) frame_count: u32,
     pub(crate) bpp: u8,
     pub(crate) meta: Metadata,
+    pub(crate) gain_map: Option<GainMapWire>,
     pub(crate) frames_offset: usize,
 }
 
@@ -202,7 +276,22 @@ fn read_u32(data: &[u8], at: usize) -> Result<u32, RefError> {
         .ok_or_else(|| RefError::Invalid("truncated u32".into()))
 }
 
-fn write_header(out: &mut Vec<u8>, w: u32, h: u32, frames: u32, bpp: u8, meta: &Metadata) {
+fn push_cicp(out: &mut Vec<u8>, c: &Cicp) {
+    out.push(c.color_primaries);
+    out.push(c.transfer_characteristics);
+    out.push(c.matrix_coefficients);
+    out.push(c.full_range as u8);
+}
+
+fn write_header(
+    out: &mut Vec<u8>,
+    w: u32,
+    h: u32,
+    frames: u32,
+    bpp: u8,
+    meta: &Metadata,
+    gain_map: Option<&GainMapWire>,
+) {
     out.extend_from_slice(MAGIC);
     push_u32(out, w);
     push_u32(out, h);
@@ -229,6 +318,9 @@ fn write_header(out: &mut Vec<u8>, w: u32, h: u32, frames: u32, bpp: u8, meta: &
     if meta.mastering_display.is_some() {
         flags |= 32;
     }
+    if gain_map.is_some() {
+        flags |= 64;
+    }
     out.push(flags);
 
     if let Some(icc) = &meta.icc_profile {
@@ -244,10 +336,7 @@ fn write_header(out: &mut Vec<u8>, w: u32, h: u32, frames: u32, bpp: u8, meta: &
         out.extend_from_slice(xmp);
     }
     if let Some(c) = &meta.cicp {
-        out.push(c.color_primaries);
-        out.push(c.transfer_characteristics);
-        out.push(c.matrix_coefficients);
-        out.push(c.full_range as u8);
+        push_cicp(out, c);
     }
     if let Some(cll) = &meta.content_light_level {
         out.extend_from_slice(&cll.max_content_light_level.to_le_bytes());
@@ -263,6 +352,29 @@ fn write_header(out: &mut Vec<u8>, w: u32, h: u32, frames: u32, bpp: u8, meta: &
         out.extend_from_slice(&md.max_luminance.to_le_bytes());
         out.extend_from_slice(&md.min_luminance.to_le_bytes());
     }
+    if let Some(gm) = gain_map {
+        push_u32(out, gm.info.width);
+        push_u32(out, gm.info.height);
+        out.push(gm.info.channels);
+        match &gm.info.alternate_cicp {
+            Some(c) => {
+                out.push(1);
+                push_cicp(out, c);
+            }
+            None => out.push(0),
+        }
+        let iso = serialize_iso21496_fmt(&gm.info.params, Iso21496Format::JxlJhgm);
+        push_u32(out, iso.len() as u32);
+        out.extend_from_slice(&iso);
+        out.extend_from_slice(&gm.pixels);
+    }
+}
+
+fn read_cicp(data: &[u8], at: usize) -> Result<Cicp, RefError> {
+    let c = data
+        .get(at..at + 4)
+        .ok_or_else(|| RefError::Invalid("truncated cicp".into()))?;
+    Ok(Cicp::new(c[0], c[1], c[2], c[3] != 0))
 }
 
 fn read_f32(data: &[u8], at: usize) -> Result<f32, RefError> {
@@ -313,10 +425,7 @@ pub(crate) fn parse_header(data: &[u8]) -> Result<Header, RefError> {
         meta = meta.with_xmp(read_blob(&mut at)?);
     }
     if flags & 8 != 0 {
-        let c = data
-            .get(at..at + 4)
-            .ok_or_else(|| RefError::Invalid("truncated cicp".into()))?;
-        meta = meta.with_cicp(Cicp::new(c[0], c[1], c[2], c[3] != 0));
+        meta = meta.with_cicp(read_cicp(data, at)?);
         at += 4;
     }
     if flags & 16 != 0 {
@@ -342,6 +451,43 @@ pub(crate) fn parse_header(data: &[u8]) -> Result<Header, RefError> {
             f[9],
         ));
     }
+    let gain_map = if flags & 64 != 0 {
+        let gw = read_u32(data, at)?;
+        let gh = read_u32(data, at + 4)?;
+        let channels = *data
+            .get(at + 8)
+            .ok_or_else(|| RefError::Invalid("truncated gain map".into()))?;
+        let has_alt = *data
+            .get(at + 9)
+            .ok_or_else(|| RefError::Invalid("truncated gain map".into()))?;
+        at += 10;
+        let alternate_cicp = if has_alt != 0 {
+            let c = read_cicp(data, at)?;
+            at += 4;
+            Some(c)
+        } else {
+            None
+        };
+        let iso = read_blob(&mut at)?;
+        let params = parse_iso21496_fmt(&iso, Iso21496Format::JxlJhgm)
+            .map_err(|e| RefError::Invalid(format!("gain map metadata: {e}")))?;
+        if !matches!(channels, 1 | 3) || gw == 0 || gh == 0 {
+            return Err(RefError::Invalid("bad gain map geometry".into()));
+        }
+        let len = gw as usize * gh as usize * channels as usize;
+        let pixels = data
+            .get(at..at + len)
+            .ok_or_else(|| RefError::Invalid("truncated gain map pixels".into()))?
+            .to_vec();
+        at += len;
+        let mut info = GainMapInfo::new(params, gw, gh, channels);
+        if let Some(c) = alternate_cicp {
+            info = info.with_alternate_cicp(c);
+        }
+        Some(GainMapWire { info, pixels })
+    } else {
+        None
+    };
 
     Ok(Header {
         width,
@@ -349,6 +495,7 @@ pub(crate) fn parse_header(data: &[u8]) -> Result<Header, RefError> {
         frame_count,
         bpp,
         meta,
+        gain_map,
         frames_offset: at,
     })
 }
@@ -384,6 +531,16 @@ pub(crate) fn build_info(h: &Header) -> ImageInfo {
     if let Some(md) = h.meta.mastering_display {
         info = info.with_mastering_display(md);
     }
+    // The header is the whole container, so presence is definitive either way.
+    info = match &h.gain_map {
+        Some(gm) => {
+            let mut supplements = info.supplements.clone();
+            supplements.gain_map = true;
+            info.with_supplements(supplements)
+                .with_gain_map(GainMapPresence::Available(Box::new(gm.info.clone())))
+        }
+        None => info.with_gain_map(GainMapPresence::Absent),
+    };
     if h.frame_count > 1 {
         info = info.with_sequence(ImageSequence::Animation {
             frame_count: Some(h.frame_count),
@@ -436,10 +593,22 @@ pub(crate) fn class_gated_context(
     Some(Arc::new(ctx))
 }
 
-pub(crate) fn encode_single(pixels: PixelSlice<'_>, meta: &Metadata) -> Vec<u8> {
+pub(crate) fn encode_single(
+    pixels: PixelSlice<'_>,
+    meta: &Metadata,
+    gain_map: Option<&GainMapWire>,
+) -> Vec<u8> {
     let bpp = pixels.descriptor().bytes_per_pixel() as u8;
     let mut out = Vec::new();
-    write_header(&mut out, pixels.width(), pixels.rows(), 1, bpp, meta);
+    write_header(
+        &mut out,
+        pixels.width(),
+        pixels.rows(),
+        1,
+        bpp,
+        meta,
+        gain_map,
+    );
     push_u32(&mut out, 0); // duration
     for y in 0..pixels.rows() {
         out.extend_from_slice(pixels.row(y));
@@ -461,6 +630,7 @@ static ENCODE_CAPS: EncodeCapabilities = EncodeCapabilities::new()
     .with_native_alpha(true)
     .with_native_16bit(true)
     .with_hdr(true) // PQ/HLG CICP + CLLI/MDCV round-trip (check_native_hdr_roundtrip)
+    .with_gain_map(true) // with_gain_map_pixels / _encoded (check_gain_map_roundtrip)
     .with_animation(true)
     .with_push_rows(true)
     .with_encode_from(false) // reference declines the pull path (see encoder)
@@ -475,7 +645,11 @@ static DECODE_CAPS: DecodeCapabilities = DecodeCapabilities::new()
     .with_streaming(true)
     .with_native_alpha(true)
     .with_native_16bit(true)
-    .with_hdr(true);
+    .with_hdr(true)
+    // Extracts / surfaces the gain map (`GainMapRender::Components`) but does
+    // NOT reconstruct HDR — zencodec carries no HDR math, so `reconstructs_hdr`
+    // stays false and a `ReconstructHdr` request falls back to `Components`.
+    .with_gain_map(true);
 
 /// Every layout the reference stores raw: 8- and 16-bit RGB/RGBA, with the
 /// 16-bit HDR-labelled variants listed so a PQ/HLG caller negotiates natively.
@@ -534,6 +708,7 @@ impl EncoderConfig for ReferenceEncoderConfig {
         RefEncodeJob {
             metadata: Metadata::none(),
             loop_count: None,
+            gain_map: None,
         }
     }
 }
@@ -542,6 +717,7 @@ impl EncoderConfig for ReferenceEncoderConfig {
 pub struct RefEncodeJob {
     metadata: Metadata,
     loop_count: Option<u32>,
+    gain_map: Option<GainMapWire>,
 }
 
 impl EncodeJob for RefEncodeJob {
@@ -564,9 +740,52 @@ impl EncodeJob for RefEncodeJob {
         self
     }
 
+    /// The pixel form: validate (8-bit, 1 or 3 channels) and store; a bad gain
+    /// map is the codec's own error, never a silent drop.
+    fn with_gain_map_pixels(mut self, gain_map: DecodedGainMap) -> Result<Self, RefError> {
+        self.gain_map = Some(GainMapWire::from_decoded(gain_map)?);
+        Ok(self)
+    }
+
+    /// The byte-carried form: only the reference's own format is accepted (a
+    /// single-frame RGB8 file of its own wire format — the reference has no
+    /// grayscale layout of its own, so a 1-channel map must come as pixels).
+    /// Any other `format` is the documented mismatch error: the caller decodes
+    /// to pixels and uses `with_gain_map_pixels`.
+    fn with_gain_map_encoded(mut self, gain_map: GainMapSource) -> Result<Self, RefError> {
+        if gain_map.format != ImageFormat::Pnm {
+            return Err(RefError::Invalid(format!(
+                "encoded gain map is {:?}, not the reference's own format — decode it and use \
+                 with_gain_map_pixels",
+                gain_map.format
+            )));
+        }
+        let h = parse_header(&gain_map.data)?;
+        if h.frame_count != 1 || h.bpp != 3 {
+            return Err(RefError::Invalid(
+                "encoded gain map must be a single-frame RGB8 reference image".into(),
+            ));
+        }
+        let start = frame_pixels_offset(&h, 0);
+        let len = frame_pixel_len(&h);
+        let pixels = gain_map
+            .data
+            .get(start..start + len)
+            .ok_or_else(|| RefError::Invalid("truncated gain map pixels".into()))?
+            .to_vec();
+        let mut info = gain_map.metadata;
+        info.width = h.width;
+        info.height = h.height;
+        info.channels = 3;
+        info.bit_depth = 8;
+        self.gain_map = Some(GainMapWire { info, pixels });
+        Ok(self)
+    }
+
     fn encoder(self) -> Result<RefEnc, RefError> {
         Ok(RefEnc {
             metadata: self.metadata,
+            gain_map: self.gain_map,
             accumulated: Vec::new(),
             width: None,
             rows: 0,
@@ -577,6 +796,7 @@ impl EncodeJob for RefEncodeJob {
     fn animation_frame_encoder(self) -> Result<RefAnimEnc, RefError> {
         Ok(RefAnimEnc {
             metadata: self.metadata,
+            gain_map: self.gain_map,
             frames: Vec::new(),
         })
     }
@@ -586,6 +806,7 @@ impl EncodeJob for RefEncodeJob {
 /// `push_rows` + `finish`; declines the pull path (`encode_from`).
 pub struct RefEnc {
     metadata: Metadata,
+    gain_map: Option<GainMapWire>,
     accumulated: Vec<u8>,
     width: Option<u32>,
     rows: u32,
@@ -605,7 +826,7 @@ impl Encoder for RefEnc {
 
     fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, RefError> {
         Ok(EncodeOutput::new(
-            encode_single(pixels, &self.metadata),
+            encode_single(pixels, &self.metadata, self.gain_map.as_ref()),
             ImageFormat::Pnm,
         ))
     }
@@ -630,7 +851,7 @@ impl Encoder for RefEnc {
         let buf = PixelBuffer::from_vec(self.accumulated, w, self.rows, desc)
             .map_err(|e| RefError::Invalid(format!("buffer: {e}")))?;
         Ok(EncodeOutput::new(
-            encode_single(buf.as_slice(), &self.metadata),
+            encode_single(buf.as_slice(), &self.metadata, self.gain_map.as_ref()),
             ImageFormat::Pnm,
         ))
     }
@@ -639,6 +860,7 @@ impl Encoder for RefEnc {
 /// Reference animation encoder.
 pub struct RefAnimEnc {
     metadata: Metadata,
+    gain_map: Option<GainMapWire>,
     frames: Vec<(Vec<u8>, u32, u32, u32, PixelDescriptor)>, // bytes, w, h, dur, desc
 }
 
@@ -684,6 +906,7 @@ impl AnimationFrameEncoder for RefAnimEnc {
             self.frames.len() as u32,
             bpp,
             &self.metadata,
+            self.gain_map.as_ref(),
         );
         push_u32(&mut out, self.frames[0].3);
         out.extend_from_slice(first_bytes);
@@ -717,12 +940,16 @@ impl DecoderConfig for ReferenceDecoderConfig {
         &DECODE_CAPS
     }
     fn job<'a>(self) -> Self::Job<'a> {
-        RefDecodeJob
+        RefDecodeJob {
+            render: GainMapRender::BaseOnly,
+        }
     }
 }
 
 /// Reference decode job.
-pub struct RefDecodeJob;
+pub struct RefDecodeJob {
+    render: GainMapRender,
+}
 
 impl<'a> DecodeJob<'a> for RefDecodeJob {
     type Error = RefError;
@@ -734,6 +961,19 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
         self
     }
     fn with_limits(self, _limits: ResourceLimits) -> Self {
+        self
+    }
+    /// The 2-way toggle is exactly `Components` / `BaseOnly`.
+    fn with_extract_gain_map(mut self, extract: bool) -> Self {
+        self.render = if extract {
+            GainMapRender::Components
+        } else {
+            GainMapRender::BaseOnly
+        };
+        self
+    }
+    fn with_gain_map_render(mut self, render: GainMapRender) -> Self {
+        self.render = render;
         self
     }
 
@@ -756,7 +996,10 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
         _preferred: &[PixelDescriptor],
     ) -> Result<RefDec<'a>, RefError> {
         parse_header(&data)?; // validate eagerly
-        Ok(RefDec { data })
+        Ok(RefDec {
+            data,
+            render: self.render,
+        })
     }
 
     fn push_decoder(
@@ -818,6 +1061,7 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
 #[derive(Debug)]
 pub struct RefDec<'a> {
     data: Cow<'a, [u8]>,
+    render: GainMapRender,
 }
 
 impl Decode for RefDec<'_> {
@@ -839,7 +1083,19 @@ impl Decode for RefDec<'_> {
         if let Some(ctx) = class_gated_context(&info.source_color, desc.color_model()) {
             buf = buf.with_color_context(ctx);
         }
-        Ok(DecodeOutput::new(buf, info))
+        let mut out = DecodeOutput::new(buf, info);
+        // Opt-in only: `BaseOnly` (the default) never carries the gain map.
+        // `ReconstructHdr` is not honoured (`reconstructs_hdr` is false — no HDR
+        // math here), so per the contract it surfaces the components instead of
+        // relabelling the SDR base as HDR.
+        let surface = matches!(
+            self.render,
+            GainMapRender::Components | GainMapRender::ReconstructHdr { .. }
+        );
+        if surface && let Some(gm) = &h.gain_map {
+            out = out.with_extras(gm.to_decoded()?);
+        }
+        Ok(out)
     }
 }
 

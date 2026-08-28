@@ -141,7 +141,7 @@ impl Encoder for MinEnc {
         // Orientation only — no metadata channels.
         let meta = Metadata::none().with_orientation(self.orientation);
         Ok(EncodeOutput::new(
-            encode_single(pixels, &meta),
+            encode_single(pixels, &meta, None),
             ImageFormat::Pnm,
         ))
     }

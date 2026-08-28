@@ -46,6 +46,17 @@ expensive to ship wrong:
   a decoded buffer *labelled* PQ/HLG rather than sRGB. Phase 0 of the
   gain-map/HDR delivery scope — prove native HDR before adding any gain-map
   encode surface.
+- **Gain maps.** `check_gain_map_roundtrip` is the encode/decode contract: an
+  encoder without `gain_map` must reject `with_gain_map_pixels` /
+  `with_gain_map_encoded` with `UnsupportedOperation::GainMapEncode` (a dropped
+  gain map is lost HDR, so silence is the one forbidden outcome); a declared
+  encoder embeds 1-channel, 3-channel and backward-direction sub-resolution maps
+  and rejects a foreign-format encoded one; a declared decoder reports the map
+  from `probe()`, surfaces it only on request (`Components` /
+  `with_extract_gain_map`, never under the default `BaseOnly`) with exact ISO
+  21496-1 params, falls back honestly on `ReconstructHdr` without
+  `reconstructs_hdr`, and the surfaced map transcodes through a fresh
+  `with_gain_map_pixels` unchanged.
 - **Error classification.** `check_decode_truncation_series` feeds a
   deterministic series of truncated prefixes of a known-good image and requires
   every failure to classify as *incomplete input* (never `Internal`, OOM, or an

@@ -245,6 +245,13 @@ impl EncodeCapabilities {
         self.hdr
     }
     /// Whether the codec supports gain map (HDR/SDR) embedding.
+    ///
+    /// The contract: `true` means
+    /// [`EncodeJob::with_gain_map_pixels`](crate::encode::EncodeJob::with_gain_map_pixels)
+    /// accepts a valid map (1- or 3-channel, either direction) and the output
+    /// carries it; `false` means both `with_gain_map_*` entry points fail with
+    /// [`UnsupportedOperation::GainMapEncode`] — never a silent drop. Verified
+    /// by `zencodec-testkit::check_gain_map_roundtrip`.
     pub const fn gain_map(&self) -> bool {
         self.gain_map
     }
@@ -641,6 +648,16 @@ impl DecodeCapabilities {
         self.hdr
     }
     /// Whether the codec supports gain map (HDR/SDR) extraction.
+    ///
+    /// The contract: `true` means `probe()` reports a present map
+    /// ([`ImageInfo::gain_map`](crate::ImageInfo::gain_map) not `Absent`,
+    /// `supplements.gain_map` set) and a
+    /// [`GainMapRender::Components`](crate::decode::GainMapRender::Components) /
+    /// `with_extract_gain_map(true)` decode surfaces it as a
+    /// [`DecodedGainMap`](crate::gainmap::DecodedGainMap) — and *only* then;
+    /// the default `BaseOnly` never does. `false` means no map is ever
+    /// surfaced. Independent of [`reconstructs_hdr`](Self::reconstructs_hdr).
+    /// Verified by `zencodec-testkit::check_gain_map_roundtrip`.
     pub const fn gain_map(&self) -> bool {
         self.gain_map
     }

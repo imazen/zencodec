@@ -175,6 +175,19 @@ codec crate adds it as a `dev-dependency` and runs the checks against its own
   `native_16bit`, and the decoded descriptor is labelled PQ/HLG, not sRGB. This
   is what makes the "envelope on the info" contract above testable — a codec
   that declares `hdr` and drops MaxCLL/MDCV fails here, not in production.
+- `check_gain_map_roundtrip` — the gain-map encode/decode contract. An encoder
+  without `gain_map` rejects `with_gain_map_pixels` / `with_gain_map_encoded`
+  with `UnsupportedOperation::GainMapEncode`; a declared one embeds 1-channel,
+  3-channel and backward-direction sub-resolution maps (dyadic ISO 21496-1
+  params, PQ alternate CICP) and rejects a foreign-format encoded map. A
+  declared decoder reports the map from `probe()`, surfaces a `DecodedGainMap`
+  only on `Components` / `with_extract_gain_map` (never under `BaseOnly`), with
+  exact params and — on a lossless encoder — byte-exact pixels; on
+  `ReconstructHdr` without `reconstructs_hdr` it surfaces the components or
+  fails with `UnsupportedOperation`, never an SDR base relabelled PQ/HLG (the
+  "signal on the buffer" rule above), and with `reconstructs_hdr` it must carry
+  the envelope on `source_color`. The surfaced map then transcodes through a
+  fresh `with_gain_map_pixels` unchanged — the Phase 4 cross-path check.
 - `check_capability_honesty` — every declared capability (the encode paths
   `push_rows`/`encode_from`/animation, the decode paths streaming/animation, the
   `lossless` knob, `cheap_probe`, the `icc`/`exif`/`xmp`/`cicp` metadata channels,
@@ -187,8 +200,9 @@ codec crate adds it as a `dev-dependency` and runs the checks against its own
   violations are collected and reported together. Out of scope: cancellation
   (timing isn't reliably testable on bounded inputs), the lossy flag (not observable
   from the bitstream), and the pixel-format/resource/tuning flags (`native_gray`,
-  `native_16bit`, `native_f32`, `hdr`, `gain_map`, `enforces_max_*`, CICP-carrier,
-  and the `effort`/`quality`/`threads` ranges), which need format-specific fixtures.
+  `native_16bit`, `native_f32`, `enforces_max_*`, CICP-carrier, and the
+  `effort`/`quality`/`threads` ranges), which need format-specific fixtures;
+  `hdr` and `gain_map` have their own checks above.
 
 The testkit ships two codecs the checks are validated against in its own tests, so
 the harness is known-good before you point it at a real codec: a faithful

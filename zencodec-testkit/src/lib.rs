@@ -31,6 +31,15 @@
 //!   (content light level + mastering display), 16-bit pixels where both ends
 //!   are natively 16-bit, and the decoded buffer is *labelled* PQ/HLG rather
 //!   than sRGB. Phase 0 of the gain-map/HDR delivery scope.
+//! - [`check_gain_map_roundtrip`] — the gain-map encode/decode contract: an
+//!   undeclared encoder rejects `with_gain_map_pixels` loudly with
+//!   `UnsupportedOperation::GainMapEncode`; a declared one embeds 1- and
+//!   3-channel maps (forward and backward direction) that a declared decoder
+//!   reports from `probe()`, surfaces only on request (`Components` /
+//!   `with_extract_gain_map`), never under the default `BaseOnly`, falls back
+//!   honestly on `ReconstructHdr` without `reconstructs_hdr`, and that survive
+//!   a decode → `with_gain_map_pixels` transcode. Phases 1, 2 (test matrix) and
+//!   4 (the testkit cross-path check) of that scope.
 //! - [`check_fidelity_honesty`] — `resolved_target_fidelity()` tells the truth:
 //!   a declared `lossless` honours a `Lossless` request byte-exactly, a codec
 //!   without `lossy` never reports `Lossy` (it promotes and says so), a codec
@@ -38,7 +47,7 @@
 //!   `is_lossless()` agrees. The cross-codec `Fidelity` contract.
 //! - [`check_capability_honesty`] — every declared capability works and every
 //!   undeclared optional path cleanly returns
-//!   [`UnsupportedOperation`](zencodec::UnsupportedOperation). Both directions for
+//!   [`UnsupportedOperation`]. Both directions for
 //!   the structural paths and (where the decoder can observe them) the metadata
 //!   channels, so a codec can't claim a feature it lacks *or* hide one it has; see
 //!   the fn docs for the exact per-flag scope.
@@ -78,11 +87,18 @@ use zencodec::decode::{
 };
 use zencodec::encode::{AnimationFrameEncoder, EncodeJob, Encoder, EncoderConfig, Fidelity};
 use zencodec::exif::Exif;
+use zencodec::gainmap::{
+    DecodedGainMap, GainMapChannel, GainMapInfo, GainMapParams, GainMapPresence, GainMapRender,
+    GainMapSource,
+};
 use zencodec::{
     Cicp, CodecError, ColorAuthority, ContentLightLevel, ErrorCategory, ImageFormat,
     MasteringDisplay, Metadata, MetadataFields, MetadataPolicy, Orientation, SourceColor,
+    UnsupportedOperation,
 };
-use zenpixels::{ColorContext, PixelDescriptor, PixelSlice, PixelSliceMut, TransferFunction};
+use zenpixels::{
+    ColorContext, PixelBuffer, PixelDescriptor, PixelSlice, PixelSliceMut, TransferFunction,
+};
 
 pub(crate) mod fixtures;
 /// The false-direction exemplar codec — consumed only by this crate's own
@@ -1101,6 +1117,621 @@ where
 }
 
 // ===========================================================================
+// Gain-map encode / decode conformance (zencodec#24, Phases 1/2/4)
+// ===========================================================================
+
+/// One cell of the gain-map test matrix.
+#[derive(Clone, Copy)]
+struct GainMapCase {
+    name: &'static str,
+    channels: u8,
+    /// ISO 21496-1 backward direction: HDR base + SDR gain map.
+    backward: bool,
+}
+
+/// The matrix the scope audit asked for: 1-channel (the UltraHDR norm),
+/// 3-channel (iOS 18 mainstream), and a backward-direction file (Android 16
+/// ships HDR-base + SDR-gain-map).
+const GAIN_MAP_CASES: [GainMapCase; 3] = [
+    GainMapCase {
+        name: "1ch forward",
+        channels: 1,
+        backward: false,
+    },
+    GainMapCase {
+        name: "3ch forward",
+        channels: 3,
+        backward: false,
+    },
+    GainMapCase {
+        name: "1ch backward",
+        channels: 1,
+        backward: true,
+    },
+];
+
+/// Gain-map dimensions: deliberately *not* the base's (20×14) — sub-resolution
+/// maps are the ecosystem norm, and a codec that assumes base geometry breaks.
+const GAIN_MAP_W: u32 = 10;
+const GAIN_MAP_H: u32 = 7;
+
+/// The ISO 21496-1 parameters every case carries. All values are dyadic
+/// (exactly representable in the wire format's fractions), so the decoded
+/// params must equal the input *exactly* — no tolerance hides a mis-serialized
+/// field. Per-channel values differ for the 3-channel case so a channel swap
+/// is visible.
+fn gain_map_params(case: GainMapCase) -> GainMapParams {
+    let ch = |i: usize| GainMapChannel {
+        min: -1.0 + i as f64 * 0.25,
+        max: 2.0 + i as f64 * 0.5,
+        gamma: 1.0 + i as f64 * 0.5,
+        base_offset: 1.0 / 64.0,
+        alternate_offset: 1.0 / 32.0,
+    };
+    let mut p = GainMapParams::default();
+    p.channels = if case.channels == 1 {
+        [ch(0); 3]
+    } else {
+        [ch(0), ch(1), ch(2)]
+    };
+    // Forward: SDR base (0 stops), HDR alternate (+2 stops). Backward flips the
+    // roles — and sets the authoritative flag, not just the headrooms.
+    if case.backward {
+        p.base_hdr_headroom = 2.0;
+        p.alternate_hdr_headroom = 0.0;
+        p.backward_direction = true;
+    } else {
+        p.base_hdr_headroom = 0.0;
+        p.alternate_hdr_headroom = 2.0;
+    }
+    p
+}
+
+/// Deterministic 8-bit gain-map pixels: a smooth ramp per channel (a gain map
+/// is a low-frequency control signal), offset per channel so channel order is
+/// observable.
+fn gain_map_pixels(case: GainMapCase) -> Pixels {
+    let c = case.channels as usize;
+    let mut bytes = vec![0u8; GAIN_MAP_W as usize * GAIN_MAP_H as usize * c];
+    for y in 0..GAIN_MAP_H as usize {
+        for x in 0..GAIN_MAP_W as usize {
+            for k in 0..c {
+                bytes[(y * GAIN_MAP_W as usize + x) * c + k] =
+                    (16 + x * 13 + y * 17 + k * 40) as u8;
+            }
+        }
+    }
+    Pixels {
+        width: GAIN_MAP_W,
+        rows: GAIN_MAP_H,
+        desc: if c == 1 {
+            PixelDescriptor::GRAY8
+        } else {
+            PixelDescriptor::RGB8
+        },
+        bytes,
+    }
+}
+
+/// The alternate rendition's colour: PQ, as an UltraHDR/AVIF map usually says.
+const GAIN_MAP_ALTERNATE_CICP: Cicp = Cicp::BT2100_PQ;
+
+/// Build the encode-input fixture for one case. Built fresh each time
+/// ([`DecodedGainMap`] is consumed by `with_gain_map_pixels`).
+fn gain_map_fixture(case: GainMapCase) -> DecodedGainMap {
+    let px = gain_map_pixels(case);
+    let buf = PixelBuffer::from_vec(px.bytes, px.width, px.rows, px.desc)
+        .expect("gain-map fixture dimensions are valid");
+    let info = GainMapInfo::new(gain_map_params(case), GAIN_MAP_W, GAIN_MAP_H, case.channels)
+        .with_alternate_cicp(GAIN_MAP_ALTERNATE_CICP);
+    DecodedGainMap::new(buf, info)
+}
+
+/// A format that is not the encoder's own, for the mismatched-`format`
+/// rejection on `with_gain_map_encoded`.
+fn foreign_format<E: EncoderConfig>() -> ImageFormat {
+    [ImageFormat::Bmp, ImageFormat::Pnm, ImageFormat::Qoi]
+        .into_iter()
+        .find(|f| *f != E::format())
+        .expect("three candidates cannot all equal one format")
+}
+
+/// Encode `img` with `gm` attached via `with_gain_map_pixels` (one-shot path).
+fn enc_with_gain_map<E>(cfg: &E, img: &TestImage, gm: DecodedGainMap) -> Result<Vec<u8>, String>
+where
+    E: EncoderConfig,
+    <E::Job as EncodeJob>::Enc: Encoder<Error = E::Error>,
+{
+    let enc = cfg
+        .clone()
+        .job()
+        .with_metadata_policy(Metadata::none(), MetadataPolicy::PreserveExact)
+        .with_gain_map_pixels(gm)
+        .map_err(|e| format!("with_gain_map_pixels: {e}"))?
+        .encoder()
+        .map_err(|e| e.to_string())?;
+    Ok(enc
+        .encode(img.as_slice())
+        .map_err(|e| e.to_string())?
+        .into_vec())
+}
+
+/// Decode with a specific [`GainMapRender`] intent.
+fn dec_render<D: DecoderConfig>(
+    cfg: &D,
+    bytes: &[u8],
+    render: GainMapRender,
+) -> Result<DecodeOutput, D::Error> {
+    cfg.clone()
+        .job()
+        .with_gain_map_render(render)
+        .decoder(Cow::Borrowed(bytes), &[])?
+        .decode()
+}
+
+/// What the check compares of a surfaced gain map.
+struct GainMapObserved {
+    pixels: Pixels,
+    info: GainMapInfo,
+}
+
+impl GainMapObserved {
+    fn of(gm: &DecodedGainMap) -> Self {
+        Self {
+            pixels: grab(gm.pixels.as_slice()),
+            info: gm.metadata.clone(),
+        }
+    }
+}
+
+/// Mean absolute sample error between two same-geometry 8-bit maps.
+fn mean_abs_error(a: &[u8], b: &[u8]) -> f64 {
+    if a.is_empty() || a.len() != b.len() {
+        return f64::INFINITY;
+    }
+    let sum: u64 = a
+        .iter()
+        .zip(b)
+        .map(|(x, y)| u64::from(x.abs_diff(*y)))
+        .sum();
+    sum as f64 / a.len() as f64
+}
+
+/// Sanity bound for a *lossy* gain-map codec, in 8-bit sample units: the
+/// smooth 10×7 ramp fixture re-encoded at the codec's default must come back
+/// within this mean absolute error. This is a "not blank, not garbled, not
+/// another channel" guard, **not** a fidelity claim — how well a lossy codec
+/// preserves a gain map is that codec's own rate–distortion test (see the
+/// q90 knee note on `with_gain_map_pixels`).
+const LOSSY_GAIN_MAP_MAE_BOUND: f64 = 24.0;
+
+/// Compare a surfaced gain map with what was embedded: geometry, channel
+/// count, params (exactly), the alternate CICP, and the pixels — byte-exact
+/// when the encoder is lossless, else within [`LOSSY_GAIN_MAP_MAE_BOUND`].
+fn compare_gain_map(
+    got: &GainMapObserved,
+    want_px: &Pixels,
+    want_info: &GainMapInfo,
+    lossless: bool,
+    what: &str,
+) -> Result<(), String> {
+    if (got.pixels.width, got.pixels.rows) != (want_px.width, want_px.rows) {
+        return Err(format!(
+            "{what}: gain-map geometry is {}x{}, expected {}x{}",
+            got.pixels.width, got.pixels.rows, want_px.width, want_px.rows
+        ));
+    }
+    let got_ch = got.pixels.desc.channels() as u8;
+    if got_ch != want_info.channels {
+        return Err(format!(
+            "{what}: gain map has {got_ch} channels ({:?}), expected {}",
+            got.pixels.desc, want_info.channels
+        ));
+    }
+    if got.info.width != want_px.width || got.info.height != want_px.rows {
+        return Err(format!(
+            "{what}: GainMapInfo says {}x{} but the pixels are {}x{}",
+            got.info.width, got.info.height, want_px.width, want_px.rows
+        ));
+    }
+    if got.info.channels != want_info.channels {
+        return Err(format!(
+            "{what}: GainMapInfo.channels is {}, expected {}",
+            got.info.channels, want_info.channels
+        ));
+    }
+    if got.info.params != want_info.params {
+        return Err(format!(
+            "{what}: ISO 21496-1 params did not survive exactly (all fixture values are \
+             dyadic, so this is a serialization/parse defect, not rounding):\n  got  {:?}\n  want {:?}",
+            got.info.params, want_info.params
+        ));
+    }
+    if got.info.alternate_cicp != want_info.alternate_cicp {
+        return Err(format!(
+            "{what}: alternate_cicp is {:?}, expected {:?}",
+            got.info.alternate_cicp, want_info.alternate_cicp
+        ));
+    }
+    if got.pixels.desc.bytes_per_pixel() != want_px.desc.bytes_per_pixel() {
+        return Err(format!(
+            "{what}: gain map came back as {:?}, expected an 8-bit {}-channel layout",
+            got.pixels.desc, want_info.channels
+        ));
+    }
+    if lossless {
+        if got.pixels.bytes != want_px.bytes {
+            return Err(format!(
+                "{what}: gain-map pixels differ from the input on a lossless encoder"
+            ));
+        }
+    } else {
+        let mae = mean_abs_error(&got.pixels.bytes, &want_px.bytes);
+        if mae > LOSSY_GAIN_MAP_MAE_BOUND {
+            return Err(format!(
+                "{what}: gain-map pixels came back with mean abs error {mae:.1} (bound \
+                 {LOSSY_GAIN_MAP_MAE_BOUND}) — blank, garbled, or the wrong map"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// The gain-map encode/decode contract (`docs/gainmap-pipeline-scope-2026-06-08.md`
+/// Phases 1, 2 and 4, tracked in zencodec#24), for every declared/undeclared
+/// combination of [`EncodeCapabilities::gain_map`](zencodec::encode::EncodeCapabilities::gain_map)
+/// and [`DecodeCapabilities::gain_map`](zencodec::decode::DecodeCapabilities::gain_map):
+///
+/// **Encoder undeclared** ⇒ `with_gain_map_pixels` and `with_gain_map_encoded`
+/// must fail with [`UnsupportedOperation::GainMapEncode`] (the trait default) —
+/// a dropped gain map is lost HDR, so silence is the one forbidden outcome.
+///
+/// **Encoder declared** ⇒ for each case of the test matrix (1-channel forward,
+/// 3-channel forward, 1-channel backward-direction — sub-resolution 10×7 maps
+/// on a 20×14 RGB8 base, ISO 21496-1 params with only dyadic values, PQ
+/// alternate CICP):
+///
+/// - `with_gain_map_pixels` accepts the map and the base still encodes;
+///   `with_gain_map_encoded` with a *foreign* `format` is rejected (the
+///   documented mismatch error — any error, it is the codec's own).
+/// - **Decoder declared** ⇒ `probe()` reports the map (`gain_map` presence not
+///   `Absent`, and when `Available` its geometry/channels/params match;
+///   `supplements.gain_map` set); the default `BaseOnly` decode carries **no**
+///   [`DecodedGainMap`] extra (opt-in only) and its base pixels equal the input
+///   when the encoder is lossless; `Components` surfaces a `DecodedGainMap`
+///   whose geometry, channels, params (exact), alternate CICP and pixels
+///   (byte-exact when lossless, else within a mean-abs-error sanity bound)
+///   match; `with_extract_gain_map(true)` yields the identical map;
+///   `ReconstructHdr { None }` without `reconstructs_hdr` either surfaces
+///   the components with the base still labelled SDR, or fails with
+///   `UnsupportedOperation` — never an SDR buffer labelled PQ/HLG; with
+///   `reconstructs_hdr` it must succeed with an HDR-labelled buffer and the
+///   envelope (`mastering_display` + `content_light_level`) on `source_color`.
+/// - **Transcode (Phase 4)**: the `Components` map is fed back through a fresh
+///   `with_gain_map_pixels`, decoded again, and must match the first
+///   generation (metadata exactly; pixels byte-exact when lossless).
+/// - **Decoder undeclared** ⇒ a `Components` decode of the same file either
+///   decodes the base with no `DecodedGainMap` extra (a hidden capability is
+///   a lie) or fails with `UnsupportedOperation`.
+///
+/// Skipped (`Ok`) only for the undeclared/undeclared pair once the loud
+/// rejection is verified. All violations across the matrix are collected and
+/// reported together. Not covered: the own-format `with_gain_map_encoded`
+/// fast path (the payload shape is container-specific — a bare AV1 OBU vs a
+/// whole JPEG — so a codec tests it with its own fixture), 10/12-bit maps, and
+/// the positive `reconstructs_hdr` branch against the testkit's own codecs
+/// (the reference declines to reconstruct, as zencodec carries no HDR math).
+/// Part of [`check_all`].
+pub fn check_gain_map_roundtrip<E, D>(enc: E, dec: D) -> Conformance
+where
+    E: EncoderConfig,
+    D: DecoderConfig,
+    <E::Job as EncodeJob>::Enc: Encoder<Error = E::Error>,
+{
+    const CHECK: &str = "gain_map_roundtrip";
+    let (ec, dc) = (E::capabilities(), D::capabilities());
+    let mut v: Vec<String> = Vec::new();
+
+    // --- undeclared encoder: loud rejection, both entry points ---
+    if !ec.gain_map() {
+        let case = GAIN_MAP_CASES[0];
+        match enc
+            .clone()
+            .job()
+            .with_gain_map_pixels(gain_map_fixture(case))
+        {
+            Ok(_) => v.push(
+                "encoder does not declare gain_map, yet with_gain_map_pixels succeeded (hidden \
+                 capability, or a silently dropped gain map)"
+                    .into(),
+            ),
+            Err(e) if e.unsupported_operation() == Some(&UnsupportedOperation::GainMapEncode) => {}
+            Err(e) => v.push(format!(
+                "encoder does not declare gain_map: with_gain_map_pixels must fail with \
+                 UnsupportedOperation::GainMapEncode, got: {e}"
+            )),
+        }
+        let src = GainMapSource::new(
+            vec![0u8; 16],
+            E::format(),
+            GainMapInfo::new(gain_map_params(case), GAIN_MAP_W, GAIN_MAP_H, 1),
+        );
+        match enc.clone().job().with_gain_map_encoded(src) {
+            Ok(_) => v.push(
+                "encoder does not declare gain_map, yet with_gain_map_encoded succeeded".into(),
+            ),
+            Err(e) if e.unsupported_operation() == Some(&UnsupportedOperation::GainMapEncode) => {}
+            Err(e) => v.push(format!(
+                "encoder does not declare gain_map: with_gain_map_encoded must fail with \
+                 UnsupportedOperation::GainMapEncode, got: {e}"
+            )),
+        }
+        return if v.is_empty() {
+            Ok(())
+        } else {
+            Err(fail(CHECK, v.join("; ")))
+        };
+    }
+
+    // --- declared encoder ---
+    let base = TestImage::rgb8_gradient(20, 14);
+    let lossless = enc.is_lossless() == Some(true);
+
+    // Foreign-format encoded map: the documented mismatch rejection.
+    let foreign = GainMapSource::new(
+        vec![0u8; 16],
+        foreign_format::<E>(),
+        GainMapInfo::new(
+            gain_map_params(GAIN_MAP_CASES[0]),
+            GAIN_MAP_W,
+            GAIN_MAP_H,
+            1,
+        ),
+    );
+    if enc.clone().job().with_gain_map_encoded(foreign).is_ok() {
+        v.push(format!(
+            "with_gain_map_encoded accepted a gain map in a foreign format ({:?}) — the \
+             contract is to reject a format mismatch so the caller decodes to pixels",
+            foreign_format::<E>()
+        ));
+    }
+
+    for case in GAIN_MAP_CASES {
+        let name = case.name;
+        let want_px = gain_map_pixels(case);
+        let want_info = gain_map_fixture(case).metadata;
+
+        let bytes = match enc_with_gain_map(&enc, &base, gain_map_fixture(case)) {
+            Ok(b) => b,
+            Err(e) => {
+                v.push(format!("[{name}] encode with gain map: {e}"));
+                continue;
+            }
+        };
+
+        if !dc.gain_map() {
+            // A decoder without the capability must not surface one anyway.
+            match dec_render(&dec, &bytes, GainMapRender::Components) {
+                Ok(out) if out.extras::<DecodedGainMap>().is_some() => v.push(format!(
+                    "[{name}] decoder does not declare gain_map, yet Components surfaced a \
+                     DecodedGainMap (hidden capability)"
+                )),
+                Ok(_) => {}
+                Err(e) if e.unsupported_operation().is_some() => {}
+                Err(e) => v.push(format!(
+                    "[{name}] decoder does not declare gain_map: a Components decode must \
+                     decode the base or fail with UnsupportedOperation, got: {e}"
+                )),
+            }
+            continue;
+        }
+
+        // probe(): the map is reported.
+        match dec.clone().job().probe(&bytes) {
+            Err(e) => v.push(format!("[{name}] probe: {e}")),
+            Ok(info) => {
+                if !info.supplements.gain_map {
+                    v.push(format!(
+                        "[{name}] probe: supplements.gain_map is false on a file with a gain map"
+                    ));
+                }
+                match &info.gain_map {
+                    GainMapPresence::Absent => v.push(format!(
+                        "[{name}] probe: gain_map presence is Absent on a file with a gain map"
+                    )),
+                    GainMapPresence::Available(i) => {
+                        if (i.width, i.height, i.channels)
+                            != (GAIN_MAP_W, GAIN_MAP_H, case.channels)
+                        {
+                            v.push(format!(
+                                "[{name}] probe: GainMapInfo is {}x{}x{}, expected {}x{}x{}",
+                                i.width,
+                                i.height,
+                                i.channels,
+                                GAIN_MAP_W,
+                                GAIN_MAP_H,
+                                case.channels
+                            ));
+                        }
+                        if i.params != want_info.params {
+                            v.push(format!(
+                                "[{name}] probe: ISO 21496-1 params differ from the input:\n  got  {:?}\n  want {:?}",
+                                i.params, want_info.params
+                            ));
+                        }
+                    }
+                    _ => {} // Unknown is honest for a cheap probe
+                }
+            }
+        }
+
+        // Default render: base only, no surfaced map.
+        match dec_render(&dec, &bytes, GainMapRender::BaseOnly) {
+            Err(e) => v.push(format!("[{name}] BaseOnly decode: {e}")),
+            Ok(out) => {
+                if out.extras::<DecodedGainMap>().is_some() {
+                    v.push(format!(
+                        "[{name}] BaseOnly (the default) surfaced a DecodedGainMap — gain-map \
+                         decode is opt-in"
+                    ));
+                }
+                let px = grab(out.pixels());
+                if (px.width, px.rows) != (base.width, base.height) {
+                    v.push(format!(
+                        "[{name}] BaseOnly decoded {}x{}, expected the {}x{} base",
+                        px.width, px.rows, base.width, base.height
+                    ));
+                } else if lossless && px.bytes != base.pixels().bytes {
+                    v.push(format!(
+                        "[{name}] BaseOnly base pixels differ from the input on a lossless \
+                         encoder — attaching a gain map must not disturb the base"
+                    ));
+                }
+            }
+        }
+
+        // Components: the map is surfaced and matches.
+        let first = match dec_render(&dec, &bytes, GainMapRender::Components) {
+            Err(e) => {
+                v.push(format!("[{name}] Components decode: {e}"));
+                None
+            }
+            Ok(mut out) => match out.take_extras::<DecodedGainMap>() {
+                None => {
+                    v.push(format!(
+                        "[{name}] decoder declares gain_map, but Components surfaced no \
+                         DecodedGainMap"
+                    ));
+                    None
+                }
+                Some(gm) => {
+                    let obs = GainMapObserved::of(&gm);
+                    if let Err(e) =
+                        compare_gain_map(&obs, &want_px, &want_info, lossless, "Components")
+                    {
+                        v.push(format!("[{name}] {e}"));
+                    }
+                    Some((gm, obs))
+                }
+            },
+        };
+
+        // with_extract_gain_map(true) is the same request as Components.
+        if let Some((_, first_obs)) = &first {
+            match dec
+                .clone()
+                .job()
+                .with_extract_gain_map(true)
+                .decoder(Cow::Borrowed(&bytes), &[])
+                .and_then(|d| d.decode())
+            {
+                Err(e) => v.push(format!("[{name}] with_extract_gain_map(true) decode: {e}")),
+                Ok(out) => match out.extras::<DecodedGainMap>() {
+                    None => v.push(format!(
+                        "[{name}] with_extract_gain_map(true) surfaced no DecodedGainMap, but \
+                         Components did — the two must be equivalent"
+                    )),
+                    Some(gm) => {
+                        let obs = GainMapObserved::of(gm);
+                        if obs.pixels != first_obs.pixels || obs.info != first_obs.info {
+                            v.push(format!(
+                                "[{name}] with_extract_gain_map(true) and Components surfaced \
+                                 different gain maps"
+                            ));
+                        }
+                    }
+                },
+            }
+        }
+
+        // ReconstructHdr: honoured only with reconstructs_hdr; otherwise an
+        // honest fallback, never an SDR buffer wearing an HDR label.
+        let recon = GainMapRender::ReconstructHdr {
+            target_headroom: None,
+        };
+        match dec_render(&dec, &bytes, recon) {
+            Ok(out) => {
+                let desc = out.pixels().descriptor();
+                let hdr_labelled = matches!(
+                    desc.transfer(),
+                    TransferFunction::Pq | TransferFunction::Hlg | TransferFunction::Linear
+                );
+                if dc.reconstructs_hdr() {
+                    if !hdr_labelled {
+                        v.push(format!(
+                            "[{name}] reconstructs_hdr is declared, but ReconstructHdr produced a \
+                             buffer labelled {:?} — the output must be an HDR pixel format",
+                            desc.transfer()
+                        ));
+                    }
+                    let sc = &out.info().source_color;
+                    if sc.mastering_display.is_none() || sc.content_light_level.is_none() {
+                        v.push(format!(
+                            "[{name}] reconstructs_hdr: the reconstructed output must carry the \
+                             luminance envelope (mastering_display + content_light_level) on \
+                             source_color — without it a native-HDR transcode loses it"
+                        ));
+                    }
+                } else if matches!(
+                    desc.transfer(),
+                    TransferFunction::Pq | TransferFunction::Hlg
+                ) {
+                    v.push(format!(
+                        "[{name}] reconstructs_hdr is NOT declared, yet ReconstructHdr returned a \
+                         buffer labelled {:?} — an SDR base must not be relabelled HDR; surface \
+                         Components or fail with UnsupportedOperation",
+                        desc.transfer()
+                    ));
+                }
+            }
+            Err(e) if dc.reconstructs_hdr() => v.push(format!(
+                "[{name}] reconstructs_hdr is declared, but ReconstructHdr failed: {e}"
+            )),
+            Err(e) if e.unsupported_operation().is_some() => {}
+            Err(e) => v.push(format!(
+                "[{name}] ReconstructHdr without reconstructs_hdr must surface Components or \
+                 fail with UnsupportedOperation, got: {e}"
+            )),
+        }
+
+        // Phase 4: the surfaced map transcodes through with_gain_map_pixels.
+        if let Some((gm, first_obs)) = first {
+            let base2 = TestImage::rgb8_gradient(20, 14);
+            match enc_with_gain_map(&enc, &base2, gm).and_then(|b| {
+                dec_render(&dec, &b, GainMapRender::Components).map_err(|e| e.to_string())
+            }) {
+                Err(e) => v.push(format!(
+                    "[{name}] transcode (decode → with_gain_map_pixels): {e}"
+                )),
+                Ok(out) => match out.extras::<DecodedGainMap>() {
+                    None => v.push(format!(
+                        "[{name}] transcode: the re-encoded file surfaced no DecodedGainMap"
+                    )),
+                    Some(gm2) => {
+                        let obs2 = GainMapObserved::of(gm2);
+                        if let Err(e) = compare_gain_map(
+                            &obs2,
+                            &first_obs.pixels,
+                            &first_obs.info,
+                            lossless,
+                            "transcode generation 2",
+                        ) {
+                            v.push(format!("[{name}] {e}"));
+                        }
+                    }
+                },
+            }
+        }
+    }
+
+    if v.is_empty() {
+        Ok(())
+    } else {
+        Err(fail(CHECK, v.join("; ")))
+    }
+}
+
+// ===========================================================================
 // Buffer colour-context conformance (zencodec#25)
 // ===========================================================================
 
@@ -1736,7 +2367,7 @@ fn run_animation_decode<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<(), D
 /// (streaming, animation), the `lossless` knob, and `cheap_probe`, **both
 /// directions** are checked: every declared capability is exercised, and every
 /// *undeclared* optional path must decline with
-/// [`UnsupportedOperation`](zencodec::UnsupportedOperation) — a codec can't claim a
+/// [`UnsupportedOperation`] — a codec can't claim a
 /// feature it lacks *or* hide one it has. The metadata channels
 /// (`icc`/`exif`/`xmp`/`cicp`) are checked bidirectionally **where the decoder can
 /// observe them**: a declared channel must survive a `PreserveExact` round trip, and
@@ -1753,10 +2384,11 @@ fn run_animation_decode<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<(), D
 /// triggered token is timing-dependent on small inputs and can't be asserted
 /// reliably here; the `lossy` flag, whose effect isn't observable from the
 /// bitstream alone; and the pixel-format / resource / tuning flags (`native_gray`,
-/// `native_16bit`, `native_f32`, `hdr`, `gain_map`, `enforces_max_pixels` /
-/// `enforces_max_memory`, the CICP-carrier flags, and the `effort` / `quality` /
-/// `threads` ranges), whose honesty needs format-specific fixtures a generic
-/// harness can't supply.
+/// `native_16bit`, `native_f32`, `enforces_max_pixels` / `enforces_max_memory`,
+/// the CICP-carrier flags, and the `effort` / `quality` / `threads` ranges),
+/// whose honesty needs format-specific fixtures a generic harness can't supply.
+/// `hdr` and `gain_map` have their own checks ([`check_native_hdr_roundtrip`],
+/// [`check_gain_map_roundtrip`]).
 pub fn check_capability_honesty<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
 where
     E: EncoderConfig,
@@ -1901,7 +2533,7 @@ where
 /// [`with_fidelity`](EncoderConfig::with_fidelity) is best-effort and
 /// infallible, so the whole cross-codec contract rests on
 /// [`resolved_target_fidelity`](EncoderConfig::resolved_target_fidelity) telling
-/// the truth. For each request — `Lossless`, then every [`LossyTarget`] arm
+/// the truth. For each request — `Lossless`, then every [`LossyTarget`](zencodec::encode::LossyTarget) arm
 /// (`CodecSpecificQuality` at the middle of the declared `quality_range`,
 /// `ApproxSsim2`, `ApproxButteraugli`, `ApproxZensimB`), each applied on top of a
 /// prior `Lossless` request so a stale setting cannot leak through — the
@@ -2048,7 +2680,7 @@ where
 /// associated types (`AnimationFrameEnc`, `StreamDec`, `AnimationFrameDec`) are
 /// intentionally *not* bound: a still-only codec legitimately uses `()` /
 /// [`Unsupported`](zencodec::Unsupported), whose `Error` is
-/// [`UnsupportedOperation`](zencodec::UnsupportedOperation), not the envelope.
+/// [`UnsupportedOperation`], not the envelope.
 ///
 /// Not part of [`check_all`] — the testkit's own [`reference`](mod@reference)
 /// codec is a deliberate Pattern-A foil, so this is opt-in for codecs that have
@@ -2313,6 +2945,7 @@ where
     check_color_context_consistency(enc.clone(), dec.clone(), &img)?;
     check_color_authority_spec(enc.clone(), dec.clone(), &img)?;
     check_native_hdr_roundtrip(enc.clone(), dec.clone())?;
+    check_gain_map_roundtrip(enc.clone(), dec.clone())?;
     let frames = [
         TestImage::rgba8_gradient_seeded(24, 16, 0),
         TestImage::rgba8_gradient_seeded(24, 16, 60),
@@ -2371,6 +3004,90 @@ mod tests {
     fn reference_capability_honesty() {
         let (e, d) = ref_codecs();
         check_capability_honesty(e, d, &TestImage::rgba8_gradient(12, 9)).unwrap();
+    }
+
+    /// The reference declares `gain_map` on both ends and honours the whole
+    /// matrix (1ch/3ch/backward, opt-in surfacing, honest `ReconstructHdr`
+    /// fallback, the Phase 4 transcode).
+    #[test]
+    fn reference_gain_map_roundtrip() {
+        let (e, d) = ref_codecs();
+        check_gain_map_roundtrip(e, d).unwrap();
+    }
+
+    /// The minimal codec declares no gain-map support: the trait defaults must
+    /// reject both entry points with `GainMapEncode`, which is all the check
+    /// asks of an undeclared encoder.
+    #[test]
+    fn minimal_gain_map_roundtrip() {
+        check_gain_map_roundtrip(MinimalEncoderConfig::new(), MinimalDecoderConfig::new()).unwrap();
+    }
+
+    /// The fixture's ISO 21496-1 values are all dyadic, so the wire format
+    /// must reproduce them exactly — the check's exact-params assertion rests
+    /// on this (a non-representable fixture value would fail every codec).
+    #[test]
+    fn gain_map_fixture_params_are_wire_exact() {
+        use zencodec::gainmap::{Iso21496Format, parse_iso21496_fmt, serialize_iso21496_fmt};
+        for case in GAIN_MAP_CASES {
+            let p = gain_map_params(case);
+            for fmt in [Iso21496Format::JxlJhgm, Iso21496Format::AvifTmap] {
+                let back = parse_iso21496_fmt(&serialize_iso21496_fmt(&p, fmt), fmt).unwrap();
+                assert_eq!(back, p, "{} via {fmt:?}", case.name);
+            }
+        }
+    }
+
+    /// The reference's own-format `with_gain_map_encoded` fast path (not
+    /// exercised by the generic check — the payload shape is container-specific):
+    /// a single-frame RGB8 reference image is byte-carried as a 3-channel map,
+    /// and any other format is the documented mismatch rejection.
+    #[test]
+    fn reference_gain_map_encoded_own_format() {
+        let case = GAIN_MAP_CASES[1]; // 3ch
+        let fixture = gain_map_fixture(case);
+        // Encode the gain-map pixels as a standalone reference image...
+        let gm_img = ReferenceEncoderConfig::new()
+            .job()
+            .encoder()
+            .unwrap()
+            .encode(fixture.pixels.as_slice())
+            .unwrap()
+            .into_vec();
+        let src = GainMapSource::new(gm_img, ImageFormat::Pnm, fixture.metadata.clone());
+        let base = TestImage::rgb8_gradient(20, 14);
+        let bytes = ReferenceEncoderConfig::new()
+            .job()
+            .with_gain_map_encoded(src)
+            .unwrap()
+            .encoder()
+            .unwrap()
+            .encode(base.as_slice())
+            .unwrap()
+            .into_vec();
+        let out = dec_render(&ReferenceDecoderConfig, &bytes, GainMapRender::Components).unwrap();
+        let gm = out.extras::<DecodedGainMap>().expect("surfaced");
+        compare_gain_map(
+            &GainMapObserved::of(gm),
+            &gain_map_pixels(case),
+            &fixture.metadata,
+            true,
+            "encoded own-format",
+        )
+        .unwrap();
+
+        // ...and a foreign format is rejected with the codec's own error.
+        let bad = GainMapSource::new(
+            vec![0; 8],
+            ImageFormat::Jpeg,
+            gain_map_fixture(case).metadata,
+        );
+        let err = ReferenceEncoderConfig::new()
+            .job()
+            .with_gain_map_encoded(bad)
+            .err()
+            .expect("foreign format rejected");
+        assert!(matches!(err, RefError::Invalid(_)), "{err}");
     }
 
     /// A real reference-codec operation cancelled via its `Stop` token surfaces

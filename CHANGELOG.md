@@ -8,6 +8,26 @@ All notable changes to zencodec are documented here. Sections below the
 ### [Unreleased]
 
 #### Added
+- **`check_gain_map_roundtrip`** (in `check_all`) — the gain-map encode/decode
+  contract (Phases 1, 2 and 4 of `docs/gainmap-pipeline-scope-2026-06-08.md`,
+  #24): an encoder without `gain_map` must reject `with_gain_map_pixels` /
+  `with_gain_map_encoded` with `UnsupportedOperation::GainMapEncode` (never a
+  silent drop); a declared encoder embeds the scope audit's test matrix —
+  1-channel, 3-channel, and backward-direction (HDR base) maps, sub-resolution,
+  with dyadic ISO 21496-1 params and a PQ alternate CICP — and rejects a
+  foreign-format encoded map; a declared decoder reports the map from `probe()`,
+  surfaces a `DecodedGainMap` only on `Components` / `with_extract_gain_map`
+  (never under the default `BaseOnly`, and both requests yield the same map)
+  with exact params and byte-exact pixels on a lossless codec, falls back
+  honestly on `ReconstructHdr` without `reconstructs_hdr` (components or
+  `UnsupportedOperation`, never an SDR buffer labelled PQ/HLG), and the surfaced
+  map transcodes through a fresh `with_gain_map_pixels` unchanged. Mutation-
+  verified against the reference (8 breakages, all caught).
+- The `reference` codec now declares `gain_map` on both ends and is the worked
+  example of the encode contract: `with_gain_map_pixels` validates and stores
+  an 8-bit 1/3-channel map, `with_gain_map_encoded` byte-carries its own format
+  and rejects any other, the wire carries pixels + ISO 21496-1 metadata (flag
+  bit 6), `probe()` reports it, and decode surfaces it opt-in only.
 - **`check_fidelity_honesty`** (in `check_all`) — the per-codec `Fidelity`
   contract: a declared `lossless` honours a `Lossless` request with
   `Some(Lossless)` and byte-exact pixels; a codec without `lossy` never reports
