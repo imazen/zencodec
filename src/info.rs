@@ -455,10 +455,34 @@ pub struct ImageInfo {
     pub has_alpha: bool,
     /// Whether the source encoding uses progressive or interlaced scan order.
     ///
-    /// True for progressive JPEG (SOF2), interlaced PNG (Adam7), and
-    /// interlaced GIF. False for all other formats and non-interlaced
-    /// variants. This is a file-level structural property detectable
-    /// from headers (cheap probe).
+    /// **Definition.** The codestream is ordered as a *refinement* sequence:
+    /// a decoder can render an approximation of the **whole** picture
+    /// (coarser resolution, or fewer coefficient bits) before the last byte
+    /// arrives, then refine it. Spatial partitions in raster order — strips,
+    /// tiles, groups, row batches — are **not** progressive: they let a
+    /// decoder emit *finished* regions early, never a coarse whole. Whether
+    /// the decoder actually streams is irrelevant; this describes the file.
+    ///
+    /// Per format, that definition resolves to:
+    ///
+    /// | format | `true` when | never (`false`) |
+    /// |---|---|---|
+    /// | JPEG | progressive DCT frame (SOF2/SOF6/SOF10/SOF14 — spectral selection / successive approximation scans) | baseline / extended sequential |
+    /// | PNG | Adam7 interlace | |
+    /// | GIF | interlace flag on the (first) image descriptor | |
+    /// | JPEG XL | the frame is split into more than one pass (`num_passes > 1`) — ISO/IEC 18181-1 progressive AC passes; a lone DC frame (`kLfFrame`) is a downscaled preview, not a pass, so a DC frame alone does not qualify | single-pass VarDCT / modular frames |
+    /// | AVIF / HEIC | the primary item is a *layered* image (`a1lx` layer sizes, one operating point per layer — the AVIF specification's progressive rendering; HEIF layered items likewise) | a single AV1 / HEVC layer; **tiles are not progressive** |
+    /// | WebP | — | VP8 / VP8L have no refinement order |
+    /// | TIFF | — | strips and tiles are spatial partitions; TIFF/EP, DNG and BigTIFF add none |
+    /// | BMP / PNM / Farbfeld / QOI / TGA / Radiance HDR / EXR | — | raster order (EXR scanline/tile) |
+    /// | RAW / DNG / PDF / SVG | — | not applicable (demosaiced / rasterised) |
+    ///
+    /// `is_progressive` is a file-level structural property: report it from the
+    /// cheap probe when the header carries it (JPEG SOF marker, PNG IHDR, GIF
+    /// image descriptor, JXL frame header, AVIF `a1lx`) and leave it `false`
+    /// where the format has no such order. Do not set it from a decoder's own
+    /// streaming ability, and do not set it for merely *interleaved* or
+    /// *tiled* layouts.
     ///
     /// Used by [`DecodePolicy::allow_progressive`](crate::decode::DecodePolicy)
     /// to reject progressive/interlaced input.

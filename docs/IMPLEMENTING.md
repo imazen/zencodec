@@ -443,6 +443,52 @@ If detection is cheap (header-only), populate it in both `probe()` and
 `decode()`. If it requires deeper parsing, only populate it in `decode()`.
 Callers who only probe will get whatever the codec can provide from headers.
 
+## Source Colour Fields (`ImageInfo.source_color`)
+
+The 2026 cross-codec audit (zencodec #11) found most decoders either left
+`SourceColor` fields at their defaults or named the wrong `ColorAuthority`.
+Two rules, both checked by the testkit:
+
+### Name the authority the format spec assigns
+
+`SourceColor::color_authority` decides which field
+`SourceColor::to_color_context()` keeps and which it drops, so a wrong value
+silently changes the colour of every downstream pixel (a HEIC that read only an
+`nclx` box but left the `Icc` default lost its CICP and fell back to sRGB).
+The rule per format is the testkit's `expected_color_authority` table:
+
+| format | authority |
+|---|---|
+| PNG, JXL, HEIC, Radiance HDR | `Cicp` when you read a CICP, else `Icc` |
+| AVIF | MIAF order — `Icc` when you read an ICC, else `Cicp` when you read a CICP, else `Icc` |
+| JPEG, WebP, GIF, TIFF, BMP, ICO, PNM, Farbfeld, QOI, TGA, DNG, RAW, PDF | always `Icc` (embedded ICC or the sRGB assumption) |
+
+Set it explicitly (`.with_color_authority(...)`) whenever you set `cicp`, and
+never name `Cicp` without populating `cicp`. Run
+`zencodec_testkit::check_source_color_authority(format, &info.source_color)`
+on your own fixtures (an `nclx`-only file, an ICC-only file, both); the
+`check_all` suite covers the mixes your encoder can produce.
+
+### Fill the descriptive fields from the bitstream, not from constants
+
+`bit_depth` and `channel_count` come from the header (PNG IHDR, JPEG SOF,
+AV1 sequence header, TIFF `BitsPerSample`), even where the format only has one
+answer today — a hardcoded `8` is right for WebP by accident and wrong the day
+the container grows. `content_light_level` / `mastering_display` are populated
+wherever the container carries them (PNG `cLLi`/`mDCv`, AVIF/HEIC `clli`/`mdcv`,
+UltraHDR JPEG). Leave a field `None` when the format genuinely has no source
+for it.
+
+### `is_progressive` is a refinement order, not a decoder ability
+
+Set `ImageInfo::is_progressive` only when the codestream is ordered so a
+decoder can show a coarse version of the **whole** image before the last byte:
+progressive JPEG (SOF2/6/10/14), Adam7 PNG, interlaced GIF, a JPEG XL frame
+with more than one pass, a layered (`a1lx`) AVIF/HEIC item. Strips, tiles,
+groups and row batches are spatial partitions — WebP, TIFF and the raster
+formats are never progressive, however well the decoder streams them. The
+full per-format table is on the field's rustdoc.
+
 ## Format Negotiation (Decode Side)
 
 The `preferred` parameter in `decoder()` is a ranked list of pixel formats the caller wants. Your decoder should pick the first format it can produce without lossy conversion:
@@ -630,6 +676,8 @@ Before calling your implementation complete:
 - [ ] `supported_descriptors()` lists every format you handle without lossy conversion
 - [ ] Unsupported paths return the correct `UnsupportedOperation` variant
 - [ ] `probe()` only reads headers (mark `with_cheap_probe(true)` if so)
+- [ ] `source_color.color_authority` follows the format table above; `bit_depth` /
+      `channel_count` read from the header; `is_progressive` only for a refinement order
 - [ ] `ResourceLimits` are checked before allocation
 - [ ] Dyn dispatch works (test with `&dyn DynEncoderConfig` / `&dyn DynDecoderConfig`)
 - [ ] `no_std` compatible (no `std` imports, `alloc` only)

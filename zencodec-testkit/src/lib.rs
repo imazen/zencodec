@@ -21,6 +21,11 @@
 //!   context silently dies. Lenient about *whether* one is attached;
 //!   [`check_color_context_attached`] is the strict, opt-in positive direction
 //!   (a decoder that read colour back must attach it).
+//! - [`check_color_authority_spec`] — the `ColorAuthority` a decoder names in
+//!   `source_color` is the one its format's spec assigns for the colour fields it
+//!   read back (PNG/JXL/HEIC: CICP outranks ICC; AVIF: MIAF order; the rest:
+//!   ICC). [`check_source_color_authority`] is the unit form for a codec's own
+//!   fixtures, [`expected_color_authority`] the answer key.
 //! - [`check_native_hdr_roundtrip`] — when both ends declare `hdr`, BT.2100 PQ
 //!   and HLG survive a `PreserveExact` round trip: the CICP, the HDR envelope
 //!   (content light level + mastering display), 16-bit pixels where both ends
@@ -69,8 +74,8 @@ use zencodec::decode::{
 use zencodec::encode::{AnimationFrameEncoder, EncodeJob, Encoder, EncoderConfig};
 use zencodec::exif::Exif;
 use zencodec::{
-    Cicp, CodecError, ColorAuthority, ContentLightLevel, ErrorCategory, MasteringDisplay, Metadata,
-    MetadataFields, MetadataPolicy, Orientation,
+    Cicp, CodecError, ColorAuthority, ContentLightLevel, ErrorCategory, ImageFormat,
+    MasteringDisplay, Metadata, MetadataFields, MetadataPolicy, Orientation, SourceColor,
 };
 use zenpixels::{ColorContext, PixelDescriptor, PixelSlice, PixelSliceMut, TransferFunction};
 
@@ -1421,6 +1426,164 @@ where
     Ok(())
 }
 
+// ===========================================================================
+// Colour authority — the per-format spec table (issue #11, Table 4)
+// ===========================================================================
+
+/// The [`ColorAuthority`] a format's specification assigns, given which colour
+/// fields the decoder actually read back.
+///
+/// This is the shared answer key behind [`check_source_color_authority`] — the
+/// "what does the spec say" half of the audit in zencodec issue #11 (Table 4),
+/// so every codec crate asserts the same rule instead of re-deriving it:
+///
+/// | format | rule |
+/// |---|---|
+/// | PNG | `cICP` outranks `iCCP` (PNG 3rd ed.): `Cicp` when CICP was read, else `Icc` |
+/// | JXL | codestream colour encoding outranks an embedded ICC: `Cicp` when read, else `Icc` |
+/// | HEIC | `nclx` is the primary colour authority (ISO 23008-12): `Cicp` when read, else `Icc` |
+/// | AVIF | MIAF order: an ICC `colr` outranks `nclx` — `Icc` when an ICC was read, else `Cicp` when CICP was read, else `Icc` |
+/// | Radiance HDR | scene-linear BT.709 has no ICC carrier: `Cicp` when the codec expressed it as CICP, else `Icc` |
+/// | JPEG, WebP, GIF, TIFF, BMP, ICO, PNM, Farbfeld, QOI, TGA, DNG, RAW, PDF | ICC (or an sRGB assumption): always `Icc` |
+///
+/// Returns `None` where no rule is recorded — [`Custom`](ImageFormat::Custom),
+/// [`Unknown`](ImageFormat::Unknown), and the formats the audit did not cover
+/// (EXR, JPEG 2000, SVG) — so a check over those passes rather than inventing a
+/// rule. `Cicp` is never expected when no CICP was read (the enum's own
+/// invariant: codecs only set `Cicp` when `cicp` is populated).
+pub fn expected_color_authority(
+    format: ImageFormat,
+    has_cicp: bool,
+    has_icc: bool,
+) -> Option<ColorAuthority> {
+    use ImageFormat::*;
+    let cicp_first = if has_cicp {
+        ColorAuthority::Cicp
+    } else {
+        ColorAuthority::Icc
+    };
+    Some(match format {
+        Png | Jxl | Heic | Hdr => cicp_first,
+        Avif => {
+            if has_icc {
+                ColorAuthority::Icc
+            } else {
+                cicp_first
+            }
+        }
+        Jpeg | WebP | Gif | Tiff | Bmp | Ico | Pnm | Farbfeld | Qoi | Tga | Dng | Raw | Pdf => {
+            ColorAuthority::Icc
+        }
+        // EXR / JPEG 2000 / SVG were not covered by the audit; `Custom` /
+        // `Unknown` (and any future `#[non_exhaustive]` variant) have no rule.
+        _ => return None,
+    })
+}
+
+/// A decoded [`SourceColor`] names the authority its format's spec assigns.
+///
+/// The unit form of the check — run it on the `source_color` a decoder produced
+/// for a known input. The expected authority comes from
+/// [`expected_color_authority`] applied to the fields the decoder *read back*
+/// (so a decoder that reads no CICP is not expected to name it). Passes when the
+/// format has no recorded rule.
+///
+/// This is the "shared test helper" the issue #11 audit asked for: the
+/// authority-mismatch class of bug (HEIC naming `Icc` for an `nclx`-only file,
+/// so the CICP was dropped by `SourceColor::to_color_context()` and the pixels
+/// fell back to sRGB) is invisible to a pixel round trip and only shows up
+/// downstream in the CMS.
+pub fn check_source_color_authority(format: ImageFormat, sc: &SourceColor) -> Conformance {
+    const CHECK: &str = "source_color_authority";
+    let Some(want) = expected_color_authority(format, sc.cicp.is_some(), sc.icc_profile.is_some())
+    else {
+        return Ok(());
+    };
+    if sc.color_authority == want {
+        return Ok(());
+    }
+    Err(fail(
+        CHECK,
+        format!(
+            "{format:?} read cicp: {}, icc: {} — the format spec makes {want:?} authoritative, \
+             but source_color.color_authority is {:?}",
+            sc.cicp.map_or("none".to_string(), |c| format!("{c:?}")),
+            sc.icc_profile
+                .as_ref()
+                .map_or("none".to_string(), |i| format!("{} bytes", i.len())),
+            sc.color_authority
+        ),
+    ))
+}
+
+/// Decoded colour authority follows the format spec on every metadata mix.
+///
+/// Encodes `img` with an ICC only, a CICP only, both, and neither (each
+/// channel only when the encoder declares it), then runs
+/// [`check_source_color_authority`] on the `source_color` of the one-shot
+/// decode *and* of `probe()`, under the encoder's declared
+/// [`format()`](EncoderConfig::format). Passes trivially for formats without a
+/// recorded rule (see [`expected_color_authority`]).
+pub fn check_color_authority_spec<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
+where
+    E: EncoderConfig,
+    D: DecoderConfig,
+    <E::Job as EncodeJob>::Enc: Encoder<Error = E::Error>,
+{
+    const CHECK: &str = "color_authority_spec";
+    let ec = E::capabilities();
+    let format = E::format();
+    let mut mixes: Vec<(&str, Metadata)> = vec![("no colour metadata", Metadata::none())];
+    if ec.icc() {
+        mixes.push((
+            "icc only",
+            Metadata::none().with_icc(fixtures::sample_icc()),
+        ));
+    }
+    if ec.cicp() {
+        mixes.push(("cicp only", Metadata::none().with_cicp(Cicp::SRGB)));
+    }
+    if ec.icc() && ec.cicp() {
+        mixes.push((
+            "icc + cicp",
+            Metadata::none()
+                .with_icc(fixtures::sample_icc())
+                .with_cicp(Cicp::SRGB),
+        ));
+    }
+    let mut v: Vec<String> = Vec::new();
+    for (name, meta) in mixes {
+        let bytes = match enc_oneshot(&enc, img, meta, MetadataPolicy::PreserveExact) {
+            Ok(b) => b,
+            Err(e) => {
+                v.push(format!("{name}: encode failed: {e}"));
+                continue;
+            }
+        };
+        match dec_output(&dec, &bytes) {
+            Err(e) => v.push(format!("{name}: decode failed: {e}")),
+            Ok(out) => {
+                if let Err(f) = check_source_color_authority(format, &out.info().source_color) {
+                    v.push(format!("{name}, decode: {}", f.detail));
+                }
+            }
+        }
+        match dec.clone().job().probe(&bytes) {
+            Err(e) => v.push(format!("{name}: probe failed: {e}")),
+            Ok(info) => {
+                if let Err(f) = check_source_color_authority(format, &info.source_color) {
+                    v.push(format!("{name}, probe: {}", f.detail));
+                }
+            }
+        }
+    }
+    if v.is_empty() {
+        Ok(())
+    } else {
+        Err(fail(CHECK, v.join("; ")))
+    }
+}
+
 /// Classify one structural capability: declared support must match observed
 /// behavior. Declared + works = fine; declared + failed = lying (missing impl);
 /// undeclared + worked = lying (hidden support); undeclared + failed with
@@ -2010,6 +2173,7 @@ where
     check_metadata_no_leak(enc.clone(), dec.clone(), &img)?;
     check_capability_honesty(enc.clone(), dec.clone(), &img)?;
     check_color_context_consistency(enc.clone(), dec.clone(), &img)?;
+    check_color_authority_spec(enc.clone(), dec.clone(), &img)?;
     check_native_hdr_roundtrip(enc.clone(), dec.clone())?;
     let frames = [
         TestImage::rgba8_gradient_seeded(24, 16, 0),
@@ -2192,6 +2356,90 @@ mod tests {
             &TestImage::rgba8_gradient(12, 9),
         )
         .unwrap();
+    }
+
+    #[test]
+    fn minimal_color_authority_spec() {
+        check_color_authority_spec(
+            MinimalEncoderConfig::new(),
+            MinimalDecoderConfig::new(),
+            &TestImage::rgba8_gradient(12, 9),
+        )
+        .unwrap();
+    }
+
+    /// The reference (PNM-labelled) codec reads ICC and CICP back and leaves the
+    /// authority at the format's `Icc` default on every metadata mix.
+    #[test]
+    fn reference_color_authority_spec() {
+        let (e, d) = ref_codecs();
+        check_color_authority_spec(e, d, &TestImage::rgba8_gradient(12, 9)).unwrap();
+    }
+
+    /// The answer key encodes issue #11's Table 4 verbatim.
+    #[test]
+    fn expected_color_authority_table() {
+        use ColorAuthority::{Cicp as C, Icc as I};
+        use ImageFormat::*;
+        let e = expected_color_authority;
+        // CICP outranks ICC.
+        for f in [Png, Jxl, Heic, Hdr] {
+            assert_eq!(e(f, true, true), Some(C), "{f:?}");
+            assert_eq!(e(f, true, false), Some(C), "{f:?}");
+            assert_eq!(e(f, false, true), Some(I), "{f:?}");
+            assert_eq!(e(f, false, false), Some(I), "{f:?}");
+        }
+        // MIAF: ICC colr outranks nclx.
+        assert_eq!(e(Avif, true, true), Some(I));
+        assert_eq!(e(Avif, false, true), Some(I));
+        assert_eq!(e(Avif, true, false), Some(C));
+        assert_eq!(e(Avif, false, false), Some(I));
+        // ICC-only (or sRGB-assumed) formats never name CICP.
+        for f in [
+            Jpeg, WebP, Gif, Tiff, Bmp, Ico, Pnm, Farbfeld, Qoi, Tga, Dng, Raw, Pdf,
+        ] {
+            for (c, i) in [(true, true), (true, false), (false, true), (false, false)] {
+                assert_eq!(e(f, c, i), Some(I), "{f:?} cicp={c} icc={i}");
+            }
+        }
+        // No recorded rule.
+        for f in [Exr, Jp2, Svg, Unknown] {
+            assert_eq!(e(f, true, true), None, "{f:?}");
+        }
+    }
+
+    /// The HEIC bug the audit opened with: an `nclx`-only file whose decoder
+    /// left the authority at the `Icc` default. `to_color_context()` then drops
+    /// the CICP and the pixels fall back to sRGB — invisible to a pixel round
+    /// trip, caught here.
+    #[test]
+    fn source_color_authority_catches_nclx_only_default_authority() {
+        let sc = SourceColor::default().with_cicp(Cicp::BT2100_PQ);
+        let f = check_source_color_authority(ImageFormat::Heic, &sc).unwrap_err();
+        assert_eq!(f.check, "source_color_authority");
+        assert!(f.detail.contains("Cicp"), "{f}");
+        assert!(
+            check_source_color_authority(
+                ImageFormat::Heic,
+                &sc.with_color_authority(ColorAuthority::Cicp)
+            )
+            .is_ok()
+        );
+    }
+
+    /// AVIF: an ICC `colr` box outranks `nclx` (MIAF), so naming CICP with an ICC
+    /// present is the mismatch there — and a JPEG may never name CICP at all.
+    #[test]
+    fn source_color_authority_icc_first_formats() {
+        let both = SourceColor::default()
+            .with_cicp(Cicp::SRGB)
+            .with_icc_profile(fixtures::sample_icc());
+        assert!(check_source_color_authority(ImageFormat::Avif, &both).is_ok());
+        let wrong = both.clone().with_color_authority(ColorAuthority::Cicp);
+        assert!(check_source_color_authority(ImageFormat::Avif, &wrong).is_err());
+        assert!(check_source_color_authority(ImageFormat::Jpeg, &wrong).is_err());
+        // A format with no recorded rule never fails.
+        assert!(check_source_color_authority(ImageFormat::Exr, &wrong).is_ok());
     }
 
     /// The minimal codec still round-trips pixels one-shot and cleanly declines

@@ -8,6 +8,16 @@ All notable changes to zencodec are documented here. Sections below the
 ### [Unreleased]
 
 #### Added
+- **`check_color_authority_spec`** (in `check_all`) — the `ColorAuthority` a
+  decoder names in `ImageInfo.source_color` must be the one its format's spec
+  assigns for the colour fields it read back, on every metadata mix the encoder
+  can produce (none / ICC / CICP / both), from both `decode()` and `probe()`.
+  **`check_source_color_authority(format, &SourceColor)`** is the unit form for a
+  codec's own fixtures and **`expected_color_authority(format, has_cicp, has_icc)`**
+  the shared answer key (PNG/JXL/HEIC/Radiance HDR: CICP outranks ICC; AVIF:
+  MIAF order, ICC `colr` outranks `nclx`; JPEG/WebP/GIF/TIFF/BMP/ICO/PNM/
+  Farbfeld/QOI/TGA/DNG/RAW/PDF: always ICC; no rule for EXR/JP2/SVG/Custom).
+  The shared test helper the decoder audit asked for (#11).
 - **`check_color_context_consistency`** (in `check_all`) — whatever
   `zenpixels::ColorContext` a decoder attaches to its output buffers must be
   class-valid (an ICC only rides a layout its device class, header bytes 16..20,
@@ -99,6 +109,15 @@ removes that whole class).
   rather than inspecting raw CICP/ICC fields.
 
 ### Added
+- Docs: `ImageInfo::is_progressive` now has a definition (a *refinement* order —
+  a coarse whole image renderable before the last byte — never a spatial
+  partition) and a per-format table settling the open design call from the
+  decoder audit: JPEG SOF2/6/10/14, Adam7 PNG, interlaced GIF, a JPEG XL frame
+  with `num_passes > 1`, and a layered (`a1lx`) AVIF/HEIC item are progressive;
+  WebP, TIFF (strips/tiles) and the raster formats never are.
+  `docs/IMPLEMENTING.md` gains a "Source Colour Fields" section (authority per
+  format, header-sourced `bit_depth`/`channel_count`, the progressive rule) and
+  matching checklist entries (#11).
 - Docs: the decoded-buffer `ColorContext` convention — decoders SHOULD attach
   `SourceColor::to_color_context()` to every emitted buffer, class-gated (ICC
   device class ↔ buffer colour model), with the ranked fallbacks (class-matching
