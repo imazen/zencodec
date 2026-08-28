@@ -1256,6 +1256,36 @@ where
         .into_vec())
 }
 
+/// Encode `img` with `gm` attached, through the incremental `push_rows` +
+/// `finish` path — a separate code path in real codecs, where a job-level
+/// setting is easy to leave behind.
+fn enc_push_rows_with_gain_map<E>(
+    cfg: &E,
+    img: &TestImage,
+    gm: DecodedGainMap,
+) -> Result<Vec<u8>, String>
+where
+    E: EncoderConfig,
+    <E::Job as EncodeJob>::Enc: Encoder<Error = E::Error>,
+{
+    let mut enc = cfg
+        .clone()
+        .job()
+        .with_metadata_policy(Metadata::none(), MetadataPolicy::PreserveExact)
+        .with_gain_map_pixels(gm)
+        .map_err(|e| format!("with_gain_map_pixels: {e}"))?
+        .encoder()
+        .map_err(|e| e.to_string())?;
+    let strip = enc.preferred_strip_height().max(1);
+    let mut y = 0;
+    while y < img.height {
+        let h = strip.min(img.height - y);
+        enc.push_rows(img.strip(y, h)).map_err(|e| e.to_string())?;
+        y += h;
+    }
+    Ok(enc.finish().map_err(|e| e.to_string())?.into_vec())
+}
+
 /// Decode with a specific [`GainMapRender`] intent.
 fn dec_render<D: DecoderConfig>(
     cfg: &D,
@@ -1410,6 +1440,10 @@ fn compare_gain_map(
 /// - **Transcode (Phase 4)**: the `Components` map is fed back through a fresh
 ///   `with_gain_map_pixels`, decoded again, and must match the first
 ///   generation (metadata exactly; pixels byte-exact when lossless).
+/// - **`push_rows` path** (when the encoder declares it): the same map
+///   attached to an incremental `push_rows` + `finish` encode surfaces
+///   identically — the streaming encoder is a separate code path in real
+///   codecs, and a job-level setting is easy to leave behind there.
 /// - **Decoder undeclared** ⇒ a `Components` decode of the same file either
 ///   decodes the base with no `DecodedGainMap` extra (a hidden capability is
 ///   a lie) or fails with `UnsupportedOperation`.
@@ -1715,6 +1749,32 @@ where
                             &first_obs.info,
                             lossless,
                             "transcode generation 2",
+                        ) {
+                            v.push(format!("[{name}] {e}"));
+                        }
+                    }
+                },
+            }
+        }
+
+        // push_rows: the streaming encoder carries the map too.
+        if ec.push_rows() {
+            match enc_push_rows_with_gain_map(&enc, &base, gain_map_fixture(case)).and_then(|b| {
+                dec_render(&dec, &b, GainMapRender::Components).map_err(|e| e.to_string())
+            }) {
+                Err(e) => v.push(format!("[{name}] push_rows encode with gain map: {e}")),
+                Ok(out) => match out.extras::<DecodedGainMap>() {
+                    None => v.push(format!(
+                        "[{name}] push_rows: the incrementally encoded file surfaced no \
+                         DecodedGainMap — the gain map was lost on the push_rows path"
+                    )),
+                    Some(gm) => {
+                        if let Err(e) = compare_gain_map(
+                            &GainMapObserved::of(gm),
+                            &want_px,
+                            &want_info,
+                            lossless,
+                            "push_rows",
                         ) {
                             v.push(format!("[{name}] {e}"));
                         }

@@ -20,9 +20,10 @@ All notable changes to zencodec are documented here. Sections below the
   (never under the default `BaseOnly`, and both requests yield the same map)
   with exact params and byte-exact pixels on a lossless codec, falls back
   honestly on `ReconstructHdr` without `reconstructs_hdr` (components or
-  `UnsupportedOperation`, never an SDR buffer labelled PQ/HLG), and the surfaced
-  map transcodes through a fresh `with_gain_map_pixels` unchanged. Mutation-
-  verified against the reference (8 breakages, all caught).
+  `UnsupportedOperation`, never an SDR buffer labelled PQ/HLG), the surfaced
+  map transcodes through a fresh `with_gain_map_pixels` unchanged, and (when
+  `push_rows` is declared) the incremental encode path carries the map too.
+  Mutation-verified against the reference (9 breakages, all caught).
 - The `reference` codec now declares `gain_map` on both ends and is the worked
   example of the encode contract: `with_gain_map_pixels` validates and stores
   an 8-bit 1/3-channel map, `with_gain_map_encoded` byte-carries its own format
