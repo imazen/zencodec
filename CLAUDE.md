@@ -66,6 +66,57 @@ Tiny, stable crate defining the common interface that all zen* codecs implement:
 - **`StreamingDecode`**: Pull-based scanline iterator. `impl StreamingDecode for ()` is the rejection stub for codecs that don't support streaming.
 - **Decode format negotiation**: Caller provides ranked `&[PixelDescriptor]` preference list. Decoder picks best match without lossy conversion.
 
+## Consumer version requirements: always current-plus-next minor (STANDING RULE)
+
+**Every consumer's requirement on `zencodec`, `zencodec-testkit`, `zenpixels`, and
+`zenpixels-convert` must span the published minor AND the next one**, so a minor
+bump does not require a coordinated re-pin wave across every repo.
+
+For a `0.x` crate Cargo treats the minor as the major: `"0.1.26"` means `^0.1.26`
+= `>=0.1.26, <0.2.0`, so a `0.2.0` release is invisible until every manifest is
+hand-edited. Instead, given published `0.x.z`, write:
+
+```toml
+zencodec  = ">=0.x.z, <0.(x+2).0"     # accepts all of 0.x.* and all of 0.(x+1).*
+```
+
+As of 2026-08-29 (published versions verified with `cargo search`):
+
+| crate | published | requirement to write |
+|---|---|---|
+| zencodec | 0.1.26 | `">=0.1.26, <0.3.0"` |
+| zencodec-testkit | 0.1.0 | `">=0.1.0, <0.3.0"` |
+| zenpixels | 0.2.16 | `">=0.2.16, <0.4.0"` |
+| zenpixels-convert | 0.2.16 | `">=0.2.16, <0.4.0"` |
+
+**The rule is current-plus-next, always — it moves with each release.** When
+zencodec publishes `0.2.0` the requirement becomes `">=0.2.0, <0.4.0"`; when it
+publishes `0.3.0`, `">=0.3.0, <0.5.0"`. Re-derive the ceiling at each release
+rather than leaving a stale one in place.
+
+**The floor stays at the version the consumer actually needs.** Only the ceiling
+moves. Never truncate to `"0.1"` or `"0.2"` — the standing never-truncate-versions
+rule still applies, because Cargo resolution is not "largest compatible patch"
+when a sibling constrains the graph.
+
+**Why this exists — the two-copies trap.** If some consumers widen and others do
+not, and both feed one dependency graph, cargo resolves **two copies** of the
+crate (e.g. `0.1.26` and `0.2.0`) and the types do not unify across the boundary:
+a `zencodec::CodecError` from one copy is a different type from the other, so
+trait impls silently fail to apply and errors surface as inscrutable mismatches.
+This workspace has hit that failure twice recently (zenanalyze and `cubecl-ir`).
+So the widening must be **uniform** — a partial sweep is worse than none.
+
+The concrete motivation: the `zencodec 0.1.26` rollout
+(`zen/ZENCODEC_026_ROLLOUT.md`) required touching every consumer repo by hand,
+across weeks. The range makes the next bump automatic — consumers ride over
+`0.2.0` with no edit at all.
+
+**`[patch.crates-io]` entries are unaffected.** A patch replaces the source
+regardless of the requirement, so bridges carrying unpublished versions stay. The
+range removes the need for the future *edit*, not the present patch; delete a
+patch when its crate actually publishes.
+
 ## Release Requirements
 
 **CI MUST pass before any crates.io release.** This includes:

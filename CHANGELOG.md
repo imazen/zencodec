@@ -99,6 +99,19 @@ removes that whole class).
 
 ## [Unreleased]
 
+### Changed
+
+- **Dependency requirements now span the published minor and the next one.**
+  `zenpixels` is `>=0.2.14, <0.4.0` (was `0.2.14`, i.e. `^0.2.14` =
+  `>=0.2.14, <0.3.0`); `zencodec-testkit` requires `zencodec >=0.1.26, <0.3.0`
+  and `zenpixels >=0.2.10, <0.4.0`. For a `0.x` crate Cargo treats the minor as
+  the major, so a plain `"0.2.14"` makes a `0.3.0` release invisible until every
+  manifest is hand-edited — which is exactly what the `zencodec 0.1.26` rollout
+  cost across every consumer repo. Floors are unchanged; only the ceilings move,
+  and nothing newer is published, so today's resolution is byte-identical.
+  The standing rule (current-plus-next, re-derived at each release) and the
+  two-copies trap it prevents are documented in `CLAUDE.md`.
+
 ### Fixed
 
 - **Pushes to `main` now cancel their superseded CI runs.** `ci.yml` and
