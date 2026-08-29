@@ -117,6 +117,37 @@ regardless of the requirement, so bridges carrying unpublished versions stay. Th
 range removes the need for the future *edit*, not the present patch; delete a
 patch when its crate actually publishes.
 
+### ⚠ BLOCKER: `zencodec-testkit` must republish BEFORE `zencodec 0.2.0`
+
+Widening the consumers is necessary but **not sufficient**, because one link in
+the graph is a *published artifact* nobody can edit in place. Read from
+`cargo metadata` (not assumed), the published `zencodec-testkit 0.1.0` declares:
+
+```
+zencodec  ^0.1.26      = >=0.1.26, <0.2.0
+zenpixels ^0.2.10      = >=0.2.10, <0.3.0
+```
+
+Those carets will **not** admit `zencodec 0.2.0` / `zenpixels 0.3.0`. So the day
+`zencodec 0.2.0` publishes, any repo that takes `zencodec-testkit` from the
+registry resolves **two `zencodec` copies** — the consumer's `0.2.0` and
+testkit's `0.1.26` — and a `check_*` helper handed a `DecoderConfig` from the
+other copy fails to typecheck (E0277: the trait bound names a *different*
+`DecoderConfig`). Affected today: `heic`, `zenbitmaps`, `zenraw`, `zenwebp`,
+`zenjpeg`, `zengif`, and all four `zenextras` members.
+
+The fix is already committed here — `zencodec-testkit/Cargo.toml` carries
+`zencodec ">=0.1.26, <0.3.0"` and `zenpixels ">=0.2.10, <0.4.0"` — but a
+manifest is not a release. **`zencodec-testkit` must be published with those
+ranges before, or in the same batch as, `zencodec 0.2.0`.** Treat it as a
+release-gate item, not a follow-up.
+
+Two consumers currently take testkit (and zencodec) from **git** rather than the
+registry — `zenjxl` and `zenpng`, whose comments still say testkit is
+unpublished. It published as `0.1.0`; those git deps and the tag-pinned
+`[patch.crates-io]` entries that exist only to unify with them can become plain
+registry deps whenever someone verifies the swap.
+
 ## Release Requirements
 
 **CI MUST pass before any crates.io release.** This includes:
