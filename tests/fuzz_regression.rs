@@ -201,13 +201,41 @@ fn run_metadata_filtered(data: &[u8]) {
     assert_eq!(out.orientation, out2.orientation);
 }
 
+/// Every seed committed to `fuzz/regression/`, by name.
+///
+/// This list is what stops the suite from passing vacuously. Without it, a
+/// renamed, moved, or emptied `fuzz/regression/` turns the whole test into a
+/// no-op that still reports green — the failure mode the gate exists to catch
+/// (the directory is not in the published `include` list, so it is easy to
+/// lose in a packaging or path refactor and never notice).
+///
+/// Adding a seed does NOT require touching this list; removing or renaming one
+/// does, deliberately. Each entry names a bug that was found by fuzzing and
+/// fixed — dropping the seed silently would retire a regression gate.
+const EXPECTED_SEEDS: &[&str] = &[
+    "crash-idempotence-10a1002a",
+    "exif_author_fixpoint_96",
+    "exif_author_issue_113_farm_artifact",
+    "exif_roundtrip_dup_interop_pointer",
+    "exif_roundtrip_gps_drift_30",
+    "exif_roundtrip_gps_drift_dup_unresolved_pointer",
+    "exif_roundtrip_issue_114_farm_artifact",
+    "exif_roundtrip_issue_115_farm_artifact",
+    "metadata_filtered_idempotent_97",
+    "metadata_filtered_issue_111_farm_artifact",
+    "metadata_filtered_orientation_entry_overlap",
+    "metadata_filtered_orientation_header_overlap",
+];
+
 #[test]
 fn fuzz_regression_seeds() {
     let dir = regression_dir();
-    let entries = match fs::read_dir(&dir) {
-        Ok(e) => e,
-        Err(_) => return, // no seeds yet — nothing to regress
-    };
+    // No `Err(_) => return`: a missing or renamed directory is a broken gate,
+    // not "nothing to regress".
+    let entries = fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("cannot read seed dir {}: {e}", dir.display()));
+
+    let mut names = Vec::new();
     let mut count = 0;
     for entry in entries.flatten() {
         let path = entry.path();
@@ -215,24 +243,37 @@ fn fuzz_regression_seeds() {
             continue;
         }
         // Skip dotfiles (e.g. .gitkeep).
-        if path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .is_some_and(|n| n.starts_with('.'))
-        {
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if name.starts_with('.') {
             continue;
         }
-        let data = fs::read(&path).expect("read seed");
+        let name = name.to_owned();
+        let data = fs::read(&path).unwrap_or_else(|e| panic!("read seed {name}: {e}"));
         // Name the seed as it runs: test output is captured on success, so
         // this only surfaces on failure — where the panic itself doesn't say
         // which seed (or which target mirror) tripped it.
-        eprintln!("fuzz_regression: seed {}", path.display());
+        eprintln!("fuzz_regression: seed {name}");
         run_parse(&data);
         run_roundtrip(&data);
         run_filter(&data);
         run_author(&data);
         run_metadata_filtered(&data);
+        names.push(name);
         count += 1;
     }
+
+    let missing: Vec<_> = EXPECTED_SEEDS
+        .iter()
+        .filter(|want| !names.iter().any(|got| got == *want))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "seed(s) missing from {}: {missing:?} — every entry in EXPECTED_SEEDS \
+         guards a fixed bug; if one was intentionally retired, drop it from the \
+         list in the same change",
+        dir.display()
+    );
     eprintln!("fuzz_regression: replayed {count} seed(s)");
 }

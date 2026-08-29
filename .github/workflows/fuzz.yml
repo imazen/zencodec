@@ -1,0 +1,93 @@
+name: Fuzz
+
+# A BUILD gate, not a fuzzing campaign. It compiles every fuzz target on every
+# push so API drift fails CI the day it happens.
+#
+# Why it exists: `fuzz/` is a standalone Cargo workspace, excluded from the root
+# manifest (`exclude = ["fuzz", "apidoc"]`) so `cargo fuzz` can resolve it
+# without erroring that it "believes it's in a workspace when it's not". That
+# exclusion also means neither `cargo test`, `cargo check --all-targets`, nor
+# clippy in ci.yml ever reaches it — the five targets under `fuzz/fuzz_targets/`
+# were compiled by nothing on any push. A workspace-wide audit on 2026-08-29
+# found 35 such targets across 11 repos; zenpipe's eleven had been broken for
+# roughly seven weeks before anyone noticed. This repo's five happened to still
+# compile when the gate was added, which is exactly when it is cheapest to add.
+#
+# Why `cargo check` and not `cargo fuzz build`: `cargo fuzz` needs a nightly
+# toolchain plus `-Zsanitizer=address`, and fully codegens the dependency graph
+# with sanitizer-coverage instrumentation for every target. `cargo check`
+# catches the same class of rot — the drift actually found across the audited
+# repos was all E0063/E0308/E0599 or outright resolution failure — on stable,
+# in a fraction of the time. Actual fuzzing stays a hand-run activity; the
+# working corpus lives in block storage, not git.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Superseded runs waste runner queue; only the newest commit per ref matters.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Linux only, deliberately: the targets are `#![no_main]` libFuzzer bins that
+  # only ever run under `cargo fuzz` on Linux. Compiling them on Windows/macOS
+  # would gate nothing these targets can actually exercise, and ci.yml already
+  # covers the library itself on all six platforms.
+  targets:
+    name: Fuzz targets compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+
+      # No sibling checkouts and no `[patch.crates-io]` rewriting. Verified with
+      # `cargo metadata` on 2026-08-29: the resolved graph is 22 packages, every
+      # one of them either from crates.io or the in-repo `path = ".."` — nothing
+      # outside this checkout. That is also why this job deliberately does NOT
+      # route through a setup action that pathes manifests: the failure this
+      # gate exists to catch is a fuzz manifest that has gone stale, and
+      # rewriting the manifest under test would mask exactly that.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: fuzz-targets
+          workspaces: fuzz
+
+      # No `--locked`: a stale committed lock would keep resolving happily while
+      # the API it targets moved on, which is the drift this gate exists to see.
+      # `fuzz/Cargo.lock` stays committed for reproducible hand-fuzzing; CI is
+      # allowed to re-resolve on top of it.
+      - name: cargo check --all-targets
+        working-directory: fuzz
+        run: cargo check --all-targets
+
+  # The committed seeds under `fuzz/regression/` are minimized inputs for bugs
+  # that have been fixed. Replaying them needs neither nightly nor cargo-fuzz,
+  # so they gate on stable via `tests/fuzz_regression.rs`, which mirrors all
+  # five target bodies.
+  #
+  # No `|| true`-shaped fallback anywhere in this job, and none in the harness:
+  # it asserts the seed directory is readable and that every seed named in
+  # `EXPECTED_SEEDS` is present, so a moved, renamed, or emptied corpus fails
+  # loudly instead of turning into a gate that doesn't gate. (Before
+  # 2026-08-29 it returned early on a missing directory and only *printed* the
+  # replay count — it would have passed green on an empty corpus.)
+  regression:
+    name: Fuzz regression seeds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: fuzz-regression
+
+      - name: Replay committed crash seeds
+        run: cargo test --test fuzz_regression -- --nocapture

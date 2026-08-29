@@ -141,6 +141,16 @@ removes that whole class).
   rather than inspecting raw CICP/ICC fields.
 
 ### Added
+- CI: a `Fuzz` workflow that compile-gates the `fuzz/` workspace on every push
+  and PR. `fuzz/` is excluded from the root manifest so `cargo fuzz` can resolve
+  it standalone, which also meant no CI job ever compiled its five targets —
+  they could rot silently against an API change and nothing would say so. The
+  gate runs `cargo check --all-targets` on stable rather than `cargo fuzz build`
+  (nightly + per-target sanitizer codegen) because every rot found in the
+  workspace-wide audit was a plain type or resolution error. A second job
+  replays the committed crash seeds. The five targets did still compile when the
+  gate was added.
+
 - Docs: `docs/IMPLEMENTING.md` "Fidelity: honour what you can, report what you
   did" — the `with_fidelity` / `resolved_target_fidelity` contract per declared
   capability (the table `check_fidelity_honesty` enforces) + a checklist entry
@@ -175,6 +185,13 @@ removes that whole class).
   it. Both now describe the real per-codec, by-convention lowering and state
   plainly that the caller-supplied `Metadata` is never cross-checked against
   the pixel buffer (#119).
+- `tests/fuzz_regression.rs` could pass vacuously: it returned early when
+  `fuzz/regression/` could not be read and only *printed* the replay count, so a
+  renamed, moved, or emptied seed directory reported green while replaying
+  nothing. It now hard-fails on an unreadable directory and asserts every seed
+  named in `EXPECTED_SEEDS` is present — the 12 committed seeds each guard a
+  fixed bug, so retiring one is a deliberate edit rather than a silent loss of
+  coverage. Verified by hiding a seed and watching the suite fail.
 
 ## [0.1.26] - 2026-07-14
 
