@@ -99,6 +99,18 @@ removes that whole class).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Pushes to `main` now cancel their superseded CI runs.** `ci.yml` and
+  `fuzz.yml` keyed their concurrency group on
+  `${{ github.head_ref || github.run_id }}`. `github.head_ref` is populated only
+  for `pull_request` events, so on a push it was empty and the group fell through
+  to `github.run_id` — unique per run, so no two pushes ever shared a group and
+  `cancel-in-progress` could never fire. Now keyed on `${{ github.ref }}`, which
+  is set for both event types, so PR cancellation is unchanged and consecutive
+  pushes supersede each other. The two workflows keep distinct groups via the
+  `${{ github.workflow }}` prefix, so they still never cancel one another.
+
 ### QUEUED BREAKING CHANGES
 <!-- Breaking changes that will ship together in the next 0.x minor release.
      Add items here as you discover them. Do NOT ship these piecemeal — batch them. -->
