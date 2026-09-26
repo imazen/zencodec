@@ -239,6 +239,43 @@ fn classify(tag: u16) -> Category {
     }
 }
 
+/// Which directory of the EXIF tree an [`EntryRef`] belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Ifd {
+    /// IFD0, the primary image directory.
+    Ifd0,
+    /// The Exif sub-IFD (pointed to by IFD0 tag 0x8769).
+    Exif,
+    /// The GPS sub-IFD (IFD0 tag 0x8825).
+    Gps,
+    /// The Interoperability sub-IFD (Exif-IFD tag 0xA005).
+    Interop,
+    /// IFD1, the thumbnail directory.
+    Ifd1,
+}
+
+/// A read-only view of one IFD entry, as yielded by [`Exif::entries`].
+///
+/// `kind` is the raw TIFF field type (1 = BYTE, 2 = ASCII, 3 = SHORT, 4 = LONG,
+/// 5 = RATIONAL, 7 = UNDEFINED, 10 = SRATIONAL, 129 = UTF-8, …) and `value` is
+/// the field's payload exactly as stored — `count` elements in the blob's
+/// [`byte_order`](Exif::byte_order), ASCII with its terminating NUL — so a
+/// consumer can diff or dump entries without re-parsing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EntryRef<'e> {
+    /// Directory the entry lives in.
+    pub ifd: Ifd,
+    /// TIFF/EXIF tag number.
+    pub tag: u16,
+    /// TIFF field type.
+    pub kind: u16,
+    /// Number of values of that type.
+    pub count: u32,
+    /// Payload bytes.
+    pub value: &'e [u8],
+}
+
 /// One IFD entry. Value bytes are [`Cow`]: **borrowed** from the source blob on
 /// [`parse`](Exif::parse) (zero-copy — a multi-KB thumbnail is never copied) and
 /// **owned** for an entry injected by an edit ([`set_copyright`](Exif::set_copyright)).
@@ -565,6 +602,32 @@ impl<'a> Exif<'a> {
     /// across [`to_bytes`](Self::to_bytes).
     pub fn byte_order(&self) -> ByteOrder {
         self.order
+    }
+
+    /// Every entry of the tree in directory order (IFD0, Exif, Interop, GPS,
+    /// IFD1), each in its directory's stored order.
+    ///
+    /// Structural pointers (the Exif / GPS / Interop IFD offsets and the
+    /// JPEG-thumbnail offset/length) are tree edges, not entries, and are not
+    /// yielded; the thumbnail's presence is [`has_thumbnail`](Self::has_thumbnail).
+    /// Entries skipped at parse time (unknown type, out-of-bounds value) are
+    /// not represented. Intended for inspection and diffing; it never
+    /// allocates.
+    pub fn entries(&self) -> impl Iterator<Item = EntryRef<'_>> + '_ {
+        fn view<'e, 'a>(ifd: Ifd, d: &'e [Entry<'a>]) -> impl Iterator<Item = EntryRef<'e>> {
+            d.iter().map(move |e| EntryRef {
+                ifd,
+                tag: e.tag,
+                kind: e.kind,
+                count: e.count,
+                value: &e.value,
+            })
+        }
+        view(Ifd::Ifd0, &self.ifd0)
+            .chain(self.exif_ifd.iter().flat_map(|d| view(Ifd::Exif, d)))
+            .chain(self.interop_ifd.iter().flat_map(|d| view(Ifd::Interop, d)))
+            .chain(self.gps_ifd.iter().flat_map(|d| view(Ifd::Gps, d)))
+            .chain(self.ifd1.iter().flat_map(|d| view(Ifd::Ifd1, d)))
     }
 
     /// The EXIF Orientation tag (0x0112), if present and valid.
@@ -3179,6 +3242,67 @@ mod tests {
             !ExifPolicy::KEEP_ALL
                 .with_device_ids(Retention::Discard)
                 .keeps_everything()
+        );
+    }
+
+    /// `entries()` walks every directory in order, yields raw type/count/value
+    /// and never the structural pointers.
+    #[test]
+    fn entries_iterates_every_directory_without_structural_pointers() {
+        // Full tree: IFD0 + Exif + Interop + GPS + IFD1(thumbnail).
+        let ori = 6u16.to_be_bytes();
+        let exif = Exif {
+            order: ByteOrder::Big,
+            had_prefix: true,
+            ifd0: vec![
+                e(TAG_MAKE, TIFF_ASCII, 4, b"Cam\0"),
+                e(TAG_ORIENTATION, TIFF_SHORT, 1, &ori),
+            ],
+            exif_ifd: Some(vec![e(TAG_COLOR_SPACE, TIFF_SHORT, 1, &[0, 1])]),
+            gps_ifd: Some(vec![e(0x0001, TIFF_ASCII, 2, b"N\0")]),
+            interop_ifd: Some(vec![e(0x0001, TIFF_ASCII, 4, b"R98\0")]),
+            ifd1: Some(vec![e(TAG_SOFTWARE, TIFF_ASCII, 3, b"sw\0")]),
+            thumbnail: Some(&[0xFF, 0xD8, 0xFF, 0xD9]),
+            text_encoding: TextEncoding::Ascii,
+        };
+        let bytes = exif.to_bytes();
+        let x = Exif::parse(&bytes).unwrap();
+        let got: alloc::vec::Vec<(Ifd, u16, u16, u32, &[u8])> = x
+            .entries()
+            .map(|r| (r.ifd, r.tag, r.kind, r.count, r.value))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                (Ifd::Ifd0, TAG_MAKE, TIFF_ASCII, 4, &b"Cam\0"[..]),
+                (Ifd::Ifd0, TAG_ORIENTATION, TIFF_SHORT, 1, &ori[..]),
+                (Ifd::Exif, TAG_COLOR_SPACE, TIFF_SHORT, 1, &[0, 1][..]),
+                (Ifd::Interop, 0x0001, TIFF_ASCII, 4, &b"R98\0"[..]),
+                (Ifd::Gps, 0x0001, TIFF_ASCII, 2, &b"N\0"[..]),
+                (Ifd::Ifd1, TAG_SOFTWARE, TIFF_ASCII, 3, &b"sw\0"[..]),
+            ]
+        );
+        assert!(x.entries().all(|r| {
+            ![
+                TAG_EXIF_IFD,
+                TAG_GPS_IFD,
+                TAG_INTEROP_IFD,
+                TAG_THUMB_OFFSET,
+                TAG_THUMB_LENGTH,
+            ]
+            .contains(&r.tag)
+        }));
+        assert!(x.has_thumbnail());
+        // Filtering is visible through the same view.
+        let pruned = x.filtered(&ExifPolicy::ORIENTATION_ONLY);
+        let tags: alloc::vec::Vec<(Ifd, u16)> = pruned.entries().map(|r| (r.ifd, r.tag)).collect();
+        assert_eq!(
+            tags,
+            vec![
+                (Ifd::Ifd0, TAG_ORIENTATION),
+                (Ifd::Exif, TAG_COLOR_SPACE),
+                (Ifd::Interop, 0x0001)
+            ]
         );
     }
 

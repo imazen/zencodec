@@ -121,6 +121,11 @@ removes that whole class).
   an image, not a device.
 - Reproducible, read-only corpus privacy audit against ExifTool
   (`scripts/audit-exif-privacy.py`) and malformed/aliased/truncated EXIF regressions.
+- `Exif::entries()` — a read-only, non-allocating iterator over every entry of
+  the parsed tree (`EntryRef { ifd: Ifd, tag, kind, count, value }`, directory
+  order IFD0 → Exif → Interop → GPS → IFD1, raw TIFF type and payload bytes),
+  for metadata dumps and image+metadata diff tools. Structural pointers are
+  tree edges and are not yielded.
 
 ### Changed
 
