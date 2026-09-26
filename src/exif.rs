@@ -9,9 +9,10 @@
 //! unchanged when nothing is dropped and allocates only on a real rewrite.
 //!
 //! Spec: TIFF 6.0 (Adobe, 1992) + EXIF 2.32 (CIPA DC-008). The structural
-//! pointer tags — Exif IFD (0x8769), GPS IFD (0x8825), and the JPEG thumbnail
-//! pointers (0x0201/0x0202) — are modeled as tree edges, not entries, and
-//! re-synthesized with fresh offsets on serialize.
+//! pointer tags — Exif IFD (0x8769), GPS IFD (0x8825), Interoperability IFD
+//! (0xA005, inside the Exif IFD), and the JPEG thumbnail pointers
+//! (0x0201/0x0202) — are modeled as tree edges, not entries, and re-synthesized
+//! with fresh offsets on serialize.
 //!
 //! Error model (no panics on untrusted input — every read is bounds-checked):
 //! - **Structural failure → `None`.** A bad byte-order mark, wrong magic,
@@ -56,6 +57,13 @@ const TAG_COPYRIGHT: u16 = 0x8298;
 const TAG_EXIF_IFD: u16 = 0x8769;
 const TAG_GPS_IFD: u16 = 0x8825;
 const TAG_INTEROP_IFD: u16 = 0xA005;
+
+// Exif sub-IFD: colour signalling (the `color` category). ColorSpace = 1 is
+// sRGB, 0xFFFF is "uncalibrated" — combined with the Interop IFD's
+// InteropIndex (`R98` sRGB / `R03` Adobe RGB) it is the only colour
+// declaration many camera JPEGs carry, so dropping it changes displayed pixels.
+const TAG_COLOR_SPACE: u16 = 0xA001;
+const TAG_GAMMA: u16 = 0xA500; // Exif 2.2
 const TAG_THUMB_OFFSET: u16 = 0x0201; // JPEGInterchangeFormat
 const TAG_THUMB_LENGTH: u16 = 0x0202; // JPEGInterchangeFormatLength
 // SubIFDs (TIFF/DNG) — an array of offsets to nested IFDs (alt/full-res images
@@ -168,6 +176,7 @@ enum Category {
     Rights,
     Datetimes,
     Camera,
+    Color,
     Other,
 }
 
@@ -212,6 +221,8 @@ fn classify(tag: u16) -> Category {
         | TAG_RAW_DEVELOPING_SOFTWARE
         | TAG_IMAGE_EDITING_SOFTWARE
         | TAG_METADATA_EDITING_SOFTWARE => Category::Camera,
+        // Colour signalling (the Interop IFD is modeled structurally alongside).
+        TAG_COLOR_SPACE | TAG_GAMMA => Category::Color,
         _ => Category::Other,
     }
 }
@@ -243,6 +254,10 @@ pub struct Exif<'a> {
     ifd0: Vec<Entry<'a>>,
     exif_ifd: Option<Vec<Entry<'a>>>,
     gps_ifd: Option<Vec<Entry<'a>>>,
+    /// Interoperability sub-IFD (0xA005, a child of the Exif IFD). Kept whole
+    /// under the `color` category, like GPS under `gps`. Never `Some` without
+    /// an Exif IFD to hang off — `to_bytes` ignores it otherwise.
+    interop_ifd: Option<Vec<Entry<'a>>>,
     ifd1: Option<Vec<Entry<'a>>>,
     thumbnail: Option<&'a [u8]>,
     /// Field type used when *writing* a string tag ([`set_copyright`](Self::set_copyright)
@@ -392,6 +407,7 @@ impl<'a> Exif<'a> {
             ifd0: Vec::new(),
             exif_ifd: None,
             gps_ifd: None,
+            interop_ifd: None,
             ifd1: None,
             thumbnail: None,
             text_encoding,
@@ -422,28 +438,23 @@ impl<'a> Exif<'a> {
         let ifd0_off = rd32(tiff, 4, order)? as usize;
         let (mut ifd0, next) = parse_ifd(tiff, ifd0_off, order)?;
 
-        // Extract sub-IFD pointers as tree edges. The Interop IFD (0xA005) is
-        // not modeled — strip its pointer so a rewrite can't leave a dangling
-        // offset (it survives only via the no-prune passthrough).
+        // Extract sub-IFD pointers as tree edges. The Interop IFD (0xA005) hangs
+        // off the Exif IFD and is extracted the same way; `to_bytes` re-synthesizes
+        // its pointer from the tree shape, so a rewrite can't leave a dangling
+        // offset.
         let exif_taken = take_pointer(&mut ifd0, TAG_EXIF_IFD, order);
+        let mut interop_ifd = None;
         let exif_ifd = exif_taken.and_then(|o| {
             parse_ifd(tiff, o, order).map(|(mut e, _)| {
-                // Interop (0xA005) isn't modeled (see module doc): its pointer is
-                // stripped so a rewrite can't leave a dangling offset, and
-                // `to_bytes` never re-synthesizes it (unlike Exif/GPS, there is
-                // no `interop_ifd` field to write back). But a *duplicate*
-                // Interop tag needs the same "gate on removal" sweep as the
-                // GPS/Exif sub-IFD pointers (zencodec#30/#107): `take_pointer`
-                // only removes the FIRST match, so a second 0xA005 entry
-                // survives as ordinary data. On the next `to_bytes`/parse cycle
-                // it resolves as an ordinary entry, gets consumed by *this same*
-                // call one occurrence at a time, and `exif_ifd`'s entry count
-                // silently shrinks by one on every round-trip until it empties
-                // out — a serializer non-fixpoint invisible to
-                // `orientation`/`has_gps`/`has_thumbnail` (nothing reads
-                // Interop), but a real bug under `filtered`/`exif_filter`
-                // idempotence. Strip any remaining occurrence in the same pass.
-                if take_pointer(&mut e, TAG_INTEROP_IFD, order).is_some() {
+                let interop_taken = take_pointer(&mut e, TAG_INTEROP_IFD, order);
+                interop_ifd = interop_taken.and_then(|o| parse_ifd(tiff, o, order).map(|(e, _)| e));
+                // Same "gate on removal" duplicate sweep as the Exif/GPS pointers
+                // (zencodec#30/#107): `take_pointer` only removes the FIRST match,
+                // and a leftover 0xA005 would either shadow the synthesized pointer
+                // on re-parse or, when unresolvable, be consumed one occurrence per
+                // round-trip so `exif_ifd` shrinks until it empties out (a serializer
+                // non-fixpoint, `duplicate_interop_pointer_stripped_on_parse`).
+                if interop_taken.is_some() {
                     e.retain(|entry| entry.tag != TAG_INTEROP_IFD);
                 }
                 e
@@ -529,6 +540,7 @@ impl<'a> Exif<'a> {
             ifd0,
             exif_ifd,
             gps_ifd,
+            interop_ifd,
             ifd1,
             thumbnail,
             // Not stored in the TIFF; edits to a parsed blob default to the
@@ -625,6 +637,13 @@ impl<'a> Exif<'a> {
     /// stripping policy actually removed camera identity (not just GPS/thumbnail).
     pub fn has_camera(&self) -> bool {
         self.has_category(Category::Camera)
+    }
+
+    /// Whether any colour-signalling data (the [`color`](ExifPolicy::color)
+    /// category — ColorSpace / Gamma in the Exif sub-IFD, or an
+    /// Interoperability sub-IFD) is present.
+    pub fn has_color(&self) -> bool {
+        self.interop_ifd.is_some() || self.has_category(Category::Color)
     }
 
     /// Whether any capture-timestamp tag (the [`datetimes`](ExifPolicy::datetimes)
@@ -740,11 +759,19 @@ impl<'a> Exif<'a> {
             tag => policy.keeps(classify(tag)),
         };
         let ifd0 = self.ifd0.iter().filter(keep).cloned().collect();
+        // The Interop IFD is kept or dropped whole under `color` (its own tags —
+        // InteropIndex/Version, RelatedImage* — are all colour/interop
+        // signalling). It hangs off the Exif IFD, so keeping it keeps that IFD
+        // even when every other Exif-IFD entry was pruned.
+        let interop_ifd = match policy.color {
+            Retention::Keep => self.exif_ifd.as_ref().and(self.interop_ifd.clone()),
+            Retention::Discard => None,
+        };
         let exif_ifd = self
             .exif_ifd
             .as_ref()
             .map(|d| d.iter().filter(keep).cloned().collect::<Vec<_>>())
-            .filter(|d: &Vec<_>| !d.is_empty());
+            .filter(|d: &Vec<_>| !d.is_empty() || interop_ifd.is_some());
         let gps_ifd = match policy.gps {
             Retention::Keep => self.gps_ifd.clone(),
             Retention::Discard => None,
@@ -769,6 +796,7 @@ impl<'a> Exif<'a> {
             ifd0,
             exif_ifd,
             gps_ifd,
+            interop_ifd,
             ifd1,
             thumbnail,
             text_encoding: self.text_encoding,
@@ -811,6 +839,7 @@ impl<'a> Exif<'a> {
     /// (guarded by `serialized_len_equals_to_bytes_len`).
     pub(crate) fn serialized_len(&self) -> usize {
         let ifd0_nptr = self.exif_ifd.is_some() as usize + self.gps_ifd.is_some() as usize;
+        let interop = self.exif_ifd.as_ref().and(self.interop_ifd.as_ref());
         let ifd1_nptr = if self.thumbnail.is_some() { 2 } else { 0 };
         let block = |entries: &[Entry<'a>], nptr: usize| -> usize {
             2 + 12 * (entries.len() + nptr) + 4 + ext_size(entries)
@@ -822,6 +851,9 @@ impl<'a> Exif<'a> {
         };
         total += TIFF_HEADER_SIZE + block(&self.ifd0, ifd0_nptr);
         if let Some(d) = &self.exif_ifd {
+            total += block(d, interop.is_some() as usize);
+        }
+        if let Some(d) = interop {
             total += block(d, 0);
         }
         if let Some(d) = &self.gps_ifd {
@@ -858,6 +890,10 @@ impl<'a> Exif<'a> {
             }
             v
         };
+        // The Interop pointer lives in the Exif IFD; without an Exif IFD there
+        // is nowhere to write it (parse never produces that shape).
+        let interop = self.exif_ifd.as_ref().and(self.interop_ifd.as_ref());
+        let exif_nptr = interop.is_some() as usize;
         let ifd1_ptrs: &[u16] = if self.thumbnail.is_some() {
             &[TAG_THUMB_OFFSET, TAG_THUMB_LENGTH]
         } else {
@@ -875,6 +911,12 @@ impl<'a> Exif<'a> {
         let (t0, x0) = sz(&self.ifd0, ifd0_ptrs.len());
         let mut cursor = TIFF_HEADER_SIZE + t0 + x0;
         let exif_off = self.exif_ifd.as_ref().map(|d| {
+            let o = cursor;
+            let (t, x) = sz(d, exif_nptr);
+            cursor += t + x;
+            o
+        });
+        let interop_off = interop.map(|d| {
             let o = cursor;
             let (t, x) = sz(d, 0);
             cursor += t + x;
@@ -923,7 +965,15 @@ impl<'a> Exif<'a> {
         );
 
         if let Some(d) = &self.exif_ifd {
-            let eb = exif_off.unwrap() + 2 + 12 * d.len() + 4;
+            let mut pv = Vec::new();
+            if let Some(o) = interop_off {
+                pv.push((TAG_INTEROP_IFD, o as u32));
+            }
+            let eb = exif_off.unwrap() + 2 + 12 * (d.len() + exif_nptr) + 4;
+            self.write_ifd(&mut out, d, &pv, eb, 0);
+        }
+        if let Some(d) = interop {
+            let eb = interop_off.unwrap() + 2 + 12 * d.len() + 4;
             self.write_ifd(&mut out, d, &[], eb, 0);
         }
         if let Some(d) = &self.gps_ifd {
@@ -1269,6 +1319,11 @@ pub struct ExifPolicy {
     pub datetimes: Retention,
     /// Camera/device identity (Make, Model, Software, lens, serial, MakerNote).
     pub camera: Retention,
+    /// Colour signalling: ColorSpace (0xA001), Gamma (0xA500) and the
+    /// Interoperability sub-IFD (InteropIndex `R98` = sRGB / `R03` = Adobe RGB).
+    /// For a JPEG without an ICC profile this is the only colour declaration,
+    /// so every preset except [`DISCARD_ALL`](Self::DISCARD_ALL) keeps it.
+    pub color: Retention,
     /// Everything else (dimensions, exposure settings, …).
     pub other: Retention,
 }
@@ -1282,6 +1337,7 @@ impl ExifPolicy {
         gps: Retention::Keep,
         datetimes: Retention::Keep,
         camera: Retention::Keep,
+        color: Retention::Keep,
         other: Retention::Keep,
     };
     /// Discard every category (drops EXIF entirely).
@@ -1292,17 +1348,20 @@ impl ExifPolicy {
         gps: Retention::Discard,
         datetimes: Retention::Discard,
         camera: Retention::Discard,
+        color: Retention::Discard,
         other: Retention::Discard,
     };
-    /// Keep only orientation + rights (the web default).
+    /// Keep orientation + rights + colour signalling (the web default).
     pub const ATTRIBUTED_ORIENTATION: Self = Self {
         orientation: Retention::Keep,
         rights: Retention::Keep,
+        color: Retention::Keep,
         ..Self::DISCARD_ALL
     };
-    /// Keep only orientation.
+    /// Keep only what places pixels on screen: orientation + colour signalling.
     pub const ORIENTATION_ONLY: Self = Self {
         orientation: Retention::Keep,
+        color: Retention::Keep,
         ..Self::DISCARD_ALL
     };
 
@@ -1344,6 +1403,12 @@ impl ExifPolicy {
         self.camera = r;
         self
     }
+    /// Set the colour-signalling category (ColorSpace / Gamma / Interop IFD).
+    #[must_use]
+    pub const fn with_color(mut self, r: Retention) -> Self {
+        self.color = r;
+        self
+    }
     /// Set the "everything else" category.
     #[must_use]
     pub const fn with_other(mut self, r: Retention) -> Self {
@@ -1357,6 +1422,7 @@ impl ExifPolicy {
             Category::Rights => self.rights.keeps(),
             Category::Datetimes => self.datetimes.keeps(),
             Category::Camera => self.camera.keeps(),
+            Category::Color => self.color.keeps(),
             Category::Other => self.other.keeps(),
         }
     }
@@ -1369,6 +1435,7 @@ impl ExifPolicy {
             && self.gps.keeps()
             && self.datetimes.keeps()
             && self.camera.keeps()
+            && self.color.keeps()
             && self.other.keeps()
     }
 
@@ -1523,6 +1590,7 @@ mod tests {
             ],
             exif_ifd: Some(vec![e(TAG_DATETIME_ORIGINAL, TIFF_ASCII, 5, b"2020\0")]),
             gps_ifd: Some(vec![e(0x0001, TIFF_ASCII, 2, b"N\0")]), // GPSLatitudeRef
+            interop_ifd: None,
             ifd1: Some(vec![]),
             thumbnail: Some(&[0xFF, 0xD8, 0xFF, 0xD9]),
             text_encoding: TextEncoding::Ascii,
@@ -1652,6 +1720,7 @@ mod tests {
             ],
             exif_ifd: None,
             gps_ifd: None,
+            interop_ifd: None,
             ifd1: None,
             thumbnail: None,
             text_encoding: TextEncoding::Ascii,
@@ -1866,6 +1935,7 @@ mod tests {
             ifd0: vec![e(TAG_ORIENTATION, TIFF_SHORT, 1, &[6, 0])],
             exif_ifd: None,
             gps_ifd: None,
+            interop_ifd: None,
             ifd1: Some(vec![]),
             thumbnail: Some(&big),
             text_encoding: TextEncoding::Ascii,
@@ -2157,6 +2227,7 @@ mod tests {
             ],
             exif_ifd: None,
             gps_ifd: None,
+            interop_ifd: None,
             ifd1: None,
             thumbnail: None,
             text_encoding: TextEncoding::Ascii,
@@ -2215,6 +2286,7 @@ mod tests {
                 e(TAG_PHOTOGRAPHER, TIFF_ASCII, 4, b"Me\0\0"),      // → Rights
             ]),
             gps_ifd: None,
+            interop_ifd: None,
             ifd1: None,
             thumbnail: None,
             text_encoding: TextEncoding::Ascii,
@@ -2368,6 +2440,7 @@ mod tests {
             ],
             exif_ifd: None,
             gps_ifd: None,
+            interop_ifd: None,
             ifd1: None,
             thumbnail: None,
             text_encoding: TextEncoding::Ascii,
@@ -2416,6 +2489,7 @@ mod tests {
             ],
             exif_ifd: None,
             gps_ifd: None,
+            interop_ifd: None,
             ifd1: None,
             thumbnail: None,
             text_encoding: TextEncoding::Ascii,
@@ -2443,6 +2517,7 @@ mod tests {
             ifd0: vec![e(TAG_ORIENTATION, TIFF_SHORT, 1, &[6, 0])],
             exif_ifd: None,
             gps_ifd: None,
+            interop_ifd: None,
             ifd1: Some(vec![e(TAG_MAKE, TIFF_ASCII, 4, b"Cam\0")]), // camera tag in IFD1
             thumbnail: Some(&[0xFF, 0xD8, 0xFF, 0xD9]),
             text_encoding: TextEncoding::Ascii,
@@ -2539,6 +2614,7 @@ mod tests {
             ifd0: vec![e(TAG_ORIENTATION, TIFF_LONG, 1, &[3, 0, 0, 0])],
             exif_ifd: None,
             gps_ifd: None,
+            interop_ifd: None,
             ifd1: None,
             thumbnail: None,
             text_encoding: TextEncoding::Ascii,
@@ -2563,6 +2639,7 @@ mod tests {
             ifd0: vec![e(TAG_ORIENTATION, TIFF_ASCII, 2, b"6\0")],
             exif_ifd: None,
             gps_ifd: None,
+            interop_ifd: None,
             ifd1: None,
             thumbnail: None,
             text_encoding: TextEncoding::Ascii,
@@ -2631,16 +2708,16 @@ mod tests {
 
     /// Regression: a *duplicate* Interop (0xA005) pointer tag inside the Exif
     /// sub-IFD silently shrank `exif_ifd` by one entry on every round-trip
-    /// instead of stopping at a fixpoint. Interop isn't modeled (see module
-    /// doc) and `to_bytes` never re-synthesizes it, so this isn't the
-    /// GPS/Exif "shadows the synthesized pointer" mechanism (zencodec#30/#107)
-    /// — `take_pointer` only ever removed the FIRST 0xA005 match, leaving a
-    /// second occurrence as ordinary data that got consumed one-at-a-time on
-    /// each subsequent parse. Not caught by `orientation`/`has_gps`/
-    /// `has_thumbnail` (nothing reads Interop content) — found by code audit
-    /// while investigating the same "which pointer tags get the duplicate
-    /// sweep" question for zencodec#114/#115 (which turned out unrelated: see
-    /// their closing comments), not a fuzz finding.
+    /// instead of stopping at a fixpoint — `take_pointer` only ever removed
+    /// the FIRST 0xA005 match, leaving a second occurrence as ordinary data
+    /// that got consumed one-at-a-time on each subsequent parse. Found by code
+    /// audit while investigating the same "which pointer tags get the
+    /// duplicate sweep" question for zencodec#114/#115 (which turned out
+    /// unrelated: see their closing comments), not a fuzz finding. The Interop
+    /// IFD is now modeled as a tree edge (the `color` category), so the sweep
+    /// also guards the GPS/Exif "shadows the synthesized pointer" mechanism
+    /// (zencodec#30/#107) for it; the unresolvable pointers here must leave
+    /// `interop_ifd` empty rather than surface as data.
     #[test]
     fn duplicate_interop_pointer_stripped_on_parse() {
         // MM TIFF, IFD0 @ 8 with one Exif-IFD pointer -> 0x1a (26). The Exif
@@ -2666,6 +2743,107 @@ mod tests {
         let b1 = x.to_bytes();
         let y = Exif::parse(&b1).expect("must re-parse");
         assert_eq!(b1, y.to_bytes(), "must be a serializer fixpoint");
+    }
+
+    /// The `color` category: ColorSpace / Gamma (Exif IFD) and the whole
+    /// Interoperability sub-IFD are kept or dropped together, the Interop
+    /// pointer is re-synthesized inside the Exif IFD (never left dangling),
+    /// and keeping colour alone is enough to keep an otherwise-empty Exif IFD.
+    #[test]
+    fn color_category_keeps_or_drops_interop_and_colorspace_together() {
+        // MM TIFF: IFD0 {Make} → Exif IFD {ColorSpace=0xFFFF, Gamma, Interop →}
+        // → Interop IFD {InteropIndex "R03"}.
+        let mut t = vec![b'M', b'M', 0, 0x2A, 0, 0, 0, 8];
+        t.extend_from_slice(&[0, 2]); // IFD0 count
+        t.extend_from_slice(&[0x01, 0x0F, 0, 2, 0, 0, 0, 4, b'C', b'a', b'm', 0]); // Make
+        t.extend_from_slice(&[0x87, 0x69, 0, 4, 0, 0, 0, 1, 0, 0, 0, 38]); // Exif IFD → 38
+        t.extend_from_slice(&[0, 0, 0, 0]);
+        assert_eq!(t.len(), 38);
+        t.extend_from_slice(&[0, 3]); // Exif IFD count
+        t.extend_from_slice(&[0xA0, 0x01, 0, 3, 0, 0, 0, 1, 0xFF, 0xFF, 0, 0]); // ColorSpace
+        t.extend_from_slice(&[0xA0, 0x05, 0, 4, 0, 0, 0, 1, 0, 0, 0, 80]); // Interop → 80
+        t.extend_from_slice(&[0xA5, 0x00, 0, 5, 0, 0, 0, 1, 0, 0, 0, 84]); // Gamma → RATIONAL @ 84
+        t.extend_from_slice(&[0, 0, 0, 0]);
+        assert_eq!(t.len(), 80);
+        // Interop IFD @ 80 — wait: put the Gamma rational first, at 80..88, and
+        // the Interop IFD at 88 instead (rebuild the two offsets below).
+        t.truncate(38);
+        t.extend_from_slice(&[0, 3]);
+        t.extend_from_slice(&[0xA0, 0x01, 0, 3, 0, 0, 0, 1, 0xFF, 0xFF, 0, 0]);
+        t.extend_from_slice(&[0xA0, 0x05, 0, 4, 0, 0, 0, 1, 0, 0, 0, 88]);
+        t.extend_from_slice(&[0xA5, 0x00, 0, 5, 0, 0, 0, 1, 0, 0, 0, 80]);
+        t.extend_from_slice(&[0, 0, 0, 0]);
+        t.extend_from_slice(&[0, 0, 0, 22, 0, 0, 0, 10]); // Gamma = 22/10 @ 80
+        assert_eq!(t.len(), 88);
+        t.extend_from_slice(&[0, 1]); // Interop IFD count
+        t.extend_from_slice(&[0x00, 0x01, 0, 2, 0, 0, 0, 4, b'R', b'0', b'3', 0]);
+        t.extend_from_slice(&[0, 0, 0, 0]);
+
+        let x = Exif::parse(&t).expect("fixture parses");
+        assert!(x.has_color());
+        let interop = x.interop_ifd.as_ref().expect("Interop IFD modeled");
+        assert_eq!(interop.len(), 1);
+        assert_eq!(interop[0].tag, 0x0001);
+        assert_eq!(&*interop[0].value, b"R03\0");
+        assert!(
+            !x.exif_ifd
+                .as_ref()
+                .unwrap()
+                .iter()
+                .any(|e| e.tag == TAG_INTEROP_IFD),
+            "pointer must be a tree edge, not data"
+        );
+
+        // Keep colour only (everything else discarded): Exif IFD survives with
+        // exactly ColorSpace + Gamma + the synthesized Interop pointer.
+        let color_only = ExifPolicy::DISCARD_ALL.with_color(Retention::Keep);
+        let kept = x.filtered(&color_only);
+        assert!(kept.has_color());
+        assert!(!kept.has_camera());
+        let bytes = kept.to_bytes();
+        let re = Exif::parse(&bytes).expect("rewrite parses");
+        assert!(re.ifd0.is_empty(), "Make dropped");
+        let exif_tags: Vec<u16> = re
+            .exif_ifd
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|e| e.tag)
+            .collect();
+        assert_eq!(exif_tags, vec![TAG_COLOR_SPACE, TAG_GAMMA]);
+        assert_eq!(
+            &*re.exif_ifd.as_ref().unwrap()[1].value,
+            &[0, 0, 0, 22, 0, 0, 0, 10]
+        );
+        assert_eq!(&*re.interop_ifd.as_ref().unwrap()[0].value, b"R03\0");
+        assert_eq!(bytes, re.to_bytes(), "fixpoint");
+        assert_eq!(
+            kept.serialized_len(),
+            bytes.len(),
+            "serialized_len tracks interop"
+        );
+
+        // Drop colour: ColorSpace, Gamma and the Interop IFD all go; with nothing
+        // else in the Exif IFD the IFD itself goes too.
+        let no_color = ExifPolicy::KEEP_ALL.with_color(Retention::Discard);
+        let dropped = x.filtered(&no_color);
+        assert!(!dropped.has_color());
+        assert!(dropped.interop_ifd.is_none());
+        assert!(dropped.exif_ifd.is_none());
+        let dropped_bytes = dropped.to_bytes();
+        let re = Exif::parse(&dropped_bytes).unwrap();
+        assert!(!re.has_color());
+        assert_eq!(re.ifd0.len(), 1, "Make kept");
+
+        // Every retaining preset keeps it.
+        for p in [
+            ExifPolicy::KEEP_ALL,
+            ExifPolicy::ATTRIBUTED_ORIENTATION,
+            ExifPolicy::ORIENTATION_ONLY,
+        ] {
+            assert!(Exif::parse(&x.filtered(&p).to_bytes()).unwrap().has_color());
+        }
+        assert!(retain(&t, &ExifPolicy::DISCARD_ALL).is_none());
     }
 
     /// Regression for fuzz zencodec#96 (`exif_author` non-fixpoint): a dangling
