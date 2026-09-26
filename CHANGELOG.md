@@ -99,6 +99,23 @@ removes that whole class).
 
 ## [Unreleased]
 
+### Fixed
+
+- **EXIF colour signalling survives `Web` / `ColorAndRotation`.** `ColorSpace`
+  (0xA001) and `Gamma` (0xA500) were classified `other` and the
+  Interoperability IFD (0xA005, `InteropIndex` `R98` = sRGB / `R03` = Adobe
+  RGB) was stripped on every prune, so an Adobe RGB camera JPEG with no ICC
+  profile came out of a `Web` prune declaring nothing and rendered as sRGB.
+  Both now live in a new `color` category that every preset except
+  `DISCARD_ALL` keeps; the Interop IFD is modeled as a tree edge like GPS
+  (its pointer is re-synthesized on serialize, never left dangling).
+  Oracle-checked against `kamadak-exif` in `tests/exif_differential.rs`.
+
+### Added
+
+- `ExifPolicy::color` + `with_color(..)` (additive — the struct is
+  `#[non_exhaustive]`), and `Exif::has_color()`.
+
 ### Changed
 
 - **Dependency requirements now span the published minor and the next one.**

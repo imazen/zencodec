@@ -521,13 +521,15 @@ pub enum MetadataPolicy {
     /// Keep everything, but drop a redundant sRGB ICC profile.
     Preserve,
     /// The web-publish set (recommended for publishing): keep the ICC profile
-    /// (unless a redundant sRGB), EXIF orientation + rights (copyright/artist),
-    /// and CICP / HDR color signaling. Drop the rest of EXIF (GPS, timestamps,
+    /// (unless a redundant sRGB), EXIF orientation, rights (copyright/artist),
+    /// EXIF colour signalling (ColorSpace / Gamma / Interoperability IFD), and
+    /// CICP / HDR color signaling. Drop the rest of EXIF (GPS, timestamps,
     /// camera/device identity, thumbnail) and all XMP.
     Web,
     /// Keep only what places pixels on screen: the ICC profile (unless a
-    /// redundant sRGB), CICP / HDR color signaling, and EXIF orientation.
-    /// Drops attribution, XMP, and all other EXIF.
+    /// redundant sRGB), CICP / HDR color signaling, EXIF orientation and EXIF
+    /// colour signalling (ColorSpace / Gamma / Interoperability IFD). Drops
+    /// attribution, XMP, and all other EXIF.
     ColorAndRotation,
     /// Explicit per-field control via [`MetadataFields`].
     Custom(MetadataFields),
