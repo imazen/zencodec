@@ -6,16 +6,16 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1283 lines (supported surface) | zencodec.features.txt 2 added (features: std) | zencodec.internal.txt 89 lines (89 hidden + 0 excluded-feature)
+# files: zencodec.txt 1308 lines (supported surface) | zencodec.features.txt 2 added (features: std) | zencodec.internal.txt 89 lines (89 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 8
 #   pub types (struct/enum/trait/alias)       132
-#   pub consts/statics                        172
+#   pub consts/statics                        182
 #   free functions                             39
-#   inherent methods                          484
-#   struct fields                             196
+#   inherent methods                          494
+#   struct fields                             206
 #   enum variants                             181
 #   re-exports                                 12
 #   trait roster entries (type × trait)       379
@@ -24,16 +24,16 @@
 #   auto-trait exceptions                       6
 #
 # per-module pub lines:
-#   (root)                          690
+#   (root)                          705
 #   decode                          166
 #   encode                          116
 #   estimate                         47
-#   exif                             65
+#   exif                             80
 #   gainmap                         126
 #   helpers                          13
 #   icc                               1
 
-## items (1194 lines)
+## items (1219 lines)
 
 pub mod zencodec
 pub use At
@@ -551,9 +551,14 @@ pub fn exif::Exif<'a>::copyright(&self) -> core::option::Option<alloc::borrow::C
 pub fn exif::Exif<'a>::copyright_bytes(&self) -> core::option::Option<&[u8]>
 pub fn exif::Exif<'a>::filtered(&self, &exif::ExifPolicy) -> exif::Exif<'a>
 pub fn exif::Exif<'a>::has_camera(&self) -> bool
+pub fn exif::Exif<'a>::has_camera_owner(&self) -> bool
+pub fn exif::Exif<'a>::has_color(&self) -> bool
 pub fn exif::Exif<'a>::has_datetimes(&self) -> bool
+pub fn exif::Exif<'a>::has_device_ids(&self) -> bool
 pub fn exif::Exif<'a>::has_gps(&self) -> bool
+pub fn exif::Exif<'a>::has_image_unique_id(&self) -> bool
 pub fn exif::Exif<'a>::has_thumbnail(&self) -> bool
+pub fn exif::Exif<'a>::has_time_offsets(&self) -> bool
 pub fn exif::Exif<'a>::new(exif::TextEncoding) -> Self
 pub fn exif::Exif<'a>::orientation(&self) -> core::option::Option<zenpixels::orientation::Orientation>
 pub fn exif::Exif<'a>::parse(&'a [u8]) -> core::option::Option<Self>
@@ -562,12 +567,17 @@ pub fn exif::Exif<'a>::set_copyright(&mut self, &str)
 pub fn exif::Exif<'a>::set_orientation(&mut self, zenpixels::orientation::Orientation)
 pub fn exif::Exif<'a>::to_bytes(&self) -> alloc::vec::Vec<u8>
 pub exif::ExifPolicy::camera: exif::Retention
+pub exif::ExifPolicy::camera_owner: exif::Retention
+pub exif::ExifPolicy::color: exif::Retention
 pub exif::ExifPolicy::datetimes: exif::Retention
+pub exif::ExifPolicy::device_ids: exif::Retention
 pub exif::ExifPolicy::gps: exif::Retention
+pub exif::ExifPolicy::image_unique_id: exif::Retention
 pub exif::ExifPolicy::orientation: exif::Retention
 pub exif::ExifPolicy::other: exif::Retention
 pub exif::ExifPolicy::rights: exif::Retention
 pub exif::ExifPolicy::thumbnail: exif::Retention
+pub exif::ExifPolicy::time_offsets: exif::Retention
 pub const exif::ExifPolicy::ATTRIBUTED_ORIENTATION: Self
 pub const exif::ExifPolicy::DISCARD_ALL: Self
 pub const exif::ExifPolicy::KEEP_ALL: Self
@@ -575,12 +585,17 @@ pub const exif::ExifPolicy::ORIENTATION_ONLY: Self
 pub fn exif::ExifPolicy::discards_everything(&self) -> bool
 pub fn exif::ExifPolicy::keeps_everything(&self) -> bool
 pub const fn exif::ExifPolicy::with_camera(self, exif::Retention) -> Self [also: (root)]
+pub const fn exif::ExifPolicy::with_camera_owner(self, exif::Retention) -> Self [also: (root)]
+pub const fn exif::ExifPolicy::with_color(self, exif::Retention) -> Self [also: (root)]
 pub const fn exif::ExifPolicy::with_datetimes(self, exif::Retention) -> Self [also: (root)]
+pub const fn exif::ExifPolicy::with_device_ids(self, exif::Retention) -> Self [also: (root)]
 pub const fn exif::ExifPolicy::with_gps(self, exif::Retention) -> Self [also: (root)]
+pub const fn exif::ExifPolicy::with_image_unique_id(self, exif::Retention) -> Self [also: (root)]
 pub const fn exif::ExifPolicy::with_orientation(self, exif::Retention) -> Self [also: (root)]
 pub const fn exif::ExifPolicy::with_other(self, exif::Retention) -> Self [also: (root)]
 pub const fn exif::ExifPolicy::with_rights(self, exif::Retention) -> Self [also: (root)]
 pub const fn exif::ExifPolicy::with_thumbnail(self, exif::Retention) -> Self [also: (root)]
+pub const fn exif::ExifPolicy::with_time_offsets(self, exif::Retention) -> Self [also: (root)]
 pub fn exif::retain<'a>(&'a [u8], &exif::ExifPolicy) -> core::option::Option<alloc::borrow::Cow<'a, [u8]>>
 pub mod gainmap
 pub gainmap::GainMapDirection::BaseIsHdr
@@ -941,9 +956,14 @@ pub fn exif::Exif<'a>::copyright(&self) -> core::option::Option<alloc::borrow::C
 pub fn exif::Exif<'a>::copyright_bytes(&self) -> core::option::Option<&[u8]>
 pub fn exif::Exif<'a>::filtered(&self, &exif::ExifPolicy) -> exif::Exif<'a>
 pub fn exif::Exif<'a>::has_camera(&self) -> bool
+pub fn exif::Exif<'a>::has_camera_owner(&self) -> bool
+pub fn exif::Exif<'a>::has_color(&self) -> bool
 pub fn exif::Exif<'a>::has_datetimes(&self) -> bool
+pub fn exif::Exif<'a>::has_device_ids(&self) -> bool
 pub fn exif::Exif<'a>::has_gps(&self) -> bool
+pub fn exif::Exif<'a>::has_image_unique_id(&self) -> bool
 pub fn exif::Exif<'a>::has_thumbnail(&self) -> bool
+pub fn exif::Exif<'a>::has_time_offsets(&self) -> bool
 pub fn exif::Exif<'a>::new(exif::TextEncoding) -> Self
 pub fn exif::Exif<'a>::orientation(&self) -> core::option::Option<zenpixels::orientation::Orientation>
 pub fn exif::Exif<'a>::parse(&'a [u8]) -> core::option::Option<Self>
@@ -953,12 +973,17 @@ pub fn exif::Exif<'a>::set_orientation(&mut self, zenpixels::orientation::Orient
 pub fn exif::Exif<'a>::to_bytes(&self) -> alloc::vec::Vec<u8>
 #[non_exhaustive] pub struct ExifPolicy [also: exif]
 pub ExifPolicy::camera: exif::Retention
+pub ExifPolicy::camera_owner: exif::Retention
+pub ExifPolicy::color: exif::Retention
 pub ExifPolicy::datetimes: exif::Retention
+pub ExifPolicy::device_ids: exif::Retention
 pub ExifPolicy::gps: exif::Retention
+pub ExifPolicy::image_unique_id: exif::Retention
 pub ExifPolicy::orientation: exif::Retention
 pub ExifPolicy::other: exif::Retention
 pub ExifPolicy::rights: exif::Retention
 pub ExifPolicy::thumbnail: exif::Retention
+pub ExifPolicy::time_offsets: exif::Retention
 pub const exif::ExifPolicy::ATTRIBUTED_ORIENTATION: Self
 pub const exif::ExifPolicy::DISCARD_ALL: Self
 pub const exif::ExifPolicy::KEEP_ALL: Self
