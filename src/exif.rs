@@ -64,6 +64,8 @@ const TAG_INTEROP_IFD: u16 = 0xA005;
 // declaration many camera JPEGs carry, so dropping it changes displayed pixels.
 const TAG_COLOR_SPACE: u16 = 0xA001;
 const TAG_GAMMA: u16 = 0xA500; // Exif 2.2
+const TAG_INTEROP_INDEX: u16 = 0x0001;
+const TAG_INTEROP_VERSION: u16 = 0x0002;
 const TAG_THUMB_OFFSET: u16 = 0x0201; // JPEGInterchangeFormat
 const TAG_THUMB_LENGTH: u16 = 0x0202; // JPEGInterchangeFormatLength
 // SubIFDs (TIFF/DNG) — an array of offsets to nested IFDs (alt/full-res images
@@ -78,7 +80,8 @@ const TAG_STRIP_BYTE_COUNTS: u16 = 0x0117;
 const TAG_TILE_OFFSETS: u16 = 0x0144;
 const TAG_TILE_BYTE_COUNTS: u16 = 0x0145;
 
-// Exif sub-IFD: capture timestamps (the `datetimes` category).
+// Exif sub-IFD: capture timestamps (the `datetimes` category) and their
+// UTC offsets (the `time_offsets` category — a time zone is a coarse location).
 const TAG_DATETIME_ORIGINAL: u16 = 0x9003;
 const TAG_DATETIME_DIGITIZED: u16 = 0x9004;
 const TAG_OFFSET_TIME: u16 = 0x9010; // Exif 2.31+
@@ -88,18 +91,25 @@ const TAG_SUBSEC_TIME: u16 = 0x9290;
 const TAG_SUBSEC_TIME_ORIGINAL: u16 = 0x9291;
 const TAG_SUBSEC_TIME_DIGITIZED: u16 = 0x9292;
 
-// Exif sub-IFD: device / capture identity (the `camera` category).
+// Exif sub-IFD: device / capture identity (the `camera` category) and the
+// per-unit identifiers that single out a device (the
+// `device_ids` category: serials, HostComputer, CameraLabel).
+// ImageUniqueID identifies an image, not a device; it has its own category.
 const TAG_MAKER_NOTE: u16 = 0x927C;
 const TAG_IMAGE_UNIQUE_ID: u16 = 0xA420;
 const TAG_BODY_SERIAL_NUMBER: u16 = 0xA431;
+const TAG_DNG_CAMERA_SERIAL: u16 = 0xC62F;
+const TAG_CAMERA_LABEL: u16 = 0xC7A1;
+// Photoshop Camera RAW aliases (ExifTool Exif.pm); conservatively sensitive.
+const TAG_PSRAW_OWNER: u16 = 0xFDE8;
+const TAG_PSRAW_SERIAL: u16 = 0xFDE9;
 const TAG_LENS_SPECIFICATION: u16 = 0xA432;
 const TAG_LENS_MAKE: u16 = 0xA433;
 const TAG_LENS_MODEL: u16 = 0xA434;
 const TAG_LENS_SERIAL_NUMBER: u16 = 0xA435;
 
-// Creator / rights-holder *name* tags (the `rights` category, alongside
-// Copyright + Artist). CameraOwnerName is Exif 2.3+; Photographer / ImageEditor
-// are Exif 3.0 (CIPA DC-008-2023).
+// Camera ownership is sensitive identity, separate from intentional attribution.
+// Photographer / ImageEditor are Exif 3.0 (CIPA DC-008-2023).
 const TAG_CAMERA_OWNER_NAME: u16 = 0xA430;
 const TAG_PHOTOGRAPHER: u16 = 0xA437; // Exif 3.0
 const TAG_IMAGE_EDITOR: u16 = 0xA438; // Exif 3.0
@@ -175,7 +185,11 @@ enum Category {
     Orientation,
     Rights,
     Datetimes,
+    TimeOffsets,
     Camera,
+    DeviceIds,
+    CameraOwner,
+    ImageUniqueId,
     Color,
     Other,
 }
@@ -183,44 +197,42 @@ enum Category {
 fn classify(tag: u16) -> Category {
     match tag {
         TAG_ORIENTATION => Category::Orientation,
-        // Attribution / rights-holder. Copyright (the rights *notice*), Artist
-        // (creator), plus the Exif-IFD creator/owner *name* tags
-        // (CameraOwnerName, Photographer, ImageEditor) — the spec says Artist
-        // mirrors one of these, so they're the same "who made / holds rights"
-        // class a copyright-preserving policy keeps.
-        TAG_COPYRIGHT
-        | TAG_ARTIST
-        | TAG_CAMERA_OWNER_NAME
-        | TAG_PHOTOGRAPHER
-        | TAG_IMAGE_EDITOR => Category::Rights,
-        // DateTime, DateTimeOriginal/Digitized, sub-sec + offset-time variants.
+        // Deliberately retained attribution; owning the camera is not authorship.
+        TAG_COPYRIGHT | TAG_ARTIST | TAG_PHOTOGRAPHER | TAG_IMAGE_EDITOR => Category::Rights,
+        TAG_CAMERA_OWNER_NAME | TAG_PSRAW_OWNER => Category::CameraOwner,
+        TAG_IMAGE_UNIQUE_ID => Category::ImageUniqueId,
+        // DateTime, DateTimeOriginal/Digitized and the sub-second variants.
         TAG_DATETIME
         | TAG_DATETIME_ORIGINAL
         | TAG_DATETIME_DIGITIZED
-        | TAG_OFFSET_TIME
-        | TAG_OFFSET_TIME_ORIGINAL
-        | TAG_OFFSET_TIME_DIGITIZED
         | TAG_SUBSEC_TIME
         | TAG_SUBSEC_TIME_ORIGINAL
         | TAG_SUBSEC_TIME_DIGITIZED => Category::Datetimes,
-        // Device / software identity: Make, Model, Software, HostComputer,
-        // MakerNote, body/lens serials + lens make/model, ImageUniqueID, and the
-        // firmware / developing / editing software tags.
+        // UTC offsets of the timestamps (a time zone).
+        TAG_OFFSET_TIME | TAG_OFFSET_TIME_ORIGINAL | TAG_OFFSET_TIME_DIGITIZED => {
+            Category::TimeOffsets
+        }
+        // Device / software identity: Make, Model, Software, MakerNote, lens
+        // make/model/spec, and the firmware / developing / editing software
+        // tags. (MakerNote stays here — it is dropped on any prune anyway.)
         TAG_MAKE
         | TAG_MODEL
         | TAG_SOFTWARE
-        | TAG_HOST_COMPUTER
         | TAG_MAKER_NOTE
-        | TAG_IMAGE_UNIQUE_ID
-        | TAG_BODY_SERIAL_NUMBER
         | TAG_LENS_SPECIFICATION
         | TAG_LENS_MAKE
         | TAG_LENS_MODEL
-        | TAG_LENS_SERIAL_NUMBER
         | TAG_CAMERA_FIRMWARE
         | TAG_RAW_DEVELOPING_SOFTWARE
         | TAG_IMAGE_EDITING_SOFTWARE
         | TAG_METADATA_EDITING_SOFTWARE => Category::Camera,
+        // Per-device identifiers, including DNG/TIFF alternatives (ExifTool Exif.pm).
+        TAG_HOST_COMPUTER
+        | TAG_BODY_SERIAL_NUMBER
+        | TAG_LENS_SERIAL_NUMBER
+        | TAG_DNG_CAMERA_SERIAL
+        | TAG_CAMERA_LABEL
+        | TAG_PSRAW_SERIAL => Category::DeviceIds,
         // Colour signalling (the Interop IFD is modeled structurally alongside).
         TAG_COLOR_SPACE | TAG_GAMMA => Category::Color,
         _ => Category::Other,
@@ -254,8 +266,8 @@ pub struct Exif<'a> {
     ifd0: Vec<Entry<'a>>,
     exif_ifd: Option<Vec<Entry<'a>>>,
     gps_ifd: Option<Vec<Entry<'a>>>,
-    /// Interoperability sub-IFD (0xA005, a child of the Exif IFD). Kept whole
-    /// under the `color` category, like GPS under `gps`. Never `Some` without
+    /// Interoperability sub-IFD (0xA005, a child of the Exif IFD). Only validated
+    /// Index/Version entries survive filtering under `color`. Never `Some` without
     /// an Exif IFD to hang off — `to_bytes` ignores it otherwise.
     interop_ifd: Option<Vec<Entry<'a>>>,
     ifd1: Option<Vec<Entry<'a>>>,
@@ -568,7 +580,7 @@ impl<'a> Exif<'a> {
     ///
     /// This is the copyright *notice* (rights statement). The rights-holder /
     /// creator *name* is a separate concept — the [`artist`](Self::artist) tag
-    /// and the Exif-IFD CameraOwnerName / Photographer / ImageEditor tags (all
+    /// and the Exif-IFD Photographer / ImageEditor tags (all
     /// in the [`rights`](ExifPolicy::rights) category). The Copyright field has
     /// historically held two NUL-separated segments (photographer copyright,
     /// then editor copyright); this returns the first segment. A second segment,
@@ -631,12 +643,31 @@ impl<'a> Exif<'a> {
         self.gps_ifd.is_some()
     }
 
-    /// Whether any device/capture-identity tag (the [`camera`](ExifPolicy::camera)
-    /// category — Make/Model/Software/MakerNote/serials/lens/ImageUniqueID/firmware…)
-    /// is present, in IFD0 or the Exif sub-IFD. Lets a privacy check assert that a
-    /// stripping policy actually removed camera identity (not just GPS/thumbnail).
+    /// Whether descriptive camera tags, device identifiers, camera ownership,
+    /// or image identity are present in IFD0 or the Exif sub-IFD.
+    /// This aggregate query retains its historical coverage of serials/image IDs.
     pub fn has_camera(&self) -> bool {
         self.has_category(Category::Camera)
+            || self.has_device_ids()
+            || self.has_camera_owner()
+            || self.has_image_unique_id()
+    }
+
+    /// Whether device identifiers (body/lens/DNG/Photoshop RAW serials, HostComputer,
+    /// CameraLabel) are present. ImageUniqueID has its own category.
+    pub fn has_device_ids(&self) -> bool {
+        self.has_category(Category::DeviceIds)
+    }
+
+    /// Whether the camera owner's name is present (not creator attribution).
+    pub fn has_camera_owner(&self) -> bool {
+        self.has_category(Category::CameraOwner)
+    }
+
+    /// Whether ImageUniqueID is present. It identifies an image, but can link
+    /// published derivatives to an identifiable original.
+    pub fn has_image_unique_id(&self) -> bool {
+        self.has_category(Category::ImageUniqueId)
     }
 
     /// Whether any colour-signalling data (the [`color`](ExifPolicy::color)
@@ -647,10 +678,18 @@ impl<'a> Exif<'a> {
     }
 
     /// Whether any capture-timestamp tag (the [`datetimes`](ExifPolicy::datetimes)
-    /// category — DateTime / DateTimeOriginal / Digitized / SubSecTime\* /
-    /// OffsetTime\*) is present, in IFD0 or the Exif sub-IFD.
+    /// or [`time_offsets`](ExifPolicy::time_offsets) category — DateTime /
+    /// DateTimeOriginal / Digitized / SubSecTime\* / OffsetTime\*) is present,
+    /// in IFD0 or the Exif sub-IFD.
     pub fn has_datetimes(&self) -> bool {
-        self.has_category(Category::Datetimes)
+        self.has_category(Category::Datetimes) || self.has_time_offsets()
+    }
+
+    /// Whether any timestamp UTC-offset tag (the
+    /// [`time_offsets`](ExifPolicy::time_offsets) category — OffsetTime\*) is
+    /// present.
+    pub fn has_time_offsets(&self) -> bool {
+        self.has_category(Category::TimeOffsets)
     }
 
     /// Whether any IFD0/Exif-IFD entry falls in `cat` (the per-entry categories;
@@ -729,9 +768,12 @@ impl<'a> Exif<'a> {
     }
 
     /// Prune the tree by `policy`, returning a new borrowing view. Surviving
-    /// entries still borrow the original source (no payload copy).
+    /// entries still borrow the original source (no payload copy). Display and
+    /// attribution tags must have valid types/counts and directory placement.
+    /// Unknown Interop entries and opaque MakerNotes are dropped on every tree
+    /// rewrite; use [`retain`] with `KEEP_ALL` for byte-exact preservation.
     pub fn filtered(&self, policy: &ExifPolicy) -> Exif<'a> {
-        let keep = |e: &&Entry<'a>| match e.tag {
+        let keep = |e: &&Entry<'a>, exif_directory: bool| match e.tag {
             // Offset-bearing structural tags whose value is a file offset, dropped
             // here so a rewrite never emits a dangling offset:
             //  - The modeled sub-IFD/thumbnail pointers (Exif/GPS/Interop, the
@@ -756,21 +798,74 @@ impl<'a> Exif<'a> {
             // those. It also routinely embeds GPS/serials. Drop it on any prune —
             // byte-exact preservation is the keep-everything (no-rewrite) path.
             TAG_MAKER_NOTE => false,
+            TAG_ORIENTATION => {
+                !exif_directory
+                    && policy.orientation.keeps()
+                    && e.count == 1
+                    && matches!(e.kind, TIFF_SHORT | TIFF_LONG)
+                    && read_uint(e, self.order).is_some_and(|v| (1..=8).contains(&v))
+            }
+            TAG_COLOR_SPACE => {
+                exif_directory && policy.color.keeps() && e.kind == TIFF_SHORT && e.count == 1
+            }
+            TAG_GAMMA => {
+                exif_directory
+                    && policy.color.keeps()
+                    && e.kind == TIFF_RATIONAL
+                    && e.count == 1
+                    && rd32(&e.value, 0, self.order).is_some_and(|v| v != 0)
+                    && rd32(&e.value, 4, self.order).is_some_and(|v| v != 0)
+            }
+            TAG_COPYRIGHT | TAG_ARTIST | TAG_PHOTOGRAPHER | TAG_IMAGE_EDITOR => {
+                let correct_directory =
+                    exif_directory == matches!(e.tag, TAG_PHOTOGRAPHER | TAG_IMAGE_EDITOR);
+                correct_directory
+                    && policy.rights.keeps()
+                    && matches!(e.kind, TIFF_ASCII | TIFF_UTF8)
+            }
             tag => policy.keeps(classify(tag)),
         };
-        let ifd0 = self.ifd0.iter().filter(keep).cloned().collect();
-        // The Interop IFD is kept or dropped whole under `color` (its own tags —
-        // InteropIndex/Version, RelatedImage* — are all colour/interop
-        // signalling). It hangs off the Exif IFD, so keeping it keeps that IFD
-        // even when every other Exif-IFD entry was pruned.
-        let interop_ifd = match policy.color {
-            Retention::Keep => self.exif_ifd.as_ref().and(self.interop_ifd.clone()),
-            Retention::Discard => None,
-        };
+        let ifd0 = self
+            .ifd0
+            .iter()
+            .filter(|e| keep(e, false))
+            .cloned()
+            .collect();
+        // An Interop directory is not an opaque color payload. Unknown/private
+        // tags, related-image fields and malformed values may contain identifying
+        // data. Only the fixed-size Index/Version declarations survive a prune.
+        let interop_ifd = self
+            .interop_ifd
+            .as_ref()
+            .filter(|_| policy.color.keeps() && self.exif_ifd.is_some())
+            .map(|d| {
+                d.iter()
+                    .filter(|e| match e.tag {
+                        TAG_INTEROP_INDEX => {
+                            e.kind == TIFF_ASCII
+                                && e.count == 4
+                                && matches!(e.value.as_ref(), b"R98\0" | b"R03\0" | b"THM\0")
+                        }
+                        TAG_INTEROP_VERSION => {
+                            e.kind == TIFF_UNDEFINED
+                                && e.count == 4
+                                && e.value.iter().all(u8::is_ascii_digit)
+                        }
+                        _ => false,
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
+            .filter(|d| !d.is_empty());
         let exif_ifd = self
             .exif_ifd
             .as_ref()
-            .map(|d| d.iter().filter(keep).cloned().collect::<Vec<_>>())
+            .map(|d| {
+                d.iter()
+                    .filter(|e| keep(e, true))
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
             .filter(|d: &Vec<_>| !d.is_empty() || interop_ifd.is_some());
         let gps_ifd = match policy.gps {
             Retention::Keep => self.gps_ifd.clone(),
@@ -783,9 +878,12 @@ impl<'a> Exif<'a> {
         // that `to_bytes` synthesizes.
         let (ifd1, thumbnail) = match policy.thumbnail {
             Retention::Keep => (
-                self.ifd1
-                    .as_ref()
-                    .map(|d| d.iter().filter(keep).cloned().collect::<Vec<_>>()),
+                self.ifd1.as_ref().map(|d| {
+                    d.iter()
+                        .filter(|e| keep(e, false))
+                        .cloned()
+                        .collect::<Vec<_>>()
+                }),
                 self.thumbnail,
             ),
             Retention::Discard => (None, None),
@@ -1309,22 +1407,38 @@ impl Retention {
 pub struct ExifPolicy {
     /// Orientation tag (0x0112).
     pub orientation: Retention,
-    /// Rights: Copyright (0x8298) + Artist (0x013B).
+    /// Intentional attribution: Copyright, Artist, Photographer, ImageEditor.
+    /// May contain names/contact details. CameraOwnerName is separate.
     pub rights: Retention,
     /// Embedded thumbnail (IFD1 + its image data).
     pub thumbnail: Retention,
     /// GPS sub-IFD (location).
     pub gps: Retention,
-    /// Capture timestamps (DateTime / Original / Digitized + sub-sec/offset).
+    /// Capture timestamps (DateTime / Original / Digitized + sub-second).
     pub datetimes: Retention,
-    /// Camera/device identity (Make, Model, Software, lens, serial, MakerNote).
+    /// UTC offsets (`OffsetTime*`). Opt in explicitly: keeping timestamps does
+    /// not enable these; discarding timestamps also discards their offsets.
+    pub time_offsets: Retention,
+    /// Descriptive camera/software information (Make/Model/lens/firmware).
+    /// Keeping this does not enable identifiers or the owner's name. MakerNote
+    /// is dropped on every rewrite because its opaque contents cannot be pruned.
     pub camera: Retention,
+    /// Device identifiers: body/lens/DNG/Photoshop RAW serials, HostComputer, CameraLabel.
+    /// Opt in with [`with_device_ids`](Self::with_device_ids).
+    pub device_ids: Retention,
+    /// CameraOwnerName and its Photoshop RAW alias, separate from attribution.
+    /// Discarded by publishing presets, even when `rights` or `camera` is kept.
+    pub camera_owner: Retention,
+    /// ImageUniqueID: image identity, not device identity. Discarded by the
+    /// publishing presets because it can correlate copies/derivatives.
+    pub image_unique_id: Retention,
     /// Colour signalling: ColorSpace (0xA001), Gamma (0xA500) and the
-    /// Interoperability sub-IFD (InteropIndex `R98` = sRGB / `R03` = Adobe RGB).
+    /// validated InteropIndex/Version (`R98` = sRGB / `R03` = Adobe RGB).
     /// For a JPEG without an ICC profile this is the only colour declaration,
     /// so every preset except [`DISCARD_ALL`](Self::DISCARD_ALL) keeps it.
     pub color: Retention,
-    /// Everything else (dimensions, exposure settings, …).
+    /// Everything else, including unknown/private tags, comments and embedded
+    /// XMP/IPTC. Keeping this is NOT a privacy filter. Prefer a publishing preset.
     pub other: Retention,
 }
 
@@ -1336,7 +1450,11 @@ impl ExifPolicy {
         thumbnail: Retention::Keep,
         gps: Retention::Keep,
         datetimes: Retention::Keep,
+        time_offsets: Retention::Keep,
         camera: Retention::Keep,
+        device_ids: Retention::Keep,
+        camera_owner: Retention::Keep,
+        image_unique_id: Retention::Keep,
         color: Retention::Keep,
         other: Retention::Keep,
     };
@@ -1347,7 +1465,11 @@ impl ExifPolicy {
         thumbnail: Retention::Discard,
         gps: Retention::Discard,
         datetimes: Retention::Discard,
+        time_offsets: Retention::Discard,
         camera: Retention::Discard,
+        device_ids: Retention::Discard,
+        camera_owner: Retention::Discard,
+        image_unique_id: Retention::Discard,
         color: Retention::Discard,
         other: Retention::Discard,
     };
@@ -1391,16 +1513,54 @@ impl ExifPolicy {
         self.gps = r;
         self
     }
-    /// Set the timestamps category.
+    /// Keep timestamps without implicitly enabling UTC offsets. Discarding
+    /// timestamps also discards offsets, preserving the historical removal
+    /// behavior. An explicit `with_time_offsets(Keep)` opts back in.
     #[must_use]
     pub const fn with_datetimes(mut self, r: Retention) -> Self {
         self.datetimes = r;
+        if r.discards() {
+            self.time_offsets = Retention::Discard;
+        }
         self
     }
-    /// Set the camera/device-identity category.
+    /// Set only the timestamp UTC-offset category (`OffsetTime*`).
+    #[must_use]
+    pub const fn with_time_offsets(mut self, r: Retention) -> Self {
+        self.time_offsets = r;
+        self
+    }
+    /// Keep descriptive camera tags without implicitly enabling identifiers or
+    /// ownership. Discarding camera information also discards device IDs, owner
+    /// name and ImageUniqueID, so existing removal chains do not start leaking.
+    /// Explicit identifier setters may opt back in afterward. Starting from
+    /// `KEEP_ALL` still keeps identifiers until explicitly discarded.
     #[must_use]
     pub const fn with_camera(mut self, r: Retention) -> Self {
         self.camera = r;
+        if r.discards() {
+            self.device_ids = Retention::Discard;
+            self.camera_owner = Retention::Discard;
+            self.image_unique_id = Retention::Discard;
+        }
+        self
+    }
+    /// Set only device identifiers (not ownership or image identity).
+    #[must_use]
+    pub const fn with_device_ids(mut self, r: Retention) -> Self {
+        self.device_ids = r;
+        self
+    }
+    /// Set only the camera owner's name.
+    #[must_use]
+    pub const fn with_camera_owner(mut self, r: Retention) -> Self {
+        self.camera_owner = r;
+        self
+    }
+    /// Set only ImageUniqueID (can correlate published copies/derivatives).
+    #[must_use]
+    pub const fn with_image_unique_id(mut self, r: Retention) -> Self {
+        self.image_unique_id = r;
         self
     }
     /// Set the colour-signalling category (ColorSpace / Gamma / Interop IFD).
@@ -1421,7 +1581,11 @@ impl ExifPolicy {
             Category::Orientation => self.orientation.keeps(),
             Category::Rights => self.rights.keeps(),
             Category::Datetimes => self.datetimes.keeps(),
+            Category::TimeOffsets => self.time_offsets.keeps(),
             Category::Camera => self.camera.keeps(),
+            Category::DeviceIds => self.device_ids.keeps(),
+            Category::CameraOwner => self.camera_owner.keeps(),
+            Category::ImageUniqueId => self.image_unique_id.keeps(),
             Category::Color => self.color.keeps(),
             Category::Other => self.other.keeps(),
         }
@@ -1434,7 +1598,11 @@ impl ExifPolicy {
             && self.thumbnail.keeps()
             && self.gps.keeps()
             && self.datetimes.keeps()
+            && self.time_offsets.keeps()
             && self.camera.keeps()
+            && self.device_ids.keeps()
+            && self.camera_owner.keeps()
+            && self.image_unique_id.keeps()
             && self.color.keeps()
             && self.other.keeps()
     }
@@ -2846,6 +3014,174 @@ mod tests {
         assert!(retain(&t, &ExifPolicy::DISCARD_ALL).is_none());
     }
 
+    /// One entry from every retention category (and every sub-split a later
+    /// refinement may introduce), so preset outputs can be pinned byte-for-byte:
+    /// IFD0 {Make, Orientation, HostComputer, Copyright, DateTime} → Exif IFD
+    /// {ExposureTime, DateTimeOriginal, OffsetTimeOriginal, ColorSpace,
+    /// ImageUniqueID, BodySerialNumber, LensModel}.
+    fn every_category_fixture() -> alloc::vec::Vec<u8> {
+        let exif = Exif {
+            order: ByteOrder::Big,
+            had_prefix: false,
+            ifd0: vec![
+                e(TAG_MAKE, TIFF_ASCII, 4, b"Cam\0"),
+                e(TAG_ORIENTATION, TIFF_SHORT, 1, &[0, 6]),
+                e(TAG_HOST_COMPUTER, TIFF_ASCII, 5, b"host\0"),
+                e(TAG_DATETIME, TIFF_ASCII, 20, b"2020:01:02 03:04:05\0"),
+                e(TAG_COPYRIGHT, TIFF_ASCII, 7, b"(c) Me\0"),
+            ],
+            exif_ifd: Some(vec![
+                e(0x829A, TIFF_RATIONAL, 1, &[0, 0, 0, 1, 0, 0, 0, 60]), // ExposureTime (other)
+                e(
+                    TAG_DATETIME_ORIGINAL,
+                    TIFF_ASCII,
+                    20,
+                    b"2020:01:02 03:04:05\0",
+                ),
+                e(TAG_OFFSET_TIME_ORIGINAL, TIFF_ASCII, 7, b"+01:00\0"),
+                e(TAG_COLOR_SPACE, TIFF_SHORT, 1, &[0, 1]),
+                e(TAG_IMAGE_UNIQUE_ID, TIFF_ASCII, 9, b"deadbeef\0"),
+                e(TAG_BODY_SERIAL_NUMBER, TIFF_ASCII, 7, b"SN0001\0"),
+                e(TAG_LENS_MODEL, TIFF_ASCII, 5, b"Lens\0"),
+            ]),
+            gps_ifd: None,
+            interop_ifd: None,
+            ifd1: None,
+            thumbnail: None,
+            text_encoding: TextEncoding::Ascii,
+        };
+        exif.to_bytes()
+    }
+
+    fn unhex(h: &str) -> alloc::vec::Vec<u8> {
+        (0..h.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&h[i..i + 2], 16).unwrap())
+            .collect()
+    }
+
+    /// Historical removal chains remain byte-identical for this fixture.
+    /// Privacy tightening of Keep and CameraOwnerName is exercised separately.
+    #[test]
+    fn legacy_discard_chains_do_not_reintroduce_identifiers() {
+        let src = every_category_fixture();
+        assert_eq!(
+            src,
+            unhex(
+                "4d4d002a000000080006010f00020000000443616d00011200030000000100060000013200020000001400000056013c0002000000050000006a82980002000000070000007087690004000000010000007800000000323032303a30313a30322030333a30343a303500686f73740000286329204d6500000007829a000500000001000000d29003000200000014000000da9011000200000007000000eea00100030000000100010000a420000200000009000000f6a43100020000000700000100a4340002000000050000010800000000000000010000003c323032303a30313a30322030333a30343a3035002b30313a3030000064656164626565660000534e3030303100004c656e730000"
+            ),
+            "fixture drifted"
+        );
+        let cases: [(&str, ExifPolicy, &str); 5] = [
+            (
+                "KEEP_ALL",
+                ExifPolicy::KEEP_ALL,
+                "4d4d002a000000080006010f00020000000443616d00011200030000000100060000013200020000001400000056013c0002000000050000006a82980002000000070000007087690004000000010000007800000000323032303a30313a30322030333a30343a303500686f73740000286329204d6500000007829a000500000001000000d29003000200000014000000da9011000200000007000000eea00100030000000100010000a420000200000009000000f6a43100020000000700000100a4340002000000050000010800000000000000010000003c323032303a30313a30322030333a30343a3035002b30313a3030000064656164626565660000534e3030303100004c656e730000",
+            ),
+            (
+                "ATTRIBUTED_ORIENTATION",
+                ExifPolicy::ATTRIBUTED_ORIENTATION,
+                "4d4d002a00000008000301120003000000010006000082980002000000070000003287690004000000010000003a00000000286329204d6500000001a0010003000000010001000000000000",
+            ),
+            (
+                "ORIENTATION_ONLY",
+                ExifPolicy::ORIENTATION_ONLY,
+                "4d4d002a000000080002011200030000000100060000876900040000000100000026000000000001a0010003000000010001000000000000",
+            ),
+            (
+                "KEEP_ALL.with_camera(Discard)",
+                ExifPolicy::KEEP_ALL.with_camera(Retention::Discard),
+                "4d4d002a00000008000401120003000000010006000001320002000000140000003e82980002000000070000005287690004000000010000005a00000000323032303a30313a30322030333a30343a303500286329204d6500000004829a000500000001000000909003000200000014000000989011000200000007000000aca0010003000000010001000000000000000000010000003c323032303a30313a30322030333a30343a3035002b30313a30300000",
+            ),
+            (
+                "KEEP_ALL.with_datetimes(Discard)",
+                ExifPolicy::KEEP_ALL.with_datetimes(Retention::Discard),
+                "4d4d002a000000080005010f00020000000443616d00011200030000000100060000013c0002000000050000004a82980002000000070000005087690004000000010000005800000000686f73740000286329204d6500000005829a0005000000010000009aa00100030000000100010000a420000200000009000000a2a431000200000007000000aca434000200000005000000b400000000000000010000003c64656164626565660000534e3030303100004c656e730000",
+            ),
+        ];
+        for (name, policy, golden) in cases {
+            let out = retain(&src, &policy).unwrap_or_else(|| panic!("{name}: dropped"));
+            assert_eq!(
+                out.as_ref(),
+                unhex(golden).as_slice(),
+                "{name}: output changed"
+            );
+        }
+        assert!(retain(&src, &ExifPolicy::DISCARD_ALL).is_none());
+    }
+
+    /// The refinements: serials/IDs and time offsets can be kept or dropped
+    /// independently of the identity/timestamp tags they used to travel with.
+    #[test]
+    fn device_ids_and_time_offsets_are_independent_refinements() {
+        let src = every_category_fixture();
+        let tags = |bytes: &[u8]| -> alloc::vec::Vec<u16> {
+            let x = Exif::parse(bytes).unwrap();
+            let mut t: alloc::vec::Vec<u16> = x.ifd0.iter().map(|e| e.tag).collect();
+            t.extend(x.exif_ifd.iter().flatten().map(|e| e.tag));
+            t.sort_unstable();
+            t
+        };
+        let has = |bytes: &[u8], tag: u16| tags(bytes).contains(&tag);
+
+        // Identity without the unit identifiers.
+        let p = ExifPolicy::KEEP_ALL.with_device_ids(Retention::Discard);
+        let out = retain(&src, &p).unwrap();
+        assert!(has(&out, TAG_MAKE) && has(&out, TAG_LENS_MODEL));
+        for t in [TAG_HOST_COMPUTER, TAG_BODY_SERIAL_NUMBER] {
+            assert!(!has(&out, t), "device id {t:#06x} leaked");
+        }
+        let x = Exif::parse(&out).unwrap();
+        assert!(x.has_camera() && !x.has_device_ids());
+
+        assert!(
+            has(&out, TAG_IMAGE_UNIQUE_ID),
+            "image identity is independent"
+        );
+
+        // Unit identifiers without the identity (an odd policy, but expressible).
+        let p = ExifPolicy::KEEP_ALL
+            .with_camera(Retention::Discard)
+            .with_device_ids(Retention::Keep);
+        let out = retain(&src, &p).unwrap();
+        assert!(!has(&out, TAG_MAKE) && !has(&out, TAG_LENS_MODEL));
+        assert!(has(&out, TAG_BODY_SERIAL_NUMBER) && has(&out, TAG_HOST_COMPUTER));
+        let x = Exif::parse(&out).unwrap();
+        assert!(x.has_camera() && x.has_device_ids());
+
+        // Timestamps without the time zone, and vice versa.
+        let p = ExifPolicy::KEEP_ALL.with_time_offsets(Retention::Discard);
+        let out = retain(&src, &p).unwrap();
+        assert!(has(&out, TAG_DATETIME_ORIGINAL) && !has(&out, TAG_OFFSET_TIME_ORIGINAL));
+        let x = Exif::parse(&out).unwrap();
+        assert!(x.has_datetimes() && !x.has_time_offsets());
+        let p = ExifPolicy::KEEP_ALL
+            .with_datetimes(Retention::Discard)
+            .with_time_offsets(Retention::Keep);
+        let out = retain(&src, &p).unwrap();
+        assert!(!has(&out, TAG_DATETIME_ORIGINAL) && has(&out, TAG_OFFSET_TIME_ORIGINAL));
+
+        // The old builders still take the whole family with them.
+        assert_eq!(
+            ExifPolicy::KEEP_ALL
+                .with_camera(Retention::Discard)
+                .device_ids,
+            Retention::Discard
+        );
+        assert_eq!(
+            ExifPolicy::KEEP_ALL
+                .with_datetimes(Retention::Discard)
+                .time_offsets,
+            Retention::Discard
+        );
+        assert!(ExifPolicy::KEEP_ALL.keeps_everything());
+        assert!(
+            !ExifPolicy::KEEP_ALL
+                .with_device_ids(Retention::Discard)
+                .keeps_everything()
+        );
+    }
+
     /// Regression for fuzz zencodec#96 (`exif_author` non-fixpoint): a dangling
     /// thumbnail offset/length pair (offset out of bounds → no thumbnail
     /// captured) must NOT round-trip as data entries. If it does, a rewrite
@@ -2887,3 +3223,6 @@ mod tests {
         assert_eq!(b1, y.to_bytes(), "must be a serializer fixpoint");
     }
 }
+
+#[cfg(test)]
+mod privacy_tests;

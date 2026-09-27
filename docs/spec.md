@@ -482,7 +482,7 @@ they embed without a retention choice, so the compiler **warns at the call site*
 deprecation warns callers, not implementors). The raw `exif`/`xmp`/`icc_profile`
 bytes stay untouched until that filter runs, so an inspect / bring-your-own
 EXIF-library round-trip still sees the originals. `MetadataPolicy` has **no
-`Default`** — name one explicitly; `Web` is the recommended privacy-safe choice,
+`Default`** — name one explicitly; `ColorAndRotation` removes attribution; `Web` intentionally retains it;
 `PreserveExact` embeds verbatim.
 
 ### `MetadataPolicy` / `MetadataFields` / `IccRetention`
@@ -494,10 +494,10 @@ filter for re-encode / recompress pipelines.
 decision the caller must make explicitly; `Web` is the recommended choice):
 - `PreserveExact` — keep everything, byte-faithfully (incl. a redundant sRGB ICC).
 - `Preserve` — keep everything, but drop a redundant sRGB ICC.
-- `Web` (recommended) — ICC (unless redundant sRGB) + EXIF orientation/rights +
+- `Web` (recommended) — ICC (unless redundant sRGB) + EXIF orientation/color/rights +
   CICP/HDR; drop the rest of EXIF (GPS, timestamps, camera, thumbnail) and XMP.
 - `ColorAndRotation` — only what places pixels: ICC (non-sRGB) + CICP/HDR +
-  EXIF orientation. Drops attribution, XMP, other EXIF.
+  EXIF orientation/color. Drops attribution, XMP, other EXIF.
 - `Custom(MetadataFields)` — explicit per-field control.
 
 `MetadataFields` (`Copy`, `#[non_exhaustive]`, `with_*` builders + `KEEP_ALL` /
@@ -550,10 +550,21 @@ rewrite **never transcodes**: it preserves the value bytes **and TIFF type**
 verbatim (a field is neither corrupted nor "corrected"). Writing is the only
 path that mints new bytes, and the caller picks the type via `TextEncoding`.
 
-`ExifPolicy` (`Copy`, `#[non_exhaustive]`, `with_*` builders) — seven keep/drop
-categories of `Retention`: `orientation`, `rights` (copyright + artist),
-`thumbnail`, `gps`, `datetimes`, `camera`, `other`. Consts: `KEEP_ALL`,
-`DISCARD_ALL`, `ATTRIBUTED_ORIENTATION`, `ORIENTATION_ONLY`.
+`ExifPolicy` (`Copy`, `#[non_exhaustive]`, `with_*` builders) has twelve categories:
+`orientation`, `rights` (Copyright/Artist/Photographer/ImageEditor), `thumbnail`,
+`gps`, `datetimes`, `time_offsets`, `camera`, `device_ids` (body/lens/DNG serials,
+HostComputer, CameraLabel), `camera_owner` (CameraOwnerName), `image_unique_id`,
+`color` (ColorSpace/Gamma/validated InteropIndex/Version), `other`.
+Consts: `KEEP_ALL`, `DISCARD_ALL`, `ATTRIBUTED_ORIENTATION`, `ORIENTATION_ONLY`.
+`has_camera_owner()` and `has_image_unique_id()` query the new categories;
+`has_camera()` remains the aggregate camera/identity query.
+
+`with_camera(Keep)` only enables descriptive tags. `with_camera(Discard)` also
+removes device IDs, ownership and image identity so historical removal chains
+remain safe. Explicit setters can opt back in. `with_datetimes` follows the same
+rule for UTC offsets: Keep does not enable them, Discard removes them.
+`KEEP_ALL.with_camera(Keep)` still keeps everything: start publishing policies
+from a publishing preset, not from `KEEP_ALL`.
 
 `Retention` (`Keep` / `Discard`) — explicit per-field intent.
 
@@ -561,20 +572,17 @@ categories of `Retention`: `orientation`, `rights` (copyright + artist),
 nothing is dropped (so `Metadata::filtered` is a cheap `Arc` clone),
 `Cow::Owned` on a rewrite, `None` when all EXIF is discarded.
 
-`helpers::parse_exif_orientation` is a lightweight orientation accessor that
-delegates here. Limitation: a partial rewrite that *keeps* `MakerNote` (0x927C)
-relocates it without fixing its maker-specific internal offsets — keep all EXIF
-(no prune) for byte-exact MakerNote.
+`helpers::parse_exif_orientation` delegates to this parser. Every EXIF prune drops
+MakerNote, unmodeled structural pointers and unknown/malformed Interop entries.
+Display tags must have usable types/counts (Orientation SHORT/LONG count 1 in
+1..=8, ColorSpace SHORT count 1, Gamma RATIONAL count 1 with nonzero terms).
+Interop retains only ASCII count-4 R98/R03/THM and four-digit UNDEFINED Version.
+IFD1 entries undergo the same category filtering; a retained JPEG thumbnail's
+own compressed bytes remain opaque. Publishing presets drop the entire thumbnail.
 
-Privacy (partial-strip policies): `MakerNote` is dropped whenever `gps` **or**
-`camera` is stripped (it's opaque and can embed GPS/serials); `SubIFDs` (0x014A,
-an unmodeled sub-IFD pointer) is dropped on a rewrite rather than left dangling;
-IFD1 (thumbnail directory) entries are filtered by the same per-category rules as
-IFD0, so a keep-thumbnail policy doesn't leak the Make/Model/DateTime it carries.
-The `Web`/`ColorAndRotation` presets drop `gps`/`camera`/`thumbnail`/`other`, so
-they were already safe; these close the gaps for hand-rolled `Custom` policies.
-Cross-carrier caveat: XMP can duplicate GPS/identity — a policy that keeps XMP
-ships it even when the EXIF copy is stripped.
+XMP, ICC profiles and other container channels have separate privacy implications;
+see [metadata privacy](metadata-privacy.md). `other: Keep` explicitly permits
+unknown fields and embedded metadata; it is not a safe publishing allowlist.
 
 Hardening: bounds-checked, no panics on untrusted input (32M+ fuzz executions);
 the serializer dedups aliased out-of-line values to prevent rewrite

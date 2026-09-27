@@ -115,8 +115,26 @@ removes that whole class).
 
 - `ExifPolicy::color` + `with_color(..)` (additive — the struct is
   `#[non_exhaustive]`), and `Exif::has_color()`.
+- Independent `ExifPolicy::{device_ids, camera_owner, image_unique_id, time_offsets}`
+  retention controls with setters and `Exif::has_*` queries. Device IDs include
+  body/lens/DNG serials, HostComputer and CameraLabel; ImageUniqueID identifies
+  an image, not a device.
+- Reproducible, read-only corpus privacy audit against ExifTool
+  (`scripts/audit-exif-privacy.py`) and malformed/aliased/truncated EXIF regressions.
 
 ### Changed
+
+- **Privacy behavior change:** `Web` no longer retains CameraOwnerName as
+  attribution. `with_camera(Keep)` no longer enables IDs/ownership/image identity;
+  `with_datetimes(Keep)` no longer enables UTC offsets. Discard still removes the
+  entire family, preserving existing removal chains. Use the explicit setters
+  to opt in. `KEEP_ALL`/`PreserveExact` retain their preservation semantics.
+- EXIF prunes validate display/attribution tag types, counts and directory placement,
+  and keep only validated Interop
+  Index/Version, preventing private or malformed payloads from riding along
+  under the color category. Attribution must have a text type. `ColorAndRotation`
+  is documented for publishing without attribution; `Web` deliberately retains it.
+
 
 - **Dependency requirements now span the published minor and the next one.**
   `zenpixels` is `>=0.2.14, <0.4.0` (was `0.2.14`, i.e. `^0.2.14` =

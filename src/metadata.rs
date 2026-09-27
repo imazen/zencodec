@@ -480,7 +480,14 @@ impl MetadataFields {
 ///
 /// **No `Default`.** Metadata retention is a privacy decision, so callers must
 /// name a policy explicitly — there is no implicit fallback. [`Web`](Self::Web)
-/// is the recommended privacy-safe choice for publishing.
+/// retains attribution for publishing; [`ColorAndRotation`](Self::ColorAndRotation)
+/// also removes names/attribution. Both remove CameraOwnerName and identifiers.
+/// Start from one of these presets rather than subtracting from `KEEP_ALL`.
+///
+/// This filters only the fields of [`Metadata`], not an entire encoded file.
+/// Retained ICC profiles may contain identifying text/private tags; thumbnails,
+/// auxiliary images and other container metadata outside this record require
+/// codec/pipeline handling. This is not an anonymity guarantee.
 ///
 /// # Delivery exceptions
 ///
@@ -497,12 +504,11 @@ impl MetadataFields {
 ///   the embedded tag) is lost. [`PreserveExact`](Self::PreserveExact) /
 ///   [`Preserve`](Self::Preserve) keep EXIF byte-faithfully (no parse, so an
 ///   unparseable/oversize blob passes through unchanged).
-/// - **[`Custom`](Self::Custom) keeping `camera` *through a prune*:** the rewrite
-///   relocates `MakerNote` (0x927C) without fixing its maker-specific internal
-///   offsets, and an uncompressed (StripOffsets) thumbnail is dropped on any
-///   rewrite — see the [`exif`](crate::exif) module limitations. (The presets
-///   sidestep this: `Web`/`ColorAndRotation` drop `camera`; `Preserve*` never
-///   rewrite.)
+/// - **Any EXIF prune drops opaque `MakerNote` and unknown Interop entries**, even
+///   when `camera` is kept. MakerNotes can contain GPS/serials and internal offsets
+///   that cannot be relocated safely. Uncompressed thumbnails are also dropped
+///   on a rewrite; explicit thumbnail retention can keep a JPEG thumbnail's own
+///   embedded metadata. The publishing presets discard thumbnails entirely.
 /// - **CICP/HDR vs the pixels and any gain map** is the caller's responsibility —
 ///   `filtered` cannot see the gain map; see [`Metadata::filtered`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -522,13 +528,15 @@ pub enum MetadataPolicy {
     Preserve,
     /// The web-publish set (recommended for publishing): keep the ICC profile
     /// (unless a redundant sRGB), EXIF orientation, rights (copyright/artist),
-    /// EXIF colour signalling (ColorSpace / Gamma / Interoperability IFD), and
+    /// EXIF colour signalling (ColorSpace / Gamma / validated Interop tags), and
     /// CICP / HDR color signaling. Drop the rest of EXIF (GPS, timestamps,
-    /// camera/device identity, thumbnail) and all XMP.
+    /// camera/device identity, CameraOwnerName, ImageUniqueID, thumbnail) and all XMP.
+    /// Attribution includes Photographer/ImageEditor and can expose names/contact
+    /// details; use `ColorAndRotation` when that is not intended.
     Web,
     /// Keep only what places pixels on screen: the ICC profile (unless a
     /// redundant sRGB), CICP / HDR color signaling, EXIF orientation and EXIF
-    /// colour signalling (ColorSpace / Gamma / Interoperability IFD). Drops
+    /// colour signalling (ColorSpace / Gamma / validated Interop tags). Drops
     /// attribution, XMP, and all other EXIF.
     ColorAndRotation,
     /// Explicit per-field control via [`MetadataFields`].

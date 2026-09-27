@@ -730,7 +730,9 @@ where
 /// (content-light-level / mastering-display), and the EXIF sub-categories the
 /// public [`Exif`] API can introspect — GPS, thumbnail, rights (copyright/artist),
 /// **camera/device identity** ([`Exif::has_camera`], Make/Model/MakerNote/serials/…)
-/// and **capture timestamps** ([`Exif::has_datetimes`]). An emitted EXIF blob that
+/// and **capture timestamps** ([`Exif::has_datetimes`]). Device IDs, camera owner,
+/// image identity and UTC offsets are checked separately when their descriptive
+/// siblings are retained. An emitted EXIF blob that
 /// fails to re-parse is also a failure (a mangled blob can hide raw GPS/camera
 /// bytes a lenient reader scrapes, and its drops can't be verified).
 pub fn check_metadata_no_leak<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
@@ -749,6 +751,16 @@ where
     let policies = [
         ("Web", MetadataPolicy::Web),
         ("ColorAndRotation", MetadataPolicy::ColorAndRotation),
+        (
+            "Web + camera/timestamps",
+            MetadataPolicy::Custom(
+                MetadataPolicy::Web.fields().with_exif(
+                    zencodec::ExifPolicy::ATTRIBUTED_ORIENTATION
+                        .with_camera(zencodec::Retention::Keep)
+                        .with_datetimes(zencodec::Retention::Keep),
+                ),
+            ),
+        ),
         ("PreserveExact", MetadataPolicy::PreserveExact),
         (
             "Custom(DISCARD_ALL)",
@@ -852,6 +864,39 @@ fn assert_no_leak(
                             "[{policy}] camera-identity tags (Make/Model/MakerNote/serial/…) in output EXIF but the policy dropped them (privacy leak)"
                         ),
                     ));
+                }
+                // A broad camera/date check is insufficient when descriptive
+                // camera tags or timestamps are retained but identifiers are not.
+                for (name, present, wanted) in [
+                    (
+                        "device identifiers",
+                        dx.has_device_ids(),
+                        want.as_ref().is_some_and(Exif::has_device_ids),
+                    ),
+                    (
+                        "camera owner",
+                        dx.has_camera_owner(),
+                        want.as_ref().is_some_and(Exif::has_camera_owner),
+                    ),
+                    (
+                        "image identity",
+                        dx.has_image_unique_id(),
+                        want.as_ref().is_some_and(Exif::has_image_unique_id),
+                    ),
+                    (
+                        "UTC offsets",
+                        dx.has_time_offsets(),
+                        want.as_ref().is_some_and(Exif::has_time_offsets),
+                    ),
+                ] {
+                    if present && !wanted {
+                        return Err(fail(
+                            check,
+                            format!(
+                                "[{policy}] {name} in output EXIF but the policy dropped it (privacy leak)"
+                            ),
+                        ));
+                    }
                 }
                 let want_datetimes = want.as_ref().is_some_and(Exif::has_datetimes);
                 if dx.has_datetimes() && !want_datetimes {
@@ -3031,7 +3076,29 @@ mod tests {
         let x = Exif::parse(&blob).expect("fixture EXIF parses");
         assert!(x.has_gps(), "fixture must contain GPS");
         assert!(x.has_thumbnail(), "fixture must contain a thumbnail");
+        assert!(x.has_device_ids() && x.has_camera_owner() && x.has_image_unique_id());
+        assert!(x.has_datetimes() && x.has_time_offsets());
         assert_eq!(x.copyright().as_deref(), Some("(C) 2026 Test"));
+    }
+
+    #[test]
+    fn metadata_check_catches_identifiers_alongside_retained_camera_tags() {
+        use zencodec::{ExifPolicy, Retention};
+        let rich = Metadata::none().with_exif(fixtures::rich_exif_le());
+        let base = ExifPolicy::ATTRIBUTED_ORIENTATION
+            .with_camera(Retention::Keep)
+            .with_datetimes(Retention::Keep);
+        let policy = |exif| MetadataPolicy::Custom(MetadataPolicy::Web.fields().with_exif(exif));
+        let expected = rich.filtered(&policy(base));
+        for leaky in [
+            base.with_device_ids(Retention::Keep),
+            base.with_camera_owner(Retention::Keep),
+            base.with_image_unique_id(Retention::Keep),
+            base.with_time_offsets(Retention::Keep),
+        ] {
+            let actual = rich.filtered(&policy(leaky));
+            assert!(assert_no_leak("mutation", "camera without IDs", &actual, &expected).is_err());
+        }
     }
 
     #[test]
