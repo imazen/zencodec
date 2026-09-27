@@ -6,21 +6,21 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1308 lines (supported surface) | zencodec.features.txt 2 added (features: std) | zencodec.internal.txt 89 lines (89 hidden + 0 excluded-feature)
+# files: zencodec.txt 1324 lines (supported surface) | zencodec.features.txt 2 added (features: std) | zencodec.internal.txt 93 lines (93 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 8
-#   pub types (struct/enum/trait/alias)       132
+#   pub types (struct/enum/trait/alias)       134
 #   pub consts/statics                        182
 #   free functions                             39
-#   inherent methods                          494
-#   struct fields                             206
-#   enum variants                             181
+#   inherent methods                          496
+#   struct fields                             211
+#   enum variants                             186
 #   re-exports                                 12
-#   trait roster entries (type × trait)       379
+#   trait roster entries (type × trait)       389
 #   conditional trait impls (verbatim)          2
-#   auto-trait-complete types                  67
+#   auto-trait-complete types                  69
 #   auto-trait exceptions                       6
 #
 # per-module pub lines:
@@ -28,12 +28,12 @@
 #   decode                          166
 #   encode                          116
 #   estimate                         47
-#   exif                             80
+#   exif                             94
 #   gainmap                         126
 #   helpers                          13
 #   icc                               1
 
-## items (1219 lines)
+## items (1233 lines)
 
 pub mod zencodec
 pub use At
@@ -538,17 +538,30 @@ pub mod exif
 pub enum exif::ByteOrder
 pub exif::ByteOrder::Big
 pub exif::ByteOrder::Little
+#[non_exhaustive] pub enum exif::Ifd
+pub exif::Ifd::Exif
+pub exif::Ifd::Gps
+pub exif::Ifd::Ifd0
+pub exif::Ifd::Ifd1
+pub exif::Ifd::Interop
 pub exif::Retention::Discard
 pub exif::Retention::Keep
 pub const fn exif::Retention::discards(self) -> bool [also: (root)]
 pub const fn exif::Retention::keeps(self) -> bool [also: (root)]
 pub exif::TextEncoding::Ascii
 pub exif::TextEncoding::Utf8
+pub struct exif::EntryRef<'e>
+pub exif::EntryRef::count: u32
+pub exif::EntryRef::ifd: exif::Ifd
+pub exif::EntryRef::kind: u16
+pub exif::EntryRef::tag: u16
+pub exif::EntryRef::value: &'e [u8]
 pub fn exif::Exif<'a>::artist(&self) -> core::option::Option<alloc::borrow::Cow<'_, str>>
 pub fn exif::Exif<'a>::artist_bytes(&self) -> core::option::Option<&[u8]>
 pub fn exif::Exif<'a>::byte_order(&self) -> exif::ByteOrder
 pub fn exif::Exif<'a>::copyright(&self) -> core::option::Option<alloc::borrow::Cow<'_, str>>
 pub fn exif::Exif<'a>::copyright_bytes(&self) -> core::option::Option<&[u8]>
+pub fn exif::Exif<'a>::entries(&self) -> impl core::iter::traits::iterator::Iterator<Item = exif::EntryRef<'_>> + '_
 pub fn exif::Exif<'a>::filtered(&self, &exif::ExifPolicy) -> exif::Exif<'a>
 pub fn exif::Exif<'a>::has_camera(&self) -> bool
 pub fn exif::Exif<'a>::has_camera_owner(&self) -> bool
@@ -954,6 +967,7 @@ pub fn exif::Exif<'a>::artist_bytes(&self) -> core::option::Option<&[u8]>
 pub fn exif::Exif<'a>::byte_order(&self) -> exif::ByteOrder
 pub fn exif::Exif<'a>::copyright(&self) -> core::option::Option<alloc::borrow::Cow<'_, str>>
 pub fn exif::Exif<'a>::copyright_bytes(&self) -> core::option::Option<&[u8]>
+pub fn exif::Exif<'a>::entries(&self) -> impl core::iter::traits::iterator::Iterator<Item = exif::EntryRef<'_>> + '_
 pub fn exif::Exif<'a>::filtered(&self, &exif::ExifPolicy) -> exif::Exif<'a>
 pub fn exif::Exif<'a>::has_camera(&self) -> bool
 pub fn exif::Exif<'a>::has_camera_owner(&self) -> bool
@@ -1255,7 +1269,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (80 types)
+## trait impls (82 types)
 
 (): encode::AnimationFrameEncoder
 (dyn core::error::Error + 'static): CodecErrorExt
@@ -1319,8 +1333,10 @@ estimate::ResourceEstimate: Clone, Copy, Debug, PartialEq
 estimate::SimdTier: Clone, Copy, Debug, Eq, Hash, PartialEq
 estimate::ThreadingInformation: Clone, Copy, Debug, PartialEq
 exif::ByteOrder: Clone, Copy, Debug, Eq, PartialEq
+exif::EntryRef<'e>: Clone, Copy, Debug, Eq, PartialEq
 exif::Exif<'a>: Clone, Debug, Default, Eq, PartialEq
 exif::ExifPolicy: Clone, Copy, Debug, Eq, PartialEq
+exif::Ifd: Clone, Copy, Debug, Eq, PartialEq
 exif::Retention: Clone, Copy, Debug, Eq, PartialEq
 exif::TextEncoding: Clone, Copy, Debug, Eq, PartialEq
 gainmap::DecodedGainMap: Debug
@@ -1342,7 +1358,7 @@ impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static,
 
 ## auto traits
 
-67 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+69 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
 Extensions: !RefUnwindSafe !UnwindSafe
 ImageInfo: !RefUnwindSafe !UnwindSafe

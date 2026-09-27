@@ -9,19 +9,19 @@
 
 ## summary
 #
-#   inherent methods                           45
-#   trait roster entries (type × trait)        44
+#   inherent methods                           47
+#   trait roster entries (type × trait)        46
 #
 # per-module pub lines:
 #   (root)                           28
 #   decode                            3
 #   encode                            1
 #   estimate                          3
-#   exif                              5
+#   exif                              7
 #   gainmap                           4
 #   helpers                           1
 
-## items (45 lines)
+## items (47 lines)
 
 pub fn AllocPreference::assert_fields_are_eq(&self)
 pub fn CicpEmission::assert_fields_are_eq(&self)
@@ -59,8 +59,10 @@ pub fn estimate::ComputeEnvironment::assert_fields_are_eq(&self)
 pub fn estimate::ImageCharacteristics::assert_fields_are_eq(&self)
 pub fn estimate::SimdTier::assert_fields_are_eq(&self)
 pub fn exif::ByteOrder::assert_fields_are_eq(&self)
+pub fn exif::EntryRef<'e>::assert_fields_are_eq(&self)
 pub fn exif::Exif<'a>::assert_fields_are_eq(&self)
 pub fn exif::ExifPolicy::assert_fields_are_eq(&self)
+pub fn exif::Ifd::assert_fields_are_eq(&self)
 pub fn exif::Retention::assert_fields_are_eq(&self)
 pub fn exif::TextEncoding::assert_fields_are_eq(&self)
 pub fn gainmap::Fraction::assert_fields_are_eq(&self)
@@ -69,7 +71,7 @@ pub fn gainmap::Iso21496Format::assert_fields_are_eq(&self)
 pub fn gainmap::UFraction::assert_fields_are_eq(&self)
 pub fn helpers::IccMatchTolerance::assert_fields_are_eq(&self)
 
-## trait impls (44 types)
+## trait impls (46 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -105,7 +107,9 @@ estimate::ResourceEstimate: TrivialClone
 estimate::SimdTier: TrivialClone
 estimate::ThreadingInformation: TrivialClone
 exif::ByteOrder: TrivialClone
+exif::EntryRef<'e>: TrivialClone
 exif::ExifPolicy: TrivialClone
+exif::Ifd: TrivialClone
 exif::Retention: TrivialClone
 exif::TextEncoding: TrivialClone
 gainmap::Fraction: TrivialClone
