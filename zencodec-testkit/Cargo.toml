@@ -29,4 +29,4 @@ rayon = "1.10.0"
 # For tests/usage.rs — the "caller also has zenpixels-convert" examples that
 # adapt a foreign pixel format into an encoder's supported set, and convert a
 # decoded buffer into a caller-chosen format.
-zenpixels-convert = "0.2.14"
+zenpixels-convert = ">=0.2.15, <0.4.0"

@@ -6,35 +6,36 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1491 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 89 lines (89 hidden + 0 excluded-feature)
+# files: zencodec.txt 1518 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 93 lines (93 hidden + 0 excluded-feature)
 
 ## summary
 #
-#   pub modules                                 9
-#   pub types (struct/enum/trait/alias)       169
-#   pub consts/statics                        172
-#   free functions                             42
-#   inherent methods                          663
+#   pub modules                                10
+#   pub types (struct/enum/trait/alias)       171
+#   pub consts/statics                        176
+#   free functions                             44
+#   inherent methods                          676
 #   struct fields                             196
-#   enum variants                             185
+#   enum variants                             189
 #   re-exports                                 12
-#   trait roster entries (type × trait)       386
+#   trait roster entries (type × trait)       399
 #   conditional trait impls (verbatim)          4
-#   auto-trait-complete types                  67
+#   auto-trait-complete types                  69
 #   auto-trait exceptions                       8
 #
 # per-module pub lines:
-#   (root)                          732
+#   (root)                          748
+#   animation                         6
 #   decode                          168
-#   encode                          119
+#   encode                          121
 #   estimate                         48
 #   exif                             65
 #   gainmap                         126
 #   helpers                          13
 #   icc                               1
-#   prelude                         176
+#   prelude                         178
 
-## items (1396 lines)
+## items (1421 lines)
 
 pub mod zencodec
 pub use At
@@ -49,16 +50,29 @@ pub use StopToken
 pub use Unstoppable
 pub use enough
 pub use whereat
+pub mod animation
+#[non_exhaustive] pub enum animation::TimingError
+pub animation::TimingError::Inexact
+pub animation::TimingError::Overflow
+pub animation::TimingError::ZeroDenominator
+pub struct animation::FrameDuration
+pub const fn animation::FrameDuration::denominator(self) -> u32
+pub const fn animation::FrameDuration::from_millis(u32) -> Self
+pub const fn animation::FrameDuration::new(u64, u32) -> core::result::Result<Self, animation::TimingError>
+pub const fn animation::FrameDuration::numerator(self) -> u64
+pub fn animation::FrameDuration::ticks_at(self, u32) -> core::result::Result<u64, animation::TimingError>
 pub mod decode
 pub decode::GainMapRender::BaseOnly
 pub decode::GainMapRender::Components
 pub decode::GainMapRender::ReconstructHdr
 pub decode::GainMapRender::ReconstructHdr::target_headroom: core::option::Option<f32>
+pub fn AnimationFrame<'a>::duration(&self) -> animation::FrameDuration
 pub fn AnimationFrame<'a>::duration_ms(&self) -> u32
 pub fn AnimationFrame<'a>::frame_index(&self) -> u32
 pub fn AnimationFrame<'a>::new(zenpixels::buffer::PixelSlice<'a>, u32, u32) -> Self
 pub fn AnimationFrame<'a>::pixels(&self) -> &zenpixels::buffer::PixelSlice<'a>
 pub fn AnimationFrame<'a>::to_owned_frame(&self) -> OwnedAnimationFrame
+pub fn AnimationFrame<'a>::with_duration(zenpixels::buffer::PixelSlice<'a>, animation::FrameDuration, u32) -> Self
 #[non_exhaustive] pub struct decode::DecodeCapabilities
 pub const decode::DecodeCapabilities::EMPTY: Self
 pub const fn decode::DecodeCapabilities::animation(&self) -> bool
@@ -176,6 +190,7 @@ pub fn decode::OutputInfo::with_alpha(self, bool) -> Self
 pub fn decode::OutputInfo::with_crop_applied(self, [u32; 4]) -> Self
 pub fn decode::OutputInfo::with_orientation_applied(self, zenpixels::orientation::Orientation) -> Self
 pub fn OwnedAnimationFrame::as_animation_frame(&self) -> AnimationFrame<'_>
+pub fn OwnedAnimationFrame::duration(&self) -> animation::FrameDuration
 pub fn OwnedAnimationFrame::duration_ms(&self) -> u32
 pub fn OwnedAnimationFrame::extensions(&self) -> &Extensions
 pub fn OwnedAnimationFrame::extensions_mut(&mut self) -> &mut Extensions
@@ -185,6 +200,7 @@ pub fn OwnedAnimationFrame::into_buffer(self) -> zenpixels::buffer::PixelBuffer
 pub fn OwnedAnimationFrame::new(zenpixels::buffer::PixelBuffer, u32, u32) -> Self
 pub fn OwnedAnimationFrame::pixels(&self) -> zenpixels::buffer::PixelSlice<'_>
 pub fn OwnedAnimationFrame::take_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&mut self) -> core::option::Option<T>
+pub fn OwnedAnimationFrame::with_duration(zenpixels::buffer::PixelBuffer, animation::FrameDuration, u32) -> Self
 pub fn OwnedAnimationFrame::with_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(self, T) -> Self
 pub decode::SourceColor::bit_depth: core::option::Option<u8>
 pub decode::SourceColor::channel_count: core::option::Option<u8>
@@ -405,10 +421,12 @@ pub trait encode::AnimationFrameEncoder: core::marker::Sized [also: prelude]
 pub type encode::AnimationFrameEncoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn encode::AnimationFrameEncoder::finish(self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, Self::Error>
 pub fn encode::AnimationFrameEncoder::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error>
+pub fn encode::AnimationFrameEncoder::push_frame_timed(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error>
 pub fn encode::AnimationFrameEncoder::reject(UnsupportedOperation) -> Self::Error
 pub type ()::Error = UnsupportedOperation [also: (root)]
 pub fn ()::finish(self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, Self::Error> [also: (root)]
 pub fn ()::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error> [also: (root)]
+pub fn ()::push_frame_timed(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error> [also: (root)]
 pub fn ()::reject(UnsupportedOperation) -> Self::Error [also: (root)]
 pub trait encode::DynAnimationFrameEncoder: core::marker::Send [also: prelude]
 pub fn encode::DynAnimationFrameEncoder::as_any(&self) -> &dyn core::any::Any
@@ -416,6 +434,7 @@ pub fn encode::DynAnimationFrameEncoder::as_any_mut(&mut self) -> &mut dyn core:
 pub fn encode::DynAnimationFrameEncoder::finish(alloc::boxed::Box<Self>, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
 pub fn encode::DynAnimationFrameEncoder::into_any(alloc::boxed::Box<Self>) -> alloc::boxed::Box<dyn core::any::Any>
 pub fn encode::DynAnimationFrameEncoder::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), encode::BoxedError>
+pub fn encode::DynAnimationFrameEncoder::push_frame_timed(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), encode::BoxedError>
 pub trait encode::DynEncodeJob [also: prelude]
 pub fn encode::DynEncodeJob::encode(alloc::boxed::Box<Self>, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
 pub fn encode::DynEncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
@@ -713,6 +732,7 @@ pub fn prelude::AnimationFrameDecoder::wrap_sink_error(decode::SinkError) -> Sel
 pub type prelude::AnimationFrameEncoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn prelude::AnimationFrameEncoder::finish(self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, Self::Error>
 pub fn prelude::AnimationFrameEncoder::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error>
+pub fn prelude::AnimationFrameEncoder::push_frame_timed(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error>
 pub fn prelude::AnimationFrameEncoder::reject(UnsupportedOperation) -> Self::Error
 pub type prelude::Decode::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn prelude::Decode::decode(self) -> core::result::Result<decode::DecodeOutput, Self::Error>
@@ -762,6 +782,7 @@ pub fn prelude::DynAnimationFrameEncoder::as_any_mut(&mut self) -> &mut dyn core
 pub fn prelude::DynAnimationFrameEncoder::finish(alloc::boxed::Box<Self>, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
 pub fn prelude::DynAnimationFrameEncoder::into_any(alloc::boxed::Box<Self>) -> alloc::boxed::Box<dyn core::any::Any>
 pub fn prelude::DynAnimationFrameEncoder::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), encode::BoxedError>
+pub fn prelude::DynAnimationFrameEncoder::push_frame_timed(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), encode::BoxedError>
 pub fn prelude::DynDecodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn prelude::DynDecodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
 pub fn prelude::DynDecodeJob::into_animation_frame_decoder(alloc::boxed::Box<Self>, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<dyn decode::DynAnimationFrameDecoder>, encode::BoxedError>
@@ -1072,6 +1093,7 @@ pub UnsupportedImageKind::Type
 #[non_exhaustive] pub enum UnsupportedOperation
 pub UnsupportedOperation::AnimationDecode
 pub UnsupportedOperation::AnimationEncode
+pub UnsupportedOperation::AnimationTiming
 pub UnsupportedOperation::DecodeInto
 pub UnsupportedOperation::GainMapEncode
 pub UnsupportedOperation::MultiImageDecode
@@ -1081,11 +1103,13 @@ pub UnsupportedOperation::RowLevelDecode
 pub UnsupportedOperation::RowLevelEncode
 pub const fn UnsupportedOperation::name(self) -> &'static str
 #[non_exhaustive] pub struct AnimationFrame<'a> [also: decode]
+pub fn AnimationFrame<'a>::duration(&self) -> animation::FrameDuration
 pub fn AnimationFrame<'a>::duration_ms(&self) -> u32
 pub fn AnimationFrame<'a>::frame_index(&self) -> u32
 pub fn AnimationFrame<'a>::new(zenpixels::buffer::PixelSlice<'a>, u32, u32) -> Self
 pub fn AnimationFrame<'a>::pixels(&self) -> &zenpixels::buffer::PixelSlice<'a>
 pub fn AnimationFrame<'a>::to_owned_frame(&self) -> OwnedAnimationFrame
+pub fn AnimationFrame<'a>::with_duration(zenpixels::buffer::PixelSlice<'a>, animation::FrameDuration, u32) -> Self
 pub struct CodecError(_)
 pub fn CodecError::category(&self) -> ErrorCategory
 pub fn CodecError::codec(&self) -> core::option::Option<&'static str>
@@ -1320,6 +1344,7 @@ pub const fn MetadataFields::with_icc(self, IccRetention) -> Self
 pub const fn MetadataFields::with_xmp(self, exif::Retention) -> Self
 #[non_exhaustive] pub struct OwnedAnimationFrame [also: decode]
 pub fn OwnedAnimationFrame::as_animation_frame(&self) -> AnimationFrame<'_>
+pub fn OwnedAnimationFrame::duration(&self) -> animation::FrameDuration
 pub fn OwnedAnimationFrame::duration_ms(&self) -> u32
 pub fn OwnedAnimationFrame::extensions(&self) -> &Extensions
 pub fn OwnedAnimationFrame::extensions_mut(&mut self) -> &mut Extensions
@@ -1329,6 +1354,7 @@ pub fn OwnedAnimationFrame::into_buffer(self) -> zenpixels::buffer::PixelBuffer
 pub fn OwnedAnimationFrame::new(zenpixels::buffer::PixelBuffer, u32, u32) -> Self
 pub fn OwnedAnimationFrame::pixels(&self) -> zenpixels::buffer::PixelSlice<'_>
 pub fn OwnedAnimationFrame::take_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&mut self) -> core::option::Option<T>
+pub fn OwnedAnimationFrame::with_duration(zenpixels::buffer::PixelBuffer, animation::FrameDuration, u32) -> Self
 pub fn OwnedAnimationFrame::with_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(self, T) -> Self
 pub struct Resolution
 pub Resolution::unit: ResolutionUnit
@@ -1433,7 +1459,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (82 types)
+## trait impls (84 types)
 
 (): encode::AnimationFrameEncoder
 (dyn core::error::Error + 'static): CodecErrorExt
@@ -1482,6 +1508,8 @@ ThreadingPolicy: Clone, Copy, Debug, Default, Eq, PartialEq
 Unsupported<E>: decode::AnimationFrameDecoder, decode::StreamingDecode
 UnsupportedImageKind: Clone, Copy, Debug, Eq, Hash, PartialEq
 UnsupportedOperation: CategorizedError, Clone, Copy, Debug, Display, Eq, Error, Hash, PartialEq
+animation::FrameDuration: Clone, Copy, Debug, Eq, Hash, PartialEq
+animation::TimingError: Clone, Copy, Debug, Display, Eq, Error, PartialEq
 decode::DecodeCapabilities: Clone, Debug, Default, Eq, PartialEq
 decode::DecodeOutput: Debug
 decode::DecodePolicy: Clone, Copy, Debug, Default, Eq, PartialEq
@@ -1524,7 +1552,7 @@ impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static,
 
 ## auto traits
 
-67 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+69 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
 CodecSet: !RefUnwindSafe !UnwindSafe
 CodecSetError: !RefUnwindSafe !UnwindSafe

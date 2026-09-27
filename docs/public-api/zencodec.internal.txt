@@ -9,11 +9,12 @@
 
 ## summary
 #
-#   inherent methods                           45
-#   trait roster entries (type × trait)        44
+#   inherent methods                           47
+#   trait roster entries (type × trait)        46
 #
 # per-module pub lines:
 #   (root)                           28
+#   animation                         2
 #   decode                            3
 #   encode                            1
 #   estimate                          3
@@ -21,7 +22,7 @@
 #   gainmap                           4
 #   helpers                           1
 
-## items (45 lines)
+## items (47 lines)
 
 pub fn AllocPreference::assert_fields_are_eq(&self)
 pub fn CicpEmission::assert_fields_are_eq(&self)
@@ -51,6 +52,8 @@ pub fn Supplements::assert_fields_are_eq(&self)
 pub fn ThreadingPolicy::assert_fields_are_eq(&self)
 pub fn UnsupportedImageKind::assert_fields_are_eq(&self)
 pub fn UnsupportedOperation::assert_fields_are_eq(&self)
+pub fn animation::FrameDuration::assert_fields_are_eq(&self)
+pub fn animation::TimingError::assert_fields_are_eq(&self)
 pub fn decode::DecodeCapabilities::assert_fields_are_eq(&self)
 pub fn decode::DecodePolicy::assert_fields_are_eq(&self)
 pub fn decode::OutputInfo::assert_fields_are_eq(&self)
@@ -69,7 +72,7 @@ pub fn gainmap::Iso21496Format::assert_fields_are_eq(&self)
 pub fn gainmap::UFraction::assert_fields_are_eq(&self)
 pub fn helpers::IccMatchTolerance::assert_fields_are_eq(&self)
 
-## trait impls (44 types)
+## trait impls (46 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -96,6 +99,8 @@ StreamOffset: TrivialClone
 ThreadingPolicy: TrivialClone
 UnsupportedImageKind: TrivialClone
 UnsupportedOperation: TrivialClone
+animation::FrameDuration: TrivialClone
+animation::TimingError: TrivialClone
 decode::DecodePolicy: TrivialClone
 encode::EncodePolicy: TrivialClone
 encode::Fidelity: TrivialClone

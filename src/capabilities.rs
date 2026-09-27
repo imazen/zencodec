@@ -33,6 +33,8 @@ pub enum UnsupportedOperation {
     PullEncode,
     /// All `AnimationFrameEncoder` methods (animation encoding).
     AnimationEncode,
+    /// Exact rational duration is not representable by this animation encoder.
+    AnimationTiming,
     /// `Decoder::decode_into()` (decode into caller buffer).
     DecodeInto,
     /// `Decoder::decode_rows()` (row-level decode).
@@ -56,6 +58,7 @@ impl UnsupportedOperation {
             Self::RowLevelEncode => "row_level_encode",
             Self::PullEncode => "pull_encode",
             Self::AnimationEncode => "animation_encode",
+            Self::AnimationTiming => "animation_timing",
             Self::DecodeInto => "decode_into",
             Self::RowLevelDecode => "row_level_decode",
             Self::AnimationDecode => "animation_decode",
@@ -336,7 +339,8 @@ impl EncodeCapabilities {
             UnsupportedOperation::PullEncode => self.encode_from,
             UnsupportedOperation::AnimationEncode => self.animation,
             UnsupportedOperation::GainMapEncode => self.gain_map,
-            UnsupportedOperation::DecodeInto
+            UnsupportedOperation::AnimationTiming
+            | UnsupportedOperation::DecodeInto
             | UnsupportedOperation::RowLevelDecode
             | UnsupportedOperation::AnimationDecode
             | UnsupportedOperation::MultiImageDecode
@@ -743,7 +747,8 @@ impl DecodeCapabilities {
             UnsupportedOperation::RowLevelDecode => self.streaming,
             UnsupportedOperation::AnimationDecode => self.animation,
             UnsupportedOperation::MultiImageDecode => self.multi_image,
-            UnsupportedOperation::RowLevelEncode
+            UnsupportedOperation::AnimationTiming
+            | UnsupportedOperation::RowLevelEncode
             | UnsupportedOperation::PullEncode
             | UnsupportedOperation::AnimationEncode
             | UnsupportedOperation::GainMapEncode

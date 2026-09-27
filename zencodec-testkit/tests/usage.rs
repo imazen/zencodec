@@ -187,7 +187,7 @@ fn estimate_before_decoding() {
 
 #[test]
 fn encode_from_a_foreign_pixel_format() {
-    use zenpixels_convert::adapt::adapt_for_encode;
+    use zenpixels_convert::adapt::adapt_for_encode_cow;
 
     let codecs = codecs();
 
@@ -203,9 +203,9 @@ fn encode_from_a_foreign_pixel_format() {
         .unwrap()
         .supported_descriptors();
 
-    // `adapt_for_encode` picks the best supported target and converts into it
+    // `adapt_for_encode_cow` picks the best supported target and converts into it
     // (it would borrow, zero-copy, if BGRA8 were already supported).
-    let adapted = adapt_for_encode(
+    let adapted = adapt_for_encode_cow(
         &bgra,
         PixelDescriptor::BGRA8_SRGB,
         W,
@@ -215,17 +215,7 @@ fn encode_from_a_foreign_pixel_format() {
     )
     .unwrap();
 
-    let bytes: &[u8] = &adapted.data;
-    let stride = adapted.width as usize * adapted.descriptor.bytes_per_pixel();
-    let slice = PixelSlice::new(
-        bytes,
-        adapted.width,
-        adapted.rows,
-        stride,
-        adapted.descriptor,
-    )
-    .unwrap();
-    let file = codecs.encode(ImageFormat::Pnm, slice).unwrap();
+    let file = codecs.encode(ImageFormat::Pnm, adapted.as_slice()).unwrap();
 
     // Round-trips: decode back and red sits where RGB expects it.
     let image = codecs.decode(file.data()).unwrap();

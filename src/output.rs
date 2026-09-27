@@ -340,7 +340,7 @@ impl core::fmt::Debug for DecodeOutput {
 #[non_exhaustive]
 pub struct AnimationFrame<'a> {
     pixels: PixelSlice<'a>,
-    duration_ms: u32,
+    duration: crate::animation::FrameDuration,
     frame_index: u32,
 }
 
@@ -349,9 +349,27 @@ impl<'a> AnimationFrame<'a> {
     pub fn new(pixels: PixelSlice<'a>, duration_ms: u32, frame_index: u32) -> Self {
         Self {
             pixels,
-            duration_ms,
+            duration: crate::animation::FrameDuration::from_millis(duration_ms),
             frame_index,
         }
+    }
+
+    /// Create a full frame with its exact encoded source duration.
+    pub fn with_duration(
+        pixels: PixelSlice<'a>,
+        duration: crate::animation::FrameDuration,
+        frame_index: u32,
+    ) -> Self {
+        Self {
+            pixels,
+            duration,
+            frame_index,
+        }
+    }
+
+    /// Exact encoded source duration, without playback clamps or rounding.
+    pub fn duration(&self) -> crate::animation::FrameDuration {
+        self.duration
     }
 
     /// Borrow the composited pixel data.
@@ -359,13 +377,14 @@ impl<'a> AnimationFrame<'a> {
         &self.pixels
     }
 
-    /// Frame duration in milliseconds.
+    /// Legacy whole milliseconds: fractional milliseconds are truncated and
+    /// values beyond u32::MAX saturate. Use `duration()` for exact timing.
     ///
     /// Zero means platform-dependent minimum display time for most formats.
     /// For JXL, zero-duration frames are compositing helpers and are never
     /// yielded by [`AnimationFrameDecoder`](crate::decode::AnimationFrameDecoder).
     pub fn duration_ms(&self) -> u32 {
-        self.duration_ms
+        self.duration.legacy_millis()
     }
 
     /// Displayed frame index (0-based).
@@ -403,7 +422,7 @@ impl<'a> AnimationFrame<'a> {
 
         OwnedAnimationFrame {
             pixels,
-            duration_ms: self.duration_ms,
+            duration: self.duration,
             frame_index: self.frame_index,
             extensions: Extensions::new(),
         }
@@ -414,7 +433,8 @@ impl core::fmt::Debug for AnimationFrame<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("AnimationFrame")
             .field("pixels", &self.pixels)
-            .field("duration_ms", &self.duration_ms)
+            .field("duration_ms", &self.duration_ms())
+            .field("duration", &self.duration)
             .field("frame_index", &self.frame_index)
             .finish()
     }
@@ -427,17 +447,36 @@ impl core::fmt::Debug for AnimationFrame<'_> {
 #[non_exhaustive]
 pub struct OwnedAnimationFrame {
     pixels: PixelBuffer,
-    duration_ms: u32,
+    duration: crate::animation::FrameDuration,
     frame_index: u32,
     extensions: Extensions,
 }
 
 impl OwnedAnimationFrame {
+    /// Create an owned frame with its exact encoded source duration.
+    pub fn with_duration(
+        pixels: PixelBuffer,
+        duration: crate::animation::FrameDuration,
+        frame_index: u32,
+    ) -> Self {
+        Self {
+            pixels,
+            duration,
+            frame_index,
+            extensions: Extensions::new(),
+        }
+    }
+
+    /// Exact encoded source duration, without playback clamps or rounding.
+    pub fn duration(&self) -> crate::animation::FrameDuration {
+        self.duration
+    }
+
     /// Create an owned frame from a [`PixelBuffer`].
     pub fn new(pixels: PixelBuffer, duration_ms: u32, frame_index: u32) -> Self {
         Self {
             pixels,
-            duration_ms,
+            duration: crate::animation::FrameDuration::from_millis(duration_ms),
             frame_index,
             extensions: Extensions::new(),
         }
@@ -453,9 +492,10 @@ impl OwnedAnimationFrame {
         self.pixels
     }
 
-    /// Frame duration in milliseconds.
+    /// Legacy whole milliseconds: fractional milliseconds are truncated and
+    /// values beyond u32::MAX saturate. Use `duration()` for exact timing.
     pub fn duration_ms(&self) -> u32 {
-        self.duration_ms
+        self.duration.legacy_millis()
     }
 
     /// Displayed frame index (0-based).
@@ -465,7 +505,7 @@ impl OwnedAnimationFrame {
 
     /// Borrow as a [`AnimationFrame`].
     pub fn as_animation_frame(&self) -> AnimationFrame<'_> {
-        AnimationFrame::new(self.pixels.as_slice(), self.duration_ms, self.frame_index)
+        AnimationFrame::with_duration(self.pixels.as_slice(), self.duration, self.frame_index)
     }
 
     /// Attach a typed extension value (e.g., per-frame codec metadata).
@@ -504,7 +544,8 @@ impl core::fmt::Debug for OwnedAnimationFrame {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("OwnedAnimationFrame")
             .field("pixels", &self.pixels)
-            .field("duration_ms", &self.duration_ms)
+            .field("duration_ms", &self.duration_ms())
+            .field("duration", &self.duration)
             .field("frame_index", &self.frame_index)
             .field("extensions", &self.extensions)
             .finish()
