@@ -33,8 +33,6 @@ pub enum UnsupportedOperation {
     PullEncode,
     /// All `AnimationFrameEncoder` methods (animation encoding).
     AnimationEncode,
-    /// Exact rational duration is not representable by this animation encoder.
-    AnimationTiming,
     /// `Decoder::decode_into()` (decode into caller buffer).
     DecodeInto,
     /// `Decoder::decode_rows()` (row-level decode).
@@ -49,6 +47,8 @@ pub enum UnsupportedOperation {
     /// ([`with_gain_map_pixels`](crate::encode::EncodeJob::with_gain_map_pixels) /
     /// [`with_gain_map_encoded`](crate::encode::EncodeJob::with_gain_map_encoded)).
     GainMapEncode,
+    /// Exact rational duration is not representable by this animation encoder.
+    AnimationTiming,
 }
 
 impl UnsupportedOperation {
