@@ -55,6 +55,9 @@ def main():
             path = destination / repo["name"]
             clone(repo["url"], repo["revision"], path)
         for package, relative in repo["packages"].items():
+            package_manifest = tomllib.loads((path/relative/"Cargo.toml").read_text())
+            if package_manifest.get("package", {}).get("name") != package:
+                raise SystemExit(f"{repo['name']}: {relative} is not package {package}")
             # JSON quoting is also valid TOML basic-string quoting here; this
             # string goes to a file, never through shell interpolation.
             patches.append(f"{json.dumps(package)} = {{ path = {json.dumps(str((path/relative).resolve()))} }}")

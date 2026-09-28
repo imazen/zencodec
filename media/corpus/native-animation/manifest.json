@@ -160,7 +160,7 @@
           "butteraugli"
         ],
         "packages": {
-          "butteraugli": "."
+          "butteraugli": "butteraugli"
         },
         "revision": "795aa3727252dc56840501864aefc4a8a537c8ea",
         "url": "https://github.com/imazen/butteraugli"

@@ -159,7 +159,7 @@
       "revision": "795aa3727252dc56840501864aefc4a8a537c8ea",
       "branch": "main",
       "packages": {
-        "butteraugli": "."
+        "butteraugli": "butteraugli"
       },
       "optional_packages": [
         "butteraugli"
