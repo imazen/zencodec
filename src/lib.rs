@@ -46,6 +46,7 @@ extern crate std;
 
 whereat::define_at_crate_info!();
 
+pub mod animation;
 mod capabilities;
 /// Cross-codec color-signaling emission policy (ICC vs CICP). See
 /// `docs/color-emit-model.md`.

@@ -99,6 +99,13 @@ removes that whole class).
 
 ## [Unreleased]
 
+### Added
+- Exact `animation::FrameDuration`, exact duration accessors/constructors on
+  animation frames, and `push_frame_timed` on static and dynamic animation
+  encoders. Exact timing is represented or rejected before accepting a frame;
+  the default rejects rather than falling back to lossy millisecond timing.
+  See `docs/animation-timing.md` for native format limits and release migration.
+
 ### Changed
 
 - **Dependency requirements now span the published minor and the next one.**

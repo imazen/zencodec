@@ -123,8 +123,10 @@ pub trait AnimationFrameDecoder: Sized {
     /// Animation loop count from the container.
     ///
     /// - `Some(0)` = loop forever
-    /// - `Some(n)` = loop `n` times
+    /// - `Some(n)` = play exactly `n` times in total, including the first play
     /// - `None` = unknown or not specified
+    ///
+    /// GIF's positive native repeat count must be incremented when exposed here.
     fn loop_count(&self) -> Option<u32> {
         None
     }
