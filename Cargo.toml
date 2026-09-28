@@ -48,8 +48,12 @@ name = "zencodec"
 # The crate is `#![no_std]` by default; this only pulls in `std` for that one
 # payload. When `core::io::ErrorKind` stabilizes this feature becomes a no-op.
 std = []
+# Bounded, namespace-aware XMP inspection; no cost for codec-traits-only users.
+metadata-audit = []
+xmp = ["metadata-audit", "dep:roxmltree"]
 
 [dependencies]
+roxmltree = { version = "0.21.1", default-features = false, features = ["positions"], optional = true }
 # Published manifest uses crates.io versions (CI + `cargo publish` build the
 # real artifact). Local development builds against the in-tree zen sources via
 # a gitignored `.cargo/config.toml` `paths` override — see CONTRIBUTING note.
@@ -71,3 +75,7 @@ moxcms = { version = ">=0.8.1, <0.10", features = ["options"] }
 [[bench]]
 name = "exif_filter"
 harness = false
+
+[[example]]
+name = "audit_metadata"
+required-features = ["xmp"]

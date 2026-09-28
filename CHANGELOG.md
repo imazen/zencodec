@@ -97,6 +97,17 @@ removes that whole class).
 
 ## zencodec
 
+### Metadata retention and audit (unreleased)
+
+- Add opt-in EXIF/XMP inspection and structural diff reports, with explicit
+  coverage findings for opaque MakerNotes and malformed/unmodeled EXIF.
+- Add bounded namespace-aware XMP selection using optional no_std roxmltree;
+  reject ambiguous rendering properties instead of matching literal prefixes.
+- Add `display_metadata::filter_for_gain_map` to reject loss of known rendering
+  signals. Preserve diffuse white in metadata emptiness/retention checks.
+- Document measured compile costs and the cross-codec gain-map retention contract.
+
+
 ## [Unreleased]
 
 ### Fixed

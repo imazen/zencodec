@@ -392,6 +392,12 @@ file. ICC profiles are retained for color fidelity and may themselves contain
 identifying text; auxiliary images and other container metadata need handling by
 the codec/pipeline. See [metadata privacy and its limits](docs/metadata-privacy.md).
 
+Gain maps need a second step: extract their rendering parameters before removing
+MakerNote/XMP, then regenerate required container signaling. The optional
+`metadata-audit` and `xmp` features provide field inspection, explicit coverage
+findings and structural diffs. See [display-preserving retention and audit](docs/metadata-retention-and-audit.md)
+for the APIs, cost model and measured dependency alternatives.
+
 **Privacy is an explicit choice — enforced at compile time.** Retention is a *transient* decision made when you hand metadata to the encoder, not a field stored on `Metadata`. The blessed path is `job.with_metadata_policy(meta, MetadataPolicy::Web)` (strips camera/GPS/identifiers, keeps orientation + attribution + colour signalling) or `PreserveExact` (verbatim). The old unguarded `with_metadata(meta)` still works but is `#[deprecated]` — the compiler **warns** at every call site that picks no policy, so you can't propagate metadata without choosing retention by accident. It's a compile-time nudge, not a semver break: existing code keeps compiling, but the warning points you at the safe call. The filter runs *before* the codec sees the record, so a codec only ever receives exactly what the policy kept. The carried bytes stay untouched until then, so you can still pull `metadata.exif` out, edit it with any EXIF library, and put it back via `with_exif`.
 
 To **stamp** rights in one line — `Metadata::none().with_copyright("© 2026 You")` builds (or merges into) the EXIF blob (ASCII); or build it directly with `Exif::new(TextEncoding::Ascii).set_copyright(…)` → `to_bytes()` — `Exif::new` requires the Exif 2.x-vs-3.0 field-type choice (type 129 is read by almost nothing, so it's never a silent default).

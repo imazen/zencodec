@@ -206,6 +206,7 @@ impl Metadata {
             && self.cicp.is_none()
             && self.content_light_level.is_none()
             && self.mastering_display.is_none()
+            && self.diffuse_white.is_none()
             && self.orientation == Orientation::Identity
     }
 
@@ -329,6 +330,7 @@ impl Metadata {
         if f.hdr.keeps() {
             out.content_light_level = self.content_light_level;
             out.mastering_display = self.mastering_display;
+            out.diffuse_white = self.diffuse_white;
         }
 
         // XMP (whole-segment).
