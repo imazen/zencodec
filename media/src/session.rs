@@ -129,17 +129,18 @@ pub trait AudioDecoder {
     fn reset(&mut self) -> Result<(), MediaError>;
 }
 
-/// Frame-fed video encoder. Output packets carry presentation timestamps —
-/// the session never re-times them. `end_input` starts the drain.
+/// Frame-fed video encoder. Frames are owned so the adapter can queue them
+/// behind encoder backpressure. Output packets carry presentation timestamps
+/// — the session never re-times them. `end_input` starts the drain.
 pub trait VideoEncoder {
-    fn push_frame(&mut self, frame: &VideoFrame) -> Result<(), MediaError>;
+    fn push_frame(&mut self, frame: VideoFrame) -> Result<(), MediaError>;
     fn next_packet(&mut self) -> Result<Option<MediaPacket>, MediaError>;
     fn end_input(&mut self) -> Result<(), MediaError>;
 }
 
-/// Block-fed audio encoder.
+/// Block-fed audio encoder. Blocks are owned for the same queueing reason.
 pub trait AudioEncoder {
-    fn push_block(&mut self, block: &AudioBlock) -> Result<(), MediaError>;
+    fn push_block(&mut self, block: AudioBlock) -> Result<(), MediaError>;
     fn next_packet(&mut self) -> Result<Option<MediaPacket>, MediaError>;
     fn end_input(&mut self) -> Result<(), MediaError>;
 }
@@ -282,7 +283,7 @@ pub fn pump<S: PacketSource, K: PacketSink>(
                 decoder.push_packet(&pkt)?;
                 while let Some(f) = decoder.next_frame()? {
                     reports[ti].frames_decoded += 1;
-                    encoder.push_frame(&f)?;
+                    encoder.push_frame(f)?;
                     while let Some(out) = encoder.next_packet()? {
                         sink.write_packet(&out)?;
                         reports[ti].packets_out += 1;
@@ -293,7 +294,7 @@ pub fn pump<S: PacketSource, K: PacketSink>(
                 decoder.push_packet(&pkt)?;
                 while let Some(b) = decoder.next_block()? {
                     reports[ti].frames_decoded += 1;
-                    encoder.push_block(&b)?;
+                    encoder.push_block(b)?;
                     while let Some(out) = encoder.next_packet()? {
                         sink.write_packet(&out)?;
                         reports[ti].packets_out += 1;
@@ -312,7 +313,7 @@ pub fn pump<S: PacketSource, K: PacketSink>(
                 decoder.end_input()?;
                 while let Some(f) = decoder.next_frame()? {
                     reports[ti].frames_decoded += 1;
-                    encoder.push_frame(&f)?;
+                    encoder.push_frame(f)?;
                     while let Some(out) = encoder.next_packet()? {
                         sink.write_packet(&out)?;
                         reports[ti].packets_out += 1;
@@ -328,7 +329,7 @@ pub fn pump<S: PacketSource, K: PacketSink>(
                 decoder.end_input()?;
                 while let Some(b) = decoder.next_block()? {
                     reports[ti].frames_decoded += 1;
-                    encoder.push_block(&b)?;
+                    encoder.push_block(b)?;
                     while let Some(out) = encoder.next_packet()? {
                         sink.write_packet(&out)?;
                         reports[ti].packets_out += 1;

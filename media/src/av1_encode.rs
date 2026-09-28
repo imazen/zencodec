@@ -22,6 +22,9 @@ pub struct EncodedAv1 {
     data: Vec<u8>,
     timestamp: Timestamp,
     input_index: u64,
+    /// True when the shown frame is a key frame (`FrameType::KEY`) — the flag
+    /// a muxer needs for seekable-point marking.
+    keyframe: bool,
 }
 impl EncodedAv1 {
     pub fn data(&self) -> &[u8] {
@@ -32,6 +35,9 @@ impl EncodedAv1 {
     }
     pub fn input_index(&self) -> u64 {
         self.input_index
+    }
+    pub fn keyframe(&self) -> bool {
+        self.keyframe
     }
     pub fn into_data(self) -> Vec<u8> {
         self.data
@@ -289,11 +295,15 @@ impl Av1Encoder {
     fn receive_inner(&mut self) -> Result<EncodeReceive, EncodeError> {
         loop {
             let packet = match &mut self.backend {
-                Backend::U8(c) => c.receive_packet().map(|p| (p.data, p.input_frameno)),
-                Backend::U16(c) => c.receive_packet().map(|p| (p.data, p.input_frameno)),
+                Backend::U8(c) => c
+                    .receive_packet()
+                    .map(|p| (p.data, p.input_frameno, p.frame_type)),
+                Backend::U16(c) => c
+                    .receive_packet()
+                    .map(|p| (p.data, p.input_frameno, p.frame_type)),
             };
             match packet {
-                Ok((data, input_index)) => {
+                Ok((data, input_index, frame_type)) => {
                     let timestamp = self
                         .queued
                         .remove(&input_index)
@@ -302,6 +312,7 @@ impl Av1Encoder {
                         data,
                         timestamp,
                         input_index,
+                        keyframe: frame_type == zenrav1e::prelude::FrameType::KEY,
                     }));
                 }
                 Err(EncoderStatus::Encoded) => continue,

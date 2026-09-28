@@ -560,7 +560,7 @@ impl AudioDecoder for FakeAudioDec {
 /// Fake audio encoder: one output packet per pushed block.
 struct FakeAudioEnc(u32, u32);
 impl AudioEncoder for FakeAudioEnc {
-    fn push_block(&mut self, _b: &AudioBlock) -> Result<(), zencodec_media::track::MediaError> {
+    fn push_block(&mut self, _b: AudioBlock) -> Result<(), zencodec_media::track::MediaError> {
         self.1 += 1;
         Ok(())
     }
