@@ -9,7 +9,7 @@
           "zenpixels-convert": "zenpixels-convert"
         },
         "pull_request": "https://github.com/imazen/zenpixels/pull/78",
-        "revision": "3ece79f38aa306311c94324ae8c0c2310a2b2f82",
+        "revision": "f28f6b891b1dbf95d31feb5805078a582707c561",
         "url": "https://github.com/imazen/zenpixels"
       },
       {
@@ -57,7 +57,7 @@
           "zencodec": "."
         },
         "pull_request": "https://github.com/imazen/zencodec/pull/127",
-        "revision": "2031094449ad1177ff96461d7c4d586c7ed384e6",
+        "revision": "e4661dcb0ad9d4fb64e57400edeb467554b2f91b",
         "url": "https://github.com/imazen/zencodec"
       },
       {
@@ -128,11 +128,11 @@
           "zenjxl-decoder": "zenjxl-decoder"
         },
         "pull_request": "https://github.com/imazen/zenjxl-decoder/pull/60",
-        "revision": "21159c6ba149bc802f0d985851e568976a44da04",
+        "revision": "ce1a28b41b71b66b19240dce0d1b6f0579c8064d",
         "url": "https://github.com/imazen/zenjxl-decoder"
       },
       {
-        "branch": "build/bench-utils-zenpng-02",
+        "branch": "fix/quality-profile",
         "name": "zenjpeg",
         "optional_packages": [
           "zenjpeg"
@@ -140,8 +140,8 @@
         "packages": {
           "zenjpeg": "zenjpeg"
         },
-        "pull_request": "https://github.com/imazen/zenjpeg/pull/211",
-        "revision": "afc2ccbb0857bc9736f07d1583e062a8a1fd09e3",
+        "pull_request": "https://github.com/imazen/zenjpeg/pull/212",
+        "revision": "60838e9bb8c17a3bb3d91694aad67271170e5b8f",
         "url": "https://github.com/imazen/zenjpeg"
       },
       {
