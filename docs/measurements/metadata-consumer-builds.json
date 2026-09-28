@@ -1,0 +1,293 @@
+{
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8\n",
+  "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.43",
+  "baseline": "cfed5cb",
+  "jobs": 4,
+  "cpu": ": AMD Ryzen 9 9950X3D 16-Core Processor",
+  "cases": {
+    "ultrahdr-core-before": [
+      {
+        "cold": {
+          "seconds": 3.311870153993368,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.018289054045453668,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.024926898069679737,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 3.351319155888632,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.01779066096059978,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.02875946811400354,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 3.230271239997819,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.01829497399739921,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.02517978916876018,
+          "exit": 0
+        }
+      }
+    ],
+    "ultrahdr-core-after": [
+      {
+        "cold": {
+          "seconds": 3.1367443301714957,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.019745266065001488,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.031462608836591244,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 3.369194525992498,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.02050234191119671,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.03015351784415543,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 3.330396861070767,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.02097662491723895,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.031607209937646985,
+          "exit": 0
+        }
+      }
+    ],
+    "heic-before": [
+      {
+        "cold": {
+          "seconds": 5.769912729971111,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.03821138199418783,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.031609429977834225,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 5.927294075023383,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.023116591852158308,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.035166167886927724,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 5.696610761107877,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.0203706210013479,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.028041232144460082,
+          "exit": 0
+        }
+      }
+    ],
+    "heic-after": [
+      {
+        "cold": {
+          "seconds": 5.1434179889038205,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.021840533008798957,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.03492525592446327,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 5.045970539096743,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.02052943198941648,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.03228244511410594,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 5.085508601972833,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.021405189065262675,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.03284693998284638,
+          "exit": 0
+        }
+      }
+    ]
+  },
+  "dependencies": {
+    "ultrahdr-core-before": "metadata-build-probe v0.0.0 (/tmp/zen-metadata-20260927/consumer-builds/ultrahdr-core-before)\nultrahdr-core v0.6.0 (/tmp/zen-metadata-20260927/consumer-snapshots/ultrahdr-before/ultrahdr-core)\nbytemuck v1.25.2\nbytemuck_derive v1.12.1 (proc-macro)\nproc-macro2 v1.0.107\nunicode-ident v1.0.26\nquote v1.0.47\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nunicode-ident v1.0.26\nenough v0.4.4\nlinear-srgb v0.6.12\narchmage v0.9.29\narchmage-macros v0.9.29 (proc-macro)\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsafe_unaligned_simd v0.2.5\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nmagetypes v0.9.29\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nrustversion v1.0.23 (proc-macro)\nnum-traits v0.2.19\nlibm v0.2.16\nthiserror v2.0.21\nthiserror-impl v2.0.21 (proc-macro)\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nwhereat v0.1.5\nzencodec v0.1.26 (https://github.com/imazen/zencodec?rev=cfed5cbb21ea63a5d610d1a58a6fe1f8ae8f1975#cfed5cbb)\nalmost-enough v0.4.4\nenough v0.4.4\nenough v0.4.4\nwhereat v0.1.5\nzenpixels v0.2.16\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nwhereat v0.1.5\nzenpixels v0.2.16 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\n",
+    "ultrahdr-core-after": "metadata-build-probe v0.0.0 (/tmp/zen-metadata-20260927/consumer-builds/ultrahdr-core-after)\nultrahdr-core v0.6.0 (/tmp/zen-metadata-20260927/consumer-snapshots/ultrahdr-after/ultrahdr-core)\nbytemuck v1.25.2\nbytemuck_derive v1.12.1 (proc-macro)\nproc-macro2 v1.0.107\nunicode-ident v1.0.26\nquote v1.0.47\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nunicode-ident v1.0.26\nenough v0.4.4\nlinear-srgb v0.6.12\narchmage v0.9.29\narchmage-macros v0.9.29 (proc-macro)\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsafe_unaligned_simd v0.2.5\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nmagetypes v0.9.29\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nrustversion v1.0.23 (proc-macro)\nnum-traits v0.2.19\nlibm v0.2.16\nthiserror v2.0.21\nthiserror-impl v2.0.21 (proc-macro)\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nwhereat v0.1.5\nzencodec v0.1.26 (https://github.com/imazen/zencodec?rev=06b5954cbd9d15282509011aab8f8efa0d8973dd#06b5954c)\nalmost-enough v0.4.4\nenough v0.4.4\nenough v0.4.4\nwhereat v0.1.5\nzenpixels v0.2.16\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nwhereat v0.1.5\nzenpixels v0.2.16 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\n",
+    "heic-before": "metadata-build-probe v0.0.0 (/tmp/zen-metadata-20260927/consumer-builds/heic-before)\nheic v0.2.0 (/tmp/zen-metadata-20260927/consumer-snapshots/heic-before)\narchmage v0.9.29\narchmage-macros v0.9.29 (proc-macro)\nproc-macro2 v1.0.107\nunicode-ident v1.0.26\nquote v1.0.47\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nunicode-ident v1.0.26\nsafe_unaligned_simd v0.2.5\nbytemuck v1.25.2\nbytemuck_derive v1.12.1 (proc-macro)\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nenough v0.4.4\ngarb v0.2.8\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nheic-core v0.2.0 (/tmp/zen-metadata-20260927/consumer-snapshots/heic-before/heic-core)\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nenough v0.4.4\nmagetypes v0.9.29\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nrustversion v1.0.23 (proc-macro)\nsafe_unaligned_simd v0.2.5\nwhereat v0.1.5\nimgref v1.12.3\nmagetypes v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nmemchr v2.8.3\nrgb v0.8.53\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsafe_unaligned_simd v0.2.5\nultrahdr-core v0.5.0 (https://github.com/imazen/ultrahdr?rev=3ac20f99d45e985e09f274fc07181b238385e703#3ac20f99)\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nenough v0.4.4\nhalf v2.7.1\ncfg-if v1.0.5\nzerocopy v0.8.59\nzerocopy-derive v0.8.59 (proc-macro)\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v2.0.119\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nunicode-ident v1.0.26\nlinear-srgb v0.6.12\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nmagetypes v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nnum-traits v0.2.19\nlibm v0.2.16\nthiserror v2.0.21\nthiserror-impl v2.0.21 (proc-macro)\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nwide v1.7.1\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsafe_arch v1.2.0\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzencodec v0.1.26 (https://github.com/imazen/zencodec?rev=cfed5cbb21ea63a5d610d1a58a6fe1f8ae8f1975#cfed5cbb)\nalmost-enough v0.4.4\nenough v0.4.4\nenough v0.4.4\nwhereat v0.1.5\nzenpixels v0.2.16\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nimgref v1.12.3\nrgb v0.8.53 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nwhereat v0.1.5\nzenpixels v0.2.16 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nwhereat v0.1.5\nzencodec v0.1.26 (https://github.com/imazen/zencodec?rev=cfed5cbb21ea63a5d610d1a58a6fe1f8ae8f1975#cfed5cbb) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzenpixels v0.2.16 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\n",
+    "heic-after": "metadata-build-probe v0.0.0 (/tmp/zen-metadata-20260927/consumer-builds/heic-after)\nheic v0.2.0 (/tmp/zen-metadata-20260927/consumer-snapshots/heic-after)\narchmage v0.9.29\narchmage-macros v0.9.29 (proc-macro)\nproc-macro2 v1.0.107\nunicode-ident v1.0.26\nquote v1.0.47\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nunicode-ident v1.0.26\nsafe_unaligned_simd v0.2.5\nbytemuck v1.25.2\nbytemuck_derive v1.12.1 (proc-macro)\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nenough v0.4.4\ngarb v0.2.8\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nheic-core v0.2.0 (/tmp/zen-metadata-20260927/consumer-snapshots/heic-after/heic-core)\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nenough v0.4.4\nmagetypes v0.9.29\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nrustversion v1.0.23 (proc-macro)\nsafe_unaligned_simd v0.2.5\nwhereat v0.1.5\nimgref v1.12.3\nmagetypes v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nmemchr v2.8.3\nrgb v0.8.53\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsafe_unaligned_simd v0.2.5\nultrahdr-core v0.6.0 (https://github.com/imazen/ultrahdr?rev=d77976b4eb0a8c12909722a12183ca3e586b15a5#d77976b4)\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nenough v0.4.4\nhalf v2.7.1\ncfg-if v1.0.5\nzerocopy v0.8.59\nzerocopy-derive v0.8.59 (proc-macro)\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v2.0.119\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nunicode-ident v1.0.26\nlinear-srgb v0.6.12\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nmagetypes v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nnum-traits v0.2.19\nlibm v0.2.16\nthiserror v2.0.21\nthiserror-impl v2.0.21 (proc-macro)\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nwhereat v0.1.5\nzencodec v0.1.26 (https://github.com/imazen/zencodec?rev=06b5954cbd9d15282509011aab8f8efa0d8973dd#06b5954c)\nalmost-enough v0.4.4\nenough v0.4.4\nenough v0.4.4\nwhereat v0.1.5\nzenpixels v0.2.16\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nimgref v1.12.3\nrgb v0.8.53 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nwhereat v0.1.5\nzenpixels v0.2.16 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nwhereat v0.1.5\nzencodec v0.1.26 (https://github.com/imazen/zencodec?rev=06b5954cbd9d15282509011aab8f8efa0d8973dd#06b5954c) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzenpixels v0.2.16 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\n"
+  },
+  "dispatch_comparison": {
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8\n",
+    "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.43",
+    "baseline": "cfed5cb",
+    "jobs": 4,
+    "locked": false,
+    "cpu": ": AMD Ryzen 9 9950X3D 16-Core Processor",
+    "cases": {
+      "zencodecs-before": [
+        {
+          "cold": {
+            "seconds": 8.481189647922292,
+            "exit": 0
+          },
+          "warm": {
+            "seconds": 0.0482571420725435,
+            "exit": 0
+          },
+          "edited": {
+            "seconds": 0.05728929303586483,
+            "exit": 0
+          }
+        },
+        {
+          "cold": {
+            "seconds": 8.419545751065016,
+            "exit": 0
+          },
+          "warm": {
+            "seconds": 0.048392612021416426,
+            "exit": 0
+          },
+          "edited": {
+            "seconds": 0.06191940908320248,
+            "exit": 0
+          }
+        },
+        {
+          "cold": {
+            "seconds": 8.368869660189375,
+            "exit": 0
+          },
+          "warm": {
+            "seconds": 0.05172294797375798,
+            "exit": 0
+          },
+          "edited": {
+            "seconds": 0.06260819500312209,
+            "exit": 0
+          }
+        }
+      ],
+      "zencodecs-after": [
+        {
+          "cold": {
+            "seconds": 8.622060172026977,
+            "exit": 0
+          },
+          "warm": {
+            "seconds": 0.052571424981579185,
+            "exit": 0
+          },
+          "edited": {
+            "seconds": 0.061169984051957726,
+            "exit": 0
+          }
+        },
+        {
+          "cold": {
+            "seconds": 8.56449955701828,
+            "exit": 0
+          },
+          "warm": {
+            "seconds": 0.04820505087263882,
+            "exit": 0
+          },
+          "edited": {
+            "seconds": 0.05976193188689649,
+            "exit": 0
+          }
+        },
+        {
+          "cold": {
+            "seconds": 8.733216719934717,
+            "exit": 0
+          },
+          "warm": {
+            "seconds": 0.05455477093346417,
+            "exit": 0
+          },
+          "edited": {
+            "seconds": 0.06709112017415464,
+            "exit": 0
+          }
+        }
+      ]
+    },
+    "dependencies": {
+      "zencodecs-before": "metadata-build-probe v0.0.0 (/tmp/zen-metadata-20260927/dispatch-builds2/zencodecs-before)\nzencodecs v0.1.0 (/tmp/zen-metadata-20260927/consumer-snapshots/zenpipe-before/zencodecs)\nbytemuck v1.25.2\nbytemuck_derive v1.12.1 (proc-macro)\nproc-macro2 v1.0.107\nunicode-ident v1.0.26\nquote v1.0.47\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nunicode-ident v1.0.26\nenough v0.4.4\nimgref v1.12.3\nlinear-srgb v0.6.12\narchmage v0.9.29\narchmage-macros v0.9.29 (proc-macro)\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsafe_unaligned_simd v0.2.5\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nmagetypes v0.9.29\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nrustversion v1.0.23 (proc-macro)\nnum-traits v0.2.19\nlibm v0.2.16\nrgb v0.8.53\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nthiserror v2.0.21\nthiserror-impl v2.0.21 (proc-macro)\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nultrahdr-core v0.6.0 (https://github.com/imazen/ultrahdr?rev=633f71e9d0c8fc82cc29b58ffaa92d367d82f9f9#633f71e9)\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nenough v0.4.4\nhalf v2.7.1\ncfg-if v1.0.5\nzerocopy v0.8.59\nzerocopy-derive v0.8.59 (proc-macro)\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v2.0.119\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nunicode-ident v1.0.26\nlinear-srgb v0.6.12 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nthiserror v2.0.21 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nwhereat v0.1.5\nzencodec v0.1.26 (https://github.com/imazen/zencodec?rev=cfed5cbb21ea63a5d610d1a58a6fe1f8ae8f1975#cfed5cbb)\nalmost-enough v0.4.4\nenough v0.4.4\nenough v0.4.4\nwhereat v0.1.5\nzenpixels v0.2.16 (https://github.com/imazen/zenpixels#197a38ba)\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nimgref v1.12.3\nrgb v0.8.53 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nwhereat v0.1.5\nzenpixels v0.2.16 (https://github.com/imazen/zenpixels#197a38ba) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzentone v0.1.0\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nlibm v0.2.16\nlinear-srgb v0.6.12 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nmagetypes v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nwhereat v0.1.5\nzencodec v0.1.26 (https://github.com/imazen/zencodec?rev=cfed5cbb21ea63a5d610d1a58a6fe1f8ae8f1975#cfed5cbb) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzenjpeg v0.9.0 (https://github.com/imazen/zenjpeg?rev=fd36fd472ca88526eccf8a78788026e704042ba6#fd36fd47)\naligned-vec v0.6.4\nequator v0.4.2\nequator-macro v0.4.2 (proc-macro)\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v2.0.119 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nenough v0.4.4\ngarb v0.2.8\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\npaste v1.0.15 (proc-macro)\nhalf v2.7.1 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nimgref v1.12.3\nlinear-srgb v0.6.12 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nmagetypes v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nmemchr v2.8.3\nrgb v0.8.53 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsafe_unaligned_simd v0.2.5\nthiserror v2.0.21 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\ntinyvec v1.13.3\nultrahdr-core v0.6.0 (https://github.com/imazen/ultrahdr?rev=633f71e9d0c8fc82cc29b58ffaa92d367d82f9f9#633f71e9) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nwhereat v0.1.5\nzenanalyze v0.2.0 (https://github.com/imazen/zenanalyze#6bbcacb1)\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\ngarb v0.2.8 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nlinear-srgb v0.6.12 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nmagetypes v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzenpixels v0.2.16 (https://github.com/imazen/zenpixels#197a38ba) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzenpixels-convert v0.2.16 (https://github.com/imazen/zenpixels#197a38ba)\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\ngarb v0.2.8 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nlibm v0.2.16\nlinear-srgb v0.6.12 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nlz4_flex v0.14.0\nmagetypes v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nonce_cell v1.21.4\npaste v1.0.15 (proc-macro)\nrgb v0.8.53 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nwhereat v0.1.5\nzenpixels v0.2.16 (https://github.com/imazen/zenpixels#197a38ba) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzencodec v0.1.26 (https://github.com/imazen/zencodec?rev=cfed5cbb21ea63a5d610d1a58a6fe1f8ae8f1975#cfed5cbb) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzenpixels v0.2.16 (https://github.com/imazen/zenpixels#197a38ba) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzenpixels-convert v0.2.16 (https://github.com/imazen/zenpixels#197a38ba) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzentone v0.1.0 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzenyuv v0.1.3 (https://github.com/imazen/zenjpeg?rev=fd36fd472ca88526eccf8a78788026e704042ba6#fd36fd47)\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nimgref v1.12.3\nlibm v0.2.16\nlinear-srgb v0.6.12 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nmagetypes v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsafe_unaligned_simd v0.2.5\nzenpixels v0.2.16 (https://github.com/imazen/zenpixels#197a38ba) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzenpixels-convert v0.2.16 (https://github.com/imazen/zenpixels#197a38ba) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\n",
+      "zencodecs-after": "metadata-build-probe v0.0.0 (/tmp/zen-metadata-20260927/dispatch-builds2/zencodecs-after)\nzencodecs v0.1.0 (/tmp/zen-metadata-20260927/consumer-snapshots/zenpipe-after/zencodecs)\nbytemuck v1.25.2\nbytemuck_derive v1.12.1 (proc-macro)\nproc-macro2 v1.0.107\nunicode-ident v1.0.26\nquote v1.0.47\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nunicode-ident v1.0.26\nenough v0.4.4\nimgref v1.12.3\nlinear-srgb v0.6.12\narchmage v0.9.29\narchmage-macros v0.9.29 (proc-macro)\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsafe_unaligned_simd v0.2.5\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nmagetypes v0.9.29\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nrustversion v1.0.23 (proc-macro)\nnum-traits v0.2.19\nlibm v0.2.16\nrgb v0.8.53\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nthiserror v2.0.21\nthiserror-impl v2.0.21 (proc-macro)\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nultrahdr-core v0.6.0 (https://github.com/imazen/ultrahdr?rev=d77976b4eb0a8c12909722a12183ca3e586b15a5#d77976b4)\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nenough v0.4.4\nhalf v2.7.1\ncfg-if v1.0.5\nzerocopy v0.8.59\nzerocopy-derive v0.8.59 (proc-macro)\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v2.0.119\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nunicode-ident v1.0.26\nlinear-srgb v0.6.12 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nthiserror v2.0.21 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nwhereat v0.1.5\nzencodec v0.1.26 (https://github.com/imazen/zencodec?rev=06b5954cbd9d15282509011aab8f8efa0d8973dd#06b5954c)\nalmost-enough v0.4.4\nenough v0.4.4\nenough v0.4.4\nroxmltree v0.21.1\nmemchr v2.8.3\nwhereat v0.1.5\nzenpixels v0.2.16 (https://github.com/imazen/zenpixels#197a38ba)\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nimgref v1.12.3\nrgb v0.8.53 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nwhereat v0.1.5\nzenpixels v0.2.16 (https://github.com/imazen/zenpixels#197a38ba) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzentone v0.1.0\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nlibm v0.2.16\nlinear-srgb v0.6.12 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nmagetypes v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nwhereat v0.1.5\nzencodec v0.1.26 (https://github.com/imazen/zencodec?rev=06b5954cbd9d15282509011aab8f8efa0d8973dd#06b5954c) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzenjpeg v0.9.0 (https://github.com/imazen/zenjpeg?rev=835bdb9ace15000065626b864b30dbdd3dc10db1#835bdb9a)\naligned-vec v0.6.4\nequator v0.4.2\nequator-macro v0.4.2 (proc-macro)\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v2.0.119 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nenough v0.4.4\ngarb v0.2.8\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\npaste v1.0.15 (proc-macro)\nhalf v2.7.1 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nimgref v1.12.3\nlinear-srgb v0.6.12 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nmagetypes v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nmemchr v2.8.3\nrgb v0.8.53 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsafe_unaligned_simd v0.2.5\nthiserror v2.0.21 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\ntinyvec v1.13.3\nultrahdr-core v0.6.0 (https://github.com/imazen/ultrahdr?rev=d77976b4eb0a8c12909722a12183ca3e586b15a5#d77976b4) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nwhereat v0.1.5\nzenanalyze v0.2.0 (https://github.com/imazen/zenanalyze#6bbcacb1)\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\ngarb v0.2.8 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nlinear-srgb v0.6.12 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nmagetypes v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzenpixels v0.2.16 (https://github.com/imazen/zenpixels#197a38ba) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzenpixels-convert v0.2.16 (https://github.com/imazen/zenpixels#197a38ba)\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nbytemuck v1.25.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\ngarb v0.2.8 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nlibm v0.2.16\nlinear-srgb v0.6.12 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nlz4_flex v0.14.0\nmagetypes v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nonce_cell v1.21.4\npaste v1.0.15 (proc-macro)\nrgb v0.8.53 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nwhereat v0.1.5\nzenpixels v0.2.16 (https://github.com/imazen/zenpixels#197a38ba) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzencodec v0.1.26 (https://github.com/imazen/zencodec?rev=06b5954cbd9d15282509011aab8f8efa0d8973dd#06b5954c) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzenpixels v0.2.16 (https://github.com/imazen/zenpixels#197a38ba) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzenpixels-convert v0.2.16 (https://github.com/imazen/zenpixels#197a38ba) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzentone v0.1.0 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzenyuv v0.1.3 (https://github.com/imazen/zenjpeg?rev=835bdb9ace15000065626b864b30dbdd3dc10db1#835bdb9a)\narchmage v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nimgref v1.12.3\nlibm v0.2.16\nlinear-srgb v0.6.12 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nmagetypes v0.9.29 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsafe_unaligned_simd v0.2.5\nzenpixels v0.2.16 (https://github.com/imazen/zenpixels#197a38ba) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nzenpixels-convert v0.2.16 (https://github.com/imazen/zenpixels#197a38ba) \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\n"
+    }
+  }
+}

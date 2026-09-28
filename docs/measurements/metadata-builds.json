@@ -1,0 +1,371 @@
+{
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8\n",
+  "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.43",
+  "baseline": "cfed5cb",
+  "jobs": 4,
+  "cpu": ": AMD Ryzen 9 9950X3D 16-Core Processor",
+  "cases": {
+    "zencodec-baseline": [
+      {
+        "cold": {
+          "seconds": 2.169221166986972,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.011951834196224809,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.02017074986360967,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 2.080085461959243,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.01250206888653338,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.020090658916160464,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 2.220730734989047,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.011873893905431032,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.022888401057571173,
+          "exit": 0
+        }
+      }
+    ],
+    "zencodec-default": [
+      {
+        "cold": {
+          "seconds": 2.1634712019003928,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.012139667058363557,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.018962441012263298,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 2.2781759209465235,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.012442928971722722,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.019525635056197643,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 2.1823677320498973,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.012397818034514785,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.020567602943629026,
+          "exit": 0
+        }
+      }
+    ],
+    "zencodec-audit": [
+      {
+        "cold": {
+          "seconds": 2.3365661238785833,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.012454667827114463,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.021054266020655632,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 2.120360570959747,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.013236065162345767,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.023944309912621975,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 2.2197272169869393,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.012153437128290534,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.01996243791654706,
+          "exit": 0
+        }
+      }
+    ],
+    "zencodec-xmp": [
+      {
+        "cold": {
+          "seconds": 2.3055231769103557,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.012952182907611132,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.021261357935145497,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 2.2910760729573667,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.014428564114496112,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.025220438838005066,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 2.5168073219247162,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.012761461082845926,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.02005122904665768,
+          "exit": 0
+        }
+      }
+    ],
+    "roxmltree": [
+      {
+        "cold": {
+          "seconds": 0.350730239180848,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.009662287076935172,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.0182111042086035,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 0.4324172257911414,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.012179706012830138,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.023071193136274815,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 0.44631693605333567,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.009621506091207266,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.019599505001679063,
+          "exit": 0
+        }
+      }
+    ],
+    "kamadak-exif": [
+      {
+        "cold": {
+          "seconds": 0.3575363929849118,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.01196422497741878,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.017617349047213793,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 0.34268318489193916,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.009210912976413965,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.016995035111904144,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 0.37472679908387363,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.010941507061943412,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.02155592106282711,
+          "exit": 0
+        }
+      }
+    ],
+    "xmpkit-core": [
+      {
+        "cold": {
+          "seconds": 1.9976224380079657,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.015375391114503145,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.022655020002275705,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 1.9966926099732518,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.01484429812990129,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.02355805691331625,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 1.9959228849038482,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.015621893107891083,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.026276678079739213,
+          "exit": 0
+        }
+      }
+    ],
+    "xmpkit-default": [
+      {
+        "cold": {
+          "seconds": 8.302485513035208,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.03078836388885975,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.045310388784855604,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 8.013051480054855,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.03262849897146225,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.03938940213993192,
+          "exit": 0
+        }
+      },
+      {
+        "cold": {
+          "seconds": 8.370769774075598,
+          "exit": 0
+        },
+        "warm": {
+          "seconds": 0.02995904698036611,
+          "exit": 0
+        },
+        "edited": {
+          "seconds": 0.03876815806142986,
+          "exit": 0
+        }
+      }
+    ]
+  },
+  "dependencies": {
+    "zencodec-baseline": "metadata-build-probe v0.0.0 (/tmp/zen-metadata-20260927/build-comparison/zencodec-baseline)\nzencodec v0.1.26 (/tmp/zen-metadata-20260927/build-comparison/baseline)\nalmost-enough v0.4.4\nenough v0.4.4\nenough v0.4.4\nwhereat v0.1.5\nzenpixels v0.2.16\nbytemuck v1.25.2\nbytemuck_derive v1.12.1 (proc-macro)\nproc-macro2 v1.0.107\nunicode-ident v1.0.26\nquote v1.0.47\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nunicode-ident v1.0.26\nwhereat v0.1.5\n",
+    "zencodec-default": "metadata-build-probe v0.0.0 (/tmp/zen-metadata-20260927/build-comparison/zencodec-default)\nzencodec v0.1.26 (/tmp/zen-metadata-20260927/build-comparison/current)\nalmost-enough v0.4.4\nenough v0.4.4\nenough v0.4.4\nwhereat v0.1.5\nzenpixels v0.2.16\nbytemuck v1.25.2\nbytemuck_derive v1.12.1 (proc-macro)\nproc-macro2 v1.0.107\nunicode-ident v1.0.26\nquote v1.0.47\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nunicode-ident v1.0.26\nwhereat v0.1.5\n",
+    "zencodec-audit": "metadata-build-probe v0.0.0 (/tmp/zen-metadata-20260927/build-comparison/zencodec-audit)\nzencodec v0.1.26 (/tmp/zen-metadata-20260927/build-comparison/current)\nalmost-enough v0.4.4\nenough v0.4.4\nenough v0.4.4\nwhereat v0.1.5\nzenpixels v0.2.16\nbytemuck v1.25.2\nbytemuck_derive v1.12.1 (proc-macro)\nproc-macro2 v1.0.107\nunicode-ident v1.0.26\nquote v1.0.47\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nunicode-ident v1.0.26\nwhereat v0.1.5\n",
+    "zencodec-xmp": "metadata-build-probe v0.0.0 (/tmp/zen-metadata-20260927/build-comparison/zencodec-xmp)\nzencodec v0.1.26 (/tmp/zen-metadata-20260927/build-comparison/current)\nalmost-enough v0.4.4\nenough v0.4.4\nenough v0.4.4\nroxmltree v0.21.1\nmemchr v2.8.3\nwhereat v0.1.5\nzenpixels v0.2.16\nbytemuck v1.25.2\nbytemuck_derive v1.12.1 (proc-macro)\nproc-macro2 v1.0.107\nunicode-ident v1.0.26\nquote v1.0.47\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nunicode-ident v1.0.26\nwhereat v0.1.5\n",
+    "roxmltree": "metadata-build-probe v0.0.0 (/tmp/zen-metadata-20260927/build-comparison/roxmltree)\nroxmltree v0.21.1\nmemchr v2.8.3\n",
+    "kamadak-exif": "metadata-build-probe v0.0.0 (/tmp/zen-metadata-20260927/build-comparison/kamadak-exif)\nkamadak-exif v0.6.1\nmutate_once v0.1.2\n",
+    "xmpkit-core": "metadata-build-probe v0.0.0 (/tmp/zen-metadata-20260927/build-comparison/xmpkit-core)\nxmpkit v0.1.6\nindexmap v2.14.2\nequivalent v1.0.2\nhashbrown v0.17.1\nquick-xml v0.40.1\nmemchr v2.8.3\nserde v1.0.229\nserde_core v1.0.229\nthiserror v2.0.21\nthiserror-impl v2.0.21 (proc-macro)\nproc-macro2 v1.0.107\nunicode-ident v1.0.26\nquote v1.0.47\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nunicode-ident v1.0.26\n",
+    "xmpkit-default": "metadata-build-probe v0.0.0 (/tmp/zen-metadata-20260927/build-comparison/xmpkit-default)\nxmpkit v0.1.6\nindexmap v2.14.2\nequivalent v1.0.2\nhashbrown v0.17.1\nlopdf v0.44.0\naes v0.9.3\ncipher v0.5.2\ncrypto-common v0.2.2\nhybrid-array v0.4.15\ntypenum v1.20.1\ninout v0.2.2\nblock-padding v0.4.2\nhybrid-array v0.4.15 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nhybrid-array v0.4.15 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\ncpubits v0.1.1\ncpufeatures v0.3.1\nbitflags v2.13.2\ncbc v0.2.1\ncipher v0.5.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nchrono v0.4.45\niana-time-zone v0.1.65\nnum-traits v0.2.19\necb v0.2.1\ncipher v0.5.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nencoding_rs v0.8.42\ncfg-if v1.0.5\ncore_detect v1.0.0\nmultiversion_no_op v1.0.0 (proc-macro)\nscopeguard v1.2.0\nsimdutf8 v0.1.5\nflate2 v1.1.10\ncrc32fast v1.5.2\ncfg-if v1.0.5\nminiz_oxide v0.9.1\nadler2 v2.0.1\nsimd-adler32 v0.3.10\ngetrandom v0.4.3\ncfg-if v1.0.5\nlibc v0.2.189\nrand_core v0.10.1\nindexmap v2.14.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nitoa v1.0.18\njiff v0.2.37\njiff-core v0.1.1\nlog v0.4.34\nmd-5 v0.11.0\ncfg-if v1.0.5\ndigest v0.11.3\nblock-buffer v0.12.1\nhybrid-array v0.4.15 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nconst-oid v0.10.2\ncrypto-common v0.2.2 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nnom v8.0.0\nmemchr v2.8.3\nrand v0.10.3\nchacha20 v0.10.2\ncfg-if v1.0.5\ncpufeatures v0.3.1\nrand_core v0.10.1\ngetrandom v0.4.3 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nrand_core v0.10.1\nrangemap v1.8.0\nrayon v1.12.0\neither v1.18.0\nrayon-core v1.13.0\ncrossbeam-deque v0.8.8\ncrossbeam-epoch v0.9.21\ncrossbeam-utils v0.8.23\ncrossbeam-utils v0.8.23\ncrossbeam-utils v0.8.23\nsha2 v0.11.0\ncfg-if v1.0.5\ncpufeatures v0.3.1\ndigest v0.11.3 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nstringprep v0.1.5\nunicode-bidi v0.3.18\nunicode-normalization v0.1.25\ntinyvec v1.13.3\nunicode-properties v0.1.4\nthiserror v2.0.21\nthiserror-impl v2.0.21 (proc-macro)\nproc-macro2 v1.0.107\nunicode-ident v1.0.26\nquote v1.0.47\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nsyn v3.0.6\nproc-macro2 v1.0.107 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nquote v1.0.47 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\nunicode-ident v1.0.26\ntime v0.3.55\nderanged v0.5.8\nnum-conv v0.2.2\npowerfmt v0.2.0\ntime-core v0.1.9\nweezl v0.2.1\nquick-xml v0.40.1\nmemchr v2.8.3\nserde v1.0.229\nserde_core v1.0.229\nthiserror v2.0.21 \u001b[33m\u001b[2m(*)\u001b[39m\u001b[22m\n"
+  }
+}

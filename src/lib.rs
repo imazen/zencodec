@@ -49,6 +49,8 @@ mod capabilities;
 mod color;
 mod cost;
 mod detect;
+/// Coupled retention for unchanged base pixels and typed gain-map parameters.
+pub mod display_metadata;
 mod error;
 pub mod estimate;
 /// Structured EXIF/TIFF parsing, pruning, and serialization.
@@ -68,12 +70,18 @@ pub mod icc;
 mod info;
 mod limits;
 mod metadata;
+/// Structured metadata inspection and change reporting.
+#[cfg(feature = "metadata-audit")]
+pub mod metadata_audit;
 mod negotiate;
 mod orientation;
 mod output;
 mod policy;
 mod sink;
 mod traits;
+/// Bounded namespace-aware XMP reading.
+#[cfg(feature = "xmp")]
+pub mod xmp;
 
 // =========================================================================
 // Public root: shared types used by both encode and decode
