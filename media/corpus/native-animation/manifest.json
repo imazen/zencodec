@@ -125,7 +125,7 @@
         "branch": "feat/sendable-decoder-state",
         "name": "zenjxl-decoder",
         "packages": {
-          "zenjxl-decoder": "."
+          "zenjxl-decoder": "zenjxl-decoder"
         },
         "pull_request": "https://github.com/imazen/zenjxl-decoder/pull/60",
         "revision": "21159c6ba149bc802f0d985851e568976a44da04",

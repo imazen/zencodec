@@ -154,6 +154,14 @@ fn main() -> Result<(), Error> {
                     if !convert_srgb {
                         return Ok(pixels);
                     }
+                    if matches!(
+                        pixels.descriptor().transfer(),
+                        zenpixels::TransferFunction::Pq | zenpixels::TransferFunction::Hlg
+                    ) {
+                        return Err(
+                            "HDR-to-SDR requires an explicit display and tone-map policy".into(),
+                        );
+                    }
                     let ready = zenpixels_convert::finalize_for_output_with(
                         &pixels,
                         &zenpixels::ColorOrigin::assumed(),
