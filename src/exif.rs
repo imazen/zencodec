@@ -9,9 +9,10 @@
 //! unchanged when nothing is dropped and allocates only on a real rewrite.
 //!
 //! Spec: TIFF 6.0 (Adobe, 1992) + EXIF 2.32 (CIPA DC-008). The structural
-//! pointer tags — Exif IFD (0x8769), GPS IFD (0x8825), and the JPEG thumbnail
-//! pointers (0x0201/0x0202) — are modeled as tree edges, not entries, and
-//! re-synthesized with fresh offsets on serialize.
+//! pointer tags — Exif IFD (0x8769), GPS IFD (0x8825), Interoperability IFD
+//! (0xA005, inside the Exif IFD), and the JPEG thumbnail pointers
+//! (0x0201/0x0202) — are modeled as tree edges, not entries, and re-synthesized
+//! with fresh offsets on serialize.
 //!
 //! Error model (no panics on untrusted input — every read is bounds-checked):
 //! - **Structural failure → `None`.** A bad byte-order mark, wrong magic,
@@ -56,6 +57,15 @@ const TAG_COPYRIGHT: u16 = 0x8298;
 const TAG_EXIF_IFD: u16 = 0x8769;
 const TAG_GPS_IFD: u16 = 0x8825;
 const TAG_INTEROP_IFD: u16 = 0xA005;
+
+// Exif sub-IFD: colour signalling (the `color` category). ColorSpace = 1 is
+// sRGB, 0xFFFF is "uncalibrated" — combined with the Interop IFD's
+// InteropIndex (`R98` sRGB / `R03` Adobe RGB) it is the only colour
+// declaration many camera JPEGs carry, so dropping it changes displayed pixels.
+const TAG_COLOR_SPACE: u16 = 0xA001;
+const TAG_GAMMA: u16 = 0xA500; // Exif 2.2
+const TAG_INTEROP_INDEX: u16 = 0x0001;
+const TAG_INTEROP_VERSION: u16 = 0x0002;
 const TAG_THUMB_OFFSET: u16 = 0x0201; // JPEGInterchangeFormat
 const TAG_THUMB_LENGTH: u16 = 0x0202; // JPEGInterchangeFormatLength
 // SubIFDs (TIFF/DNG) — an array of offsets to nested IFDs (alt/full-res images
@@ -70,7 +80,8 @@ const TAG_STRIP_BYTE_COUNTS: u16 = 0x0117;
 const TAG_TILE_OFFSETS: u16 = 0x0144;
 const TAG_TILE_BYTE_COUNTS: u16 = 0x0145;
 
-// Exif sub-IFD: capture timestamps (the `datetimes` category).
+// Exif sub-IFD: capture timestamps (the `datetimes` category) and their
+// UTC offsets (the `time_offsets` category — a time zone is a coarse location).
 const TAG_DATETIME_ORIGINAL: u16 = 0x9003;
 const TAG_DATETIME_DIGITIZED: u16 = 0x9004;
 const TAG_OFFSET_TIME: u16 = 0x9010; // Exif 2.31+
@@ -80,18 +91,25 @@ const TAG_SUBSEC_TIME: u16 = 0x9290;
 const TAG_SUBSEC_TIME_ORIGINAL: u16 = 0x9291;
 const TAG_SUBSEC_TIME_DIGITIZED: u16 = 0x9292;
 
-// Exif sub-IFD: device / capture identity (the `camera` category).
+// Exif sub-IFD: device / capture identity (the `camera` category) and the
+// per-unit identifiers that single out a device (the
+// `device_ids` category: serials, HostComputer, CameraLabel).
+// ImageUniqueID identifies an image, not a device; it has its own category.
 const TAG_MAKER_NOTE: u16 = 0x927C;
 const TAG_IMAGE_UNIQUE_ID: u16 = 0xA420;
 const TAG_BODY_SERIAL_NUMBER: u16 = 0xA431;
+const TAG_DNG_CAMERA_SERIAL: u16 = 0xC62F;
+const TAG_CAMERA_LABEL: u16 = 0xC7A1;
+// Photoshop Camera RAW aliases (ExifTool Exif.pm); conservatively sensitive.
+const TAG_PSRAW_OWNER: u16 = 0xFDE8;
+const TAG_PSRAW_SERIAL: u16 = 0xFDE9;
 const TAG_LENS_SPECIFICATION: u16 = 0xA432;
 const TAG_LENS_MAKE: u16 = 0xA433;
 const TAG_LENS_MODEL: u16 = 0xA434;
 const TAG_LENS_SERIAL_NUMBER: u16 = 0xA435;
 
-// Creator / rights-holder *name* tags (the `rights` category, alongside
-// Copyright + Artist). CameraOwnerName is Exif 2.3+; Photographer / ImageEditor
-// are Exif 3.0 (CIPA DC-008-2023).
+// Camera ownership is sensitive identity, separate from intentional attribution.
+// Photographer / ImageEditor are Exif 3.0 (CIPA DC-008-2023).
 const TAG_CAMERA_OWNER_NAME: u16 = 0xA430;
 const TAG_PHOTOGRAPHER: u16 = 0xA437; // Exif 3.0
 const TAG_IMAGE_EDITOR: u16 = 0xA438; // Exif 3.0
@@ -167,53 +185,95 @@ enum Category {
     Orientation,
     Rights,
     Datetimes,
+    TimeOffsets,
     Camera,
+    DeviceIds,
+    CameraOwner,
+    ImageUniqueId,
+    Color,
     Other,
 }
 
 fn classify(tag: u16) -> Category {
     match tag {
         TAG_ORIENTATION => Category::Orientation,
-        // Attribution / rights-holder. Copyright (the rights *notice*), Artist
-        // (creator), plus the Exif-IFD creator/owner *name* tags
-        // (CameraOwnerName, Photographer, ImageEditor) — the spec says Artist
-        // mirrors one of these, so they're the same "who made / holds rights"
-        // class a copyright-preserving policy keeps.
-        TAG_COPYRIGHT
-        | TAG_ARTIST
-        | TAG_CAMERA_OWNER_NAME
-        | TAG_PHOTOGRAPHER
-        | TAG_IMAGE_EDITOR => Category::Rights,
-        // DateTime, DateTimeOriginal/Digitized, sub-sec + offset-time variants.
+        // Deliberately retained attribution; owning the camera is not authorship.
+        TAG_COPYRIGHT | TAG_ARTIST | TAG_PHOTOGRAPHER | TAG_IMAGE_EDITOR => Category::Rights,
+        TAG_CAMERA_OWNER_NAME | TAG_PSRAW_OWNER => Category::CameraOwner,
+        TAG_IMAGE_UNIQUE_ID => Category::ImageUniqueId,
+        // DateTime, DateTimeOriginal/Digitized and the sub-second variants.
         TAG_DATETIME
         | TAG_DATETIME_ORIGINAL
         | TAG_DATETIME_DIGITIZED
-        | TAG_OFFSET_TIME
-        | TAG_OFFSET_TIME_ORIGINAL
-        | TAG_OFFSET_TIME_DIGITIZED
         | TAG_SUBSEC_TIME
         | TAG_SUBSEC_TIME_ORIGINAL
         | TAG_SUBSEC_TIME_DIGITIZED => Category::Datetimes,
-        // Device / software identity: Make, Model, Software, HostComputer,
-        // MakerNote, body/lens serials + lens make/model, ImageUniqueID, and the
-        // firmware / developing / editing software tags.
+        // UTC offsets of the timestamps (a time zone).
+        TAG_OFFSET_TIME | TAG_OFFSET_TIME_ORIGINAL | TAG_OFFSET_TIME_DIGITIZED => {
+            Category::TimeOffsets
+        }
+        // Device / software identity: Make, Model, Software, MakerNote, lens
+        // make/model/spec, and the firmware / developing / editing software
+        // tags. (MakerNote stays here — it is dropped on any prune anyway.)
         TAG_MAKE
         | TAG_MODEL
         | TAG_SOFTWARE
-        | TAG_HOST_COMPUTER
         | TAG_MAKER_NOTE
-        | TAG_IMAGE_UNIQUE_ID
-        | TAG_BODY_SERIAL_NUMBER
         | TAG_LENS_SPECIFICATION
         | TAG_LENS_MAKE
         | TAG_LENS_MODEL
-        | TAG_LENS_SERIAL_NUMBER
         | TAG_CAMERA_FIRMWARE
         | TAG_RAW_DEVELOPING_SOFTWARE
         | TAG_IMAGE_EDITING_SOFTWARE
         | TAG_METADATA_EDITING_SOFTWARE => Category::Camera,
+        // Per-device identifiers, including DNG/TIFF alternatives (ExifTool Exif.pm).
+        TAG_HOST_COMPUTER
+        | TAG_BODY_SERIAL_NUMBER
+        | TAG_LENS_SERIAL_NUMBER
+        | TAG_DNG_CAMERA_SERIAL
+        | TAG_CAMERA_LABEL
+        | TAG_PSRAW_SERIAL => Category::DeviceIds,
+        // Colour signalling (the Interop IFD is modeled structurally alongside).
+        TAG_COLOR_SPACE | TAG_GAMMA => Category::Color,
         _ => Category::Other,
     }
+}
+
+/// Which directory of the EXIF tree an [`EntryRef`] belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Ifd {
+    /// IFD0, the primary image directory.
+    Ifd0,
+    /// The Exif sub-IFD (pointed to by IFD0 tag 0x8769).
+    Exif,
+    /// The GPS sub-IFD (IFD0 tag 0x8825).
+    Gps,
+    /// The Interoperability sub-IFD (Exif-IFD tag 0xA005).
+    Interop,
+    /// IFD1, the thumbnail directory.
+    Ifd1,
+}
+
+/// A read-only view of one IFD entry, as yielded by [`Exif::entries`].
+///
+/// `kind` is the raw TIFF field type (1 = BYTE, 2 = ASCII, 3 = SHORT, 4 = LONG,
+/// 5 = RATIONAL, 7 = UNDEFINED, 10 = SRATIONAL, 129 = UTF-8, …) and `value` is
+/// the field's payload exactly as stored — `count` elements in the blob's
+/// [`byte_order`](Exif::byte_order), ASCII with its terminating NUL — so a
+/// consumer can diff or dump entries without re-parsing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EntryRef<'e> {
+    /// Directory the entry lives in.
+    pub ifd: Ifd,
+    /// TIFF/EXIF tag number.
+    pub tag: u16,
+    /// TIFF field type.
+    pub kind: u16,
+    /// Number of values of that type.
+    pub count: u32,
+    /// Payload bytes.
+    pub value: &'e [u8],
 }
 
 /// One IFD entry. Value bytes are [`Cow`]: **borrowed** from the source blob on
@@ -243,6 +303,10 @@ pub struct Exif<'a> {
     ifd0: Vec<Entry<'a>>,
     exif_ifd: Option<Vec<Entry<'a>>>,
     gps_ifd: Option<Vec<Entry<'a>>>,
+    /// Interoperability sub-IFD (0xA005, a child of the Exif IFD). Only validated
+    /// Index/Version entries survive filtering under `color`. Never `Some` without
+    /// an Exif IFD to hang off — `to_bytes` ignores it otherwise.
+    interop_ifd: Option<Vec<Entry<'a>>>,
     ifd1: Option<Vec<Entry<'a>>>,
     thumbnail: Option<&'a [u8]>,
     /// Field type used when *writing* a string tag ([`set_copyright`](Self::set_copyright)
@@ -392,6 +456,7 @@ impl<'a> Exif<'a> {
             ifd0: Vec::new(),
             exif_ifd: None,
             gps_ifd: None,
+            interop_ifd: None,
             ifd1: None,
             thumbnail: None,
             text_encoding,
@@ -422,28 +487,23 @@ impl<'a> Exif<'a> {
         let ifd0_off = rd32(tiff, 4, order)? as usize;
         let (mut ifd0, next) = parse_ifd(tiff, ifd0_off, order)?;
 
-        // Extract sub-IFD pointers as tree edges. The Interop IFD (0xA005) is
-        // not modeled — strip its pointer so a rewrite can't leave a dangling
-        // offset (it survives only via the no-prune passthrough).
+        // Extract sub-IFD pointers as tree edges. The Interop IFD (0xA005) hangs
+        // off the Exif IFD and is extracted the same way; `to_bytes` re-synthesizes
+        // its pointer from the tree shape, so a rewrite can't leave a dangling
+        // offset.
         let exif_taken = take_pointer(&mut ifd0, TAG_EXIF_IFD, order);
+        let mut interop_ifd = None;
         let exif_ifd = exif_taken.and_then(|o| {
             parse_ifd(tiff, o, order).map(|(mut e, _)| {
-                // Interop (0xA005) isn't modeled (see module doc): its pointer is
-                // stripped so a rewrite can't leave a dangling offset, and
-                // `to_bytes` never re-synthesizes it (unlike Exif/GPS, there is
-                // no `interop_ifd` field to write back). But a *duplicate*
-                // Interop tag needs the same "gate on removal" sweep as the
-                // GPS/Exif sub-IFD pointers (zencodec#30/#107): `take_pointer`
-                // only removes the FIRST match, so a second 0xA005 entry
-                // survives as ordinary data. On the next `to_bytes`/parse cycle
-                // it resolves as an ordinary entry, gets consumed by *this same*
-                // call one occurrence at a time, and `exif_ifd`'s entry count
-                // silently shrinks by one on every round-trip until it empties
-                // out — a serializer non-fixpoint invisible to
-                // `orientation`/`has_gps`/`has_thumbnail` (nothing reads
-                // Interop), but a real bug under `filtered`/`exif_filter`
-                // idempotence. Strip any remaining occurrence in the same pass.
-                if take_pointer(&mut e, TAG_INTEROP_IFD, order).is_some() {
+                let interop_taken = take_pointer(&mut e, TAG_INTEROP_IFD, order);
+                interop_ifd = interop_taken.and_then(|o| parse_ifd(tiff, o, order).map(|(e, _)| e));
+                // Same "gate on removal" duplicate sweep as the Exif/GPS pointers
+                // (zencodec#30/#107): `take_pointer` only removes the FIRST match,
+                // and a leftover 0xA005 would either shadow the synthesized pointer
+                // on re-parse or, when unresolvable, be consumed one occurrence per
+                // round-trip so `exif_ifd` shrinks until it empties out (a serializer
+                // non-fixpoint, `duplicate_interop_pointer_stripped_on_parse`).
+                if interop_taken.is_some() {
                     e.retain(|entry| entry.tag != TAG_INTEROP_IFD);
                 }
                 e
@@ -529,6 +589,7 @@ impl<'a> Exif<'a> {
             ifd0,
             exif_ifd,
             gps_ifd,
+            interop_ifd,
             ifd1,
             thumbnail,
             // Not stored in the TIFF; edits to a parsed blob default to the
@@ -541,6 +602,32 @@ impl<'a> Exif<'a> {
     /// across [`to_bytes`](Self::to_bytes).
     pub fn byte_order(&self) -> ByteOrder {
         self.order
+    }
+
+    /// Every entry of the tree in directory order (IFD0, Exif, Interop, GPS,
+    /// IFD1), each in its directory's stored order.
+    ///
+    /// Structural pointers (the Exif / GPS / Interop IFD offsets and the
+    /// JPEG-thumbnail offset/length) are tree edges, not entries, and are not
+    /// yielded; the thumbnail's presence is [`has_thumbnail`](Self::has_thumbnail).
+    /// Entries skipped at parse time (unknown type, out-of-bounds value) are
+    /// not represented. Intended for inspection and diffing; it never
+    /// allocates.
+    pub fn entries(&self) -> impl Iterator<Item = EntryRef<'_>> + '_ {
+        fn view<'e, 'a>(ifd: Ifd, d: &'e [Entry<'a>]) -> impl Iterator<Item = EntryRef<'e>> {
+            d.iter().map(move |e| EntryRef {
+                ifd,
+                tag: e.tag,
+                kind: e.kind,
+                count: e.count,
+                value: &e.value,
+            })
+        }
+        view(Ifd::Ifd0, &self.ifd0)
+            .chain(self.exif_ifd.iter().flat_map(|d| view(Ifd::Exif, d)))
+            .chain(self.interop_ifd.iter().flat_map(|d| view(Ifd::Interop, d)))
+            .chain(self.gps_ifd.iter().flat_map(|d| view(Ifd::Gps, d)))
+            .chain(self.ifd1.iter().flat_map(|d| view(Ifd::Ifd1, d)))
     }
 
     /// The EXIF Orientation tag (0x0112), if present and valid.
@@ -556,7 +643,7 @@ impl<'a> Exif<'a> {
     ///
     /// This is the copyright *notice* (rights statement). The rights-holder /
     /// creator *name* is a separate concept — the [`artist`](Self::artist) tag
-    /// and the Exif-IFD CameraOwnerName / Photographer / ImageEditor tags (all
+    /// and the Exif-IFD Photographer / ImageEditor tags (all
     /// in the [`rights`](ExifPolicy::rights) category). The Copyright field has
     /// historically held two NUL-separated segments (photographer copyright,
     /// then editor copyright); this returns the first segment. A second segment,
@@ -619,19 +706,53 @@ impl<'a> Exif<'a> {
         self.gps_ifd.is_some()
     }
 
-    /// Whether any device/capture-identity tag (the [`camera`](ExifPolicy::camera)
-    /// category — Make/Model/Software/MakerNote/serials/lens/ImageUniqueID/firmware…)
-    /// is present, in IFD0 or the Exif sub-IFD. Lets a privacy check assert that a
-    /// stripping policy actually removed camera identity (not just GPS/thumbnail).
+    /// Whether descriptive camera tags, device identifiers, camera ownership,
+    /// or image identity are present in IFD0 or the Exif sub-IFD.
+    /// This aggregate query retains its historical coverage of serials/image IDs.
     pub fn has_camera(&self) -> bool {
         self.has_category(Category::Camera)
+            || self.has_device_ids()
+            || self.has_camera_owner()
+            || self.has_image_unique_id()
+    }
+
+    /// Whether device identifiers (body/lens/DNG/Photoshop RAW serials, HostComputer,
+    /// CameraLabel) are present. ImageUniqueID has its own category.
+    pub fn has_device_ids(&self) -> bool {
+        self.has_category(Category::DeviceIds)
+    }
+
+    /// Whether the camera owner's name is present (not creator attribution).
+    pub fn has_camera_owner(&self) -> bool {
+        self.has_category(Category::CameraOwner)
+    }
+
+    /// Whether ImageUniqueID is present. It identifies an image, but can link
+    /// published derivatives to an identifiable original.
+    pub fn has_image_unique_id(&self) -> bool {
+        self.has_category(Category::ImageUniqueId)
+    }
+
+    /// Whether any colour-signalling data (the [`color`](ExifPolicy::color)
+    /// category — ColorSpace / Gamma in the Exif sub-IFD, or an
+    /// Interoperability sub-IFD) is present.
+    pub fn has_color(&self) -> bool {
+        self.interop_ifd.is_some() || self.has_category(Category::Color)
     }
 
     /// Whether any capture-timestamp tag (the [`datetimes`](ExifPolicy::datetimes)
-    /// category — DateTime / DateTimeOriginal / Digitized / SubSecTime\* /
-    /// OffsetTime\*) is present, in IFD0 or the Exif sub-IFD.
+    /// or [`time_offsets`](ExifPolicy::time_offsets) category — DateTime /
+    /// DateTimeOriginal / Digitized / SubSecTime\* / OffsetTime\*) is present,
+    /// in IFD0 or the Exif sub-IFD.
     pub fn has_datetimes(&self) -> bool {
-        self.has_category(Category::Datetimes)
+        self.has_category(Category::Datetimes) || self.has_time_offsets()
+    }
+
+    /// Whether any timestamp UTC-offset tag (the
+    /// [`time_offsets`](ExifPolicy::time_offsets) category — OffsetTime\*) is
+    /// present.
+    pub fn has_time_offsets(&self) -> bool {
+        self.has_category(Category::TimeOffsets)
     }
 
     /// Whether any IFD0/Exif-IFD entry falls in `cat` (the per-entry categories;
@@ -710,9 +831,12 @@ impl<'a> Exif<'a> {
     }
 
     /// Prune the tree by `policy`, returning a new borrowing view. Surviving
-    /// entries still borrow the original source (no payload copy).
+    /// entries still borrow the original source (no payload copy). Display and
+    /// attribution tags must have valid types/counts and directory placement.
+    /// Unknown Interop entries and opaque MakerNotes are dropped on every tree
+    /// rewrite; use [`retain`] with `KEEP_ALL` for byte-exact preservation.
     pub fn filtered(&self, policy: &ExifPolicy) -> Exif<'a> {
-        let keep = |e: &&Entry<'a>| match e.tag {
+        let keep = |e: &&Entry<'a>, exif_directory: bool| match e.tag {
             // Offset-bearing structural tags whose value is a file offset, dropped
             // here so a rewrite never emits a dangling offset:
             //  - The modeled sub-IFD/thumbnail pointers (Exif/GPS/Interop, the
@@ -737,14 +861,75 @@ impl<'a> Exif<'a> {
             // those. It also routinely embeds GPS/serials. Drop it on any prune —
             // byte-exact preservation is the keep-everything (no-rewrite) path.
             TAG_MAKER_NOTE => false,
+            TAG_ORIENTATION => {
+                !exif_directory
+                    && policy.orientation.keeps()
+                    && e.count == 1
+                    && matches!(e.kind, TIFF_SHORT | TIFF_LONG)
+                    && read_uint(e, self.order).is_some_and(|v| (1..=8).contains(&v))
+            }
+            TAG_COLOR_SPACE => {
+                exif_directory && policy.color.keeps() && e.kind == TIFF_SHORT && e.count == 1
+            }
+            TAG_GAMMA => {
+                exif_directory
+                    && policy.color.keeps()
+                    && e.kind == TIFF_RATIONAL
+                    && e.count == 1
+                    && rd32(&e.value, 0, self.order).is_some_and(|v| v != 0)
+                    && rd32(&e.value, 4, self.order).is_some_and(|v| v != 0)
+            }
+            TAG_COPYRIGHT | TAG_ARTIST | TAG_PHOTOGRAPHER | TAG_IMAGE_EDITOR => {
+                let correct_directory =
+                    exif_directory == matches!(e.tag, TAG_PHOTOGRAPHER | TAG_IMAGE_EDITOR);
+                correct_directory
+                    && policy.rights.keeps()
+                    && matches!(e.kind, TIFF_ASCII | TIFF_UTF8)
+            }
             tag => policy.keeps(classify(tag)),
         };
-        let ifd0 = self.ifd0.iter().filter(keep).cloned().collect();
+        let ifd0 = self
+            .ifd0
+            .iter()
+            .filter(|e| keep(e, false))
+            .cloned()
+            .collect();
+        // An Interop directory is not an opaque color payload. Unknown/private
+        // tags, related-image fields and malformed values may contain identifying
+        // data. Only the fixed-size Index/Version declarations survive a prune.
+        let interop_ifd = self
+            .interop_ifd
+            .as_ref()
+            .filter(|_| policy.color.keeps() && self.exif_ifd.is_some())
+            .map(|d| {
+                d.iter()
+                    .filter(|e| match e.tag {
+                        TAG_INTEROP_INDEX => {
+                            e.kind == TIFF_ASCII
+                                && e.count == 4
+                                && matches!(e.value.as_ref(), b"R98\0" | b"R03\0" | b"THM\0")
+                        }
+                        TAG_INTEROP_VERSION => {
+                            e.kind == TIFF_UNDEFINED
+                                && e.count == 4
+                                && e.value.iter().all(u8::is_ascii_digit)
+                        }
+                        _ => false,
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
+            .filter(|d| !d.is_empty());
         let exif_ifd = self
             .exif_ifd
             .as_ref()
-            .map(|d| d.iter().filter(keep).cloned().collect::<Vec<_>>())
-            .filter(|d: &Vec<_>| !d.is_empty());
+            .map(|d| {
+                d.iter()
+                    .filter(|e| keep(e, true))
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
+            .filter(|d: &Vec<_>| !d.is_empty() || interop_ifd.is_some());
         let gps_ifd = match policy.gps {
             Retention::Keep => self.gps_ifd.clone(),
             Retention::Discard => None,
@@ -756,9 +941,12 @@ impl<'a> Exif<'a> {
         // that `to_bytes` synthesizes.
         let (ifd1, thumbnail) = match policy.thumbnail {
             Retention::Keep => (
-                self.ifd1
-                    .as_ref()
-                    .map(|d| d.iter().filter(keep).cloned().collect::<Vec<_>>()),
+                self.ifd1.as_ref().map(|d| {
+                    d.iter()
+                        .filter(|e| keep(e, false))
+                        .cloned()
+                        .collect::<Vec<_>>()
+                }),
                 self.thumbnail,
             ),
             Retention::Discard => (None, None),
@@ -769,6 +957,7 @@ impl<'a> Exif<'a> {
             ifd0,
             exif_ifd,
             gps_ifd,
+            interop_ifd,
             ifd1,
             thumbnail,
             text_encoding: self.text_encoding,
@@ -811,6 +1000,7 @@ impl<'a> Exif<'a> {
     /// (guarded by `serialized_len_equals_to_bytes_len`).
     pub(crate) fn serialized_len(&self) -> usize {
         let ifd0_nptr = self.exif_ifd.is_some() as usize + self.gps_ifd.is_some() as usize;
+        let interop = self.exif_ifd.as_ref().and(self.interop_ifd.as_ref());
         let ifd1_nptr = if self.thumbnail.is_some() { 2 } else { 0 };
         let block = |entries: &[Entry<'a>], nptr: usize| -> usize {
             2 + 12 * (entries.len() + nptr) + 4 + ext_size(entries)
@@ -822,6 +1012,9 @@ impl<'a> Exif<'a> {
         };
         total += TIFF_HEADER_SIZE + block(&self.ifd0, ifd0_nptr);
         if let Some(d) = &self.exif_ifd {
+            total += block(d, interop.is_some() as usize);
+        }
+        if let Some(d) = interop {
             total += block(d, 0);
         }
         if let Some(d) = &self.gps_ifd {
@@ -858,6 +1051,10 @@ impl<'a> Exif<'a> {
             }
             v
         };
+        // The Interop pointer lives in the Exif IFD; without an Exif IFD there
+        // is nowhere to write it (parse never produces that shape).
+        let interop = self.exif_ifd.as_ref().and(self.interop_ifd.as_ref());
+        let exif_nptr = interop.is_some() as usize;
         let ifd1_ptrs: &[u16] = if self.thumbnail.is_some() {
             &[TAG_THUMB_OFFSET, TAG_THUMB_LENGTH]
         } else {
@@ -875,6 +1072,12 @@ impl<'a> Exif<'a> {
         let (t0, x0) = sz(&self.ifd0, ifd0_ptrs.len());
         let mut cursor = TIFF_HEADER_SIZE + t0 + x0;
         let exif_off = self.exif_ifd.as_ref().map(|d| {
+            let o = cursor;
+            let (t, x) = sz(d, exif_nptr);
+            cursor += t + x;
+            o
+        });
+        let interop_off = interop.map(|d| {
             let o = cursor;
             let (t, x) = sz(d, 0);
             cursor += t + x;
@@ -923,7 +1126,15 @@ impl<'a> Exif<'a> {
         );
 
         if let Some(d) = &self.exif_ifd {
-            let eb = exif_off.unwrap() + 2 + 12 * d.len() + 4;
+            let mut pv = Vec::new();
+            if let Some(o) = interop_off {
+                pv.push((TAG_INTEROP_IFD, o as u32));
+            }
+            let eb = exif_off.unwrap() + 2 + 12 * (d.len() + exif_nptr) + 4;
+            self.write_ifd(&mut out, d, &pv, eb, 0);
+        }
+        if let Some(d) = interop {
+            let eb = interop_off.unwrap() + 2 + 12 * d.len() + 4;
             self.write_ifd(&mut out, d, &[], eb, 0);
         }
         if let Some(d) = &self.gps_ifd {
@@ -1259,17 +1470,38 @@ impl Retention {
 pub struct ExifPolicy {
     /// Orientation tag (0x0112).
     pub orientation: Retention,
-    /// Rights: Copyright (0x8298) + Artist (0x013B).
+    /// Intentional attribution: Copyright, Artist, Photographer, ImageEditor.
+    /// May contain names/contact details. CameraOwnerName is separate.
     pub rights: Retention,
     /// Embedded thumbnail (IFD1 + its image data).
     pub thumbnail: Retention,
     /// GPS sub-IFD (location).
     pub gps: Retention,
-    /// Capture timestamps (DateTime / Original / Digitized + sub-sec/offset).
+    /// Capture timestamps (DateTime / Original / Digitized + sub-second).
     pub datetimes: Retention,
-    /// Camera/device identity (Make, Model, Software, lens, serial, MakerNote).
+    /// UTC offsets (`OffsetTime*`). Opt in explicitly: keeping timestamps does
+    /// not enable these; discarding timestamps also discards their offsets.
+    pub time_offsets: Retention,
+    /// Descriptive camera/software information (Make/Model/lens/firmware).
+    /// Keeping this does not enable identifiers or the owner's name. MakerNote
+    /// is dropped on every rewrite because its opaque contents cannot be pruned.
     pub camera: Retention,
-    /// Everything else (dimensions, exposure settings, …).
+    /// Device identifiers: body/lens/DNG/Photoshop RAW serials, HostComputer, CameraLabel.
+    /// Opt in with [`with_device_ids`](Self::with_device_ids).
+    pub device_ids: Retention,
+    /// CameraOwnerName and its Photoshop RAW alias, separate from attribution.
+    /// Discarded by publishing presets, even when `rights` or `camera` is kept.
+    pub camera_owner: Retention,
+    /// ImageUniqueID: image identity, not device identity. Discarded by the
+    /// publishing presets because it can correlate copies/derivatives.
+    pub image_unique_id: Retention,
+    /// Colour signalling: ColorSpace (0xA001), Gamma (0xA500) and the
+    /// validated InteropIndex/Version (`R98` = sRGB / `R03` = Adobe RGB).
+    /// For a JPEG without an ICC profile this is the only colour declaration,
+    /// so every preset except [`DISCARD_ALL`](Self::DISCARD_ALL) keeps it.
+    pub color: Retention,
+    /// Everything else, including unknown/private tags, comments and embedded
+    /// XMP/IPTC. Keeping this is NOT a privacy filter. Prefer a publishing preset.
     pub other: Retention,
 }
 
@@ -1281,7 +1513,12 @@ impl ExifPolicy {
         thumbnail: Retention::Keep,
         gps: Retention::Keep,
         datetimes: Retention::Keep,
+        time_offsets: Retention::Keep,
         camera: Retention::Keep,
+        device_ids: Retention::Keep,
+        camera_owner: Retention::Keep,
+        image_unique_id: Retention::Keep,
+        color: Retention::Keep,
         other: Retention::Keep,
     };
     /// Discard every category (drops EXIF entirely).
@@ -1291,18 +1528,25 @@ impl ExifPolicy {
         thumbnail: Retention::Discard,
         gps: Retention::Discard,
         datetimes: Retention::Discard,
+        time_offsets: Retention::Discard,
         camera: Retention::Discard,
+        device_ids: Retention::Discard,
+        camera_owner: Retention::Discard,
+        image_unique_id: Retention::Discard,
+        color: Retention::Discard,
         other: Retention::Discard,
     };
-    /// Keep only orientation + rights (the web default).
+    /// Keep orientation + rights + colour signalling (the web default).
     pub const ATTRIBUTED_ORIENTATION: Self = Self {
         orientation: Retention::Keep,
         rights: Retention::Keep,
+        color: Retention::Keep,
         ..Self::DISCARD_ALL
     };
-    /// Keep only orientation.
+    /// Keep only what places pixels on screen: orientation + colour signalling.
     pub const ORIENTATION_ONLY: Self = Self {
         orientation: Retention::Keep,
+        color: Retention::Keep,
         ..Self::DISCARD_ALL
     };
 
@@ -1332,16 +1576,60 @@ impl ExifPolicy {
         self.gps = r;
         self
     }
-    /// Set the timestamps category.
+    /// Keep timestamps without implicitly enabling UTC offsets. Discarding
+    /// timestamps also discards offsets, preserving the historical removal
+    /// behavior. An explicit `with_time_offsets(Keep)` opts back in.
     #[must_use]
     pub const fn with_datetimes(mut self, r: Retention) -> Self {
         self.datetimes = r;
+        if r.discards() {
+            self.time_offsets = Retention::Discard;
+        }
         self
     }
-    /// Set the camera/device-identity category.
+    /// Set only the timestamp UTC-offset category (`OffsetTime*`).
+    #[must_use]
+    pub const fn with_time_offsets(mut self, r: Retention) -> Self {
+        self.time_offsets = r;
+        self
+    }
+    /// Keep descriptive camera tags without implicitly enabling identifiers or
+    /// ownership. Discarding camera information also discards device IDs, owner
+    /// name and ImageUniqueID, so existing removal chains do not start leaking.
+    /// Explicit identifier setters may opt back in afterward. Starting from
+    /// `KEEP_ALL` still keeps identifiers until explicitly discarded.
     #[must_use]
     pub const fn with_camera(mut self, r: Retention) -> Self {
         self.camera = r;
+        if r.discards() {
+            self.device_ids = Retention::Discard;
+            self.camera_owner = Retention::Discard;
+            self.image_unique_id = Retention::Discard;
+        }
+        self
+    }
+    /// Set only device identifiers (not ownership or image identity).
+    #[must_use]
+    pub const fn with_device_ids(mut self, r: Retention) -> Self {
+        self.device_ids = r;
+        self
+    }
+    /// Set only the camera owner's name.
+    #[must_use]
+    pub const fn with_camera_owner(mut self, r: Retention) -> Self {
+        self.camera_owner = r;
+        self
+    }
+    /// Set only ImageUniqueID (can correlate published copies/derivatives).
+    #[must_use]
+    pub const fn with_image_unique_id(mut self, r: Retention) -> Self {
+        self.image_unique_id = r;
+        self
+    }
+    /// Set the colour-signalling category (ColorSpace / Gamma / Interop IFD).
+    #[must_use]
+    pub const fn with_color(mut self, r: Retention) -> Self {
+        self.color = r;
         self
     }
     /// Set the "everything else" category.
@@ -1356,7 +1644,12 @@ impl ExifPolicy {
             Category::Orientation => self.orientation.keeps(),
             Category::Rights => self.rights.keeps(),
             Category::Datetimes => self.datetimes.keeps(),
+            Category::TimeOffsets => self.time_offsets.keeps(),
             Category::Camera => self.camera.keeps(),
+            Category::DeviceIds => self.device_ids.keeps(),
+            Category::CameraOwner => self.camera_owner.keeps(),
+            Category::ImageUniqueId => self.image_unique_id.keeps(),
+            Category::Color => self.color.keeps(),
             Category::Other => self.other.keeps(),
         }
     }
@@ -1368,7 +1661,12 @@ impl ExifPolicy {
             && self.thumbnail.keeps()
             && self.gps.keeps()
             && self.datetimes.keeps()
+            && self.time_offsets.keeps()
             && self.camera.keeps()
+            && self.device_ids.keeps()
+            && self.camera_owner.keeps()
+            && self.image_unique_id.keeps()
+            && self.color.keeps()
             && self.other.keeps()
     }
 
@@ -1523,6 +1821,7 @@ mod tests {
             ],
             exif_ifd: Some(vec![e(TAG_DATETIME_ORIGINAL, TIFF_ASCII, 5, b"2020\0")]),
             gps_ifd: Some(vec![e(0x0001, TIFF_ASCII, 2, b"N\0")]), // GPSLatitudeRef
+            interop_ifd: None,
             ifd1: Some(vec![]),
             thumbnail: Some(&[0xFF, 0xD8, 0xFF, 0xD9]),
             text_encoding: TextEncoding::Ascii,
@@ -1652,6 +1951,7 @@ mod tests {
             ],
             exif_ifd: None,
             gps_ifd: None,
+            interop_ifd: None,
             ifd1: None,
             thumbnail: None,
             text_encoding: TextEncoding::Ascii,
@@ -1866,6 +2166,7 @@ mod tests {
             ifd0: vec![e(TAG_ORIENTATION, TIFF_SHORT, 1, &[6, 0])],
             exif_ifd: None,
             gps_ifd: None,
+            interop_ifd: None,
             ifd1: Some(vec![]),
             thumbnail: Some(&big),
             text_encoding: TextEncoding::Ascii,
@@ -2157,6 +2458,7 @@ mod tests {
             ],
             exif_ifd: None,
             gps_ifd: None,
+            interop_ifd: None,
             ifd1: None,
             thumbnail: None,
             text_encoding: TextEncoding::Ascii,
@@ -2215,6 +2517,7 @@ mod tests {
                 e(TAG_PHOTOGRAPHER, TIFF_ASCII, 4, b"Me\0\0"),      // → Rights
             ]),
             gps_ifd: None,
+            interop_ifd: None,
             ifd1: None,
             thumbnail: None,
             text_encoding: TextEncoding::Ascii,
@@ -2368,6 +2671,7 @@ mod tests {
             ],
             exif_ifd: None,
             gps_ifd: None,
+            interop_ifd: None,
             ifd1: None,
             thumbnail: None,
             text_encoding: TextEncoding::Ascii,
@@ -2416,6 +2720,7 @@ mod tests {
             ],
             exif_ifd: None,
             gps_ifd: None,
+            interop_ifd: None,
             ifd1: None,
             thumbnail: None,
             text_encoding: TextEncoding::Ascii,
@@ -2443,6 +2748,7 @@ mod tests {
             ifd0: vec![e(TAG_ORIENTATION, TIFF_SHORT, 1, &[6, 0])],
             exif_ifd: None,
             gps_ifd: None,
+            interop_ifd: None,
             ifd1: Some(vec![e(TAG_MAKE, TIFF_ASCII, 4, b"Cam\0")]), // camera tag in IFD1
             thumbnail: Some(&[0xFF, 0xD8, 0xFF, 0xD9]),
             text_encoding: TextEncoding::Ascii,
@@ -2539,6 +2845,7 @@ mod tests {
             ifd0: vec![e(TAG_ORIENTATION, TIFF_LONG, 1, &[3, 0, 0, 0])],
             exif_ifd: None,
             gps_ifd: None,
+            interop_ifd: None,
             ifd1: None,
             thumbnail: None,
             text_encoding: TextEncoding::Ascii,
@@ -2563,6 +2870,7 @@ mod tests {
             ifd0: vec![e(TAG_ORIENTATION, TIFF_ASCII, 2, b"6\0")],
             exif_ifd: None,
             gps_ifd: None,
+            interop_ifd: None,
             ifd1: None,
             thumbnail: None,
             text_encoding: TextEncoding::Ascii,
@@ -2631,16 +2939,16 @@ mod tests {
 
     /// Regression: a *duplicate* Interop (0xA005) pointer tag inside the Exif
     /// sub-IFD silently shrank `exif_ifd` by one entry on every round-trip
-    /// instead of stopping at a fixpoint. Interop isn't modeled (see module
-    /// doc) and `to_bytes` never re-synthesizes it, so this isn't the
-    /// GPS/Exif "shadows the synthesized pointer" mechanism (zencodec#30/#107)
-    /// — `take_pointer` only ever removed the FIRST 0xA005 match, leaving a
-    /// second occurrence as ordinary data that got consumed one-at-a-time on
-    /// each subsequent parse. Not caught by `orientation`/`has_gps`/
-    /// `has_thumbnail` (nothing reads Interop content) — found by code audit
-    /// while investigating the same "which pointer tags get the duplicate
-    /// sweep" question for zencodec#114/#115 (which turned out unrelated: see
-    /// their closing comments), not a fuzz finding.
+    /// instead of stopping at a fixpoint — `take_pointer` only ever removed
+    /// the FIRST 0xA005 match, leaving a second occurrence as ordinary data
+    /// that got consumed one-at-a-time on each subsequent parse. Found by code
+    /// audit while investigating the same "which pointer tags get the
+    /// duplicate sweep" question for zencodec#114/#115 (which turned out
+    /// unrelated: see their closing comments), not a fuzz finding. The Interop
+    /// IFD is now modeled as a tree edge (the `color` category), so the sweep
+    /// also guards the GPS/Exif "shadows the synthesized pointer" mechanism
+    /// (zencodec#30/#107) for it; the unresolvable pointers here must leave
+    /// `interop_ifd` empty rather than surface as data.
     #[test]
     fn duplicate_interop_pointer_stripped_on_parse() {
         // MM TIFF, IFD0 @ 8 with one Exif-IFD pointer -> 0x1a (26). The Exif
@@ -2666,6 +2974,336 @@ mod tests {
         let b1 = x.to_bytes();
         let y = Exif::parse(&b1).expect("must re-parse");
         assert_eq!(b1, y.to_bytes(), "must be a serializer fixpoint");
+    }
+
+    /// The `color` category: ColorSpace / Gamma (Exif IFD) and the whole
+    /// Interoperability sub-IFD are kept or dropped together, the Interop
+    /// pointer is re-synthesized inside the Exif IFD (never left dangling),
+    /// and keeping colour alone is enough to keep an otherwise-empty Exif IFD.
+    #[test]
+    fn color_category_keeps_or_drops_interop_and_colorspace_together() {
+        // MM TIFF: IFD0 {Make} → Exif IFD {ColorSpace=0xFFFF, Gamma, Interop →}
+        // → Interop IFD {InteropIndex "R03"}.
+        let mut t = vec![b'M', b'M', 0, 0x2A, 0, 0, 0, 8];
+        t.extend_from_slice(&[0, 2]); // IFD0 count
+        t.extend_from_slice(&[0x01, 0x0F, 0, 2, 0, 0, 0, 4, b'C', b'a', b'm', 0]); // Make
+        t.extend_from_slice(&[0x87, 0x69, 0, 4, 0, 0, 0, 1, 0, 0, 0, 38]); // Exif IFD → 38
+        t.extend_from_slice(&[0, 0, 0, 0]);
+        assert_eq!(t.len(), 38);
+        t.extend_from_slice(&[0, 3]); // Exif IFD count
+        t.extend_from_slice(&[0xA0, 0x01, 0, 3, 0, 0, 0, 1, 0xFF, 0xFF, 0, 0]); // ColorSpace
+        t.extend_from_slice(&[0xA0, 0x05, 0, 4, 0, 0, 0, 1, 0, 0, 0, 80]); // Interop → 80
+        t.extend_from_slice(&[0xA5, 0x00, 0, 5, 0, 0, 0, 1, 0, 0, 0, 84]); // Gamma → RATIONAL @ 84
+        t.extend_from_slice(&[0, 0, 0, 0]);
+        assert_eq!(t.len(), 80);
+        // Interop IFD @ 80 — wait: put the Gamma rational first, at 80..88, and
+        // the Interop IFD at 88 instead (rebuild the two offsets below).
+        t.truncate(38);
+        t.extend_from_slice(&[0, 3]);
+        t.extend_from_slice(&[0xA0, 0x01, 0, 3, 0, 0, 0, 1, 0xFF, 0xFF, 0, 0]);
+        t.extend_from_slice(&[0xA0, 0x05, 0, 4, 0, 0, 0, 1, 0, 0, 0, 88]);
+        t.extend_from_slice(&[0xA5, 0x00, 0, 5, 0, 0, 0, 1, 0, 0, 0, 80]);
+        t.extend_from_slice(&[0, 0, 0, 0]);
+        t.extend_from_slice(&[0, 0, 0, 22, 0, 0, 0, 10]); // Gamma = 22/10 @ 80
+        assert_eq!(t.len(), 88);
+        t.extend_from_slice(&[0, 1]); // Interop IFD count
+        t.extend_from_slice(&[0x00, 0x01, 0, 2, 0, 0, 0, 4, b'R', b'0', b'3', 0]);
+        t.extend_from_slice(&[0, 0, 0, 0]);
+
+        let x = Exif::parse(&t).expect("fixture parses");
+        assert!(x.has_color());
+        let interop = x.interop_ifd.as_ref().expect("Interop IFD modeled");
+        assert_eq!(interop.len(), 1);
+        assert_eq!(interop[0].tag, 0x0001);
+        assert_eq!(&*interop[0].value, b"R03\0");
+        assert!(
+            !x.exif_ifd
+                .as_ref()
+                .unwrap()
+                .iter()
+                .any(|e| e.tag == TAG_INTEROP_IFD),
+            "pointer must be a tree edge, not data"
+        );
+
+        // Keep colour only (everything else discarded): Exif IFD survives with
+        // exactly ColorSpace + Gamma + the synthesized Interop pointer.
+        let color_only = ExifPolicy::DISCARD_ALL.with_color(Retention::Keep);
+        let kept = x.filtered(&color_only);
+        assert!(kept.has_color());
+        assert!(!kept.has_camera());
+        let bytes = kept.to_bytes();
+        let re = Exif::parse(&bytes).expect("rewrite parses");
+        assert!(re.ifd0.is_empty(), "Make dropped");
+        let exif_tags: Vec<u16> = re
+            .exif_ifd
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|e| e.tag)
+            .collect();
+        assert_eq!(exif_tags, vec![TAG_COLOR_SPACE, TAG_GAMMA]);
+        assert_eq!(
+            &*re.exif_ifd.as_ref().unwrap()[1].value,
+            &[0, 0, 0, 22, 0, 0, 0, 10]
+        );
+        assert_eq!(&*re.interop_ifd.as_ref().unwrap()[0].value, b"R03\0");
+        assert_eq!(bytes, re.to_bytes(), "fixpoint");
+        assert_eq!(
+            kept.serialized_len(),
+            bytes.len(),
+            "serialized_len tracks interop"
+        );
+
+        // Drop colour: ColorSpace, Gamma and the Interop IFD all go; with nothing
+        // else in the Exif IFD the IFD itself goes too.
+        let no_color = ExifPolicy::KEEP_ALL.with_color(Retention::Discard);
+        let dropped = x.filtered(&no_color);
+        assert!(!dropped.has_color());
+        assert!(dropped.interop_ifd.is_none());
+        assert!(dropped.exif_ifd.is_none());
+        let dropped_bytes = dropped.to_bytes();
+        let re = Exif::parse(&dropped_bytes).unwrap();
+        assert!(!re.has_color());
+        assert_eq!(re.ifd0.len(), 1, "Make kept");
+
+        // Every retaining preset keeps it.
+        for p in [
+            ExifPolicy::KEEP_ALL,
+            ExifPolicy::ATTRIBUTED_ORIENTATION,
+            ExifPolicy::ORIENTATION_ONLY,
+        ] {
+            assert!(Exif::parse(&x.filtered(&p).to_bytes()).unwrap().has_color());
+        }
+        assert!(retain(&t, &ExifPolicy::DISCARD_ALL).is_none());
+    }
+
+    /// One entry from every retention category (and every sub-split a later
+    /// refinement may introduce), so preset outputs can be pinned byte-for-byte:
+    /// IFD0 {Make, Orientation, HostComputer, Copyright, DateTime} → Exif IFD
+    /// {ExposureTime, DateTimeOriginal, OffsetTimeOriginal, ColorSpace,
+    /// ImageUniqueID, BodySerialNumber, LensModel}.
+    fn every_category_fixture() -> alloc::vec::Vec<u8> {
+        let exif = Exif {
+            order: ByteOrder::Big,
+            had_prefix: false,
+            ifd0: vec![
+                e(TAG_MAKE, TIFF_ASCII, 4, b"Cam\0"),
+                e(TAG_ORIENTATION, TIFF_SHORT, 1, &[0, 6]),
+                e(TAG_HOST_COMPUTER, TIFF_ASCII, 5, b"host\0"),
+                e(TAG_DATETIME, TIFF_ASCII, 20, b"2020:01:02 03:04:05\0"),
+                e(TAG_COPYRIGHT, TIFF_ASCII, 7, b"(c) Me\0"),
+            ],
+            exif_ifd: Some(vec![
+                e(0x829A, TIFF_RATIONAL, 1, &[0, 0, 0, 1, 0, 0, 0, 60]), // ExposureTime (other)
+                e(
+                    TAG_DATETIME_ORIGINAL,
+                    TIFF_ASCII,
+                    20,
+                    b"2020:01:02 03:04:05\0",
+                ),
+                e(TAG_OFFSET_TIME_ORIGINAL, TIFF_ASCII, 7, b"+01:00\0"),
+                e(TAG_COLOR_SPACE, TIFF_SHORT, 1, &[0, 1]),
+                e(TAG_IMAGE_UNIQUE_ID, TIFF_ASCII, 9, b"deadbeef\0"),
+                e(TAG_BODY_SERIAL_NUMBER, TIFF_ASCII, 7, b"SN0001\0"),
+                e(TAG_LENS_MODEL, TIFF_ASCII, 5, b"Lens\0"),
+            ]),
+            gps_ifd: None,
+            interop_ifd: None,
+            ifd1: None,
+            thumbnail: None,
+            text_encoding: TextEncoding::Ascii,
+        };
+        exif.to_bytes()
+    }
+
+    fn unhex(h: &str) -> alloc::vec::Vec<u8> {
+        (0..h.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&h[i..i + 2], 16).unwrap())
+            .collect()
+    }
+
+    /// Historical removal chains remain byte-identical for this fixture.
+    /// Privacy tightening of Keep and CameraOwnerName is exercised separately.
+    #[test]
+    fn legacy_discard_chains_do_not_reintroduce_identifiers() {
+        let src = every_category_fixture();
+        assert_eq!(
+            src,
+            unhex(
+                "4d4d002a000000080006010f00020000000443616d00011200030000000100060000013200020000001400000056013c0002000000050000006a82980002000000070000007087690004000000010000007800000000323032303a30313a30322030333a30343a303500686f73740000286329204d6500000007829a000500000001000000d29003000200000014000000da9011000200000007000000eea00100030000000100010000a420000200000009000000f6a43100020000000700000100a4340002000000050000010800000000000000010000003c323032303a30313a30322030333a30343a3035002b30313a3030000064656164626565660000534e3030303100004c656e730000"
+            ),
+            "fixture drifted"
+        );
+        let cases: [(&str, ExifPolicy, &str); 5] = [
+            (
+                "KEEP_ALL",
+                ExifPolicy::KEEP_ALL,
+                "4d4d002a000000080006010f00020000000443616d00011200030000000100060000013200020000001400000056013c0002000000050000006a82980002000000070000007087690004000000010000007800000000323032303a30313a30322030333a30343a303500686f73740000286329204d6500000007829a000500000001000000d29003000200000014000000da9011000200000007000000eea00100030000000100010000a420000200000009000000f6a43100020000000700000100a4340002000000050000010800000000000000010000003c323032303a30313a30322030333a30343a3035002b30313a3030000064656164626565660000534e3030303100004c656e730000",
+            ),
+            (
+                "ATTRIBUTED_ORIENTATION",
+                ExifPolicy::ATTRIBUTED_ORIENTATION,
+                "4d4d002a00000008000301120003000000010006000082980002000000070000003287690004000000010000003a00000000286329204d6500000001a0010003000000010001000000000000",
+            ),
+            (
+                "ORIENTATION_ONLY",
+                ExifPolicy::ORIENTATION_ONLY,
+                "4d4d002a000000080002011200030000000100060000876900040000000100000026000000000001a0010003000000010001000000000000",
+            ),
+            (
+                "KEEP_ALL.with_camera(Discard)",
+                ExifPolicy::KEEP_ALL.with_camera(Retention::Discard),
+                "4d4d002a00000008000401120003000000010006000001320002000000140000003e82980002000000070000005287690004000000010000005a00000000323032303a30313a30322030333a30343a303500286329204d6500000004829a000500000001000000909003000200000014000000989011000200000007000000aca0010003000000010001000000000000000000010000003c323032303a30313a30322030333a30343a3035002b30313a30300000",
+            ),
+            (
+                "KEEP_ALL.with_datetimes(Discard)",
+                ExifPolicy::KEEP_ALL.with_datetimes(Retention::Discard),
+                "4d4d002a000000080005010f00020000000443616d00011200030000000100060000013c0002000000050000004a82980002000000070000005087690004000000010000005800000000686f73740000286329204d6500000005829a0005000000010000009aa00100030000000100010000a420000200000009000000a2a431000200000007000000aca434000200000005000000b400000000000000010000003c64656164626565660000534e3030303100004c656e730000",
+            ),
+        ];
+        for (name, policy, golden) in cases {
+            let out = retain(&src, &policy).unwrap_or_else(|| panic!("{name}: dropped"));
+            assert_eq!(
+                out.as_ref(),
+                unhex(golden).as_slice(),
+                "{name}: output changed"
+            );
+        }
+        assert!(retain(&src, &ExifPolicy::DISCARD_ALL).is_none());
+    }
+
+    /// The refinements: serials/IDs and time offsets can be kept or dropped
+    /// independently of the identity/timestamp tags they used to travel with.
+    #[test]
+    fn device_ids_and_time_offsets_are_independent_refinements() {
+        let src = every_category_fixture();
+        let tags = |bytes: &[u8]| -> alloc::vec::Vec<u16> {
+            let x = Exif::parse(bytes).unwrap();
+            let mut t: alloc::vec::Vec<u16> = x.ifd0.iter().map(|e| e.tag).collect();
+            t.extend(x.exif_ifd.iter().flatten().map(|e| e.tag));
+            t.sort_unstable();
+            t
+        };
+        let has = |bytes: &[u8], tag: u16| tags(bytes).contains(&tag);
+
+        // Identity without the unit identifiers.
+        let p = ExifPolicy::KEEP_ALL.with_device_ids(Retention::Discard);
+        let out = retain(&src, &p).unwrap();
+        assert!(has(&out, TAG_MAKE) && has(&out, TAG_LENS_MODEL));
+        for t in [TAG_HOST_COMPUTER, TAG_BODY_SERIAL_NUMBER] {
+            assert!(!has(&out, t), "device id {t:#06x} leaked");
+        }
+        let x = Exif::parse(&out).unwrap();
+        assert!(x.has_camera() && !x.has_device_ids());
+
+        assert!(
+            has(&out, TAG_IMAGE_UNIQUE_ID),
+            "image identity is independent"
+        );
+
+        // Unit identifiers without the identity (an odd policy, but expressible).
+        let p = ExifPolicy::KEEP_ALL
+            .with_camera(Retention::Discard)
+            .with_device_ids(Retention::Keep);
+        let out = retain(&src, &p).unwrap();
+        assert!(!has(&out, TAG_MAKE) && !has(&out, TAG_LENS_MODEL));
+        assert!(has(&out, TAG_BODY_SERIAL_NUMBER) && has(&out, TAG_HOST_COMPUTER));
+        let x = Exif::parse(&out).unwrap();
+        assert!(x.has_camera() && x.has_device_ids());
+
+        // Timestamps without the time zone, and vice versa.
+        let p = ExifPolicy::KEEP_ALL.with_time_offsets(Retention::Discard);
+        let out = retain(&src, &p).unwrap();
+        assert!(has(&out, TAG_DATETIME_ORIGINAL) && !has(&out, TAG_OFFSET_TIME_ORIGINAL));
+        let x = Exif::parse(&out).unwrap();
+        assert!(x.has_datetimes() && !x.has_time_offsets());
+        let p = ExifPolicy::KEEP_ALL
+            .with_datetimes(Retention::Discard)
+            .with_time_offsets(Retention::Keep);
+        let out = retain(&src, &p).unwrap();
+        assert!(!has(&out, TAG_DATETIME_ORIGINAL) && has(&out, TAG_OFFSET_TIME_ORIGINAL));
+
+        // The old builders still take the whole family with them.
+        assert_eq!(
+            ExifPolicy::KEEP_ALL
+                .with_camera(Retention::Discard)
+                .device_ids,
+            Retention::Discard
+        );
+        assert_eq!(
+            ExifPolicy::KEEP_ALL
+                .with_datetimes(Retention::Discard)
+                .time_offsets,
+            Retention::Discard
+        );
+        assert!(ExifPolicy::KEEP_ALL.keeps_everything());
+        assert!(
+            !ExifPolicy::KEEP_ALL
+                .with_device_ids(Retention::Discard)
+                .keeps_everything()
+        );
+    }
+
+    /// `entries()` walks every directory in order, yields raw type/count/value
+    /// and never the structural pointers.
+    #[test]
+    fn entries_iterates_every_directory_without_structural_pointers() {
+        // Full tree: IFD0 + Exif + Interop + GPS + IFD1(thumbnail).
+        let ori = 6u16.to_be_bytes();
+        let exif = Exif {
+            order: ByteOrder::Big,
+            had_prefix: true,
+            ifd0: vec![
+                e(TAG_MAKE, TIFF_ASCII, 4, b"Cam\0"),
+                e(TAG_ORIENTATION, TIFF_SHORT, 1, &ori),
+            ],
+            exif_ifd: Some(vec![e(TAG_COLOR_SPACE, TIFF_SHORT, 1, &[0, 1])]),
+            gps_ifd: Some(vec![e(0x0001, TIFF_ASCII, 2, b"N\0")]),
+            interop_ifd: Some(vec![e(0x0001, TIFF_ASCII, 4, b"R98\0")]),
+            ifd1: Some(vec![e(TAG_SOFTWARE, TIFF_ASCII, 3, b"sw\0")]),
+            thumbnail: Some(&[0xFF, 0xD8, 0xFF, 0xD9]),
+            text_encoding: TextEncoding::Ascii,
+        };
+        let bytes = exif.to_bytes();
+        let x = Exif::parse(&bytes).unwrap();
+        let got: alloc::vec::Vec<(Ifd, u16, u16, u32, &[u8])> = x
+            .entries()
+            .map(|r| (r.ifd, r.tag, r.kind, r.count, r.value))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                (Ifd::Ifd0, TAG_MAKE, TIFF_ASCII, 4, &b"Cam\0"[..]),
+                (Ifd::Ifd0, TAG_ORIENTATION, TIFF_SHORT, 1, &ori[..]),
+                (Ifd::Exif, TAG_COLOR_SPACE, TIFF_SHORT, 1, &[0, 1][..]),
+                (Ifd::Interop, 0x0001, TIFF_ASCII, 4, &b"R98\0"[..]),
+                (Ifd::Gps, 0x0001, TIFF_ASCII, 2, &b"N\0"[..]),
+                (Ifd::Ifd1, TAG_SOFTWARE, TIFF_ASCII, 3, &b"sw\0"[..]),
+            ]
+        );
+        assert!(x.entries().all(|r| {
+            ![
+                TAG_EXIF_IFD,
+                TAG_GPS_IFD,
+                TAG_INTEROP_IFD,
+                TAG_THUMB_OFFSET,
+                TAG_THUMB_LENGTH,
+            ]
+            .contains(&r.tag)
+        }));
+        assert!(x.has_thumbnail());
+        // Filtering is visible through the same view.
+        let pruned = x.filtered(&ExifPolicy::ORIENTATION_ONLY);
+        let tags: alloc::vec::Vec<(Ifd, u16)> = pruned.entries().map(|r| (r.ifd, r.tag)).collect();
+        assert_eq!(
+            tags,
+            vec![
+                (Ifd::Ifd0, TAG_ORIENTATION),
+                (Ifd::Exif, TAG_COLOR_SPACE),
+                (Ifd::Interop, 0x0001)
+            ]
+        );
     }
 
     /// Regression for fuzz zencodec#96 (`exif_author` non-fixpoint): a dangling
@@ -2709,3 +3347,6 @@ mod tests {
         assert_eq!(b1, y.to_bytes(), "must be a serializer fixpoint");
     }
 }
+
+#[cfg(test)]
+mod privacy_tests;

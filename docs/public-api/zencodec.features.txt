@@ -1,5 +1,5 @@
 # zencodec public API — additions from non-default features
-# features: std
+# features: metadata-audit,std,xmp
 # (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
 # Encodings: crate-name prefix stripped; auto traits collapse to a
 # count + exceptions; trait impls collapse to one roster line per
@@ -9,19 +9,81 @@
 
 ## summary
 #
+#   pub modules                                 2
+#   pub types (struct/enum/trait/alias)         8
 #   pub consts/statics                          1
-#   inherent methods                            1
-#   trait roster entries (type × trait)         2
+#   inherent methods                           18
+#   struct fields                               4
+#   enum variants                              12
+#   trait roster entries (type × trait)        33
+#   auto-trait-complete types                   8
 #
 # per-module pub lines:
-#   (root)                            1
+#   (root)                            3
 #   estimate                          1
+#   metadata_audit                   24
+#   xmp                              17
 
-## items (2 lines)
+## items (45 lines)
 
 pub fn estimate::ComputeEnvironment::host() -> Self
+pub mod metadata_audit
+#[non_exhaustive] pub enum metadata_audit::Change<'a>
+pub metadata_audit::Change::Added(&'a metadata_audit::Entry)
+pub metadata_audit::Change::Modified
+pub metadata_audit::Change::Modified::after: &'a metadata_audit::Entry
+pub metadata_audit::Change::Modified::before: &'a metadata_audit::Entry
+pub metadata_audit::Change::Removed(&'a metadata_audit::Entry)
+#[non_exhaustive] pub enum metadata_audit::Finding
+pub metadata_audit::Finding::ExifCoverageLimited
+pub metadata_audit::Finding::InvalidExif
+pub metadata_audit::Finding::InvalidXmp(alloc::string::String)
+pub metadata_audit::Finding::Limit
+pub metadata_audit::Finding::MakerNote
+pub metadata_audit::Finding::MakerNote::bytes: usize
+pub metadata_audit::Finding::MakerNote::path: alloc::string::String
+#[non_exhaustive] pub struct metadata_audit::Entry
+pub fn metadata_audit::Entry::kind(&self) -> &str
+pub fn metadata_audit::Entry::path(&self) -> &str
+pub fn metadata_audit::Entry::value(&self) -> &str
+pub struct metadata_audit::Report
+pub fn metadata_audit::Report::diff<'a>(&'a self, &'a Self) -> alloc::vec::Vec<metadata_audit::Change<'a>>
+pub fn metadata_audit::Report::entries(&self) -> &[metadata_audit::Entry]
+pub fn metadata_audit::Report::exif(&[u8]) -> Self
+pub fn metadata_audit::Report::findings(&self) -> &[metadata_audit::Finding]
+pub fn metadata_audit::Report::xmp(&str) -> Self
+pub mod xmp
+#[non_exhaustive] pub enum xmp::Error
+pub xmp::Error::Duplicate(alloc::string::String)
+pub xmp::Error::Limit
+pub xmp::Error::Structure(alloc::string::String)
+pub xmp::Error::Xml(alloc::string::String)
+#[non_exhaustive] pub struct xmp::Field
+pub fn xmp::Field::path(&self) -> &str
+pub fn xmp::Field::value(&self) -> &str
+pub struct xmp::Packet<'a>
+pub fn xmp::Packet<'a>::fields(&self) -> core::result::Result<alloc::vec::Vec<xmp::Field>, xmp::Error>
+pub fn xmp::Packet<'a>::parse(&'a str) -> core::result::Result<Self, xmp::Error>
+pub fn xmp::Packet<'a>::property(&self, &str, &str) -> core::result::Result<core::option::Option<alloc::vec::Vec<alloc::string::String>>, xmp::Error>
+pub fn xmp::Packet<'a>::resource_sequence(&self, &str, &str, &str, &str) -> core::result::Result<alloc::vec::Vec<alloc::vec::Vec<xmp::Property>>, xmp::Error>
+pub struct xmp::Property
+pub fn xmp::Property::name(&self) -> &str
+pub fn xmp::Property::namespace(&self) -> &str
+pub fn xmp::Property::value(&self) -> &str
 pub const fn CodecIoKind::kind(&self) -> core::option::Option<core::io::error::ErrorKind>
 
-## trait impls (1 types)
+## trait impls (9 types)
 
 CodecIoKind: From<&std::io::error::Error>, From<core::io::error::ErrorKind>
+metadata_audit::Change<'a>: Debug, Eq, PartialEq
+metadata_audit::Entry: Clone, Debug, Eq, PartialEq
+metadata_audit::Finding: Clone, Debug, Eq, PartialEq
+metadata_audit::Report: Clone, Debug, Default, Eq, PartialEq
+xmp::Error: Clone, Debug, Display, Eq, Error, PartialEq
+xmp::Field: Clone, Debug, Eq, PartialEq
+xmp::Packet<'a>: Debug
+xmp::Property: Clone, Debug, Eq, PartialEq
+
+## auto traits
+
+8 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
