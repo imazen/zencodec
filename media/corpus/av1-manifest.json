@@ -2,16 +2,16 @@
   "schema": 2,
   "purpose": "validation-only synthetic media fixtures",
   "generator": "scripts/generate_av1_corpus.py",
-  "build_commit": "aa74db19f9dc43651c60e48836b3e6b952bb2e23",
+  "build_commit": "22c326da1eec7929880324b2682c83ae4dffbec4",
   "generator_sources": {
-    "scripts/generate_av1_corpus.py": "3cf2006354b8d288c99da4da55b509f27d26ac8c7a6690f9c77848b1450e7601",
-    "examples/generate_av1_corpus.rs": "d1c9eb339e7fd8c0a81d96d9b8ad74ce4786d8727534cf03d0475cb47301d8ae",
+    "scripts/generate_av1_corpus.py": "77ee2331d522f32898461283184cbb2ccee20b9fab5c5682aa0608cbed10b695",
+    "examples/generate_av1_corpus.rs": "8515fe318399c76c8e4f98909bb8a3972bf2edd380ec02e761cba8d3705b6779",
     "crates/zencodec-media-testkit/src/synthetic.rs": "f40137510ae7086f8c51309c916617013545015e7d703b7f9aaadadc898bdbdd",
     "src/av1_encode.rs": "0761267e1deda85626d61a37575c17dcc8daaa5f60a37fdbd3bc47cf5c0b6e2c",
-    "src/av1.rs": "00a6aaacdbcd242008806436624c7f11eb1bb1e3feb5608b2ab4ccddb9425083",
-    "Cargo.lock": "07d27b3fbea119456905d4a24fbbee81a58635c3bb2e49b2978c8f4b8379e47d"
+    "src/av1.rs": "fb154f8afc159412232db8ee62f06e36bd806fe0df55d2ac760a889af6dd5f82",
+    "Cargo.lock": "c25b1c153f4a2543a54609e8ac7ab11622f1609c57becc1816ff8e17ef68fec6"
   },
-  "binary_sha256": "e44f4522eb3ca5b149960643673421285463b667120c3cbd44a18b4bab0bab89",
+  "binary_sha256": "89d68e3706742a22b3db6eb4a76238157572e80df3ea6d991a3821ccfd8fe54b",
   "build_command": [
     "cargo",
     "build",
@@ -25,11 +25,11 @@
   "codec_sources": {
     "rav1d-safe": {
       "version": "0.6.0",
-      "source": "git+https://github.com/imazen/rav1d-safe?rev=6f39132f385fe4bf8a7ca416fe9e6a70b7295278#6f39132f385fe4bf8a7ca416fe9e6a70b7295278"
+      "source": "git+https://github.com/imazen/rav1d-safe?rev=dfd01e3268f6e8da862d2d5f0a71d19f414f2b87#dfd01e3268f6e8da862d2d5f0a71d19f414f2b87"
     },
     "zenpixels": {
-      "version": "0.2.16",
-      "source": "git+https://github.com/imazen/zenpixels?rev=789d69dbc314e748676b7f2f19542c17473ba40b#789d69dbc314e748676b7f2f19542c17473ba40b"
+      "version": "0.3.1",
+      "source": "git+https://github.com/imazen/zenpixels?rev=3ece79f38aa306311c94324ae8c0c2310a2b2f82#3ece79f38aa306311c94324ae8c0c2310a2b2f82"
     },
     "zenrav1e": {
       "version": "0.2.0",
