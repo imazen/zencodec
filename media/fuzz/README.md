@@ -48,3 +48,15 @@ The binary SHA-256 is
 `58aa4a6926e295caa8ad9bdb84b74ea7153b3009ed4517be178bd27195340e86`.
 This validates the recorded native encode/decode target only; later display and
 animation additions were not part of that binary.
+
+Completed ASan `color_contracts` epoch on 2026-09-28 at locally recorded
+zencodec revision `043bb7cdb29f2b725765fe0f5072d740a80fdeba`:
+3,601 seconds, 21,634,807 executions, 36 new corpus units, 459 MiB peak RSS,
+no reported failure. Seed 20260930; `max_len=8192`, `timeout=10`,
+`rss_limit_mb=2048`. Binary SHA-256:
+`656e0845502cd5e79c1a639b9ea1751ccdb958b72285aeccdd68141fdb25c40c`.
+This target checks native reconstruction, packing, dirty padding, row strides,
+crop phase and output allocation limits. It does not exercise CMS/alpha
+conversion or prove the subsequent converter fixes. The epoch finished at
+05:30:51 UTC; raw logs, source hashes and initial/final corpus hashes were
+preserved separately from the committed fixture corpus.
