@@ -48,6 +48,7 @@ def main():
     manifest = json.loads((ROOT / "integration/repos.lock.json").read_text())
     patches = ["[patch.crates-io]"]
     git_patches = {}
+    locked_names = {p["name"] for p in tomllib.loads((ROOT/"Cargo.lock").read_text())["package"]}
     for repo in manifest["repositories"]:
         if repo["name"] == "zencodec":
             path = repository
@@ -66,8 +67,12 @@ def main():
         # packages can intentionally live at different revisions of one repo.
         entries = git_patches.setdefault(repo["url"], [])
         for package, relative in repo["packages"].items():
+            if package not in locked_names:
+                continue  # Avoid duplicate unused path patches destabilizing Cargo.lock.
             entries.append(f"{json.dumps(package)} = {{ path = {json.dumps(str((path/relative).resolve()))} }}")
     for url, entries in git_patches.items():
+        if not entries:
+            continue
         patches.append(f"[patch.{json.dumps(url)}]")
         patches.extend(entries)
     config = media / ".cargo/config.toml"
