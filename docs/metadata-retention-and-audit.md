@@ -213,7 +213,7 @@ per case, four jobs, no concurrent builds, same development build method.
 
 HEIC includes the ultrahdr-core 0.5 → 0.6 dependency migration, so its reduction
 must not be attributed to the new parser alone. Warm medians remain 18–53 ms;
-edited consumer medians 25–61 ms. These small samples are compile-cost estimates,
+edited consumer medians 25–62 ms. These small samples are compile-cost estimates,
 not precise performance guarantees.
 
 The zencodecs comparison uses `--offline` without `--locked`: Cargo repeatedly
@@ -233,3 +233,21 @@ python3 scripts/measure-metadata-builds.py \
   --work /tmp/metadata-dispatch-builds --extra-cases /tmp/metadata-consumers/cases.json \
   --only zencodecs-before zencodecs-after --unlocked
 ```
+
+
+### Validation and remaining CI gates
+
+The metadata-focused local gates pass: core workspace all-feature tests/clippy,
+no_std XMP check, JPEG full library suite (1,166 passed, three ignored), Apple
+inspection (nine), UltraHDR production assembly (ten), HEIC adapter (122), and
+zencodecs JPEG/HEIC library suite (154). The reconstruction test compares decoded
+HDR bytes exactly, not only parsed metadata. Pinned JPEG/HEIC/UltraHDR and default
+zencodecs clippy pass with warnings denied; reduced-feature dispatch emits
+existing unused-code warnings. The public JPEG API snapshots are regenerated.
+
+The ARM JPEG encoder quality-floor failure is also present on the exact upstream
+main baseline: `baseline_444_opt Q50`, zensim 44.6 versus floor 47.0
+([baseline CI](https://github.com/imazen/zenjpeg/actions/runs/36344883310/job/108691957491)).
+This task does not lower that threshold or alter the ordinary JPEG pixel encoder.
+Zenpipe's shared CI prerequisites are described above. These PRs are reviewable
+implementations, not a claim that the whole ecosystem is ready to publish.
