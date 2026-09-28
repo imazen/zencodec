@@ -35,6 +35,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("directory", type=Path, help="new, nonexistent destination")
     parser.add_argument("--check", action="store_true", help="run the integration checks after cloning")
+    parser.add_argument("--with-consumers", action="store_true", help="also clone and configure the pinned downstream consumer PRs")
     args = parser.parse_args()
     if run("git", "status", "--porcelain", "--untracked-files=no", cwd=ROOT):
         raise SystemExit("Commit the media checkout first; the runner tests its exact committed revision")
@@ -88,8 +89,14 @@ def main():
     versions = lambda lock: sorted((p["name"],p["version"]) for p in lock["package"])
     if versions(before) != versions(after):
         raise SystemExit("Local path overrides unexpectedly changed locked package versions")
+    consumer = None
+    if args.with_consumers:
+        import consumer_series
+        consumer = consumer_series.configure(ROOT, destination, manifest["repositories"], clone, run)
     if args.check:
         subprocess.run(["bash", "scripts/check.sh"], cwd=media, check=True)
+        if consumer is not None:
+            consumer_series.check(consumer)
     print(f"Pinned media revision {revision} at {media}")
 
 

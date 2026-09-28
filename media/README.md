@@ -24,11 +24,20 @@ changes as ordinary checkouts together, start from a clean committed checkout:
 
 ```sh
 python3 scripts/checkout_series.py ~/tmp/zencodec-media-series-check --check
+# Include the downstream pipeline, HEIC, frozen metric helper and shared CI PRs:
+python3 scripts/checkout_series.py ~/tmp/zencodec-media-consumers-check --with-consumers --check
 ```
 
 The destination must not exist. The runner creates isolated ordinary clones and
 a local Cargo patch configuration; it preserves existing working directories.
 [The manifest](integration/repos.lock.json) records the exact PR revisions.
+The optional [consumer manifest](integration/consumers.lock.json) adds zenpipe
+and its companion changes. Its checks cover mixed-gamut compositing, real ICC
+transcodes, JPEG 2000 pixels, metadata, cancellation, and the complete consumer
+feature graph. Both runners retain the locked package versions when replacing
+remote dependencies with local clones. A deliberately older consumer version
+is retained when the core checkout has a different version; the frozen quality
+judge is not upgraded by integration setup.
 
 Exact timestamp extraction and bounded HTTP range input are implemented; see
 [seeking and network contracts](docs/SEEKING.md).

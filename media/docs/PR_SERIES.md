@@ -18,7 +18,8 @@ change in the locked package/version multiset.
 | WebP | [zenwebp #105](https://github.com/imazen/zenwebp/pull/105): exact timing/plays, single-frame ANIM, cancellation and context |
 | JPEG XL | [zenjxl-decoder #60](https://github.com/imazen/zenjxl-decoder/pull/60), [jxl-encoder #124–127](https://github.com/imazen/jxl-encoder/pull/127), [zenjxl #20](https://github.com/imazen/zenjxl/pull/20): movable decoder, native animation/color/clock contracts and repeated 1×1 canvases |
 | AVIF | [cavif-rs #7](https://github.com/imazen/cavif-rs/pull/7), [zenavif #50](https://github.com/imazen/zenavif/pull/50), [#51](https://github.com/imazen/zenavif/pull/51): native 12-bit samples, exact animation timing, borrowed cancellation, retained-frame budgets and decoded color context |
-| Consumers | [zenpipe #85](https://github.com/imazen/zenpipe/pull/85): own filter channel mask. [heic #52](https://github.com/imazen/heic/pull/52): shared pixel/gain-map types. [zenjpeg #211](https://github.com/imazen/zenjpeg/pull/211), [zensim #63](https://github.com/imazen/zensim/pull/63): current PNG dependency compatibility |
+| Consumers | [zenpipe #85](https://github.com/imazen/zenpipe/pull/85): own filter channel mask. [#86](https://github.com/imazen/zenpipe/pull/86): one compatible codec graph, explicit ICC-to-sRGB transcodes, native JPEG 2000 and current public contracts. [heic #52](https://github.com/imazen/heic/pull/52): shared pixel/gain-map types. [zenjpeg #211](https://github.com/imazen/zenjpeg/pull/211), [zensim #63](https://github.com/imazen/zensim/pull/63): current PNG dependency compatibility |
+| Reproducible CI | [zen-workspace #1](https://github.com/imazen/zen-workspace/pull/1): let consumers preserve exact manifest pins instead of replacing them with sibling main branches; existing default behavior is retained |
 
 Review owner fixes before the integration layer. Several PRs are stacked;
 merging only the last diff of a stack is insufficient. The manifest always pins
@@ -39,3 +40,10 @@ failures without changing expected scores or hiding them. Linux tests do not
 establish Apple/Windows/Android/GPU/ARM runtime correctness. The frozen scorer
 revision is deliberate; dependency work does not retrain or silently select a
 new quality profile.
+
+The optional `--with-consumers` checkout mode uses
+[`consumers.lock.json`](../integration/consumers.lock.json). Zensim's recorded
+judge is the immutable compatibility backport, even though its mergeable PR
+also incorporates newer main. This separates integration compatibility from
+metric/model selection. The shared CI workflow and setup action are pinned too,
+so the review branches can run together before any owner PR merges.
