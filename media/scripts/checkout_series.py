@@ -47,7 +47,7 @@ def main():
     media = repository / "media"
     manifest = json.loads((ROOT / "integration/repos.lock.json").read_text())
     patches = ["[patch.crates-io]"]
-    git_patches = []
+    git_patches = {}
     for repo in manifest["repositories"]:
         if repo["name"] == "zencodec":
             path = repository
@@ -61,11 +61,15 @@ def main():
             # JSON quoting is also valid TOML basic-string quoting here; this
             # string goes to a file, never through shell interpolation.
             patches.append(f"{json.dumps(package)} = {{ path = {json.dumps(str((path/relative).resolve()))} }}")
-        if repo.get("direct_git", False):
-            git_patches.append(f"[patch.{json.dumps(repo['url'])}]")
-            for package, relative in repo["packages"].items():
-                git_patches.append(f"{json.dumps(package)} = {{ path = {json.dumps(str((path/relative).resolve()))} }}")
-    patches.extend(git_patches)
+        # Crates reached through explicit git dependencies need an override
+        # as well as registry patches. Group by URL: serializer and decoder
+        # packages can intentionally live at different revisions of one repo.
+        entries = git_patches.setdefault(repo["url"], [])
+        for package, relative in repo["packages"].items():
+            entries.append(f"{json.dumps(package)} = {{ path = {json.dumps(str((path/relative).resolve()))} }}")
+    for url, entries in git_patches.items():
+        patches.append(f"[patch.{json.dumps(url)}]")
+        patches.extend(entries)
     config = media / ".cargo/config.toml"
     config.parent.mkdir(exist_ok=True)
     if config.exists():
