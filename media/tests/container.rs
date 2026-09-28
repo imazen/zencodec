@@ -159,7 +159,7 @@ fn fixture(name: &str) -> Vec<u8> {
 
 fn demux_all(bytes: &[u8]) -> (Vec<TrackSpec>, Vec<MediaPacket>) {
     let mut d = Mp4Demuxer::new(Cursor::new(bytes), MediaLimits::default()).unwrap();
-    let tracks = d.tracks();
+    let tracks = d.tracks().to_vec();
     let mut pkts = Vec::new();
     while let Some(p) = d.next_packet().unwrap() {
         pkts.push(p);
@@ -514,4 +514,166 @@ fn mp4_malformed() {
             "cut {cut} must not yield the full packet stream"
         );
     }
+}
+
+// --- session pump ------------------------------------------------------------
+
+use zencodec_media::session::{
+    AudioBlock, AudioDecoder, AudioEncoder, DropReason, Pcm, TrackHandler, codec_allowed_in_webm,
+    pump,
+};
+
+/// Fake audio decoder: one block of `frames` silent samples per packet —
+/// honors the real contract (one block per push, then None).
+struct FakeAudioDec {
+    pending: u32,
+    pts_ticks: i64,
+}
+impl AudioDecoder for FakeAudioDec {
+    fn push_packet(&mut self, _p: &MediaPacket) -> Result<(), zencodec_media::track::MediaError> {
+        self.pending += 1;
+        Ok(())
+    }
+    fn next_block(&mut self) -> Result<Option<AudioBlock>, zencodec_media::track::MediaError> {
+        if self.pending == 0 {
+            return Ok(None);
+        }
+        self.pending -= 1;
+        let pts = Timestamp::new(self.pts_ticks, TimeBase::new(1, 48_000).unwrap());
+        self.pts_ticks += 960;
+        Ok(Some(AudioBlock {
+            pts,
+            frames: 960,
+            channels: 1,
+            sample_rate: 48_000,
+            pcm: Pcm::S16(vec![0; 960]),
+        }))
+    }
+    fn end_input(&mut self) -> Result<(), zencodec_media::track::MediaError> {
+        Ok(())
+    }
+    fn reset(&mut self) -> Result<(), zencodec_media::track::MediaError> {
+        Ok(())
+    }
+}
+
+/// Fake audio encoder: one output packet per pushed block.
+struct FakeAudioEnc(u32, u32);
+impl AudioEncoder for FakeAudioEnc {
+    fn push_block(&mut self, _b: &AudioBlock) -> Result<(), zencodec_media::track::MediaError> {
+        self.1 += 1;
+        Ok(())
+    }
+    fn next_packet(&mut self) -> Result<Option<MediaPacket>, zencodec_media::track::MediaError> {
+        if self.1 == 0 {
+            return Ok(None);
+        }
+        self.1 -= 1;
+        Ok(Some(MediaPacket {
+            track: self.0,
+            ordinal: 0,
+            config_epoch: 0,
+            data: b"fake-opus".to_vec(),
+            pts: Timestamp::new(0, TimeBase::new(1, 1_000).unwrap()),
+            dts: None,
+            duration_ticks: Some(20),
+            keyframe: false,
+            discard_padding_ns: None,
+        }))
+    }
+    fn end_input(&mut self) -> Result<(), zencodec_media::track::MediaError> {
+        Ok(())
+    }
+}
+
+#[test]
+fn session_copy_and_drop() {
+    let bytes = fixture("h264_aac_faststart.mp4");
+    let mut d = Mp4Demuxer::new(Cursor::new(&bytes), MediaLimits::default()).unwrap();
+    assert!(codec_allowed_in_webm(&Codec::H264));
+    assert!(codec_allowed_in_webm(&Codec::Aac));
+
+    // Out tracks: only the video is kept.
+    let out = vec![TrackSpec {
+        time_base: TimeBase::new(1_000_000, 1_000_000_000).unwrap(),
+        ..d.tracks()[0].clone()
+    }];
+    let mut mux = WebmMuxer::new(Vec::new(), 1_000_000, &out, 5_000, TickPolicy::Nearest).unwrap();
+
+    let mut handlers = vec![
+        TrackHandler::Copy,
+        TrackHandler::Drop {
+            reason: DropReason::CallerChoice,
+        },
+    ];
+    let rep = pump(&mut d, &mut mux, &mut handlers).unwrap();
+    mux.finish().unwrap();
+
+    assert_eq!(rep.tracks[0].packets_in, 15);
+    assert_eq!(rep.tracks[0].packets_out, 15);
+    assert_eq!(rep.tracks[1].packets_in, 45);
+    assert_eq!(rep.tracks[1].packets_out, 0);
+    assert_eq!(rep.tracks[1].packets_dropped, 45);
+    assert_eq!(rep.tracks[1].drop_reason, Some(DropReason::CallerChoice));
+}
+
+#[test]
+fn session_requires_handler_per_track() {
+    let bytes = fixture("h264_aac_faststart.mp4");
+    let mut d = Mp4Demuxer::new(Cursor::new(&bytes), MediaLimits::default()).unwrap();
+    let out = vec![TrackSpec {
+        time_base: TimeBase::new(1_000_000, 1_000_000_000).unwrap(),
+        ..d.tracks()[0].clone()
+    }];
+    let mut mux = WebmMuxer::new(Vec::new(), 1_000_000, &out, 5_000, TickPolicy::Nearest).unwrap();
+    // Missing handler for track 1 → contract error, not silent drop.
+    let mut handlers = vec![TrackHandler::Copy];
+    assert!(pump(&mut d, &mut mux, &mut handlers).is_err());
+}
+
+#[test]
+fn session_transcode_audio() {
+    let bytes = fixture("h264_aac_faststart.mp4");
+    let mut d = Mp4Demuxer::new(Cursor::new(&bytes), MediaLimits::default()).unwrap();
+
+    // Out: dropped video isn't declared; transcoded audio becomes out track 0.
+    let out = vec![TrackSpec {
+        index: 0,
+        kind: TrackKind::Audio,
+        codec: Codec::Opus,
+        codec_private: None,
+        time_base: TimeBase::new(1_000_000, 1_000_000_000).unwrap(),
+        video: None,
+        audio: Some(AudioInfo {
+            sample_rate: 48_000,
+            channels: 1,
+        }),
+        codec_delay_ns: 0,
+        seek_preroll_ns: 0,
+        config_epoch: 0,
+        declared_packets: None,
+        declared_duration: None,
+        edit_delay_ticks: None,
+    }];
+    let mut mux = WebmMuxer::new(Vec::new(), 1_000_000, &out, 5_000, TickPolicy::Exact).unwrap();
+
+    let mut handlers = vec![
+        TrackHandler::Drop {
+            reason: DropReason::CallerChoice,
+        },
+        TrackHandler::Audio {
+            decoder: Box::new(FakeAudioDec {
+                pending: 0,
+                pts_ticks: 0,
+            }),
+            encoder: Box::new(FakeAudioEnc(0, 0)),
+        },
+    ];
+    let rep = pump(&mut d, &mut mux, &mut handlers).unwrap();
+    mux.finish().unwrap();
+
+    assert_eq!(rep.tracks[1].packets_in, 45);
+    assert_eq!(rep.tracks[1].frames_decoded, 45);
+    assert_eq!(rep.tracks[1].packets_out, 45);
+    assert_eq!(rep.tracks[0].packets_dropped, 15);
 }

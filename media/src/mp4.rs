@@ -156,6 +156,8 @@ struct SampleCursor {
 pub struct Mp4Demuxer<R> {
     r: R,
     tracks: Vec<Mp4Track>,
+    /// Public specs cached once at open (`tracks()` returns a slice of this).
+    specs: Vec<TrackSpec>,
     /// Cursor per track; merged decode-order emission happens across tracks.
     cursors: Vec<SampleCursor>,
     /// Emission buffer: next packet per track, merged by dts.
@@ -237,10 +239,12 @@ impl<R: Read + Seek> Mp4Demuxer<R> {
         for (i, t) in tracks.iter_mut().enumerate() {
             t.spec.index = i as u32;
         }
+        let specs = tracks.iter().map(|t| t.spec.clone()).collect();
         let heads = (0..tracks.len()).map(|_| None).collect();
         Ok(Self {
             r,
             tracks,
+            specs,
             cursors,
             heads,
             limits,
@@ -250,8 +254,8 @@ impl<R: Read + Seek> Mp4Demuxer<R> {
     }
 
     /// Declared tracks.
-    pub fn tracks(&self) -> Vec<TrackSpec> {
-        self.tracks.iter().map(|t| t.spec.clone()).collect()
+    pub fn tracks(&self) -> &[TrackSpec] {
+        &self.specs
     }
 
     /// The `TrackSpec` a packet's `config_epoch` refers to: `stsd` may carry

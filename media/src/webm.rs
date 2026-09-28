@@ -41,7 +41,7 @@ pub struct MuxReport {
     pub discard_padding_written_ns: u64,
 }
 
-fn codec_to_webm(c: Codec) -> Result<&'static str, MediaError> {
+pub(crate) fn codec_to_webm(c: Codec) -> Result<&'static str, MediaError> {
     Ok(match c {
         Codec::Av1 => "V_AV1",
         Codec::Vp9 => "V_VP9",

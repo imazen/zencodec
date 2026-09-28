@@ -21,6 +21,7 @@ pub mod http;
 pub mod ivf;
 pub mod mp4;
 pub mod plane;
+pub mod session;
 pub mod source;
 pub mod time;
 pub mod track;
