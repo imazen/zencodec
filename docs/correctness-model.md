@@ -58,9 +58,14 @@ only ever receives what the policy kept. A codec cannot leak what it never saw.
 | Pipeline / app | `with_metadata_policy` | — | No |
 | Pipeline / app | `with_metadata` (no policy) | — | Yes — pick a policy |
 
-`MetadataPolicy` has no `Default`; callers name one. `Web` is the privacy-safe
-choice for publishing (keeps ICC, EXIF orientation + rights, and color signaling;
-drops GPS, timestamps, camera identity, thumbnail, and all XMP). `PreserveExact`
+`MetadataPolicy` has no `Default`; callers name one. `ColorAndRotation` removes
+EXIF attribution as well as identifiers; `Web` intentionally retains attribution
+(Copyright/Artist/Photographer/ImageEditor). Both preserve ICC, orientation and
+color signaling and drop GPS, timestamps, camera ownership, device/image IDs,
+thumbnail and all XMP. `with_camera(Keep)` does not enable identity fields;
+`with_datetimes(Keep)` does not enable offsets. Discarding either family still
+removes its sensitive siblings. See [metadata privacy](metadata-privacy.md) for
+the allowlist, ICC/container limits and corpus audit. `PreserveExact`
 is a verbatim round trip. The per-variant promises and the edges where they don't
 hold are documented on [`MetadataPolicy`](../src/metadata.rs) under "Delivery
 exceptions" — the short version: a partial policy fails *safe* on an unparseable

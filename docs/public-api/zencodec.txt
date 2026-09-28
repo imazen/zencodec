@@ -6,36 +6,37 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1518 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 93 lines (93 hidden + 0 excluded-feature)
+# files: zencodec.txt 1565 lines (supported surface) | zencodec.features.txt 55 added (features: metadata-audit,std,xmp) | zencodec.internal.txt 104 lines (104 hidden + 0 excluded-feature)
 
 ## summary
 #
-#   pub modules                                10
-#   pub types (struct/enum/trait/alias)       171
-#   pub consts/statics                        176
-#   free functions                             44
-#   inherent methods                          676
-#   struct fields                             196
-#   enum variants                             189
+#   pub modules                                11
+#   pub types (struct/enum/trait/alias)       174
+#   pub consts/statics                        186
+#   free functions                             45
+#   inherent methods                          688
+#   struct fields                             211
+#   enum variants                             196
 #   re-exports                                 12
-#   trait roster entries (type × trait)       399
+#   trait roster entries (type × trait)       412
 #   conditional trait impls (verbatim)          4
-#   auto-trait-complete types                  69
+#   auto-trait-complete types                  72
 #   auto-trait exceptions                       8
 #
 # per-module pub lines:
-#   (root)                          748
+#   (root)                          764
 #   animation                         6
 #   decode                          168
+#   display_metadata                  4
 #   encode                          121
 #   estimate                         48
-#   exif                             65
+#   exif                             94
 #   gainmap                         126
 #   helpers                          13
 #   icc                               1
 #   prelude                         178
 
-## items (1421 lines)
+## items (1465 lines)
 
 pub mod zencodec
 pub use At
@@ -321,6 +322,11 @@ pub fn decode::is_format_available(zenpixels::descriptor::PixelFormat, &[zenpixe
 pub fn decode::negotiate_pixel_format(&[zenpixels::descriptor::PixelDescriptor], &[zenpixels::descriptor::PixelDescriptor]) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub type decode::BoxedError = alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)> [also: encode]
 pub type decode::SinkError = alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>
+pub mod display_metadata
+#[non_exhaustive] pub enum display_metadata::Error
+pub display_metadata::Error::GainMap(gainmap::GainMapParseError)
+pub display_metadata::Error::Removed(&'static str)
+pub fn display_metadata::filter_for_gain_map(&Metadata, &gainmap::GainMapParams, &MetadataPolicy) -> core::result::Result<Metadata, display_metadata::Error>
 pub mod encode
 #[non_exhaustive] pub enum encode::Fidelity
 pub encode::Fidelity::Lossless
@@ -564,22 +570,40 @@ pub mod exif
 pub enum exif::ByteOrder
 pub exif::ByteOrder::Big
 pub exif::ByteOrder::Little
+#[non_exhaustive] pub enum exif::Ifd
+pub exif::Ifd::Exif
+pub exif::Ifd::Gps
+pub exif::Ifd::Ifd0
+pub exif::Ifd::Ifd1
+pub exif::Ifd::Interop
 pub exif::Retention::Discard
 pub exif::Retention::Keep
 pub const fn exif::Retention::discards(self) -> bool [also: (root)]
 pub const fn exif::Retention::keeps(self) -> bool [also: (root)]
 pub exif::TextEncoding::Ascii
 pub exif::TextEncoding::Utf8
+pub struct exif::EntryRef<'e>
+pub exif::EntryRef::count: u32
+pub exif::EntryRef::ifd: exif::Ifd
+pub exif::EntryRef::kind: u16
+pub exif::EntryRef::tag: u16
+pub exif::EntryRef::value: &'e [u8]
 pub fn exif::Exif<'a>::artist(&self) -> core::option::Option<alloc::borrow::Cow<'_, str>>
 pub fn exif::Exif<'a>::artist_bytes(&self) -> core::option::Option<&[u8]>
 pub fn exif::Exif<'a>::byte_order(&self) -> exif::ByteOrder
 pub fn exif::Exif<'a>::copyright(&self) -> core::option::Option<alloc::borrow::Cow<'_, str>>
 pub fn exif::Exif<'a>::copyright_bytes(&self) -> core::option::Option<&[u8]>
+pub fn exif::Exif<'a>::entries(&self) -> impl core::iter::traits::iterator::Iterator<Item = exif::EntryRef<'_>> + '_
 pub fn exif::Exif<'a>::filtered(&self, &exif::ExifPolicy) -> exif::Exif<'a>
 pub fn exif::Exif<'a>::has_camera(&self) -> bool
+pub fn exif::Exif<'a>::has_camera_owner(&self) -> bool
+pub fn exif::Exif<'a>::has_color(&self) -> bool
 pub fn exif::Exif<'a>::has_datetimes(&self) -> bool
+pub fn exif::Exif<'a>::has_device_ids(&self) -> bool
 pub fn exif::Exif<'a>::has_gps(&self) -> bool
+pub fn exif::Exif<'a>::has_image_unique_id(&self) -> bool
 pub fn exif::Exif<'a>::has_thumbnail(&self) -> bool
+pub fn exif::Exif<'a>::has_time_offsets(&self) -> bool
 pub fn exif::Exif<'a>::new(exif::TextEncoding) -> Self
 pub fn exif::Exif<'a>::orientation(&self) -> core::option::Option<zenpixels::orientation::Orientation>
 pub fn exif::Exif<'a>::parse(&'a [u8]) -> core::option::Option<Self>
@@ -588,12 +612,17 @@ pub fn exif::Exif<'a>::set_copyright(&mut self, &str)
 pub fn exif::Exif<'a>::set_orientation(&mut self, zenpixels::orientation::Orientation)
 pub fn exif::Exif<'a>::to_bytes(&self) -> alloc::vec::Vec<u8>
 pub exif::ExifPolicy::camera: exif::Retention
+pub exif::ExifPolicy::camera_owner: exif::Retention
+pub exif::ExifPolicy::color: exif::Retention
 pub exif::ExifPolicy::datetimes: exif::Retention
+pub exif::ExifPolicy::device_ids: exif::Retention
 pub exif::ExifPolicy::gps: exif::Retention
+pub exif::ExifPolicy::image_unique_id: exif::Retention
 pub exif::ExifPolicy::orientation: exif::Retention
 pub exif::ExifPolicy::other: exif::Retention
 pub exif::ExifPolicy::rights: exif::Retention
 pub exif::ExifPolicy::thumbnail: exif::Retention
+pub exif::ExifPolicy::time_offsets: exif::Retention
 pub const exif::ExifPolicy::ATTRIBUTED_ORIENTATION: Self
 pub const exif::ExifPolicy::DISCARD_ALL: Self
 pub const exif::ExifPolicy::KEEP_ALL: Self
@@ -601,12 +630,17 @@ pub const exif::ExifPolicy::ORIENTATION_ONLY: Self
 pub fn exif::ExifPolicy::discards_everything(&self) -> bool
 pub fn exif::ExifPolicy::keeps_everything(&self) -> bool
 pub const fn exif::ExifPolicy::with_camera(self, exif::Retention) -> Self [also: (root)]
+pub const fn exif::ExifPolicy::with_camera_owner(self, exif::Retention) -> Self [also: (root)]
+pub const fn exif::ExifPolicy::with_color(self, exif::Retention) -> Self [also: (root)]
 pub const fn exif::ExifPolicy::with_datetimes(self, exif::Retention) -> Self [also: (root)]
+pub const fn exif::ExifPolicy::with_device_ids(self, exif::Retention) -> Self [also: (root)]
 pub const fn exif::ExifPolicy::with_gps(self, exif::Retention) -> Self [also: (root)]
+pub const fn exif::ExifPolicy::with_image_unique_id(self, exif::Retention) -> Self [also: (root)]
 pub const fn exif::ExifPolicy::with_orientation(self, exif::Retention) -> Self [also: (root)]
 pub const fn exif::ExifPolicy::with_other(self, exif::Retention) -> Self [also: (root)]
 pub const fn exif::ExifPolicy::with_rights(self, exif::Retention) -> Self [also: (root)]
 pub const fn exif::ExifPolicy::with_thumbnail(self, exif::Retention) -> Self [also: (root)]
+pub const fn exif::ExifPolicy::with_time_offsets(self, exif::Retention) -> Self [also: (root)]
 pub fn exif::retain<'a>(&'a [u8], &exif::ExifPolicy) -> core::option::Option<alloc::borrow::Cow<'a, [u8]>>
 pub mod gainmap
 pub gainmap::GainMapDirection::BaseIsHdr
@@ -1166,11 +1200,17 @@ pub fn exif::Exif<'a>::artist_bytes(&self) -> core::option::Option<&[u8]>
 pub fn exif::Exif<'a>::byte_order(&self) -> exif::ByteOrder
 pub fn exif::Exif<'a>::copyright(&self) -> core::option::Option<alloc::borrow::Cow<'_, str>>
 pub fn exif::Exif<'a>::copyright_bytes(&self) -> core::option::Option<&[u8]>
+pub fn exif::Exif<'a>::entries(&self) -> impl core::iter::traits::iterator::Iterator<Item = exif::EntryRef<'_>> + '_
 pub fn exif::Exif<'a>::filtered(&self, &exif::ExifPolicy) -> exif::Exif<'a>
 pub fn exif::Exif<'a>::has_camera(&self) -> bool
+pub fn exif::Exif<'a>::has_camera_owner(&self) -> bool
+pub fn exif::Exif<'a>::has_color(&self) -> bool
 pub fn exif::Exif<'a>::has_datetimes(&self) -> bool
+pub fn exif::Exif<'a>::has_device_ids(&self) -> bool
 pub fn exif::Exif<'a>::has_gps(&self) -> bool
+pub fn exif::Exif<'a>::has_image_unique_id(&self) -> bool
 pub fn exif::Exif<'a>::has_thumbnail(&self) -> bool
+pub fn exif::Exif<'a>::has_time_offsets(&self) -> bool
 pub fn exif::Exif<'a>::new(exif::TextEncoding) -> Self
 pub fn exif::Exif<'a>::orientation(&self) -> core::option::Option<zenpixels::orientation::Orientation>
 pub fn exif::Exif<'a>::parse(&'a [u8]) -> core::option::Option<Self>
@@ -1180,12 +1220,17 @@ pub fn exif::Exif<'a>::set_orientation(&mut self, zenpixels::orientation::Orient
 pub fn exif::Exif<'a>::to_bytes(&self) -> alloc::vec::Vec<u8>
 #[non_exhaustive] pub struct ExifPolicy [also: exif]
 pub ExifPolicy::camera: exif::Retention
+pub ExifPolicy::camera_owner: exif::Retention
+pub ExifPolicy::color: exif::Retention
 pub ExifPolicy::datetimes: exif::Retention
+pub ExifPolicy::device_ids: exif::Retention
 pub ExifPolicy::gps: exif::Retention
+pub ExifPolicy::image_unique_id: exif::Retention
 pub ExifPolicy::orientation: exif::Retention
 pub ExifPolicy::other: exif::Retention
 pub ExifPolicy::rights: exif::Retention
 pub ExifPolicy::thumbnail: exif::Retention
+pub ExifPolicy::time_offsets: exif::Retention
 pub const exif::ExifPolicy::ATTRIBUTED_ORIENTATION: Self
 pub const exif::ExifPolicy::DISCARD_ALL: Self
 pub const exif::ExifPolicy::KEEP_ALL: Self
@@ -1459,7 +1504,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (84 types)
+## trait impls (87 types)
 
 (): encode::AnimationFrameEncoder
 (dyn core::error::Error + 'static): CodecErrorExt
@@ -1515,6 +1560,7 @@ decode::DecodeOutput: Debug
 decode::DecodePolicy: Clone, Copy, Debug, Default, Eq, PartialEq
 decode::EmbeddedMetadata: Clone, Debug, Default, PartialEq
 decode::OutputInfo: Clone, Debug, Eq, PartialEq
+display_metadata::Error: Debug, Display, Error
 encode::EncodeCapabilities: Clone, Debug, Default, PartialEq
 encode::EncodeOutput: AsRef<[u8]>, Clone, Debug, Eq, PartialEq
 encode::EncodePolicy: Clone, Copy, Debug, Default, Eq, PartialEq
@@ -1527,8 +1573,10 @@ estimate::ResourceEstimate: Clone, Copy, Debug, PartialEq
 estimate::SimdTier: Clone, Copy, Debug, Eq, Hash, PartialEq
 estimate::ThreadingInformation: Clone, Copy, Debug, PartialEq
 exif::ByteOrder: Clone, Copy, Debug, Eq, PartialEq
+exif::EntryRef<'e>: Clone, Copy, Debug, Eq, PartialEq
 exif::Exif<'a>: Clone, Debug, Default, Eq, PartialEq
 exif::ExifPolicy: Clone, Copy, Debug, Eq, PartialEq
+exif::Ifd: Clone, Copy, Debug, Eq, PartialEq
 exif::Retention: Clone, Copy, Debug, Eq, PartialEq
 exif::TextEncoding: Clone, Copy, Debug, Eq, PartialEq
 gainmap::DecodedGainMap: Debug
@@ -1552,7 +1600,7 @@ impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static,
 
 ## auto traits
 
-69 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+72 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
 CodecSet: !RefUnwindSafe !UnwindSafe
 CodecSetError: !RefUnwindSafe !UnwindSafe
