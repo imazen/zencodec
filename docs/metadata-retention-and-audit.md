@@ -172,3 +172,64 @@ but disproportionate for mandatory codec metadata retention. Its full vendor
 correctness and rewriting behavior were not audited here. Keep it outside the
 hot codec dependency graph; the native reports deliberately expose the boundary
 between decoded fields and unknown vendor data.
+
+## Review and landing order
+
+| Repository | PR | Dependency |
+|---|---|---|
+| zencodec | [#128](https://github.com/imazen/zencodec/pull/128) | Stacked on existing #125 → #124 → #123 |
+| zenjpeg | [#210](https://github.com/imazen/zenjpeg/pull/210) | #128; exact root/fuzz pins |
+| ultrahdr | [#35](https://github.com/imazen/ultrahdr/pull/35) | #128 and zenjpeg #210 |
+| heic | [#51](https://github.com/imazen/heic/pull/51) | Hardened Apple parser from ultrahdr #35 |
+| zenpipe/zencodecs | [#84](https://github.com/imazen/zenpipe/pull/84) | All above |
+
+The codec PRs target their own `main`; they are cross-repository dependencies,
+not accidental branches of unrelated feature PRs. No crate is published by this
+change. Before publishing, land the EXIF stack in order, retarget #128 as its
+parents land, then publish the shared API and advance dependency version floors
+before removing the temporary git patches.
+
+Zenpipe's shared `cargo superwork ci-clone --add-paths` workflow checks out
+sibling `main`s and rewrites dependency pins to those paths. That workflow cannot
+exercise a cross-repository PR stack until its parents land. The standalone
+pinned builds and their explicit test commands are the implementation validation;
+do not treat a substituted-main CI run as testing these exact dependency commits.
+The existing planar migration branch and an unrelated AVIF animation/API-snapshot
+failure are separate prerequisite CI work in zenpipe, not suppressed here.
+
+### Other affected consumers
+
+[Raw consumer runs](measurements/metadata-consumer-builds.json) and
+[snapshot/case generator](../scripts/metadata-consumer-build-cases.py) cover
+ultrahdr-core without default features, HEIC with backend-rust/std/zencodec, and
+zencodecs without defaults plus jpeg-ultrahdr. Three fresh artifact directories
+per case, four jobs, no concurrent builds, same development build method.
+
+| Consumer | Before cold median | After cold median | Difference |
+|---|---:|---:|---:|
+| ultrahdr-core | 3.312 s | 3.330 s | +0.5% |
+| HEIC adapter | 5.770 s | 5.086 s | -11.9% |
+| zencodecs JPEG/UltraHDR dispatch | 8.420 s | 8.622 s | +2.4% |
+
+HEIC includes the ultrahdr-core 0.5 → 0.6 dependency migration, so its reduction
+must not be attributed to the new parser alone. Warm medians remain 18–53 ms;
+edited consumer medians 25–61 ms. These small samples are compile-cost estimates,
+not precise performance guarantees.
+
+The zencodecs comparison uses `--offline` without `--locked`: Cargo repeatedly
+wanted to normalize unused patch records between fetch/tree/build, even after an
+untimed preparation build. Both before/after use the same unlocked/offline method;
+raw results record that difference and resolved dependency trees. Failed locked
+attempts are excluded, and none of their target directories were reused for the
+reported cold runs. Other reported comparisons use locked builds.
+
+```sh
+python3 scripts/metadata-consumer-build-cases.py \
+  --zen-root /path/to/zen --work /tmp/metadata-consumers
+python3 scripts/measure-metadata-builds.py \
+  --work /tmp/metadata-consumer-builds --extra-cases /tmp/metadata-consumers/cases.json \
+  --only ultrahdr-core-before ultrahdr-core-after heic-before heic-after
+python3 scripts/measure-metadata-builds.py \
+  --work /tmp/metadata-dispatch-builds --extra-cases /tmp/metadata-consumers/cases.json \
+  --only zencodecs-before zencodecs-after --unlocked
+```

@@ -8,6 +8,8 @@ p.add_argument('--work', type=pathlib.Path, required=True)
 p.add_argument('--baseline', default='cfed5cb')
 p.add_argument('--repeats', type=int, default=3)
 p.add_argument('--extra-cases', type=pathlib.Path, help='JSON map of additional case names to dependency/patch TOML')
+p.add_argument('--unlocked', action='store_true', help='Allow Cargo to normalize unused patch records during builds; offline still applies')
+p.add_argument('--prepare-build', action='store_true', help='Resolve build-only lockfile changes in a separate untimed target')
 p.add_argument('--only', nargs='*', help='Only run selected cases')
 a = p.parse_args()
 root = pathlib.Path(__file__).resolve().parents[1]
@@ -35,7 +37,7 @@ cases = {
 }
 if a.extra_cases: cases.update(json.loads(a.extra_cases.read_text()))
 if a.only: cases = {name: dep for name, dep in cases.items() if name in a.only}
-report = {'rustc': subprocess.check_output(['rustc','-Vv'], text=True), 'platform': platform.platform(), 'baseline': a.baseline, 'jobs': 4, 'cpu': pathlib.Path('/proc/cpuinfo').read_text().split('model name')[1].split('\n')[0].strip(), 'cases': {}}
+report = {'rustc': subprocess.check_output(['rustc','-Vv'], text=True), 'platform': platform.platform(), 'baseline': a.baseline, 'jobs': 4, 'locked': not a.unlocked, 'cpu': pathlib.Path('/proc/cpuinfo').read_text().split('model name')[1].split('\n')[0].strip(), 'cases': {}}
 for name, dep in cases.items():
     project = a.work / name
     (project/'src').mkdir(parents=True, exist_ok=True)
@@ -44,7 +46,12 @@ for name, dep in cases.items():
     source.write_text('pub fn probe() -> usize { 1 }\n')
     with (project/'fetch.log').open('w') as log:
         subprocess.run(['cargo','fetch'], cwd=project, stdout=log, stderr=log, check=True)
-    report.setdefault('dependencies', {})[name] = subprocess.check_output(['cargo', 'tree', '--edges', 'normal', '--prefix', 'none', '--locked'], cwd=project, text=True)
+    report.setdefault('dependencies', {})[name] = subprocess.check_output(['cargo', 'tree', '--edges', 'normal', '--prefix', 'none', '--offline'], cwd=project, text=True)
+    with (project/'fetch.log').open('a') as log:
+        subprocess.run(['cargo','fetch',*([] if a.unlocked else ['--locked'])], cwd=project, stdout=log, stderr=log, check=True)
+    if a.prepare_build:
+        with (project/'prepare.log').open('w') as log:
+            subprocess.run(['cargo','build','--lib','--offline','-j4'], cwd=project, env=dict(os.environ,CARGO_TARGET_DIR=str(project/'prepare-target')), stdout=log, stderr=log, check=True)
     results = []
     for repeat in range(a.repeats):
         env = dict(os.environ, CARGO_TARGET_DIR=str(project/f'target-{repeat}'))
@@ -53,7 +60,7 @@ for name, dep in cases.items():
             if stage == 'edited': source.write_text(source.read_text()+'// source invalidation\n')
             start = time.perf_counter()
             with (project/f'{repeat}-{stage}.log').open('w') as log:
-                result = subprocess.run(['cargo','build','--lib','--offline','--locked','-j4'], cwd=project, env=env, stdout=log, stderr=log)
+                result = subprocess.run(['cargo','build','--lib','--offline',*([] if a.unlocked else ['--locked']),'-j4'], cwd=project, env=env, stdout=log, stderr=log)
             times[stage] = {'seconds': time.perf_counter()-start, 'exit': result.returncode}
             if result.returncode: break
         results.append(times)
