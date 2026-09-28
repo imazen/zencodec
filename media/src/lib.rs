@@ -13,14 +13,18 @@ pub mod animation;
 
 pub mod color;
 pub mod display;
+pub mod ebml;
 pub mod encode_color;
 pub mod frame;
 #[cfg(feature = "http")]
 pub mod http;
 pub mod ivf;
+pub mod mp4;
 pub mod plane;
 pub mod source;
 pub mod time;
+pub mod track;
+pub mod webm;
 
 #[cfg(all(
     feature = "animation",
