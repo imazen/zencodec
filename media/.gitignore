@@ -1,0 +1,9 @@
+/target/
+/corpus/generated/
+/.cargo/config.toml
+__pycache__/
+/fuzz/target/
+/fuzz/corpus/
+/fuzz/artifacts/
+
+.workongoing

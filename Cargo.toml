@@ -9,7 +9,7 @@ members = ["zencodec-testkit"]
 # `apidoc/` is the CI-free public-API snapshot runner: excluded so plain
 # `cargo test` and every CI job never compile its dependency tree or run
 # rustdoc. Regenerate via `just api-doc`.
-exclude = ["fuzz", "apidoc"]
+exclude = ["fuzz", "apidoc", "media"]
 resolver = "3"
 
 [package]

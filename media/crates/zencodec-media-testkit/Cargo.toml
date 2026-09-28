@@ -1,0 +1,11 @@
+[package]
+name = "zencodec-media-testkit"
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.89"
+publish = false
+license = "Apache-2.0 OR MIT"
+description = "Independent media conversion references and synthetic fixtures"
+
+[lints.rust]
+unsafe_code = "forbid"

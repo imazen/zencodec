@@ -1,0 +1,200 @@
+{
+  "schema": 1,
+  "repositories": [
+    {
+      "name": "zenpixels",
+      "url": "https://github.com/imazen/zenpixels",
+      "revision": "3ece79f38aa306311c94324ae8c0c2310a2b2f82",
+      "branch": "fix/finalize-current-color",
+      "pull_request": "https://github.com/imazen/zenpixels/pull/78",
+      "packages": {
+        "zenpixels": "zenpixels",
+        "zenpixels-convert": "zenpixels-convert"
+      }
+    },
+    {
+      "name": "rav1d-safe",
+      "url": "https://github.com/imazen/rav1d-safe",
+      "revision": "dfd01e3268f6e8da862d2d5f0a71d19f414f2b87",
+      "branch": "feat/presentation-provenance",
+      "pull_request": "https://github.com/imazen/rav1d-safe/pull/533",
+      "packages": {
+        "rav1d-safe": "."
+      }
+    },
+    {
+      "name": "zenrav1e",
+      "url": "https://github.com/imazen/zenrav1e",
+      "revision": "9057c4bacf1d8a23974e32de09fd4446a1cc525a",
+      "branch": "fix/small-video-frames",
+      "pull_request": "https://github.com/imazen/zenrav1e/pull/44",
+      "packages": {
+        "zenrav1e": "."
+      }
+    },
+    {
+      "name": "linear-srgb",
+      "url": "https://github.com/imazen/linear-srgb",
+      "revision": "c56e7940f4a123fb653bc60593376cf2eaed3e70",
+      "branch": "main",
+      "packages": {
+        "linear-srgb": "."
+      }
+    },
+    {
+      "name": "zentone",
+      "url": "https://github.com/imazen/zentone",
+      "revision": "9f0dab49bffa194b4a52b5eb28ba15b2d958356d",
+      "branch": "main",
+      "packages": {
+        "zentone": "."
+      }
+    },
+    {
+      "name": "zencodec",
+      "url": "https://github.com/imazen/zencodec",
+      "revision": "2031094449ad1177ff96461d7c4d586c7ed384e6",
+      "branch": "feat/exact-animation-timing",
+      "packages": {
+        "zencodec": "."
+      },
+      "pull_request": "https://github.com/imazen/zencodec/pull/127"
+    },
+    {
+      "name": "zengif",
+      "url": "https://github.com/imazen/zengif",
+      "revision": "1d91101ae53b92833124087624f2f0238fabd760",
+      "branch": "fix/encode-color-contract",
+      "pull_request": "https://github.com/imazen/zengif/pull/20",
+      "packages": {
+        "zengif": "."
+      }
+    },
+    {
+      "name": "zenpng",
+      "url": "https://github.com/imazen/zenpng",
+      "revision": "27393eef995aea329cfbc1df5cac5e3f7346b4cb",
+      "branch": "fix/native-animation-color-negotiation",
+      "pull_request": "https://github.com/imazen/zenpng/pull/22",
+      "packages": {
+        "zenpng": "."
+      }
+    },
+    {
+      "name": "zenwebp",
+      "url": "https://github.com/imazen/zenwebp",
+      "revision": "6b580c2532fc765e8a913011c55b9b8f3cfcb4eb",
+      "branch": "fix/exact-animation-timing",
+      "pull_request": "https://github.com/imazen/zenwebp/pull/105",
+      "packages": {
+        "zenwebp": "."
+      }
+    },
+    {
+      "name": "zenquant",
+      "url": "https://github.com/imazen/zenquant",
+      "revision": "8a61dacca8df5c5ac5d7fa368a272855f3097f36",
+      "branch": "fix/transparent-palette-remapping",
+      "pull_request": "https://github.com/imazen/zenquant/pull/13",
+      "packages": {
+        "zenquant": "."
+      },
+      "direct_git": true
+    },
+    {
+      "name": "zenjxl",
+      "url": "https://github.com/imazen/zenjxl",
+      "revision": "561849318d6839f478fa7cbc73d67e6d489d4860",
+      "branch": "fix/exact-animation-timing",
+      "packages": {
+        "zenjxl": "."
+      },
+      "pull_request": "https://github.com/imazen/zenjxl/pull/20"
+    },
+    {
+      "name": "jxl-encoder",
+      "url": "https://github.com/imazen/jxl-encoder",
+      "revision": "3c1be8179ac7fdb7e7322e299cdad645046acf6c",
+      "branch": "fix/identical-single-pixel-animation",
+      "packages": {
+        "jxl-encoder": "jxl-encoder"
+      },
+      "pull_request": "https://github.com/imazen/jxl-encoder/pull/127"
+    },
+    {
+      "name": "zenjxl-decoder",
+      "url": "https://github.com/imazen/zenjxl-decoder",
+      "revision": "21159c6ba149bc802f0d985851e568976a44da04",
+      "branch": "feat/sendable-decoder-state",
+      "packages": {
+        "zenjxl-decoder": "."
+      },
+      "pull_request": "https://github.com/imazen/zenjxl-decoder/pull/60"
+    },
+    {
+      "name": "zenjpeg",
+      "url": "https://github.com/imazen/zenjpeg",
+      "revision": "afc2ccbb0857bc9736f07d1583e062a8a1fd09e3",
+      "branch": "build/bench-utils-zenpng-02",
+      "packages": {
+        "zenjpeg": "zenjpeg"
+      },
+      "pull_request": "https://github.com/imazen/zenjpeg/pull/211",
+      "optional_packages": [
+        "zenjpeg"
+      ]
+    },
+    {
+      "name": "ultrahdr",
+      "url": "https://github.com/imazen/ultrahdr",
+      "revision": "633f71e9d0c8fc82cc29b58ffaa92d367d82f9f9",
+      "branch": "main",
+      "packages": {
+        "ultrahdr-core": "ultrahdr-core"
+      }
+    },
+    {
+      "name": "butteraugli",
+      "url": "https://github.com/imazen/butteraugli",
+      "revision": "795aa3727252dc56840501864aefc4a8a537c8ea",
+      "branch": "main",
+      "packages": {
+        "butteraugli": "."
+      },
+      "optional_packages": [
+        "butteraugli"
+      ]
+    },
+    {
+      "name": "zenavif",
+      "url": "https://github.com/imazen/zenavif",
+      "revision": "b777fa12a92059d3d50c0bfa12e30d2b10502df6",
+      "branch": "fix/animation-decoded-color",
+      "packages": {
+        "zenavif": "."
+      },
+      "pull_request": "https://github.com/imazen/zenavif/pull/51"
+    },
+    {
+      "name": "zenravif",
+      "url": "https://github.com/imazen/cavif-rs",
+      "revision": "aac04acc5295b581eac7234ed96bac1553ce51e2",
+      "branch": "fix/native-animation-sample-contract",
+      "packages": {
+        "zenravif": "ravif"
+      },
+      "direct_git": true,
+      "pull_request": "https://github.com/imazen/cavif-rs/pull/7"
+    },
+    {
+      "name": "zenavif-wire-owner",
+      "url": "https://github.com/imazen/zenavif",
+      "revision": "98c8a5011e1ac573770a8889a8b5a4a68587de90",
+      "packages": {
+        "zenavif-serialize": "zenavif-serialize"
+      },
+      "direct_git": true,
+      "role": "Serializer revision explicitly pinned by zenravif; distinct from the zenavif adapter checkout."
+    }
+  ]
+}

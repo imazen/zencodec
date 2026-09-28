@@ -1,0 +1,1587 @@
+{
+  "codec_revisions": {
+    "repositories": [
+      {
+        "branch": "fix/finalize-current-color",
+        "name": "zenpixels",
+        "packages": {
+          "zenpixels": "zenpixels",
+          "zenpixels-convert": "zenpixels-convert"
+        },
+        "pull_request": "https://github.com/imazen/zenpixels/pull/78",
+        "revision": "3ece79f38aa306311c94324ae8c0c2310a2b2f82",
+        "url": "https://github.com/imazen/zenpixels"
+      },
+      {
+        "branch": "feat/presentation-provenance",
+        "name": "rav1d-safe",
+        "packages": {
+          "rav1d-safe": "."
+        },
+        "pull_request": "https://github.com/imazen/rav1d-safe/pull/533",
+        "revision": "dfd01e3268f6e8da862d2d5f0a71d19f414f2b87",
+        "url": "https://github.com/imazen/rav1d-safe"
+      },
+      {
+        "branch": "fix/small-video-frames",
+        "name": "zenrav1e",
+        "packages": {
+          "zenrav1e": "."
+        },
+        "pull_request": "https://github.com/imazen/zenrav1e/pull/44",
+        "revision": "9057c4bacf1d8a23974e32de09fd4446a1cc525a",
+        "url": "https://github.com/imazen/zenrav1e"
+      },
+      {
+        "branch": "main",
+        "name": "linear-srgb",
+        "packages": {
+          "linear-srgb": "."
+        },
+        "revision": "c56e7940f4a123fb653bc60593376cf2eaed3e70",
+        "url": "https://github.com/imazen/linear-srgb"
+      },
+      {
+        "branch": "main",
+        "name": "zentone",
+        "packages": {
+          "zentone": "."
+        },
+        "revision": "9f0dab49bffa194b4a52b5eb28ba15b2d958356d",
+        "url": "https://github.com/imazen/zentone"
+      },
+      {
+        "branch": "feat/exact-animation-timing",
+        "name": "zencodec",
+        "packages": {
+          "zencodec": "."
+        },
+        "pull_request": "https://github.com/imazen/zencodec/pull/127",
+        "revision": "2031094449ad1177ff96461d7c4d586c7ed384e6",
+        "url": "https://github.com/imazen/zencodec"
+      },
+      {
+        "branch": "fix/encode-color-contract",
+        "name": "zengif",
+        "packages": {
+          "zengif": "."
+        },
+        "pull_request": "https://github.com/imazen/zengif/pull/20",
+        "revision": "1d91101ae53b92833124087624f2f0238fabd760",
+        "url": "https://github.com/imazen/zengif"
+      },
+      {
+        "branch": "fix/native-animation-color-negotiation",
+        "name": "zenpng",
+        "packages": {
+          "zenpng": "."
+        },
+        "pull_request": "https://github.com/imazen/zenpng/pull/22",
+        "revision": "27393eef995aea329cfbc1df5cac5e3f7346b4cb",
+        "url": "https://github.com/imazen/zenpng"
+      },
+      {
+        "branch": "fix/exact-animation-timing",
+        "name": "zenwebp",
+        "packages": {
+          "zenwebp": "."
+        },
+        "pull_request": "https://github.com/imazen/zenwebp/pull/105",
+        "revision": "6b580c2532fc765e8a913011c55b9b8f3cfcb4eb",
+        "url": "https://github.com/imazen/zenwebp"
+      },
+      {
+        "branch": "fix/transparent-palette-remapping",
+        "direct_git": true,
+        "name": "zenquant",
+        "packages": {
+          "zenquant": "."
+        },
+        "pull_request": "https://github.com/imazen/zenquant/pull/13",
+        "revision": "8a61dacca8df5c5ac5d7fa368a272855f3097f36",
+        "url": "https://github.com/imazen/zenquant"
+      },
+      {
+        "branch": "fix/exact-animation-timing",
+        "name": "zenjxl",
+        "packages": {
+          "zenjxl": "."
+        },
+        "pull_request": "https://github.com/imazen/zenjxl/pull/20",
+        "revision": "561849318d6839f478fa7cbc73d67e6d489d4860",
+        "url": "https://github.com/imazen/zenjxl"
+      },
+      {
+        "branch": "fix/identical-single-pixel-animation",
+        "name": "jxl-encoder",
+        "packages": {
+          "jxl-encoder": "jxl-encoder"
+        },
+        "pull_request": "https://github.com/imazen/jxl-encoder/pull/127",
+        "revision": "3c1be8179ac7fdb7e7322e299cdad645046acf6c",
+        "url": "https://github.com/imazen/jxl-encoder"
+      },
+      {
+        "branch": "feat/sendable-decoder-state",
+        "name": "zenjxl-decoder",
+        "packages": {
+          "zenjxl-decoder": "."
+        },
+        "pull_request": "https://github.com/imazen/zenjxl-decoder/pull/60",
+        "revision": "21159c6ba149bc802f0d985851e568976a44da04",
+        "url": "https://github.com/imazen/zenjxl-decoder"
+      },
+      {
+        "branch": "build/bench-utils-zenpng-02",
+        "name": "zenjpeg",
+        "optional_packages": [
+          "zenjpeg"
+        ],
+        "packages": {
+          "zenjpeg": "zenjpeg"
+        },
+        "pull_request": "https://github.com/imazen/zenjpeg/pull/211",
+        "revision": "afc2ccbb0857bc9736f07d1583e062a8a1fd09e3",
+        "url": "https://github.com/imazen/zenjpeg"
+      },
+      {
+        "branch": "main",
+        "name": "ultrahdr",
+        "packages": {
+          "ultrahdr-core": "ultrahdr-core"
+        },
+        "revision": "633f71e9d0c8fc82cc29b58ffaa92d367d82f9f9",
+        "url": "https://github.com/imazen/ultrahdr"
+      },
+      {
+        "branch": "main",
+        "name": "butteraugli",
+        "optional_packages": [
+          "butteraugli"
+        ],
+        "packages": {
+          "butteraugli": "."
+        },
+        "revision": "795aa3727252dc56840501864aefc4a8a537c8ea",
+        "url": "https://github.com/imazen/butteraugli"
+      },
+      {
+        "branch": "fix/animation-decoded-color",
+        "name": "zenavif",
+        "packages": {
+          "zenavif": "."
+        },
+        "pull_request": "https://github.com/imazen/zenavif/pull/51",
+        "revision": "b777fa12a92059d3d50c0bfa12e30d2b10502df6",
+        "url": "https://github.com/imazen/zenavif"
+      },
+      {
+        "branch": "fix/native-animation-sample-contract",
+        "direct_git": true,
+        "name": "zenravif",
+        "packages": {
+          "zenravif": "ravif"
+        },
+        "pull_request": "https://github.com/imazen/cavif-rs/pull/7",
+        "revision": "aac04acc5295b581eac7234ed96bac1553ce51e2",
+        "url": "https://github.com/imazen/cavif-rs"
+      },
+      {
+        "direct_git": true,
+        "name": "zenavif-wire-owner",
+        "packages": {
+          "zenavif-serialize": "zenavif-serialize"
+        },
+        "revision": "98c8a5011e1ac573770a8889a8b5a4a68587de90",
+        "role": "Serializer revision explicitly pinned by zenravif; distinct from the zenavif adapter checkout.",
+        "url": "https://github.com/imazen/zenavif"
+      }
+    ],
+    "schema": 1
+  },
+  "fixtures": [
+    {
+      "bytes": 160,
+      "file": "1x1-opaque.gif",
+      "format": "Gif",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "e3820096cb82366b860b8a4e668453a7aaaf423af03bdf289fa308ea03a79332"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "34aaa746c25a0f105c4316bbb1f009aa359f49582656ee97d73c58132d563423"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "e3820096cb82366b860b8a4e668453a7aaaf423af03bdf289fa308ea03a79332"
+        }
+      ],
+      "height": 1,
+      "sha256": "1d3699eaafaed9558c90d77dcc4c22e67819e5f2ce904ba48b013e552fc308db",
+      "total_plays": 2,
+      "width": 1
+    },
+    {
+      "bytes": 422,
+      "file": "1x1-opaque.png",
+      "format": "Apng",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "e3820096cb82366b860b8a4e668453a7aaaf423af03bdf289fa308ea03a79332"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "34aaa746c25a0f105c4316bbb1f009aa359f49582656ee97d73c58132d563423"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "e3820096cb82366b860b8a4e668453a7aaaf423af03bdf289fa308ea03a79332"
+        }
+      ],
+      "height": 1,
+      "sha256": "94743f68af63c94c4fa6231e991d064656cd92bec364eada6730a4390c55f239",
+      "total_plays": 2,
+      "width": 1
+    },
+    {
+      "bytes": 284,
+      "file": "1x1-opaque.webp",
+      "format": "Webp",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "e3820096cb82366b860b8a4e668453a7aaaf423af03bdf289fa308ea03a79332"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "34aaa746c25a0f105c4316bbb1f009aa359f49582656ee97d73c58132d563423"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "e3820096cb82366b860b8a4e668453a7aaaf423af03bdf289fa308ea03a79332"
+        }
+      ],
+      "height": 1,
+      "sha256": "67e22824a0124f19eb02309a4b1bd9242de45a0a9f125281cf0bfaa4e636fec1",
+      "total_plays": 2,
+      "width": 1
+    },
+    {
+      "bytes": 114,
+      "file": "1x1-opaque.jxl",
+      "format": "Jxl",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "e3820096cb82366b860b8a4e668453a7aaaf423af03bdf289fa308ea03a79332"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "34aaa746c25a0f105c4316bbb1f009aa359f49582656ee97d73c58132d563423"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "e3820096cb82366b860b8a4e668453a7aaaf423af03bdf289fa308ea03a79332"
+        }
+      ],
+      "height": 1,
+      "sha256": "0ccf1fab41b5cefcbea7284d29c308927f390e3b628b0e4f312328cab8d05055",
+      "total_plays": 2,
+      "width": 1
+    },
+    {
+      "bytes": 1164,
+      "file": "1x1-opaque.avif",
+      "format": "Avif",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "e3820096cb82366b860b8a4e668453a7aaaf423af03bdf289fa308ea03a79332"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "34aaa746c25a0f105c4316bbb1f009aa359f49582656ee97d73c58132d563423"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "e3820096cb82366b860b8a4e668453a7aaaf423af03bdf289fa308ea03a79332"
+        }
+      ],
+      "height": 1,
+      "sha256": "4d09e548c07b69c6aac280d82aa26e33e577dbd6dc06f59121802ec5d34f12a0",
+      "total_plays": 2,
+      "width": 1
+    },
+    {
+      "bytes": 160,
+      "file": "1x1-binary-alpha.gif",
+      "format": "Gif",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "34aaa746c25a0f105c4316bbb1f009aa359f49582656ee97d73c58132d563423"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+        }
+      ],
+      "height": 1,
+      "sha256": "ca9203393fff0808f35886fc5eb068fc1adeb41b622c38078025397d2e68d612",
+      "total_plays": 2,
+      "width": 1
+    },
+    {
+      "bytes": 427,
+      "file": "1x1-binary-alpha.png",
+      "format": "Apng",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "34aaa746c25a0f105c4316bbb1f009aa359f49582656ee97d73c58132d563423"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+        }
+      ],
+      "height": 1,
+      "sha256": "b9f9ff540fff07e15120bb8b924551d8b7dff0687d3517138293dd40fdc91079",
+      "total_plays": 2,
+      "width": 1
+    },
+    {
+      "bytes": 284,
+      "file": "1x1-binary-alpha.webp",
+      "format": "Webp",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "34aaa746c25a0f105c4316bbb1f009aa359f49582656ee97d73c58132d563423"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+        }
+      ],
+      "height": 1,
+      "sha256": "66e66da898dfe0c0337bd88ff86509d319f4f20a318a92aa1974165f65d1f85e",
+      "total_plays": 2,
+      "width": 1
+    },
+    {
+      "bytes": 108,
+      "file": "1x1-binary-alpha.jxl",
+      "format": "Jxl",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "34aaa746c25a0f105c4316bbb1f009aa359f49582656ee97d73c58132d563423"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+        }
+      ],
+      "height": 1,
+      "sha256": "b99630d4bb2150908bd298452522ab8e5d32caacce217d1d36b2f3a48231078f",
+      "total_plays": 2,
+      "width": 1
+    },
+    {
+      "bytes": 2100,
+      "file": "1x1-binary-alpha.avif",
+      "format": "Avif",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "ad95131bc0b799c0b1af477fb14fcf26a6a9f76079e48bf090acb7e8367bfd0e"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "34aaa746c25a0f105c4316bbb1f009aa359f49582656ee97d73c58132d563423"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+        }
+      ],
+      "height": 1,
+      "sha256": "e099e7f4b07bfc73188d59305bbf603fcd1ac0963d343fc733c6db5008818644",
+      "total_plays": 2,
+      "width": 1
+    },
+    {
+      "bytes": 392,
+      "file": "17x13-opaque.gif",
+      "format": "Gif",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "2298140c59647697798d16161b73e05e9f277e336de8448bb359b231b9231fd3"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "a85938bab5f60851690369c97ec342bc53bb7ac93ec41c08e2458e795228d933"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "a85938bab5f60851690369c97ec342bc53bb7ac93ec41c08e2458e795228d933"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "89cae7f5c2d36b707b1fc5e848a5269c3ae9d09b25e9841a13eee4da86f2fce8"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "2298140c59647697798d16161b73e05e9f277e336de8448bb359b231b9231fd3"
+        }
+      ],
+      "height": 13,
+      "sha256": "9a33f1536a3a6cfe3840963435ca89ae3ff543402fdf515f4c17aed17d0e3b65",
+      "total_plays": 2,
+      "width": 17
+    },
+    {
+      "bytes": 557,
+      "file": "17x13-opaque.png",
+      "format": "Apng",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "2298140c59647697798d16161b73e05e9f277e336de8448bb359b231b9231fd3"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "a85938bab5f60851690369c97ec342bc53bb7ac93ec41c08e2458e795228d933"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "a85938bab5f60851690369c97ec342bc53bb7ac93ec41c08e2458e795228d933"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "89cae7f5c2d36b707b1fc5e848a5269c3ae9d09b25e9841a13eee4da86f2fce8"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "2298140c59647697798d16161b73e05e9f277e336de8448bb359b231b9231fd3"
+        }
+      ],
+      "height": 13,
+      "sha256": "d55c24a92b3838a3ceb88bd53e1539f92816bc8a51eefdf53c90efa6270a33a9",
+      "total_plays": 2,
+      "width": 17
+    },
+    {
+      "bytes": 502,
+      "file": "17x13-opaque.webp",
+      "format": "Webp",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "2298140c59647697798d16161b73e05e9f277e336de8448bb359b231b9231fd3"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "a85938bab5f60851690369c97ec342bc53bb7ac93ec41c08e2458e795228d933"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "a85938bab5f60851690369c97ec342bc53bb7ac93ec41c08e2458e795228d933"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "89cae7f5c2d36b707b1fc5e848a5269c3ae9d09b25e9841a13eee4da86f2fce8"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "2298140c59647697798d16161b73e05e9f277e336de8448bb359b231b9231fd3"
+        }
+      ],
+      "height": 13,
+      "sha256": "2242bd03f175a32168d441a6669d662896206f14aed3d1ec64d621aa655baec5",
+      "total_plays": 2,
+      "width": 17
+    },
+    {
+      "bytes": 315,
+      "file": "17x13-opaque.jxl",
+      "format": "Jxl",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "2298140c59647697798d16161b73e05e9f277e336de8448bb359b231b9231fd3"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "a85938bab5f60851690369c97ec342bc53bb7ac93ec41c08e2458e795228d933"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "a85938bab5f60851690369c97ec342bc53bb7ac93ec41c08e2458e795228d933"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "89cae7f5c2d36b707b1fc5e848a5269c3ae9d09b25e9841a13eee4da86f2fce8"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "2298140c59647697798d16161b73e05e9f277e336de8448bb359b231b9231fd3"
+        }
+      ],
+      "height": 13,
+      "sha256": "5b07219ee8d25fd658b627e986b693f3fa57011325193e479ca86d5b517e78e5",
+      "total_plays": 2,
+      "width": 17
+    },
+    {
+      "bytes": 2393,
+      "file": "17x13-opaque.avif",
+      "format": "Avif",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "2298140c59647697798d16161b73e05e9f277e336de8448bb359b231b9231fd3"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "a85938bab5f60851690369c97ec342bc53bb7ac93ec41c08e2458e795228d933"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "a85938bab5f60851690369c97ec342bc53bb7ac93ec41c08e2458e795228d933"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "89cae7f5c2d36b707b1fc5e848a5269c3ae9d09b25e9841a13eee4da86f2fce8"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "2298140c59647697798d16161b73e05e9f277e336de8448bb359b231b9231fd3"
+        }
+      ],
+      "height": 13,
+      "sha256": "63dc3f27423829b53a4f9602d70372ee0188137c6f9edb85f20598f95930610f",
+      "total_plays": 2,
+      "width": 17
+    },
+    {
+      "bytes": 482,
+      "file": "17x13-binary-alpha.gif",
+      "format": "Gif",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "857e9d804e052214d20bf1170a747f943aec5903cf8a4dba2983b5bb55f30a35"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "6f3da36f9478dd9165a21fe357c03325ab7c2f32524865c64902afc2aaea01c0"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "6f3da36f9478dd9165a21fe357c03325ab7c2f32524865c64902afc2aaea01c0"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "b8618da8f86cb42d94d1934bae2b05b6a630a7d253efe94b363b9ffb7a53548a"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "857e9d804e052214d20bf1170a747f943aec5903cf8a4dba2983b5bb55f30a35"
+        }
+      ],
+      "height": 13,
+      "sha256": "2f2995c568beff7309cffc08f8293779b5905bdc2fa2e321aaf0323190d8970d",
+      "total_plays": 2,
+      "width": 17
+    },
+    {
+      "bytes": 612,
+      "file": "17x13-binary-alpha.png",
+      "format": "Apng",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "857e9d804e052214d20bf1170a747f943aec5903cf8a4dba2983b5bb55f30a35"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "6f3da36f9478dd9165a21fe357c03325ab7c2f32524865c64902afc2aaea01c0"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "6f3da36f9478dd9165a21fe357c03325ab7c2f32524865c64902afc2aaea01c0"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "b8618da8f86cb42d94d1934bae2b05b6a630a7d253efe94b363b9ffb7a53548a"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "857e9d804e052214d20bf1170a747f943aec5903cf8a4dba2983b5bb55f30a35"
+        }
+      ],
+      "height": 13,
+      "sha256": "d9c2b68ad7de6089c019eda19a9e9babc246d4cae0c8cd444b131b4ac35c029b",
+      "total_plays": 2,
+      "width": 17
+    },
+    {
+      "bytes": 526,
+      "file": "17x13-binary-alpha.webp",
+      "format": "Webp",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "857e9d804e052214d20bf1170a747f943aec5903cf8a4dba2983b5bb55f30a35"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "6f3da36f9478dd9165a21fe357c03325ab7c2f32524865c64902afc2aaea01c0"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "6f3da36f9478dd9165a21fe357c03325ab7c2f32524865c64902afc2aaea01c0"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "b8618da8f86cb42d94d1934bae2b05b6a630a7d253efe94b363b9ffb7a53548a"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "857e9d804e052214d20bf1170a747f943aec5903cf8a4dba2983b5bb55f30a35"
+        }
+      ],
+      "height": 13,
+      "sha256": "de396df7a37ffb2692198d32377aca2d582438fa05b87c887f4eb00836bc51bf",
+      "total_plays": 2,
+      "width": 17
+    },
+    {
+      "bytes": 334,
+      "file": "17x13-binary-alpha.jxl",
+      "format": "Jxl",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "857e9d804e052214d20bf1170a747f943aec5903cf8a4dba2983b5bb55f30a35"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "6f3da36f9478dd9165a21fe357c03325ab7c2f32524865c64902afc2aaea01c0"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "6f3da36f9478dd9165a21fe357c03325ab7c2f32524865c64902afc2aaea01c0"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "b8618da8f86cb42d94d1934bae2b05b6a630a7d253efe94b363b9ffb7a53548a"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "857e9d804e052214d20bf1170a747f943aec5903cf8a4dba2983b5bb55f30a35"
+        }
+      ],
+      "height": 13,
+      "sha256": "00ecbbb2388471fe432f570625283f4f76a13bfa61e84510318f0af502bc90ee",
+      "total_plays": 2,
+      "width": 17
+    },
+    {
+      "bytes": 3811,
+      "file": "17x13-binary-alpha.avif",
+      "format": "Avif",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "857e9d804e052214d20bf1170a747f943aec5903cf8a4dba2983b5bb55f30a35"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "6f3da36f9478dd9165a21fe357c03325ab7c2f32524865c64902afc2aaea01c0"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "6f3da36f9478dd9165a21fe357c03325ab7c2f32524865c64902afc2aaea01c0"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "b8618da8f86cb42d94d1934bae2b05b6a630a7d253efe94b363b9ffb7a53548a"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "857e9d804e052214d20bf1170a747f943aec5903cf8a4dba2983b5bb55f30a35"
+        }
+      ],
+      "height": 13,
+      "sha256": "abfb1fef13b9c05e3663cdfa670f12823380d6cc28e8c55314cff566ffefcfcd",
+      "total_plays": 2,
+      "width": 17
+    },
+    {
+      "bytes": 8532,
+      "file": "257x259-opaque.gif",
+      "format": "Gif",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "84f8083760427465431470057447ff022f264873f0a49ef52912974107856ac1"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "379bb1bbb6c41cee0f437f6553b16edf8fbeacf3303682c57ff3e0f9db35d070"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "379bb1bbb6c41cee0f437f6553b16edf8fbeacf3303682c57ff3e0f9db35d070"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "e522b586ea3c8d6966f08a46c61133a0358c7ae41e033dfd4e79bc95b8ca630e"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "84f8083760427465431470057447ff022f264873f0a49ef52912974107856ac1"
+        }
+      ],
+      "height": 259,
+      "sha256": "eadb70734573de4e8af764023893024fefc7b1c6c70de8d085c930c11e01d432",
+      "total_plays": 2,
+      "width": 257
+    },
+    {
+      "bytes": 3982,
+      "file": "257x259-opaque.png",
+      "format": "Apng",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "84f8083760427465431470057447ff022f264873f0a49ef52912974107856ac1"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "379bb1bbb6c41cee0f437f6553b16edf8fbeacf3303682c57ff3e0f9db35d070"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "379bb1bbb6c41cee0f437f6553b16edf8fbeacf3303682c57ff3e0f9db35d070"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "e522b586ea3c8d6966f08a46c61133a0358c7ae41e033dfd4e79bc95b8ca630e"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "84f8083760427465431470057447ff022f264873f0a49ef52912974107856ac1"
+        }
+      ],
+      "height": 259,
+      "sha256": "950b9428ddfe909c5f90de9a9ed13d03b11210d89ebac5a8caeac340d9de0367",
+      "total_plays": 2,
+      "width": 257
+    },
+    {
+      "bytes": 758,
+      "file": "257x259-opaque.webp",
+      "format": "Webp",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "84f8083760427465431470057447ff022f264873f0a49ef52912974107856ac1"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "379bb1bbb6c41cee0f437f6553b16edf8fbeacf3303682c57ff3e0f9db35d070"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "379bb1bbb6c41cee0f437f6553b16edf8fbeacf3303682c57ff3e0f9db35d070"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "e522b586ea3c8d6966f08a46c61133a0358c7ae41e033dfd4e79bc95b8ca630e"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "84f8083760427465431470057447ff022f264873f0a49ef52912974107856ac1"
+        }
+      ],
+      "height": 259,
+      "sha256": "f484876d1af201161134494b2419b57eb38fdba223d27924d9474d2f929dce35",
+      "total_plays": 2,
+      "width": 257
+    },
+    {
+      "bytes": 1007,
+      "file": "257x259-opaque.jxl",
+      "format": "Jxl",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "84f8083760427465431470057447ff022f264873f0a49ef52912974107856ac1"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "379bb1bbb6c41cee0f437f6553b16edf8fbeacf3303682c57ff3e0f9db35d070"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "379bb1bbb6c41cee0f437f6553b16edf8fbeacf3303682c57ff3e0f9db35d070"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "e522b586ea3c8d6966f08a46c61133a0358c7ae41e033dfd4e79bc95b8ca630e"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "84f8083760427465431470057447ff022f264873f0a49ef52912974107856ac1"
+        }
+      ],
+      "height": 259,
+      "sha256": "26370f7d5f4389e56e01073c538fb41b2c05db75e5c7ae6850b95aa74ac3fb40",
+      "total_plays": 2,
+      "width": 257
+    },
+    {
+      "bytes": 148478,
+      "file": "257x259-opaque.avif",
+      "format": "Avif",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "84f8083760427465431470057447ff022f264873f0a49ef52912974107856ac1"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "379bb1bbb6c41cee0f437f6553b16edf8fbeacf3303682c57ff3e0f9db35d070"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "379bb1bbb6c41cee0f437f6553b16edf8fbeacf3303682c57ff3e0f9db35d070"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "e522b586ea3c8d6966f08a46c61133a0358c7ae41e033dfd4e79bc95b8ca630e"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "84f8083760427465431470057447ff022f264873f0a49ef52912974107856ac1"
+        }
+      ],
+      "height": 259,
+      "sha256": "af2facae9a4d75b0c9751c2f17c4c03c7b79bfb6d97253adc5d1bc5c15d41767",
+      "total_plays": 2,
+      "width": 257
+    },
+    {
+      "bytes": 11452,
+      "file": "257x259-binary-alpha.gif",
+      "format": "Gif",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "3f312d2b29ef6307d177e2f66bea0ced99de5ee316afb8d51414204636eab99c"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "2c955908ff03bad0c72d6453694f64f7b4d569ea791b7293b0e600bbfeab1f2c"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "2c955908ff03bad0c72d6453694f64f7b4d569ea791b7293b0e600bbfeab1f2c"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "17ac3d61b824d2f97871b54c1a724b896bf007aa47811346f511f64bad8588cf"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "3f312d2b29ef6307d177e2f66bea0ced99de5ee316afb8d51414204636eab99c"
+        }
+      ],
+      "height": 259,
+      "sha256": "731948722d6d6c9cd2181b7eab85bfb3188749c267152f35a66838d9b47247cb",
+      "total_plays": 2,
+      "width": 257
+    },
+    {
+      "bytes": 5014,
+      "file": "257x259-binary-alpha.png",
+      "format": "Apng",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "3f312d2b29ef6307d177e2f66bea0ced99de5ee316afb8d51414204636eab99c"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "2c955908ff03bad0c72d6453694f64f7b4d569ea791b7293b0e600bbfeab1f2c"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "2c955908ff03bad0c72d6453694f64f7b4d569ea791b7293b0e600bbfeab1f2c"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "17ac3d61b824d2f97871b54c1a724b896bf007aa47811346f511f64bad8588cf"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "3f312d2b29ef6307d177e2f66bea0ced99de5ee316afb8d51414204636eab99c"
+        }
+      ],
+      "height": 259,
+      "sha256": "bc88a514e21954bf79ccccaaf1f4a1fa1ab125de4330d00ef144b17ce2c7061c",
+      "total_plays": 2,
+      "width": 257
+    },
+    {
+      "bytes": 846,
+      "file": "257x259-binary-alpha.webp",
+      "format": "Webp",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "3f312d2b29ef6307d177e2f66bea0ced99de5ee316afb8d51414204636eab99c"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "2c955908ff03bad0c72d6453694f64f7b4d569ea791b7293b0e600bbfeab1f2c"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "2c955908ff03bad0c72d6453694f64f7b4d569ea791b7293b0e600bbfeab1f2c"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "17ac3d61b824d2f97871b54c1a724b896bf007aa47811346f511f64bad8588cf"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "3f312d2b29ef6307d177e2f66bea0ced99de5ee316afb8d51414204636eab99c"
+        }
+      ],
+      "height": 259,
+      "sha256": "53db0ba3a026c734e38558dc1d74a2c0d5bbd0050cae9d68772b6051d8657355",
+      "total_plays": 2,
+      "width": 257
+    },
+    {
+      "bytes": 5199,
+      "file": "257x259-binary-alpha.jxl",
+      "format": "Jxl",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "3f312d2b29ef6307d177e2f66bea0ced99de5ee316afb8d51414204636eab99c"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "2c955908ff03bad0c72d6453694f64f7b4d569ea791b7293b0e600bbfeab1f2c"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "2c955908ff03bad0c72d6453694f64f7b4d569ea791b7293b0e600bbfeab1f2c"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "17ac3d61b824d2f97871b54c1a724b896bf007aa47811346f511f64bad8588cf"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "3f312d2b29ef6307d177e2f66bea0ced99de5ee316afb8d51414204636eab99c"
+        }
+      ],
+      "height": 259,
+      "sha256": "3f69a63c266ef0159fac4a03f4f37aad07c5fb2fd94471643cc79b9aad500539",
+      "total_plays": 2,
+      "width": 257
+    },
+    {
+      "bytes": 152932,
+      "file": "257x259-binary-alpha.avif",
+      "format": "Avif",
+      "frames": [
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "3f312d2b29ef6307d177e2f66bea0ced99de5ee316afb8d51414204636eab99c"
+        },
+        {
+          "duration": [
+            1,
+            50
+          ],
+          "rgba8_sha256": "2c955908ff03bad0c72d6453694f64f7b4d569ea791b7293b0e600bbfeab1f2c"
+        },
+        {
+          "duration": [
+            3,
+            100
+          ],
+          "rgba8_sha256": "2c955908ff03bad0c72d6453694f64f7b4d569ea791b7293b0e600bbfeab1f2c"
+        },
+        {
+          "duration": [
+            1,
+            100
+          ],
+          "rgba8_sha256": "17ac3d61b824d2f97871b54c1a724b896bf007aa47811346f511f64bad8588cf"
+        },
+        {
+          "duration": [
+            7,
+            100
+          ],
+          "rgba8_sha256": "3f312d2b29ef6307d177e2f66bea0ced99de5ee316afb8d51414204636eab99c"
+        }
+      ],
+      "height": 259,
+      "sha256": "21ac5ae9d6f1bf03678f4a5724033f1096738e6660e32fb9eee19e680397a28d",
+      "total_plays": 2,
+      "width": 257
+    }
+  ],
+  "pixel_format": "RGBA8 straight-alpha sRGB, tightly packed rows",
+  "pixel_source": "crates/zencodec-media-codec-tests/src/lib.rs:fixtures",
+  "schema": 1
+}

@@ -1,0 +1,54 @@
+[package]
+name = "zencodec-media-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+zenrav1e = { version = "0.2.0", default-features = false, features = ["stop"] }
+libfuzzer-sys = "0.4"
+zencodec-media = { path = "..", features = ["av1-decode", "av1-encode"] }
+zenpixels = { version = ">=0.2.16, <0.4.0", default-features = false }
+rav1d-safe = { version = "0.6.0", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }
+
+[patch.crates-io]
+zencodec = { path = "../.." }
+linear-srgb = { git = "https://github.com/imazen/linear-srgb", rev = "c56e7940f4a123fb653bc60593376cf2eaed3e70" }
+zentone = { git = "https://github.com/imazen/zentone", rev = "9f0dab49bffa194b4a52b5eb28ba15b2d958356d" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "3ece79f38aa306311c94324ae8c0c2310a2b2f82" }
+rav1d-safe = { git = "https://github.com/imazen/rav1d-safe", rev = "dfd01e3268f6e8da862d2d5f0a71d19f414f2b87" }
+
+zenrav1e = { git = "https://github.com/imazen/zenrav1e", rev = "9057c4bacf1d8a23974e32de09fd4446a1cc525a" }
+
+[[bin]]
+name = "color_contracts"
+path = "fuzz_targets/color_contracts.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "container_contracts"
+path = "fuzz_targets/container_contracts.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "native_av1"
+path = "fuzz_targets/native_av1.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "native_encode"
+path = "fuzz_targets/native_encode.rs"
+test = false
+doc = false
+bench = false
