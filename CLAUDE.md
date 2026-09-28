@@ -187,3 +187,13 @@ CHANGELOGs. Full design context:
    `ConvertStep::{ExpandNarrowToFull,ContractFullToNarrow}` only when a
    consumer actually needs to cross the boundary; known design points are
    recorded in the `SignalRange` docs.
+
+## Experimental media workspace (2026-09-28)
+
+`media/` contains the unpublished `zencodec-media` experiment, native media
+corpus, independent conversion references, and coordinated integration runner.
+It is a separate Cargo workspace so codec implementations and their Rust 1.93
+requirements do not enter the existing no_std image contract's dependency graph.
+Its animation adapter uses the in-repository zencodec exact-duration contract.
+Run `bash media/scripts/check.sh` for this workspace. The user explicitly chose
+the zencodec repository for this experiment; keep further media work here.

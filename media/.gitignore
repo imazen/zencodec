@@ -1,0 +1,13 @@
+/target/
+/corpus/generated/
+/.cargo/config.toml
+__pycache__/
+/fuzz/target/
+/fuzz/corpus/
+/fuzz/artifacts/
+
+.workongoing
+
+# This executable validation workspace needs exact dependency resolution.
+!/Cargo.lock
+!/fuzz/Cargo.lock

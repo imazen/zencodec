@@ -1,0 +1,30 @@
+[package]
+name = "zencodec-media-codec-tests"
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.93"
+publish = false
+license = "Apache-2.0 OR MIT"
+description = "Native animation corpus and cross-format integration checks"
+
+[dependencies]
+zencodec-media = { path = "../..", features = ["animation", "av1-decode", "av1-encode", "http"] }
+zencodec = ">=0.1.27, <0.3.0"
+zenpixels = ">=0.2.16, <0.4.0"
+zenpixels-convert = { version = ">=0.2.16, <0.4.0", features = ["cms-moxcms"] }
+zengif = "0.8.0"
+zenavif = { version = "0.2.0", default-features = false, features = ["encode-imazen"] }
+zenjxl = { version = "0.3.0", features = ["zencodec"] }
+zenpng = { version = "0.2.0", default-features = false }
+zenwebp = { version = "0.5.0", default-features = false, features = ["std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[dev-dependencies]
+tempfile = "3.27"
+zenrav1e = { version = "0.2.0", default-features = false, features = ["stop"] }
+rav1d-safe = { version = "0.6.0", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }

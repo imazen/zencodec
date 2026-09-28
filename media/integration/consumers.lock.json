@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "repositories": [
+    {
+      "name": "zenpipe",
+      "url": "https://github.com/imazen/zenpipe",
+      "revision": "da9aba249f19f910563dbd4275bbc993d46df1ab",
+      "pull_request": "https://github.com/imazen/zenpipe/pull/86",
+      "packages": {}
+    },
+    {
+      "name": "heic",
+      "url": "https://github.com/imazen/heic",
+      "revision": "ac5c7cb9409875bbb09b121dee35a0d658954bf1",
+      "pull_request": "https://github.com/imazen/heic/pull/52",
+      "packages": {
+        "heic": "."
+      }
+    },
+    {
+      "name": "zensim",
+      "url": "https://github.com/imazen/zensim",
+      "revision": "8557758809156baba7364bd8cfe32889a61da4e8",
+      "pull_request": "https://github.com/imazen/zensim/pull/63",
+      "packages": {
+        "zensim": "zensim",
+        "zensim-regress": "zensim-regress"
+      },
+      "role": "Immutable PNG-compatibility backport on the frozen codec judge. PR head includes current main for merging, but does not change the recorded metric revision."
+    },
+    {
+      "name": "zen-workspace",
+      "url": "https://github.com/imazen/zen-workspace",
+      "revision": "6294a0dde3b9bd35f189f7bc262b5295c0173818",
+      "pull_request": "https://github.com/imazen/zen-workspace/pull/1",
+      "packages": {}
+    }
+  ]
+}

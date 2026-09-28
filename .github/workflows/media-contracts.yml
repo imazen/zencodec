@@ -1,0 +1,23 @@
+name: Media contracts
+on:
+  push:
+    paths: ['media/**', 'src/**', 'Cargo.toml', '.github/workflows/media-contracts.yml']
+  pull_request:
+    paths: ['media/**', 'src/**', 'Cargo.toml', '.github/workflows/media-contracts.yml']
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: media
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: media
+      - run: bash scripts/check.sh
