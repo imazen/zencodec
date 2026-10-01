@@ -29,10 +29,13 @@ mod encoder;
 mod encoding;
 mod unsupported;
 
-pub use decoder::{AnimationFrameDecoder, Decode, StreamingDecode};
+pub use decoder::{
+    AnimationFrameDecoder, Decode, IncrementalDecode, PushOutcome, PushStatus, StreamingDecode,
+};
 pub use decoding::{DecodeJob, DecoderConfig};
 pub use dyn_decoding::{
-    DynAnimationFrameDecoder, DynDecodeJob, DynDecoder, DynDecoderConfig, DynStreamingDecoder,
+    DynAnimationFrameDecoder, DynDecodeJob, DynDecoder, DynDecoderConfig, DynIncrementalDecoder,
+    DynStreamingDecoder,
 };
 pub use dyn_encoding::{DynAnimationFrameEncoder, DynEncodeJob, DynEncoder, DynEncoderConfig};
 pub use encoder::{AnimationFrameEncoder, Encoder};

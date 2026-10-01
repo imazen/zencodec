@@ -13,7 +13,7 @@ use super::BoxedError;
 use super::decoder::{AnimationFrameDecoder, Decode, StreamingDecode};
 use super::dyn_decoding::{
     AnimationFrameDecoderShim, DecoderShim, DynAnimationFrameDecoder, DynDecoder,
-    DynStreamingDecoder, StreamingDecoderShim,
+    DynIncrementalDecoder, DynStreamingDecoder, StreamingDecoderShim,
 };
 
 // ===========================================================================
@@ -487,5 +487,29 @@ pub trait DecodeJob<'a>: Sized {
             .streaming_decoder(data, preferred)
             .map_err(|e| Box::new(e) as BoxedError)?;
         Ok(Box::new(StreamingDecoderShim(dec)))
+    }
+
+    /// Create a type-erased incremental (Sans-I/O) decoder.
+    ///
+    /// Codecs that support incremental decoding override this method.
+    /// Default implementation returns [`UnsupportedOperation::IncrementalDecode`].
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let mut dec = config.job().dyn_incremental_decoder(&[])?;
+    /// while !dec.is_complete() {
+    ///     let outcome = dec.push_chunk(chunk, is_eof, stop)?;
+    ///     while let Some((y, strip)) = dec.pull_batch()? {
+    ///         // process strip
+    ///     }
+    /// }
+    /// ```
+    fn dyn_incremental_decoder(
+        self,
+        preferred: &[PixelDescriptor],
+    ) -> Result<Box<dyn DynIncrementalDecoder>, BoxedError> {
+        let _ = preferred;
+        Err(Box::new(crate::capabilities::UnsupportedOperation::IncrementalDecode))
     }
 }

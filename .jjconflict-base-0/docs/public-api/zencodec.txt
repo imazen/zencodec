@@ -1,0 +1,1832 @@
+# zencodec public API — supported surface (default features)
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+#
+# files: zencodec.txt 1785 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 118 lines (118 hidden + 0 excluded-feature)
+
+## summary
+#
+#   pub modules                                12
+#   pub types (struct/enum/trait/alias)       190
+#   pub consts/statics                        197
+#   free functions                             46
+#   inherent methods                          780
+#   struct fields                             220
+#   enum variants                             271
+#   re-exports                                 12
+#   trait roster entries (type × trait)       488
+#   conditional trait impls (verbatim)          4
+#   auto-trait-complete types                  86
+#   auto-trait exceptions                       9
+#
+# per-module pub lines:
+#   (root)                          790
+#   animation                         8
+#   decode                          173
+#   encode                          126
+#   estimate                         48
+#   exif                             94
+#   gainmap                         126
+#   helpers                          13
+#   icc                               1
+#   inventory                       103
+#   metadata_rewrite                 58
+#   prelude                         188
+
+## items (1669 lines)
+
+pub mod zencodec
+pub use At
+pub use Cicp
+pub use ColorAuthority
+pub use ContentLightLevel
+pub use ErrorAtExt
+pub use MasteringDisplay
+pub use Orientation
+pub use ResultAtExt
+pub use StopToken
+pub use Unstoppable
+pub use enough
+pub use whereat
+pub mod animation
+#[non_exhaustive] pub enum animation::TimingError
+pub animation::TimingError::Inexact
+pub animation::TimingError::Overflow
+pub animation::TimingError::ZeroDenominator
+pub struct animation::FrameDuration
+pub const fn animation::FrameDuration::denominator(self) -> u32
+pub const fn animation::FrameDuration::from_millis(u32) -> Self
+pub const fn animation::FrameDuration::new(u64, u32) -> core::result::Result<Self, animation::TimingError>
+pub const fn animation::FrameDuration::numerator(self) -> u64
+pub fn animation::FrameDuration::ticks_at(self, u32) -> core::result::Result<u64, animation::TimingError>
+pub struct animation::TimingQuantizer
+pub const fn animation::TimingQuantizer::new(u32, u64) -> core::result::Result<Self, animation::TimingError>
+pub fn animation::TimingQuantizer::quantize(&mut self, animation::FrameDuration) -> core::result::Result<animation::FrameDuration, animation::TimingError>
+pub mod decode
+pub decode::GainMapRender::BaseOnly
+pub decode::GainMapRender::Components
+pub decode::GainMapRender::ReconstructHdr
+pub decode::GainMapRender::ReconstructHdr::target_headroom: core::option::Option<f32>
+pub fn AnimationFrame<'a>::duration(&self) -> animation::FrameDuration
+pub fn AnimationFrame<'a>::duration_ms(&self) -> u32
+pub fn AnimationFrame<'a>::frame_index(&self) -> u32
+pub fn AnimationFrame<'a>::new(zenpixels::buffer::PixelSlice<'a>, u32, u32) -> Self
+pub fn AnimationFrame<'a>::pixels(&self) -> &zenpixels::buffer::PixelSlice<'a>
+pub fn AnimationFrame<'a>::to_owned_frame(&self) -> OwnedAnimationFrame
+pub fn AnimationFrame<'a>::with_duration(zenpixels::buffer::PixelSlice<'a>, animation::FrameDuration, u32) -> Self
+#[non_exhaustive] pub struct decode::DecodeCapabilities
+pub const decode::DecodeCapabilities::EMPTY: Self
+pub const fn decode::DecodeCapabilities::animation(&self) -> bool
+pub const fn decode::DecodeCapabilities::cheap_probe(&self) -> bool
+pub const fn decode::DecodeCapabilities::cicp(&self) -> bool
+pub const fn decode::DecodeCapabilities::decode_into(&self) -> bool
+pub const fn decode::DecodeCapabilities::enforces_max_input_bytes(&self) -> bool
+pub const fn decode::DecodeCapabilities::enforces_max_memory(&self) -> bool
+pub const fn decode::DecodeCapabilities::enforces_max_pixels(&self) -> bool
+pub const fn decode::DecodeCapabilities::exif(&self) -> bool
+pub const fn decode::DecodeCapabilities::gain_map(&self) -> bool
+pub const fn decode::DecodeCapabilities::hdr(&self) -> bool
+pub const fn decode::DecodeCapabilities::icc(&self) -> bool
+pub const fn decode::DecodeCapabilities::inventory(&self) -> bool
+pub const fn decode::DecodeCapabilities::multi_image(&self) -> bool
+pub const fn decode::DecodeCapabilities::native_16bit(&self) -> bool
+pub const fn decode::DecodeCapabilities::native_alpha(&self) -> bool
+pub const fn decode::DecodeCapabilities::native_f32(&self) -> bool
+pub const fn decode::DecodeCapabilities::native_gray(&self) -> bool
+pub const fn decode::DecodeCapabilities::new() -> Self
+pub const fn decode::DecodeCapabilities::reconstructs_hdr(&self) -> bool
+pub const fn decode::DecodeCapabilities::stop(&self) -> bool
+pub const fn decode::DecodeCapabilities::streaming(&self) -> bool
+pub const fn decode::DecodeCapabilities::supports(&self, UnsupportedOperation) -> bool
+pub const fn decode::DecodeCapabilities::threads_supported_range(&self) -> (u16, u16)
+pub const fn decode::DecodeCapabilities::with_animation(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_cheap_probe(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_cicp(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_decode_into(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_enforces_max_input_bytes(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_enforces_max_memory(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_enforces_max_pixels(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_exif(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_gain_map(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_hdr(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_icc(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_inventory(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_multi_image(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_native_16bit(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_native_alpha(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_native_f32(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_native_gray(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_reconstructs_hdr(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_stop(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_streaming(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_threads_supported_range(self, u16, u16) -> Self
+pub const fn decode::DecodeCapabilities::with_xmp(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::xmp(&self) -> bool
+#[non_exhaustive] pub struct decode::DecodeOutput
+pub fn decode::DecodeOutput::descriptor(&self) -> zenpixels::descriptor::PixelDescriptor
+pub fn decode::DecodeOutput::extensions(&self) -> &Extensions
+pub fn decode::DecodeOutput::extensions_mut(&mut self) -> &mut Extensions
+pub fn decode::DecodeOutput::extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&self) -> core::option::Option<&T>
+pub fn decode::DecodeOutput::format(&self) -> ImageFormat
+pub fn decode::DecodeOutput::has_alpha(&self) -> bool
+pub fn decode::DecodeOutput::height(&self) -> u32
+pub fn decode::DecodeOutput::info(&self) -> &ImageInfo
+pub fn decode::DecodeOutput::into_buffer(self) -> zenpixels::buffer::PixelBuffer
+pub fn decode::DecodeOutput::metadata(&self) -> Metadata
+pub fn decode::DecodeOutput::new(zenpixels::buffer::PixelBuffer, ImageInfo) -> Self
+pub fn decode::DecodeOutput::pixels(&self) -> zenpixels::buffer::PixelSlice<'_>
+pub fn decode::DecodeOutput::source_encoding_details(&self) -> core::option::Option<&dyn SourceEncodingDetails>
+pub fn decode::DecodeOutput::take_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&mut self) -> core::option::Option<T>
+pub fn decode::DecodeOutput::take_source_encoding_details(&mut self) -> core::option::Option<alloc::boxed::Box<dyn SourceEncodingDetails>>
+pub fn decode::DecodeOutput::width(&self) -> u32
+pub fn decode::DecodeOutput::with_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(self, T) -> Self
+pub fn decode::DecodeOutput::with_source_encoding_details<T: SourceEncodingDetails + 'static>(self, T) -> Self
+#[non_exhaustive] pub struct decode::DecodePolicy
+pub decode::DecodePolicy::allow_animation: core::option::Option<bool>
+pub decode::DecodePolicy::allow_exif: core::option::Option<bool>
+pub decode::DecodePolicy::allow_icc: core::option::Option<bool>
+pub decode::DecodePolicy::allow_progressive: core::option::Option<bool>
+pub decode::DecodePolicy::allow_truncated: core::option::Option<bool>
+pub decode::DecodePolicy::allow_xmp: core::option::Option<bool>
+pub decode::DecodePolicy::strict: core::option::Option<bool>
+pub const fn decode::DecodePolicy::none() -> Self
+pub const fn decode::DecodePolicy::permissive() -> Self
+pub const fn decode::DecodePolicy::resolve_animation(&self, bool) -> bool
+pub const fn decode::DecodePolicy::resolve_exif(&self, bool) -> bool
+pub const fn decode::DecodePolicy::resolve_icc(&self, bool) -> bool
+pub const fn decode::DecodePolicy::resolve_progressive(&self, bool) -> bool
+pub const fn decode::DecodePolicy::resolve_strict(&self, bool) -> bool
+pub const fn decode::DecodePolicy::resolve_truncated(&self, bool) -> bool
+pub const fn decode::DecodePolicy::resolve_xmp(&self, bool) -> bool
+pub const fn decode::DecodePolicy::strict() -> Self
+pub const fn decode::DecodePolicy::with_allow_animation(self, bool) -> Self
+pub const fn decode::DecodePolicy::with_allow_exif(self, bool) -> Self
+pub const fn decode::DecodePolicy::with_allow_icc(self, bool) -> Self
+pub const fn decode::DecodePolicy::with_allow_progressive(self, bool) -> Self
+pub const fn decode::DecodePolicy::with_allow_truncated(self, bool) -> Self
+pub const fn decode::DecodePolicy::with_allow_xmp(self, bool) -> Self
+pub const fn decode::DecodePolicy::with_strict(self, bool) -> Self
+#[non_exhaustive] pub struct decode::DecodedGainMap [also: gainmap]
+pub decode::DecodedGainMap::metadata: gainmap::GainMapInfo
+pub decode::DecodedGainMap::pixels: zenpixels::buffer::PixelBuffer
+pub fn gainmap::DecodedGainMap::channels(&self) -> u8
+pub fn gainmap::DecodedGainMap::height(&self) -> u32
+pub fn gainmap::DecodedGainMap::new(zenpixels::buffer::PixelBuffer, gainmap::GainMapInfo) -> Self
+pub fn gainmap::DecodedGainMap::width(&self) -> u32
+#[non_exhaustive] pub struct decode::EmbeddedMetadata
+pub decode::EmbeddedMetadata::exif: core::option::Option<alloc::sync::Arc<[u8]>>
+pub decode::EmbeddedMetadata::xmp: core::option::Option<alloc::sync::Arc<[u8]>>
+pub fn decode::EmbeddedMetadata::is_empty(&self) -> bool
+pub fn decode::EmbeddedMetadata::with_exif(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn decode::EmbeddedMetadata::with_xmp(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+#[non_exhaustive] pub struct decode::OutputInfo
+pub decode::OutputInfo::crop_applied: core::option::Option<[u32; 4]>
+pub decode::OutputInfo::has_alpha: bool
+pub decode::OutputInfo::height: u32
+pub decode::OutputInfo::native_format: zenpixels::descriptor::PixelDescriptor
+pub decode::OutputInfo::orientation_applied: zenpixels::orientation::Orientation
+pub decode::OutputInfo::width: u32
+pub fn decode::OutputInfo::buffer_size(&self) -> u64
+pub fn decode::OutputInfo::full_decode(u32, u32, zenpixels::descriptor::PixelDescriptor) -> Self
+pub fn decode::OutputInfo::pixel_count(&self) -> u64
+pub fn decode::OutputInfo::with_alpha(self, bool) -> Self
+pub fn decode::OutputInfo::with_crop_applied(self, [u32; 4]) -> Self
+pub fn decode::OutputInfo::with_orientation_applied(self, zenpixels::orientation::Orientation) -> Self
+pub fn OwnedAnimationFrame::as_animation_frame(&self) -> AnimationFrame<'_>
+pub fn OwnedAnimationFrame::duration(&self) -> animation::FrameDuration
+pub fn OwnedAnimationFrame::duration_ms(&self) -> u32
+pub fn OwnedAnimationFrame::extensions(&self) -> &Extensions
+pub fn OwnedAnimationFrame::extensions_mut(&mut self) -> &mut Extensions
+pub fn OwnedAnimationFrame::extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&self) -> core::option::Option<&T>
+pub fn OwnedAnimationFrame::frame_index(&self) -> u32
+pub fn OwnedAnimationFrame::into_buffer(self) -> zenpixels::buffer::PixelBuffer
+pub fn OwnedAnimationFrame::new(zenpixels::buffer::PixelBuffer, u32, u32) -> Self
+pub fn OwnedAnimationFrame::pixels(&self) -> zenpixels::buffer::PixelSlice<'_>
+pub fn OwnedAnimationFrame::take_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&mut self) -> core::option::Option<T>
+pub fn OwnedAnimationFrame::with_duration(zenpixels::buffer::PixelBuffer, animation::FrameDuration, u32) -> Self
+pub fn OwnedAnimationFrame::with_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(self, T) -> Self
+pub decode::SourceColor::bit_depth: core::option::Option<u8>
+pub decode::SourceColor::channel_count: core::option::Option<u8>
+pub decode::SourceColor::cicp: core::option::Option<zenpixels::cicp::Cicp>
+pub decode::SourceColor::color_authority: zenpixels::color::ColorAuthority
+pub decode::SourceColor::content_light_level: core::option::Option<zenpixels::hdr::ContentLightLevel>
+pub decode::SourceColor::diffuse_white: core::option::Option<zenpixels::hdr::DiffuseWhite>
+pub decode::SourceColor::icc_profile: core::option::Option<alloc::sync::Arc<[u8]>>
+pub decode::SourceColor::mastering_display: core::option::Option<zenpixels::hdr::MasteringDisplay>
+pub fn SourceColor::color_primaries(&self) -> zenpixels::descriptor::ColorPrimaries
+pub fn SourceColor::has_hdr_transfer(&self) -> bool
+pub fn SourceColor::to_color_context(&self) -> zenpixels::color::ColorContext
+pub fn SourceColor::transfer_function(&self) -> zenpixels::descriptor::TransferFunction
+pub fn SourceColor::with_bit_depth(self, u8) -> Self
+pub fn SourceColor::with_channel_count(self, u8) -> Self
+pub fn SourceColor::with_cicp(self, zenpixels::cicp::Cicp) -> Self
+pub fn SourceColor::with_color_authority(self, zenpixels::color::ColorAuthority) -> Self
+pub fn SourceColor::with_content_light_level(self, zenpixels::hdr::ContentLightLevel) -> Self
+pub fn SourceColor::with_icc_profile(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn SourceColor::with_mastering_display(self, zenpixels::hdr::MasteringDisplay) -> Self
+pub trait decode::AnimationFrameDecoder: core::marker::Sized [also: prelude]
+pub type decode::AnimationFrameDecoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn decode::AnimationFrameDecoder::frame_count(&self) -> core::option::Option<u32>
+pub fn decode::AnimationFrameDecoder::info(&self) -> &ImageInfo
+pub fn decode::AnimationFrameDecoder::loop_count(&self) -> core::option::Option<u32>
+pub fn decode::AnimationFrameDecoder::render_next_frame(&mut self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<core::option::Option<AnimationFrame<'_>>, Self::Error>
+pub fn decode::AnimationFrameDecoder::render_next_frame_owned(&mut self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<core::option::Option<OwnedAnimationFrame>, Self::Error>
+pub fn decode::AnimationFrameDecoder::render_next_frame_to_sink(&mut self, core::option::Option<&dyn enough::Stop>, &mut dyn decode::DecodeRowSink) -> core::result::Result<core::option::Option<decode::OutputInfo>, Self::Error>
+pub fn decode::AnimationFrameDecoder::wrap_sink_error(decode::SinkError) -> Self::Error
+pub trait decode::Decode: core::marker::Sized [also: prelude]
+pub type decode::Decode::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn decode::Decode::decode(self) -> core::result::Result<decode::DecodeOutput, Self::Error>
+pub trait decode::DecodeJob<'a>: core::marker::Sized [also: prelude]
+pub type decode::DecodeJob::AnimationFrameDec: decode::AnimationFrameDecoder<Error = Self::Error> + core::marker::Send + 'static
+pub type decode::DecodeJob::Dec: decode::Decode<Error = Self::Error>
+pub type decode::DecodeJob::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub type decode::DecodeJob::StreamDec: decode::StreamingDecode<Error = Self::Error> + core::marker::Send
+pub fn decode::DecodeJob::animation_frame_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<Self::AnimationFrameDec, Self::Error>
+pub fn decode::DecodeJob::decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<Self::Dec, Self::Error>
+pub fn decode::DecodeJob::dyn_animation_frame_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<dyn decode::DynAnimationFrameDecoder>, encode::BoxedError> where Self: 'a, Self::AnimationFrameDec: core::marker::Send
+pub fn decode::DecodeJob::dyn_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynDecoder + 'a)>, encode::BoxedError> where Self: 'a
+pub fn decode::DecodeJob::dyn_streaming_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynStreamingDecoder + 'a)>, encode::BoxedError> where Self: 'a, Self::StreamDec: core::marker::Send
+pub fn decode::DecodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
+pub fn decode::DecodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn decode::DecodeJob::inventory(&self, &[u8]) -> core::result::Result<inventory::Inventory, whereat::at::At<CodecError>>
+pub fn decode::DecodeJob::output_info(&self, &[u8]) -> core::result::Result<decode::OutputInfo, Self::Error>
+pub fn decode::DecodeJob::probe(&self, &[u8]) -> core::result::Result<ImageInfo, Self::Error>
+pub fn decode::DecodeJob::probe_full(&self, &[u8]) -> core::result::Result<ImageInfo, Self::Error>
+pub fn decode::DecodeJob::push_decoder(self, alloc::borrow::Cow<'a, [u8]>, &mut dyn decode::DecodeRowSink, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<decode::OutputInfo, Self::Error>
+pub fn decode::DecodeJob::streaming_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<Self::StreamDec, Self::Error>
+pub fn decode::DecodeJob::try_set_policy(&mut self, decode::DecodePolicy) -> core::result::Result<(), UnsupportedOperation>
+pub fn decode::DecodeJob::try_with_policy(self, decode::DecodePolicy) -> core::result::Result<Self, UnsupportedOperation>
+pub fn decode::DecodeJob::with_crop_hint(self, u32, u32, u32, u32) -> Self
+pub fn decode::DecodeJob::with_extract_gain_map(self, bool) -> Self
+pub fn decode::DecodeJob::with_gain_map_render(self, gainmap::GainMapRender) -> Self
+pub fn decode::DecodeJob::with_limits(self, ResourceLimits) -> Self
+pub fn decode::DecodeJob::with_orientation(self, OrientationHint) -> Self
+pub fn decode::DecodeJob::with_policy(self, decode::DecodePolicy) -> Self
+pub fn decode::DecodeJob::with_start_frame_index(self, u32) -> Self
+pub fn decode::DecodeJob::with_stop(self, almost_enough::stop_token::StopToken) -> Self
+pub trait decode::DecodeRowSink
+pub fn decode::DecodeRowSink::begin(&mut self, u32, u32, zenpixels::descriptor::PixelDescriptor) -> core::result::Result<(), decode::SinkError>
+pub fn decode::DecodeRowSink::finish(&mut self) -> core::result::Result<(), decode::SinkError>
+pub fn decode::DecodeRowSink::provide_next_buffer(&mut self, u32, u32, u32, zenpixels::descriptor::PixelDescriptor) -> core::result::Result<zenpixels::buffer::PixelSliceMut<'_>, decode::SinkError>
+pub trait decode::DecoderConfig: core::clone::Clone + core::marker::Send + core::marker::Sync [also: prelude]
+pub type decode::DecoderConfig::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub type decode::DecoderConfig::Job<'a>: decode::DecodeJob<'a, Error = Self::Error> + 'static
+pub fn decode::DecoderConfig::capabilities() -> &'static decode::DecodeCapabilities
+pub fn decode::DecoderConfig::decode(self, &[u8]) -> core::result::Result<decode::DecodeOutput, Self::Error> where Self: core::marker::Sized
+pub fn decode::DecoderConfig::estimate_decode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
+pub fn decode::DecoderConfig::formats() -> &'static [ImageFormat]
+pub fn decode::DecoderConfig::job<'a>(self) -> Self::Job
+pub fn decode::DecoderConfig::probe(&self, &[u8]) -> core::result::Result<ImageInfo, Self::Error> where Self: core::marker::Sized
+pub fn decode::DecoderConfig::supported_descriptors() -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub trait decode::DynAnimationFrameDecoder: core::marker::Send [also: prelude]
+pub fn decode::DynAnimationFrameDecoder::as_any(&self) -> &dyn core::any::Any
+pub fn decode::DynAnimationFrameDecoder::as_any_mut(&mut self) -> &mut dyn core::any::Any
+pub fn decode::DynAnimationFrameDecoder::frame_count(&self) -> core::option::Option<u32>
+pub fn decode::DynAnimationFrameDecoder::info(&self) -> &ImageInfo
+pub fn decode::DynAnimationFrameDecoder::into_any(alloc::boxed::Box<Self>) -> alloc::boxed::Box<dyn core::any::Any>
+pub fn decode::DynAnimationFrameDecoder::loop_count(&self) -> core::option::Option<u32>
+pub fn decode::DynAnimationFrameDecoder::render_next_frame_owned(&mut self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<core::option::Option<OwnedAnimationFrame>, encode::BoxedError>
+pub fn decode::DynAnimationFrameDecoder::render_next_frame_to_sink(&mut self, core::option::Option<&dyn enough::Stop>, &mut dyn decode::DecodeRowSink) -> core::result::Result<core::option::Option<decode::OutputInfo>, encode::BoxedError>
+pub trait decode::DynDecodeJob<'a> [also: prelude]
+pub fn decode::DynDecodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
+pub fn decode::DynDecodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn decode::DynDecodeJob::into_animation_frame_decoder(alloc::boxed::Box<Self>, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<dyn decode::DynAnimationFrameDecoder>, encode::BoxedError>
+pub fn decode::DynDecodeJob::into_decoder(alloc::boxed::Box<Self>, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynDecoder + 'a)>, encode::BoxedError>
+pub fn decode::DynDecodeJob::into_streaming_decoder(alloc::boxed::Box<Self>, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynStreamingDecoder + 'a)>, encode::BoxedError>
+pub fn decode::DynDecodeJob::inventory(&self, &[u8]) -> core::result::Result<inventory::Inventory, encode::BoxedError>
+pub fn decode::DynDecodeJob::output_info(&self, &[u8]) -> core::result::Result<decode::OutputInfo, encode::BoxedError>
+pub fn decode::DynDecodeJob::probe(&self, &[u8]) -> core::result::Result<ImageInfo, encode::BoxedError>
+pub fn decode::DynDecodeJob::probe_full(&self, &[u8]) -> core::result::Result<ImageInfo, encode::BoxedError>
+pub fn decode::DynDecodeJob::push_decode(alloc::boxed::Box<Self>, alloc::borrow::Cow<'a, [u8]>, &mut dyn decode::DecodeRowSink, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<decode::OutputInfo, encode::BoxedError>
+pub fn decode::DynDecodeJob::set_crop_hint(&mut self, u32, u32, u32, u32)
+pub fn decode::DynDecodeJob::set_extract_gain_map(&mut self, bool)
+pub fn decode::DynDecodeJob::set_gain_map_render(&mut self, gainmap::GainMapRender)
+pub fn decode::DynDecodeJob::set_limits(&mut self, ResourceLimits)
+pub fn decode::DynDecodeJob::set_orientation(&mut self, OrientationHint)
+pub fn decode::DynDecodeJob::set_policy(&mut self, decode::DecodePolicy)
+pub fn decode::DynDecodeJob::set_start_frame_index(&mut self, u32)
+pub fn decode::DynDecodeJob::set_stop(&mut self, almost_enough::stop_token::StopToken)
+pub fn decode::DynDecodeJob::try_set_policy(&mut self, decode::DecodePolicy) -> core::result::Result<(), encode::BoxedError>
+pub trait decode::DynDecoder [also: prelude]
+pub fn decode::DynDecoder::decode(alloc::boxed::Box<Self>) -> core::result::Result<decode::DecodeOutput, encode::BoxedError>
+pub trait decode::DynDecoderConfig: core::marker::Send + core::marker::Sync [also: prelude]
+pub fn decode::DynDecoderConfig::as_any(&self) -> &dyn core::any::Any
+pub fn decode::DynDecoderConfig::capabilities(&self) -> &'static decode::DecodeCapabilities
+pub fn decode::DynDecoderConfig::dyn_job(&self) -> alloc::boxed::Box<(dyn decode::DynDecodeJob<'_> + '_)>
+pub fn decode::DynDecoderConfig::estimate_decode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
+pub fn decode::DynDecoderConfig::formats(&self) -> &'static [ImageFormat]
+pub fn decode::DynDecoderConfig::supported_descriptors(&self) -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub trait decode::DynStreamingDecoder: core::marker::Send [also: prelude]
+pub fn decode::DynStreamingDecoder::info(&self) -> &ImageInfo
+pub fn decode::DynStreamingDecoder::next_batch(&mut self) -> core::result::Result<core::option::Option<(u32, zenpixels::buffer::PixelSlice<'_>)>, encode::BoxedError>
+pub fn decode::SourceEncodingDetails::is_lossless(&self) -> bool
+pub fn decode::SourceEncodingDetails::source_generic_quality(&self) -> core::option::Option<f32>
+pub trait decode::StreamingDecode [also: prelude]
+pub type decode::StreamingDecode::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn decode::StreamingDecode::info(&self) -> &ImageInfo
+pub fn decode::StreamingDecode::next_batch(&mut self) -> core::result::Result<core::option::Option<(u32, zenpixels::buffer::PixelSlice<'_>)>, Self::Error>
+pub fn decode::is_format_available(zenpixels::descriptor::PixelFormat, &[zenpixels::descriptor::PixelDescriptor]) -> bool
+pub fn decode::negotiate_pixel_format(&[zenpixels::descriptor::PixelDescriptor], &[zenpixels::descriptor::PixelDescriptor]) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
+pub type decode::BoxedError = alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)> [also: encode]
+pub type decode::SinkError = alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>
+pub mod encode
+#[non_exhaustive] pub enum encode::Fidelity
+pub encode::Fidelity::Lossless
+pub encode::Fidelity::Lossy(encode::LossyTarget)
+pub const fn encode::Fidelity::butteraugli(f32) -> Self
+pub const fn encode::Fidelity::codec_quality(f32) -> Self
+pub const fn encode::Fidelity::is_lossless(self) -> bool
+pub const fn encode::Fidelity::ssim2(f32) -> Self
+pub const fn encode::Fidelity::zensim_b(f32) -> Self
+#[non_exhaustive] pub enum encode::LossyTarget
+pub encode::LossyTarget::ApproxButteraugli(f32)
+pub encode::LossyTarget::ApproxSsim2(f32)
+pub encode::LossyTarget::ApproxZensimB(f32)
+pub encode::LossyTarget::CodecSpecificQuality(f32)
+#[non_exhaustive] pub struct encode::EncodeCapabilities
+pub const encode::EncodeCapabilities::EMPTY: Self
+pub const fn encode::EncodeCapabilities::animation(&self) -> bool
+pub const fn encode::EncodeCapabilities::animation_timing(&self) -> bool
+pub const fn encode::EncodeCapabilities::cicp(&self) -> bool
+pub const fn encode::EncodeCapabilities::cicp_is_valid_carrier(&self) -> bool
+pub const fn encode::EncodeCapabilities::cicp_safe_sole_carrier(&self) -> bool
+pub const fn encode::EncodeCapabilities::effort_range(&self) -> core::option::Option<[i32; 2]>
+pub const fn encode::EncodeCapabilities::encode_from(&self) -> bool
+pub const fn encode::EncodeCapabilities::enforces_max_memory(&self) -> bool
+pub const fn encode::EncodeCapabilities::enforces_max_pixels(&self) -> bool
+pub const fn encode::EncodeCapabilities::exif(&self) -> bool
+pub const fn encode::EncodeCapabilities::gain_map(&self) -> bool
+pub const fn encode::EncodeCapabilities::hdr(&self) -> bool
+pub const fn encode::EncodeCapabilities::icc(&self) -> bool
+pub const fn encode::EncodeCapabilities::lossless(&self) -> bool
+pub const fn encode::EncodeCapabilities::lossy(&self) -> bool
+pub const fn encode::EncodeCapabilities::native_16bit(&self) -> bool
+pub const fn encode::EncodeCapabilities::native_alpha(&self) -> bool
+pub const fn encode::EncodeCapabilities::native_f32(&self) -> bool
+pub const fn encode::EncodeCapabilities::native_gray(&self) -> bool
+pub const fn encode::EncodeCapabilities::new() -> Self
+pub const fn encode::EncodeCapabilities::push_rows(&self) -> bool
+pub const fn encode::EncodeCapabilities::quality_range(&self) -> core::option::Option<[f32; 2]>
+pub const fn encode::EncodeCapabilities::stop(&self) -> bool
+pub const fn encode::EncodeCapabilities::supports(&self, UnsupportedOperation) -> bool
+pub const fn encode::EncodeCapabilities::threads_supported_range(&self) -> (u16, u16)
+pub const fn encode::EncodeCapabilities::with_animation(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_animation_timing(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_cicp(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_cicp_is_valid_carrier(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_cicp_safe_sole_carrier(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_effort_range(self, i32, i32) -> Self
+pub const fn encode::EncodeCapabilities::with_encode_from(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_enforces_max_memory(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_enforces_max_pixels(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_exif(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_gain_map(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_hdr(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_icc(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_lossless(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_lossy(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_native_16bit(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_native_alpha(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_native_f32(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_native_gray(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_push_rows(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_quality_range(self, f32, f32) -> Self
+pub const fn encode::EncodeCapabilities::with_stop(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_threads_supported_range(self, u16, u16) -> Self
+pub const fn encode::EncodeCapabilities::with_xmp(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::xmp(&self) -> bool
+#[non_exhaustive] pub struct encode::EncodeOutput
+pub fn encode::EncodeOutput::data(&self) -> &[u8]
+pub fn encode::EncodeOutput::extension(&self) -> &'static str
+pub fn encode::EncodeOutput::extensions(&self) -> &Extensions
+pub fn encode::EncodeOutput::extensions_mut(&mut self) -> &mut Extensions
+pub fn encode::EncodeOutput::extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&self) -> core::option::Option<&T>
+pub fn encode::EncodeOutput::format(&self) -> ImageFormat
+pub fn encode::EncodeOutput::into_vec(self) -> alloc::vec::Vec<u8>
+pub fn encode::EncodeOutput::is_empty(&self) -> bool
+pub fn encode::EncodeOutput::len(&self) -> usize
+pub fn encode::EncodeOutput::mime_type(&self) -> &'static str
+pub fn encode::EncodeOutput::new(alloc::vec::Vec<u8>, ImageFormat) -> Self
+pub fn encode::EncodeOutput::take_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&mut self) -> core::option::Option<T>
+pub fn encode::EncodeOutput::with_extension(self, &'static str) -> Self
+pub fn encode::EncodeOutput::with_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(self, T) -> Self
+pub fn encode::EncodeOutput::with_mime_type(self, &'static str) -> Self
+#[non_exhaustive] pub struct encode::EncodePolicy
+pub encode::EncodePolicy::color: core::option::Option<ColorEmitPolicy>
+pub encode::EncodePolicy::embed_exif: core::option::Option<bool>
+pub encode::EncodePolicy::embed_icc: core::option::Option<bool>
+pub encode::EncodePolicy::embed_xmp: core::option::Option<bool>
+pub const fn encode::EncodePolicy::none() -> Self
+pub const fn encode::EncodePolicy::preserve_all() -> Self
+pub const fn encode::EncodePolicy::resolve_color(&self, ColorEmitPolicy) -> ColorEmitPolicy
+pub const fn encode::EncodePolicy::resolve_exif(&self, bool) -> bool
+pub const fn encode::EncodePolicy::resolve_icc(&self, bool) -> bool
+pub const fn encode::EncodePolicy::resolve_xmp(&self, bool) -> bool
+pub const fn encode::EncodePolicy::strip_all() -> Self
+pub const fn encode::EncodePolicy::with_color(self, ColorEmitPolicy) -> Self
+pub const fn encode::EncodePolicy::with_embed_exif(self, bool) -> Self
+pub const fn encode::EncodePolicy::with_embed_icc(self, bool) -> Self
+pub const fn encode::EncodePolicy::with_embed_xmp(self, bool) -> Self
+pub trait encode::AnimationFrameEncoder: core::marker::Sized [also: prelude]
+pub type encode::AnimationFrameEncoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn encode::AnimationFrameEncoder::finish(self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, Self::Error>
+pub fn encode::AnimationFrameEncoder::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error>
+pub fn encode::AnimationFrameEncoder::push_frame_exact(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error>
+pub fn encode::AnimationFrameEncoder::push_frame_timed(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<animation::FrameDuration, Self::Error>
+pub fn encode::AnimationFrameEncoder::reject(UnsupportedOperation) -> Self::Error
+pub type ()::Error = UnsupportedOperation [also: (root)]
+pub fn ()::finish(self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, Self::Error> [also: (root)]
+pub fn ()::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error> [also: (root)]
+pub fn ()::push_frame_exact(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error> [also: (root)]
+pub fn ()::push_frame_timed(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<animation::FrameDuration, Self::Error> [also: (root)]
+pub fn ()::reject(UnsupportedOperation) -> Self::Error [also: (root)]
+pub trait encode::DynAnimationFrameEncoder: core::marker::Send [also: prelude]
+pub fn encode::DynAnimationFrameEncoder::as_any(&self) -> &dyn core::any::Any
+pub fn encode::DynAnimationFrameEncoder::as_any_mut(&mut self) -> &mut dyn core::any::Any
+pub fn encode::DynAnimationFrameEncoder::finish(alloc::boxed::Box<Self>, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
+pub fn encode::DynAnimationFrameEncoder::into_any(alloc::boxed::Box<Self>) -> alloc::boxed::Box<dyn core::any::Any>
+pub fn encode::DynAnimationFrameEncoder::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), encode::BoxedError>
+pub fn encode::DynAnimationFrameEncoder::push_frame_exact(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), encode::BoxedError>
+pub fn encode::DynAnimationFrameEncoder::push_frame_timed(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<animation::FrameDuration, encode::BoxedError>
+pub trait encode::DynEncodeJob [also: prelude]
+pub fn encode::DynEncodeJob::encode(alloc::boxed::Box<Self>, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
+pub fn encode::DynEncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
+pub fn encode::DynEncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn encode::DynEncodeJob::into_animation_frame_encoder(alloc::boxed::Box<Self>) -> core::result::Result<alloc::boxed::Box<dyn encode::DynAnimationFrameEncoder>, encode::BoxedError>
+pub fn encode::DynEncodeJob::into_encoder(alloc::boxed::Box<Self>) -> core::result::Result<alloc::boxed::Box<dyn encode::DynEncoder>, encode::BoxedError>
+pub fn encode::DynEncodeJob::set_canvas_size(&mut self, u32, u32)
+pub fn encode::DynEncodeJob::set_limits(&mut self, ResourceLimits)
+pub fn encode::DynEncodeJob::set_loop_count(&mut self, core::option::Option<u32>)
+pub fn encode::DynEncodeJob::set_metadata(&mut self, Metadata)
+pub fn encode::DynEncodeJob::set_metadata_policy(&mut self, Metadata, MetadataPolicy)
+pub fn encode::DynEncodeJob::set_policy(&mut self, encode::EncodePolicy)
+pub fn encode::DynEncodeJob::set_stop(&mut self, almost_enough::stop_token::StopToken)
+pub fn encode::DynEncodeJob::try_set_policy(&mut self, encode::EncodePolicy) -> core::result::Result<(), encode::BoxedError>
+pub trait encode::DynEncoder: core::marker::Send [also: prelude]
+pub fn encode::DynEncoder::encode(alloc::boxed::Box<Self>, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
+pub fn encode::DynEncoder::encode_from(alloc::boxed::Box<Self>, &mut dyn core::ops::function::FnMut(u32, zenpixels::buffer::PixelSliceMut<'_>) -> usize) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
+pub fn encode::DynEncoder::encode_srgba8(alloc::boxed::Box<Self>, &mut [u8], bool, u32, u32, u32) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
+pub fn encode::DynEncoder::finish(alloc::boxed::Box<Self>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
+pub fn encode::DynEncoder::preferred_strip_height(&self) -> u32
+pub fn encode::DynEncoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), encode::BoxedError>
+pub trait encode::DynEncoderConfig: core::marker::Send + core::marker::Sync [also: prelude]
+pub fn encode::DynEncoderConfig::as_any(&self) -> &dyn core::any::Any
+pub fn encode::DynEncoderConfig::capabilities(&self) -> &'static encode::EncodeCapabilities
+pub fn encode::DynEncoderConfig::dyn_job(&self) -> alloc::boxed::Box<(dyn encode::DynEncodeJob + 'static)>
+pub fn encode::DynEncoderConfig::estimate_encode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
+pub fn encode::DynEncoderConfig::format(&self) -> ImageFormat
+pub fn encode::DynEncoderConfig::supported_descriptors(&self) -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub trait encode::EncodeJob: core::marker::Sized [also: prelude]
+pub type encode::EncodeJob::AnimationFrameEnc: core::marker::Sized + core::marker::Send + 'static
+pub type encode::EncodeJob::Enc: core::marker::Sized + 'static
+pub type encode::EncodeJob::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn encode::EncodeJob::animation_frame_encoder(self) -> core::result::Result<Self::AnimationFrameEnc, Self::Error>
+pub fn encode::EncodeJob::dyn_animation_frame_encoder(self) -> core::result::Result<alloc::boxed::Box<dyn encode::DynAnimationFrameEncoder>, encode::BoxedError> where Self::AnimationFrameEnc: encode::AnimationFrameEncoder + core::marker::Send
+pub fn encode::EncodeJob::dyn_encoder(self) -> core::result::Result<alloc::boxed::Box<dyn encode::DynEncoder>, encode::BoxedError> where Self::Enc: encode::Encoder + core::marker::Send
+pub fn encode::EncodeJob::encode(self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, Self::Error> where Self::Enc: encode::Encoder<Error = Self::Error>
+pub fn encode::EncodeJob::encoder(self) -> core::result::Result<Self::Enc, Self::Error>
+pub fn encode::EncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
+pub fn encode::EncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn encode::EncodeJob::try_set_policy(&mut self, encode::EncodePolicy) -> core::result::Result<(), UnsupportedOperation>
+pub fn encode::EncodeJob::try_with_policy(self, encode::EncodePolicy) -> core::result::Result<Self, UnsupportedOperation>
+pub fn encode::EncodeJob::with_canvas_size(self, u32, u32) -> Self
+pub fn encode::EncodeJob::with_gain_map_encoded(self, gainmap::GainMapSource) -> core::result::Result<Self, Self::Error> where Self::Enc: encode::Encoder<Error = Self::Error>
+pub fn encode::EncodeJob::with_gain_map_pixels(self, gainmap::DecodedGainMap) -> core::result::Result<Self, Self::Error> where Self::Enc: encode::Encoder<Error = Self::Error>
+pub fn encode::EncodeJob::with_limits(self, ResourceLimits) -> Self
+pub fn encode::EncodeJob::with_loop_count(self, core::option::Option<u32>) -> Self
+pub fn encode::EncodeJob::with_metadata(self, Metadata) -> Self
+pub fn encode::EncodeJob::with_metadata_policy(self, Metadata, MetadataPolicy) -> Self
+pub fn encode::EncodeJob::with_policy(self, encode::EncodePolicy) -> Self
+pub fn encode::EncodeJob::with_stop(self, almost_enough::stop_token::StopToken) -> Self
+pub trait encode::Encoder: core::marker::Sized [also: prelude]
+pub type encode::Encoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn encode::Encoder::encode(self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, Self::Error>
+pub fn encode::Encoder::encode_from(self, &mut dyn core::ops::function::FnMut(u32, zenpixels::buffer::PixelSliceMut<'_>) -> usize) -> core::result::Result<encode::EncodeOutput, Self::Error>
+pub fn encode::Encoder::encode_srgba8(self, &mut [u8], bool, u32, u32, u32) -> core::result::Result<encode::EncodeOutput, Self::Error>
+pub fn encode::Encoder::finish(self) -> core::result::Result<encode::EncodeOutput, Self::Error>
+pub fn encode::Encoder::preferred_strip_height(&self) -> u32
+pub fn encode::Encoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), Self::Error>
+pub fn encode::Encoder::reject(UnsupportedOperation) -> Self::Error
+pub trait encode::EncoderConfig: core::clone::Clone + core::marker::Send + core::marker::Sync [also: prelude]
+pub type encode::EncoderConfig::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub type encode::EncoderConfig::Job: encode::EncodeJob<Error = Self::Error>
+pub fn encode::EncoderConfig::alpha_quality(&self) -> core::option::Option<f32>
+pub fn encode::EncoderConfig::capabilities() -> &'static encode::EncodeCapabilities
+pub fn encode::EncoderConfig::encode(self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, Self::Error> where Self: core::marker::Sized, <Self::Job as encode::EncodeJob>::Enc: encode::Encoder<Error = Self::Error>
+pub fn encode::EncoderConfig::estimate_encode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
+pub fn encode::EncoderConfig::format() -> ImageFormat
+pub fn encode::EncoderConfig::generic_effort(&self) -> core::option::Option<i32>
+pub fn encode::EncoderConfig::generic_quality(&self) -> core::option::Option<f32>
+pub fn encode::EncoderConfig::is_lossless(&self) -> core::option::Option<bool>
+pub fn encode::EncoderConfig::job(self) -> Self::Job
+pub fn encode::EncoderConfig::resolved_target_fidelity(&self) -> core::option::Option<encode::Fidelity>
+pub fn encode::EncoderConfig::supported_descriptors() -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub fn encode::EncoderConfig::with_alpha_quality(self, f32) -> Self
+pub fn encode::EncoderConfig::with_fidelity(self, encode::Fidelity) -> Self
+pub fn encode::EncoderConfig::with_generic_effort(self, i32) -> Self
+pub fn encode::EncoderConfig::with_generic_quality(self, f32) -> Self
+pub fn encode::EncoderConfig::with_lossless(self, bool) -> Self
+pub fn encode::best_encode_format(zenpixels::descriptor::PixelDescriptor, &[zenpixels::descriptor::PixelDescriptor]) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
+pub mod estimate
+#[non_exhaustive] pub enum estimate::SimdTier
+pub estimate::SimdTier::CurrentHost
+pub estimate::SimdTier::Neon
+pub estimate::SimdTier::Unknown
+pub estimate::SimdTier::Wasm
+pub estimate::SimdTier::Wasm128
+pub estimate::SimdTier::X86V1
+pub estimate::SimdTier::X86V2
+pub estimate::SimdTier::X86V3
+pub estimate::SimdTier::X86V4
+#[non_exhaustive] pub struct estimate::ComputeEnvironment
+pub fn estimate::ComputeEnvironment::available_ram_bytes(&self) -> core::option::Option<u64>
+pub fn estimate::ComputeEnvironment::conservative() -> Self
+pub fn estimate::ComputeEnvironment::cores(&self) -> usize
+pub fn estimate::ComputeEnvironment::new() -> Self
+pub fn estimate::ComputeEnvironment::simd_tier(&self) -> core::option::Option<estimate::SimdTier>
+pub fn estimate::ComputeEnvironment::with_available_ram_bytes(self, u64) -> Self
+pub fn estimate::ComputeEnvironment::with_cores(self, usize) -> Self
+pub fn estimate::ComputeEnvironment::with_simd_tier(self, estimate::SimdTier) -> Self
+#[non_exhaustive] pub struct estimate::ImageCharacteristics
+pub fn estimate::ImageCharacteristics::descriptor(&self) -> &zenpixels::descriptor::PixelDescriptor
+pub fn estimate::ImageCharacteristics::frame_count(&self) -> u32
+pub fn estimate::ImageCharacteristics::height(&self) -> u32
+pub fn estimate::ImageCharacteristics::input_bytes(&self) -> u64
+pub fn estimate::ImageCharacteristics::new(u32, u32, zenpixels::descriptor::PixelDescriptor) -> Self
+pub fn estimate::ImageCharacteristics::pixels(&self) -> u64
+pub fn estimate::ImageCharacteristics::width(&self) -> u32
+pub fn estimate::ImageCharacteristics::with_frame_count(self, u32) -> Self
+#[non_exhaustive] pub struct estimate::ResourceEstimate
+pub fn estimate::ResourceEstimate::at_cores(&self, usize) -> Self
+pub fn estimate::ResourceEstimate::conservative(&estimate::ImageCharacteristics) -> Self
+pub fn estimate::ResourceEstimate::cpu_ms(&self) -> core::option::Option<u64>
+pub fn estimate::ResourceEstimate::new(u64, u64) -> Self
+pub fn estimate::ResourceEstimate::peak_memory_bytes_est(&self) -> core::option::Option<u64>
+pub fn estimate::ResourceEstimate::peak_memory_bytes_max(&self) -> core::option::Option<u64>
+pub fn estimate::ResourceEstimate::threading(&self) -> core::option::Option<estimate::ThreadingInformation>
+pub fn estimate::ResourceEstimate::unknown() -> Self
+pub fn estimate::ResourceEstimate::wall_ms(&self) -> core::option::Option<u64>
+pub fn estimate::ResourceEstimate::with_cpu_ms(self, u64) -> Self
+pub fn estimate::ResourceEstimate::with_peak_max(self, u64) -> Self
+pub fn estimate::ResourceEstimate::with_threading(self, estimate::ThreadingInformation) -> Self
+#[non_exhaustive] pub struct estimate::ThreadingInformation
+pub const estimate::ThreadingInformation::SERIAL: Self
+pub fn estimate::ThreadingInformation::effective_threads(&self, usize) -> u64
+pub fn estimate::ThreadingInformation::is_parallel(&self) -> bool
+pub fn estimate::ThreadingInformation::max_efficient_threads(&self) -> core::option::Option<u32>
+pub fn estimate::ThreadingInformation::parallel(u32) -> Self
+pub fn estimate::ThreadingInformation::parallel_unknown_knee() -> Self
+pub mod exif
+pub enum exif::ByteOrder
+pub exif::ByteOrder::Big
+pub exif::ByteOrder::Little
+#[non_exhaustive] pub enum exif::Ifd
+pub exif::Ifd::Exif
+pub exif::Ifd::Gps
+pub exif::Ifd::Ifd0
+pub exif::Ifd::Ifd1
+pub exif::Ifd::Interop
+pub exif::Retention::Discard
+pub exif::Retention::Keep
+pub const fn exif::Retention::discards(self) -> bool [also: (root)]
+pub const fn exif::Retention::keeps(self) -> bool [also: (root)]
+pub exif::TextEncoding::Ascii
+pub exif::TextEncoding::Utf8
+pub struct exif::EntryRef<'e>
+pub exif::EntryRef::count: u32
+pub exif::EntryRef::ifd: exif::Ifd
+pub exif::EntryRef::kind: u16
+pub exif::EntryRef::tag: u16
+pub exif::EntryRef::value: &'e [u8]
+pub fn exif::Exif<'a>::artist(&self) -> core::option::Option<alloc::borrow::Cow<'_, str>>
+pub fn exif::Exif<'a>::artist_bytes(&self) -> core::option::Option<&[u8]>
+pub fn exif::Exif<'a>::byte_order(&self) -> exif::ByteOrder
+pub fn exif::Exif<'a>::copyright(&self) -> core::option::Option<alloc::borrow::Cow<'_, str>>
+pub fn exif::Exif<'a>::copyright_bytes(&self) -> core::option::Option<&[u8]>
+pub fn exif::Exif<'a>::entries(&self) -> impl core::iter::traits::iterator::Iterator<Item = exif::EntryRef<'_>> + '_
+pub fn exif::Exif<'a>::filtered(&self, &exif::ExifPolicy) -> exif::Exif<'a>
+pub fn exif::Exif<'a>::has_camera(&self) -> bool
+pub fn exif::Exif<'a>::has_camera_owner(&self) -> bool
+pub fn exif::Exif<'a>::has_color(&self) -> bool
+pub fn exif::Exif<'a>::has_datetimes(&self) -> bool
+pub fn exif::Exif<'a>::has_device_ids(&self) -> bool
+pub fn exif::Exif<'a>::has_gps(&self) -> bool
+pub fn exif::Exif<'a>::has_image_unique_id(&self) -> bool
+pub fn exif::Exif<'a>::has_thumbnail(&self) -> bool
+pub fn exif::Exif<'a>::has_time_offsets(&self) -> bool
+pub fn exif::Exif<'a>::new(exif::TextEncoding) -> Self
+pub fn exif::Exif<'a>::orientation(&self) -> core::option::Option<zenpixels::orientation::Orientation>
+pub fn exif::Exif<'a>::parse(&'a [u8]) -> core::option::Option<Self>
+pub fn exif::Exif<'a>::set_artist(&mut self, &str)
+pub fn exif::Exif<'a>::set_copyright(&mut self, &str)
+pub fn exif::Exif<'a>::set_orientation(&mut self, zenpixels::orientation::Orientation)
+pub fn exif::Exif<'a>::to_bytes(&self) -> alloc::vec::Vec<u8>
+pub exif::ExifPolicy::camera: exif::Retention
+pub exif::ExifPolicy::camera_owner: exif::Retention
+pub exif::ExifPolicy::color: exif::Retention
+pub exif::ExifPolicy::datetimes: exif::Retention
+pub exif::ExifPolicy::device_ids: exif::Retention
+pub exif::ExifPolicy::gps: exif::Retention
+pub exif::ExifPolicy::image_unique_id: exif::Retention
+pub exif::ExifPolicy::orientation: exif::Retention
+pub exif::ExifPolicy::other: exif::Retention
+pub exif::ExifPolicy::rights: exif::Retention
+pub exif::ExifPolicy::thumbnail: exif::Retention
+pub exif::ExifPolicy::time_offsets: exif::Retention
+pub const exif::ExifPolicy::ATTRIBUTED_ORIENTATION: Self
+pub const exif::ExifPolicy::DISCARD_ALL: Self
+pub const exif::ExifPolicy::KEEP_ALL: Self
+pub const exif::ExifPolicy::ORIENTATION_ONLY: Self
+pub fn exif::ExifPolicy::discards_everything(&self) -> bool
+pub fn exif::ExifPolicy::keeps_everything(&self) -> bool
+pub const fn exif::ExifPolicy::with_camera(self, exif::Retention) -> Self [also: (root)]
+pub const fn exif::ExifPolicy::with_camera_owner(self, exif::Retention) -> Self [also: (root)]
+pub const fn exif::ExifPolicy::with_color(self, exif::Retention) -> Self [also: (root)]
+pub const fn exif::ExifPolicy::with_datetimes(self, exif::Retention) -> Self [also: (root)]
+pub const fn exif::ExifPolicy::with_device_ids(self, exif::Retention) -> Self [also: (root)]
+pub const fn exif::ExifPolicy::with_gps(self, exif::Retention) -> Self [also: (root)]
+pub const fn exif::ExifPolicy::with_image_unique_id(self, exif::Retention) -> Self [also: (root)]
+pub const fn exif::ExifPolicy::with_orientation(self, exif::Retention) -> Self [also: (root)]
+pub const fn exif::ExifPolicy::with_other(self, exif::Retention) -> Self [also: (root)]
+pub const fn exif::ExifPolicy::with_rights(self, exif::Retention) -> Self [also: (root)]
+pub const fn exif::ExifPolicy::with_thumbnail(self, exif::Retention) -> Self [also: (root)]
+pub const fn exif::ExifPolicy::with_time_offsets(self, exif::Retention) -> Self [also: (root)]
+pub fn exif::retain<'a>(&'a [u8], &exif::ExifPolicy) -> core::option::Option<alloc::borrow::Cow<'a, [u8]>>
+pub mod gainmap
+pub gainmap::GainMapDirection::BaseIsHdr
+pub gainmap::GainMapDirection::BaseIsSdr
+#[non_exhaustive] pub enum gainmap::GainMapParseError
+pub gainmap::GainMapParseError::InvalidGamma
+pub gainmap::GainMapParseError::InvalidGamma::channel: usize
+pub gainmap::GainMapParseError::InvalidGamma::value: f64
+pub gainmap::GainMapParseError::MinExceedsMax
+pub gainmap::GainMapParseError::MinExceedsMax::channel: usize
+pub gainmap::GainMapParseError::MinExceedsMax::max: f64
+pub gainmap::GainMapParseError::MinExceedsMax::min: f64
+pub gainmap::GainMapParseError::NonFiniteValue
+pub gainmap::GainMapParseError::NonFiniteValue::field: &'static str
+pub gainmap::GainMapParseError::TruncatedData
+pub gainmap::GainMapParseError::TruncatedData::actual: usize
+pub gainmap::GainMapParseError::TruncatedData::expected: usize
+pub gainmap::GainMapParseError::UnsupportedVersion
+pub gainmap::GainMapParseError::UnsupportedVersion::version: u8
+pub gainmap::GainMapParseError::UrnMismatch
+pub gainmap::GainMapParseError::ZeroDenominator
+pub gainmap::GainMapParseError::ZeroDenominator::field: &'static str
+pub gainmap::GainMapPresence::Absent
+pub gainmap::GainMapPresence::Available(alloc::boxed::Box<gainmap::GainMapInfo>)
+pub gainmap::GainMapPresence::Unknown
+pub fn gainmap::GainMapPresence::info(&self) -> core::option::Option<&gainmap::GainMapInfo>
+pub fn gainmap::GainMapPresence::into_info(self) -> core::option::Option<alloc::boxed::Box<gainmap::GainMapInfo>>
+pub fn gainmap::GainMapPresence::is_absent(&self) -> bool
+pub fn gainmap::GainMapPresence::is_present(&self) -> bool
+pub fn gainmap::GainMapPresence::is_unknown(&self) -> bool
+pub gainmap::GainMapRender::BaseOnly
+pub gainmap::GainMapRender::Components
+pub gainmap::GainMapRender::ReconstructHdr
+pub gainmap::GainMapRender::ReconstructHdr::target_headroom: core::option::Option<f32>
+pub gainmap::Iso21496Format::AvifTmap = 1
+pub gainmap::Iso21496Format::JpegApp2 = 0
+pub gainmap::Iso21496Format::JpegApp2BodyWithUrn = 3
+pub gainmap::Iso21496Format::JxlJhgm = 2
+pub gainmap::DecodedGainMap::metadata: gainmap::GainMapInfo
+pub gainmap::DecodedGainMap::pixels: zenpixels::buffer::PixelBuffer
+pub fn gainmap::DecodedGainMap::channels(&self) -> u8
+pub fn gainmap::DecodedGainMap::height(&self) -> u32
+pub fn gainmap::DecodedGainMap::new(zenpixels::buffer::PixelBuffer, gainmap::GainMapInfo) -> Self
+pub fn gainmap::DecodedGainMap::width(&self) -> u32
+pub struct gainmap::Fraction
+pub gainmap::Fraction::denominator: u32
+pub gainmap::Fraction::numerator: i32
+pub fn gainmap::Fraction::from_f64(f64, u32) -> Self
+pub fn gainmap::Fraction::from_f64_cf(f64) -> Self
+pub fn gainmap::Fraction::is_valid(&self) -> bool
+pub fn gainmap::Fraction::to_f64(self) -> f64
+pub gainmap::GainMapChannel::alternate_offset: f64
+pub gainmap::GainMapChannel::base_offset: f64
+pub gainmap::GainMapChannel::gamma: f64
+pub gainmap::GainMapChannel::max: f64
+pub gainmap::GainMapChannel::min: f64
+pub fn gainmap::GainMapChannel::linear_max(&self) -> f64
+pub fn gainmap::GainMapChannel::linear_min(&self) -> f64
+pub gainmap::GainMapInfo::alternate_cicp: core::option::Option<zenpixels::cicp::Cicp>
+pub gainmap::GainMapInfo::alternate_icc: core::option::Option<alloc::sync::Arc<[u8]>>
+pub gainmap::GainMapInfo::bit_depth: u8
+pub gainmap::GainMapInfo::channels: u8
+pub gainmap::GainMapInfo::height: u32
+pub gainmap::GainMapInfo::params: gainmap::GainMapParams
+pub gainmap::GainMapInfo::width: u32
+pub fn gainmap::GainMapInfo::new(gainmap::GainMapParams, u32, u32, u8) -> Self
+pub fn gainmap::GainMapInfo::with_alternate_cicp(self, zenpixels::cicp::Cicp) -> Self
+pub fn gainmap::GainMapInfo::with_alternate_icc(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn gainmap::GainMapInfo::with_bit_depth(self, u8) -> Self
+pub gainmap::GainMapParams::alternate_hdr_headroom: f64
+pub gainmap::GainMapParams::backward_direction: bool
+pub gainmap::GainMapParams::base_hdr_headroom: f64
+pub gainmap::GainMapParams::channels: [gainmap::GainMapChannel; 3]
+pub gainmap::GainMapParams::use_base_color_space: bool
+pub fn gainmap::GainMapParams::direction(&self) -> gainmap::GainMapDirection
+pub fn gainmap::GainMapParams::is_single_channel(&self) -> bool
+pub fn gainmap::GainMapParams::linear_alternate_headroom(&self) -> f64
+pub fn gainmap::GainMapParams::linear_base_headroom(&self) -> f64
+pub fn gainmap::GainMapParams::validate(&self) -> core::result::Result<(), gainmap::GainMapParseError>
+#[non_exhaustive] pub struct gainmap::GainMapSource
+pub gainmap::GainMapSource::data: alloc::vec::Vec<u8>
+pub gainmap::GainMapSource::depth: u8
+pub gainmap::GainMapSource::format: ImageFormat
+pub gainmap::GainMapSource::metadata: gainmap::GainMapInfo
+pub fn gainmap::GainMapSource::new(alloc::vec::Vec<u8>, ImageFormat, gainmap::GainMapInfo) -> Self
+pub fn gainmap::GainMapSource::with_depth(self, u8) -> Self
+pub struct gainmap::UFraction
+pub gainmap::UFraction::denominator: u32
+pub gainmap::UFraction::numerator: u32
+pub fn gainmap::UFraction::from_f64(f64, u32) -> Self
+pub fn gainmap::UFraction::from_f64_cf(f64) -> Self
+pub fn gainmap::UFraction::is_valid(&self) -> bool
+pub fn gainmap::UFraction::to_f64(self) -> f64
+pub fn gainmap::parse_iso21496(&[u8]) -> core::result::Result<gainmap::GainMapParams, gainmap::GainMapParseError>
+pub fn gainmap::parse_iso21496_fmt(&[u8], gainmap::Iso21496Format) -> core::result::Result<gainmap::GainMapParams, gainmap::GainMapParseError>
+pub fn gainmap::serialize_iso21496(&gainmap::GainMapParams) -> alloc::vec::Vec<u8>
+pub fn gainmap::serialize_iso21496_fmt(&gainmap::GainMapParams, gainmap::Iso21496Format) -> alloc::vec::Vec<u8>
+pub fn gainmap::serialize_iso21496_fmt_into(&gainmap::GainMapParams, gainmap::Iso21496Format, &mut alloc::vec::Vec<u8>)
+pub mod helpers
+pub enum helpers::IccMatchTolerance
+pub helpers::IccMatchTolerance::Approximate = 13
+pub helpers::IccMatchTolerance::Exact = 1
+pub helpers::IccMatchTolerance::Intent = 56
+pub helpers::IccMatchTolerance::Precise = 3
+pub fn helpers::copy_decode_to_sink<'a, J>(J, alloc::borrow::Cow<'a, [u8]>, &mut dyn decode::DecodeRowSink, &[zenpixels::descriptor::PixelDescriptor], fn(decode::SinkError) -> <J as decode::DecodeJob>::Error) -> core::result::Result<decode::OutputInfo, <J as decode::DecodeJob>::Error> where J: decode::DecodeJob<'a>
+pub fn helpers::copy_frame_to_sink<D: decode::AnimationFrameDecoder>(&mut D, core::option::Option<&dyn enough::Stop>, &mut dyn decode::DecodeRowSink) -> core::result::Result<core::option::Option<decode::OutputInfo>, <D as decode::AnimationFrameDecoder>::Error>
+pub fn helpers::descriptor_for_decoded_pixels(zenpixels::descriptor::PixelFormat, &SourceColor, core::option::Option<&zenpixels::cicp::Cicp>, helpers::IccMatchTolerance) -> zenpixels::descriptor::PixelDescriptor
+pub fn helpers::descriptor_for_decoded_pixels_v2(zenpixels::descriptor::PixelFormat, &SourceColor, core::option::Option<&zenpixels::color::ColorProfileSource<'_>>) -> zenpixels::descriptor::PixelDescriptor
+pub fn helpers::icc_profile_is_srgb(&[u8]) -> bool
+pub fn helpers::identify_well_known_icc(&[u8], helpers::IccMatchTolerance) -> core::option::Option<(zenpixels::descriptor::ColorPrimaries, zenpixels::descriptor::TransferFunction)>
+pub fn helpers::parse_exif_orientation(&[u8]) -> core::option::Option<zenpixels::orientation::Orientation>
+pub fn helpers::set_exif_orientation(&[u8], zenpixels::orientation::Orientation) -> core::option::Option<alloc::vec::Vec<u8>>
+pub mod icc
+pub mod inventory
+#[non_exhaustive] pub enum inventory::Disposition
+pub inventory::Disposition::Dropped
+pub inventory::Disposition::ImageData
+pub inventory::Disposition::Malformed
+pub inventory::Disposition::Metadata(inventory::MetadataKind)
+pub inventory::Disposition::Padding
+pub inventory::Disposition::Skipped
+pub inventory::Disposition::Structure
+pub inventory::Disposition::Trailing
+pub inventory::Disposition::Unknown
+pub inventory::Disposition::Unreferenced
+pub const fn inventory::Disposition::is_consumed(self) -> bool
+pub const fn inventory::Disposition::name(self) -> &'static str
+#[non_exhaustive] pub enum inventory::InventoryError
+pub inventory::InventoryError::Allocation
+pub inventory::InventoryError::BadParent
+pub inventory::InventoryError::BadParent::part: inventory::PartId
+pub inventory::InventoryError::EmptyPart
+pub inventory::InventoryError::EmptyPart::part: inventory::PartId
+pub inventory::InventoryError::OutOfBounds
+pub inventory::InventoryError::OutOfBounds::part: inventory::PartId
+pub inventory::InventoryError::OutsideParent
+pub inventory::InventoryError::OutsideParent::part: inventory::PartId
+pub inventory::InventoryError::Overlap
+pub inventory::InventoryError::Overlap::first: inventory::PartId
+pub inventory::InventoryError::Overlap::second: inventory::PartId
+pub inventory::InventoryError::TooManyParts
+pub inventory::InventoryError::TooManyParts::max: u32
+pub inventory::InventoryError::Uncovered
+pub inventory::InventoryError::Uncovered::parent: core::option::Option<inventory::PartId>
+pub inventory::InventoryError::Uncovered::range: core::ops::range::Range<u64>
+#[non_exhaustive] pub enum inventory::MetadataKind
+pub inventory::MetadataKind::Animation
+pub inventory::MetadataKind::Cicp
+pub inventory::MetadataKind::Colour
+pub inventory::MetadataKind::Exif
+pub inventory::MetadataKind::GainMap
+pub inventory::MetadataKind::HdrStatic
+pub inventory::MetadataKind::Icc
+pub inventory::MetadataKind::Orientation
+pub inventory::MetadataKind::Resolution
+pub inventory::MetadataKind::Supplement
+pub inventory::MetadataKind::Xmp
+pub const fn inventory::MetadataKind::name(self) -> &'static str
+#[non_exhaustive] pub enum inventory::PartKind
+pub inventory::PartKind::Attribute
+pub inventory::PartKind::Block
+pub inventory::PartKind::Box
+pub inventory::PartKind::Chunk
+pub inventory::PartKind::CodedUnit
+pub inventory::PartKind::EmbeddedImage
+pub inventory::PartKind::Extent
+pub inventory::PartKind::Field
+pub inventory::PartKind::Gap
+pub inventory::PartKind::Header
+pub inventory::PartKind::Ifd
+pub inventory::PartKind::Item
+pub inventory::PartKind::Property
+pub inventory::PartKind::ScanData
+pub inventory::PartKind::Segment
+pub inventory::PartKind::Trailer
+pub const fn inventory::PartKind::name(self) -> &'static str
+#[non_exhaustive] pub enum inventory::PartTag
+pub inventory::PartTag::Code(u32)
+pub inventory::PartTag::FourCc([u8; 4])
+pub inventory::PartTag::Marker(u8)
+pub inventory::PartTag::Name(alloc::borrow::Cow<'static, str>)
+pub inventory::PartTag::None
+pub struct inventory::Inventory
+pub fn inventory::Inventory::bytes_by_disposition(&self) -> alloc::vec::Vec<(&'static str, u64)>
+pub fn inventory::Inventory::children(&self, core::option::Option<inventory::PartId>) -> alloc::vec::Vec<inventory::PartId>
+pub fn inventory::Inventory::fill_gaps(&mut self, core::option::Option<inventory::PartId>, inventory::Disposition) -> core::result::Result<(), inventory::InventoryError>
+pub fn inventory::Inventory::format(&self) -> ImageFormat
+pub fn inventory::Inventory::get(&self, inventory::PartId) -> core::option::Option<&inventory::Part>
+pub fn inventory::Inventory::input_len(&self) -> u64
+pub fn inventory::Inventory::new(ImageFormat, u64) -> Self
+pub fn inventory::Inventory::parts(&self) -> &[inventory::Part]
+pub fn inventory::Inventory::push(&mut self, core::option::Option<inventory::PartId>, inventory::Part) -> core::result::Result<inventory::PartId, inventory::InventoryError>
+pub fn inventory::Inventory::set_detail(&mut self, inventory::PartId, impl core::convert::Into<alloc::string::String>) -> bool
+pub fn inventory::Inventory::set_disposition(&mut self, inventory::PartId, inventory::Disposition) -> core::option::Option<inventory::Disposition>
+pub fn inventory::Inventory::try_children(&self, core::option::Option<inventory::PartId>) -> core::result::Result<alloc::vec::Vec<inventory::PartId>, inventory::InventoryError>
+pub fn inventory::Inventory::unconsumed(&self) -> impl core::iter::traits::iterator::Iterator<Item = (inventory::PartId, &inventory::Part)>
+pub fn inventory::Inventory::validate(&self) -> core::result::Result<(), inventory::InventoryError>
+pub fn inventory::Inventory::with_max_parts(self, u32) -> Self
+#[non_exhaustive] pub struct inventory::Part
+pub fn inventory::Part::body(&self) -> core::option::Option<core::ops::range::Range<u64>>
+pub fn inventory::Part::clear_body(&mut self)
+pub fn inventory::Part::clear_detail(&mut self)
+pub fn inventory::Part::detail(&self) -> core::option::Option<&str>
+pub fn inventory::Part::disposition(&self) -> inventory::Disposition
+pub fn inventory::Part::is_empty(&self) -> bool
+pub fn inventory::Part::kind(&self) -> inventory::PartKind
+pub fn inventory::Part::label(&self) -> core::option::Option<&str>
+pub fn inventory::Part::len(&self) -> u64
+pub fn inventory::Part::new(inventory::PartKind, inventory::PartTag, core::ops::range::Range<u64>, inventory::Disposition) -> Self
+pub fn inventory::Part::parent(&self) -> core::option::Option<inventory::PartId>
+pub fn inventory::Part::range(&self) -> core::ops::range::Range<u64>
+pub fn inventory::Part::set_body(&mut self, core::ops::range::Range<u64>)
+pub fn inventory::Part::set_detail(&mut self, impl core::convert::Into<alloc::string::String>)
+pub fn inventory::Part::set_disposition(&mut self, inventory::Disposition)
+pub fn inventory::Part::set_label(&mut self, impl core::convert::Into<alloc::borrow::Cow<'static, str>>)
+pub fn inventory::Part::tag(&self) -> &inventory::PartTag
+pub fn inventory::Part::with_body(self, core::ops::range::Range<u64>) -> Self
+pub fn inventory::Part::with_detail(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn inventory::Part::with_label(self, impl core::convert::Into<alloc::borrow::Cow<'static, str>>) -> Self
+pub struct inventory::PartId(_)
+pub const fn inventory::PartId::index(self) -> usize
+pub const inventory::DEFAULT_MAX_PARTS: u32
+pub mod metadata_rewrite
+#[non_exhaustive] pub enum metadata_rewrite::Action
+pub metadata_rewrite::Action::Keep
+pub metadata_rewrite::Action::OpaqueIcc
+pub metadata_rewrite::Action::OpaqueImageData
+pub metadata_rewrite::Action::Remove
+pub metadata_rewrite::Action::RemoveJpegReconstruction
+pub metadata_rewrite::Action::Rewrite
+#[non_exhaustive] pub enum metadata_rewrite::Compression
+pub metadata_rewrite::Compression::Brotli
+pub metadata_rewrite::Compression::Zlib
+#[non_exhaustive] pub enum metadata_rewrite::Error
+pub metadata_rewrite::Error::Allocation
+pub metadata_rewrite::Error::Cancelled
+pub metadata_rewrite::Error::Limit(LimitKind)
+pub metadata_rewrite::Error::Malformed(&'static str)
+pub metadata_rewrite::Error::Service(&'static str)
+pub metadata_rewrite::Error::Stopped(enough::reason::StopReason)
+pub metadata_rewrite::Error::Unsupported(&'static str)
+pub struct metadata_rewrite::Entry
+pub fn metadata_rewrite::Entry::action(&self) -> metadata_rewrite::Action
+pub fn metadata_rewrite::Entry::carrier(&self) -> &'static str
+pub fn metadata_rewrite::Entry::new(core::ops::range::Range<usize>, &'static str, metadata_rewrite::Action) -> Self
+pub fn metadata_rewrite::Entry::source_range(&self) -> core::ops::range::Range<usize>
+pub struct metadata_rewrite::Plan<'a>
+pub fn metadata_rewrite::Plan<'a>::chunks(&self) -> impl core::iter::traits::iterator::Iterator<Item = &[u8]>
+pub fn metadata_rewrite::Plan<'a>::from_parts(usize, alloc::vec::Vec<alloc::borrow::Cow<'a, [u8]>>, alloc::vec::Vec<metadata_rewrite::Entry>) -> core::result::Result<Self, metadata_rewrite::Error>
+pub fn metadata_rewrite::Plan<'a>::output_len(&self) -> usize
+pub fn metadata_rewrite::Plan<'a>::report(&self) -> &[metadata_rewrite::Entry]
+pub fn metadata_rewrite::Plan<'a>::to_vec(&self) -> core::result::Result<alloc::vec::Vec<u8>, metadata_rewrite::Error>
+pub struct metadata_rewrite::Request<'a>
+pub fn metadata_rewrite::Request<'a>::edit_xmp(&self) -> bool
+pub fn metadata_rewrite::Request<'a>::input(&self) -> &'a [u8]
+pub fn metadata_rewrite::Request<'a>::max_carriers(&self) -> usize
+pub fn metadata_rewrite::Request<'a>::max_input(&self) -> usize
+pub fn metadata_rewrite::Request<'a>::max_metadata(&self) -> usize
+pub fn metadata_rewrite::Request<'a>::max_output(&self) -> usize
+pub fn metadata_rewrite::Request<'a>::new(&'a [u8]) -> Self
+pub fn metadata_rewrite::Request<'a>::normalize_icc(&self) -> bool
+pub fn metadata_rewrite::Request<'a>::policy(&self) -> &MetadataPolicy
+pub fn metadata_rewrite::Request<'a>::remove_reconstruction(&self) -> bool
+pub fn metadata_rewrite::Request<'a>::services(&self) -> core::option::Option<&'a dyn metadata_rewrite::Services>
+pub fn metadata_rewrite::Request<'a>::stop(&self) -> &'a dyn enough::Stop
+pub fn metadata_rewrite::Request<'a>::with_byte_limits(self, usize, usize) -> Self
+pub fn metadata_rewrite::Request<'a>::with_carrier_limit(self, usize) -> Self
+pub fn metadata_rewrite::Request<'a>::with_icc_normalization(self, bool) -> Self
+pub fn metadata_rewrite::Request<'a>::with_input(self, &'a [u8]) -> Self
+pub fn metadata_rewrite::Request<'a>::with_jpeg_reconstruction_removal(self, bool) -> Self
+pub fn metadata_rewrite::Request<'a>::with_metadata_limit(self, usize) -> Self
+pub fn metadata_rewrite::Request<'a>::with_policy(self, MetadataPolicy) -> Self
+pub fn metadata_rewrite::Request<'a>::with_services(self, &'a dyn metadata_rewrite::Services) -> Self
+pub fn metadata_rewrite::Request<'a>::with_stop(self, &'a dyn enough::Stop) -> Self
+pub fn metadata_rewrite::Request<'a>::with_xmp_editing(self, bool) -> Self
+pub trait metadata_rewrite::Services
+pub fn metadata_rewrite::Services::compress(&self, metadata_rewrite::Compression, &[u8], usize, &dyn enough::Stop) -> core::result::Result<alloc::vec::Vec<u8>, metadata_rewrite::Error>
+pub fn metadata_rewrite::Services::decompress(&self, metadata_rewrite::Compression, &[u8], usize, &dyn enough::Stop) -> core::result::Result<alloc::vec::Vec<u8>, metadata_rewrite::Error>
+pub fn metadata_rewrite::Services::merge_xmp(&self, &[u8], &[u8], usize, &dyn enough::Stop) -> core::result::Result<alloc::vec::Vec<u8>, metadata_rewrite::Error>
+pub fn metadata_rewrite::Services::normalize_icc(&self, &[u8], usize, &dyn enough::Stop) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, metadata_rewrite::Error>
+pub fn metadata_rewrite::Services::rewrite_xmp(&self, &[u8], usize, &dyn enough::Stop) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, metadata_rewrite::Error>
+pub mod prelude
+pub type prelude::AnimationFrameDecoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn prelude::AnimationFrameDecoder::frame_count(&self) -> core::option::Option<u32>
+pub fn prelude::AnimationFrameDecoder::info(&self) -> &ImageInfo
+pub fn prelude::AnimationFrameDecoder::loop_count(&self) -> core::option::Option<u32>
+pub fn prelude::AnimationFrameDecoder::render_next_frame(&mut self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<core::option::Option<AnimationFrame<'_>>, Self::Error>
+pub fn prelude::AnimationFrameDecoder::render_next_frame_owned(&mut self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<core::option::Option<OwnedAnimationFrame>, Self::Error>
+pub fn prelude::AnimationFrameDecoder::render_next_frame_to_sink(&mut self, core::option::Option<&dyn enough::Stop>, &mut dyn decode::DecodeRowSink) -> core::result::Result<core::option::Option<decode::OutputInfo>, Self::Error>
+pub fn prelude::AnimationFrameDecoder::wrap_sink_error(decode::SinkError) -> Self::Error
+pub type prelude::AnimationFrameEncoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn prelude::AnimationFrameEncoder::finish(self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, Self::Error>
+pub fn prelude::AnimationFrameEncoder::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error>
+pub fn prelude::AnimationFrameEncoder::push_frame_exact(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error>
+pub fn prelude::AnimationFrameEncoder::push_frame_timed(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<animation::FrameDuration, Self::Error>
+pub fn prelude::AnimationFrameEncoder::reject(UnsupportedOperation) -> Self::Error
+pub type prelude::Decode::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn prelude::Decode::decode(self) -> core::result::Result<decode::DecodeOutput, Self::Error>
+pub type prelude::DecodeJob::AnimationFrameDec: decode::AnimationFrameDecoder<Error = Self::Error> + core::marker::Send + 'static
+pub type prelude::DecodeJob::Dec: decode::Decode<Error = Self::Error>
+pub type prelude::DecodeJob::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub type prelude::DecodeJob::StreamDec: decode::StreamingDecode<Error = Self::Error> + core::marker::Send
+pub fn prelude::DecodeJob::animation_frame_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<Self::AnimationFrameDec, Self::Error>
+pub fn prelude::DecodeJob::decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<Self::Dec, Self::Error>
+pub fn prelude::DecodeJob::dyn_animation_frame_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<dyn decode::DynAnimationFrameDecoder>, encode::BoxedError> where Self: 'a, Self::AnimationFrameDec: core::marker::Send
+pub fn prelude::DecodeJob::dyn_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynDecoder + 'a)>, encode::BoxedError> where Self: 'a
+pub fn prelude::DecodeJob::dyn_streaming_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynStreamingDecoder + 'a)>, encode::BoxedError> where Self: 'a, Self::StreamDec: core::marker::Send
+pub fn prelude::DecodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
+pub fn prelude::DecodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn prelude::DecodeJob::inventory(&self, &[u8]) -> core::result::Result<inventory::Inventory, whereat::at::At<CodecError>>
+pub fn prelude::DecodeJob::output_info(&self, &[u8]) -> core::result::Result<decode::OutputInfo, Self::Error>
+pub fn prelude::DecodeJob::probe(&self, &[u8]) -> core::result::Result<ImageInfo, Self::Error>
+pub fn prelude::DecodeJob::probe_full(&self, &[u8]) -> core::result::Result<ImageInfo, Self::Error>
+pub fn prelude::DecodeJob::push_decoder(self, alloc::borrow::Cow<'a, [u8]>, &mut dyn decode::DecodeRowSink, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<decode::OutputInfo, Self::Error>
+pub fn prelude::DecodeJob::streaming_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<Self::StreamDec, Self::Error>
+pub fn prelude::DecodeJob::try_set_policy(&mut self, decode::DecodePolicy) -> core::result::Result<(), UnsupportedOperation>
+pub fn prelude::DecodeJob::try_with_policy(self, decode::DecodePolicy) -> core::result::Result<Self, UnsupportedOperation>
+pub fn prelude::DecodeJob::with_crop_hint(self, u32, u32, u32, u32) -> Self
+pub fn prelude::DecodeJob::with_extract_gain_map(self, bool) -> Self
+pub fn prelude::DecodeJob::with_gain_map_render(self, gainmap::GainMapRender) -> Self
+pub fn prelude::DecodeJob::with_limits(self, ResourceLimits) -> Self
+pub fn prelude::DecodeJob::with_orientation(self, OrientationHint) -> Self
+pub fn prelude::DecodeJob::with_policy(self, decode::DecodePolicy) -> Self
+pub fn prelude::DecodeJob::with_start_frame_index(self, u32) -> Self
+pub fn prelude::DecodeJob::with_stop(self, almost_enough::stop_token::StopToken) -> Self
+pub type prelude::DecoderConfig::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub type prelude::DecoderConfig::Job<'a>: decode::DecodeJob<'a, Error = Self::Error> + 'static
+pub fn prelude::DecoderConfig::capabilities() -> &'static decode::DecodeCapabilities
+pub fn prelude::DecoderConfig::decode(self, &[u8]) -> core::result::Result<decode::DecodeOutput, Self::Error> where Self: core::marker::Sized
+pub fn prelude::DecoderConfig::estimate_decode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
+pub fn prelude::DecoderConfig::formats() -> &'static [ImageFormat]
+pub fn prelude::DecoderConfig::job<'a>(self) -> Self::Job
+pub fn prelude::DecoderConfig::probe(&self, &[u8]) -> core::result::Result<ImageInfo, Self::Error> where Self: core::marker::Sized
+pub fn prelude::DecoderConfig::supported_descriptors() -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub fn prelude::DynAnimationFrameDecoder::as_any(&self) -> &dyn core::any::Any
+pub fn prelude::DynAnimationFrameDecoder::as_any_mut(&mut self) -> &mut dyn core::any::Any
+pub fn prelude::DynAnimationFrameDecoder::frame_count(&self) -> core::option::Option<u32>
+pub fn prelude::DynAnimationFrameDecoder::info(&self) -> &ImageInfo
+pub fn prelude::DynAnimationFrameDecoder::into_any(alloc::boxed::Box<Self>) -> alloc::boxed::Box<dyn core::any::Any>
+pub fn prelude::DynAnimationFrameDecoder::loop_count(&self) -> core::option::Option<u32>
+pub fn prelude::DynAnimationFrameDecoder::render_next_frame_owned(&mut self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<core::option::Option<OwnedAnimationFrame>, encode::BoxedError>
+pub fn prelude::DynAnimationFrameDecoder::render_next_frame_to_sink(&mut self, core::option::Option<&dyn enough::Stop>, &mut dyn decode::DecodeRowSink) -> core::result::Result<core::option::Option<decode::OutputInfo>, encode::BoxedError>
+pub fn prelude::DynAnimationFrameEncoder::as_any(&self) -> &dyn core::any::Any
+pub fn prelude::DynAnimationFrameEncoder::as_any_mut(&mut self) -> &mut dyn core::any::Any
+pub fn prelude::DynAnimationFrameEncoder::finish(alloc::boxed::Box<Self>, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
+pub fn prelude::DynAnimationFrameEncoder::into_any(alloc::boxed::Box<Self>) -> alloc::boxed::Box<dyn core::any::Any>
+pub fn prelude::DynAnimationFrameEncoder::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), encode::BoxedError>
+pub fn prelude::DynAnimationFrameEncoder::push_frame_exact(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), encode::BoxedError>
+pub fn prelude::DynAnimationFrameEncoder::push_frame_timed(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<animation::FrameDuration, encode::BoxedError>
+pub fn prelude::DynDecodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
+pub fn prelude::DynDecodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn prelude::DynDecodeJob::into_animation_frame_decoder(alloc::boxed::Box<Self>, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<dyn decode::DynAnimationFrameDecoder>, encode::BoxedError>
+pub fn prelude::DynDecodeJob::into_decoder(alloc::boxed::Box<Self>, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynDecoder + 'a)>, encode::BoxedError>
+pub fn prelude::DynDecodeJob::into_streaming_decoder(alloc::boxed::Box<Self>, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynStreamingDecoder + 'a)>, encode::BoxedError>
+pub fn prelude::DynDecodeJob::inventory(&self, &[u8]) -> core::result::Result<inventory::Inventory, encode::BoxedError>
+pub fn prelude::DynDecodeJob::output_info(&self, &[u8]) -> core::result::Result<decode::OutputInfo, encode::BoxedError>
+pub fn prelude::DynDecodeJob::probe(&self, &[u8]) -> core::result::Result<ImageInfo, encode::BoxedError>
+pub fn prelude::DynDecodeJob::probe_full(&self, &[u8]) -> core::result::Result<ImageInfo, encode::BoxedError>
+pub fn prelude::DynDecodeJob::push_decode(alloc::boxed::Box<Self>, alloc::borrow::Cow<'a, [u8]>, &mut dyn decode::DecodeRowSink, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<decode::OutputInfo, encode::BoxedError>
+pub fn prelude::DynDecodeJob::set_crop_hint(&mut self, u32, u32, u32, u32)
+pub fn prelude::DynDecodeJob::set_extract_gain_map(&mut self, bool)
+pub fn prelude::DynDecodeJob::set_gain_map_render(&mut self, gainmap::GainMapRender)
+pub fn prelude::DynDecodeJob::set_limits(&mut self, ResourceLimits)
+pub fn prelude::DynDecodeJob::set_orientation(&mut self, OrientationHint)
+pub fn prelude::DynDecodeJob::set_policy(&mut self, decode::DecodePolicy)
+pub fn prelude::DynDecodeJob::set_start_frame_index(&mut self, u32)
+pub fn prelude::DynDecodeJob::set_stop(&mut self, almost_enough::stop_token::StopToken)
+pub fn prelude::DynDecodeJob::try_set_policy(&mut self, decode::DecodePolicy) -> core::result::Result<(), encode::BoxedError>
+pub fn prelude::DynDecoder::decode(alloc::boxed::Box<Self>) -> core::result::Result<decode::DecodeOutput, encode::BoxedError>
+pub fn prelude::DynDecoderConfig::as_any(&self) -> &dyn core::any::Any
+pub fn prelude::DynDecoderConfig::capabilities(&self) -> &'static decode::DecodeCapabilities
+pub fn prelude::DynDecoderConfig::dyn_job(&self) -> alloc::boxed::Box<(dyn decode::DynDecodeJob<'_> + '_)>
+pub fn prelude::DynDecoderConfig::estimate_decode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
+pub fn prelude::DynDecoderConfig::formats(&self) -> &'static [ImageFormat]
+pub fn prelude::DynDecoderConfig::supported_descriptors(&self) -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub fn prelude::DynEncodeJob::encode(alloc::boxed::Box<Self>, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
+pub fn prelude::DynEncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
+pub fn prelude::DynEncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn prelude::DynEncodeJob::into_animation_frame_encoder(alloc::boxed::Box<Self>) -> core::result::Result<alloc::boxed::Box<dyn encode::DynAnimationFrameEncoder>, encode::BoxedError>
+pub fn prelude::DynEncodeJob::into_encoder(alloc::boxed::Box<Self>) -> core::result::Result<alloc::boxed::Box<dyn encode::DynEncoder>, encode::BoxedError>
+pub fn prelude::DynEncodeJob::set_canvas_size(&mut self, u32, u32)
+pub fn prelude::DynEncodeJob::set_limits(&mut self, ResourceLimits)
+pub fn prelude::DynEncodeJob::set_loop_count(&mut self, core::option::Option<u32>)
+pub fn prelude::DynEncodeJob::set_metadata(&mut self, Metadata)
+pub fn prelude::DynEncodeJob::set_metadata_policy(&mut self, Metadata, MetadataPolicy)
+pub fn prelude::DynEncodeJob::set_policy(&mut self, encode::EncodePolicy)
+pub fn prelude::DynEncodeJob::set_stop(&mut self, almost_enough::stop_token::StopToken)
+pub fn prelude::DynEncodeJob::try_set_policy(&mut self, encode::EncodePolicy) -> core::result::Result<(), encode::BoxedError>
+pub fn prelude::DynEncoder::encode(alloc::boxed::Box<Self>, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
+pub fn prelude::DynEncoder::encode_from(alloc::boxed::Box<Self>, &mut dyn core::ops::function::FnMut(u32, zenpixels::buffer::PixelSliceMut<'_>) -> usize) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
+pub fn prelude::DynEncoder::encode_srgba8(alloc::boxed::Box<Self>, &mut [u8], bool, u32, u32, u32) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
+pub fn prelude::DynEncoder::finish(alloc::boxed::Box<Self>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
+pub fn prelude::DynEncoder::preferred_strip_height(&self) -> u32
+pub fn prelude::DynEncoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), encode::BoxedError>
+pub fn prelude::DynEncoderConfig::as_any(&self) -> &dyn core::any::Any
+pub fn prelude::DynEncoderConfig::capabilities(&self) -> &'static encode::EncodeCapabilities
+pub fn prelude::DynEncoderConfig::dyn_job(&self) -> alloc::boxed::Box<(dyn encode::DynEncodeJob + 'static)>
+pub fn prelude::DynEncoderConfig::estimate_encode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
+pub fn prelude::DynEncoderConfig::format(&self) -> ImageFormat
+pub fn prelude::DynEncoderConfig::supported_descriptors(&self) -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub fn prelude::DynStreamingDecoder::info(&self) -> &ImageInfo
+pub fn prelude::DynStreamingDecoder::next_batch(&mut self) -> core::result::Result<core::option::Option<(u32, zenpixels::buffer::PixelSlice<'_>)>, encode::BoxedError>
+pub type prelude::EncodeJob::AnimationFrameEnc: core::marker::Sized + core::marker::Send + 'static
+pub type prelude::EncodeJob::Enc: core::marker::Sized + 'static
+pub type prelude::EncodeJob::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn prelude::EncodeJob::animation_frame_encoder(self) -> core::result::Result<Self::AnimationFrameEnc, Self::Error>
+pub fn prelude::EncodeJob::dyn_animation_frame_encoder(self) -> core::result::Result<alloc::boxed::Box<dyn encode::DynAnimationFrameEncoder>, encode::BoxedError> where Self::AnimationFrameEnc: encode::AnimationFrameEncoder + core::marker::Send
+pub fn prelude::EncodeJob::dyn_encoder(self) -> core::result::Result<alloc::boxed::Box<dyn encode::DynEncoder>, encode::BoxedError> where Self::Enc: encode::Encoder + core::marker::Send
+pub fn prelude::EncodeJob::encode(self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, Self::Error> where Self::Enc: encode::Encoder<Error = Self::Error>
+pub fn prelude::EncodeJob::encoder(self) -> core::result::Result<Self::Enc, Self::Error>
+pub fn prelude::EncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
+pub fn prelude::EncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn prelude::EncodeJob::try_set_policy(&mut self, encode::EncodePolicy) -> core::result::Result<(), UnsupportedOperation>
+pub fn prelude::EncodeJob::try_with_policy(self, encode::EncodePolicy) -> core::result::Result<Self, UnsupportedOperation>
+pub fn prelude::EncodeJob::with_canvas_size(self, u32, u32) -> Self
+pub fn prelude::EncodeJob::with_gain_map_encoded(self, gainmap::GainMapSource) -> core::result::Result<Self, Self::Error> where Self::Enc: encode::Encoder<Error = Self::Error>
+pub fn prelude::EncodeJob::with_gain_map_pixels(self, gainmap::DecodedGainMap) -> core::result::Result<Self, Self::Error> where Self::Enc: encode::Encoder<Error = Self::Error>
+pub fn prelude::EncodeJob::with_limits(self, ResourceLimits) -> Self
+pub fn prelude::EncodeJob::with_loop_count(self, core::option::Option<u32>) -> Self
+pub fn prelude::EncodeJob::with_metadata(self, Metadata) -> Self
+pub fn prelude::EncodeJob::with_metadata_policy(self, Metadata, MetadataPolicy) -> Self
+pub fn prelude::EncodeJob::with_policy(self, encode::EncodePolicy) -> Self
+pub fn prelude::EncodeJob::with_stop(self, almost_enough::stop_token::StopToken) -> Self
+pub type prelude::Encoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn prelude::Encoder::encode(self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, Self::Error>
+pub fn prelude::Encoder::encode_from(self, &mut dyn core::ops::function::FnMut(u32, zenpixels::buffer::PixelSliceMut<'_>) -> usize) -> core::result::Result<encode::EncodeOutput, Self::Error>
+pub fn prelude::Encoder::encode_srgba8(self, &mut [u8], bool, u32, u32, u32) -> core::result::Result<encode::EncodeOutput, Self::Error>
+pub fn prelude::Encoder::finish(self) -> core::result::Result<encode::EncodeOutput, Self::Error>
+pub fn prelude::Encoder::preferred_strip_height(&self) -> u32
+pub fn prelude::Encoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), Self::Error>
+pub fn prelude::Encoder::reject(UnsupportedOperation) -> Self::Error
+pub type prelude::EncoderConfig::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub type prelude::EncoderConfig::Job: encode::EncodeJob<Error = Self::Error>
+pub fn prelude::EncoderConfig::alpha_quality(&self) -> core::option::Option<f32>
+pub fn prelude::EncoderConfig::capabilities() -> &'static encode::EncodeCapabilities
+pub fn prelude::EncoderConfig::encode(self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, Self::Error> where Self: core::marker::Sized, <Self::Job as encode::EncodeJob>::Enc: encode::Encoder<Error = Self::Error>
+pub fn prelude::EncoderConfig::estimate_encode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
+pub fn prelude::EncoderConfig::format() -> ImageFormat
+pub fn prelude::EncoderConfig::generic_effort(&self) -> core::option::Option<i32>
+pub fn prelude::EncoderConfig::generic_quality(&self) -> core::option::Option<f32>
+pub fn prelude::EncoderConfig::is_lossless(&self) -> core::option::Option<bool>
+pub fn prelude::EncoderConfig::job(self) -> Self::Job
+pub fn prelude::EncoderConfig::resolved_target_fidelity(&self) -> core::option::Option<encode::Fidelity>
+pub fn prelude::EncoderConfig::supported_descriptors() -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub fn prelude::EncoderConfig::with_alpha_quality(self, f32) -> Self
+pub fn prelude::EncoderConfig::with_fidelity(self, encode::Fidelity) -> Self
+pub fn prelude::EncoderConfig::with_generic_effort(self, i32) -> Self
+pub fn prelude::EncoderConfig::with_generic_quality(self, f32) -> Self
+pub fn prelude::EncoderConfig::with_lossless(self, bool) -> Self
+pub type prelude::StreamingDecode::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn prelude::StreamingDecode::info(&self) -> &ImageInfo
+pub fn prelude::StreamingDecode::next_batch(&mut self) -> core::result::Result<core::option::Option<(u32, zenpixels::buffer::PixelSlice<'_>)>, Self::Error>
+#[non_exhaustive] pub enum AllocPreference
+pub AllocPreference::CodecDefault
+pub AllocPreference::Fallible
+pub AllocPreference::Infallible
+#[non_exhaustive] pub enum CicpEmission
+pub CicpEmission::Never
+pub CicpEmission::WhereValidCarrier
+pub CicpEmission::WhereverSupported
+#[non_exhaustive] pub enum CodecSetError
+pub CodecSetError::Codec(encode::BoxedError)
+pub CodecSetError::NoDecoder(ImageFormat)
+pub CodecSetError::NoEncoder(ImageFormat)
+pub CodecSetError::TranscodeRequiresExplicitHandling(TranscodeBarrier)
+pub CodecSetError::UnrecognizedFormat
+#[non_exhaustive] pub enum ColorEmitPolicy
+pub ColorEmitPolicy::Balanced
+pub ColorEmitPolicy::Compact
+pub ColorEmitPolicy::Compatibility
+pub ColorEmitPolicy::Custom(ColorEmitFields)
+pub ColorEmitPolicy::Verbatim
+pub const fn ColorEmitPolicy::fields(&self) -> ColorEmitFields
+#[non_exhaustive] pub enum ErrorCategory
+pub ErrorCategory::Image(ImageError)
+pub ErrorCategory::Internal(InternalKind)
+pub ErrorCategory::Io(CodecIoKind)
+pub ErrorCategory::Policy(PolicyKind)
+pub ErrorCategory::Request(RequestError)
+pub ErrorCategory::Resource(ResourceError)
+pub ErrorCategory::Stopped(enough::reason::StopReason)
+pub enum GainMapDirection [also: gainmap]
+pub GainMapDirection::BaseIsHdr
+pub GainMapDirection::BaseIsSdr
+#[non_exhaustive] pub enum GainMapPresence [also: gainmap]
+pub GainMapPresence::Absent
+pub GainMapPresence::Available(alloc::boxed::Box<gainmap::GainMapInfo>)
+pub GainMapPresence::Unknown
+pub fn gainmap::GainMapPresence::info(&self) -> core::option::Option<&gainmap::GainMapInfo>
+pub fn gainmap::GainMapPresence::into_info(self) -> core::option::Option<alloc::boxed::Box<gainmap::GainMapInfo>>
+pub fn gainmap::GainMapPresence::is_absent(&self) -> bool
+pub fn gainmap::GainMapPresence::is_present(&self) -> bool
+pub fn gainmap::GainMapPresence::is_unknown(&self) -> bool
+#[non_exhaustive] pub enum GainMapRender [also: decode, gainmap]
+pub GainMapRender::BaseOnly
+pub GainMapRender::Components
+pub GainMapRender::ReconstructHdr
+pub GainMapRender::ReconstructHdr::target_headroom: core::option::Option<f32>
+#[non_exhaustive] pub enum IccDisposition
+pub IccDisposition::Drop
+pub IccDisposition::KeepSource
+pub IccDisposition::SynthesizeFrom(zenpixels::cicp::Cicp)
+#[non_exhaustive] pub enum IccRetention
+pub IccRetention::Drop
+pub IccRetention::DropIfCicpRepresentable
+pub IccRetention::DropIfCicpSafeSoleCarrier
+pub IccRetention::Keep
+pub IccRetention::KeepNonSrgb
+#[non_exhaustive] pub enum ImageError
+pub ImageError::Malformed
+pub ImageError::UnexpectedEof
+pub ImageError::Unsupported(UnsupportedImageKind)
+#[non_exhaustive] pub enum ImageFormat
+pub ImageFormat::Avif
+pub ImageFormat::Bmp
+pub ImageFormat::Custom(&'static ImageFormatDefinition)
+pub ImageFormat::Dng
+pub ImageFormat::Exr
+pub ImageFormat::Farbfeld
+pub ImageFormat::Gif
+pub ImageFormat::Hdr
+pub ImageFormat::Heic
+pub ImageFormat::Ico
+pub ImageFormat::Jp2
+pub ImageFormat::Jpeg
+pub ImageFormat::Jxl
+pub ImageFormat::Pdf
+pub ImageFormat::Png
+pub ImageFormat::Pnm
+pub ImageFormat::Qoi
+pub ImageFormat::Raw
+pub ImageFormat::Svg
+pub ImageFormat::Tga
+pub ImageFormat::Tiff
+pub ImageFormat::Unknown
+pub ImageFormat::WebP
+pub const ImageFormat::RECOMMENDED_PROBE_BYTES: usize
+pub fn ImageFormat::definition(self) -> core::option::Option<&'static ImageFormatDefinition>
+pub fn ImageFormat::extension(self) -> &'static str
+pub fn ImageFormat::extensions(self) -> &'static [&'static str]
+pub fn ImageFormat::magic_bytes_needed(self) -> usize
+pub fn ImageFormat::mime_type(self) -> &'static str
+pub fn ImageFormat::mime_types(self) -> &'static [&'static str]
+pub fn ImageFormat::supports_alpha(self) -> bool
+pub fn ImageFormat::supports_animation(self) -> bool
+pub fn ImageFormat::supports_lossless(self) -> bool
+pub fn ImageFormat::supports_lossy(self) -> bool
+#[non_exhaustive] pub enum ImageSequence
+pub ImageSequence::Animation
+pub ImageSequence::Animation::frame_count: core::option::Option<u32>
+pub ImageSequence::Animation::loop_count: core::option::Option<u32>
+pub ImageSequence::Animation::random_access: bool
+pub ImageSequence::Multi
+pub ImageSequence::Multi::image_count: core::option::Option<u32>
+pub ImageSequence::Multi::random_access: bool
+pub ImageSequence::Single
+pub fn ImageSequence::count(&self) -> core::option::Option<u32>
+pub fn ImageSequence::is_animation(&self) -> bool
+pub fn ImageSequence::is_multi(&self) -> bool
+pub fn ImageSequence::random_access(&self) -> bool
+#[non_exhaustive] pub enum InternalKind
+pub InternalKind::Bug
+pub InternalKind::Dependency
+#[non_exhaustive] pub enum InvalidKind
+pub InvalidKind::Buffer
+pub InvalidKind::Parameters
+pub InvalidKind::State
+#[non_exhaustive] pub enum Iso21496Format [also: gainmap]
+pub Iso21496Format::AvifTmap = 1
+pub Iso21496Format::JpegApp2 = 0
+pub Iso21496Format::JpegApp2BodyWithUrn = 3
+pub Iso21496Format::JxlJhgm = 2
+#[non_exhaustive] pub enum LimitExceeded
+pub LimitExceeded::Duration
+pub LimitExceeded::Duration::actual: u64
+pub LimitExceeded::Duration::max: u64
+pub LimitExceeded::Frames
+pub LimitExceeded::Frames::actual: u32
+pub LimitExceeded::Frames::max: u32
+pub LimitExceeded::Height
+pub LimitExceeded::Height::actual: u32
+pub LimitExceeded::Height::max: u32
+pub LimitExceeded::InputSize
+pub LimitExceeded::InputSize::actual: u64
+pub LimitExceeded::InputSize::max: u64
+pub LimitExceeded::Memory
+pub LimitExceeded::Memory::actual: u64
+pub LimitExceeded::Memory::max: u64
+pub LimitExceeded::OutputSize
+pub LimitExceeded::OutputSize::actual: u64
+pub LimitExceeded::OutputSize::max: u64
+pub LimitExceeded::Pixels
+pub LimitExceeded::Pixels::actual: u64
+pub LimitExceeded::Pixels::max: u64
+pub LimitExceeded::TotalPixels
+pub LimitExceeded::TotalPixels::actual: u64
+pub LimitExceeded::TotalPixels::max: u64
+pub LimitExceeded::Width
+pub LimitExceeded::Width::actual: u32
+pub LimitExceeded::Width::max: u32
+pub fn LimitExceeded::kind(&self) -> LimitKind
+#[non_exhaustive] pub enum LimitKind
+pub LimitKind::DecompressionRatio
+pub LimitKind::Duration
+pub LimitKind::Frames
+pub LimitKind::Height
+pub LimitKind::InputSize
+pub LimitKind::InventoryParts
+pub LimitKind::Memory
+pub LimitKind::MetadataCarriers
+pub LimitKind::MetadataEntries
+pub LimitKind::MetadataRewriteSize
+pub LimitKind::MetadataSize
+pub LimitKind::OutputSize
+pub LimitKind::Pixels
+pub LimitKind::Scans
+pub LimitKind::TotalPixels
+pub LimitKind::Width
+#[non_exhaustive] pub enum MetadataPolicy
+pub MetadataPolicy::ColorAndRotation
+pub MetadataPolicy::Custom(MetadataFields)
+pub MetadataPolicy::Preserve
+pub MetadataPolicy::PreserveExact
+pub MetadataPolicy::Web
+pub fn MetadataPolicy::fields(&self) -> MetadataFields
+#[non_exhaustive] pub enum OrientationHint
+pub OrientationHint::Correct
+pub OrientationHint::CorrectAndTransform(zenpixels::orientation::Orientation)
+pub OrientationHint::ExactTransform(zenpixels::orientation::Orientation)
+pub OrientationHint::Preserve
+pub const fn OrientationHint::bakes(self) -> bool
+#[non_exhaustive] pub enum PolicyKind
+pub PolicyKind::Decode
+pub PolicyKind::Encode
+#[non_exhaustive] pub enum RequestError
+pub RequestError::CmsRequired
+pub RequestError::Invalid(InvalidKind)
+pub RequestError::Unsupported(UnsupportedOperation)
+#[non_exhaustive] pub enum ResolutionUnit
+pub ResolutionUnit::Centimeter
+pub ResolutionUnit::Inch
+pub ResolutionUnit::Meter
+pub ResolutionUnit::Unknown
+#[non_exhaustive] pub enum ResourceError
+pub ResourceError::Limits(LimitKind)
+pub ResourceError::OutOfMemory
+#[non_exhaustive] pub enum Retention [also: exif]
+pub Retention::Discard
+pub Retention::Keep
+#[non_exhaustive] pub enum TextEncoding [also: exif]
+pub TextEncoding::Ascii
+pub TextEncoding::Utf8
+#[non_exhaustive] pub enum ThreadingPolicy
+pub ThreadingPolicy::Balanced
+pub ThreadingPolicy::LimitOrAny
+pub ThreadingPolicy::LimitOrAny::preferred_max_threads: u16
+pub ThreadingPolicy::LimitOrSingle
+pub ThreadingPolicy::LimitOrSingle::max_threads: u16
+pub ThreadingPolicy::Parallel
+pub ThreadingPolicy::Sequential
+pub ThreadingPolicy::SingleThread
+pub ThreadingPolicy::Unlimited
+pub fn ThreadingPolicy::is_parallel(self) -> bool
+pub fn ThreadingPolicy::resolve_thread_count(self) -> u32
+#[non_exhaustive] pub enum TranscodeBarrier
+pub TranscodeBarrier::AuxiliaryImage
+pub TranscodeBarrier::PixelDescriptor
+pub TranscodeBarrier::Sequence
+#[non_exhaustive] pub enum UnsupportedImageKind
+pub UnsupportedImageKind::Feature
+pub UnsupportedImageKind::Type
+#[non_exhaustive] pub enum UnsupportedOperation
+pub UnsupportedOperation::AnimationDecode
+pub UnsupportedOperation::AnimationEncode
+pub UnsupportedOperation::AnimationTiming
+pub UnsupportedOperation::DecodeInto
+pub UnsupportedOperation::DecodePolicy
+pub UnsupportedOperation::EncodePolicy
+pub UnsupportedOperation::GainMapEncode
+pub UnsupportedOperation::Inventory
+pub UnsupportedOperation::MultiImageDecode
+pub UnsupportedOperation::PixelFormat
+pub UnsupportedOperation::PullEncode
+pub UnsupportedOperation::RowLevelDecode
+pub UnsupportedOperation::RowLevelEncode
+pub const fn UnsupportedOperation::name(self) -> &'static str
+#[non_exhaustive] pub struct AnimationFrame<'a> [also: decode]
+pub fn AnimationFrame<'a>::duration(&self) -> animation::FrameDuration
+pub fn AnimationFrame<'a>::duration_ms(&self) -> u32
+pub fn AnimationFrame<'a>::frame_index(&self) -> u32
+pub fn AnimationFrame<'a>::new(zenpixels::buffer::PixelSlice<'a>, u32, u32) -> Self
+pub fn AnimationFrame<'a>::pixels(&self) -> &zenpixels::buffer::PixelSlice<'a>
+pub fn AnimationFrame<'a>::to_owned_frame(&self) -> OwnedAnimationFrame
+pub fn AnimationFrame<'a>::with_duration(zenpixels::buffer::PixelSlice<'a>, animation::FrameDuration, u32) -> Self
+pub struct CodecError(_)
+pub fn CodecError::category(&self) -> ErrorCategory
+pub fn CodecError::codec(&self) -> core::option::Option<&'static str>
+pub fn CodecError::detail(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+pub fn CodecError::from_native<E>(E) -> Self where E: CategorizedError + core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn CodecError::from_parts(core::option::Option<&'static str>, ErrorCategory, alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>) -> Self
+pub fn CodecError::new(core::option::Option<&'static str>, ErrorCategory) -> Self
+pub fn CodecError::of<E>(whereat::at::At<E>) -> whereat::at::At<CodecError> where E: CategorizedError + core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn CodecError::with_codec(self, core::option::Option<&'static str>) -> Self
+pub struct CodecIoKind
+pub const fn CodecIoKind::opaque() -> Self
+pub struct CodecSet
+pub fn CodecSet::animation_decoder<'a>(&'a self, &'a [u8], &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<dyn decode::DynAnimationFrameDecoder>, CodecSetError>
+pub fn CodecSet::can_decode(&self, ImageFormat) -> bool
+pub fn CodecSet::can_encode(&self, ImageFormat) -> bool
+pub fn CodecSet::decodable_formats(&self) -> impl core::iter::traits::iterator::Iterator<Item = ImageFormat> + '_
+pub fn CodecSet::decode<'a>(&'a self, &'a [u8]) -> core::result::Result<decode::DecodeOutput, CodecSetError>
+pub fn CodecSet::decode_as<'a>(&'a self, ImageFormat, &'a [u8], &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<decode::DecodeOutput, CodecSetError>
+pub fn CodecSet::decode_job<'a>(&'a self, ImageFormat) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynDecodeJob<'a> + 'a)>, CodecSetError>
+pub fn CodecSet::decode_preferring<'a>(&'a self, &'a [u8], &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<decode::DecodeOutput, CodecSetError>
+pub fn CodecSet::decoder_for(&self, ImageFormat) -> core::option::Option<&dyn decode::DynDecoderConfig>
+pub fn CodecSet::detect(&self, &[u8]) -> core::option::Option<ImageFormat>
+pub fn CodecSet::encodable_formats(&self) -> impl core::iter::traits::iterator::Iterator<Item = ImageFormat> + '_
+pub fn CodecSet::encode(&self, ImageFormat, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, CodecSetError>
+pub fn CodecSet::encode_job(&self, ImageFormat) -> core::result::Result<alloc::boxed::Box<dyn encode::DynEncodeJob>, CodecSetError>
+pub fn CodecSet::encode_job_with(&self, ImageFormat, encode::Fidelity) -> core::result::Result<alloc::boxed::Box<dyn encode::DynEncodeJob>, CodecSetError>
+pub fn CodecSet::encode_with(&self, ImageFormat, encode::Fidelity, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, CodecSetError>
+pub fn CodecSet::encoder_for(&self, ImageFormat) -> core::option::Option<&dyn encode::DynEncoderConfig>
+pub fn CodecSet::estimate_decode(&self, ImageFormat, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> core::result::Result<estimate::ResourceEstimate, CodecSetError>
+pub fn CodecSet::estimate_decode_of(&self, &[u8], &estimate::ComputeEnvironment) -> core::result::Result<estimate::ResourceEstimate, CodecSetError>
+pub fn CodecSet::estimate_encode(&self, ImageFormat, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> core::result::Result<estimate::ResourceEstimate, CodecSetError>
+pub fn CodecSet::estimate_encode_of(&self, ImageFormat, zenpixels::buffer::PixelSlice<'_>, &estimate::ComputeEnvironment) -> core::result::Result<estimate::ResourceEstimate, CodecSetError>
+pub fn CodecSet::new() -> Self
+pub fn CodecSet::probe<'a>(&'a self, &'a [u8]) -> core::result::Result<ImageInfo, CodecSetError>
+pub fn CodecSet::push_decode<'a>(&'a self, &'a [u8], &mut dyn decode::DecodeRowSink, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<decode::OutputInfo, CodecSetError>
+pub fn CodecSet::streaming_decoder<'a>(&'a self, &'a [u8], &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynStreamingDecoder + 'a)>, CodecSetError>
+pub fn CodecSet::transcode(&self, &[u8], ImageFormat, encode::Fidelity, MetadataPolicy, ColorEmitPolicy) -> core::result::Result<encode::EncodeOutput, CodecSetError>
+pub fn CodecSet::with_decode_policy(self, decode::DecodePolicy) -> Self
+pub fn CodecSet::with_decoder(self, impl decode::DecoderConfig + 'static) -> Self
+pub fn CodecSet::with_encode_policy(self, encode::EncodePolicy) -> Self
+pub fn CodecSet::with_encoder<C>(self, C) -> Self where C: encode::EncoderConfig + 'static, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::Enc: encode::Encoder + core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::AnimationFrameEnc: encode::AnimationFrameEncoder
+pub fn CodecSet::with_limits(self, ResourceLimits) -> Self
+pub fn CodecSet::with_stop(self, almost_enough::stop_token::StopToken) -> Self
+#[non_exhaustive] pub struct ColorEmitFields
+pub ColorEmitFields::cicp: CicpEmission
+pub ColorEmitFields::icc: IccRetention
+pub const fn ColorEmitFields::new(IccRetention, CicpEmission) -> Self
+#[non_exhaustive] pub struct ColorEmitPlan
+pub ColorEmitPlan::cicp: core::option::Option<zenpixels::cicp::Cicp>
+pub ColorEmitPlan::icc: IccDisposition
+pub struct Exif<'a> [also: exif]
+pub fn exif::Exif<'a>::artist(&self) -> core::option::Option<alloc::borrow::Cow<'_, str>>
+pub fn exif::Exif<'a>::artist_bytes(&self) -> core::option::Option<&[u8]>
+pub fn exif::Exif<'a>::byte_order(&self) -> exif::ByteOrder
+pub fn exif::Exif<'a>::copyright(&self) -> core::option::Option<alloc::borrow::Cow<'_, str>>
+pub fn exif::Exif<'a>::copyright_bytes(&self) -> core::option::Option<&[u8]>
+pub fn exif::Exif<'a>::entries(&self) -> impl core::iter::traits::iterator::Iterator<Item = exif::EntryRef<'_>> + '_
+pub fn exif::Exif<'a>::filtered(&self, &exif::ExifPolicy) -> exif::Exif<'a>
+pub fn exif::Exif<'a>::has_camera(&self) -> bool
+pub fn exif::Exif<'a>::has_camera_owner(&self) -> bool
+pub fn exif::Exif<'a>::has_color(&self) -> bool
+pub fn exif::Exif<'a>::has_datetimes(&self) -> bool
+pub fn exif::Exif<'a>::has_device_ids(&self) -> bool
+pub fn exif::Exif<'a>::has_gps(&self) -> bool
+pub fn exif::Exif<'a>::has_image_unique_id(&self) -> bool
+pub fn exif::Exif<'a>::has_thumbnail(&self) -> bool
+pub fn exif::Exif<'a>::has_time_offsets(&self) -> bool
+pub fn exif::Exif<'a>::new(exif::TextEncoding) -> Self
+pub fn exif::Exif<'a>::orientation(&self) -> core::option::Option<zenpixels::orientation::Orientation>
+pub fn exif::Exif<'a>::parse(&'a [u8]) -> core::option::Option<Self>
+pub fn exif::Exif<'a>::set_artist(&mut self, &str)
+pub fn exif::Exif<'a>::set_copyright(&mut self, &str)
+pub fn exif::Exif<'a>::set_orientation(&mut self, zenpixels::orientation::Orientation)
+pub fn exif::Exif<'a>::to_bytes(&self) -> alloc::vec::Vec<u8>
+#[non_exhaustive] pub struct ExifPolicy [also: exif]
+pub ExifPolicy::camera: exif::Retention
+pub ExifPolicy::camera_owner: exif::Retention
+pub ExifPolicy::color: exif::Retention
+pub ExifPolicy::datetimes: exif::Retention
+pub ExifPolicy::device_ids: exif::Retention
+pub ExifPolicy::gps: exif::Retention
+pub ExifPolicy::image_unique_id: exif::Retention
+pub ExifPolicy::orientation: exif::Retention
+pub ExifPolicy::other: exif::Retention
+pub ExifPolicy::rights: exif::Retention
+pub ExifPolicy::thumbnail: exif::Retention
+pub ExifPolicy::time_offsets: exif::Retention
+pub const exif::ExifPolicy::ATTRIBUTED_ORIENTATION: Self
+pub const exif::ExifPolicy::DISCARD_ALL: Self
+pub const exif::ExifPolicy::KEEP_ALL: Self
+pub const exif::ExifPolicy::ORIENTATION_ONLY: Self
+pub fn exif::ExifPolicy::discards_everything(&self) -> bool
+pub fn exif::ExifPolicy::keeps_everything(&self) -> bool
+pub struct Extensions
+pub fn Extensions::contains<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&self) -> bool
+pub fn Extensions::get<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&self) -> core::option::Option<&T>
+pub fn Extensions::insert<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&mut self, T) -> core::option::Option<T>
+pub fn Extensions::is_empty(&self) -> bool
+pub fn Extensions::len(&self) -> usize
+pub fn Extensions::new() -> Self
+pub fn Extensions::remove<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&mut self) -> core::option::Option<T>
+pub struct GainMapChannel [also: gainmap]
+pub GainMapChannel::alternate_offset: f64
+pub GainMapChannel::base_offset: f64
+pub GainMapChannel::gamma: f64
+pub GainMapChannel::max: f64
+pub GainMapChannel::min: f64
+pub fn gainmap::GainMapChannel::linear_max(&self) -> f64
+pub fn gainmap::GainMapChannel::linear_min(&self) -> f64
+#[non_exhaustive] pub struct GainMapInfo [also: gainmap]
+pub GainMapInfo::alternate_cicp: core::option::Option<zenpixels::cicp::Cicp>
+pub GainMapInfo::alternate_icc: core::option::Option<alloc::sync::Arc<[u8]>>
+pub GainMapInfo::bit_depth: u8
+pub GainMapInfo::channels: u8
+pub GainMapInfo::height: u32
+pub GainMapInfo::params: gainmap::GainMapParams
+pub GainMapInfo::width: u32
+pub fn gainmap::GainMapInfo::new(gainmap::GainMapParams, u32, u32, u8) -> Self
+pub fn gainmap::GainMapInfo::with_alternate_cicp(self, zenpixels::cicp::Cicp) -> Self
+pub fn gainmap::GainMapInfo::with_alternate_icc(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn gainmap::GainMapInfo::with_bit_depth(self, u8) -> Self
+#[non_exhaustive] pub struct GainMapParams [also: gainmap]
+pub GainMapParams::alternate_hdr_headroom: f64
+pub GainMapParams::backward_direction: bool
+pub GainMapParams::base_hdr_headroom: f64
+pub GainMapParams::channels: [gainmap::GainMapChannel; 3]
+pub GainMapParams::use_base_color_space: bool
+pub fn gainmap::GainMapParams::direction(&self) -> gainmap::GainMapDirection
+pub fn gainmap::GainMapParams::is_single_channel(&self) -> bool
+pub fn gainmap::GainMapParams::linear_alternate_headroom(&self) -> f64
+pub fn gainmap::GainMapParams::linear_base_headroom(&self) -> f64
+pub fn gainmap::GainMapParams::validate(&self) -> core::result::Result<(), gainmap::GainMapParseError>
+#[non_exhaustive] pub struct ImageFormatDefinition
+pub ImageFormatDefinition::detect: fn(&[u8]) -> bool
+pub ImageFormatDefinition::display_name: &'static str
+pub ImageFormatDefinition::extensions: &'static [&'static str]
+pub ImageFormatDefinition::image_format: core::option::Option<ImageFormat>
+pub ImageFormatDefinition::magic_bytes_needed: usize
+pub ImageFormatDefinition::mime_types: &'static [&'static str]
+pub ImageFormatDefinition::name: &'static str
+pub ImageFormatDefinition::preferred_extension: &'static str
+pub ImageFormatDefinition::preferred_mime_type: &'static str
+pub ImageFormatDefinition::supports_alpha: bool
+pub ImageFormatDefinition::supports_animation: bool
+pub ImageFormatDefinition::supports_lossless: bool
+pub ImageFormatDefinition::supports_lossy: bool
+pub const fn ImageFormatDefinition::new(&'static str, core::option::Option<ImageFormat>, &'static str, &'static str, &'static [&'static str], &'static str, &'static [&'static str], bool, bool, bool, bool, usize, fn(&[u8]) -> bool) -> Self
+pub fn ImageFormatDefinition::to_image_format(&'static self) -> ImageFormat
+pub struct ImageFormatRegistry
+pub fn ImageFormatRegistry::common() -> Self
+pub fn ImageFormatRegistry::detect(&self, &[u8]) -> core::option::Option<ImageFormat>
+pub fn ImageFormatRegistry::formats(&self) -> &[&'static ImageFormatDefinition]
+pub fn ImageFormatRegistry::from_extension(&self, &str) -> core::option::Option<ImageFormat>
+pub fn ImageFormatRegistry::from_mime_type(&self, &str) -> core::option::Option<ImageFormat>
+pub fn ImageFormatRegistry::from_static(&'static [&'static ImageFormatDefinition]) -> Self
+pub fn ImageFormatRegistry::from_vec(alloc::vec::Vec<&'static ImageFormatDefinition>) -> Self
+#[non_exhaustive] pub struct ImageInfo
+pub ImageInfo::embedded_metadata: decode::EmbeddedMetadata
+pub ImageInfo::format: ImageFormat
+pub ImageInfo::gain_map: gainmap::GainMapPresence
+pub ImageInfo::has_alpha: bool
+pub ImageInfo::height: u32
+pub ImageInfo::is_progressive: bool
+pub ImageInfo::orientation: zenpixels::orientation::Orientation
+pub ImageInfo::resolution: core::option::Option<Resolution>
+pub ImageInfo::sequence: ImageSequence
+pub ImageInfo::source_color: SourceColor
+pub ImageInfo::source_encoding: core::option::Option<alloc::sync::Arc<dyn SourceEncodingDetails>>
+pub ImageInfo::supplements: Supplements
+pub ImageInfo::warnings: alloc::vec::Vec<alloc::string::String>
+pub ImageInfo::width: u32
+pub fn ImageInfo::color_primaries(&self) -> zenpixels::descriptor::ColorPrimaries
+pub fn ImageInfo::display_height(&self) -> u32
+pub fn ImageInfo::display_width(&self) -> u32
+pub fn ImageInfo::frame_count(&self) -> core::option::Option<u32>
+pub fn ImageInfo::has_additional_images(&self) -> bool
+pub fn ImageInfo::has_warnings(&self) -> bool
+pub fn ImageInfo::is_animation(&self) -> bool
+pub fn ImageInfo::is_multi_image(&self) -> bool
+pub fn ImageInfo::metadata(&self) -> Metadata
+pub fn ImageInfo::new(u32, u32, ImageFormat) -> Self
+pub fn ImageInfo::source_encoding_details(&self) -> core::option::Option<&dyn SourceEncodingDetails>
+pub fn ImageInfo::transfer_function(&self) -> zenpixels::descriptor::TransferFunction
+pub fn ImageInfo::warnings(&self) -> &[alloc::string::String]
+pub fn ImageInfo::with_alpha(self, bool) -> Self
+pub fn ImageInfo::with_bit_depth(self, u8) -> Self
+pub fn ImageInfo::with_channel_count(self, u8) -> Self
+pub fn ImageInfo::with_cicp(self, zenpixels::cicp::Cicp) -> Self
+pub fn ImageInfo::with_color_authority(self, zenpixels::color::ColorAuthority) -> Self
+pub fn ImageInfo::with_content_light_level(self, zenpixels::hdr::ContentLightLevel) -> Self
+pub fn ImageInfo::with_embedded_metadata(self, decode::EmbeddedMetadata) -> Self
+pub fn ImageInfo::with_exif(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn ImageInfo::with_gain_map(self, gainmap::GainMapPresence) -> Self
+pub fn ImageInfo::with_icc_profile(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn ImageInfo::with_mastering_display(self, zenpixels::hdr::MasteringDisplay) -> Self
+pub fn ImageInfo::with_orientation(self, zenpixels::orientation::Orientation) -> Self
+pub fn ImageInfo::with_progressive(self, bool) -> Self
+pub fn ImageInfo::with_resolution(self, Resolution) -> Self
+pub fn ImageInfo::with_sequence(self, ImageSequence) -> Self
+pub fn ImageInfo::with_source_color(self, SourceColor) -> Self
+pub fn ImageInfo::with_source_encoding_details<T: SourceEncodingDetails + 'static>(self, T) -> Self
+pub fn ImageInfo::with_supplements(self, Supplements) -> Self
+pub fn ImageInfo::with_warning(self, alloc::string::String) -> Self
+pub fn ImageInfo::with_warnings(self, alloc::vec::Vec<alloc::string::String>) -> Self
+pub fn ImageInfo::with_xmp(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+#[non_exhaustive] pub struct Metadata
+pub Metadata::cicp: core::option::Option<zenpixels::cicp::Cicp>
+pub Metadata::content_light_level: core::option::Option<zenpixels::hdr::ContentLightLevel>
+pub Metadata::diffuse_white: core::option::Option<zenpixels::hdr::DiffuseWhite>
+pub Metadata::exif: core::option::Option<alloc::sync::Arc<[u8]>>
+pub Metadata::icc_profile: core::option::Option<alloc::sync::Arc<[u8]>>
+pub Metadata::mastering_display: core::option::Option<zenpixels::hdr::MasteringDisplay>
+pub Metadata::orientation: zenpixels::orientation::Orientation
+pub Metadata::xmp: core::option::Option<alloc::sync::Arc<[u8]>>
+pub fn Metadata::clear_diffuse_white(self) -> Self
+pub fn Metadata::color_primaries(&self) -> zenpixels::descriptor::ColorPrimaries
+pub fn Metadata::filtered(&self, &MetadataPolicy) -> Metadata
+pub fn Metadata::is_empty(&self) -> bool
+pub fn Metadata::none() -> Self
+pub fn Metadata::transfer_function(&self) -> zenpixels::descriptor::TransferFunction
+pub fn Metadata::with_artist(self, &str) -> Self
+pub fn Metadata::with_cicp(self, zenpixels::cicp::Cicp) -> Self
+pub fn Metadata::with_content_light_level(self, zenpixels::hdr::ContentLightLevel) -> Self
+pub fn Metadata::with_copyright(self, &str) -> Self
+pub fn Metadata::with_diffuse_white(self, zenpixels::hdr::DiffuseWhite) -> Self
+pub fn Metadata::with_exif(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn Metadata::with_icc(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn Metadata::with_mastering_display(self, zenpixels::hdr::MasteringDisplay) -> Self
+pub fn Metadata::with_orientation(self, zenpixels::orientation::Orientation) -> Self
+pub fn Metadata::with_xmp(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+#[non_exhaustive] pub struct MetadataFields
+pub MetadataFields::cicp: exif::Retention
+pub MetadataFields::exif: exif::ExifPolicy
+pub MetadataFields::hdr: exif::Retention
+pub MetadataFields::icc: IccRetention
+pub MetadataFields::xmp: exif::Retention
+pub const MetadataFields::DISCARD_ALL: Self
+pub const MetadataFields::KEEP_ALL: Self
+pub const fn MetadataFields::with_cicp(self, exif::Retention) -> Self
+pub const fn MetadataFields::with_exif(self, exif::ExifPolicy) -> Self
+pub const fn MetadataFields::with_hdr(self, exif::Retention) -> Self
+pub const fn MetadataFields::with_icc(self, IccRetention) -> Self
+pub const fn MetadataFields::with_xmp(self, exif::Retention) -> Self
+#[non_exhaustive] pub struct OwnedAnimationFrame [also: decode]
+pub fn OwnedAnimationFrame::as_animation_frame(&self) -> AnimationFrame<'_>
+pub fn OwnedAnimationFrame::duration(&self) -> animation::FrameDuration
+pub fn OwnedAnimationFrame::duration_ms(&self) -> u32
+pub fn OwnedAnimationFrame::extensions(&self) -> &Extensions
+pub fn OwnedAnimationFrame::extensions_mut(&mut self) -> &mut Extensions
+pub fn OwnedAnimationFrame::extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&self) -> core::option::Option<&T>
+pub fn OwnedAnimationFrame::frame_index(&self) -> u32
+pub fn OwnedAnimationFrame::into_buffer(self) -> zenpixels::buffer::PixelBuffer
+pub fn OwnedAnimationFrame::new(zenpixels::buffer::PixelBuffer, u32, u32) -> Self
+pub fn OwnedAnimationFrame::pixels(&self) -> zenpixels::buffer::PixelSlice<'_>
+pub fn OwnedAnimationFrame::take_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&mut self) -> core::option::Option<T>
+pub fn OwnedAnimationFrame::with_duration(zenpixels::buffer::PixelBuffer, animation::FrameDuration, u32) -> Self
+pub fn OwnedAnimationFrame::with_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(self, T) -> Self
+pub struct Resolution
+pub Resolution::unit: ResolutionUnit
+pub Resolution::x: f64
+pub Resolution::y: f64
+pub fn Resolution::dpi(&self) -> (f64, f64)
+#[non_exhaustive] pub struct ResourceLimits
+pub ResourceLimits::max_animation_ms: core::option::Option<u64>
+pub ResourceLimits::max_frames: core::option::Option<u32>
+pub ResourceLimits::max_height: core::option::Option<u32>
+pub ResourceLimits::max_input_bytes: core::option::Option<u64>
+pub ResourceLimits::max_memory_bytes: core::option::Option<u64>
+pub ResourceLimits::max_output_bytes: core::option::Option<u64>
+pub ResourceLimits::max_pixels: core::option::Option<u64>
+pub ResourceLimits::max_total_pixels: core::option::Option<u64>
+pub ResourceLimits::max_width: core::option::Option<u32>
+pub ResourceLimits::prefer_fallible_allocations: AllocPreference
+pub ResourceLimits::threading: ThreadingPolicy
+pub fn ResourceLimits::check_animation_ms(&self, u64) -> core::result::Result<(), LimitExceeded>
+pub fn ResourceLimits::check_dimensions(&self, u32, u32) -> core::result::Result<(), LimitExceeded>
+pub fn ResourceLimits::check_frames(&self, u32) -> core::result::Result<(), LimitExceeded>
+pub fn ResourceLimits::check_image_info(&self, &ImageInfo) -> core::result::Result<(), LimitExceeded>
+pub fn ResourceLimits::check_input_size(&self, u64) -> core::result::Result<(), LimitExceeded>
+pub fn ResourceLimits::check_memory(&self, u64) -> core::result::Result<(), LimitExceeded>
+pub fn ResourceLimits::check_output_info(&self, &decode::OutputInfo) -> core::result::Result<(), LimitExceeded>
+pub fn ResourceLimits::check_output_size(&self, u64) -> core::result::Result<(), LimitExceeded>
+pub fn ResourceLimits::check_total_pixels(&self, u64) -> core::result::Result<(), LimitExceeded>
+pub fn ResourceLimits::for_untrusted_input() -> Self
+pub fn ResourceLimits::has_any(&self) -> bool
+pub fn ResourceLimits::none() -> Self
+pub fn ResourceLimits::safe_default() -> Self
+pub fn ResourceLimits::threading(&self) -> ThreadingPolicy
+pub fn ResourceLimits::with_max_animation_ms(self, u64) -> Self
+pub fn ResourceLimits::with_max_frames(self, u32) -> Self
+pub fn ResourceLimits::with_max_height(self, u32) -> Self
+pub fn ResourceLimits::with_max_input_bytes(self, u64) -> Self
+pub fn ResourceLimits::with_max_memory(self, u64) -> Self
+pub fn ResourceLimits::with_max_output(self, u64) -> Self
+pub fn ResourceLimits::with_max_pixels(self, u64) -> Self
+pub fn ResourceLimits::with_max_total_pixels(self, u64) -> Self
+pub fn ResourceLimits::with_max_width(self, u32) -> Self
+pub fn ResourceLimits::with_prefer_fallible_allocations(self, AllocPreference) -> Self
+pub fn ResourceLimits::with_threading(self, ThreadingPolicy) -> Self
+#[non_exhaustive] pub struct SourceColor [also: decode]
+pub SourceColor::bit_depth: core::option::Option<u8>
+pub SourceColor::channel_count: core::option::Option<u8>
+pub SourceColor::cicp: core::option::Option<zenpixels::cicp::Cicp>
+pub SourceColor::color_authority: zenpixels::color::ColorAuthority
+pub SourceColor::content_light_level: core::option::Option<zenpixels::hdr::ContentLightLevel>
+pub SourceColor::diffuse_white: core::option::Option<zenpixels::hdr::DiffuseWhite>
+pub SourceColor::icc_profile: core::option::Option<alloc::sync::Arc<[u8]>>
+pub SourceColor::mastering_display: core::option::Option<zenpixels::hdr::MasteringDisplay>
+pub fn SourceColor::color_primaries(&self) -> zenpixels::descriptor::ColorPrimaries
+pub fn SourceColor::has_hdr_transfer(&self) -> bool
+pub fn SourceColor::to_color_context(&self) -> zenpixels::color::ColorContext
+pub fn SourceColor::transfer_function(&self) -> zenpixels::descriptor::TransferFunction
+pub fn SourceColor::with_bit_depth(self, u8) -> Self
+pub fn SourceColor::with_channel_count(self, u8) -> Self
+pub fn SourceColor::with_cicp(self, zenpixels::cicp::Cicp) -> Self
+pub fn SourceColor::with_color_authority(self, zenpixels::color::ColorAuthority) -> Self
+pub fn SourceColor::with_content_light_level(self, zenpixels::hdr::ContentLightLevel) -> Self
+pub fn SourceColor::with_icc_profile(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn SourceColor::with_mastering_display(self, zenpixels::hdr::MasteringDisplay) -> Self
+pub struct StreamOffset(pub u64)
+#[non_exhaustive] pub struct Supplements
+pub Supplements::auxiliary: bool
+pub Supplements::depth_map: bool
+pub Supplements::gain_map: bool
+pub Supplements::pyramid: bool
+pub Supplements::segmentation_mattes: bool
+pub struct Unsupported<E>(_)
+pub const ISO_21496_1_PRIMARY_APP2_BODY: &[u8; 32] [also: gainmap]
+pub const ISO_21496_1_URN: &[u8; 28] [also: gainmap]
+pub trait CategorizedError: core::any::Any
+pub fn CategorizedError::category(&self) -> ErrorCategory
+pub fn CategorizedError::codec_name(&self) -> core::option::Option<&'static str>
+pub trait CodecErrorExt
+pub fn CodecErrorExt::codec_error(&self) -> core::option::Option<&CodecError>
+pub fn CodecErrorExt::error_category(&self) -> core::option::Option<ErrorCategory>
+pub fn CodecErrorExt::find_cause<T: core::error::Error + 'static>(&self) -> core::option::Option<&T>
+pub fn CodecErrorExt::limit_exceeded(&self) -> core::option::Option<&LimitExceeded>
+pub fn CodecErrorExt::unsupported_operation(&self) -> core::option::Option<&UnsupportedOperation>
+pub fn (dyn core::error::Error + 'static)::codec_error(&self) -> core::option::Option<&CodecError>
+pub fn (dyn core::error::Error + 'static)::error_category(&self) -> core::option::Option<ErrorCategory>
+pub fn (dyn core::error::Error + 'static)::find_cause<T: core::error::Error + 'static>(&self) -> core::option::Option<&T>
+pub fn (dyn core::error::Error + 'static)::limit_exceeded(&self) -> core::option::Option<&LimitExceeded>
+pub fn (dyn core::error::Error + 'static)::unsupported_operation(&self) -> core::option::Option<&UnsupportedOperation>
+pub fn (dyn core::error::Error + core::marker::Send + 'static)::codec_error(&self) -> core::option::Option<&CodecError>
+pub fn (dyn core::error::Error + core::marker::Send + 'static)::error_category(&self) -> core::option::Option<ErrorCategory>
+pub fn (dyn core::error::Error + core::marker::Send + 'static)::find_cause<T: core::error::Error + 'static>(&self) -> core::option::Option<&T>
+pub fn (dyn core::error::Error + core::marker::Send + 'static)::limit_exceeded(&self) -> core::option::Option<&LimitExceeded>
+pub fn (dyn core::error::Error + core::marker::Send + 'static)::unsupported_operation(&self) -> core::option::Option<&UnsupportedOperation>
+pub fn (dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)::codec_error(&self) -> core::option::Option<&CodecError>
+pub fn (dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)::error_category(&self) -> core::option::Option<ErrorCategory>
+pub fn (dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)::find_cause<T: core::error::Error + 'static>(&self) -> core::option::Option<&T>
+pub fn (dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)::limit_exceeded(&self) -> core::option::Option<&LimitExceeded>
+pub fn (dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)::unsupported_operation(&self) -> core::option::Option<&UnsupportedOperation>
+pub trait SourceEncodingDetails: core::any::Any + core::marker::Send + core::marker::Sync [also: decode]
+pub fn SourceEncodingDetails::is_lossless(&self) -> bool
+pub fn SourceEncodingDetails::source_generic_quality(&self) -> core::option::Option<f32>
+pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Error + 'static)) -> core::option::Option<&'a T>
+pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
+pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
+
+## trait impls (102 types)
+
+(): encode::AnimationFrameEncoder
+(dyn core::error::Error + 'static): CodecErrorExt
+(dyn core::error::Error + core::marker::Send + 'static): CodecErrorExt
+(dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static): CodecErrorExt
+AllocPreference: Clone, Copy, Debug, Default, Eq, PartialEq
+AnimationFrame<'_>: Debug
+CicpEmission: Clone, Copy, Debug, Default, Eq, PartialEq
+CodecError: CategorizedError, Debug, Display, Error
+CodecIoKind: Clone, Copy, Debug, Default, Eq, Hash, PartialEq
+CodecSet: Clone, Debug, Default
+CodecSetError: Debug, Display, Error, From<alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>>
+ColorEmitFields: Clone, Copy, Debug, Default, Eq, PartialEq
+ColorEmitPlan: Clone, Debug, PartialEq
+ColorEmitPolicy: Clone, Copy, Debug, Default, Eq, PartialEq
+E: CodecErrorExt
+ErrorCategory: Clone, Copy, Debug, Display, Eq, From<ImageError>, From<InternalKind>, From<InvalidKind>, From<LimitKind>, From<PolicyKind>, From<RequestError>, From<ResourceError>, From<UnsupportedImageKind>, From<enough::reason::StopReason>, Hash, PartialEq
+Extensions: Clone, Debug, Default
+IccDisposition: Clone, Debug, Eq, PartialEq
+IccRetention: Clone, Copy, Debug, Eq, PartialEq
+ImageError: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
+ImageFormat: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
+ImageFormatDefinition: Debug, Eq, Hash, PartialEq
+ImageFormatRegistry: Clone, Debug, Default
+ImageInfo: Clone, Debug, PartialEq
+ImageSequence: Clone, Debug, Default, Eq, PartialEq
+InternalKind: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
+InvalidKind: Clone, Copy, Debug, Eq, Hash, PartialEq
+LimitExceeded: CategorizedError, Clone, Debug, Display, Eq, Error, PartialEq
+LimitKind: Clone, Copy, Debug, Eq, Hash, PartialEq
+Metadata: Clone, Debug, Default, From<&ImageInfo>, PartialEq
+MetadataFields: Clone, Copy, Debug, Eq, PartialEq
+MetadataPolicy: Clone, Copy, Debug, Eq, PartialEq
+OrientationHint: Clone, Copy, Debug, Default, Eq, Hash, PartialEq
+OwnedAnimationFrame: Debug
+PolicyKind: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
+RequestError: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
+Resolution: Clone, Copy, Debug, PartialEq
+ResolutionUnit: Clone, Copy, Debug, Default, Eq, Hash, PartialEq
+ResourceError: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
+ResourceLimits: Clone, Copy, Debug, Default, Eq, PartialEq
+SourceColor: Clone, Debug, Default, PartialEq
+StreamOffset: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
+Supplements: Clone, Debug, Default, Eq, PartialEq
+ThreadingPolicy: Clone, Copy, Debug, Default, Eq, PartialEq
+TranscodeBarrier: Clone, Copy, Debug, Eq, PartialEq
+Unsupported<E>: decode::AnimationFrameDecoder, decode::StreamingDecode
+UnsupportedImageKind: Clone, Copy, Debug, Eq, Hash, PartialEq
+UnsupportedOperation: CategorizedError, Clone, Copy, Debug, Display, Eq, Error, Hash, PartialEq
+animation::FrameDuration: Clone, Copy, Debug, Eq, Hash, PartialEq
+animation::TimingError: Clone, Copy, Debug, Display, Eq, Error, PartialEq
+animation::TimingQuantizer: Clone, Copy, Debug
+decode::DecodeCapabilities: Clone, Debug, Default, Eq, PartialEq
+decode::DecodeOutput: Debug
+decode::DecodePolicy: Clone, Copy, Debug, Default, Eq, PartialEq
+decode::EmbeddedMetadata: Clone, Debug, Default, PartialEq
+decode::OutputInfo: Clone, Debug, Eq, PartialEq
+encode::EncodeCapabilities: Clone, Debug, Default, PartialEq
+encode::EncodeOutput: AsRef<[u8]>, Clone, Debug, Eq, PartialEq
+encode::EncodePolicy: Clone, Copy, Debug, Default, Eq, PartialEq
+encode::Fidelity: Clone, Copy, Debug, PartialEq
+encode::LossyTarget: Clone, Copy, Debug, PartialEq
+enough::reason::StopReason: CategorizedError
+estimate::ComputeEnvironment: Clone, Copy, Debug, Default, Eq, PartialEq
+estimate::ImageCharacteristics: Clone, Debug, Eq, PartialEq
+estimate::ResourceEstimate: Clone, Copy, Debug, PartialEq
+estimate::SimdTier: Clone, Copy, Debug, Eq, Hash, PartialEq
+estimate::ThreadingInformation: Clone, Copy, Debug, PartialEq
+exif::ByteOrder: Clone, Copy, Debug, Eq, PartialEq
+exif::EntryRef<'e>: Clone, Copy, Debug, Eq, PartialEq
+exif::Exif<'a>: Clone, Debug, Default, Eq, PartialEq
+exif::ExifPolicy: Clone, Copy, Debug, Eq, PartialEq
+exif::Ifd: Clone, Copy, Debug, Eq, PartialEq
+exif::Retention: Clone, Copy, Debug, Eq, PartialEq
+exif::TextEncoding: Clone, Copy, Debug, Eq, PartialEq
+gainmap::DecodedGainMap: Debug
+gainmap::Fraction: Clone, Copy, Debug, Default, Eq, PartialEq
+gainmap::GainMapChannel: Clone, Copy, Debug, Default, PartialEq
+gainmap::GainMapDirection: Clone, Copy, Debug, Eq, PartialEq
+gainmap::GainMapInfo: Clone, Debug, PartialEq
+gainmap::GainMapParams: Clone, Debug, Default, PartialEq
+gainmap::GainMapParseError: Clone, Debug, Display, Error, PartialEq
+gainmap::GainMapPresence: Clone, Debug, Default, PartialEq
+gainmap::GainMapRender: Clone, Copy, Debug, Default, PartialEq
+gainmap::GainMapSource: Clone, Debug
+gainmap::Iso21496Format: Clone, Copy, Debug, Eq, PartialEq
+gainmap::UFraction: Clone, Copy, Debug, Default, Eq, PartialEq
+helpers::IccMatchTolerance: Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd
+inventory::Disposition: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
+inventory::Inventory: Clone, Debug, Display, Eq, PartialEq
+inventory::InventoryError: CategorizedError, Clone, Debug, Display, Eq, Error, PartialEq
+inventory::MetadataKind: Clone, Copy, Debug, Eq, Hash, PartialEq
+inventory::Part: Clone, Debug, Eq, PartialEq
+inventory::PartId: Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd
+inventory::PartKind: Clone, Copy, Debug, Eq, Hash, PartialEq
+inventory::PartTag: Clone, Debug, Display, Eq, Hash, PartialEq
+metadata_rewrite::Action: Clone, Copy, Debug, Eq, PartialEq
+metadata_rewrite::Compression: Clone, Copy, Debug, Eq, PartialEq
+metadata_rewrite::Entry: Clone, Debug, Eq, PartialEq
+metadata_rewrite::Error: Clone, Debug, Display, Eq, Error, PartialEq
+metadata_rewrite::Plan<'a>: Debug
+metadata_rewrite::Request<'a>: Clone
+whereat::at::At<E>: CategorizedError
+impl<C> decode::DynDecoderConfig for C where C: decode::DecoderConfig + 'static
+impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::Enc: encode::Encoder + core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::AnimationFrameEnc: encode::AnimationFrameEncoder
+impl<C> decode::DynDecoderConfig for C where C: decode::DecoderConfig + 'static
+impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::Enc: encode::Encoder + core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::AnimationFrameEnc: encode::AnimationFrameEncoder
+
+## auto traits
+
+86 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+CodecError: !RefUnwindSafe !UnwindSafe
+CodecSet: !RefUnwindSafe !UnwindSafe
+CodecSetError: !RefUnwindSafe !UnwindSafe
+Extensions: !RefUnwindSafe !UnwindSafe
+ImageInfo: !RefUnwindSafe !UnwindSafe
+OwnedAnimationFrame: !RefUnwindSafe !UnwindSafe
+decode::DecodeOutput: !RefUnwindSafe !UnwindSafe
+encode::EncodeOutput: !RefUnwindSafe !UnwindSafe
+metadata_rewrite::Request<'a>: !RefUnwindSafe !Send !Sync !UnwindSafe

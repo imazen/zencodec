@@ -188,6 +188,70 @@ impl<S: StreamingDecode + Send> DynStreamingDecoder for StreamingDecoderShim<S> 
 }
 
 // ===========================================================================
+// DynIncrementalDecoder
+// ===========================================================================
+
+/// Object-safe incremental Sans-I/O decoder.
+///
+/// Wraps [`IncrementalDecode`](super::decoder::IncrementalDecode) for dyn dispatch.
+pub trait DynIncrementalDecoder: Send {
+    /// Push a chunk of compressed input bytes into the decoder.
+    fn push_chunk(
+        &mut self,
+        chunk: &[u8],
+        is_eof: bool,
+        stop: Option<&dyn Stop>,
+    ) -> Result<super::decoder::PushOutcome, BoxedError>;
+
+    /// Pull the next batch of decoded scanlines, if available.
+    fn pull_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, BoxedError>;
+
+    /// Image metadata, available as soon as sufficient header bytes have been pushed.
+    fn info(&self) -> Option<&ImageInfo>;
+
+    /// Whether decoding has fully completed.
+    fn is_complete(&self) -> bool;
+}
+
+impl core::fmt::Debug for dyn DynIncrementalDecoder + '_ {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("DynIncrementalDecoder")
+            .finish_non_exhaustive()
+    }
+}
+
+pub(super) struct IncrementalDecoderShim<I>(pub(super) I);
+
+impl<I: super::decoder::IncrementalDecode + Send> DynIncrementalDecoder
+    for IncrementalDecoderShim<I>
+{
+    fn push_chunk(
+        &mut self,
+        chunk: &[u8],
+        is_eof: bool,
+        stop: Option<&dyn Stop>,
+    ) -> Result<super::decoder::PushOutcome, BoxedError> {
+        self.0
+            .push_chunk(chunk, is_eof, stop)
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn pull_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, BoxedError> {
+        self.0
+            .pull_batch()
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn info(&self) -> Option<&ImageInfo> {
+        self.0.info()
+    }
+
+    fn is_complete(&self) -> bool {
+        self.0.is_complete()
+    }
+}
+
+// ===========================================================================
 // DynDecodeJob
 // ===========================================================================
 
@@ -293,6 +357,15 @@ pub trait DynDecodeJob<'a> {
         data: Cow<'a, [u8]>,
         preferred: &[PixelDescriptor],
     ) -> Result<Box<dyn DynAnimationFrameDecoder>, BoxedError>;
+
+    /// Create an incremental Sans-I/O decoder (consumes this job).
+    fn into_incremental_decoder(
+        self: Box<Self>,
+        preferred: &[PixelDescriptor],
+    ) -> Result<Box<dyn DynIncrementalDecoder>, BoxedError> {
+        let _ = preferred;
+        Err(Box::new(crate::capabilities::UnsupportedOperation::IncrementalDecode))
+    }
 }
 
 struct DecodeJobShim<J>(Option<J>);
@@ -455,6 +528,14 @@ where
             .animation_frame_decoder(data, preferred)
             .map_err(|e| Box::new(e) as BoxedError)?;
         Ok(Box::new(AnimationFrameDecoderShim(dec)))
+    }
+
+    fn into_incremental_decoder(
+        mut self: Box<Self>,
+        preferred: &[PixelDescriptor],
+    ) -> Result<Box<dyn DynIncrementalDecoder>, BoxedError> {
+        let job = self.take()?;
+        job.dyn_incremental_decoder(preferred)
     }
 }
 

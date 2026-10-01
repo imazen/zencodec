@@ -1,0 +1,8 @@
+# Working corpus + crash artifacts live in block storage (/mnt/v/fuzzes/zencodec/),
+# not git. Only fuzz_targets/, Cargo.toml, Cargo.lock, and tiny regression/ seeds
+# are tracked.
+target/
+corpus/
+artifacts/
+coverage/
+*.profraw

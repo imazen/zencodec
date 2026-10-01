@@ -1,0 +1,33 @@
+[package]
+name = "zencodec-testkit"
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.88"
+license = "Apache-2.0 OR MIT"
+description = "Conformance test harness for zencodec codec implementations"
+categories = ["multimedia::images", "development-tools::testing"]
+keywords = ["image", "codec", "conformance", "testing"]
+repository = "https://github.com/imazen/zencodec"
+include = ["/src/**", "/README.md", "/LICENSE*"]
+
+[dependencies]
+# Path for in-workspace development; version so a future `cargo publish` resolves
+# against crates.io. Testkit versions independently from the codec contracts.
+# `std` so the reference codec and usage examples can reach
+# `ComputeEnvironment::host()`; testkit-only, never affects a no_std consumer.
+zencodec = { path = "..", version = ">=0.1.27, <0.3.0", features = ["std"] }
+zenpixels = { version = ">=0.2.10, <0.4.0", features = ["icc"] }
+enough = "0.4.4"
+# The `minimal` codec uses `type Error = At<CodecError>` (the envelope pattern),
+# the way real codecs do — they depend on whereat directly to name `At<…>`.
+whereat = "0.1.5"
+
+[dev-dependencies]
+zenmeta = { path = "../zenmeta", version = "0.1.0", features = ["rewrite"] }
+# For the decode-parallelism examples (tests/decode_parallelism.rs) — exercises
+# capping codec thread count via a sized rayon pool.
+rayon = "1.10.0"
+# For tests/usage.rs — the "caller also has zenpixels-convert" examples that
+# adapt a foreign pixel format into an encoder's supported set, and convert a
+# decoded buffer into a caller-chosen format.
+zenpixels-convert = ">=0.2.16, <0.4.0"

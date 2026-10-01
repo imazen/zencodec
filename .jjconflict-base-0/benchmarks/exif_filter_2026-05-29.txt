@@ -1,0 +1,57 @@
+# zencodec EXIF filter benchmark — zero-copy validation
+# Date: 2026-05-29  Branch: feat/metadata-policy (PR #17)
+# Host: AMD Ryzen 9 7950X, WSL2 (no -C target-cpu=native)
+# Command: cargo bench --bench exif_filter
+# Takeaway: parse + retain(passthrough) are FLAT in thumbnail size
+#   (zero-copy borrow); only an actual prune-rewrite / to_bytes copies
+#   the thumbnail and scales linearly. retain_passthrough: 6.2ns @1KiB,
+#   6.2ns @64KiB, 13ns @1MiB. rewrite: 282ns / 1083ns / 42447ns.
+
+═══════════════════════════════════════════════════════════════
+  zenbench  1780106647-1dce52
+  git: a7836166ecf9a58abe3c572c67dee764d33af93d
+═══════════════════════════════════════════════════════════════
+
+  thumb_1KiB  4 rounds × 3K calls ⚠ only 4 rounds
+                             mean ±mad ns  95% CI vs base        iB/s
+  ├─ parse                    48.2 ±1.4ns  [47.0–49.3]ns        19.8G
+  ├─ retain_passthrough        6.2 ±0.1ns  [-89.8%–-84.6%]       154G
+  ├─ retain_prune_rewrite   282.3 ±23.8ns  [+425.3%–+565.2%]    3.38G [1]
+  ╰─ parse_then_to_bytes    247.2 ±17.5ns  [+387.8%–+437.9%]    3.86G
+
+  retain_passthrough    █████████████████████████████████████████████ 154 GiB/s
+  parse                 ██████ 19.8 GiB/s
+  parse_then_to_bytes   █ 3.86 GiB/s
+  retain_prune_rewrite  █ 3.38 GiB/s
+  [1] drift r=-0.80 — later rounds faster
+
+  thumb_64KiB  4 rounds × 956 calls ⚠ only 4 rounds
+                              mean ±mad ns  95% CI vs base          iB/s
+  ├─ parse                     47.4 ±0.2ns  [46.8–48.3]ns          1288G
+  ├─ retain_passthrough         6.2 ±0.0ns  [-87.3%–-86.1%]        9842G [1]
+  ├─ retain_prune_rewrite    1083.2 ±3.6ns  [+2165.3%–+2217.8%]    56.3G
+  ╰─ parse_then_to_bytes    1062.2 ±13.7ns  [+2141.8%–+2176.6%]    57.5G
+
+  retain_passthrough    █████████████████████████████████████████████ 9842 GiB/s
+  parse                 ██████ 1288 GiB/s
+  parse_then_to_bytes   █ 57.5 GiB/s
+  retain_prune_rewrite  █ 56.3 GiB/s
+  [1] drift r=1.00 — later rounds slower
+
+  thumb_1MiB  4 rounds × 26 calls ⚠ only 4 rounds
+                                 mean ±mad ns  95% CI vs base             iB/s
+  ├─ parse                        76.6 ±8.2ns  [61.7–100.9]ns           12748G [1]
+  ├─ retain_passthrough           13.4 ±0.5ns  [-83.7%–-74.6%]          73091G [2]
+  ├─ retain_prune_rewrite   42447.0 ±1242.0ns  [+53219.1%–+58015.0%]     23.0G
+  ╰─ parse_then_to_bytes    42638.1 ±1893.0ns  [+52586.9%–+59165.3%]     22.9G
+
+  retain_passthrough    ████████████████████████████████████████████ 73091 GiB/s
+  parse                 ████████ 12748 GiB/s
+  retain_prune_rewrite  █ 23.0 GiB/s
+  parse_then_to_bytes   █ 22.9 GiB/s
+  [1] CV=32%
+  [2] CV=38%
+
+  total: 367.2s  (353 noisy rounds)
+═══════════════════════════════════════════════════════════════
+  filter: cargo bench -- --group=NAME  format: --format=llm|csv|md|json

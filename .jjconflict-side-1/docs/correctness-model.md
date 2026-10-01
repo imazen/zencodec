@@ -1,0 +1,247 @@
+# Correctness model: color, orientation, and metadata
+
+Three things in an encode are *correctness* signals, not preferences: the color
+carrier (ICC vs CICP), the display orientation, and which metadata is retained.
+Get any of them wrong and the output is wrong — colors shift, the image displays
+sideways or double-rotated, or private data the caller asked to strip ships
+anyway. This document describes how zencodec keeps those decisions in one place
+so individual codecs can't quietly diverge, and how to verify a codec honors the
+contract.
+
+The guiding idea is a pit of success: the framework resolves each signal to a
+plain, embed-ready value *before* the codec runs, and the codec only embeds what
+it is handed. A codec author who does the obvious thing gets correct behavior;
+getting it wrong takes effort.
+
+## The signals are stream-scoped, the feeding mode is orthogonal
+
+A signal is decided once per encode, on the job, before any pixels move:
+
+- `EncodeJob::with_policy(EncodePolicy)` — the color-carrier emission policy
+  (`ColorEmitPolicy`), resolved against the target's capabilities by
+  `resolve_color_emit`.
+- `EncodeJob::with_metadata_policy(meta, MetadataPolicy)` — metadata retention,
+  applied by `Metadata::filtered` before the record reaches the codec.
+- The orientation lives on `Metadata::orientation` (the authoritative field) and,
+  redundantly, in the EXIF blob's `0x0112` tag. `filtered` reconciles the two.
+
+None of this depends on *how* pixels are fed. A codec may take the image in one
+shot (`encode`), incrementally (`push_rows` + `finish`), by pull (`encode_from`),
+or as animation frames (`push_frame`); on the decode side, one-shot (`decode`),
+streaming (`streaming_decoder`), push-sink (`push_decoder`), or animation. The
+feeding mode is a performance/streaming concern. The correctness signals are set
+on the job and are identical across every mode — which is exactly why the testkit
+checks that all feeding modes produce identical output (see below). If two paths
+for the same operation produce different pixels, that is a bug in one of them,
+not a tradeoff.
+
+## Metadata retention: one primitive, one safe wrapper
+
+Retention is a privacy decision. The policy-taking wrapper makes that choice
+explicit; calling the deprecated primitive only produces a warning. It remains
+possible to call the primitive, so deprecation is not compile-time enforcement.
+
+`EncodeJob::with_metadata(meta)` is the storage *primitive*. Every codec
+implements it: store the bytes, embed what the format supports at encode time.
+It is marked `#[deprecated]`. The deprecation is aimed at *callers*: the compiler
+warns at any call site that hands a codec metadata without naming a retention
+policy. Implementing the method does not warn (Rust's `#[deprecated]` fires at
+call sites, not impl sites), so codecs implement it normally.
+
+`EncodeJob::with_metadata_policy(meta, policy)` is the blessed path and the one
+without a warning. It is a provided method: it calls `meta.filtered(&policy)` and
+hands the result to `with_metadata`. Because the filter runs first, the codec
+only ever receives what the policy kept. A codec cannot leak what it never saw.
+
+| Audience | Calls | Implements | Sees a warning? |
+|---|---|---|---|
+| Codec author | — | `with_metadata` (primitive) | No |
+| Pipeline / app | `with_metadata_policy` | — | No |
+| Pipeline / app | `with_metadata` (no policy) | — | Yes — pick a policy |
+
+`MetadataPolicy` has no `Default`; callers name one. `Web` is the privacy-safe
+choice for publishing (keeps ICC, EXIF orientation + rights, and color signaling;
+drops GPS, timestamps, camera identity, thumbnail, and all XMP). `PreserveExact`
+requests retaining supplied metadata, subject to orientation reconciliation and
+the target codec's supported carriers. It does not guarantee a verbatim round trip. The per-variant promises and the edges where they don't
+hold are documented on [`MetadataPolicy`](../src/metadata.rs) under "Delivery
+exceptions" — the short version: a partial policy fails *safe* on an unparseable
+or oversized EXIF blob (it drops the whole blob rather than risk leaking), and
+the consistency between CICP/HDR signaling and a gain map is the caller's job
+because `filtered` can't see the gain map.
+
+## Orientation: one authority, reconciled
+
+Orientation can be expressed three ways — a container field, the EXIF `0x0112`
+tag, and the pixels themselves (baked upright). The hazard is double-application:
+a decoder bakes the rotation into the pixels and sets the field to `Identity`, but
+the EXIF tag still says `Rotate90`, so a downstream consumer that re-reads the tag
+rotates a second time.
+
+`Metadata::orientation` is the single authority. `filtered` reconciles the
+embedded EXIF tag to match it (rewriting `0x0112` in place via
+`helpers::set_exif_orientation` only when they disagree, so the common case keeps
+the zero-copy `Arc` clone). A codec embeds the field's value; it does not invent
+orientation from a second source.
+
+## Color emission: resolve, then embed
+
+`EncodePolicy.color` (a `ColorEmitPolicy`) says how to carry color — prefer
+compact CICP code points, keep the ICC bytes, or a custom mix.
+`resolve_color_emit(&SourceColor, &EncodeCapabilities, ColorEmitPolicy)` turns
+that into a concrete `ColorEmitPlan` (`{ cicp, icc: IccDisposition }`) against the
+target format's capabilities — no CMS, no codec dependency, never a silent ICC
+drop. The codec writes the carriers the plan names. The design and the rejected
+alternatives are in [color-emit-model.md](color-emit-model.md).
+
+The coarse `EncodePolicy.embed_icc/embed_exif/embed_xmp` flags remain as a
+best-effort whole-channel gate, but they are not the retention control — they
+no-op on a codec that doesn't implement `with_policy`. For privacy, filter with a `MetadataPolicy`. For required embed gates, use
+`try_set_policy` / `try_with_policy`. A codec accepts only fields it implements;
+the default rejects every nonempty policy. Generic and erased jobs share the
+same mutable implementation, and rejection must leave the job unchanged.
+These checks confirm policy support, not successful metadata delivery or
+lossless pixel fidelity. Those need codec-specific, content-dependent evidence.
+
+## Gain-map HDR: signal on the buffer, envelope on the info
+
+A `PixelBuffer` is self-describing for the color **signal** — its descriptor
+carries transfer (PQ/HLG/linear), primaries, range, and bit depth, so the samples
+encode the HDR fully (PQ is absolute). It deliberately does **not** carry the
+luminance **envelope** (MaxCLL/MaxFALL, mastering display): the zenpixels color
+structs (`ColorContext`, `ColorOrigin`) are `Eq`, and `MasteringDisplay` is `f32`
+(not `Eq`), so the envelope lives on the non-`Eq` `ImageInfo`/`SourceColor` and
+`Metadata` instead — where it travels *alongside* the buffer, not inside it.
+
+So the contract for `GainMapRender::ReconstructHdr` (decode → native HDR): the
+codec returns the reconstructed buffer **and** populates
+`ImageInfo.source_color.{mastering_display, content_light_level}`. MaxCLL/MaxFALL
+are measured, so they are recomputed from the reconstructed pixels at encode time;
+the decoder carries the derived peak + the invariant mastering display. A full
+native-HDR encode is then `buffer (signal) + SourceColor (envelope)` — the encoder
+reads the envelope off `Metadata`. Skipping this silently drops the envelope on a
+gain-map → native-HDR transcode. (Gain-map → *gain-map* transcode is
+`GainMapRender::Components` and reconstructs nothing — no envelope step.)
+
+## Colour on the decoded buffer: attached, class-gated, identical on every path
+
+The descriptor folds transfer/primaries into enums; the raw H.273 code points and
+the ICC bytes live in `ImageInfo.source_color`, *beside* the buffer. A stage that
+sees only the pixels (CMS, load-bearing reduction, re-encoder) would have to
+guess — so decoders SHOULD attach `SourceColor::to_color_context()` to every
+buffer they emit, **class-gated**: an ICC rides only a layout its device class
+describes (`RGB ` ↔ Rgb/Rgba/Bgra, `GRAY` ↔ Gray/GrayAlpha). On a mismatch,
+derive the profile's CICP and carry that alone, or pick a layout the profile
+describes — never pair them crosswise, never strip the most accurate description
+when a derivable one exists. Derived outputs (HDR reconstruction) get a
+synthesized description, not the source's. The full ranked rules and the carrier
+table (descriptor / context / `source_color`) are in
+[IMPLEMENTING.md](IMPLEMENTING.md#colour-on-the-decoded-buffer-colorcontext).
+
+The invariant the framework can check without knowing a codec's format: whatever
+is attached is class-valid and **identical across the one-shot, streaming, and
+animation paths**. Strip and scratch buffers are rebuilt per batch and are where
+a context silently dies (zenavif's streaming strips shipped context-free while
+its one-shot buffer carried one; `AnimationFrame::to_owned_frame` dropped it on
+the owned-frame path until zencodec#25).
+
+## Verifying a codec: zencodec-testkit
+
+The contract above is only worth anything if codecs actually honor it. The
+[`zencodec-testkit`](../zencodec-testkit) crate is how a codec proves it does. A
+codec crate adds it as a `dev-dependency` and runs the checks against its own
+`EncoderConfig` / `DecoderConfig`:
+
+- `check_metadata_no_leak` — encodes with rich metadata (GPS + thumbnail + camera
+  + copyright + XMP + ICC) under several policies, decodes, and re-parses the
+  embedded EXIF to assert that anything the policy dropped is actually gone. It is
+  a subset check (decoded ⊆ filtered), so a codec that supports fewer channels
+  still passes — it may drop more, never add back. This is the privacy guarantee,
+  tested end to end rather than asserted on a struct field.
+- `check_cross_path_pixel_equivalence` — runs every advertised encode and decode
+  feeding mode and diffs the results byte-for-byte. This is what catches
+  buffered-vs-streaming divergence (tile-boundary handling, edge padding, rounding
+  differences between a one-shot path and an incremental one).
+- `check_animation_cross_path_equivalence` — the same for the three animation
+  decode paths (borrowed canvas, owned, push-sink): all must yield identical
+  frames matching the input. The borrowed path is the usual culprit — its frame
+  aliases the decoder's canvas and is invalidated by the next call, so a codec
+  that composites in place can leak the wrong frame.
+- `check_orientation_roundtrip` — confirms an orientation survives a keeping
+  policy exactly once, catching both loss and double-application.
+- `check_color_context_consistency` — whatever `ColorContext` the decoder
+  attaches is class-valid (ICC device class matches the buffer's colour model)
+  and identical on the one-shot, streaming, and animation (borrowed + owned)
+  paths. Lenient about whether one is attached at all, so it is in `check_all`;
+  `check_color_context_attached` is the strict, opt-in positive direction (a
+  decoder that read colour back must attach the authoritative field).
+- `check_native_hdr_roundtrip` — when both ends declare `hdr`, BT.2100 PQ and
+  HLG survive `PreserveExact`: CICP, the HDR envelope (CLLI exactly, MDCV within
+  container fixed-point precision), 16-bit pixels where both ends declare
+  `native_16bit`, and the decoded descriptor is labelled PQ/HLG, not sRGB. This
+  is what makes the "envelope on the info" contract above testable — a codec
+  that declares `hdr` and drops MaxCLL/MDCV fails here, not in production.
+- `check_gain_map_roundtrip` — the gain-map encode/decode contract. An encoder
+  without `gain_map` rejects `with_gain_map_pixels` / `with_gain_map_encoded`
+  with `UnsupportedOperation::GainMapEncode`; a declared one embeds 1-channel,
+  3-channel and backward-direction sub-resolution maps (dyadic ISO 21496-1
+  params, PQ alternate CICP) and rejects a foreign-format encoded map. A
+  declared decoder reports the map from `probe()`, surfaces a `DecodedGainMap`
+  only on `Components` / `with_extract_gain_map` (never under `BaseOnly`), with
+  exact params and — on a lossless encoder — byte-exact pixels; on
+  `ReconstructHdr` without `reconstructs_hdr` it surfaces the components or
+  fails with `UnsupportedOperation`, never an SDR base relabelled PQ/HLG (the
+  "signal on the buffer" rule above), and with `reconstructs_hdr` it must carry
+  the envelope on `source_color`. The surfaced map then transcodes through a
+  fresh `with_gain_map_pixels` unchanged — the Phase 4 cross-path check.
+- `check_capability_honesty` — every declared capability (the encode paths
+  `push_rows`/`encode_from`/animation, the decode paths streaming/animation, the
+  `lossless` knob, `cheap_probe`, the `icc`/`exif`/`xmp`/`cicp` metadata channels,
+  and `native_alpha`) must actually work, and every *undeclared* optional path must
+  decline with `UnsupportedOperation` rather than panicking or silently succeeding.
+  Both directions are checked for the structural paths and (where the decoder can
+  observe them) the metadata channels — so a codec can't claim a feature it lacks
+  *or* hide one it has; `native_alpha` is forward-only (a no-alpha codec may
+  legitimately reject or flatten RGBA, so that direction isn't asserted). All
+  violations are collected and reported together. Out of scope: cancellation
+  (timing isn't reliably testable on bounded inputs), the lossy flag (not observable
+  from the bitstream), and the pixel-format/resource/tuning flags (`native_gray`,
+  `native_16bit`, `native_f32`, `enforces_max_*`, CICP-carrier, and the
+  `effort`/`quality`/`threads` ranges), which need format-specific fixtures;
+  `hdr` and `gain_map` have their own checks above.
+
+The testkit ships two codecs the checks are validated against in its own tests, so
+the harness is known-good before you point it at a real codec: a faithful
+`reference` (round-trips pixels *and* metadata, declares and honors every
+capability) and a `minimal` one (one-shot only, every optional capability declared
+false) that exercises the false-direction branches.
+
+## Known hazards the testkit is meant to catch
+
+These are the failure modes that motivated the model. They are not hypothetical;
+they are the shapes of bug that recur across codecs.
+
+- **Buffered vs streaming pixel divergence.** Any format with block structure
+  (AVIF/AV1 tiles, JPEG MCUs) or a channel reorder (WebP BGRA swizzle) risks the
+  incremental path producing different pixels at boundaries than the one-shot
+  path. `check_cross_path_pixel_equivalence` diffs them.
+- **Encode-side metadata ignored.** A codec whose encode path never calls
+  `with_metadata`/`with_metadata_policy` silently drops everything — orientation,
+  color profile, rights. Under a `PreserveExact` policy the testkit's positive
+  round-trip expectations (and a codec's own tests) surface this; the privacy
+  check alone won't, because dropping everything never *leaks*.
+- **TIFF-family multi-representation orientation.** A TIFF codec can carry
+  orientation in the IFD `0x0112` tag *and* bake it into the stored pixels *and*
+  surface it as a container field. All three must agree, and a re-encode must not
+  reintroduce a tag the pixels already satisfy. `check_orientation_roundtrip`
+  exercises the round trip; a codec that represents orientation in more than one
+  place should run it under every policy. (Reconciliation logic lives in
+  `Metadata::filtered`; a codec that bypasses `filtered` is on its own.)
+- **Color carrier clobbered at the codec.** A codec that overrides the resolved
+  color carrier from a pixel descriptor (rather than embedding the
+  `ColorEmitPlan`) can emit signaling that disagrees with the pixels. Embed the
+  plan; do not re-derive.
+
+If you add a codec to the zen family, wire up the testkit before wiring up the
+pipeline. The checks are cheap to run and the bugs they catch are expensive to
+ship.

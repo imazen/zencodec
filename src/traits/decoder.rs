@@ -57,6 +57,85 @@ pub trait StreamingDecode {
     fn info(&self) -> &ImageInfo;
 }
 
+/// Status returned after pushing input bytes to an incremental decoder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PushStatus {
+    /// The decoder needs more input data before further output scanlines can be produced.
+    NeedMoreInput,
+    /// One or more batches of decoded scanlines/pixels are ready to be pulled via [`pull_batch`](IncrementalDecode::pull_batch).
+    OutputReady,
+    /// Decoding of the image has completed. All scanlines have been yielded.
+    Complete,
+}
+
+/// Outcome of a [`push_chunk`](IncrementalDecode::push_chunk) call.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PushOutcome {
+    /// Number of bytes consumed from the provided chunk.
+    pub bytes_consumed: usize,
+    /// Decoder status after processing those bytes.
+    pub status: PushStatus,
+}
+
+impl PushOutcome {
+    /// Create a new push outcome.
+    #[inline]
+    pub const fn new(bytes_consumed: usize, status: PushStatus) -> Self {
+        Self {
+            bytes_consumed,
+            status,
+        }
+    }
+}
+
+/// Incremental (Sans-I/O) scanline/batch decoder.
+///
+/// Accepts compressed input bytes in arbitrary chunks without performing any I/O,
+/// and yields strips/scanlines as soon as sufficient data has been pushed.
+///
+/// # Usage
+///
+/// ```text
+/// let mut dec = job.into_incremental_decoder(&[])?;
+/// while !dec.is_complete() {
+///     let chunk = read_chunk_from_network();
+///     let outcome = dec.push_chunk(chunk, is_eof, stop)?;
+///     while let Some((y, strip)) = dec.pull_batch()? {
+///         // process scanlines starting at row y
+///     }
+/// }
+/// ```
+pub trait IncrementalDecode {
+    /// The codec-specific error type.
+    type Error: core::error::Error + Send + Sync + 'static;
+
+    /// Push a chunk of compressed input bytes into the decoder.
+    ///
+    /// - `chunk`: slice of input bytes.
+    /// - `is_eof`: true if no further bytes will follow.
+    /// - `stop`: optional cancellation token.
+    fn push_chunk(
+        &mut self,
+        chunk: &[u8],
+        is_eof: bool,
+        stop: Option<&dyn Stop>,
+    ) -> Result<PushOutcome, Self::Error>;
+
+    /// Pull the next batch of decoded scanlines, if available.
+    ///
+    /// Returns `Ok(Some((y, strip)))` with row offset and pixel slice,
+    /// or `Ok(None)` if more input is needed before another batch can be produced.
+    fn pull_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, Self::Error>;
+
+    /// Image metadata, available as soon as sufficient header bytes have been pushed.
+    ///
+    /// Returns `Some(&ImageInfo)` once known, or `None` if more input is needed.
+    fn info(&self) -> Option<&ImageInfo>;
+
+    /// Whether decoding has fully completed.
+    fn is_complete(&self) -> bool;
+}
+
 /// Full-frame composited animation decode.
 ///
 /// The decoder composites internally (handling disposal, blending,

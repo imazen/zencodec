@@ -220,13 +220,14 @@ pub mod encode {
 pub mod decode {
     // Traits — config, job, execution
     pub use crate::traits::{
-        AnimationFrameDecoder, Decode, DecodeJob, DecoderConfig, StreamingDecode,
+        AnimationFrameDecoder, Decode, DecodeJob, DecoderConfig, IncrementalDecode, PushOutcome,
+        PushStatus, StreamingDecode,
     };
 
     // Object-safe dyn dispatch
     pub use crate::traits::{
         BoxedError, DynAnimationFrameDecoder, DynDecodeJob, DynDecoder, DynDecoderConfig,
-        DynStreamingDecoder,
+        DynIncrementalDecoder, DynStreamingDecoder,
     };
 
     // Types
@@ -257,7 +258,8 @@ pub mod decode {
 pub mod prelude {
     pub use crate::decode::{
         AnimationFrameDecoder, Decode, DecodeJob, DecoderConfig, DynAnimationFrameDecoder,
-        DynDecodeJob, DynDecoder, DynDecoderConfig, DynStreamingDecoder, StreamingDecode,
+        DynDecodeJob, DynDecoder, DynDecoderConfig, DynIncrementalDecoder, DynStreamingDecoder,
+        IncrementalDecode, StreamingDecode,
     };
     pub use crate::encode::{
         AnimationFrameEncoder, DynAnimationFrameEncoder, DynEncodeJob, DynEncoder,

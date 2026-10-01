@@ -1,0 +1,35 @@
+[package]
+name = "zenmeta"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "Apache-2.0 OR MIT"
+description = "Shared image metadata inspection, retention and inventory implementation"
+repository = "https://github.com/imazen/zencodec"
+readme = "README.md"
+include = ["/src/**", "/tests/**", "/examples/**", "/README.md", "/CHANGELOG.md", "/PROVENANCE.md", "/LICENSE-*"]
+
+[features]
+default = []
+std = ["zencodec/std"]
+audit = []
+apple = []
+inventory = []
+rewrite = []
+xmp = ["dep:roxmltree"]
+
+[dependencies]
+zencodec = { path = "..", version = ">=0.1.27, <0.3.0", default-features = false }
+zenpixels = { version = ">=0.2.14, <0.4.0", default-features = false, features = ["icc"] }
+roxmltree = { version = "0.21.1", default-features = false, features = ["positions"], optional = true }
+
+[[test]]
+name = "metadata_inspection"
+required-features = ["audit", "xmp"]
+
+[[example]]
+name = "audit_metadata"
+required-features = ["audit", "xmp"]
+
+[dev-dependencies]
+proptest = "1.11.0"
