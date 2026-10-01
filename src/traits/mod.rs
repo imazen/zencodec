@@ -35,7 +35,7 @@ pub use decoder::{
 pub use decoding::{DecodeJob, DecoderConfig};
 pub use dyn_decoding::{
     DynAnimationFrameDecoder, DynDecodeJob, DynDecoder, DynDecoderConfig, DynIncrementalDecoder,
-    DynStreamingDecoder,
+    DynStreamingDecoder, IncrementalDecoderShim,
 };
 pub use dyn_encoding::{DynAnimationFrameEncoder, DynEncodeJob, DynEncoder, DynEncoderConfig};
 pub use encoder::{AnimationFrameEncoder, Encoder};

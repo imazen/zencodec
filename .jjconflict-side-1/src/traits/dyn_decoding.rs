@@ -220,7 +220,7 @@ impl core::fmt::Debug for dyn DynIncrementalDecoder + '_ {
     }
 }
 
-pub(super) struct IncrementalDecoderShim<I>(pub(super) I);
+pub struct IncrementalDecoderShim<I>(pub I);
 
 impl<I: super::decoder::IncrementalDecode + Send> DynIncrementalDecoder
     for IncrementalDecoderShim<I>

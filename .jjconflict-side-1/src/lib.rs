@@ -227,7 +227,7 @@ pub mod decode {
     // Object-safe dyn dispatch
     pub use crate::traits::{
         BoxedError, DynAnimationFrameDecoder, DynDecodeJob, DynDecoder, DynDecoderConfig,
-        DynIncrementalDecoder, DynStreamingDecoder,
+        DynIncrementalDecoder, DynStreamingDecoder, IncrementalDecoderShim,
     };
 
     // Types
