@@ -477,6 +477,10 @@ pub struct Inventory {
     len: u64,
     parts: Vec<Part>,
     max_parts: u32,
+    /// Child IDs per part (same indexing as `parts`), in push order.
+    kids: Vec<Vec<u32>>,
+    /// Top-level IDs in push order.
+    top: Vec<u32>,
 }
 
 impl Inventory {
@@ -487,6 +491,8 @@ impl Inventory {
             len,
             parts: Vec::new(),
             max_parts: DEFAULT_MAX_PARTS,
+            kids: Vec::new(),
+            top: Vec::new(),
         }
     }
 
@@ -520,33 +526,43 @@ impl Inventory {
 
     /// Record `part` under `parent` (`None` = top level) and return its ID.
     ///
-    /// Fails only when the part cap is reached; coverage is checked by
+    /// Fails when the part cap is reached, or when `parent` does not name a
+    /// part recorded earlier. Coverage is checked by
     /// [`validate`](Self::validate), not here.
     pub fn push(
         &mut self,
         parent: Option<PartId>,
         mut part: Part,
     ) -> Result<PartId, InventoryError> {
+        let id = PartId(self.parts.len() as u32);
         if self.parts.len() >= self.max_parts as usize {
             return Err(InventoryError::TooManyParts {
                 max: self.max_parts,
             });
         }
+        match parent {
+            Some(p) if p.index() >= self.parts.len() => {
+                return Err(InventoryError::BadParent { part: id });
+            }
+            Some(p) => self.kids[p.index()].push(id.0),
+            None => self.top.push(id.0),
+        }
         part.parent = parent;
-        let id = PartId(self.parts.len() as u32);
         self.parts.push(part);
+        self.kids.push(Vec::new());
         Ok(id)
     }
 
     /// Children of `parent` (`None` = top level), sorted by start offset.
     pub fn children(&self, parent: Option<PartId>) -> Vec<PartId> {
-        let mut ids: Vec<PartId> = self
-            .parts
-            .iter()
-            .enumerate()
-            .filter(|(_, p)| p.parent == parent)
-            .map(|(i, _)| PartId(i as u32))
-            .collect();
+        let ids = match parent {
+            None => &self.top,
+            Some(p) => match self.kids.get(p.index()) {
+                Some(k) => k,
+                None => return Vec::new(),
+            },
+        };
+        let mut ids: Vec<PartId> = ids.iter().map(|&i| PartId(i)).collect();
         ids.sort_by_key(|id| (self.parts[id.index()].range.start, id.0));
         ids
     }
@@ -607,7 +623,7 @@ impl Inventory {
     pub fn validate(&self) -> Result<(), InventoryError> {
         let n = self.parts.len();
         let mut children: Vec<Vec<usize>> = vec![Vec::new(); n];
-        let mut top = Vec::new();
+        let mut top = Vec::with_capacity(self.top.len());
         for (i, part) in self.parts.iter().enumerate() {
             let id = PartId(i as u32);
             if part.range.start >= part.range.end {
@@ -703,15 +719,9 @@ impl Inventory {
     /// Bytes per disposition name, counting only parts without children
     /// (leaves), so nested bytes are counted once.
     pub fn bytes_by_disposition(&self) -> Vec<(&'static str, u64)> {
-        let mut has_child = vec![false; self.parts.len()];
-        for p in &self.parts {
-            if let Some(parent) = p.parent {
-                has_child[parent.index()] = true;
-            }
-        }
         let mut totals: Vec<(&'static str, u64)> = Vec::new();
         for (i, p) in self.parts.iter().enumerate() {
-            if has_child[i] {
+            if !self.kids[i].is_empty() {
                 continue;
             }
             let name = p.disposition.name();
@@ -916,15 +926,40 @@ mod tests {
     #[test]
     fn a_parent_must_precede_its_children() {
         let mut inv = Inventory::new(ImageFormat::Png, 10);
-        inv.push(
-            Some(PartId(5)),
-            part(PartKind::Chunk, 0..10, Disposition::Structure),
-        )
-        .unwrap();
         assert_eq!(
-            inv.validate(),
+            inv.push(
+                Some(PartId(5)),
+                part(PartKind::Chunk, 0..10, Disposition::Structure),
+            ),
             Err(InventoryError::BadParent { part: PartId(0) })
         );
+        assert!(inv.parts().is_empty());
+    }
+
+    /// Many sibling containers each filling their own gaps stays linear in the
+    /// number of parts per container, not quadratic in the whole inventory.
+    #[test]
+    fn gap_filling_scales_with_siblings_not_inventory_size() {
+        let n: u64 = 20_000;
+        let mut inv = Inventory::new(ImageFormat::Avif, n * 16);
+        for i in 0..n {
+            let start = i * 16;
+            let b = inv
+                .push(
+                    None,
+                    part(PartKind::Box, start..start + 16, Disposition::Structure)
+                        .with_body(start + 8..start + 16),
+                )
+                .unwrap();
+            inv.push(
+                Some(b),
+                part(PartKind::Box, start + 8..start + 12, Disposition::Unknown),
+            )
+            .unwrap();
+            inv.fill_gaps(Some(b), Disposition::Unreferenced).unwrap();
+        }
+        inv.validate().unwrap();
+        assert_eq!(inv.parts().len() as u64, n * 3);
     }
 
     #[test]
