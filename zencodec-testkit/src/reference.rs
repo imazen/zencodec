@@ -510,6 +510,181 @@ pub(crate) fn frame_pixel_len(h: &Header) -> usize {
     h.width as usize * h.height as usize * h.bpp as usize
 }
 
+/// Structural inventory of a `ZCR1` stream: the worked example of
+/// [`DecodeJob::inventory`].
+///
+/// Walks the wire format with checked arithmetic and no pixel allocation, and
+/// never fails on malformed input: whatever cannot be read becomes one
+/// [`Malformed`](zencodec::inventory::Disposition::Malformed) part, and bytes
+/// after the last frame are [`Trailing`](zencodec::inventory::Disposition::Trailing)
+/// because the decoder never reads them. The only error is the part cap.
+pub(crate) fn zcr_inventory(
+    data: &[u8],
+    format: ImageFormat,
+) -> Result<zencodec::inventory::Inventory, RefError> {
+    use zencodec::inventory::{
+        Disposition, Inventory, InventoryError, MetadataKind, Part, PartKind, PartTag,
+    };
+    let len = data.len() as u64;
+    let mut inv = Inventory::new(format, len);
+    let cap = |e: InventoryError| RefError::Invalid(format!("inventory: {e}"));
+    let malformed_from = |inv: &mut Inventory, at: u64, why: &str| -> Result<(), RefError> {
+        if at < len {
+            inv.push(
+                None,
+                Part::new(
+                    PartKind::Gap,
+                    PartTag::None,
+                    at..len,
+                    Disposition::Malformed,
+                )
+                .with_detail(why.to_owned()),
+            )
+            .map_err(cap)?;
+        }
+        Ok(())
+    };
+
+    let header_ok = data.len() >= 19
+        && &data[..4] == MAGIC
+        && descriptor_for_bpp(data[16]).is_ok()
+        && read_u32(data, 4).is_ok_and(|w| w > 0)
+        && read_u32(data, 8).is_ok_and(|h| h > 0)
+        && read_u32(data, 12).is_ok_and(|f| f > 0);
+    if !header_ok {
+        malformed_from(&mut inv, 0, "not a ZCR1 header")?;
+        return Ok(inv);
+    }
+    let (w, h, frames, bpp, flags) = (
+        u64::from(read_u32(data, 4)?),
+        u64::from(read_u32(data, 8)?),
+        u64::from(read_u32(data, 12)?),
+        u64::from(data[16]),
+        data[18],
+    );
+    inv.push(
+        None,
+        Part::new(
+            PartKind::Header,
+            PartTag::None,
+            0..19,
+            Disposition::Structure,
+        )
+        .with_label("ZCR1")
+        .with_detail("magic, geometry, frame count, layout, orientation, flags"),
+    )
+    .map_err(cap)?;
+
+    let mut at: u64 = 19;
+    // A length-prefixed blob: `u32` length, then the bytes.
+    let blob_end = |at: u64| -> Option<u64> {
+        let n = read_u32(data, usize::try_from(at).ok()?).ok()?;
+        let end = at.checked_add(4)?.checked_add(u64::from(n))?;
+        (end <= len).then_some(end)
+    };
+    let fixed_end = |at: u64, n: u64| -> Option<u64> {
+        let end = at.checked_add(n)?;
+        (end <= len).then_some(end)
+    };
+    let sections: [(u8, &str, MetadataKind); 6] = [
+        (1, "icc", MetadataKind::Icc),
+        (2, "exif", MetadataKind::Exif),
+        (4, "xmp", MetadataKind::Xmp),
+        (8, "cicp", MetadataKind::Cicp),
+        (16, "clli", MetadataKind::HdrStatic),
+        (32, "mdcv", MetadataKind::HdrStatic),
+    ];
+    for (bit, name, kind) in sections {
+        if flags & bit == 0 {
+            continue;
+        }
+        let end = match bit {
+            1 | 2 | 4 => blob_end(at),
+            8 | 16 => fixed_end(at, 4),
+            _ => fixed_end(at, 40),
+        };
+        let Some(end) = end else {
+            malformed_from(&mut inv, at, &format!("truncated {name} section"))?;
+            return Ok(inv);
+        };
+        inv.push(
+            None,
+            Part::new(
+                PartKind::Chunk,
+                PartTag::Name(name.into()),
+                at..end,
+                Disposition::Metadata(kind),
+            ),
+        )
+        .map_err(cap)?;
+        at = end;
+    }
+    if flags & 64 != 0 {
+        // w:u32 h:u32 channels:u8 has_alt:u8 [cicp:4] iso_len:u32 iso pixels
+        let gm = (|| -> Option<u64> {
+            let at_us = usize::try_from(at).ok()?;
+            let gw = u64::from(read_u32(data, at_us).ok()?);
+            let gh = u64::from(read_u32(data, at_us.checked_add(4)?).ok()?);
+            let channels = u64::from(*data.get(at_us.checked_add(8)?)?);
+            let has_alt = *data.get(at_us.checked_add(9)?)? != 0;
+            let iso_at = at + 10 + if has_alt { 4 } else { 0 };
+            let iso_end = blob_end(iso_at)?;
+            fixed_end(iso_end, gw.checked_mul(gh)?.checked_mul(channels)?)
+        })();
+        let Some(end) = gm else {
+            malformed_from(&mut inv, at, "truncated gain-map section")?;
+            return Ok(inv);
+        };
+        inv.push(
+            None,
+            Part::new(
+                PartKind::Chunk,
+                PartTag::Name("gain-map".into()),
+                at..end,
+                Disposition::Metadata(MetadataKind::GainMap),
+            ),
+        )
+        .map_err(cap)?;
+        at = end;
+    }
+
+    let pixels = w.checked_mul(h).and_then(|n| n.checked_mul(bpp));
+    for i in 0..frames {
+        let (Some(dur_end), Some(px_end)) = (
+            fixed_end(at, 4),
+            pixels.and_then(|n| fixed_end(at.saturating_add(4), n)),
+        ) else {
+            malformed_from(&mut inv, at, &format!("truncated frame {i}"))?;
+            return Ok(inv);
+        };
+        inv.push(
+            None,
+            Part::new(
+                PartKind::Chunk,
+                PartTag::Code(i as u32),
+                at..dur_end,
+                Disposition::Metadata(MetadataKind::Animation),
+            )
+            .with_label("duration"),
+        )
+        .map_err(cap)?;
+        inv.push(
+            None,
+            Part::new(
+                PartKind::Chunk,
+                PartTag::Code(i as u32),
+                dur_end..px_end,
+                Disposition::ImageData,
+            )
+            .with_label("pixels"),
+        )
+        .map_err(cap)?;
+        at = px_end;
+    }
+    inv.fill_gaps(None, Disposition::Trailing).map_err(cap)?;
+    Ok(inv)
+}
+
 pub(crate) fn build_info(h: &Header) -> ImageInfo {
     let mut info =
         ImageInfo::new(h.width, h.height, ImageFormat::Pnm).with_orientation(h.meta.orientation);
@@ -649,7 +824,8 @@ static DECODE_CAPS: DecodeCapabilities = DecodeCapabilities::new()
     // Extracts / surfaces the gain map (`GainMapRender::Components`) but does
     // NOT reconstruct HDR — zencodec carries no HDR math, so `reconstructs_hdr`
     // stays false and a `ReconstructHdr` request falls back to `Components`.
-    .with_gain_map(true);
+    .with_gain_map(true)
+    .with_inventory(true);
 
 /// Every layout the reference stores raw: 8- and 16-bit RGB/RGBA, with the
 /// 16-bit HDR-labelled variants listed so a PQ/HLG caller negotiates natively.
@@ -942,6 +1118,7 @@ impl DecoderConfig for ReferenceDecoderConfig {
     fn job<'a>(self) -> Self::Job<'a> {
         RefDecodeJob {
             render: GainMapRender::BaseOnly,
+            format: ImageFormat::Pnm,
         }
     }
 }
@@ -1001,13 +1178,18 @@ impl DecoderConfig for ReferenceZcrDecoderConfig {
         ReferenceDecoderConfig::capabilities()
     }
     fn job<'a>(self) -> Self::Job<'a> {
-        ReferenceDecoderConfig.job()
+        RefDecodeJob {
+            render: GainMapRender::BaseOnly,
+            format: ZCR_FORMATS[0],
+        }
     }
 }
 
 /// Reference decode job.
 pub struct RefDecodeJob {
     render: GainMapRender,
+    /// The format the job's config registered under; inventories report it.
+    format: ImageFormat,
 }
 
 impl<'a> DecodeJob<'a> for RefDecodeJob {
@@ -1038,6 +1220,10 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
 
     fn probe(&self, data: &[u8]) -> Result<ImageInfo, RefError> {
         Ok(build_info(&parse_header(data)?))
+    }
+
+    fn inventory(&self, data: &[u8]) -> Result<Option<zencodec::inventory::Inventory>, RefError> {
+        zcr_inventory(data, self.format).map(Some)
     }
 
     fn output_info(&self, data: &[u8]) -> Result<OutputInfo, RefError> {

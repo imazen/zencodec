@@ -6,35 +6,36 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1491 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 89 lines (89 hidden + 0 excluded-feature)
+# files: zencodec.txt 1604 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 101 lines (101 hidden + 0 excluded-feature)
 
 ## summary
 #
-#   pub modules                                 9
-#   pub types (struct/enum/trait/alias)       169
-#   pub consts/statics                        172
+#   pub modules                                10
+#   pub types (struct/enum/trait/alias)       177
+#   pub consts/statics                        180
 #   free functions                             42
-#   inherent methods                          663
-#   struct fields                             196
-#   enum variants                             185
+#   inherent methods                          685
+#   struct fields                             213
+#   enum variants                             234
 #   re-exports                                 12
-#   trait roster entries (type × trait)       386
+#   trait roster entries (type × trait)       434
 #   conditional trait impls (verbatim)          4
-#   auto-trait-complete types                  67
+#   auto-trait-complete types                  75
 #   auto-trait exceptions                       8
 #
 # per-module pub lines:
-#   (root)                          732
-#   decode                          168
+#   (root)                          740
+#   decode                          170
 #   encode                          119
 #   estimate                         48
 #   exif                             65
 #   gainmap                         126
 #   helpers                          13
 #   icc                               1
-#   prelude                         176
+#   inventory                        93
+#   prelude                         178
 
-## items (1396 lines)
+## items (1501 lines)
 
 pub mod zencodec
 pub use At
@@ -72,6 +73,7 @@ pub const fn decode::DecodeCapabilities::exif(&self) -> bool
 pub const fn decode::DecodeCapabilities::gain_map(&self) -> bool
 pub const fn decode::DecodeCapabilities::hdr(&self) -> bool
 pub const fn decode::DecodeCapabilities::icc(&self) -> bool
+pub const fn decode::DecodeCapabilities::inventory(&self) -> bool
 pub const fn decode::DecodeCapabilities::multi_image(&self) -> bool
 pub const fn decode::DecodeCapabilities::native_16bit(&self) -> bool
 pub const fn decode::DecodeCapabilities::native_alpha(&self) -> bool
@@ -94,6 +96,7 @@ pub const fn decode::DecodeCapabilities::with_exif(self, bool) -> Self
 pub const fn decode::DecodeCapabilities::with_gain_map(self, bool) -> Self
 pub const fn decode::DecodeCapabilities::with_hdr(self, bool) -> Self
 pub const fn decode::DecodeCapabilities::with_icc(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_inventory(self, bool) -> Self
 pub const fn decode::DecodeCapabilities::with_multi_image(self, bool) -> Self
 pub const fn decode::DecodeCapabilities::with_native_16bit(self, bool) -> Self
 pub const fn decode::DecodeCapabilities::with_native_alpha(self, bool) -> Self
@@ -229,6 +232,7 @@ pub fn decode::DecodeJob::dyn_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenp
 pub fn decode::DecodeJob::dyn_streaming_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynStreamingDecoder + 'a)>, encode::BoxedError> where Self: 'a, Self::StreamDec: core::marker::Send
 pub fn decode::DecodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn decode::DecodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn decode::DecodeJob::inventory(&self, &[u8]) -> core::result::Result<core::option::Option<inventory::Inventory>, Self::Error>
 pub fn decode::DecodeJob::output_info(&self, &[u8]) -> core::result::Result<decode::OutputInfo, Self::Error>
 pub fn decode::DecodeJob::probe(&self, &[u8]) -> core::result::Result<ImageInfo, Self::Error>
 pub fn decode::DecodeJob::probe_full(&self, &[u8]) -> core::result::Result<ImageInfo, Self::Error>
@@ -271,6 +275,7 @@ pub fn decode::DynDecodeJob::extensions_mut(&mut self) -> core::option::Option<&
 pub fn decode::DynDecodeJob::into_animation_frame_decoder(alloc::boxed::Box<Self>, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<dyn decode::DynAnimationFrameDecoder>, encode::BoxedError>
 pub fn decode::DynDecodeJob::into_decoder(alloc::boxed::Box<Self>, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynDecoder + 'a)>, encode::BoxedError>
 pub fn decode::DynDecodeJob::into_streaming_decoder(alloc::boxed::Box<Self>, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynStreamingDecoder + 'a)>, encode::BoxedError>
+pub fn decode::DynDecodeJob::inventory(&self, &[u8]) -> core::result::Result<core::option::Option<inventory::Inventory>, encode::BoxedError>
 pub fn decode::DynDecodeJob::output_info(&self, &[u8]) -> core::result::Result<decode::OutputInfo, encode::BoxedError>
 pub fn decode::DynDecodeJob::probe(&self, &[u8]) -> core::result::Result<ImageInfo, encode::BoxedError>
 pub fn decode::DynDecodeJob::probe_full(&self, &[u8]) -> core::result::Result<ImageInfo, encode::BoxedError>
@@ -701,6 +706,105 @@ pub fn helpers::identify_well_known_icc(&[u8], helpers::IccMatchTolerance) -> co
 pub fn helpers::parse_exif_orientation(&[u8]) -> core::option::Option<zenpixels::orientation::Orientation>
 pub fn helpers::set_exif_orientation(&[u8], zenpixels::orientation::Orientation) -> core::option::Option<alloc::vec::Vec<u8>>
 pub mod icc
+pub mod inventory
+#[non_exhaustive] pub enum inventory::Disposition
+pub inventory::Disposition::Dropped
+pub inventory::Disposition::ImageData
+pub inventory::Disposition::Malformed
+pub inventory::Disposition::Metadata(inventory::MetadataKind)
+pub inventory::Disposition::Padding
+pub inventory::Disposition::Skipped
+pub inventory::Disposition::Structure
+pub inventory::Disposition::Trailing
+pub inventory::Disposition::Unknown
+pub inventory::Disposition::Unreferenced
+pub const fn inventory::Disposition::is_consumed(self) -> bool
+pub const fn inventory::Disposition::name(self) -> &'static str
+#[non_exhaustive] pub enum inventory::InventoryError
+pub inventory::InventoryError::BadParent
+pub inventory::InventoryError::BadParent::part: inventory::PartId
+pub inventory::InventoryError::EmptyPart
+pub inventory::InventoryError::EmptyPart::part: inventory::PartId
+pub inventory::InventoryError::OutOfBounds
+pub inventory::InventoryError::OutOfBounds::part: inventory::PartId
+pub inventory::InventoryError::OutsideParent
+pub inventory::InventoryError::OutsideParent::part: inventory::PartId
+pub inventory::InventoryError::Overlap
+pub inventory::InventoryError::Overlap::first: inventory::PartId
+pub inventory::InventoryError::Overlap::second: inventory::PartId
+pub inventory::InventoryError::TooManyParts
+pub inventory::InventoryError::TooManyParts::max: u32
+pub inventory::InventoryError::Uncovered
+pub inventory::InventoryError::Uncovered::parent: core::option::Option<inventory::PartId>
+pub inventory::InventoryError::Uncovered::range: core::ops::range::Range<u64>
+#[non_exhaustive] pub enum inventory::MetadataKind
+pub inventory::MetadataKind::Animation
+pub inventory::MetadataKind::Cicp
+pub inventory::MetadataKind::Colour
+pub inventory::MetadataKind::Exif
+pub inventory::MetadataKind::GainMap
+pub inventory::MetadataKind::HdrStatic
+pub inventory::MetadataKind::Icc
+pub inventory::MetadataKind::Orientation
+pub inventory::MetadataKind::Resolution
+pub inventory::MetadataKind::Supplement
+pub inventory::MetadataKind::Xmp
+pub const fn inventory::MetadataKind::name(self) -> &'static str
+#[non_exhaustive] pub enum inventory::PartKind
+pub inventory::PartKind::Attribute
+pub inventory::PartKind::Block
+pub inventory::PartKind::Box
+pub inventory::PartKind::Chunk
+pub inventory::PartKind::CodedUnit
+pub inventory::PartKind::EmbeddedImage
+pub inventory::PartKind::Extent
+pub inventory::PartKind::Field
+pub inventory::PartKind::Gap
+pub inventory::PartKind::Header
+pub inventory::PartKind::Ifd
+pub inventory::PartKind::Item
+pub inventory::PartKind::Property
+pub inventory::PartKind::ScanData
+pub inventory::PartKind::Segment
+pub inventory::PartKind::Trailer
+pub const fn inventory::PartKind::name(self) -> &'static str
+#[non_exhaustive] pub enum inventory::PartTag
+pub inventory::PartTag::Code(u32)
+pub inventory::PartTag::FourCc([u8; 4])
+pub inventory::PartTag::Marker(u8)
+pub inventory::PartTag::Name(alloc::borrow::Cow<'static, str>)
+pub inventory::PartTag::None
+pub struct inventory::Inventory
+pub fn inventory::Inventory::bytes_by_disposition(&self) -> alloc::vec::Vec<(&'static str, u64)>
+pub fn inventory::Inventory::children(&self, core::option::Option<inventory::PartId>) -> alloc::vec::Vec<inventory::PartId>
+pub fn inventory::Inventory::fill_gaps(&mut self, core::option::Option<inventory::PartId>, inventory::Disposition) -> core::result::Result<(), inventory::InventoryError>
+pub fn inventory::Inventory::format(&self) -> ImageFormat
+pub fn inventory::Inventory::get(&self, inventory::PartId) -> core::option::Option<&inventory::Part>
+pub fn inventory::Inventory::input_len(&self) -> u64
+pub fn inventory::Inventory::new(ImageFormat, u64) -> Self
+pub fn inventory::Inventory::parts(&self) -> &[inventory::Part]
+pub fn inventory::Inventory::push(&mut self, core::option::Option<inventory::PartId>, inventory::Part) -> core::result::Result<inventory::PartId, inventory::InventoryError>
+pub fn inventory::Inventory::unconsumed(&self) -> impl core::iter::traits::iterator::Iterator<Item = (inventory::PartId, &inventory::Part)>
+pub fn inventory::Inventory::validate(&self) -> core::result::Result<(), inventory::InventoryError>
+pub fn inventory::Inventory::with_max_parts(self, u32) -> Self
+#[non_exhaustive] pub struct inventory::Part
+pub inventory::Part::body: core::option::Option<core::ops::range::Range<u64>>
+pub inventory::Part::detail: core::option::Option<alloc::string::String>
+pub inventory::Part::disposition: inventory::Disposition
+pub inventory::Part::kind: inventory::PartKind
+pub inventory::Part::label: core::option::Option<alloc::borrow::Cow<'static, str>>
+pub inventory::Part::parent: core::option::Option<inventory::PartId>
+pub inventory::Part::range: core::ops::range::Range<u64>
+pub inventory::Part::tag: inventory::PartTag
+pub fn inventory::Part::is_empty(&self) -> bool
+pub fn inventory::Part::len(&self) -> u64
+pub fn inventory::Part::new(inventory::PartKind, inventory::PartTag, core::ops::range::Range<u64>, inventory::Disposition) -> Self
+pub fn inventory::Part::with_body(self, core::ops::range::Range<u64>) -> Self
+pub fn inventory::Part::with_detail(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn inventory::Part::with_label(self, impl core::convert::Into<alloc::borrow::Cow<'static, str>>) -> Self
+pub struct inventory::PartId(_)
+pub const fn inventory::PartId::index(self) -> usize
+pub const inventory::DEFAULT_MAX_PARTS: u32
 pub mod prelude
 pub type prelude::AnimationFrameDecoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn prelude::AnimationFrameDecoder::frame_count(&self) -> core::option::Option<u32>
@@ -727,6 +831,7 @@ pub fn prelude::DecodeJob::dyn_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zen
 pub fn prelude::DecodeJob::dyn_streaming_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynStreamingDecoder + 'a)>, encode::BoxedError> where Self: 'a, Self::StreamDec: core::marker::Send
 pub fn prelude::DecodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn prelude::DecodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn prelude::DecodeJob::inventory(&self, &[u8]) -> core::result::Result<core::option::Option<inventory::Inventory>, Self::Error>
 pub fn prelude::DecodeJob::output_info(&self, &[u8]) -> core::result::Result<decode::OutputInfo, Self::Error>
 pub fn prelude::DecodeJob::probe(&self, &[u8]) -> core::result::Result<ImageInfo, Self::Error>
 pub fn prelude::DecodeJob::probe_full(&self, &[u8]) -> core::result::Result<ImageInfo, Self::Error>
@@ -767,6 +872,7 @@ pub fn prelude::DynDecodeJob::extensions_mut(&mut self) -> core::option::Option<
 pub fn prelude::DynDecodeJob::into_animation_frame_decoder(alloc::boxed::Box<Self>, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<dyn decode::DynAnimationFrameDecoder>, encode::BoxedError>
 pub fn prelude::DynDecodeJob::into_decoder(alloc::boxed::Box<Self>, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynDecoder + 'a)>, encode::BoxedError>
 pub fn prelude::DynDecodeJob::into_streaming_decoder(alloc::boxed::Box<Self>, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<(dyn decode::DynStreamingDecoder + 'a)>, encode::BoxedError>
+pub fn prelude::DynDecodeJob::inventory(&self, &[u8]) -> core::result::Result<core::option::Option<inventory::Inventory>, encode::BoxedError>
 pub fn prelude::DynDecodeJob::output_info(&self, &[u8]) -> core::result::Result<decode::OutputInfo, encode::BoxedError>
 pub fn prelude::DynDecodeJob::probe(&self, &[u8]) -> core::result::Result<ImageInfo, encode::BoxedError>
 pub fn prelude::DynDecodeJob::probe_full(&self, &[u8]) -> core::result::Result<ImageInfo, encode::BoxedError>
@@ -1433,7 +1539,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (82 types)
+## trait impls (90 types)
 
 (): encode::AnimationFrameEncoder
 (dyn core::error::Error + 'static): CodecErrorExt
@@ -1516,6 +1622,14 @@ gainmap::GainMapSource: Clone, Debug
 gainmap::Iso21496Format: Clone, Copy, Debug, Eq, PartialEq
 gainmap::UFraction: Clone, Copy, Debug, Default, Eq, PartialEq
 helpers::IccMatchTolerance: Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd
+inventory::Disposition: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
+inventory::Inventory: Clone, Debug, Display, Eq, PartialEq
+inventory::InventoryError: Clone, Debug, Display, Eq, Error, PartialEq
+inventory::MetadataKind: Clone, Copy, Debug, Eq, Hash, PartialEq
+inventory::Part: Clone, Debug, Eq, PartialEq
+inventory::PartId: Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd
+inventory::PartKind: Clone, Copy, Debug, Eq, Hash, PartialEq
+inventory::PartTag: Clone, Debug, Display, Eq, Hash, PartialEq
 whereat::at::At<E>: CategorizedError
 impl<C> decode::DynDecoderConfig for C where C: decode::DecoderConfig + 'static
 impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::Enc: encode::Encoder + core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::AnimationFrameEnc: encode::AnimationFrameEncoder
@@ -1524,7 +1638,7 @@ impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static,
 
 ## auto traits
 
-67 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+75 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
 CodecSet: !RefUnwindSafe !UnwindSafe
 CodecSetError: !RefUnwindSafe !UnwindSafe

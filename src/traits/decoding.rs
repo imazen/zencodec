@@ -196,6 +196,29 @@ pub trait DecodeJob<'a>: Sized {
         self.probe(data)
     }
 
+    /// Map every structural part of `data` without decoding pixels.
+    ///
+    /// The returned [`Inventory`](crate::inventory::Inventory) attributes every
+    /// byte of the input to a part — segment, chunk, box, item extent, block,
+    /// trailer or gap — and says what this decoder does with it
+    /// ([`Disposition`](crate::inventory::Disposition)). Bytes the decoder never
+    /// reads are listed, not skipped, so the inventory can be used to audit a
+    /// file for metadata that would slip through a pipeline.
+    ///
+    /// Malformed or truncated input still yields an inventory: record what was
+    /// understood and mark the rest
+    /// [`Malformed`](crate::inventory::Disposition::Malformed). Reserve errors
+    /// for cancellation and resource limits. The result must pass
+    /// [`Inventory::validate`](crate::inventory::Inventory::validate).
+    ///
+    /// Default: `Ok(None)`, meaning this decoder does not enumerate parts. A
+    /// codec that implements it also sets
+    /// [`DecodeCapabilities::with_inventory`](crate::decode::DecodeCapabilities::with_inventory).
+    fn inventory(&self, data: &[u8]) -> Result<Option<crate::inventory::Inventory>, Self::Error> {
+        let _ = data;
+        Ok(None)
+    }
+
     // --- Decode hints (optional, decoder may ignore) ---
 
     /// Hint: crop to this region in source coordinates.

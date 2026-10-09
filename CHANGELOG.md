@@ -8,6 +8,14 @@ All notable changes to zencodec are documented here. Sections below the
 ### [Unreleased]
 
 #### Added
+- **`check_inventory`** (in `check_all` when the decoder declares `inventory`) — the
+  structural-inventory contract: on a valid file, on the same file with 37 junk bytes
+  appended, and on every truncation, `DecodeJob::inventory` returns `Some`, covers the whole
+  input, passes `Inventory::validate`, never panics or errors, and never reports the appended
+  junk as structure, image data or metadata. An undeclared decoder must return `None`.
+  Mutation-verified: a walker that calls the junk image data, or leaves it uncovered, fails.
+- The `reference` codec implements `inventory` (header, every metadata section, per-frame
+  duration and pixels, trailing bytes) as the worked example, and declares the capability.
 - **`check_gain_map_roundtrip`** (in `check_all`) — the gain-map encode/decode
   contract (Phases 1, 2 and 4 of `docs/gainmap-pipeline-scope-2026-06-08.md`,
   #24): an encoder without `gain_map` must reject `with_gain_map_pixels` /
@@ -168,6 +176,17 @@ removes that whole class).
   goes through the explicit `conservative()` / `host()` constructors.
 
 ### Added
+
+- **`inventory` module and `DecodeJob::inventory`** — a byte-exact map of a file's structural
+  parts (segments, chunks, boxes, item extents, blocks, IFDs, trailers, gaps), each with its
+  byte range and a `Disposition` saying what the decoder does with it (`Structure`,
+  `ImageData`, `Metadata(kind)` versus `Dropped`, `Skipped`, `Unknown`, `Trailing`,
+  `Unreferenced`, `Padding`, `Malformed`). `Inventory::validate` checks that top-level parts
+  tile the input and that declared container bodies are tiled by their children, so bytes a
+  decoder never reads are listed instead of skipped silently; `unconsumed()` lists them for
+  audits. `DecodeJob::inventory` and `DynDecodeJob::inventory` default to `Ok(None)`;
+  `DecodeCapabilities::with_inventory` declares support. Additive. Implementer guide:
+  `docs/inventory.md`.
 - `CodecSet` / `CodecSetError` — multi-codec registry: register decoder /
   encoder configs one line each and get detect→decode, `probe`, push /
   streaming / animation decode, and format-keyed encode through one
