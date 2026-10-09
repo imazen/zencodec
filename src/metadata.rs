@@ -206,6 +206,7 @@ impl Metadata {
             && self.cicp.is_none()
             && self.content_light_level.is_none()
             && self.mastering_display.is_none()
+            && self.diffuse_white.is_none()
             && self.orientation == Orientation::Identity
     }
 
@@ -329,6 +330,7 @@ impl Metadata {
         if f.hdr.keeps() {
             out.content_light_level = self.content_light_level;
             out.mastering_display = self.mastering_display;
+            out.diffuse_white = self.diffuse_white;
         }
 
         // XMP (whole-segment).
@@ -419,7 +421,7 @@ pub struct MetadataFields {
     pub xmp: Retention,
     /// CICP color signaling.
     pub cicp: Retention,
-    /// HDR `ContentLightLevel` + `MasteringDisplay`.
+    /// HDR `ContentLightLevel`, `MasteringDisplay`, and `DiffuseWhite`.
     pub hdr: Retention,
 }
 
@@ -908,6 +910,40 @@ mod tests {
             ..MetadataFields::DISCARD_ALL
         };
         assert_eq!(MetadataPolicy::Custom(custom).fields(), custom);
+    }
+
+    #[test]
+    fn diffuse_white_survives_retaining_policies() {
+        // Exercise the decode-info -> encode-metadata boundary with a source
+        // anchor different from the conventional 203-nit fallback.
+        let white = DiffuseWhite::new(100.0);
+        let mut info = crate::ImageInfo::new(1, 1, crate::ImageFormat::Png);
+        info.source_color.diffuse_white = Some(white);
+        let metadata = Metadata::from(&info);
+        for policy in [
+            MetadataPolicy::PreserveExact,
+            MetadataPolicy::Preserve,
+            MetadataPolicy::Web,
+            MetadataPolicy::ColorAndRotation,
+            MetadataPolicy::Custom(MetadataFields::DISCARD_ALL.with_hdr(Retention::Keep)),
+        ] {
+            let filtered = metadata.filtered(&policy);
+            assert_eq!(filtered.diffuse_white, Some(white), "{policy:?}");
+            assert!(!filtered.is_empty(), "{policy:?}");
+            assert_eq!(filtered.filtered(&policy), filtered, "{policy:?}");
+        }
+        let discarded = metadata.filtered(&MetadataPolicy::Custom(
+            MetadataFields::KEEP_ALL.with_hdr(Retention::Discard),
+        ));
+        assert_eq!(discarded.diffuse_white, None);
+        assert!(discarded.is_empty());
+    }
+
+    #[test]
+    fn diffuse_white_alone_is_not_empty() {
+        let metadata = Metadata::none().with_diffuse_white(DiffuseWhite::new(100.0));
+        assert!(!metadata.is_empty());
+        assert!(metadata.clear_diffuse_white().is_empty());
     }
 
     #[test]

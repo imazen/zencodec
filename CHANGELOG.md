@@ -102,6 +102,14 @@ removes that whole class).
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserve the HDR diffuse-white luminance anchor when metadata retention keeps
+  HDR fields, including `PreserveExact`, `Preserve`, `Web`, and
+  `ColorAndRotation`. `Metadata::is_empty` now recognizes an anchor-only record.
+  Previously filtering silently removed the anchor and could cause downstream
+  color processing to use a different luminance fallback.
+
 ### Changed
 
 - **Dependency requirements now span the published minor and the next one.**
