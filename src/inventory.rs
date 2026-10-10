@@ -394,6 +394,16 @@ impl Part {
         self.detail = Some(detail.into());
     }
 
+    /// Remove a declared body, before the part is pushed.
+    pub fn clear_body(&mut self) {
+        self.body = None;
+    }
+
+    /// Remove the detail, before the part is pushed.
+    pub fn clear_detail(&mut self) {
+        self.detail = None;
+    }
+
     /// The part this one is nested in, or `None` at the top level.
     pub fn parent(&self) -> Option<PartId> {
         self.parent

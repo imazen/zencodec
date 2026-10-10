@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1610 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 101 lines (101 hidden + 0 excluded-feature)
+# files: zencodec.txt 1612 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 101 lines (101 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -14,7 +14,7 @@
 #   pub types (struct/enum/trait/alias)       177
 #   pub consts/statics                        180
 #   free functions                             42
-#   inherent methods                          699
+#   inherent methods                          701
 #   struct fields                             205
 #   enum variants                             234
 #   re-exports                                 12
@@ -32,10 +32,10 @@
 #   gainmap                         126
 #   helpers                          13
 #   icc                               1
-#   inventory                        99
+#   inventory                       101
 #   prelude                         178
 
-## items (1507 lines)
+## items (1509 lines)
 
 pub mod zencodec
 pub use At
@@ -791,6 +791,8 @@ pub fn inventory::Inventory::validate(&self) -> core::result::Result<(), invento
 pub fn inventory::Inventory::with_max_parts(self, u32) -> Self
 #[non_exhaustive] pub struct inventory::Part
 pub fn inventory::Part::body(&self) -> core::option::Option<core::ops::range::Range<u64>>
+pub fn inventory::Part::clear_body(&mut self)
+pub fn inventory::Part::clear_detail(&mut self)
 pub fn inventory::Part::detail(&self) -> core::option::Option<&str>
 pub fn inventory::Part::disposition(&self) -> inventory::Disposition
 pub fn inventory::Part::is_empty(&self) -> bool
