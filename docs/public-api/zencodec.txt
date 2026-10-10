@@ -14,8 +14,8 @@
 #   pub types (struct/enum/trait/alias)       177
 #   pub consts/statics                        180
 #   free functions                             42
-#   inherent methods                          687
-#   struct fields                             213
+#   inherent methods                          695
+#   struct fields                             205
 #   enum variants                             234
 #   re-exports                                 12
 #   trait roster entries (type × trait)       434
@@ -790,17 +790,17 @@ pub fn inventory::Inventory::unconsumed(&self) -> impl core::iter::traits::itera
 pub fn inventory::Inventory::validate(&self) -> core::result::Result<(), inventory::InventoryError>
 pub fn inventory::Inventory::with_max_parts(self, u32) -> Self
 #[non_exhaustive] pub struct inventory::Part
-pub inventory::Part::body: core::option::Option<core::ops::range::Range<u64>>
-pub inventory::Part::detail: core::option::Option<alloc::string::String>
-pub inventory::Part::disposition: inventory::Disposition
-pub inventory::Part::kind: inventory::PartKind
-pub inventory::Part::label: core::option::Option<alloc::borrow::Cow<'static, str>>
-pub inventory::Part::parent: core::option::Option<inventory::PartId>
-pub inventory::Part::range: core::ops::range::Range<u64>
-pub inventory::Part::tag: inventory::PartTag
+pub fn inventory::Part::body(&self) -> core::option::Option<core::ops::range::Range<u64>>
+pub fn inventory::Part::detail(&self) -> core::option::Option<&str>
+pub fn inventory::Part::disposition(&self) -> inventory::Disposition
 pub fn inventory::Part::is_empty(&self) -> bool
+pub fn inventory::Part::kind(&self) -> inventory::PartKind
+pub fn inventory::Part::label(&self) -> core::option::Option<&str>
 pub fn inventory::Part::len(&self) -> u64
 pub fn inventory::Part::new(inventory::PartKind, inventory::PartTag, core::ops::range::Range<u64>, inventory::Disposition) -> Self
+pub fn inventory::Part::parent(&self) -> core::option::Option<inventory::PartId>
+pub fn inventory::Part::range(&self) -> core::ops::range::Range<u64>
+pub fn inventory::Part::tag(&self) -> &inventory::PartTag
 pub fn inventory::Part::with_body(self, core::ops::range::Range<u64>) -> Self
 pub fn inventory::Part::with_detail(self, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn inventory::Part::with_label(self, impl core::convert::Into<alloc::borrow::Cow<'static, str>>) -> Self

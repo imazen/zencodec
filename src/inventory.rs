@@ -316,27 +316,27 @@ impl fmt::Display for Disposition {
 #[non_exhaustive]
 pub struct Part {
     /// The part this one is nested in, or `None` at the top level.
-    pub parent: Option<PartId>,
+    parent: Option<PartId>,
     /// Structural class.
-    pub kind: PartKind,
+    kind: PartKind,
     /// Identity within the format.
-    pub tag: PartTag,
+    tag: PartTag,
     /// A short identifying label taken from the file: an APPn signature
     /// (`"Exif"`, `"ICC_PROFILE"`), a PNG text keyword, a GIF application
     /// identifier, a HEIF item name or content type.
-    pub label: Option<Cow<'static, str>>,
+    label: Option<Cow<'static, str>>,
     /// Absolute byte range in the input, headers included.
-    pub range: Range<u64>,
+    range: Range<u64>,
     /// For a container whose children account for every byte after its own
     /// header: the sub-range those children must tile exactly.
     /// [`Inventory::validate`] enforces it. `None` for leaves, and for
     /// containers whose content is reported as a whole.
-    pub body: Option<Range<u64>>,
+    body: Option<Range<u64>>,
     /// What the decoder does with the bytes.
-    pub disposition: Disposition,
+    disposition: Disposition,
     /// Free-form detail: why a part is malformed, an item's MIME type, an
     /// auxiliary image URN.
-    pub detail: Option<String>,
+    detail: Option<String>,
 }
 
 impl Part {
@@ -370,6 +370,46 @@ impl Part {
     pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
         self.detail = Some(detail.into());
         self
+    }
+
+    /// The part this one is nested in, or `None` at the top level.
+    pub fn parent(&self) -> Option<PartId> {
+        self.parent
+    }
+
+    /// Structural class.
+    pub fn kind(&self) -> PartKind {
+        self.kind
+    }
+
+    /// Identity within the format.
+    pub fn tag(&self) -> &PartTag {
+        &self.tag
+    }
+
+    /// The identifying label copied from the file, if any.
+    pub fn label(&self) -> Option<&str> {
+        self.label.as_deref()
+    }
+
+    /// Absolute byte range in the input, headers included.
+    pub fn range(&self) -> Range<u64> {
+        self.range.clone()
+    }
+
+    /// The sub-range this container's children tile exactly, if declared.
+    pub fn body(&self) -> Option<Range<u64>> {
+        self.body.clone()
+    }
+
+    /// What the decoder does with the bytes.
+    pub fn disposition(&self) -> Disposition {
+        self.disposition
+    }
+
+    /// The walker's free-form remark, if any.
+    pub fn detail(&self) -> Option<&str> {
+        self.detail.as_deref()
     }
 
     /// Number of bytes the part spans.
