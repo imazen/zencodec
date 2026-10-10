@@ -97,6 +97,10 @@ Minimums; more is welcome where the codec already parses it.
   reader takes different bytes, name it in `detail`.
 - **Bound the work.** Stop collecting at the part cap, before allocating per unit. Avoid quadratic
   lookups. Honour `max_input_bytes` and the stop token.
+- **When a work budget runs out, report the unverified bytes unconsumed.** Only adversarial input
+  exhausts a budget, so the safe answer is the right one there. Report what you couldn't verify as
+  `Unknown` or `Malformed`, with a detail saying the decoder may read it. A consumed claim there is a
+  hiding place any file can trigger.
 
 ## Testing
 
