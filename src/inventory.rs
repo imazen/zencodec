@@ -41,7 +41,6 @@
 
 use alloc::borrow::Cow;
 use alloc::string::{String, ToString};
-use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt;
 use core::ops::Range;
@@ -51,10 +50,11 @@ use crate::ImageFormat;
 /// Default cap on the number of parts one inventory may hold.
 ///
 /// A crafted file can contain millions of tiny units (a PNG of 12-byte chunks,
-/// a GIF of one-byte sub-blocks). Each part costs about a hundred bytes, so the
-/// cap bounds memory at roughly 100 MiB. Raise it with
+/// a GIF of one-byte sub-blocks). A part costs about 140 bytes plus its label
+/// and detail strings; 2^20 parts measured 146 MiB peak RSS without strings and
+/// 178 MiB with a short label and detail on each. Raise the cap with
 /// [`Inventory::with_max_parts`] when auditing trusted, unusually fragmented
-/// files.
+/// files; walkers should stop collecting at the cap rather than after it.
 pub const DEFAULT_MAX_PARTS: u32 = 1 << 20;
 
 /// Index of a part within its [`Inventory`].
@@ -477,11 +477,17 @@ pub struct Inventory {
     len: u64,
     parts: Vec<Part>,
     max_parts: u32,
-    /// Child IDs per part (same indexing as `parts`), in push order.
-    kids: Vec<Vec<u32>>,
-    /// Top-level IDs in push order.
-    top: Vec<u32>,
+    /// First child of each part (same indexing as `parts`), or `NONE`.
+    first_child: Vec<u32>,
+    /// Next sibling of each part, or `NONE`. Sibling lists run in reverse
+    /// push order; readers sort them by offset.
+    next_sibling: Vec<u32>,
+    /// First top-level part, or `NONE`.
+    first_top: u32,
 }
+
+/// End of a sibling list.
+const NONE: u32 = u32::MAX;
 
 impl Inventory {
     /// An empty inventory for an input of `len` bytes.
@@ -491,8 +497,9 @@ impl Inventory {
             len,
             parts: Vec::new(),
             max_parts: DEFAULT_MAX_PARTS,
-            kids: Vec::new(),
-            top: Vec::new(),
+            first_child: Vec::new(),
+            next_sibling: Vec::new(),
+            first_top: NONE,
         }
     }
 
@@ -540,16 +547,17 @@ impl Inventory {
                 max: self.max_parts,
             });
         }
-        match parent {
+        let next = match parent {
             Some(p) if p.index() >= self.parts.len() => {
                 return Err(InventoryError::BadParent { part: id });
             }
-            Some(p) => self.kids[p.index()].push(id.0),
-            None => self.top.push(id.0),
-        }
+            Some(p) => core::mem::replace(&mut self.first_child[p.index()], id.0),
+            None => core::mem::replace(&mut self.first_top, id.0),
+        };
         part.parent = parent;
         self.parts.push(part);
-        self.kids.push(Vec::new());
+        self.first_child.push(NONE);
+        self.next_sibling.push(next);
         Ok(id)
     }
 
@@ -579,16 +587,27 @@ impl Inventory {
 
     /// Children of `parent` (`None` = top level), sorted by start offset.
     pub fn children(&self, parent: Option<PartId>) -> Vec<PartId> {
-        let ids = match parent {
-            None => &self.top,
-            Some(p) => match self.kids.get(p.index()) {
-                Some(k) => k,
-                None => return Vec::new(),
+        let mut ids = Vec::new();
+        self.children_into(parent, &mut ids);
+        ids.into_iter().map(|i| PartId(i as u32)).collect()
+    }
+
+    /// Fill `out` with the indices of `parent`'s children, sorted by start
+    /// offset (ties by recording order).
+    fn children_into(&self, parent: Option<PartId>, out: &mut Vec<usize>) {
+        out.clear();
+        let mut next = match parent {
+            None => self.first_top,
+            Some(p) => match self.first_child.get(p.index()) {
+                Some(&first) => first,
+                None => return,
             },
         };
-        let mut ids: Vec<PartId> = ids.iter().map(|&i| PartId(i)).collect();
-        ids.sort_by_key(|id| (self.parts[id.index()].range.start, id.0));
-        ids
+        while next != NONE {
+            out.push(next as usize);
+            next = self.next_sibling[next as usize];
+        }
+        out.sort_by_key(|&i| (self.parts[i].range.start, i));
     }
 
     /// Cover every byte of the top level (`parent` = `None`) or of `parent`'s
@@ -645,9 +664,6 @@ impl Inventory {
     ///
     /// An empty input has a valid empty inventory.
     pub fn validate(&self) -> Result<(), InventoryError> {
-        let n = self.parts.len();
-        let mut children: Vec<Vec<usize>> = vec![Vec::new(); n];
-        let mut top = Vec::with_capacity(self.top.len());
         for (i, part) in self.parts.iter().enumerate() {
             let id = PartId(i as u32);
             if part.range.start >= part.range.end {
@@ -663,25 +679,27 @@ impl Inventory {
             {
                 return Err(InventoryError::OutsideParent { part: id });
             }
-            match part.parent {
-                None => top.push(i),
-                Some(p) => {
-                    let pi = p.index();
-                    if pi >= i {
-                        return Err(InventoryError::BadParent { part: id });
-                    }
-                    let pr = &self.parts[pi].range;
-                    if part.range.start < pr.start || part.range.end > pr.end {
-                        return Err(InventoryError::OutsideParent { part: id });
-                    }
-                    children[pi].push(i);
+            if let Some(p) = part.parent {
+                let pi = p.index();
+                if pi >= i {
+                    return Err(InventoryError::BadParent { part: id });
+                }
+                let pr = &self.parts[pi].range;
+                if part.range.start < pr.start || part.range.end > pr.end {
+                    return Err(InventoryError::OutsideParent { part: id });
                 }
             }
         }
-        self.check_level(None, &mut top, Some(0..self.len))?;
-        for (i, kids) in children.iter_mut().enumerate() {
-            let body = self.parts[i].body.clone();
-            self.check_level(Some(PartId(i as u32)), kids, body)?;
+        let mut level = Vec::new();
+        self.children_into(None, &mut level);
+        self.check_level(None, &level, Some(0..self.len))?;
+        for (i, part) in self.parts.iter().enumerate() {
+            if self.first_child[i] == NONE && part.body.is_none() {
+                continue;
+            }
+            let id = PartId(i as u32);
+            self.children_into(Some(id), &mut level);
+            self.check_level(Some(id), &level, part.body.clone())?;
         }
         Ok(())
     }
@@ -690,10 +708,9 @@ impl Inventory {
     fn check_level(
         &self,
         parent: Option<PartId>,
-        ids: &mut [usize],
+        ids: &[usize],
         span: Option<Range<u64>>,
     ) -> Result<(), InventoryError> {
-        ids.sort_by_key(|&i| (self.parts[i].range.start, i));
         for pair in ids.windows(2) {
             if self.parts[pair[1]].range.start < self.parts[pair[0]].range.end {
                 return Err(InventoryError::Overlap {
@@ -745,7 +762,7 @@ impl Inventory {
     pub fn bytes_by_disposition(&self) -> Vec<(&'static str, u64)> {
         let mut totals: Vec<(&'static str, u64)> = Vec::new();
         for (i, p) in self.parts.iter().enumerate() {
-            if !self.kids[i].is_empty() {
+            if self.first_child[i] != NONE {
                 continue;
             }
             let name = p.disposition.name();
