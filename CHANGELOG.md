@@ -8,6 +8,9 @@ All notable changes to zencodec are documented here. Sections below the
 ### [Unreleased]
 
 #### Added
+- **`check_inventory`** (in `check_all` when a decoder declares `inventory`): on a valid file,
+  the file plus appended junk, and every truncation, the inventory exists, validates, and never
+  claims the junk as consumed. The `reference` codec implements `inventory` as the worked example.
 - **`check_gain_map_roundtrip`** (in `check_all`) — the gain-map encode/decode
   contract (Phases 1, 2 and 4 of `docs/gainmap-pipeline-scope-2026-06-08.md`,
   #24): an encoder without `gain_map` must reject `with_gain_map_pixels` /
@@ -168,6 +171,11 @@ removes that whole class).
   goes through the explicit `conservative()` / `host()` constructors.
 
 ### Added
+
+- **`inventory` module, `DecodeJob::inventory` / `DynDecodeJob::inventory`** (default
+  `Ok(None)`) and `DecodeCapabilities::with_inventory`: a byte-exact map of a file's parts, each
+  with a `Disposition` saying what the decoder does with it; `validate()` checks the parts tile
+  the input, `unconsumed()` lists what no decoder reads. Additive. Guide: `docs/inventory.md`.
 - `CodecSet` / `CodecSetError` — multi-codec registry: register decoder /
   encoder configs one line each and get detect→decode, `probe`, push /
   streaming / animation decode, and format-keyed encode through one

@@ -16,6 +16,7 @@
 //! - [`ImageInfo`] / [`Metadata`] / [`Orientation`] / [`OrientationHint`] — image metadata
 //! - [`ResourceLimits`] / [`ThreadingPolicy`] — resource limit and threading configuration
 //! - [`UnsupportedOperation`] / [`CodecErrorExt`] — standard unsupported operation reporting and error chain inspection
+//! - [`inventory`] — a byte-exact map of a file's structural parts, for auditing what a decoder does and does not read
 //! - [`prelude`] — one-import bundle of all encode/decode traits
 //!
 //! # Re-exported crates
@@ -69,6 +70,7 @@ pub mod helpers;
 // a future major; do not ship it in a patch/minor.
 pub mod icc;
 mod info;
+pub mod inventory;
 mod limits;
 mod metadata;
 mod negotiate;

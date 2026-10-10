@@ -9,8 +9,8 @@
 
 ## summary
 #
-#   inherent methods                           45
-#   trait roster entries (type × trait)        44
+#   inherent methods                           53
+#   trait roster entries (type × trait)        48
 #
 # per-module pub lines:
 #   (root)                           28
@@ -20,8 +20,9 @@
 #   exif                              5
 #   gainmap                           4
 #   helpers                           1
+#   inventory                         8
 
-## items (45 lines)
+## items (53 lines)
 
 pub fn AllocPreference::assert_fields_are_eq(&self)
 pub fn CicpEmission::assert_fields_are_eq(&self)
@@ -68,8 +69,16 @@ pub fn gainmap::GainMapDirection::assert_fields_are_eq(&self)
 pub fn gainmap::Iso21496Format::assert_fields_are_eq(&self)
 pub fn gainmap::UFraction::assert_fields_are_eq(&self)
 pub fn helpers::IccMatchTolerance::assert_fields_are_eq(&self)
+pub fn inventory::Disposition::assert_fields_are_eq(&self)
+pub fn inventory::Inventory::assert_fields_are_eq(&self)
+pub fn inventory::InventoryError::assert_fields_are_eq(&self)
+pub fn inventory::MetadataKind::assert_fields_are_eq(&self)
+pub fn inventory::Part::assert_fields_are_eq(&self)
+pub fn inventory::PartId::assert_fields_are_eq(&self)
+pub fn inventory::PartKind::assert_fields_are_eq(&self)
+pub fn inventory::PartTag::assert_fields_are_eq(&self)
 
-## trait impls (44 types)
+## trait impls (48 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -115,3 +124,7 @@ gainmap::GainMapRender: TrivialClone
 gainmap::Iso21496Format: TrivialClone
 gainmap::UFraction: TrivialClone
 helpers::IccMatchTolerance: TrivialClone
+inventory::Disposition: TrivialClone
+inventory::MetadataKind: TrivialClone
+inventory::PartId: TrivialClone
+inventory::PartKind: TrivialClone

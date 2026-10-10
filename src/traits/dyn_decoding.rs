@@ -212,6 +212,15 @@ pub trait DynDecodeJob<'a> {
     /// Probe image metadata with a full parse.
     fn probe_full(&self, data: &[u8]) -> Result<ImageInfo, BoxedError>;
 
+    /// Map every structural part of `data`; see
+    /// [`DecodeJob::inventory`](crate::decode::DecodeJob::inventory).
+    ///
+    /// Default: `Ok(None)`.
+    fn inventory(&self, data: &[u8]) -> Result<Option<crate::inventory::Inventory>, BoxedError> {
+        let _ = data;
+        Ok(None)
+    }
+
     /// Hint: crop to this region in source coordinates.
     fn set_crop_hint(&mut self, x: u32, y: u32, width: u32, height: u32);
 
@@ -338,6 +347,12 @@ where
     fn probe_full(&self, data: &[u8]) -> Result<ImageInfo, BoxedError> {
         self.as_ref()?
             .probe_full(data)
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn inventory(&self, data: &[u8]) -> Result<Option<crate::inventory::Inventory>, BoxedError> {
+        self.as_ref()?
+            .inventory(data)
             .map_err(|e| Box::new(e) as BoxedError)
     }
 

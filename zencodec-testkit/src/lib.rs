@@ -45,6 +45,8 @@
 //!   without `lossy` never reports `Lossy` (it promotes and says so), a codec
 //!   with `lossy` never answers a lossy request with `Lossless`, and the legacy
 //!   `is_lossless()` agrees. The cross-codec `Fidelity` contract.
+//! - [`check_inventory`] — a declared structural inventory covers every byte,
+//!   reports appended junk as unconsumed, and survives every truncation.
 //! - [`check_capability_honesty`] — every declared capability works and every
 //!   undeclared optional path cleanly returns
 //!   [`UnsupportedOperation`]. Both directions for
@@ -2987,6 +2989,136 @@ where
     }
 }
 
+/// The structural inventory is honest and complete.
+///
+/// For a decoder that declares
+/// [`inventory`](zencodec::decode::DecodeCapabilities::inventory):
+///
+/// - `inventory(valid)` returns `Some`, for the decoder's format, covering
+///   exactly `valid.len()` bytes, passing
+///   [`Inventory::validate`](zencodec::inventory::Inventory::validate), and
+///   attributing at least one part to
+///   [`ImageData`](zencodec::inventory::Disposition::ImageData);
+/// - with 37 junk bytes appended, the inventory still validates, still covers
+///   the whole input, and attributes every appended byte to an *unconsumed*
+///   part: junk must never be reported as structure, image data or metadata;
+/// - every truncation of `valid` yields a valid inventory without panicking or
+///   failing, because truncated and malformed input is exactly what an audit
+///   needs to see.
+///
+/// A decoder that does not declare the capability must return `Ok(None)`.
+///
+/// `valid` must be a complete file with a logical end (JPEG EOI, PNG IEND, the
+/// last box). On a stream that is already cut short, appended bytes can
+/// legitimately continue the cut unit (a JPEG scan without EOI reads them as
+/// scan data), so the junk assertion doesn't apply: for such corpus files call
+/// [`Inventory::validate`](zencodec::inventory::Inventory::validate) directly.
+pub fn check_inventory<D>(dec: D, valid: &[u8]) -> Conformance
+where
+    D: DecoderConfig,
+{
+    use zencodec::inventory::{Disposition, Inventory};
+    const CHECK: &str = "inventory";
+
+    let run = |data: &[u8]| -> Result<Option<Inventory>, String> {
+        let job = dec.clone().job();
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| job.inventory(data))) {
+            Err(_) => Err(format!("inventory panicked on {} bytes", data.len())),
+            Ok(Err(e)) => Err(format!("inventory failed on {} bytes: {e}", data.len())),
+            Ok(Ok(inv)) => Ok(inv),
+        }
+    };
+
+    if !D::capabilities().inventory() {
+        return match run(valid).map_err(|e| fail(CHECK, e))? {
+            None => Ok(()),
+            Some(_) => Err(fail(
+                CHECK,
+                "inventory() returned Some but the decoder does not declare the `inventory` \
+                 capability",
+            )),
+        };
+    }
+
+    let formats = D::formats();
+    let checked = |data: &[u8], what: &str| -> Result<Inventory, Failure> {
+        let inv = run(data)
+            .map_err(|e| fail(CHECK, format!("{what}: {e}")))?
+            .ok_or_else(|| {
+                fail(
+                    CHECK,
+                    format!("{what}: the decoder declares `inventory` but returned None"),
+                )
+            })?;
+        if inv.input_len() != data.len() as u64 {
+            return Err(fail(
+                CHECK,
+                format!(
+                    "{what}: inventory covers {} bytes, the input has {}",
+                    inv.input_len(),
+                    data.len()
+                ),
+            ));
+        }
+        if !formats.contains(&inv.format()) {
+            return Err(fail(
+                CHECK,
+                format!(
+                    "{what}: inventory format {} is not one this decoder declares",
+                    inv.format()
+                ),
+            ));
+        }
+        inv.validate()
+            .map_err(|e| fail(CHECK, format!("{what}: invalid inventory: {e}\n{inv}")))?;
+        Ok(inv)
+    };
+
+    let inv = checked(valid, "valid input")?;
+    if !inv
+        .parts()
+        .iter()
+        .any(|p| p.disposition == Disposition::ImageData)
+    {
+        return Err(fail(
+            CHECK,
+            format!("valid input: no part is attributed to image data\n{inv}"),
+        ));
+    }
+
+    let mut junked = valid.to_vec();
+    junked.extend((0..37u8).map(|i| i.wrapping_mul(97) ^ 0x5A));
+    let inv = checked(&junked, "input with 37 appended bytes")?;
+    let tail = valid.len() as u64..junked.len() as u64;
+    let mut has_child = vec![false; inv.parts().len()];
+    for p in inv.parts() {
+        if let Some(parent) = p.parent {
+            has_child[parent.index()] = true;
+        }
+    }
+    for (i, p) in inv.parts().iter().enumerate() {
+        let overlaps = p.range.start < tail.end && p.range.end > tail.start;
+        if overlaps && !has_child[i] && p.disposition.is_consumed() {
+            return Err(fail(
+                CHECK,
+                format!(
+                    "input with 37 appended bytes: part {}..{} covers appended junk but is \
+                     reported as {}\n{inv}",
+                    p.range.start, p.range.end, p.disposition
+                ),
+            ));
+        }
+    }
+
+    for n in truncation_lengths(valid.len()) {
+        checked(
+            &valid[..n],
+            &format!("truncated to {n} of {} bytes", valid.len()),
+        )?;
+    }
+    Ok(())
+}
+
 /// Run every conformance check with sensible default inputs, returning the first
 /// failure. The one-call entry point for a codec's test suite; for control over
 /// image sizes or animation frames, call the individual `check_*` functions.
@@ -3008,6 +3140,11 @@ where
     check_color_authority_spec(enc.clone(), dec.clone(), &img)?;
     check_native_hdr_roundtrip(enc.clone(), dec.clone())?;
     check_gain_map_roundtrip(enc.clone(), dec.clone())?;
+    if D::capabilities().inventory() {
+        let bytes = enc_oneshot(&enc, &img, Metadata::none(), MetadataPolicy::PreserveExact)
+            .map_err(|e| fail("inventory", format!("encode: {e}")))?;
+        check_inventory(dec.clone(), &bytes)?;
+    }
     let frames = [
         TestImage::rgba8_gradient_seeded(24, 16, 0),
         TestImage::rgba8_gradient_seeded(24, 16, 60),
@@ -3824,6 +3961,68 @@ mod tests {
     #[test]
     fn minimal_check_all() {
         check_all(MinimalEncoderConfig::new(), MinimalDecoderConfig::new()).unwrap();
+    }
+
+    /// The reference inventory covers every section of a file carrying all the
+    /// metadata the wire format supports plus three animation frames, and the
+    /// contract holds for it (junk, truncation).
+    #[test]
+    fn reference_inventory_maps_every_section() {
+        use zencodec::inventory::{Disposition, MetadataKind};
+        let (e, d) = ref_codecs();
+        let frames = [
+            TestImage::rgba8_gradient_seeded(6, 4, 0),
+            TestImage::rgba8_gradient_seeded(6, 4, 60),
+            TestImage::rgba8_gradient_seeded(6, 4, 120),
+        ];
+        let meta = Metadata::none()
+            .with_exif(fixtures::rich_exif_le())
+            .with_xmp(fixtures::sample_xmp())
+            .with_icc(fixtures::sample_icc())
+            .with_cicp(Cicp::SRGB);
+        let bytes = encode_animation(&e, &frames, meta).unwrap();
+        check_inventory(d.clone(), &bytes).unwrap();
+
+        let inv = d.clone().job().inventory(&bytes).unwrap().unwrap();
+        let count =
+            |disp: Disposition| inv.parts().iter().filter(|p| p.disposition == disp).count();
+        assert_eq!(count(Disposition::Metadata(MetadataKind::Exif)), 1, "{inv}");
+        assert_eq!(count(Disposition::Metadata(MetadataKind::Xmp)), 1, "{inv}");
+        assert_eq!(count(Disposition::Metadata(MetadataKind::Icc)), 1, "{inv}");
+        assert_eq!(count(Disposition::Metadata(MetadataKind::Cicp)), 1, "{inv}");
+        assert_eq!(
+            count(Disposition::Metadata(MetadataKind::Animation)),
+            3,
+            "{inv}"
+        );
+        assert_eq!(count(Disposition::ImageData), 3, "{inv}");
+        assert_eq!(
+            inv.unconsumed().count(),
+            0,
+            "a clean file has no unconsumed bytes\n{inv}"
+        );
+
+        let mut tail = bytes.clone();
+        tail.extend_from_slice(b"camera serial 12345");
+        let inv = d.job().inventory(&tail).unwrap().unwrap();
+        let unconsumed: Vec<_> = inv.unconsumed().collect();
+        assert_eq!(unconsumed.len(), 1, "{inv}");
+        assert_eq!(unconsumed[0].1.disposition, Disposition::Trailing);
+        assert_eq!(unconsumed[0].1.range, bytes.len() as u64..tail.len() as u64);
+    }
+
+    /// A decoder that does not declare `inventory` passes by returning `None`.
+    #[test]
+    fn undeclared_inventory_is_none() {
+        let bytes = enc_oneshot(
+            &MinimalEncoderConfig::new(),
+            &TestImage::rgba8_gradient(5, 3),
+            Metadata::none(),
+            MetadataPolicy::PreserveExact,
+        )
+        .unwrap();
+        assert!(!<MinimalDecoderConfig as DecoderConfig>::capabilities().inventory());
+        check_inventory(MinimalDecoderConfig::new(), &bytes).unwrap();
     }
 
     /// The reference round-trips metadata faithfully, so under PreserveExact the

@@ -548,6 +548,7 @@ pub struct DecodeCapabilities {
     // Format capabilities
     hdr: bool,
     gain_map: bool,
+    inventory: bool,
     reconstructs_hdr: bool,
     native_gray: bool,
     native_16bit: bool,
@@ -586,6 +587,7 @@ impl DecodeCapabilities {
             streaming: false,
             hdr: false,
             gain_map: false,
+            inventory: false,
             reconstructs_hdr: false,
             native_gray: false,
             native_16bit: false,
@@ -660,6 +662,11 @@ impl DecodeCapabilities {
     /// Verified by `zencodec-testkit::check_gain_map_roundtrip`.
     pub const fn gain_map(&self) -> bool {
         self.gain_map
+    }
+    /// Whether [`DecodeJob::inventory`](crate::decode::DecodeJob::inventory)
+    /// returns an inventory (see [`inventory`](crate::inventory)).
+    pub const fn inventory(&self) -> bool {
+        self.inventory
     }
     /// Whether the codec *reconstructs* HDR itself (applies the gain map), as
     /// opposed to only extracting/surfacing it.
@@ -813,6 +820,12 @@ impl DecodeCapabilities {
         self.gain_map = v;
         self
     }
+    /// Set whether [`DecodeJob::inventory`](crate::decode::DecodeJob::inventory)
+    /// is implemented.
+    pub const fn with_inventory(mut self, v: bool) -> Self {
+        self.inventory = v;
+        self
+    }
     /// Set whether the codec reconstructs HDR itself (applies the gain map).
     /// See [`reconstructs_hdr`](Self::reconstructs_hdr).
     pub const fn with_reconstructs_hdr(mut self, v: bool) -> Self {
@@ -879,6 +892,7 @@ impl fmt::Debug for DecodeCapabilities {
             .field("streaming", &self.streaming)
             .field("hdr", &self.hdr)
             .field("gain_map", &self.gain_map)
+            .field("inventory", &self.inventory)
             .field("reconstructs_hdr", &self.reconstructs_hdr)
             .field("native_gray", &self.native_gray)
             .field("native_16bit", &self.native_16bit)
