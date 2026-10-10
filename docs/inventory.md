@@ -110,6 +110,72 @@ when the codec already parses it.
   - Headers and PNM comment lines.
   - The BMP colour table, embedded profile, gap before the pixel array, and trailing data.
 
+## Pitfalls the first reviews found
+
+Independent reviews of the first twelve codec walkers kept finding the same mistakes. Check each one before
+asking for review.
+
+- **Bytes hidden inside a consumed part.** For every consumed unit, find where the decoder stops reading it:
+  a size field, framing, the end of a zlib or LZW stream, a parsed field list, the number of palette entries an
+  index can reach. Bytes after that point are a child part (`Unreferenced` or `Dropped`), not part of the
+  unit. Examples from review:
+  - PNG: decompressed data past the last row; an iCCP name longer than 79 bytes.
+  - tRNS/PLTE: entries beyond `2^bit_depth`.
+  - TGA: colour-map entries no index reaches.
+  - JPEG: holes in the MPF index; extended-XMP GUIDs.
+  - JPEG 2000: the tail of a marker segment past its parsed fields.
+  - JPEG AI: RDI display-mapping blobs.
+- **Entropy-coded leaves.** Finding the end of coded data is in scope when it costs O(compressed bytes) with
+  O(1) state, as with GIF LZW, PNG zlib and a count-only Huffman pass over sequential JPEG scans. It is out of
+  scope when it needs per-coefficient history or memory proportional to the image. Examples: VP8L, compressed
+  ALPH, JPEG AC-refinement and arithmetic scans, JPEG AI ANS threads, JPEG 2000 packet data, compressed TIFF
+  strips.
+  - Keep such a leaf whole as `ImageData`, and say in its `detail` that bytes after the end of the coded data
+    are not distinguished.
+  - Callers should know that `unconsumed()` does not cover that slack.
+- **The decoder's cursor, not the length field.** When the decoder ignores a declared length (JPEG 2000
+  SIZ/COD/QCD, a PNM header byte), the bytes between where it stops and the declared end are not consumed.
+  When it reads past a declared end, they are.
+- **Which copy wins.** Model the decoder's rule exactly, and mark the copies it ignores `Dropped` or
+  `Skipped`. The rule is "last wins" for most overwrites, "first wins" for JPEG 2000 `colr`, and "last valid
+  wins" for JPEG 2000 `cdef`/`pclr`. Apply it per key, not per segment: JPEG DAC entries, DQT/DHT slots and
+  TIFF duplicate tags are all per key.
+- **Settings and limits change the answer.**
+  - The job's policy (strict, permissive, `allow_progressive`), its `GainMapRender` mode and the decoder's
+    default limits (pixels, frames, file size) decide whether a unit is read, or whether the file decodes at
+    all.
+  - When the decoder would reject the file, every consumed disposition after the point of rejection is
+    false. Demote it, or say so in the `detail`.
+  - Call the decoder's own limit checks rather than copying their constants.
+- **Reuse the decoder's parsers.** Decide dispositions by calling the functions the decode path calls, not by
+  re-implementing them. Re-implementations drift; the review findings were mostly drift. Examples:
+  - container probes;
+  - metadata selection;
+  - the UltraHDR stack: zenjpeg's container probe and gain-map selection, ultrahdr-core's XMP parsing,
+    `zencodec::gainmap::parse_iso21496_fmt`.
+
+  For identifiers that live in another crate (`zencodec::ISO_21496_1_URN`), grep is not enough. Trace from
+  the zencodec entry points.
+- **More than one reader.** `probe()`, `decode()` and the animation decoder can each read different bytes:
+  WebP has three readers, the GIF probe reads differently, and PNG frames have their own path. Dispositions
+  describe the zencodec decode path. When another reader differs, name it in the `detail`.
+- **Test in both directions.**
+  - Overwriting bytes reported unconsumed must leave the decode output and reported metadata unchanged.
+  - Overwriting a consumed leaf must change one of them, or its `detail` must say why not (for example
+    "parsed for validity only").
+  - A test in the first direction alone cannot find an over-claimed part. For an audit, over-claiming is
+    the dangerous direction: `unconsumed()` silently leaves that part out.
+- **Bounded work.**
+  - Precompute first-occurrence indices; a per-unit linear scan is quadratic.
+  - Stop collecting at the part cap, before allocating per unit.
+  - Avoid owned per-part strings for repeated gaps.
+  - Cap pre-emit allocations such as TIFF IFD entries.
+  - Honour `max_input_bytes` and the stop token.
+  - Measure adversarial inputs with `/usr/bin/time -v`.
+- **Oracles.** Compare by offset and length. Match by role (which region, which frame) and in file order.
+  When filtering an oracle's phantom units, derive the filter from the oracle's own structure, not the
+  walker's. Pin the list of files the oracle fails on.
+
 ## Testing
 
 1. `zencodec_testkit::check_inventory(config, &bytes)` on encoder output (it is part of
