@@ -372,6 +372,28 @@ impl Part {
         self
     }
 
+    /// Change what the decoder does with the bytes, before the part is pushed.
+    /// (After `push`, use [`Inventory::set_disposition`].)
+    pub fn set_disposition(&mut self, disposition: Disposition) {
+        self.disposition = disposition;
+    }
+
+    /// Set the identifying label, before the part is pushed.
+    pub fn set_label(&mut self, label: impl Into<Cow<'static, str>>) {
+        self.label = Some(label.into());
+    }
+
+    /// Declare the sub-range this part's children tile exactly, before the part is pushed.
+    pub fn set_body(&mut self, body: Range<u64>) {
+        self.body = Some(body);
+    }
+
+    /// Set the free-form detail, before the part is pushed.
+    /// (After `push`, use [`Inventory::set_detail`].)
+    pub fn set_detail(&mut self, detail: impl Into<String>) {
+        self.detail = Some(detail.into());
+    }
+
     /// The part this one is nested in, or `None` at the top level.
     pub fn parent(&self) -> Option<PartId> {
         self.parent

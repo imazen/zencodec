@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1606 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 101 lines (101 hidden + 0 excluded-feature)
+# files: zencodec.txt 1610 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 101 lines (101 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -14,7 +14,7 @@
 #   pub types (struct/enum/trait/alias)       177
 #   pub consts/statics                        180
 #   free functions                             42
-#   inherent methods                          695
+#   inherent methods                          699
 #   struct fields                             205
 #   enum variants                             234
 #   re-exports                                 12
@@ -32,10 +32,10 @@
 #   gainmap                         126
 #   helpers                          13
 #   icc                               1
-#   inventory                        95
+#   inventory                        99
 #   prelude                         178
 
-## items (1503 lines)
+## items (1507 lines)
 
 pub mod zencodec
 pub use At
@@ -800,6 +800,10 @@ pub fn inventory::Part::len(&self) -> u64
 pub fn inventory::Part::new(inventory::PartKind, inventory::PartTag, core::ops::range::Range<u64>, inventory::Disposition) -> Self
 pub fn inventory::Part::parent(&self) -> core::option::Option<inventory::PartId>
 pub fn inventory::Part::range(&self) -> core::ops::range::Range<u64>
+pub fn inventory::Part::set_body(&mut self, core::ops::range::Range<u64>)
+pub fn inventory::Part::set_detail(&mut self, impl core::convert::Into<alloc::string::String>)
+pub fn inventory::Part::set_disposition(&mut self, inventory::Disposition)
+pub fn inventory::Part::set_label(&mut self, impl core::convert::Into<alloc::borrow::Cow<'static, str>>)
 pub fn inventory::Part::tag(&self) -> &inventory::PartTag
 pub fn inventory::Part::with_body(self, core::ops::range::Range<u64>) -> Self
 pub fn inventory::Part::with_detail(self, impl core::convert::Into<alloc::string::String>) -> Self
