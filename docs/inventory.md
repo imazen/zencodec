@@ -117,14 +117,25 @@ asking for review.
 
 - **Bytes hidden inside a consumed part.** For every consumed unit, find where the decoder stops reading it:
   a size field, framing, the end of a zlib or LZW stream, a parsed field list, the number of palette entries an
-  index can reach. Bytes after that point are a child part (`Unreferenced` or `Dropped`), not part of the
-  unit. Examples from review:
+  index can reach. Bytes after that point are a child part, not part of the unit. That child is
+  `Unreferenced` or `Dropped` unless the caller still receives the bytes (see "Tails the caller
+  still receives"). Examples from review:
   - PNG: decompressed data past the last row; an iCCP name longer than 79 bytes.
   - tRNS/PLTE: entries beyond `2^bit_depth`.
   - TGA: colour-map entries no index reaches.
   - JPEG: holes in the MPF index; extended-XMP GUIDs.
   - JPEG 2000: the tail of a marker segment past its parsed fields.
   - JPEG AI: RDI display-mapping blobs.
+- **Tails the caller still receives.** Some decoders hand a blob to the caller whole, internal end
+  included. Examples: an ICC profile copied with the bytes past its declared size, an XMP item with
+  its trailer, a `tmap` payload attached as gain-map metadata. The bytes after the internal end are
+  then delivered.
+  - Still split them out as a child, so an auditor sees the boundary.
+  - Give that child the parent's `Metadata(kind)` disposition, and say in its `detail` that the bytes
+    lie past the internal end but reach the caller.
+  - Use `Unreferenced` or `Dropped` only when the decoder cuts the blob at its internal end before
+    handing it over.
+  - Check by comparing the parent's bytes with what `probe()`/`decode()` report.
 - **Entropy-coded leaves.** Finding the end of coded data is in scope when it costs O(compressed bytes) with
   O(1) state, as with GIF LZW, PNG zlib and a count-only Huffman pass over sequential JPEG scans. It is out of
   scope when it needs per-coefficient history or memory proportional to the image. Examples: VP8L, compressed
