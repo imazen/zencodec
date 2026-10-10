@@ -3007,6 +3007,12 @@ where
 ///   needs to see.
 ///
 /// A decoder that does not declare the capability must return `Ok(None)`.
+///
+/// `valid` must be a complete file with a logical end (JPEG EOI, PNG IEND, the
+/// last box). On a stream that is already cut short, appended bytes can
+/// legitimately continue the cut unit (a JPEG scan without EOI reads them as
+/// scan data), so the junk assertion doesn't apply: for such corpus files call
+/// [`Inventory::validate`](zencodec::inventory::Inventory::validate) directly.
 pub fn check_inventory<D>(dec: D, valid: &[u8]) -> Conformance
 where
     D: DecoderConfig,
