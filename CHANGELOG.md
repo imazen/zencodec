@@ -185,8 +185,9 @@ removes that whole class).
   tile the input and that declared container bodies are tiled by their children, so bytes a
   decoder never reads are listed instead of skipped silently; `unconsumed()` lists them for
   audits. `DecodeJob::inventory` and `DynDecodeJob::inventory` default to `Ok(None)`;
-  `DecodeCapabilities::with_inventory` declares support. Additive. Implementer guide:
-  `docs/inventory.md`.
+  `DecodeCapabilities::with_inventory` declares support. `set_disposition` / `set_detail`
+  let a walker downgrade an earlier part once a later duplicate overrides it (ranges and parents
+  stay fixed). Additive. Implementer guide: `docs/inventory.md`.
 - `CodecSet` / `CodecSetError` — multi-codec registry: register decoder /
   encoder configs one line each and get detect→decode, `probe`, push /
   streaming / animation decode, and format-keyed encode through one

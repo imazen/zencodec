@@ -553,6 +553,30 @@ impl Inventory {
         Ok(id)
     }
 
+    /// Change a recorded part's disposition, returning the previous one.
+    ///
+    /// For walkers that learn a part's fate only later: an earlier unit that a
+    /// later duplicate overrides, a table that no frame ends up using. Ranges and
+    /// parents can't change after `push`, so coverage stays as recorded.
+    /// `None` when `id` names no part.
+    pub fn set_disposition(&mut self, id: PartId, disposition: Disposition) -> Option<Disposition> {
+        self.parts
+            .get_mut(id.index())
+            .map(|p| core::mem::replace(&mut p.disposition, disposition))
+    }
+
+    /// Replace a recorded part's detail (see [`set_disposition`](Self::set_disposition)).
+    /// Returns `false` when `id` names no part.
+    pub fn set_detail(&mut self, id: PartId, detail: impl Into<String>) -> bool {
+        match self.parts.get_mut(id.index()) {
+            Some(p) => {
+                p.detail = Some(detail.into());
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Children of `parent` (`None` = top level), sorted by start offset.
     pub fn children(&self, parent: Option<PartId>) -> Vec<PartId> {
         let ids = match parent {
@@ -960,6 +984,39 @@ mod tests {
         }
         inv.validate().unwrap();
         assert_eq!(inv.parts().len() as u64, n * 3);
+    }
+
+    #[test]
+    fn a_later_duplicate_can_downgrade_an_earlier_part() {
+        let mut inv = Inventory::new(ImageFormat::Gif, 20);
+        let first = inv
+            .push(
+                None,
+                part(
+                    PartKind::Block,
+                    0..10,
+                    Disposition::Metadata(MetadataKind::Animation),
+                ),
+            )
+            .unwrap();
+        inv.push(
+            None,
+            part(
+                PartKind::Block,
+                10..20,
+                Disposition::Metadata(MetadataKind::Animation),
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            inv.set_disposition(first, Disposition::Dropped),
+            Some(Disposition::Metadata(MetadataKind::Animation))
+        );
+        assert!(inv.set_detail(first, "overwritten by the block at 10"));
+        assert_eq!(inv.unconsumed().count(), 1);
+        assert_eq!(inv.set_disposition(PartId(9), Disposition::Dropped), None);
+        assert!(!inv.set_detail(PartId(9), "x"));
+        inv.validate().unwrap();
     }
 
     #[test]
