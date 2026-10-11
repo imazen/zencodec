@@ -3078,7 +3078,7 @@ where
     if !inv
         .parts()
         .iter()
-        .any(|p| p.disposition == Disposition::ImageData)
+        .any(|p| p.disposition() == Disposition::ImageData)
     {
         return Err(fail(
             CHECK,
@@ -3092,19 +3092,21 @@ where
     let tail = valid.len() as u64..junked.len() as u64;
     let mut has_child = vec![false; inv.parts().len()];
     for p in inv.parts() {
-        if let Some(parent) = p.parent {
+        if let Some(parent) = p.parent() {
             has_child[parent.index()] = true;
         }
     }
     for (i, p) in inv.parts().iter().enumerate() {
-        let overlaps = p.range.start < tail.end && p.range.end > tail.start;
-        if overlaps && !has_child[i] && p.disposition.is_consumed() {
+        let overlaps = p.range().start < tail.end && p.range().end > tail.start;
+        if overlaps && !has_child[i] && p.disposition().is_consumed() {
             return Err(fail(
                 CHECK,
                 format!(
                     "input with 37 appended bytes: part {}..{} covers appended junk but is \
                      reported as {}\n{inv}",
-                    p.range.start, p.range.end, p.disposition
+                    p.range().start,
+                    p.range().end,
+                    p.disposition()
                 ),
             ));
         }
@@ -3984,8 +3986,12 @@ mod tests {
         check_inventory(d.clone(), &bytes).unwrap();
 
         let inv = d.clone().job().inventory(&bytes).unwrap().unwrap();
-        let count =
-            |disp: Disposition| inv.parts().iter().filter(|p| p.disposition == disp).count();
+        let count = |disp: Disposition| {
+            inv.parts()
+                .iter()
+                .filter(|p| p.disposition() == disp)
+                .count()
+        };
         assert_eq!(count(Disposition::Metadata(MetadataKind::Exif)), 1, "{inv}");
         assert_eq!(count(Disposition::Metadata(MetadataKind::Xmp)), 1, "{inv}");
         assert_eq!(count(Disposition::Metadata(MetadataKind::Icc)), 1, "{inv}");
@@ -4007,8 +4013,11 @@ mod tests {
         let inv = d.job().inventory(&tail).unwrap().unwrap();
         let unconsumed: Vec<_> = inv.unconsumed().collect();
         assert_eq!(unconsumed.len(), 1, "{inv}");
-        assert_eq!(unconsumed[0].1.disposition, Disposition::Trailing);
-        assert_eq!(unconsumed[0].1.range, bytes.len() as u64..tail.len() as u64);
+        assert_eq!(unconsumed[0].1.disposition(), Disposition::Trailing);
+        assert_eq!(
+            unconsumed[0].1.range(),
+            bytes.len() as u64..tail.len() as u64
+        );
     }
 
     /// A decoder that does not declare `inventory` passes by returning `None`.

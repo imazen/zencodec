@@ -175,7 +175,7 @@ removes that whole class).
 - **`inventory` module, `DecodeJob::inventory` / `DynDecodeJob::inventory`** (default
   `Ok(None)`) and `DecodeCapabilities::with_inventory`: a byte-exact map of a file's parts, each
   with a `Disposition` saying what the decoder does with it; `validate()` checks the parts tile
-  the input, `unconsumed()` lists what no decoder reads. Additive. Guide: `docs/inventory.md`.
+  the input, `unconsumed()` lists what no decoder reads. `Part` is read through getters (`range()`, `disposition()`, `label()`, `detail()`, ...) so its storage can change in minor releases. Additive. Guide: `docs/inventory.md`.
 - `CodecSet` / `CodecSetError` — multi-codec registry: register decoder /
   encoder configs one line each and get detect→decode, `probe`, push /
   streaming / animation decode, and format-keyed encode through one
