@@ -1,8 +1,28 @@
 # zenmeta source and test migration
 
 This is the implementation map for the [design](zenmeta-design.md), based on
-source inspection on 2026-10-12. No extraction is claimed complete here. Read the
-[release audit](zenmeta-published-api-2026-10-12.md) before changing public paths.
+source inspection and integration on 2026-10-12. The status below distinguishes
+verified migrations from remaining work. Read the [release audit](zenmeta-published-api-2026-10-12.md) before changing public paths.
+
+## Integration status (2026-10-12)
+
+Changes remain on per-repository `review/zenmeta-integration` bookmarks pending
+final API review and PR splitting. These are not crate releases.
+
+| Owner | Verified work | Remaining work |
+|---|---|---|
+| zencodec | EXIF metadata subset of PR 130, baseline contract, typed unsupported inventory; registry comparison against 0.1.26 passes | Final public-surface snapshots and dependency guards |
+| zenmeta | XMP/audit/display/Apple/IFD extraction, plist bounds, strict/legacy Apple distinction, shared gain-map XMP source (`ddb6f905`) | JPEG consumers, generic scrub analysis, final review |
+| ultrahdr | Apple/plist delegation preserving 0.6.0 nominal types (`8db388f9`); registry comparison passes | PR 35 encoder metadata-policy integration, remote CI |
+| TIFF | Default-off shared-IFD inventory, dispatch/error tests, six-platform CI configuration; native/i686 suites pass (`e61b3460`) | Finish remote CI and final API review |
+| RAW | Default-off shared-IFD inventory for both backends, saved crashes, native/i686 suites, independent ExifTool checks (`47aeffac`) | Finish remote CI and final API review |
+| JPEG | Extended-inspection source and tests imported; shared gain-map XMP source extracted | Reconcile PRs 210/225/221, wrappers, inventory gating and all corpus/oracle tests |
+| Other codecs and zenpipe | Source/PR map below | Consumer migration and codec-owned rewrite planners |
+
+The semver audit found existing unreleased breaks independently of this
+extraction: TIFF's six associated error types differ from 0.1.2; RAW's error
+variants differ from 0.2.0. Their codec changelogs retain those queued breaks.
+Do not infer complete compatibility from the additive inventory contract.
 
 ## Ownership
 
@@ -78,10 +98,9 @@ behavior separately from new stricter operations. A stricter public operation
 may reject what a legacy helper accepts; its name and result must make that
 intent explicit.
 
-Confirm the source-license boundary before copying code: zencodec and ultrahdr
-sources use permissive licenses; the proposed zenifd and current zenjpeg sources
-use AGPL-3.0-only OR LicenseRef-Imazen-Commercial. No relicensing is implied by
-the proposed ownership change.
+The copyright holder authorized Apache-2.0 OR MIT on 2026-10-12 for controlled
+source moved into zenmeta. Preserve third-party notices and dependency licenses.
+The shared source record lives in [zenmeta provenance](../zenmeta/PROVENANCE.md).
 
 ### TIFF and RAW
 
