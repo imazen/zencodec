@@ -33,3 +33,14 @@ This additive bridge is suitable for the remaining 0.1 release and the next
 breaking zencodec release. A future breaking API can make the exact duration
 the only timing input; existing image traits need not host the video transport,
 seek index or network I/O abstraction to carry accurate animation timing.
+
+## Main integration validation
+
+The timing API is combined with current metadata retention and inventory support
+at `f6175c37`. `just test-animation-hdr` passes workspace tests (including exact
+rational timing and diffuse-white retention), strict workspace Clippy, no-default
+WASM compilation, public docs and regenerated API snapshots. Existing ignored
+examples remain unchanged. Validation uses zenpixels/zenpixels-convert
+`789d69db`, matching the consuming codec integration; no crate is published.
+The r7900x capped build/test wrapper reports 12 s and 0.33 GiB peak RSS; these
+are whole-job observations, not codec memory or speed measurements.

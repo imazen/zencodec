@@ -9,11 +9,12 @@
 
 ## summary
 #
-#   inherent methods                           53
-#   trait roster entries (type × trait)        48
+#   inherent methods                           55
+#   trait roster entries (type × trait)        50
 #
 # per-module pub lines:
 #   (root)                           28
+#   animation                         2
 #   decode                            3
 #   encode                            1
 #   estimate                          3
@@ -22,7 +23,7 @@
 #   helpers                           1
 #   inventory                         8
 
-## items (53 lines)
+## items (55 lines)
 
 pub fn AllocPreference::assert_fields_are_eq(&self)
 pub fn CicpEmission::assert_fields_are_eq(&self)
@@ -52,6 +53,8 @@ pub fn Supplements::assert_fields_are_eq(&self)
 pub fn ThreadingPolicy::assert_fields_are_eq(&self)
 pub fn UnsupportedImageKind::assert_fields_are_eq(&self)
 pub fn UnsupportedOperation::assert_fields_are_eq(&self)
+pub fn animation::FrameDuration::assert_fields_are_eq(&self)
+pub fn animation::TimingError::assert_fields_are_eq(&self)
 pub fn decode::DecodeCapabilities::assert_fields_are_eq(&self)
 pub fn decode::DecodePolicy::assert_fields_are_eq(&self)
 pub fn decode::OutputInfo::assert_fields_are_eq(&self)
@@ -78,7 +81,7 @@ pub fn inventory::PartId::assert_fields_are_eq(&self)
 pub fn inventory::PartKind::assert_fields_are_eq(&self)
 pub fn inventory::PartTag::assert_fields_are_eq(&self)
 
-## trait impls (48 types)
+## trait impls (50 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -105,6 +108,8 @@ StreamOffset: TrivialClone
 ThreadingPolicy: TrivialClone
 UnsupportedImageKind: TrivialClone
 UnsupportedOperation: TrivialClone
+animation::FrameDuration: TrivialClone
+animation::TimingError: TrivialClone
 decode::DecodePolicy: TrivialClone
 encode::EncodePolicy: TrivialClone
 encode::Fidelity: TrivialClone
