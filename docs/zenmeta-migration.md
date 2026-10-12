@@ -24,6 +24,9 @@ final API review and PR splitting. These are not crate releases.
 | SVG | PR33 walker/review cases reused behind default-off inventory (`17b621f0`); native/i686, resource probes, xmllint, clippy and fuzz build pass | Final review and remote CI |
 | PDF | PR33 walker and regression/oracle cases integrated (`dd1d476e`); native/i686, typed errors, MuPDF/ExifTool and 0.2.0 API audit | Final review and remote CI |
 | EXR | PR37 integrated (`ebc471ed`); native/i686, ExifTool and decoder-mutation corpus pass; one-shot stop fix shared with native probe/decode | Final review and remote CI |
+| JXL | PR24 integrated (`831e5bba`), default-off inventory, 184-file decoder corpus, jxlinfo/ExifTool checks, native/i686 and API audit | Remote CI, final pins and review |
+| WebP | PR106 integrated (`53dd3f89`); native/i686/no_std, ExifTool and 20,000-input mutation run; 0.4.4 API audit | Input-limit expectation approval, remote CI and final review |
+| AVIF | PR61 integrated (`9dc9f529`); all three encoders × both decoders for EXIF/XMP/orientation; native/i686, ExifTool and 0.1.6 API audit | Remote CI; broader ICC/gain-map backend matrix and final review |
 | Other codecs and zenpipe | Source/PR map below | Consumer migration and codec-owned rewrite planners |
 
 The semver audit found existing unreleased breaks independently of this
@@ -238,3 +241,16 @@ existing released behavior, before changing the shared contract documentation.
 Retain the review's libultrahdr, ExifTool and EXIF round-trip tests when importing
 the stack. Existing inventory/parser oracles do not cover these encoding and
 HDR reconstruction issues.
+
+### Priority validation update
+
+JXL, WebP and AVIF integrations are now on their review branches. Their
+codec-owned reports distinguish existing published API breaks from the additive
+inventory feature: [JXL](https://github.com/imazen/zenjxl/blob/review/zenmeta-integration/docs/INVENTORY.md),
+[WebP](https://github.com/imazen/zenwebp/blob/review/zenmeta-integration/docs/metadata-integration.md),
+[AVIF](https://github.com/imazen/zenavif/blob/review/zenmeta-integration/docs/METADATA_INTEGRATION.md).
+PNG `e9bbecbc`, HEIC `eab27643`, ultrahdr `4db930c8` and zenflate `43c10e3d`
+now have successful remote CI runs. JPEG's Windows ARM/i686 corpus failures
+are addressed by serial prefetch and a cross cache mount (`709f78ff`), pending
+remote verification. The remote JPEG colorspace session also has interrupted
+lossless/metadata work outside the M3 stack; it has not been reconciled yet.
