@@ -19,6 +19,8 @@
 
 ### Added
 
+- Namespace-aware GContainer `Directory` inspection and length/padding editing share the existing RDF traversal. Recovered lossless tests retain semantic ordering, quote style and the malformed-input time bound; malformed or ambiguous directories now fail explicitly. No codec signatures expose this implementation type.
+
 - Shared gain-map XMP parsing/generation and container-directory interpretation
   from zenjpeg PR 210 (`74e727f6`), behind `xmp`; no JPEG framing or codec
   dependency. Existing tests move with their parser.

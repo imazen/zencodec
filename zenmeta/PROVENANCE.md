@@ -54,3 +54,13 @@ implementation types are not re-exported by codecs.
 zencodec and implementation helpers into zenmeta. The owner authorized
 Apache-2.0 OR MIT for the controlled source in this extraction. JPEG/PNG/JXL
 container framing is not moved into zenmeta.
+
+## GContainer span editing
+
+`tests/container_directory.rs` retains the semantic matching, padding, single-quote
+and 4 MiB malformed-input cases from the interrupted JPEG lossless work
+(`zenjpeg/src/container/xmp.rs`). The owner approved strict
+namespace-bound fixtures and explicit malformed/ambiguous failures on 2026-10-12.
+The implementation uses the existing zenmeta XML/RDF parser instead of the
+recovered prefix-based scanner. Source positions are private and separate from
+public property equality. Controlled source uses the authorized dual license.

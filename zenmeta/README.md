@@ -36,3 +36,8 @@ JPEG APP framing and packet reassembly remain codec responsibilities.
 Optional `rewrite` supplies bounded EXIF processing and fallible plan assembly
 for codec-owned rewriters. Requests, services and completed plans are zencodec
 types, so a codec need not expose zenmeta types in its public API.
+
+`xmp::container::Directory` validates a complete GContainer packet and updates
+secondary lengths by semantic while preserving unrelated source bytes. It
+rejects ambiguous directories and missing carried payloads. Codecs still own
+MPF offsets, payload layout and APP/box framing.

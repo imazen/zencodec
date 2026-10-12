@@ -1,5 +1,8 @@
 //! XMP container-directory values and serialization, independent of file framing.
 
+mod directory;
+pub use directory::Directory;
+
 use alloc::string::String;
 use alloc::vec::Vec;
 

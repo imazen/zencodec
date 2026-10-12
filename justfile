@@ -72,3 +72,13 @@ metadata-rewrite-check:
     cargo check -p zencodec
     cargo test -p zenmeta --features rewrite --test rewrite
     cargo clippy -p zenmeta --features rewrite --lib -- -D warnings
+
+metadata-directory-check:
+    cargo test -p zenmeta --features xmp --test container_directory
+    cargo clippy -p zenmeta --features xmp --lib --test container_directory -- -D warnings
+    cargo check -p zenmeta --no-default-features --features xmp --target wasm32-wasip1
+    CARGO_TARGET_I686_UNKNOWN_LINUX_GNU_RUNNER=env cargo test -p zenmeta --features xmp --test container_directory --target i686-unknown-linux-gnu
+
+metadata-directory-oracle:
+    ZENMETA_DIRECTORY_OUTPUT="$HOME/tmp/zenmeta-directory-oracle" cargo test -p zenmeta --features xmp --test container_directory rewrite_item_lengths_matches_items_by_semantic -- --exact
+    python3 scripts/check-directory-oracle.py "$HOME/tmp/zenmeta-directory-oracle/rewritten.xmp"

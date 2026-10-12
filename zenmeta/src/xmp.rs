@@ -78,6 +78,13 @@ impl Property {
     }
 }
 
+// Source positions stay separate from semantic equality of public Property values.
+pub(crate) struct SpannedProperty {
+    pub property: Property,
+    pub source: core::ops::Range<usize>,
+    pub attribute: bool,
+}
+
 /// Bounded parsed XMP packet, borrowing its source XML.
 #[derive(Debug)]
 pub struct Packet<'a> {
@@ -162,6 +169,23 @@ impl<'a> Packet<'a> {
         item_namespace: &str,
         item_name: &str,
     ) -> Result<Vec<Vec<Property>>, Error> {
+        self.resource_sequence_spanned(namespace, name, item_namespace, item_name, 4096)
+            .map(|items| {
+                items
+                    .into_iter()
+                    .map(|fields| fields.into_iter().map(|f| f.property).collect())
+                    .collect()
+            })
+    }
+
+    pub(crate) fn resource_sequence_spanned(
+        &self,
+        namespace: &str,
+        name: &str,
+        item_namespace: &str,
+        item_name: &str,
+        max_items: usize,
+    ) -> Result<Vec<Vec<SpannedProperty>>, Error> {
         if self
             .descriptions()
             .any(|d| d.attribute((namespace, name)).is_some())
@@ -190,6 +214,9 @@ impl<'a> Packet<'a> {
             if !li.has_tag_name((RDF, "li")) {
                 return Err(Error::Structure(name.into()));
             }
+            if items.len() >= max_items {
+                return Err(Error::Limit);
+            }
             structural_node(li, true)?;
             let item = only_child(li).ok_or_else(|| Error::Structure(name.into()))?;
             if !item.has_tag_name((item_namespace, item_name))
@@ -204,28 +231,36 @@ impl<'a> Packet<'a> {
                 if a.namespace() == Some(RDF) {
                     return Err(Error::Structure(name.into()));
                 }
-                fields.push(Property {
-                    namespace: a.namespace().unwrap_or("").into(),
-                    name: a.name().into(),
-                    value: a.value().into(),
+                fields.push(SpannedProperty {
+                    property: Property {
+                        namespace: a.namespace().unwrap_or("").into(),
+                        name: a.name().into(),
+                        value: a.value().into(),
+                    },
+                    source: a.range(),
+                    attribute: true,
                 });
             }
             for child in item.children().filter(Node::is_element) {
-                fields.push(Property {
-                    namespace: child.tag_name().namespace().unwrap_or("").into(),
-                    name: child.tag_name().name().into(),
-                    value: plain_text(child)?,
+                fields.push(SpannedProperty {
+                    property: Property {
+                        namespace: child.tag_name().namespace().unwrap_or("").into(),
+                        name: child.tag_name().name().into(),
+                        value: plain_text(child)?,
+                    },
+                    source: child.range(),
+                    attribute: false,
                 });
             }
-            if fields.len() > 256 || items.len() >= 4096 {
+            if fields.len() > 256 {
                 return Err(Error::Limit);
             }
             for (i, a) in fields.iter().enumerate() {
-                if fields[..i]
-                    .iter()
-                    .any(|b| a.namespace == b.namespace && a.name == b.name)
-                {
-                    return Err(Error::Duplicate(a.name.clone()));
+                if fields[..i].iter().any(|b| {
+                    a.property.namespace == b.property.namespace
+                        && a.property.name == b.property.name
+                }) {
+                    return Err(Error::Duplicate(a.property.name.clone()));
                 }
             }
             items.push(fields);
