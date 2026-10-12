@@ -5,7 +5,8 @@ types. Metadata operations do not require zenpipe, zencodecs or a pixel decoder.
 
 The default build supports rendering-preserving retention for an already parsed
 ISO gain map. Optional `xmp` and `audit` features enable namespace-aware XML
-inspection and structural metadata reports independently. All features support
+inspection and structural metadata reports independently. `apple` enables
+MakerNote and binary-plist inspection without XML or audit. All features support
 `no_std + alloc`; no unsafe code is used.
 
 ```rust

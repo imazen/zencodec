@@ -12,6 +12,7 @@ readme = "README.md"
 default = []
 std = ["zencodec/std"]
 audit = []
+apple = []
 xmp = ["dep:roxmltree"]
 
 [dependencies]

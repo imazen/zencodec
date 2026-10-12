@@ -4,8 +4,12 @@
 
 extern crate alloc;
 
+#[cfg(feature = "apple")]
+pub mod apple;
 #[cfg(feature = "audit")]
 pub mod audit;
+#[cfg(feature = "apple")]
+pub mod bplist;
 pub mod display;
 #[cfg(feature = "xmp")]
 pub mod xmp;

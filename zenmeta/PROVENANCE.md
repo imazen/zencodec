@@ -12,3 +12,12 @@ parser behavior and test expectations are retained.
 The EXIF implementation remains in zencodec. Its public iterator is reused by
 audit, avoiding a second semantic EXIF parser. Video contracts from the source
 integration branch are not part of this extraction.
+
+Apple MakerNote parsing and its inline tests come from
+[ultrahdr PR 35](https://github.com/imazen/ultrahdr/pull/35), commit
+`1dee8471bb32d3189add54e63d8f45bfeebfb440`,
+`ultrahdr-core/src/metadata/apple.rs` (Apache-2.0). The binary-plist parser and
+inline tests come from the Apache-2.0 ultrahdr-core 0.6.0 release,
+`src/metadata/bplist.rs`. The strict MakerNote parser rejects malformed/duplicate
+rendering tags; the released ultrahdr helper is more tolerant and needs a
+compatibility path before delegation.

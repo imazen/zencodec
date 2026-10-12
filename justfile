@@ -22,3 +22,17 @@ clippy:
 # Full workspace test gate (incl. the conformance testkit)
 test:
     cargo test --workspace
+
+# Metadata extraction matrix; callers apply their host's build resource limits.
+metadata-check:
+    cargo fmt -p zencodec -p zencodec-testkit -p zenmeta --check
+    cargo test --workspace --all-features
+    cargo check -p zenmeta --no-default-features
+    cargo check -p zenmeta --no-default-features --features xmp
+    cargo check -p zenmeta --no-default-features --features audit
+    cargo check -p zenmeta --no-default-features --features apple
+    cargo clippy -p zencodec -p zenmeta --all-targets --all-features -- -D warnings
+
+# Compare the actual published contract, not an unpublished metadata branch.
+metadata-semver:
+    cargo semver-checks check-release -p zencodec --baseline-version 0.1.26 --all-features
