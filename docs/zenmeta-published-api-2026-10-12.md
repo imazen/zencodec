@@ -189,3 +189,10 @@ or downstream associated-type compatibility. Codec audits therefore also
 inspect associated error types manually. Their existing main-branch breaks
 must not be attributed to the inventory addition or silently omitted from
 release notes.
+
+### Published-version recheck
+
+On 2026-10-12, [docs.rs latest](https://docs.rs/crate/zencodec/latest) still
+resolved to 0.1.26, matching this audit's downloaded release artifact. A fresh
+crates.io API request was inaccessible and lib.rs returned HTTP 403; neither
+failed request is treated as additional registry evidence.
