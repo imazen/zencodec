@@ -12,22 +12,27 @@ final API review and PR splitting. These are not crate releases.
 | Owner | Verified work | Remaining work |
 |---|---|---|
 | zencodec | EXIF metadata subset of PR 130, baseline contract, typed unsupported inventory; existing PNG timing contract combined without changing released discriminants (`ee1a2305`); registry comparison and public snapshots pass | Final dependency guards and review |
-| zenmeta | XMP/audit/display/Apple/IFD extraction, plist bounds, strict/legacy Apple distinction, shared gain-map XMP source (`ddb6f905`) | JPEG consumers, generic scrub analysis, final review |
-| ultrahdr | Apple/plist delegation preserving 0.6.0 nominal types (`8db388f9`); registry comparison and full CI pass (`1d86bffc`) | PR35 encoder-policy integration against JPEG replacement; independent-reader verification |
+| zenmeta | XMP/audit/display/Apple/IFD extraction, plist bounds, strict/legacy Apple distinction, shared gain-map XMP source (`ddb6f905`) | Generic scrub analysis and final review |
+| ultrahdr | Apple/plist delegation preserving 0.6.0 nominal types (`8db388f9`); registry comparison and full CI pass (`1d86bffc`) | PR35 policy assembly integrated (`4db930c8`); native/i686 and ExifTool MPF checks pass; finish remote CI and final pins |
 | TIFF | Default-off shared-IFD inventory, approved architecture-specific ICC checks, one-shot timeout propagation (`c38ed0d3`); native/i686 and full CI pass | Final API review and dependency normalization |
 | RAW | Default-off shared-IFD inventory for both backends, saved crashes, native/i686 suites, ExifTool checks; DNG/RAF/CR3 one-shot timeout propagation (`89b54052`); full CI passes | Final API review and dependency normalization |
-| JPEG | PRs210/225/221 reconciled locally; JPEG-owned XMP wrappers delegate to zenmeta; approved strict parsing and original binary fixtures reused | Complete corpus/oracle/API validation and push integration |
+| JPEG | PRs210/225/221 combined and pushed (`db07f503`); private shared XMP wrappers, original fixtures, pinned independent-reader oracles and 0.8.4 API audit | Finish full CI; feature-combination corrections verified locally |
 | HEIC | PRs51/57 integrated (`2cbd95a2`), private Apple delegation, native/i686 suites, external-tool framing checks and full CI pass | Final dependency normalization and typed part-error mapping |
 | zenflate | Existing count-only scanner gated behind default-off scan (`a0ea0363`); native/i686 differential tests and semver pass; explicit-corpus cross-cache fix verified (`43c10e3d`) | Finish remote CI |
 | PNG | PR32 reused against animation-aware main (`e9bbecbc`), default-off scanner, typed limits/cancellation; approved expectation, native/i686 and API audit complete | Finish remote CI and final dependency normalization |
 | JPEG 2000 | PR26 reused behind default-off inventory (`147a728b`); native/i686, ExifTool and decoder-mutation checks pass | Final review and remote CI |
 | SVG | PR33 walker/review cases reused behind default-off inventory (`17b621f0`); native/i686, resource probes, xmllint, clippy and fuzz build pass | Final review and remote CI |
+| PDF | PR33 walker and regression/oracle cases integrated (`dd1d476e`); native/i686, typed errors, MuPDF/ExifTool and 0.2.0 API audit | Final review and remote CI |
+| EXR | PR37 integrated (`ebc471ed`); native/i686, ExifTool and decoder-mutation corpus pass; one-shot stop fix shared with native probe/decode | Final review and remote CI |
 | Other codecs and zenpipe | Source/PR map below | Consumer migration and codec-owned rewrite planners |
 
 The semver audit found existing unreleased breaks independently of this
 extraction: TIFF's six associated error types differ from 0.1.2; RAW's error
 variants differ from 0.2.0; PNG's nine associated error types and three auto
 traits differ from 0.1.4. Their codec changelogs retain those queued breaks.
+JPEG 0.8.4 and PDF 0.2.0 also have pre-existing main-branch breaks, documented
+in their integration audits. ultrahdr-rs latest resolvable published version is
+0.3.5: local 0.4.1 headings do not establish a registry release.
 Do not infer complete compatibility from the additive inventory contract.
 
 ## Ownership
