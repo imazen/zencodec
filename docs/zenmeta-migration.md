@@ -206,3 +206,35 @@ testkit checks. Do not attempt to keep correctness synchronized through copied
 tag tables, copied parsers or prose alone. Where two interpretations intentionally
 remain, pin their differences with existing regression fixtures and an explicit
 policy at the shared parser boundary.
+
+## Priority and additional JPEG review findings (2026-10-12)
+
+Implementation order is now JXL, WebP, then AVIF backends. The imported GIF
+work is preserved as a WIP change while these take priority.
+
+A separate JPEG metadata review reports an unpushed stack based on `007920fb`,
+ending at `3c8f4057`. This stack is independent of PR225 and has **not** been
+incorporated into the integration branch. Its reported changes need source
+review and combined testing before the JPEG migration is complete:
+
+| Commit | Reported change |
+|---|---|
+| `ea224f98` | Write JPEG EXIF framing exactly once |
+| `a76f7c41` | Transport bare TIFF EXIF through the zencodec boundary |
+| `1581bf08` | Read ISO gain-map records with ISO preference over XMP |
+| `da8d2982` | ISO-only gain-map output omits hdrgm XMP |
+| `e008374e` | Preserve SDR-base segments and attach the matching ICC profile |
+| `3c8f4057` | Record oversized EXIF failures |
+
+The review also reports unresolved oversized EXIF panic/truncation, BT.709
+assumptions during HDR reconstruction, missing ISO/XMP disagreement reporting,
+and missing fuzz coverage of the new ISO gain-map decode path. These are
+reported findings, not independently reproduced measurements in this integration.
+A public ICC setter is another API usability question: EncoderSegments is not
+nameable through the normal public encode module in that reviewed tree.
+
+Reconcile the EXIF byte representation across JPEG/PNG/TIFF/WebP/HEIF, including
+existing released behavior, before changing the shared contract documentation.
+Retain the review's libultrahdr, ExifTool and EXIF round-trip tests when importing
+the stack. Existing inventory/parser oracles do not cover these encoding and
+HDR reconstruction issues.

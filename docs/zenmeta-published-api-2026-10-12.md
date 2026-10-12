@@ -164,3 +164,28 @@ against 0.1.26 (58 skipped by the tool). Workspace tests, isolated zenmeta
 features, all-target clippy, Rust 1.88 and WASI checks pass. The API snapshot
 runner also records zenmeta's own feature-dependent surface and verifies
 that repository instruction files are excluded from its package.
+
+## Integration evidence at c1c3292f
+
+The integration source `c1c3292ff10f386191780ad407526951165da47a`
+was checked with `just metadata-error-check`, including the registry comparison
+above: 196 checks passed and 58 were skipped. The review head `d2407559`
+only adds migration documentation after that source revision. Re-run this gate
+if source changes again; this is not a guarantee for future changes.
+
+| Change relative to 0.1.26 | Compatibility assessment |
+|---|---|
+| New inventory module, capability and default trait operation | Additive; existing DecodeJob implementations acquire a default unsupported result without a new associated-error bound |
+| Inventory returns a value or typed error, rather than Option | Change to an unpublished git API only |
+| EXIF entries iterator and policy categories | Additive source API; existing non-exhaustive policy remains owned by zencodec |
+| EXIF filtering retains validated color and separates identifiers/time offsets | Observable behavior change; recorded in CHANGELOG, not certified by semver-checks |
+| Opaque MakerNotes dropped during EXIF rewriting | Observable behavior change; byte-exact KEEP_ALL remains available |
+| HDR diffuse-white survives retained HDR metadata | Behavior repair recorded in CHANGELOG |
+| Shared parsers extracted to zenmeta | Published zencodec types and useful baseline remain; codec wrappers retain their own public type identity |
+| Combined animation timing additions | Released UnsupportedOperation discriminants preserved; check caught and repaired the initial drift |
+
+The tool does not prove behavioral equivalence, arbitrary feature combinations,
+or downstream associated-type compatibility. Codec audits therefore also
+inspect associated error types manually. Their existing main-branch breaks
+must not be attributed to the inventory addition or silently omitted from
+release notes.
