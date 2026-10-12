@@ -205,3 +205,18 @@ are unchanged. After adding this module, `just metadata-semver` again passed
 196 checks with 58 skipped against 0.1.26. Codec planner integration is separate
 validation; the new `Plan::from_parts` constructor requires codec validation
 and does not itself certify arbitrary container data.
+
+### Final shared-contract revision check
+
+`just metadata-semver` was rerun on source revision
+`a31a9b680e54d5fea555c44b0d70c65802087df3` against published 0.1.26:
+196 checks passed, 58 skipped; the tool reported `no semver update required`.
+This includes the codec-owned rewrite request/plan contracts. It is a signature
+audit with the stated skipped checks, not a guarantee of behavioral identity.
+
+The integration keeps public rewrite signatures in zencodec. JPEG, PNG and JXL
+call zenmeta privately; zencodecs dispatches to those planners. Direct codec
+tests, including independent readers, are recorded in each codec report. The
+zencodecs regression suite passes with those planners, and application-supplied
+compression/XML callbacks preserve one-shot timeout reasons through I/O adapters.
+The all-crate replacement PR set and final remote CI verification are still open.
