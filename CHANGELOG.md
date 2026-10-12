@@ -13,6 +13,11 @@ All notable changes to zencodec are documented here. Sections below the
 
 #### Added
 
+- `LimitKind::InventoryParts` and categorization for `InventoryError`: hitting
+  the part cap is a recoverable resource failure with its typed cause retained;
+  inconsistent maps are internal errors. New variants append after released
+  discriminants. Malformed file bytes remain reportable inventory parts.
+
 - Retain the exact animation timing additions from `20310944`, already used by
   PNG main: `animation::FrameDuration`, exact frame accessors/constructors,
   and static/dynamic `push_frame_timed`. Existing millisecond APIs remain.

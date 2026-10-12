@@ -61,3 +61,9 @@ metadata-coordinated-final:
     cargo test -p zencodec --all-features --lib capabilities::
     just metadata-semver
     just metadata-target-check
+
+metadata-error-check:
+    cargo test -p zencodec --all-features --lib inventory::
+    cargo clippy --workspace --all-targets --all-features -- -D warnings
+    just metadata-semver
+    just api-doc

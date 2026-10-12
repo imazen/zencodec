@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1681 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 109 lines (109 hidden + 0 excluded-feature)
+# files: zencodec.txt 1682 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 109 lines (109 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -16,15 +16,15 @@
 #   free functions                             44
 #   inherent methods                          726
 #   struct fields                             220
-#   enum variants                             244
+#   enum variants                             245
 #   re-exports                                 12
-#   trait roster entries (type × trait)       457
+#   trait roster entries (type × trait)       458
 #   conditional trait impls (verbatim)          4
 #   auto-trait-complete types                  79
 #   auto-trait exceptions                       8
 #
 # per-module pub lines:
-#   (root)                          772
+#   (root)                          773
 #   animation                         6
 #   decode                          170
 #   encode                          121
@@ -36,7 +36,7 @@
 #   inventory                       101
 #   prelude                         180
 
-## items (1574 lines)
+## items (1575 lines)
 
 pub mod zencodec
 pub use At
@@ -1177,6 +1177,7 @@ pub LimitKind::Duration
 pub LimitKind::Frames
 pub LimitKind::Height
 pub LimitKind::InputSize
+pub LimitKind::InventoryParts
 pub LimitKind::Memory
 pub LimitKind::OutputSize
 pub LimitKind::Pixels
@@ -1702,7 +1703,7 @@ gainmap::UFraction: Clone, Copy, Debug, Default, Eq, PartialEq
 helpers::IccMatchTolerance: Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd
 inventory::Disposition: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
 inventory::Inventory: Clone, Debug, Display, Eq, PartialEq
-inventory::InventoryError: Clone, Debug, Display, Eq, Error, PartialEq
+inventory::InventoryError: CategorizedError, Clone, Debug, Display, Eq, Error, PartialEq
 inventory::MetadataKind: Clone, Copy, Debug, Eq, Hash, PartialEq
 inventory::Part: Clone, Debug, Eq, PartialEq
 inventory::PartId: Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd

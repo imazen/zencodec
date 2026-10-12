@@ -746,6 +746,9 @@ pub enum LimitKind {
     /// [`Memory`](LimitKind::Memory) cap. Codecs route it directly via
     /// [`ErrorCategory::Resource`](crate::ErrorCategory::Resource).
     DecompressionRatio,
+    /// The structural inventory reached its configured part-count cap.
+    /// Recover the cap from [`crate::inventory::InventoryError::TooManyParts`].
+    InventoryParts,
 }
 
 impl LimitExceeded {

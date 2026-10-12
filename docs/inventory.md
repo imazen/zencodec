@@ -125,3 +125,13 @@ Minimums; more is welcome where the codec already parses it.
 5. Cross-check offsets and lengths against an independent dumper such as `exiftool -v3`. Run it as
    a test that executes when an environment variable names the tool, never one that skips itself
    when the tool is missing.
+
+## Errors and configured work limits
+
+An input byte cap and cancellation stop the inventory operation itself. Pixel
+limits can be reported as decode-outcome annotations because inspection does
+not decode or allocate pixel buffers. A reached part cap is
+`Resource(Limits(InventoryParts))`, retaining `InventoryError::TooManyParts` as
+the typed cause. Walkers should wrap that error directly with the codec name,
+not stringify it as malformed input. Other `InventoryError` variants describe
+a broken map invariant and classify as internal bugs.
