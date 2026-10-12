@@ -3,7 +3,7 @@ name = "zenmeta"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
-license = "Apache-2.0"
+license = "Apache-2.0 OR MIT"
 description = "Shared image metadata inspection, retention and inventory implementation"
 repository = "https://github.com/imazen/zencodec"
 readme = "README.md"
@@ -13,6 +13,7 @@ default = []
 std = ["zencodec/std"]
 audit = []
 apple = []
+inventory = []
 xmp = ["dep:roxmltree"]
 
 [dependencies]

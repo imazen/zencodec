@@ -6,7 +6,7 @@ commit `27cfae5d4de24bfb20d2005d77daf4ac9ff05f39`. Their original paths are
 `src/xmp.rs`, `src/metadata_audit.rs`, `src/display_metadata.rs`,
 `tests/metadata_inspection.rs`, `tests/display_retention.rs`, and
 `examples/audit_metadata.rs`. That source is Apache-2.0 OR MIT; this crate initially
-uses the Apache-2.0 option. Imports and feature gates change with ownership;
+was initially extracted under the Apache-2.0 option. Imports and feature gates change with ownership;
 parser behavior and test expectations are retained.
 
 The EXIF implementation remains in zencodec. Its public iterator is reused by
@@ -21,3 +21,13 @@ inline tests come from the Apache-2.0 ultrahdr-core 0.6.0 release,
 `src/metadata/bplist.rs`. The strict MakerNote parser rejects malformed/duplicate
 rendering tags; the released ultrahdr helper is more tolerant and needs a
 compatibility path before delegation.
+
+TIFF/BigTIFF traversal comes from [zenextras PR 30](https://github.com/imazen/zenextras/pull/30),
+commit `601682d365d7b8d772bb045f45bb554005f41fb1`, `zenifd/src/walk.rs` and
+`zenifd/src/tags.rs`. The shared source and its inline tests now live in
+`src/ifd/`, gated by `inventory`; no zenifd package is required.
+
+On 2026-10-12 the copyright holder authorized Apache-2.0 OR MIT licensing for
+the controlled source moved into zenmeta, including the formerly AGPL/commercial
+IFD implementation and Apache-licensed Apple implementation. This does not
+relicense dependencies or remove any third-party notices.

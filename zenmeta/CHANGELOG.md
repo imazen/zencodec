@@ -9,6 +9,9 @@
 
 ### Added
 
+- Shared TIFF/BigTIFF walker and tag names from zenextras PR 30 (`601682d3`),
+  gated by the default-off `inventory` feature. Existing decoder-specific Rules
+  stay in their codecs. No zenifd package is introduced.
 - Apple MakerNote inspection and strict HDR parsing from ultrahdr PR 35
   (`1dee8471`), plus the existing binary-plist parser from ultrahdr-core 0.6.0.
   Both retain their tests and are gated by the default-off `apple` feature.
@@ -28,3 +31,8 @@
   complete value; the imported parser read the high bytes instead. Malformed date
   markers and over-wide lengths are rejected. These change parser behavior from
   the source release and must be reflected in consumer changelogs when delegated.
+
+### Changed
+
+- Use Apache-2.0 OR MIT for the extracted, controlled source with copyright-holder
+  authorization. Third-party dependency licenses remain unchanged.

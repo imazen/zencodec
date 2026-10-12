@@ -11,5 +11,7 @@ pub mod audit;
 #[cfg(feature = "apple")]
 pub mod bplist;
 pub mod display;
+#[cfg(feature = "inventory")]
+pub mod ifd;
 #[cfg(feature = "xmp")]
 pub mod xmp;
