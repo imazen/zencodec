@@ -234,3 +234,11 @@ manifest used by the final 0.1.26 compatibility comparison are unchanged.
 Directory parsing/editing passed native and i686 tests, a no_std WASM check,
 and inspection by Python ElementTree and ExifTool. This validates the shared
 editor; the JPEG lossless consumer still has separate integration gates.
+
+### Final main reconciliation
+
+The metadata integration was merged with main `675c472b` on 2026-10-12.
+`just metadata-check metadata-semver api-doc` passes on the combined tree:
+196 compatibility checks pass and 58 are skipped against 0.1.26; the tool
+reports no required semver update. Shared source differs from `a81daf76`
+only in CodecSet documentation; contract signatures remain identical.

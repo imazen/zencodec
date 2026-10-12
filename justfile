@@ -82,3 +82,12 @@ metadata-directory-check:
 metadata-directory-oracle:
     ZENMETA_DIRECTORY_OUTPUT="$HOME/tmp/zenmeta-directory-oracle" cargo test -p zenmeta --features xmp --test container_directory rewrite_item_lengths_matches_items_by_semantic -- --exact
     python3 scripts/check-directory-oracle.py "$HOME/tmp/zenmeta-directory-oracle/rewritten.xmp"
+
+# Shared exact timing and HDR metadata retention integration.
+test-animation-hdr:
+    cargo fmt -p zencodec -p zencodec-testkit -p zenmeta --check
+    cargo test --workspace
+    cargo clippy --workspace --all-targets -- -D warnings
+    cargo check --workspace --no-default-features --target wasm32-unknown-unknown
+    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+    just api-doc

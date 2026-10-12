@@ -186,8 +186,9 @@ impl From<BoxedError> for CodecSetError {
 
 /// A runtime set of codecs with one entry point per operation.
 ///
-/// See the [crate docs](crate) for the registration model, detection
-/// semantics, and the app-wide sharing pattern.
+/// Register configs with [`with_decoder`](Self::with_decoder) and
+/// [`with_encoder`](Self::with_encoder). The set is `Send + Sync`; operations
+/// borrow it, so one registration can be shared across calls.
 ///
 /// Operation defaults ([`with_limits`](Self::with_limits),
 /// [`with_stop`](Self::with_stop), [`with_decode_policy`](Self::with_decode_policy),
