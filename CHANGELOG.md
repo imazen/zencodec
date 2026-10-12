@@ -102,6 +102,29 @@ removes that whole class).
 
 ## [Unreleased]
 
+### QUEUED BREAKING CHANGES
+
+- None against crates.io zencodec 0.1.26 for the metadata extraction. Unpublished
+  inventory/metadata PR consumers require migration; those are recorded separately.
+
+### Added
+
+- Metadata additions extracted from the metadata portion of PR 130 (source
+  `27cfae5d`, including PRs 123–125 and 128): `exif::Ifd`, `exif::EntryRef`,
+  `Exif::entries`, and separate color, time-offset, device-ID, camera-owner and
+  image-ID queries and `ExifPolicy` fields/builders. Existing type ownership stays
+  in zencodec; XMP/audit implementations belong in the new zenmeta crate.
+
+### Changed
+
+- EXIF publishing presets retain validated color declarations and remove camera
+  ownership independently of creator attribution. Timestamp/camera opt-ins no
+  longer automatically retain UTC offsets or device/image identifiers; those have
+  explicit categories. These are behavior changes from crates.io 0.1.26 even
+  though the non-exhaustive policy's new fields are source-compatible.
+- EXIF rewrites drop opaque MakerNotes and restrict Interop retention to validated
+  color entries. Byte-exact `retain(..., KEEP_ALL)` remains the preservation path.
+
 ### Fixed
 
 - Preserve the HDR diffuse-white luminance anchor when metadata retention keeps

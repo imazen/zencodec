@@ -198,3 +198,80 @@ fn differential_exif_prefix_framing() {
     assert_eq!(x.orientation().map(|o| u32::from(o.to_exif())), orc.0);
     assert_eq!(x.copyright().map(|c| c.into_owned()), orc.1);
 }
+
+// ── Colour signalling survives every retaining preset ───────────────────────
+
+/// Big-endian TIFF: IFD0 → Exif IFD {ColorSpace, Interop pointer} → Interop
+/// IFD {InteropIndex}. This is how a camera declares Adobe RGB without an ICC
+/// profile: `ColorSpace = 0xFFFF` (uncalibrated) plus `InteropIndex = "R03"`.
+fn build_colour_only_exif(color_space: u16, interop_index: &[u8; 4]) -> Vec<u8> {
+    let mut t = vec![b'M', b'M', 0, 0x2A, 0, 0, 0, 8];
+    // IFD0 @ 8: one entry (Exif IFD pointer → 26), next = 0.
+    t.extend_from_slice(&[0, 1]);
+    t.extend_from_slice(&[0x87, 0x69, 0, 4, 0, 0, 0, 1, 0, 0, 0, 26]);
+    t.extend_from_slice(&[0, 0, 0, 0]);
+    assert_eq!(t.len(), 26);
+    // Exif IFD @ 26: ColorSpace SHORT, Interop pointer → 56, next = 0.
+    t.extend_from_slice(&[0, 2]);
+    t.extend_from_slice(&[0xA0, 0x01, 0, 3, 0, 0, 0, 1]);
+    t.extend_from_slice(&color_space.to_be_bytes());
+    t.extend_from_slice(&[0, 0]);
+    t.extend_from_slice(&[0xA0, 0x05, 0, 4, 0, 0, 0, 1, 0, 0, 0, 56]);
+    t.extend_from_slice(&[0, 0, 0, 0]);
+    assert_eq!(t.len(), 56);
+    // Interop IFD @ 56: InteropIndex ASCII[4], next = 0.
+    t.extend_from_slice(&[0, 1]);
+    t.extend_from_slice(&[0x00, 0x01, 0, 2, 0, 0, 0, 4]);
+    t.extend_from_slice(interop_index);
+    t.extend_from_slice(&[0, 0, 0, 0]);
+    t
+}
+
+/// Oracle view of the colour declaration: (ColorSpace, InteropIndex).
+fn oracle_colour(blob: &[u8]) -> (Option<u32>, Option<String>) {
+    let (fields, _) = exif::parse_exif(blob).expect("oracle parses");
+    let cs = fields
+        .iter()
+        .find(|f| f.tag == Tag::ColorSpace)
+        .and_then(|f| f.value.get_uint(0));
+    let idx = fields
+        .iter()
+        .find(|f| f.tag == Tag::InteroperabilityIndex)
+        .map(|f| match &f.value {
+            Value::Ascii(v) if !v.is_empty() => String::from_utf8_lossy(&v[0]).into_owned(),
+            other => panic!("InteropIndex has type {other:?}"),
+        });
+    (cs, idx)
+}
+
+/// An Adobe RGB camera JPEG whose only colour declaration is EXIF must not
+/// become implicit sRGB under a preset that promises to keep colour
+/// (`Web` = `ATTRIBUTED_ORIENTATION`, `ColorAndRotation` = `ORIENTATION_ONLY`).
+#[test]
+fn colour_declaration_survives_retaining_presets() {
+    use zencodec::exif::{ExifPolicy, retain};
+
+    let src = build_colour_only_exif(0xFFFF, b"R03\0");
+    assert_eq!(
+        oracle_colour(&src),
+        (Some(0xFFFF), Some("R03".into())),
+        "fixture as seen by the oracle"
+    );
+
+    for (name, policy) in [
+        ("KEEP_ALL", ExifPolicy::KEEP_ALL),
+        ("ATTRIBUTED_ORIENTATION", ExifPolicy::ATTRIBUTED_ORIENTATION),
+        ("ORIENTATION_ONLY", ExifPolicy::ORIENTATION_ONLY),
+    ] {
+        let out = retain(&src, &policy).unwrap_or_else(|| panic!("{name}: EXIF dropped entirely"));
+        assert_eq!(
+            oracle_colour(&out),
+            (Some(0xFFFF), Some("R03".into())),
+            "{name}: colour declaration lost"
+        );
+        // Stable under a second pass (serializer fixpoint).
+        let again = retain(&out, &policy).expect("second pass");
+        assert_eq!(again.as_ref(), out.as_ref(), "{name}: not a fixpoint");
+    }
+    assert!(retain(&src, &ExifPolicy::DISCARD_ALL).is_none());
+}
