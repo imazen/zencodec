@@ -541,6 +541,36 @@ impl fmt::Display for InventoryError {
 
 impl core::error::Error for InventoryError {}
 
+impl crate::CategorizedError for InventoryError {
+    fn codec_name(&self) -> Option<&'static str> {
+        None
+    }
+
+    fn category(&self) -> crate::ErrorCategory {
+        match self {
+            Self::TooManyParts { .. } => crate::ErrorCategory::Resource(
+                crate::ResourceError::Limits(crate::LimitKind::InventoryParts),
+            ),
+            // Malformed file bytes belong in the inventory. These variants
+            // instead describe an inconsistent map constructed by a walker.
+            _ => crate::ErrorCategory::Internal(crate::InternalKind::Bug),
+        }
+    }
+}
+
+/// Shared default keeps native codec errors unconstrained and the cause visible
+/// through both generic and erased dispatch.
+pub(crate) fn unsupported() -> crate::At<crate::CodecError> {
+    use crate::{CategorizedError, ErrorAtExt, UnsupportedOperation};
+    let operation = UnsupportedOperation::Inventory;
+    crate::CodecError::from_parts(
+        None,
+        operation.category(),
+        alloc::boxed::Box::new(operation),
+    )
+    .start_at()
+}
+
 /// A byte-exact map of a file's structural parts. See the
 /// [module documentation](self).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -907,6 +937,40 @@ mod tests {
 
     fn part(kind: PartKind, range: Range<u64>, d: Disposition) -> Part {
         Part::new(kind, PartTag::None, range, d)
+    }
+
+    #[test]
+    fn part_cap_is_a_typed_resource_failure_through_erasure() {
+        use crate::{CategorizedError, CodecErrorExt, ErrorAtExt};
+        let mut inventory = Inventory::new(ImageFormat::Png, 1).with_max_parts(0);
+        let cause = inventory
+            .push(
+                None,
+                Part::new(
+                    PartKind::Header,
+                    PartTag::None,
+                    0..1,
+                    Disposition::Structure,
+                ),
+            )
+            .unwrap_err();
+        let expected = crate::ErrorCategory::Resource(crate::ResourceError::Limits(
+            crate::LimitKind::InventoryParts,
+        ));
+        assert_eq!(cause.category(), expected);
+        let error = crate::CodecError::from_parts(
+            Some("test-codec"),
+            cause.category(),
+            alloc::boxed::Box::new(cause),
+        )
+        .start_at();
+        assert_eq!(error.category(), expected);
+        let erased: crate::decode::BoxedError = alloc::boxed::Box::new(error);
+        assert_eq!(erased.error_category(), Some(expected));
+        assert_eq!(
+            erased.find_cause::<InventoryError>(),
+            Some(&InventoryError::TooManyParts { max: 0 })
+        );
     }
 
     #[test]

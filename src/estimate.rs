@@ -81,7 +81,7 @@ pub enum SimdTier {
 ///
 /// Sealed and growable — construct via
 /// [`conservative()`](ComputeEnvironment::conservative) (or
-/// [`host()`](ComputeEnvironment::host) on `std`) and refine with the `with_*`
+/// `ComputeEnvironment::host()` on `std`) and refine with the `with_*`
 /// setters; read with the accessors. Carries the available
 /// core count + an optional [`SimdTier`] today; new fields (RAM, load factor,
 /// GPU) are additive.
@@ -98,7 +98,7 @@ impl ComputeEnvironment {
     /// tier. Estimates built on it assume serial execution on unknown hardware —
     /// safe (never over-counts cores) but pessimistic on wall time.
     ///
-    /// Refine with the `with_*` setters, or use [`host()`](Self::host) to detect
+    /// Refine with the `with_*` setters, or use `ComputeEnvironment::host()` to detect
     /// the running machine.
     #[must_use]
     pub fn conservative() -> Self {

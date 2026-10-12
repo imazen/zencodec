@@ -1,0 +1,380 @@
+# zenmeta public API — additions from non-default features
+# features: apple,audit,inventory,rewrite,std,xmp
+# (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
+# Encodings: crate-name prefix stripped; auto traits collapse to a
+# count + exceptions; trait impls collapse to one roster line per
+# type (method signatures live at the trait definition); blanket
+# impls omitted; re-export duplicates annotated `[also: path]`.
+# DO NOT EDIT BY HAND — commit regenerated changes with the code.
+
+## summary
+#
+#   pub modules                                12
+#   pub types (struct/enum/trait/alias)        34
+#   pub consts/statics                         20
+#   free functions                             32
+#   inherent methods                           94
+#   struct fields                              81
+#   enum variants                              43
+#   trait roster entries (type × trait)        83
+#   auto-trait-complete types                  31
+#   auto-trait exceptions                       2
+#
+# per-module pub lines:
+#   (root)                            6
+#   apple                            30
+#   audit                            24
+#   bplist                           11
+#   ifd                             169
+#   rewrite                          19
+#   xmp                              57
+
+## items (313 lines)
+
+pub mod apple
+pub mod apple::compatibility
+pub fn apple::compatibility::headroom_stops(&apple::AppleHdrInfo) -> core::option::Option<f64>
+pub mod apple::tags
+pub const apple::tags::HDR_GAIN: u16
+pub const apple::tags::HDR_HEADROOM: u16
+pub const apple::tags::HDR_IMAGE_TYPE: u16
+pub struct apple::AppleHdrInfo
+pub apple::AppleHdrInfo::hdr_gain: f64
+pub apple::AppleHdrInfo::hdr_headroom: core::option::Option<f64>
+pub apple::AppleHdrInfo::hdr_image_type: core::option::Option<i32>
+pub fn apple::AppleHdrInfo::has_gain_map(&self) -> bool
+pub fn apple::AppleHdrInfo::headroom_stops(&self) -> core::option::Option<f64>
+pub fn apple::AppleHdrInfo::is_hdr(&self) -> bool
+pub struct apple::AppleMakerNote<'a>
+pub fn apple::AppleMakerNote<'a>::byte_order(&self) -> zencodec::exif::ByteOrder
+pub fn apple::AppleMakerNote<'a>::entries(&self) -> impl core::iter::traits::iterator::Iterator<Item = core::result::Result<apple::MakerNoteEntry<'a>, apple::MakerNoteEntryError>> + '_
+pub fn apple::AppleMakerNote<'a>::parse(&'a [u8]) -> core::option::Option<Self>
+pub struct apple::MakerNoteEntry<'a>
+pub fn apple::MakerNoteEntry<'a>::count(&self) -> u32
+pub fn apple::MakerNoteEntry<'a>::kind(&self) -> u16
+pub fn apple::MakerNoteEntry<'a>::tag(&self) -> u16
+pub fn apple::MakerNoteEntry<'a>::value(&self) -> &'a [u8]
+#[non_exhaustive] pub struct apple::MakerNoteEntryError
+pub apple::MakerNoteEntryError::index: usize
+pub apple::MakerNoteEntryError::tag: core::option::Option<u16>
+pub fn apple::from_apple_headroom(&apple::AppleHdrInfo) -> core::option::Option<zencodec::gainmap::GainMapParams>
+pub fn apple::parse_apple_makernote(&[u8]) -> core::option::Option<apple::AppleHdrInfo> [also: apple::compatibility]
+pub fn apple::parse_exif_for_apple_hdr(&[u8]) -> core::option::Option<apple::AppleHdrInfo> [also: apple::compatibility]
+pub mod audit
+#[non_exhaustive] pub enum audit::Change<'a>
+pub audit::Change::Added(&'a audit::Entry)
+pub audit::Change::Modified
+pub audit::Change::Modified::after: &'a audit::Entry
+pub audit::Change::Modified::before: &'a audit::Entry
+pub audit::Change::Removed(&'a audit::Entry)
+#[non_exhaustive] pub enum audit::Finding
+pub audit::Finding::ExifCoverageLimited
+pub audit::Finding::InvalidExif
+pub audit::Finding::InvalidXmp(alloc::string::String)
+pub audit::Finding::Limit
+pub audit::Finding::MakerNote
+pub audit::Finding::MakerNote::bytes: usize
+pub audit::Finding::MakerNote::path: alloc::string::String
+#[non_exhaustive] pub struct audit::Entry [also: ifd::walk]
+pub fn audit::Entry::kind(&self) -> &str
+pub fn audit::Entry::path(&self) -> &str
+pub fn audit::Entry::value(&self) -> &str
+pub struct audit::Report
+pub fn audit::Report::diff<'a>(&'a self, &'a Self) -> alloc::vec::Vec<audit::Change<'a>>
+pub fn audit::Report::entries(&self) -> &[audit::Entry]
+pub fn audit::Report::exif(&[u8]) -> Self
+pub fn audit::Report::findings(&self) -> &[audit::Finding]
+pub fn audit::Report::xmp(&str) -> Self
+pub mod bplist
+pub enum bplist::PlistValue
+pub bplist::PlistValue::Array(alloc::vec::Vec<bplist::PlistValue>)
+pub bplist::PlistValue::Bool(bool)
+pub bplist::PlistValue::Data(alloc::vec::Vec<u8>)
+pub bplist::PlistValue::Date(f64)
+pub bplist::PlistValue::Dict(alloc::vec::Vec<(alloc::string::String, bplist::PlistValue)>)
+pub bplist::PlistValue::Integer(i64)
+pub bplist::PlistValue::Real(f64)
+pub bplist::PlistValue::String(alloc::string::String)
+pub bplist::PlistValue::Uid(u64)
+pub fn bplist::parse_bplist(&[u8]) -> core::option::Option<bplist::PlistValue>
+pub mod ifd
+pub mod ifd::tags
+pub fn ifd::tags::tag_known(ifd::walk::Kind, u16) -> bool
+pub fn ifd::tags::tag_name(ifd::walk::Kind, u16) -> alloc::borrow::Cow<'static, str>
+pub mod ifd::walk
+pub enum ifd::walk::Count
+pub ifd::walk::Count::Bytes(u64)
+pub ifd::walk::Count::Tag(u16)
+pub ifd::walk::Count::ToEnd
+pub enum ifd::walk::Kind
+pub ifd::walk::Kind::Exif
+pub ifd::walk::Kind::Gps
+pub ifd::walk::Kind::Interop
+pub ifd::walk::Kind::MakerNote
+pub ifd::walk::Kind::Page(u32)
+pub ifd::walk::Kind::Sub
+pub enum ifd::walk::Loc
+pub ifd::walk::Loc::At(u64, u64)
+pub ifd::walk::Loc::Empty
+pub ifd::walk::Loc::Inline
+pub ifd::walk::Loc::Overflow
+pub ifd::walk::Loc::UnknownType
+pub struct ifd::walk::Cand
+pub ifd::walk::Cand::body: core::option::Option<core::ops::range::Range<u64>>
+pub ifd::walk::Cand::children: alloc::vec::Vec<ifd::walk::Cand>
+pub ifd::walk::Cand::detail: alloc::string::String
+pub ifd::walk::Cand::disp: zencodec::inventory::Disposition
+pub ifd::walk::Cand::gap: core::option::Option<(zencodec::inventory::Disposition, alloc::string::String)>
+pub ifd::walk::Cand::kind: zencodec::inventory::PartKind
+pub ifd::walk::Cand::label: core::option::Option<alloc::string::String>
+pub ifd::walk::Cand::range: core::ops::range::Range<u64>
+pub ifd::walk::Cand::tag: zencodec::inventory::PartTag
+pub fn ifd::walk::Cand::new(core::ops::range::Range<u64>, zencodec::inventory::PartKind, zencodec::inventory::PartTag, zencodec::inventory::Disposition, alloc::string::String) -> Self
+pub fn ifd::walk::Cand::note(&mut self, &str)
+pub struct ifd::walk::ChunkGeom
+pub ifd::walk::ChunkGeom::pad_per_row: u64
+pub ifd::walk::ChunkGeom::row: u64
+pub ifd::walk::ChunkGeom::rows: u64
+pub ifd::walk::ChunkGeom::rows_in: u64
+pub fn ifd::walk::ChunkGeom::read(&self) -> core::option::Option<u64>
+pub struct ifd::walk::ChunkUse
+pub ifd::walk::ChunkUse::covered: bool
+pub ifd::walk::ChunkUse::note: core::option::Option<alloc::string::String>
+pub ifd::walk::ChunkUse::past_count: bool
+pub ifd::walk::ChunkUse::tail: &'static str
+pub ifd::walk::ChunkUse::unknown: core::option::Option<&'static str>
+pub ifd::walk::ChunkUse::unread: core::option::Option<&'static str>
+pub ifd::walk::ChunkUse::used: core::option::Option<u64>
+pub ifd::walk::Entry::at: u64
+pub ifd::walk::Entry::count: u64
+pub ifd::walk::Entry::field: u64
+pub ifd::walk::Entry::notes: alloc::vec::Vec<alloc::string::String>
+pub ifd::walk::Entry::tag: u16
+pub ifd::walk::Entry::typ: u16
+pub struct ifd::walk::ExtentRule
+pub ifd::walk::ExtentRule::counts: ifd::walk::Count
+pub ifd::walk::ExtentRule::fate: ifd::walk::Fate
+pub ifd::walk::ExtentRule::kind: zencodec::inventory::PartKind
+pub ifd::walk::ExtentRule::offsets: u16
+pub ifd::walk::ExtentRule::what: &'static str
+pub struct ifd::walk::Fate
+pub ifd::walk::Fate::d: zencodec::inventory::Disposition
+pub ifd::walk::Fate::note: core::option::Option<alloc::borrow::Cow<'static, str>>
+pub fn ifd::walk::Fate::because(zencodec::inventory::Disposition, impl core::convert::Into<alloc::borrow::Cow<'static, str>>) -> Self
+pub fn ifd::walk::Fate::new(zencodec::inventory::Disposition) -> Self
+pub struct ifd::walk::Ifd
+pub ifd::walk::Ifd::at: u64
+pub ifd::walk::Ifd::depth: u8
+pub ifd::walk::Ifd::end: u64
+pub ifd::walk::Ifd::entries: alloc::vec::Vec<ifd::walk::Entry>
+pub ifd::walk::Ifd::first_unknown: core::option::Option<usize>
+pub ifd::walk::Ifd::followed: bool
+pub ifd::walk::Ifd::kind: ifd::walk::Kind
+pub ifd::walk::Ifd::last: alloc::collections::btree::map::BTreeMap<u16, usize>
+pub ifd::walk::Ifd::name: alloc::string::String
+pub ifd::walk::Ifd::next: u64
+pub ifd::walk::Ifd::notes: alloc::vec::Vec<alloc::string::String>
+pub ifd::walk::Ifd::parent: core::option::Option<(usize, usize)>
+pub ifd::walk::Ifd::problem: core::option::Option<alloc::string::String>
+pub ifd::walk::Ifd::roles: alloc::vec::Vec<(ifd::walk::Kind, bool)>
+pub fn ifd::walk::Ifd::followed_as(&self, ifd::walk::Kind) -> bool
+pub fn ifd::walk::Ifd::holds_image(&self) -> bool
+pub fn ifd::walk::Ifd::is(&self, ifd::walk::Kind) -> bool
+pub fn ifd::walk::Ifd::page(&self) -> core::option::Option<u32>
+pub struct ifd::walk::Layout
+pub ifd::walk::Layout::big: bool
+pub ifd::walk::Layout::le: bool
+pub fn ifd::walk::Layout::count_len(self) -> u64
+pub fn ifd::walk::Layout::entry_len(self) -> u64
+pub fn ifd::walk::Layout::header_len(self) -> u64
+pub fn ifd::walk::Layout::inline_cap(self) -> u64
+pub fn ifd::walk::Layout::offset(self, &[u8], u64) -> core::option::Option<u64>
+pub fn ifd::walk::Layout::u16(self, &[u8], u64) -> core::option::Option<u16>
+pub fn ifd::walk::Layout::u32(self, &[u8], u64) -> core::option::Option<u32>
+pub fn ifd::walk::Layout::u64(self, &[u8], u64) -> core::option::Option<u64>
+pub struct ifd::walk::Placed
+pub fn ifd::walk::Placed::insert(&mut self, ifd::walk::Cand)
+pub fn ifd::walk::Placed::into_sorted(self) -> alloc::vec::Vec<ifd::walk::Cand>
+pub struct ifd::walk::Placement
+pub ifd::walk::Placement::budget_hit: bool
+pub ifd::walk::Placement::ifd0_ok: bool
+pub ifd::walk::Placement::logical_end: u64
+pub ifd::walk::Placement::parts: alloc::vec::Vec<ifd::walk::Cand>
+pub struct ifd::walk::Walk<'a>
+pub ifd::walk::Walk::base: u64
+pub ifd::walk::Walk::budget_hit: bool
+pub ifd::walk::Walk::cancelled: bool
+pub ifd::walk::Walk::d: &'a [u8]
+pub ifd::walk::Walk::entries_left: u64
+pub ifd::walk::Walk::fatal: core::option::Option<alloc::string::String>
+pub ifd::walk::Walk::header: core::ops::range::Range<u64>
+pub ifd::walk::Walk::header_ext: core::option::Option<(core::ops::range::Range<u64>, zencodec::inventory::Disposition, alloc::string::String)>
+pub ifd::walk::Walk::header_ok: bool
+pub ifd::walk::Walk::ifds: alloc::vec::Vec<ifd::walk::Ifd>
+pub ifd::walk::Walk::lay: ifd::walk::Layout
+pub ifd::walk::Walk::magic: u16
+pub ifd::walk::Walk::pointer_reads: u64
+pub fn ifd::walk::Walk<'_>::abs(&self, u64) -> core::option::Option<u64>
+pub fn ifd::walk::Walk<'_>::bytes(&self, &ifd::walk::Entry) -> core::option::Option<&[u8]>
+pub fn ifd::walk::Walk<'_>::find<'i>(&self, &'i ifd::walk::Ifd, u16) -> core::option::Option<&'i ifd::walk::Entry>
+pub fn ifd::walk::Walk<'_>::limit(&self) -> u64
+pub fn ifd::walk::Walk<'_>::loc(&self, &ifd::walk::Entry) -> ifd::walk::Loc
+pub fn ifd::walk::Walk<'_>::single_uint(&self, &ifd::walk::Entry) -> core::option::Option<u64>
+pub fn ifd::walk::Walk<'_>::take_scan(&self, u64) -> bool
+pub fn ifd::walk::Walk<'_>::uints(&self, &ifd::walk::Entry, usize) -> alloc::vec::Vec<u64>
+pub const ifd::walk::BUDGET_GAP: &str
+pub const ifd::walk::EXIF_IFD: u16
+pub const ifd::walk::FREE_BYTE_COUNTS: u16
+pub const ifd::walk::FREE_OFFSETS: u16
+pub const ifd::walk::GPS_IFD: u16
+pub const ifd::walk::INTEROP_IFD: u16
+pub const ifd::walk::JPEG_IF_LENGTH: u16
+pub const ifd::walk::JPEG_IF_OFFSET: u16
+pub const ifd::walk::STRIP_BYTE_COUNTS: u16
+pub const ifd::walk::STRIP_OFFSETS: u16
+pub const ifd::walk::SUB_IFDS: u16
+pub const ifd::walk::TILE_BYTE_COUNTS: u16
+pub const ifd::walk::TILE_OFFSETS: u16
+pub trait ifd::walk::Rules
+pub fn ifd::walk::Rules::cancelled(&self) -> bool
+pub fn ifd::walk::Rules::chunk_use(&self, &ifd::walk::Walk<'_>, &ifd::walk::Ifd, bool, &[u64], &[u64]) -> alloc::vec::Vec<ifd::walk::ChunkUse>
+pub fn ifd::walk::Rules::entry(&self, &ifd::walk::Walk<'_>, &ifd::walk::Ifd, usize) -> ifd::walk::Fate
+pub fn ifd::walk::Rules::extents(&self, &ifd::walk::Walk<'_>, &ifd::walk::Ifd) -> alloc::vec::Vec<ifd::walk::ExtentRule>
+pub fn ifd::walk::Rules::follows(&self, &ifd::walk::Walk<'_>, &ifd::walk::Ifd, ifd::walk::Kind, &ifd::walk::Entry) -> bool
+pub fn ifd::walk::Rules::follows_next(&self, &ifd::walk::Walk<'_>, &ifd::walk::Ifd, ifd::walk::Kind) -> bool
+pub fn ifd::walk::Rules::header_extension(&self, &ifd::walk::Walk<'_>) -> core::option::Option<(u64, ifd::walk::Fate)>
+pub fn ifd::walk::Rules::ifd(&self, &ifd::walk::Walk<'_>, &ifd::walk::Ifd) -> ifd::walk::Fate
+pub fn ifd::walk::Rules::image_data(&self, &ifd::walk::Walk<'_>, &ifd::walk::Ifd) -> ifd::walk::Fate
+pub fn ifd::walk::Rules::jpeg_stream(&self, &ifd::walk::Walk<'_>, &ifd::walk::Ifd) -> ifd::walk::Fate
+pub fn ifd::walk::Rules::magic(&self, u16) -> bool
+pub fn ifd::walk::Rules::pointer(&self, ifd::walk::Kind, &ifd::walk::Entry) -> core::option::Option<(ifd::walk::Kind, &'static str)>
+pub fn ifd::walk::Rules::pointer_offsets(&self, &ifd::walk::Walk<'_>, &ifd::walk::Entry, usize) -> alloc::vec::Vec<u64>
+pub fn ifd::walk::Rules::rejects(&self, &ifd::walk::Walk<'_>, u64, ifd::walk::Kind) -> core::option::Option<&'static str>
+pub fn ifd::walk::Rules::value(&self, &ifd::walk::Walk<'_>, &ifd::walk::Ifd, usize) -> ifd::walk::Fate
+pub fn ifd::walk::Rules::value_tail(&self, &ifd::walk::Walk<'_>, &ifd::walk::Ifd, usize) -> core::option::Option<(u64, ifd::walk::Fate)>
+pub fn ifd::walk::add_note(&mut alloc::vec::Vec<alloc::string::String>, alloc::string::String)
+pub fn ifd::walk::chunk_geometry(&ifd::walk::Walk<'_>, &ifd::walk::Ifd, bool, usize) -> core::option::Option<alloc::vec::Vec<ifd::walk::ChunkGeom>>
+pub fn ifd::walk::default_chunk_use(&ifd::walk::Walk<'_>, &ifd::walk::Ifd, bool, &[u64], &[u64]) -> alloc::vec::Vec<ifd::walk::ChunkUse>
+pub fn ifd::walk::emit(&mut zencodec::inventory::Inventory, core::option::Option<zencodec::inventory::PartId>, ifd::walk::Cand) -> core::result::Result<(), zencodec::inventory::InventoryError>
+pub fn ifd::walk::emit_top(&mut zencodec::inventory::Inventory, &[u8], alloc::vec::Vec<ifd::walk::Cand>, u64, (zencodec::inventory::Disposition, core::option::Option<alloc::string::String>)) -> core::result::Result<(), zencodec::inventory::InventoryError>
+pub fn ifd::walk::get(&[u8], u64, u64) -> core::option::Option<&[u8]>
+pub fn ifd::walk::kind_name(ifd::walk::Kind) -> alloc::string::String
+pub fn ifd::walk::place(&mut ifd::walk::Walk<'_>, &dyn ifd::walk::Rules, alloc::vec::Vec<ifd::walk::Cand>) -> ifd::walk::Placement
+pub fn ifd::walk::push_note(&mut alloc::string::String, &str)
+pub fn ifd::walk::type_name(u16) -> alloc::borrow::Cow<'static, str>
+pub fn ifd::walk::type_size(u16) -> core::option::Option<u64>
+pub fn ifd::walk::union_fate(&ifd::walk::Ifd, impl core::ops::function::Fn(ifd::walk::Kind, bool) -> ifd::walk::Fate) -> ifd::walk::Fate
+pub fn ifd::walk::walk<'a>(&'a [u8], u64, u64, &dyn ifd::walk::Rules) -> ifd::walk::Walk<'a>
+pub fn ifd::walk::walk_ifd<'a>(&'a [u8], u64, u64, ifd::walk::Layout, u64, ifd::walk::Kind, alloc::string::String, u8, &dyn ifd::walk::Rules) -> ifd::walk::Walk<'a>
+pub mod rewrite
+pub struct rewrite::Context<'a>
+pub fn rewrite::Context<'a>::decompress(&self, zencodec::metadata_rewrite::Compression, &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, zencodec::metadata_rewrite::Error>
+pub fn rewrite::Context<'a>::exif(&self, &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, zencodec::metadata_rewrite::Error>
+pub fn rewrite::Context<'a>::icc(&self, &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, zencodec::metadata_rewrite::Error>
+pub fn rewrite::Context<'a>::new(&zencodec::metadata_rewrite::Request<'a>) -> core::result::Result<Self, zencodec::metadata_rewrite::Error>
+pub fn rewrite::Context<'a>::services(&self) -> core::result::Result<&dyn zencodec::metadata_rewrite::Services, zencodec::metadata_rewrite::Error>
+pub fn rewrite::Context<'a>::with_input(self, &'a [u8]) -> Self
+pub fn rewrite::Context<'a>::with_xmp_editing(self, bool) -> Self
+pub fn rewrite::Context<'a>::xmp(&self, &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, zencodec::metadata_rewrite::Error>
+pub struct rewrite::PlanBuilder<'a>
+pub fn rewrite::PlanBuilder<'a>::append(&mut self, &rewrite::Context<'_>, Self, usize) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
+pub fn rewrite::PlanBuilder<'a>::finish(self) -> core::result::Result<zencodec::metadata_rewrite::Plan<'a>, zencodec::metadata_rewrite::Error>
+pub fn rewrite::PlanBuilder<'a>::inject_after_first(&mut self, &rewrite::Context<'_>, alloc::vec::Vec<u8>, &'static str) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
+pub fn rewrite::PlanBuilder<'a>::keep(&mut self, &rewrite::Context<'a>, core::ops::range::Range<usize>, &'static str) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
+pub fn rewrite::PlanBuilder<'a>::new() -> Self
+pub fn rewrite::PlanBuilder<'a>::output_len(&self) -> usize
+pub fn rewrite::PlanBuilder<'a>::record(&mut self, &rewrite::Context<'_>, core::ops::range::Range<usize>, &'static str, zencodec::metadata_rewrite::Action, core::option::Option<alloc::borrow::Cow<'a, [u8]>>) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
+pub fn rewrite::PlanBuilder<'a>::remove(&mut self, &rewrite::Context<'_>, core::ops::range::Range<usize>, &'static str) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
+pub fn rewrite::PlanBuilder<'a>::remove_kept_range(&mut self, &rewrite::Context<'_>, &core::ops::range::Range<usize>) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
+pub mod xmp
+pub mod xmp::container
+#[non_exhaustive] pub enum xmp::container::ItemSemantic
+pub xmp::container::ItemSemantic::ConfidenceMap
+pub xmp::container::ItemSemantic::DepthMap
+pub xmp::container::ItemSemantic::GainMap
+pub xmp::container::ItemSemantic::Other(alloc::string::String)
+pub xmp::container::ItemSemantic::Primary
+pub fn xmp::container::ItemSemantic::as_xmp_str(&self) -> &str
+pub fn xmp::container::ItemSemantic::from_xmp(&str) -> Self
+#[non_exhaustive] pub struct xmp::container::ContainerItem
+pub xmp::container::ContainerItem::length: core::option::Option<usize>
+pub xmp::container::ContainerItem::mime: alloc::string::String
+pub xmp::container::ContainerItem::padding: core::option::Option<usize>
+pub xmp::container::ContainerItem::semantic: xmp::container::ItemSemantic
+pub fn xmp::container::ContainerItem::primary(impl core::convert::Into<alloc::string::String>) -> Self
+pub fn xmp::container::ContainerItem::secondary(xmp::container::ItemSemantic, impl core::convert::Into<alloc::string::String>, usize) -> Self
+pub struct xmp::container::Directory<'a>
+pub fn xmp::container::Directory<'a>::items(&self) -> impl core::iter::traits::exact_size::ExactSizeIterator<Item = &xmp::container::ContainerItem>
+pub fn xmp::container::Directory<'a>::parse(&'a str) -> core::result::Result<Self, xmp::Error>
+pub fn xmp::container::Directory<'a>::rewrite_item_lengths(&self, &[(&str, usize)]) -> core::result::Result<alloc::string::String, xmp::Error>
+pub fn xmp::container::generate_container_directory(&[xmp::container::ContainerItem]) -> alloc::string::String
+pub fn xmp::container::parse_container_items(&str) -> alloc::vec::Vec<xmp::container::ContainerItem>
+pub mod xmp::gainmap
+#[non_exhaustive] pub enum xmp::gainmap::XmpError
+pub xmp::gainmap::XmpError::Invalid(alloc::string::String)
+pub xmp::gainmap::XmpError::LengthLimit
+pub xmp::gainmap::XmpError::LengthLimit::got: usize
+pub xmp::gainmap::XmpError::LengthLimit::max: usize
+pub xmp::gainmap::XmpError::NotUltraHdr
+pub const xmp::gainmap::CONTAINER_NAMESPACE: &str
+pub const xmp::gainmap::HDRGM_NAMESPACE: &str
+pub const xmp::gainmap::ITEM_NAMESPACE: &str
+pub const xmp::gainmap::MAX_XMP_LENGTH: usize
+pub fn xmp::gainmap::generate_gainmap_xmp(&zencodec::gainmap::GainMapParams) -> alloc::string::String
+pub fn xmp::gainmap::generate_primary_xmp(usize) -> alloc::string::String
+pub fn xmp::gainmap::generate_primary_xmp_with_items(&[xmp::container::ContainerItem]) -> alloc::string::String
+pub fn xmp::gainmap::generate_xmp(&zencodec::gainmap::GainMapParams, usize) -> alloc::string::String
+pub fn xmp::gainmap::generate_xmp_with_items(&zencodec::gainmap::GainMapParams, &[xmp::container::ContainerItem]) -> alloc::string::String
+pub fn xmp::gainmap::parse_xmp(&str) -> core::result::Result<(zencodec::gainmap::GainMapParams, core::option::Option<usize>), xmp::gainmap::XmpError>
+pub fn xmp::gainmap::parse_xmp_full(&str) -> (core::option::Option<zencodec::gainmap::GainMapParams>, alloc::vec::Vec<xmp::container::ContainerItem>)
+#[non_exhaustive] pub enum xmp::Error
+pub xmp::Error::Duplicate(alloc::string::String)
+pub xmp::Error::Limit
+pub xmp::Error::Structure(alloc::string::String)
+pub xmp::Error::Xml(alloc::string::String)
+#[non_exhaustive] pub struct xmp::Field
+pub fn xmp::Field::path(&self) -> &str
+pub fn xmp::Field::value(&self) -> &str
+pub struct xmp::Packet<'a>
+pub fn xmp::Packet<'a>::fields(&self) -> core::result::Result<alloc::vec::Vec<xmp::Field>, xmp::Error>
+pub fn xmp::Packet<'a>::parse(&'a str) -> core::result::Result<Self, xmp::Error>
+pub fn xmp::Packet<'a>::property(&self, &str, &str) -> core::result::Result<core::option::Option<alloc::vec::Vec<alloc::string::String>>, xmp::Error>
+pub fn xmp::Packet<'a>::resource_sequence(&self, &str, &str, &str, &str) -> core::result::Result<alloc::vec::Vec<alloc::vec::Vec<xmp::Property>>, xmp::Error>
+pub struct xmp::Property
+pub fn xmp::Property::name(&self) -> &str
+pub fn xmp::Property::namespace(&self) -> &str
+pub fn xmp::Property::value(&self) -> &str
+
+## trait impls (25 types)
+
+apple::AppleHdrInfo: Clone, Copy, Debug, Default, PartialEq
+apple::AppleMakerNote<'a>: Debug
+apple::MakerNoteEntry<'a>: Clone, Copy, Debug, Eq, PartialEq
+apple::MakerNoteEntryError: Clone, Copy, Debug, Eq, PartialEq
+audit::Change<'a>: Debug, Eq, PartialEq
+audit::Entry: Clone, Debug, Eq, PartialEq
+audit::Finding: Clone, Debug, Eq, PartialEq
+audit::Report: Clone, Debug, Default, Eq, PartialEq
+bplist::PlistValue: Clone, Debug, PartialEq
+ifd::walk::ChunkGeom: Clone, Copy, Debug
+ifd::walk::ChunkUse: Clone, Debug, Default
+ifd::walk::Entry: Clone, Debug
+ifd::walk::Ifd: Debug
+ifd::walk::Kind: Clone, Copy, Debug, Eq, PartialEq
+ifd::walk::Layout: Clone, Copy, Debug
+ifd::walk::Placed: Default
+rewrite::Context<'a>: Clone, Deref
+rewrite::PlanBuilder<'a>: Debug, Default
+xmp::Error: Clone, Debug, Display, Eq, Error, PartialEq
+xmp::Field: Clone, Debug, Eq, PartialEq
+xmp::Packet<'a>: Debug
+xmp::Property: Clone, Debug, Eq, PartialEq
+xmp::container::ContainerItem: Clone, Debug, Eq, PartialEq
+xmp::container::ItemSemantic: Clone, Debug, Eq, PartialEq
+xmp::gainmap::XmpError: Debug, Display, Error
+
+## auto traits
+
+31 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+ifd::walk::Walk<'a>: !Freeze !RefUnwindSafe !Sync
+rewrite::Context<'a>: !RefUnwindSafe !Send !Sync !UnwindSafe

@@ -211,12 +211,20 @@ pub trait DecodeJob<'a>: Sized {
     /// for cancellation and resource limits. The result must pass
     /// [`Inventory::validate`](crate::inventory::Inventory::validate).
     ///
-    /// Default: `Ok(None)`, meaning this decoder does not enumerate parts. A
-    /// codec that implements it also sets
+    /// Default: an [`UnsupportedOperation::Inventory`](crate::UnsupportedOperation::Inventory)
+    /// error. Codecs gate the walker behind a default-off `inventory` feature;
+    /// this method stays callable when that feature is disabled. A codec that
+    /// enables it also sets
     /// [`DecodeCapabilities::with_inventory`](crate::decode::DecodeCapabilities::with_inventory).
-    fn inventory(&self, data: &[u8]) -> Result<Option<crate::inventory::Inventory>, Self::Error> {
+    /// The shared error envelope lets this default work without changing the
+    /// published bounds on [`Self::Error`]. Implementations preserve native
+    /// errors as its detail and retain location traces.
+    fn inventory(
+        &self,
+        data: &[u8],
+    ) -> Result<crate::inventory::Inventory, crate::At<crate::CodecError>> {
         let _ = data;
-        Ok(None)
+        Err(crate::inventory::unsupported())
     }
 
     // --- Decode hints (optional, decoder may ignore) ---

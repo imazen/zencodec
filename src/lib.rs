@@ -74,6 +74,8 @@ mod info;
 pub mod inventory;
 mod limits;
 mod metadata;
+/// Metadata-only rewrite requests, reports and runtime service contracts.
+pub mod metadata_rewrite;
 mod negotiate;
 mod orientation;
 mod output;

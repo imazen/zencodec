@@ -24,4 +24,4 @@ pub const fn CodecIoKind::kind(&self) -> core::option::Option<core::io::error::E
 
 ## trait impls (1 types)
 
-CodecIoKind: From<&core::io::error::Error>, From<core::io::error::ErrorKind>
+CodecIoKind: From<&std::io::error::Error>, From<core::io::error::ErrorKind>

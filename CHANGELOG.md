@@ -1,13 +1,20 @@
 # Changelog
 
-All notable changes to zencodec are documented here. Sections below the
-`zencodec-testkit` heading refer to the root `zencodec` crate.
+Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELOG.md).
 
 ## zencodec-testkit
 
 ### [Unreleased]
 
+#### QUEUED BREAKING CHANGES
+
+- None against crates.io zencodec-testkit 0.1.0.
+
 #### Added
+
+- `check_inventory_dispatch` compares generic/dynamic results and disabled-operation
+  errors. `check_all` also checks the disabled inventory contract without changing
+  its published generic bounds; erased-dispatch checks remain separately callable.
 - **`check_inventory`** (in `check_all` when a decoder declares `inventory`): on a valid file,
   the file plus appended junk, and every truncation, the inventory exists, validates, and never
   claims the junk as consumed. The `reference` codec implements `inventory` as the worked example.
@@ -102,6 +109,52 @@ removes that whole class).
 
 ## [Unreleased]
 
+### QUEUED BREAKING CHANGES
+
+- None against crates.io zencodec 0.1.26 for the metadata extraction. Unpublished
+  inventory/metadata PR consumers require migration; those are recorded separately.
+
+### Added
+
+- Add `metadata_rewrite` request, report, output-plan and runtime-service contracts
+  without a dependency on zenmeta or a codec. Existing published metadata APIs
+  remain in place; the new contract is additive relative to 0.1.26 (`a31a9b68`).
+
+- `LimitKind::InventoryParts` and categorization for `InventoryError`: hitting
+  the part cap is a recoverable resource failure with its typed cause retained;
+  inconsistent maps are internal errors. New variants append after released
+  discriminants. Malformed file bytes remain reportable inventory parts (`c1c3292f`).
+
+- Retain the exact animation timing additions from `20310944`, already used by
+  PNG main: `animation::FrameDuration`, exact frame accessors/constructors,
+  and static/dynamic `push_frame_timed`. Existing millisecond APIs remain.
+  This coordinated integration preserves both inventory and animation APIs;
+  it adds no video implementation. See `docs/animation-timing.md`.
+  New unsupported-operation variants follow all released variants, preserving
+  the numeric discriminants checked against crates.io 0.1.26.
+
+- `UnsupportedOperation::Inventory` and an inventory default returning the
+  existing `At<CodecError>` envelope, without new bounds on `DecodeJob::Error`.
+  The inventory method itself is new relative to crates.io 0.1.26.
+- Metadata additions extracted from the metadata portion of PR 130 (source
+  `27cfae5d`, including PRs 123–125 and 128): `exif::Ifd`, `exif::EntryRef`,
+  `Exif::entries`, and separate color, time-offset, device-ID, camera-owner and
+  image-ID queries and `ExifPolicy` fields/builders. Existing type ownership stays
+  in zencodec; XMP/audit implementations belong in the new zenmeta crate.
+
+### Changed
+
+- Unpublished inventory callers now receive `Result<Inventory, At<CodecError>>`
+  (dynamic dispatch retains `BoxedError`), replacing `Result<Option<Inventory>, _>`.
+  Disabled implementations return unsupported; no released inventory API changes.
+- EXIF publishing presets retain validated color declarations and remove camera
+  ownership independently of creator attribution. Timestamp/camera opt-ins no
+  longer automatically retain UTC offsets or device/image identifiers; those have
+  explicit categories. These are behavior changes from crates.io 0.1.26 even
+  though the non-exhaustive policy's new fields are source-compatible.
+- EXIF rewrites drop opaque MakerNotes and restrict Interop retention to validated
+  color entries. Byte-exact `retain(..., KEEP_ALL)` remains the preservation path.
+
 ### Fixed
 
 - Preserve the HDR diffuse-white luminance anchor when metadata retention keeps
@@ -110,12 +163,6 @@ removes that whole class).
   Previously filtering silently removed the anchor and could cause downstream
   color processing to use a different luminance fallback.
 
-### Added
-- Exact `animation::FrameDuration`, exact duration accessors/constructors on
-  animation frames, and `push_frame_timed` on static and dynamic animation
-  encoders. Exact timing is represented or rejected before accepting a frame;
-  the default rejects rather than falling back to lossy millisecond timing.
-  See `docs/animation-timing.md` for native format limits and release migration.
 
 ### Changed
 

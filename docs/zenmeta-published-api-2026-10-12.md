@@ -148,3 +148,97 @@ version component merely because a source file changes ownership. Re-run the
 registry comparison on each final package and test old external implementors.
 Coordinate unpublished PR dependencies explicitly; existing git consumers can
 still break even though the released API remains intact.
+
+## Coordinated animation dependency
+
+PNG main already uses exact rational animation timing from zencodec `20310944`.
+The metadata integration retains those existing additions so the consumer
+can use one shared contract source. Its millisecond constructors/accessors
+remain available. The first combined semver check caught changed numeric
+discriminants from inserting `AnimationTiming` between released variants;
+the combined source appends the new variant to preserve those values. This
+is a compatibility repair to an unreleased proposal, not a video feature.
+
+After that repair, `just metadata-semver` passes all 196 enabled checks
+against 0.1.26 (58 skipped by the tool). Workspace tests, isolated zenmeta
+features, all-target clippy, Rust 1.88 and WASI checks pass. The API snapshot
+runner also records zenmeta's own feature-dependent surface and verifies
+that repository instruction files are excluded from its package.
+
+## Integration evidence at c1c3292f
+
+The integration source `c1c3292ff10f386191780ad407526951165da47a`
+was checked with `just metadata-error-check`, including the registry comparison
+above: 196 checks passed and 58 were skipped. The review head `d2407559`
+only adds migration documentation after that source revision. Re-run this gate
+if source changes again; this is not a guarantee for future changes.
+
+| Change relative to 0.1.26 | Compatibility assessment |
+|---|---|
+| New inventory module, capability and default trait operation | Additive; existing DecodeJob implementations acquire a default unsupported result without a new associated-error bound |
+| Inventory returns a value or typed error, rather than Option | Change to an unpublished git API only |
+| EXIF entries iterator and policy categories | Additive source API; existing non-exhaustive policy remains owned by zencodec |
+| EXIF filtering retains validated color and separates identifiers/time offsets | Observable behavior change; recorded in CHANGELOG, not certified by semver-checks |
+| Opaque MakerNotes dropped during EXIF rewriting | Observable behavior change; byte-exact KEEP_ALL remains available |
+| HDR diffuse-white survives retained HDR metadata | Behavior repair recorded in CHANGELOG |
+| Shared parsers extracted to zenmeta | Published zencodec types and useful baseline remain; codec wrappers retain their own public type identity |
+| Combined animation timing additions | Released UnsupportedOperation discriminants preserved; check caught and repaired the initial drift |
+
+The tool does not prove behavioral equivalence, arbitrary feature combinations,
+or downstream associated-type compatibility. Codec audits therefore also
+inspect associated error types manually. Their existing main-branch breaks
+must not be attributed to the inventory addition or silently omitted from
+release notes.
+
+### Published-version recheck
+
+On 2026-10-12, [docs.rs latest](https://docs.rs/crate/zencodec/latest) still
+resolved to 0.1.26, matching this audit's downloaded release artifact. A fresh
+crates.io API request was inaccessible and lib.rs returned HTTP 403; neither
+failed request is treated as additional registry evidence.
+
+### Rewrite contracts
+
+The additional `metadata_rewrite` module contains only shared requests, runtime
+service interfaces and completed plan/report types. Existing published items
+are unchanged. After adding this module, `just metadata-semver` again passed
+196 checks with 58 skipped against 0.1.26. Codec planner integration is separate
+validation; the new `Plan::from_parts` constructor requires codec validation
+and does not itself certify arbitrary container data.
+
+### Final shared-contract revision check
+
+`just metadata-semver` was rerun on source revision
+`a31a9b680e54d5fea555c44b0d70c65802087df3` against published 0.1.26:
+196 checks passed, 58 skipped; the tool reported `no semver update required`.
+This includes the codec-owned rewrite request/plan contracts. It is a signature
+audit with the stated skipped checks, not a guarantee of behavioral identity.
+
+The integration keeps public rewrite signatures in zencodec. JPEG, PNG and JXL
+call zenmeta privately; zencodecs dispatches to those planners. Direct codec
+tests, including independent readers, are recorded in each codec report. The
+zencodecs regression suite passes with those planners, and application-supplied
+compression/XML callbacks preserve one-shot timeout reasons through I/O adapters.
+The all-crate replacement PR set and final remote CI verification are still open.
+
+### GContainer implementation revision
+
+The follow-up `a81daf76` adds `zenmeta::xmp::container::Directory` with
+`parse`, `items`, and `rewrite_item_lengths`. This is zenmeta's own advanced
+API, behind its default-off `xmp` feature. JPEG calls it privately; its public
+wrapper types remain JPEG-owned. The generated zenmeta API snapshot includes
+these additions.
+
+`git diff a31a9b6 a81daf7 -- src Cargo.toml` is empty: the zencodec source and
+manifest used by the final 0.1.26 compatibility comparison are unchanged.
+Directory parsing/editing passed native and i686 tests, a no_std WASM check,
+and inspection by Python ElementTree and ExifTool. This validates the shared
+editor; the JPEG lossless consumer still has separate integration gates.
+
+### Final main reconciliation
+
+The metadata integration was merged with main `675c472b` on 2026-10-12.
+`just metadata-check metadata-semver api-doc` passes on the combined tree:
+196 compatibility checks pass and 58 are skipped against 0.1.26; the tool
+reports no required semver update. Shared source differs from `a81daf76`
+only in CodecSet documentation; contract signatures remain identical.

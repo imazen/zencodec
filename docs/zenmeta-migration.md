@@ -1,8 +1,41 @@
 # zenmeta source and test migration
 
 This is the implementation map for the [design](zenmeta-design.md), based on
-source inspection on 2026-10-12. No extraction is claimed complete here. Read the
-[release audit](zenmeta-published-api-2026-10-12.md) before changing public paths.
+source inspection and integration on 2026-10-12. The status below distinguishes
+verified migrations from remaining work. Read the [release audit](zenmeta-published-api-2026-10-12.md) before changing public paths.
+
+## Integration status (2026-10-12)
+
+Changes remain on per-repository `review/zenmeta-integration` bookmarks pending
+final API review and PR splitting. These are not crate releases.
+
+| Owner | Verified work | Remaining work |
+|---|---|---|
+| zencodec | Additive baseline, inventory and rewrite contracts; 0.1.26 semver comparison at `a31a9b68` passes; no zencodec source/manifest changes through `a81daf76` | Final replacement PR and current-revision remote CI |
+| zenmeta | XMP/audit/display/Apple/IFD extraction, bounded plist and rewrite services; namespace-aware GContainer span editor (`a81daf76`), native/i686/WASM and independent XML readers | Final replacement PR and consumer pin normalization |
+| ultrahdr | Apple/plist compatibility wrappers, PR35 policy assembly, native/i686/oracle checks; full CI at `3c8e2cb2` passes | Coordinate the new zenmeta pin with the pending JPEG consumer; the mixed-pin workspace fails nominal-type checks |
+| TIFF | Shared-IFD inventory, architecture-specific ICC assertions and one-shot stop handling; native/i686 checks and zenextras CI at `21e5d651` pass | Final API review and dependency normalization |
+| RAW | Both backend inventories, DNG/RAF/CR3 stop propagation, original regression/oracle cases; final dependency checks at `ca14fae3` pass locally | Current-revision remote CI and final review |
+| JPEG | PRs210/225/221, ISO-first decoding, private zenmeta wrappers, codec-owned rewrite plan, independent readers; native/shared EXIF assertions (`fea3707a`); shared ICC validation (`c7d341a9`) | Lossless recovery is local: native/i686/oracle/fuzz and both library feature suites pass, but the existing gain-map layout assertion awaits approval. Legacy extended-XMP concatenation and recompression's secondary-image handling remain separate gaps |
+| HEIC | PRs51/57, private Apple delegation, typed limits, native/i686/oracle checks; full CI at `dde352e0` passes | Final dependency normalization and review |
+| zenflate | Default-off count-only scanner, native/i686 differential tests and semver; full CI at `43c10e3d` passes | Final replacement PR |
+| PNG | Inventory plus codec-owned rewrite planner, typed limits/cancellation, native/i686/oracle checks (`97f6bbaf`) | Current-revision remote CI and final dependency normalization |
+| JPEG 2000 / SVG / PDF / EXR | Original inventory/review/fuzz/oracle tests retained; native/i686 checks and zenextras CI at `21e5d651` pass | Final API review and dependency normalization |
+| JXL | Inventory and codec-owned rewrite planner, decoder corpus and independent readers; native/i686/API checks and full CI at `3c622f09` pass | Final replacement PR and coordinated pins |
+| WebP | Inventory, approved typed InputSize assertion, native/i686/no_std/oracle/mutation checks; cross corpus-cache repair (`9cfa2396`) | Remote CI for the repaired workflow and final review |
+| AVIF | Three encoders × two decoders for metadata and gain-map transport; combined animation contracts and SVT color-matrix correction pass locally, including native SVT adapter tests | Existing AOM 10-bit RGBA routing assertion awaits approval; remote CI at `399b5754` fails that same assertion. Final merged revision and pins are not pushed |
+| GIF | Inventory, approved typed global part cap (`053aff1a`); i686 CI corpus-cache permission failure repaired (`6a38e3ae`) without changing assertions | Remote CI for the cache repair and final review |
+| Bitmaps | Six formats use typed InputSize; QOI and long PNM/HDR/TGA/BMP scans retain one-shot stop reasons (`e8933609`); local checks pass | Current-revision remote CI and final review |
+| zenpipe / zencodecs | JPEG/PNG/JXL planners delegated to codecs; standalone metadata-service library independent of zencodecs; original dispatch tests and local all-codec build pass | Final remote dependency pins, API review, commit and replacement PR |
+
+The semver audit found existing unreleased breaks independently of this
+extraction: TIFF's six associated error types differ from 0.1.2; RAW's error
+variants differ from 0.2.0; PNG's nine associated error types and three auto
+traits differ from 0.1.4. Their codec changelogs retain those queued breaks.
+JPEG 0.8.4 and PDF 0.2.0 also have pre-existing main-branch breaks, documented
+in their integration audits. ultrahdr-rs latest resolvable published version is
+0.3.5: local 0.4.1 headings do not establish a registry release.
+Do not infer complete compatibility from the additive inventory contract.
 
 ## Ownership
 
@@ -78,10 +111,9 @@ behavior separately from new stricter operations. A stricter public operation
 may reject what a legacy helper accepts; its name and result must make that
 intent explicit.
 
-Confirm the source-license boundary before copying code: zencodec and ultrahdr
-sources use permissive licenses; the proposed zenifd and current zenjpeg sources
-use AGPL-3.0-only OR LicenseRef-Imazen-Commercial. No relicensing is implied by
-the proposed ownership change.
+The copyright holder authorized Apache-2.0 OR MIT on 2026-10-12 for controlled
+source moved into zenmeta. Preserve third-party notices and dependency licenses.
+The shared source record lives in [zenmeta provenance](../zenmeta/PROVENANCE.md).
 
 ### TIFF and RAW
 
@@ -176,3 +208,48 @@ testkit checks. Do not attempt to keep correctness synchronized through copied
 tag tables, copied parsers or prose alone. Where two interpretations intentionally
 remain, pin their differences with existing regression fixtures and an explicit
 policy at the shared parser boundary.
+
+## Priority and additional JPEG review findings (2026-10-12)
+
+Implementation order is now JXL, WebP, then AVIF backends. The imported GIF
+work is preserved as a WIP change while these take priority.
+
+A separate JPEG metadata review reports an unpushed stack based on `007920fb`,
+ending at `3c8f4057`. This stack is independent of PR225 and has **not** been
+incorporated into the integration branch. Its reported changes need source
+review and combined testing before the JPEG migration is complete:
+
+| Commit | Reported change |
+|---|---|
+| `ea224f98` | Write JPEG EXIF framing exactly once |
+| `a76f7c41` | Transport bare TIFF EXIF through the zencodec boundary |
+| `1581bf08` | Read ISO gain-map records with ISO preference over XMP |
+| `da8d2982` | ISO-only gain-map output omits hdrgm XMP |
+| `e008374e` | Preserve SDR-base segments and attach the matching ICC profile |
+| `3c8f4057` | Record oversized EXIF failures |
+
+The review also reports unresolved oversized EXIF panic/truncation, BT.709
+assumptions during HDR reconstruction, missing ISO/XMP disagreement reporting,
+and missing fuzz coverage of the new ISO gain-map decode path. These are
+reported findings, not independently reproduced measurements in this integration.
+A public ICC setter is another API usability question: EncoderSegments is not
+nameable through the normal public encode module in that reviewed tree.
+
+Reconcile the EXIF byte representation across JPEG/PNG/TIFF/WebP/HEIF, including
+existing released behavior, before changing the shared contract documentation.
+Retain the review's libultrahdr, ExifTool and EXIF round-trip tests when importing
+the stack. Existing inventory/parser oracles do not cover these encoding and
+HDR reconstruction issues.
+
+### Priority validation update
+
+JXL, WebP and AVIF integrations are now on their review branches. Their
+codec-owned reports distinguish existing published API breaks from the additive
+inventory feature: [JXL](https://github.com/imazen/zenjxl/blob/review/zenmeta-integration/docs/INVENTORY.md),
+[WebP](https://github.com/imazen/zenwebp/blob/review/zenmeta-integration/docs/metadata-integration.md),
+[AVIF](https://github.com/imazen/zenavif/blob/review/zenmeta-integration/docs/METADATA_INTEGRATION.md).
+PNG `e9bbecbc`, HEIC `eab27643`, ultrahdr `4db930c8` and zenflate `43c10e3d`
+now have successful remote CI runs. JPEG's Windows ARM/i686 corpus failures
+are addressed by serial prefetch and a cross cache mount (`709f78ff`), pending
+remote verification. The remote JPEG colorspace session also has interrupted
+lossless/metadata work outside the M3 stack; it has not been reconciled yet.

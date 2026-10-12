@@ -187,3 +187,11 @@ CHANGELOGs. Full design context:
    `ConvertStep::{ExpandNarrowToFull,ContractFullToNarrow}` only when a
    consumer actually needs to cross the boundary; known design points are
    recorded in the `SignalRange` docs.
+
+## Known Bugs
+
+- Fixed during metadata/timing integration (2026-10-12): the existing timing
+  proposal inserted `AnimationTiming` in the middle of `UnsupportedOperation`,
+  changing numeric casts of six released variants. Append new variants after
+  the released ones. `just metadata-semver` compares crates.io 0.1.26 and catches
+  this even though the enum is non-exhaustive.

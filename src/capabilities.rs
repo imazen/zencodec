@@ -47,6 +47,8 @@ pub enum UnsupportedOperation {
     /// ([`with_gain_map_pixels`](crate::encode::EncodeJob::with_gain_map_pixels) /
     /// [`with_gain_map_encoded`](crate::encode::EncodeJob::with_gain_map_encoded)).
     GainMapEncode,
+    /// Structural inventory is unavailable (including a disabled Cargo feature).
+    Inventory,
     /// Exact rational duration is not representable by this animation encoder.
     AnimationTiming,
 }
@@ -65,6 +67,7 @@ impl UnsupportedOperation {
             Self::PixelFormat => "pixel_format",
             Self::MultiImageDecode => "multi_image_decode",
             Self::GainMapEncode => "gain_map_encode",
+            Self::Inventory => "inventory",
         }
     }
 }
@@ -339,6 +342,7 @@ impl EncodeCapabilities {
             UnsupportedOperation::PullEncode => self.encode_from,
             UnsupportedOperation::AnimationEncode => self.animation,
             UnsupportedOperation::GainMapEncode => self.gain_map,
+            UnsupportedOperation::Inventory => false,
             UnsupportedOperation::AnimationTiming
             | UnsupportedOperation::DecodeInto
             | UnsupportedOperation::RowLevelDecode
@@ -754,6 +758,7 @@ impl DecodeCapabilities {
             UnsupportedOperation::RowLevelDecode => self.streaming,
             UnsupportedOperation::AnimationDecode => self.animation,
             UnsupportedOperation::MultiImageDecode => self.multi_image,
+            UnsupportedOperation::Inventory => self.inventory,
             UnsupportedOperation::AnimationTiming
             | UnsupportedOperation::RowLevelEncode
             | UnsupportedOperation::PullEncode
