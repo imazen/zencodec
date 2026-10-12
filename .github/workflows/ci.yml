@@ -52,7 +52,7 @@ jobs:
 
 
       - name: Test
-        run: cargo test
+        run: cargo test --workspace --all-features
 
       - name: Check no_std (no codec feature)
         run: cargo check --no-default-features
@@ -84,7 +84,7 @@ jobs:
 
 
       - name: Test (i686/QEMU)
-        run: cross test --target i686-unknown-linux-gnu
+        run: cross test --workspace --all-features --target i686-unknown-linux-gnu
 
   # ==========================================================================
   # WASM check
@@ -106,6 +106,9 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
+
+      - name: Check zenmeta WASM feature set
+        run: cargo check -p zenmeta --target wasm32-wasip1 --no-default-features --features apple,audit,inventory,xmp
 
       - name: Check WASM (no_std)
         run: cargo check --target wasm32-wasip1 --no-default-features
@@ -132,7 +135,7 @@ jobs:
 
 
       - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 
   # ==========================================================================
@@ -170,22 +173,8 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Patch path deps to git refs
-        shell: bash
-        run: |
-          sed \
-            -e 's|path = "\.\./zenpixels/zenpixels"|git = "https://github.com/imazen/zenpixels"|g' \
-            -e 's|path = "\.\./zenpixels/zenpixels-convert"|git = "https://github.com/imazen/zenpixels"|g' \
-            Cargo.toml > Cargo.toml.ci && \
-            mv Cargo.toml.ci Cargo.toml
-          # Add [patch.crates-io] only if not already present
-          if ! grep -q '\[patch.crates-io\]' Cargo.toml; then
-            printf '\n[patch.crates-io]\nzenpixels = { git = "https://github.com/imazen/zenpixels" }\n' >> Cargo.toml
-          fi
-          rm -f Cargo.lock
-
       - name: Check MSRV
-        run: cargo +1.88.0 check
+        run: cargo +1.88.0 check -p zencodec -p zenmeta --all-features
 
   # ==========================================================================
   # Semver check (API compatibility)
@@ -217,7 +206,7 @@ jobs:
         # `continue-on-error`, which previously let real breaks pass green). The
         # crate is non-breaking vs 0.1.20; intentional breaks must bump the version
         # and clear CHANGELOG's QUEUED BREAKING list.
-        run: cargo semver-checks check-release
+        run: cargo semver-checks check-release -p zencodec --baseline-version 0.1.26 --all-features
 
   # ==========================================================================
   # Code coverage
@@ -252,3 +241,18 @@ jobs:
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  metadata-features:
+    name: Metadata feature (${{ matrix.feature }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        feature: [std, audit, xmp, apple, inventory]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Test isolated feature
+        run: cargo test -p zenmeta --no-default-features --features ${{ matrix.feature }}
+      - name: Test empty feature set
+        run: cargo test -p zenmeta --no-default-features

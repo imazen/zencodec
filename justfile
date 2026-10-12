@@ -32,8 +32,12 @@ metadata-check:
     cargo check -p zenmeta --no-default-features --features audit
     cargo check -p zenmeta --no-default-features --features apple
     cargo check -p zenmeta --no-default-features --features inventory
-    cargo clippy -p zencodec -p zenmeta --all-targets --all-features -- -D warnings
+    cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 # Compare the actual published contract, not an unpublished metadata branch.
 metadata-semver:
     cargo semver-checks check-release -p zencodec --baseline-version 0.1.26 --all-features
+
+metadata-target-check:
+    cargo check -p zenmeta --target wasm32-wasip1 --no-default-features --features apple,audit,inventory,xmp
+    cargo +1.88.0 check -p zencodec -p zenmeta --all-features
