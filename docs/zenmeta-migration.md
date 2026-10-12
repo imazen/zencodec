@@ -27,7 +27,7 @@ that every new main run has finished.
 | GIF | [27](https://github.com/imazen/zengif/pull/27), `10f96266`: optional inventory and typed limits; review CI passed | Monitor main CI |
 | Bitmaps | [29](https://github.com/imazen/zenbitmaps/pull/29), `ed0f474a`: six format inventories, typed limits, traversal cancellation; corpus mount verified locally | Monitor main CI |
 | JPEG | [226](https://github.com/imazen/zenjpeg/pull/226), review `9a5694d4`: metadata stacks plus recovered lossless edits; approved layout tests pass | CI exposes one legacy overlapping-MPF expectation. Approval requested to suppress an invalid gain-map entry without promoting a different image. PRs210/213/221/225 remain open until replacement lands |
-| zenpipe / zencodecs | Codec-owned rewriting dispatch, standalone services, original inventory dispatch/CLI; full codec graph including SVT/AOM and inventory dispatch pass locally | Final snapshots, current-main reconciliation and replacement PR |
+| zenpipe / zencodecs | [90](https://github.com/imazen/zenpipe/pull/90), review `78750a6c`: codec-owned rewriting dispatch, independent services, original inventory dispatch/CLI; full SVT/AOM codec graph, PDF inventory, API snapshots, current-main filters, standalone demo/fuzz and pin guards pass | Remote CI and landing; JPEG dependency remains the review revision |
 
 Superseded metadata PRs were closed only after their replacement landed. The
 metadata portion of zencodec PR130 is incorporated; its experimental media/video
