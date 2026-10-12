@@ -11,23 +11,22 @@ final API review and PR splitting. These are not crate releases.
 
 | Owner | Verified work | Remaining work |
 |---|---|---|
-| zencodec | EXIF metadata subset of PR 130, baseline contract, typed unsupported inventory; existing PNG timing contract combined without changing released discriminants (`ee1a2305`); registry comparison and public snapshots pass | Final dependency guards and review |
-| zenmeta | XMP/audit/display/Apple/IFD extraction, plist bounds, strict/legacy Apple distinction, shared gain-map XMP source (`ddb6f905`) | Generic scrub analysis and final review |
-| ultrahdr | Apple/plist delegation preserving 0.6.0 nominal types (`8db388f9`); registry comparison and full CI pass (`1d86bffc`) | PR35 policy assembly integrated (`4db930c8`); native/i686 and ExifTool MPF checks pass; finish remote CI and final pins |
-| TIFF | Default-off shared-IFD inventory, approved architecture-specific ICC checks, one-shot timeout propagation (`c38ed0d3`); native/i686 and full CI pass | Final API review and dependency normalization |
-| RAW | Default-off shared-IFD inventory for both backends, saved crashes, native/i686 suites, ExifTool checks; DNG/RAF/CR3 one-shot timeout propagation (`89b54052`); full CI passes | Final API review and dependency normalization |
-| JPEG | PRs210/225/221 combined and pushed (`db07f503`); private shared XMP wrappers, original fixtures, pinned independent-reader oracles and 0.8.4 API audit | Finish full CI; feature-combination corrections verified locally |
-| HEIC | PRs51/57 integrated (`2cbd95a2`), private Apple delegation, native/i686 suites, external-tool framing checks and full CI pass | Final dependency normalization and typed part-error mapping |
-| zenflate | Existing count-only scanner gated behind default-off scan (`a0ea0363`); native/i686 differential tests and semver pass; explicit-corpus cross-cache fix verified (`43c10e3d`) | Finish remote CI |
-| PNG | PR32 reused against animation-aware main (`e9bbecbc`), default-off scanner, typed limits/cancellation; approved expectation, native/i686 and API audit complete | Finish remote CI and final dependency normalization |
-| JPEG 2000 | PR26 reused behind default-off inventory (`147a728b`); native/i686, ExifTool and decoder-mutation checks pass | Final review and remote CI |
-| SVG | PR33 walker/review cases reused behind default-off inventory (`17b621f0`); native/i686, resource probes, xmllint, clippy and fuzz build pass | Final review and remote CI |
-| PDF | PR33 walker and regression/oracle cases integrated (`dd1d476e`); native/i686, typed errors, MuPDF/ExifTool and 0.2.0 API audit | Final review and remote CI |
-| EXR | PR37 integrated (`ebc471ed`); native/i686, ExifTool and decoder-mutation corpus pass; one-shot stop fix shared with native probe/decode | Final review and remote CI |
-| JXL | PR24 integrated (`831e5bba`), default-off inventory, 184-file decoder corpus, jxlinfo/ExifTool checks, native/i686 and API audit | Remote CI, final pins and review |
-| WebP | PR106 integrated (`53dd3f89`); native/i686/no_std, ExifTool and 20,000-input mutation run; 0.4.4 API audit | Input-limit expectation approval, remote CI and final review |
-| AVIF | PR61 integrated (`9dc9f529`); all three encoders × both decoders for EXIF/XMP/orientation; native/i686, ExifTool and 0.1.6 API audit | Remote CI; broader ICC/gain-map backend matrix and final review |
-| Other codecs and zenpipe | Source/PR map below | Consumer migration and codec-owned rewrite planners |
+| zencodec | Additive baseline, inventory and rewrite contracts; 0.1.26 semver comparison at `a31a9b68` passes; no zencodec source/manifest changes through `a81daf76` | Final replacement PR and current-revision remote CI |
+| zenmeta | XMP/audit/display/Apple/IFD extraction, bounded plist and rewrite services; namespace-aware GContainer span editor (`a81daf76`), native/i686/WASM and independent XML readers | Final replacement PR and consumer pin normalization |
+| ultrahdr | Apple/plist compatibility wrappers, PR35 policy assembly, native/i686/oracle checks; full CI at `3c8e2cb2` passes | Coordinate the new zenmeta pin with the pending JPEG consumer; the mixed-pin workspace fails nominal-type checks |
+| TIFF | Shared-IFD inventory, architecture-specific ICC assertions and one-shot stop handling; native/i686 checks and zenextras CI at `21e5d651` pass | Final API review and dependency normalization |
+| RAW | Both backend inventories, DNG/RAF/CR3 stop propagation, original regression/oracle cases; final dependency checks at `ca14fae3` pass locally | Current-revision remote CI and final review |
+| JPEG | PRs210/225/221, ISO-first decoding, private zenmeta wrappers, codec-owned rewrite plan, independent readers; native/shared EXIF assertions (`fea3707a`); shared ICC validation (`c7d341a9`) | Lossless recovery is local: native/i686/oracle/fuzz and both library feature suites pass, but the existing gain-map layout assertion awaits approval. Legacy extended-XMP concatenation and recompression's secondary-image handling remain separate gaps |
+| HEIC | PRs51/57, private Apple delegation, typed limits, native/i686/oracle checks; full CI at `dde352e0` passes | Final dependency normalization and review |
+| zenflate | Default-off count-only scanner, native/i686 differential tests and semver; full CI at `43c10e3d` passes | Final replacement PR |
+| PNG | Inventory plus codec-owned rewrite planner, typed limits/cancellation, native/i686/oracle checks (`97f6bbaf`) | Current-revision remote CI and final dependency normalization |
+| JPEG 2000 / SVG / PDF / EXR | Original inventory/review/fuzz/oracle tests retained; native/i686 checks and zenextras CI at `21e5d651` pass | Final API review and dependency normalization |
+| JXL | Inventory and codec-owned rewrite planner, decoder corpus and independent readers; native/i686/API checks and full CI at `3c622f09` pass | Final replacement PR and coordinated pins |
+| WebP | Inventory, approved typed InputSize assertion, native/i686/no_std/oracle/mutation checks; cross corpus-cache repair (`9cfa2396`) | Remote CI for the repaired workflow and final review |
+| AVIF | Three encoders × two decoders for metadata and gain-map transport; combined animation contracts and SVT color-matrix correction pass locally, including native SVT adapter tests | Existing AOM 10-bit RGBA routing assertion awaits approval; remote CI at `399b5754` fails that same assertion. Final merged revision and pins are not pushed |
+| GIF | Inventory, approved typed global part cap (`053aff1a`); i686 CI corpus-cache permission failure repaired (`6a38e3ae`) without changing assertions | Remote CI for the cache repair and final review |
+| Bitmaps | Six formats use typed InputSize; QOI and long PNM/HDR/TGA/BMP scans retain one-shot stop reasons (`e8933609`); local checks pass | Current-revision remote CI and final review |
+| zenpipe / zencodecs | JPEG/PNG/JXL planners delegated to codecs; standalone metadata-service library independent of zencodecs; original dispatch tests and local all-codec build pass | Final remote dependency pins, API review, commit and replacement PR |
 
 The semver audit found existing unreleased breaks independently of this
 extraction: TIFF's six associated error types differ from 0.1.2; RAW's error
