@@ -6,27 +6,32 @@ verified migrations from remaining work. Read the [release audit](zenmeta-publis
 
 ## Integration status (2026-10-12)
 
-Changes remain on per-repository `review/zenmeta-integration` bookmarks pending
-final API review and PR splitting. These are not crate releases.
+The following replacement PRs have landed on main and their remote trees were
+verified. No crate has been published. Main CI is still running on some platforms;
+local validation and earlier review CI are evidence for the changes, not a claim
+that every new main run has finished.
 
-| Owner | Verified work | Remaining work |
+| Owner | Main landing / verified work | Remaining work |
 |---|---|---|
-| zencodec | Additive baseline, inventory and rewrite contracts; 0.1.26 semver comparison at `a31a9b68` passes; no zencodec source/manifest changes through `a81daf76` | Final replacement PR and current-revision remote CI |
-| zenmeta | XMP/audit/display/Apple/IFD extraction, bounded plist and rewrite services; namespace-aware GContainer span editor (`a81daf76`), native/i686/WASM and independent XML readers | Final replacement PR and consumer pin normalization |
-| ultrahdr | Apple/plist compatibility wrappers, PR35 policy assembly, native/i686/oracle checks; full CI at `3c8e2cb2` passes | Coordinate the new zenmeta pin with the pending JPEG consumer; the mixed-pin workspace fails nominal-type checks |
-| TIFF | Shared-IFD inventory, architecture-specific ICC assertions and one-shot stop handling; native/i686 checks and zenextras CI at `21e5d651` pass | Final API review and dependency normalization |
-| RAW | Both backend inventories, DNG/RAF/CR3 stop propagation, original regression/oracle cases; final dependency checks at `ca14fae3` pass locally | Current-revision remote CI and final review |
-| JPEG | PRs210/225/221, ISO-first decoding, private zenmeta wrappers, codec-owned rewrite plan, independent readers; native/shared EXIF assertions (`fea3707a`); shared ICC validation (`c7d341a9`) | Lossless recovery is local: native/i686/oracle/fuzz and both library feature suites pass, but the existing gain-map layout assertion awaits approval. Legacy extended-XMP concatenation and recompression's secondary-image handling remain separate gaps |
-| HEIC | PRs51/57, private Apple delegation, typed limits, native/i686/oracle checks; full CI at `dde352e0` passes | Final dependency normalization and review |
-| zenflate | Default-off count-only scanner, native/i686 differential tests and semver; full CI at `43c10e3d` passes | Final replacement PR |
-| PNG | Inventory plus codec-owned rewrite planner, typed limits/cancellation, native/i686/oracle checks (`97f6bbaf`) | Current-revision remote CI and final dependency normalization |
-| JPEG 2000 / SVG / PDF / EXR | Original inventory/review/fuzz/oracle tests retained; native/i686 checks and zenextras CI at `21e5d651` pass | Final API review and dependency normalization |
-| JXL | Inventory and codec-owned rewrite planner, decoder corpus and independent readers; native/i686/API checks and full CI at `3c622f09` pass | Final replacement PR and coordinated pins |
-| WebP | Inventory, approved typed InputSize assertion, native/i686/no_std/oracle/mutation checks; cross corpus-cache repair (`9cfa2396`) | Remote CI for the repaired workflow and final review |
-| AVIF | Three encoders × two decoders for metadata and gain-map transport; combined animation contracts and SVT color-matrix correction pass locally, including native SVT adapter tests | Existing AOM 10-bit RGBA routing assertion awaits approval; remote CI at `399b5754` fails that same assertion. Final merged revision and pins are not pushed |
-| GIF | Inventory, approved typed global part cap (`053aff1a`); i686 CI corpus-cache permission failure repaired (`6a38e3ae`) without changing assertions | Remote CI for the cache repair and final review |
-| Bitmaps | Six formats use typed InputSize; QOI and long PNM/HDR/TGA/BMP scans retain one-shot stop reasons (`e8933609`); local checks pass | Current-revision remote CI and final review |
-| zenpipe / zencodecs | JPEG/PNG/JXL planners delegated to codecs; standalone metadata-service library independent of zencodecs; original dispatch tests and local all-codec build pass | Final remote dependency pins, API review, commit and replacement PR |
+| zencodec / zenmeta | [137](https://github.com/imazen/zencodec/pull/137), `b8b6d8ce`: reusable implementation and additive contracts; final 0.1.26 comparison passes 196 checks (58 skipped) | Monitor main CI; no release authorized |
+| JXL | [26](https://github.com/imazen/zenjxl/pull/26), `117cce41`: optional inventory and standalone rewrite; native/i686 final-pin checks pass | Monitor main CI |
+| JXL decoder | [62](https://github.com/imazen/zenjxl-decoder/pull/62), `d44393e5`: bounded header scan and codestream-length API; complete PR CI passed | Monitor main CI |
+| WebP | [112](https://github.com/imazen/zenwebp/pull/112), `d12fe2bb`: optional inventory, typed limits and corpus mount; review CI passed | Monitor main CI |
+| AVIF | [66](https://github.com/imazen/zenavif/pull/66), `45d79e8d`: three encoders/two decoders, gain-map transport, retained animation contracts and approved AOM routing; standalone SVT/AOM consumer compiles | Monitor main CI |
+| ultrahdr | [36](https://github.com/imazen/ultrahdr/pull/36), `f7c46146`: Apple/plist compatibility wrappers and policy assembly; final workspace pin check passes | JPEG dependency is a pinned review revision; monitor main CI |
+| HEIC | [59](https://github.com/imazen/heic/pull/59), `7180d019`: Apple delegation and optional inventory; final native/fuzz/WASI checks pass | Monitor main CI |
+| TIFF / JPEG 2000 / SVG / PDF / EXR | [zenextras 43](https://github.com/imazen/zenextras/pull/43), `1cd349a1`: codec-specific inventory with shared IFD traversal; final workspace/fuzz checks pass | Monitor main CI |
+| RAW | [23](https://github.com/imazen/zenraw/pull/23), `a2063d8f`: both backend inventories; final backend checks pass | Monitor main CI |
+| zenflate | [16](https://github.com/imazen/zenflate/pull/16), `acc70801`: optional count-only scanner; review CI passed | Monitor main CI |
+| PNG | [41](https://github.com/imazen/zenpng/pull/41), `e04f734a`: optional inventory and standalone rewrite; current-main threading/APNG behavior retained and tested | Monitor main CI |
+| GIF | [27](https://github.com/imazen/zengif/pull/27), `10f96266`: optional inventory and typed limits; review CI passed | Monitor main CI |
+| Bitmaps | [29](https://github.com/imazen/zenbitmaps/pull/29), `ed0f474a`: six format inventories, typed limits, traversal cancellation; corpus mount verified locally | Monitor main CI |
+| JPEG | [226](https://github.com/imazen/zenjpeg/pull/226), review `9a5694d4`: metadata stacks plus recovered lossless edits; approved layout tests pass | CI exposes one legacy overlapping-MPF expectation. Approval requested to suppress an invalid gain-map entry without promoting a different image. PRs210/213/221/225 remain open until replacement lands |
+| zenpipe / zencodecs | Codec-owned rewriting dispatch, standalone services, original inventory dispatch/CLI; full codec graph including SVT/AOM and inventory dispatch pass locally | Final snapshots, current-main reconciliation and replacement PR |
+
+Superseded metadata PRs were closed only after their replacement landed. The
+metadata portion of zencodec PR130 is incorporated; its experimental media/video
+stack is outside this task, so PR129/130 are not closed wholesale.
 
 The semver audit found existing unreleased breaks independently of this
 extraction: TIFF's six associated error types differ from 0.1.2; RAW's error
