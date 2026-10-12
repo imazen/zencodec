@@ -186,7 +186,7 @@ impl From<BoxedError> for CodecSetError {
 
 /// A runtime set of codecs with one entry point per operation.
 ///
-/// See the [module docs](self) for the registration model, detection
+/// See the [crate docs](crate) for the registration model, detection
 /// semantics, and the app-wide sharing pattern.
 ///
 /// Operation defaults ([`with_limits`](Self::with_limits),

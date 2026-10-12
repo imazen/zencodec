@@ -50,3 +50,14 @@ metadata-xmp-portability:
     cargo +1.88.0 check -p zenmeta --no-default-features --features xmp
     cargo check -p zenmeta --no-default-features --features xmp --target wasm32-wasip1
     CARGO_TARGET_I686_UNKNOWN_LINUX_GNU_RUNNER=env cargo test -p zenmeta --features xmp --target i686-unknown-linux-gnu
+
+metadata-coordinated-check:
+    just api-doc
+    just metadata-check
+    just metadata-semver
+
+metadata-coordinated-final:
+    just api-doc
+    cargo test -p zencodec --all-features --lib capabilities::
+    just metadata-semver
+    just metadata-target-check

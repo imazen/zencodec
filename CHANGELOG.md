@@ -12,6 +12,14 @@ All notable changes to zencodec are documented here. Sections below the
 - None against crates.io zencodec-testkit 0.1.0.
 
 #### Added
+
+- Retain the exact animation timing additions from `20310944`, already used by
+  PNG main: `animation::FrameDuration`, exact frame accessors/constructors,
+  and static/dynamic `push_frame_timed`. Existing millisecond APIs remain.
+  This coordinated integration preserves both inventory and animation APIs;
+  it adds no video implementation. See `docs/animation-timing.md`.
+  New unsupported-operation variants follow all released variants, preserving
+  the numeric discriminants checked against crates.io 0.1.26.
 - `check_inventory_dispatch` compares generic/dynamic results and disabled-operation
   errors. `check_all` also checks the disabled inventory contract without changing
   its published generic bounds; erased-dispatch checks remain separately callable.
@@ -145,6 +153,7 @@ removes that whole class).
   `ColorAndRotation`. `Metadata::is_empty` now recognizes an anchor-only record.
   Previously filtering silently removed the anchor and could cause downstream
   color processing to use a different luminance fallback.
+
 
 ### Changed
 

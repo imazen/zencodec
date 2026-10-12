@@ -7,6 +7,7 @@ license = "Apache-2.0 OR MIT"
 description = "Shared image metadata inspection, retention and inventory implementation"
 repository = "https://github.com/imazen/zencodec"
 readme = "README.md"
+include = ["/src/**", "/tests/**", "/examples/**", "/README.md", "/CHANGELOG.md", "/PROVENANCE.md", "/LICENSE-*"]
 
 [features]
 default = []

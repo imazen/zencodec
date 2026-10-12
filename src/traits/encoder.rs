@@ -175,6 +175,23 @@ pub trait AnimationFrameEncoder: Sized {
         stop: Option<&dyn Stop>,
     ) -> Result<(), Self::Error>;
 
+    /// Push a frame with its exact encoded source duration.
+    ///
+    /// Implementations must represent this duration exactly or reject it before
+    /// accepting the frame. They must not round, clamp a minimum, saturate, or
+    /// wrap the format's timing field. Zero remains zero when supported by the
+    /// format; JXL display helpers and codecs requiring positive durations can
+    /// reject it. The default rejects even whole milliseconds because legacy
+    /// `push_frame` implementations may silently quantize those values.
+    fn push_frame_timed(
+        &mut self,
+        _pixels: PixelSlice<'_>,
+        _duration: crate::animation::FrameDuration,
+        _stop: Option<&dyn Stop>,
+    ) -> Result<(), Self::Error> {
+        Err(Self::reject(crate::UnsupportedOperation::AnimationTiming))
+    }
+
     /// Finalize animation. Returns encoded output.
     ///
     /// Pass `None` if cancellation is not needed.

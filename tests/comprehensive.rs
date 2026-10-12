@@ -2215,3 +2215,43 @@ fn extensions_wrong_type_returns_none() {
     let ext = job.extensions().unwrap();
     assert!(ext.downcast_ref::<u32>().is_none());
 }
+
+#[test]
+fn exact_animation_default_rejects_and_dyn_shim_does_not_fall_back_to_milliseconds() {
+    use zencodec::animation::FrameDuration;
+    let buf = make_rgb8_buffer(2, 2);
+    for duration in [
+        FrameDuration::new(1001, 30000).unwrap(),
+        FrameDuration::from_millis(100),
+    ] {
+        let mut enc = MockEncoderConfig::new()
+            .job()
+            .animation_frame_encoder()
+            .unwrap();
+        let err = enc
+            .push_frame_timed(buf.as_slice(), duration, None)
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            mock_anim::MockError::Unsupported(UnsupportedOperation::AnimationTiming)
+        ));
+        assert!(enc.finish(None).is_err(), "reject must not accept a frame");
+        let mut enc = MockEncoderConfig::new()
+            .job()
+            .dyn_animation_frame_encoder()
+            .unwrap();
+        let err = enc
+            .push_frame_timed(buf.as_slice(), duration, None)
+            .unwrap_err();
+        assert!(matches!(
+            err.downcast_ref::<mock_anim::MockError>(),
+            Some(mock_anim::MockError::Unsupported(
+                UnsupportedOperation::AnimationTiming
+            ))
+        ));
+        assert!(
+            enc.finish(None).is_err(),
+            "dyn shim must not call legacy push_frame"
+        );
+    }
+}

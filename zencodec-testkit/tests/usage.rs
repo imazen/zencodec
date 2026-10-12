@@ -215,8 +215,7 @@ fn encode_from_a_foreign_pixel_format() {
     )
     .unwrap();
 
-    let slice = adapted.as_slice();
-    let file = codecs.encode(ImageFormat::Pnm, slice).unwrap();
+    let file = codecs.encode(ImageFormat::Pnm, adapted.as_slice()).unwrap();
 
     // Round-trips: decode back and red sits where RGB expects it.
     let image = codecs.decode(file.data()).unwrap();

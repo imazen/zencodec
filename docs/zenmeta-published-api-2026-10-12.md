@@ -148,3 +148,19 @@ version component merely because a source file changes ownership. Re-run the
 registry comparison on each final package and test old external implementors.
 Coordinate unpublished PR dependencies explicitly; existing git consumers can
 still break even though the released API remains intact.
+
+## Coordinated animation dependency
+
+PNG main already uses exact rational animation timing from zencodec `20310944`.
+The metadata integration retains those existing additions so the consumer
+can use one shared contract source. Its millisecond constructors/accessors
+remain available. The first combined semver check caught changed numeric
+discriminants from inserting `AnimationTiming` between released variants;
+the combined source appends the new variant to preserve those values. This
+is a compatibility repair to an unreleased proposal, not a video feature.
+
+After that repair, `just metadata-semver` passes all 196 enabled checks
+against 0.1.26 (58 skipped by the tool). Workspace tests, isolated zenmeta
+features, all-target clippy, Rust 1.88 and WASI checks pass. The API snapshot
+runner also records zenmeta's own feature-dependent surface and verifies
+that repository instruction files are excluded from its package.

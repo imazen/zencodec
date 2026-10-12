@@ -316,8 +316,12 @@ pub trait EncodeJob: Sized {
     /// Set animation loop count.
     ///
     /// - `Some(0)` = loop forever
-    /// - `Some(n)` = loop `n` times
+    /// - `Some(n)` = play exactly `n` times in total, including the first play
     /// - `None` = format default
+    ///
+    /// Codecs must reject counts outside the format's range when the animation
+    /// encoder is constructed, rather than truncating or wrapping them. GIF's
+    /// wire count represents repeats after the first play and needs conversion.
     ///
     /// Must be set before [`animation_frame_encoder()`](EncodeJob::animation_frame_encoder)
     /// because formats write the loop count before frame data.

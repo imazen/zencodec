@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Explicit package contents exclude repository instruction files; public API
+  snapshot validation checks the packaged surface.
+
 ### QUEUED BREAKING CHANGES
 
 - None: zenmeta has no crates.io release yet. Changes to proposed PR-only paths
