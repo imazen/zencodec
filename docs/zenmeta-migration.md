@@ -13,18 +13,21 @@ final API review and PR splitting. These are not crate releases.
 |---|---|---|
 | zencodec | EXIF metadata subset of PR 130, baseline contract, typed unsupported inventory; existing PNG timing contract combined without changing released discriminants (`ee1a2305`); registry comparison and public snapshots pass | Final dependency guards and review |
 | zenmeta | XMP/audit/display/Apple/IFD extraction, plist bounds, strict/legacy Apple distinction, shared gain-map XMP source (`ddb6f905`) | JPEG consumers, generic scrub analysis, final review |
-| ultrahdr | Apple/plist delegation preserving 0.6.0 nominal types (`8db388f9`); registry comparison passes; SIMD CI compatibility repaired (`1d86bffc`) | PR 35 encoder metadata-policy integration, finish remote CI |
+| ultrahdr | Apple/plist delegation preserving 0.6.0 nominal types (`8db388f9`); registry comparison and full CI pass (`1d86bffc`) | PR35 encoder-policy integration against JPEG replacement; independent-reader verification |
 | TIFF | Default-off shared-IFD inventory, approved architecture-specific ICC checks, one-shot timeout propagation (`c38ed0d3`); native/i686 and full CI pass | Final API review and dependency normalization |
 | RAW | Default-off shared-IFD inventory for both backends, saved crashes, native/i686 suites, ExifTool checks; DNG/RAF/CR3 one-shot timeout propagation (`89b54052`); full CI passes | Final API review and dependency normalization |
-| JPEG | Extended-inspection source and tests imported; shared gain-map XMP source extracted | Reconcile PRs 210/225/221, wrappers, inventory gating and all corpus/oracle tests |
-| HEIC | PRs 51/57 integrated (`2cbd95a2`), private Apple delegation, native/i686 inventory and mutation suites, existing decode/behavior suites, external-tool framing checks | Finish remote CI and final dependency normalization |
-| zenflate | Existing count-only scanner gated behind default-off scan (`a0ea0363`); original regressions retained as lossless text; native/i686 differential tests and semver pass | Finish remote CI |
-| PNG | PR 32 reused against current animation-aware main, default-off inventory/scanner, typed dispatch and cancellation checks | Input-limit expectation decision, final portability/API validation |
+| JPEG | PRs210/225/221 reconciled locally; JPEG-owned XMP wrappers delegate to zenmeta; approved strict parsing and original binary fixtures reused | Complete corpus/oracle/API validation and push integration |
+| HEIC | PRs51/57 integrated (`2cbd95a2`), private Apple delegation, native/i686 suites, external-tool framing checks and full CI pass | Final dependency normalization and typed part-error mapping |
+| zenflate | Existing count-only scanner gated behind default-off scan (`a0ea0363`); native/i686 differential tests and semver pass; explicit-corpus cross-cache fix verified (`43c10e3d`) | Finish remote CI |
+| PNG | PR32 reused against animation-aware main (`e9bbecbc`), default-off scanner, typed limits/cancellation; approved expectation, native/i686 and API audit complete | Finish remote CI and final dependency normalization |
+| JPEG 2000 | PR26 reused behind default-off inventory (`147a728b`); native/i686, ExifTool and decoder-mutation checks pass | Final review and remote CI |
+| SVG | PR33 walker/review cases reused behind default-off inventory (`17b621f0`); native/i686, resource probes, xmllint, clippy and fuzz build pass | Final review and remote CI |
 | Other codecs and zenpipe | Source/PR map below | Consumer migration and codec-owned rewrite planners |
 
 The semver audit found existing unreleased breaks independently of this
 extraction: TIFF's six associated error types differ from 0.1.2; RAW's error
-variants differ from 0.2.0. Their codec changelogs retain those queued breaks.
+variants differ from 0.2.0; PNG's nine associated error types and three auto
+traits differ from 0.1.4. Their codec changelogs retain those queued breaks.
 Do not infer complete compatibility from the additive inventory contract.
 
 ## Ownership
