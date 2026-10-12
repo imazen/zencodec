@@ -159,6 +159,17 @@ pub trait DynAnimationFrameEncoder: Send {
         stop: Option<&dyn Stop>,
     ) -> Result<(), BoxedError>;
 
+    /// Push an exact source duration, or reject without silently quantizing it.
+    /// See [`AnimationFrameEncoder::push_frame_timed`].
+    fn push_frame_timed(
+        &mut self,
+        _pixels: PixelSlice<'_>,
+        _duration: crate::animation::FrameDuration,
+        _stop: Option<&dyn Stop>,
+    ) -> Result<(), BoxedError> {
+        Err(Box::new(crate::UnsupportedOperation::AnimationTiming))
+    }
+
     /// Finalize animation. Returns encoded output.
     fn finish(self: Box<Self>, stop: Option<&dyn Stop>) -> Result<EncodeOutput, BoxedError>;
 }
@@ -195,6 +206,17 @@ impl<F: AnimationFrameEncoder + Send + 'static> DynAnimationFrameEncoder
     ) -> Result<(), BoxedError> {
         self.0
             .push_frame(pixels, duration_ms, stop)
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn push_frame_timed(
+        &mut self,
+        pixels: PixelSlice<'_>,
+        duration: crate::animation::FrameDuration,
+        stop: Option<&dyn Stop>,
+    ) -> Result<(), BoxedError> {
+        self.0
+            .push_frame_timed(pixels, duration, stop)
             .map_err(|e| Box::new(e) as BoxedError)
     }
 

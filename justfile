@@ -22,3 +22,12 @@ clippy:
 # Full workspace test gate (incl. the conformance testkit)
 test:
     cargo test --workspace
+
+# Shared exact timing and HDR metadata retention integration.
+test-animation-hdr:
+    cargo fmt --all --check
+    cargo test --workspace
+    cargo clippy --workspace --all-targets -- -D warnings
+    cargo check --workspace --no-default-features --target wasm32-unknown-unknown
+    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+    just api-doc
