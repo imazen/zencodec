@@ -15,3 +15,6 @@ pub mod display;
 pub mod ifd;
 #[cfg(feature = "xmp")]
 pub mod xmp;
+
+#[cfg(feature = "rewrite")]
+pub mod rewrite;

@@ -196,3 +196,12 @@ On 2026-10-12, [docs.rs latest](https://docs.rs/crate/zencodec/latest) still
 resolved to 0.1.26, matching this audit's downloaded release artifact. A fresh
 crates.io API request was inaccessible and lib.rs returned HTTP 403; neither
 failed request is treated as additional registry evidence.
+
+### Rewrite contracts
+
+The additional `metadata_rewrite` module contains only shared requests, runtime
+service interfaces and completed plan/report types. Existing published items
+are unchanged. After adding this module, `just metadata-semver` again passed
+196 checks with 58 skipped against 0.1.26. Codec planner integration is separate
+validation; the new `Plan::from_parts` constructor requires codec validation
+and does not itself certify arbitrary container data.

@@ -7,6 +7,11 @@ All notable changes to zencodec are documented here. Sections below the
 
 ### [Unreleased]
 
+- Add `metadata_rewrite` request, report, output-plan and runtime-service contracts
+  without a dependency on zenmeta or a codec. Existing published metadata APIs
+  remain in place; the new contract is additive relative to 0.1.26.
+
+
 #### QUEUED BREAKING CHANGES
 
 - None against crates.io zencodec-testkit 0.1.0.

@@ -67,3 +67,8 @@ metadata-error-check:
     cargo clippy --workspace --all-targets --all-features -- -D warnings
     just metadata-semver
     just api-doc
+
+metadata-rewrite-check:
+    cargo check -p zencodec
+    cargo test -p zenmeta --features rewrite --test rewrite
+    cargo clippy -p zenmeta --features rewrite --lib -- -D warnings

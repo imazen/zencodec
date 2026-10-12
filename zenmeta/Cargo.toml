@@ -15,6 +15,7 @@ std = ["zencodec/std"]
 audit = []
 apple = []
 inventory = []
+rewrite = []
 xmp = ["dep:roxmltree"]
 
 [dependencies]

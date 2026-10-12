@@ -9,8 +9,8 @@
 
 ## summary
 #
-#   inherent methods                           57
-#   trait roster entries (type × trait)        52
+#   inherent methods                           61
+#   trait roster entries (type × trait)        54
 #
 # per-module pub lines:
 #   (root)                           28
@@ -22,8 +22,9 @@
 #   gainmap                           4
 #   helpers                           1
 #   inventory                         8
+#   metadata_rewrite                  4
 
-## items (57 lines)
+## items (61 lines)
 
 pub fn AllocPreference::assert_fields_are_eq(&self)
 pub fn CicpEmission::assert_fields_are_eq(&self)
@@ -82,8 +83,12 @@ pub fn inventory::Part::assert_fields_are_eq(&self)
 pub fn inventory::PartId::assert_fields_are_eq(&self)
 pub fn inventory::PartKind::assert_fields_are_eq(&self)
 pub fn inventory::PartTag::assert_fields_are_eq(&self)
+pub fn metadata_rewrite::Action::assert_fields_are_eq(&self)
+pub fn metadata_rewrite::Compression::assert_fields_are_eq(&self)
+pub fn metadata_rewrite::Entry::assert_fields_are_eq(&self)
+pub fn metadata_rewrite::Error::assert_fields_are_eq(&self)
 
-## trait impls (52 types)
+## trait impls (54 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -137,3 +142,5 @@ inventory::Disposition: TrivialClone
 inventory::MetadataKind: TrivialClone
 inventory::PartId: TrivialClone
 inventory::PartKind: TrivialClone
+metadata_rewrite::Action: TrivialClone
+metadata_rewrite::Compression: TrivialClone

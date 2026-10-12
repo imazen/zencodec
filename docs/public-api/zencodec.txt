@@ -6,25 +6,25 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1682 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 109 lines (109 hidden + 0 excluded-feature)
+# files: zencodec.txt 1751 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 115 lines (115 hidden + 0 excluded-feature)
 
 ## summary
 #
-#   pub modules                                11
-#   pub types (struct/enum/trait/alias)       181
+#   pub modules                                12
+#   pub types (struct/enum/trait/alias)       188
 #   pub consts/statics                        194
 #   free functions                             44
-#   inherent methods                          726
+#   inherent methods                          765
 #   struct fields                             220
-#   enum variants                             245
+#   enum variants                             260
 #   re-exports                                 12
-#   trait roster entries (type × trait)       458
+#   trait roster entries (type × trait)       480
 #   conditional trait impls (verbatim)          4
-#   auto-trait-complete types                  79
-#   auto-trait exceptions                       8
+#   auto-trait-complete types                  84
+#   auto-trait exceptions                       9
 #
 # per-module pub lines:
-#   (root)                          773
+#   (root)                          774
 #   animation                         6
 #   decode                          170
 #   encode                          121
@@ -34,9 +34,10 @@
 #   helpers                          13
 #   icc                               1
 #   inventory                       101
+#   metadata_rewrite                 61
 #   prelude                         180
 
-## items (1575 lines)
+## items (1637 lines)
 
 pub mod zencodec
 pub use At
@@ -860,6 +861,68 @@ pub fn inventory::Part::with_label(self, impl core::convert::Into<alloc::borrow:
 pub struct inventory::PartId(_)
 pub const fn inventory::PartId::index(self) -> usize
 pub const inventory::DEFAULT_MAX_PARTS: u32
+pub mod metadata_rewrite
+#[non_exhaustive] pub enum metadata_rewrite::Action
+pub metadata_rewrite::Action::Keep
+pub metadata_rewrite::Action::OpaqueIcc
+pub metadata_rewrite::Action::OpaqueImageData
+pub metadata_rewrite::Action::Remove
+pub metadata_rewrite::Action::RemoveJpegReconstruction
+pub metadata_rewrite::Action::Rewrite
+#[non_exhaustive] pub enum metadata_rewrite::Compression
+pub metadata_rewrite::Compression::Brotli
+pub metadata_rewrite::Compression::Zlib
+#[non_exhaustive] pub enum metadata_rewrite::Error
+pub metadata_rewrite::Error::Allocation
+pub metadata_rewrite::Error::Cancelled
+pub metadata_rewrite::Error::Limit(&'static str)
+pub metadata_rewrite::Error::Malformed(&'static str)
+pub metadata_rewrite::Error::Service(&'static str)
+pub metadata_rewrite::Error::Stopped(enough::reason::StopReason)
+pub metadata_rewrite::Error::Unsupported(&'static str)
+pub struct metadata_rewrite::Entry
+pub fn metadata_rewrite::Entry::action(&self) -> metadata_rewrite::Action
+pub fn metadata_rewrite::Entry::carrier(&self) -> &'static str
+pub fn metadata_rewrite::Entry::new(core::ops::range::Range<usize>, &'static str, metadata_rewrite::Action) -> Self
+pub fn metadata_rewrite::Entry::source_range(&self) -> core::ops::range::Range<usize>
+pub struct metadata_rewrite::Plan<'a>
+pub fn metadata_rewrite::Plan<'a>::chunks(&self) -> impl core::iter::traits::iterator::Iterator<Item = &[u8]>
+pub fn metadata_rewrite::Plan<'a>::from_parts(alloc::vec::Vec<alloc::borrow::Cow<'a, [u8]>>, alloc::vec::Vec<metadata_rewrite::Entry>) -> core::result::Result<Self, metadata_rewrite::Error>
+pub fn metadata_rewrite::Plan<'a>::output_len(&self) -> usize
+pub fn metadata_rewrite::Plan<'a>::report(&self) -> &[metadata_rewrite::Entry]
+pub fn metadata_rewrite::Plan<'a>::to_vec(&self) -> core::result::Result<alloc::vec::Vec<u8>, metadata_rewrite::Error>
+pub struct metadata_rewrite::Request<'a>
+pub fn metadata_rewrite::Request<'a>::check(&self) -> core::result::Result<(), metadata_rewrite::Error>
+pub fn metadata_rewrite::Request<'a>::edit_xmp(&self) -> bool
+pub fn metadata_rewrite::Request<'a>::input(&self) -> &'a [u8]
+pub fn metadata_rewrite::Request<'a>::max_carriers(&self) -> usize
+pub fn metadata_rewrite::Request<'a>::max_input(&self) -> usize
+pub fn metadata_rewrite::Request<'a>::max_metadata(&self) -> usize
+pub fn metadata_rewrite::Request<'a>::max_output(&self) -> usize
+pub fn metadata_rewrite::Request<'a>::new(&'a [u8]) -> Self
+pub fn metadata_rewrite::Request<'a>::normalize_icc(&self) -> bool
+pub fn metadata_rewrite::Request<'a>::packet(&self, usize) -> core::result::Result<(), metadata_rewrite::Error>
+pub fn metadata_rewrite::Request<'a>::policy(&self) -> &MetadataPolicy
+pub fn metadata_rewrite::Request<'a>::remove_reconstruction(&self) -> bool
+pub fn metadata_rewrite::Request<'a>::services(&self) -> core::option::Option<&'a dyn metadata_rewrite::Services>
+pub fn metadata_rewrite::Request<'a>::stop(&self) -> &'a dyn enough::Stop
+pub fn metadata_rewrite::Request<'a>::validate(&self) -> core::result::Result<(), metadata_rewrite::Error>
+pub fn metadata_rewrite::Request<'a>::with_byte_limits(self, usize, usize) -> Self
+pub fn metadata_rewrite::Request<'a>::with_carrier_limit(self, usize) -> Self
+pub fn metadata_rewrite::Request<'a>::with_icc_normalization(self, bool) -> Self
+pub fn metadata_rewrite::Request<'a>::with_input(self, &'a [u8]) -> Self
+pub fn metadata_rewrite::Request<'a>::with_jpeg_reconstruction_removal(self, bool) -> Self
+pub fn metadata_rewrite::Request<'a>::with_metadata_limit(self, usize) -> Self
+pub fn metadata_rewrite::Request<'a>::with_policy(self, MetadataPolicy) -> Self
+pub fn metadata_rewrite::Request<'a>::with_services(self, &'a dyn metadata_rewrite::Services) -> Self
+pub fn metadata_rewrite::Request<'a>::with_stop(self, &'a dyn enough::Stop) -> Self
+pub fn metadata_rewrite::Request<'a>::with_xmp_editing(self, bool) -> Self
+pub trait metadata_rewrite::Services
+pub fn metadata_rewrite::Services::compress(&self, metadata_rewrite::Compression, &[u8], usize, &dyn enough::Stop) -> core::result::Result<alloc::vec::Vec<u8>, metadata_rewrite::Error>
+pub fn metadata_rewrite::Services::decompress(&self, metadata_rewrite::Compression, &[u8], usize, &dyn enough::Stop) -> core::result::Result<alloc::vec::Vec<u8>, metadata_rewrite::Error>
+pub fn metadata_rewrite::Services::merge_xmp(&self, &[u8], &[u8], usize, &dyn enough::Stop) -> core::result::Result<alloc::vec::Vec<u8>, metadata_rewrite::Error>
+pub fn metadata_rewrite::Services::normalize_icc(&self, &[u8], usize, &dyn enough::Stop) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, metadata_rewrite::Error>
+pub fn metadata_rewrite::Services::rewrite_xmp(&self, &[u8], usize, &dyn enough::Stop) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, metadata_rewrite::Error>
 pub mod prelude
 pub type prelude::AnimationFrameDecoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn prelude::AnimationFrameDecoder::frame_count(&self) -> core::option::Option<u32>
@@ -1614,7 +1677,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (94 types)
+## trait impls (100 types)
 
 (): encode::AnimationFrameEncoder
 (dyn core::error::Error + 'static): CodecErrorExt
@@ -1709,6 +1772,12 @@ inventory::Part: Clone, Debug, Eq, PartialEq
 inventory::PartId: Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd
 inventory::PartKind: Clone, Copy, Debug, Eq, Hash, PartialEq
 inventory::PartTag: Clone, Debug, Display, Eq, Hash, PartialEq
+metadata_rewrite::Action: Clone, Copy, Debug, Eq, PartialEq
+metadata_rewrite::Compression: Clone, Copy, Debug, Eq, PartialEq
+metadata_rewrite::Entry: Clone, Debug, Eq, PartialEq
+metadata_rewrite::Error: Clone, Debug, Display, Eq, Error, PartialEq
+metadata_rewrite::Plan<'a>: Debug
+metadata_rewrite::Request<'a>: Clone
 whereat::at::At<E>: CategorizedError
 impl<C> decode::DynDecoderConfig for C where C: decode::DecoderConfig + 'static
 impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::Enc: encode::Encoder + core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::AnimationFrameEnc: encode::AnimationFrameEncoder
@@ -1717,7 +1786,7 @@ impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static,
 
 ## auto traits
 
-79 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+84 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
 CodecSet: !RefUnwindSafe !UnwindSafe
 CodecSetError: !RefUnwindSafe !UnwindSafe
@@ -1726,3 +1795,4 @@ ImageInfo: !RefUnwindSafe !UnwindSafe
 OwnedAnimationFrame: !RefUnwindSafe !UnwindSafe
 decode::DecodeOutput: !RefUnwindSafe !UnwindSafe
 encode::EncodeOutput: !RefUnwindSafe !UnwindSafe
+metadata_rewrite::Request<'a>: !RefUnwindSafe !Send !Sync !UnwindSafe

@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Add optional `rewrite` support: bounded shared EXIF validation/filtering,
+  application-service limits and fallible plan assembly. Codec public signatures
+  use zencodec-owned request/plan/error types. Container planners remain with codecs.
+
+
 ### Fixed
 
 - Explicit package contents exclude repository instruction files; public API

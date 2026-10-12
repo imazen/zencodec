@@ -1,5 +1,5 @@
 # zenmeta public API — additions from non-default features
-# features: apple,audit,inventory,std,xmp
+# features: apple,audit,inventory,rewrite,std,xmp
 # (regenerated on every `cargo test` by zenutils-apidoc; ZEN_API_DOC=check verifies, =off skips).
 # Encodings: crate-name prefix stripped; auto traits collapse to a
 # count + exceptions; trait impls collapse to one roster line per
@@ -9,26 +9,27 @@
 
 ## summary
 #
-#   pub modules                                11
-#   pub types (struct/enum/trait/alias)        31
+#   pub modules                                12
+#   pub types (struct/enum/trait/alias)        33
 #   pub consts/statics                         20
 #   free functions                             32
-#   inherent methods                           74
+#   inherent methods                           91
 #   struct fields                              81
 #   enum variants                              43
-#   trait roster entries (type × trait)        79
-#   auto-trait-complete types                  29
-#   auto-trait exceptions                       1
+#   trait roster entries (type × trait)        83
+#   auto-trait-complete types                  30
+#   auto-trait exceptions                       2
 #
 # per-module pub lines:
-#   (root)                            5
+#   (root)                            6
 #   apple                            30
 #   audit                            24
 #   bplist                           11
 #   ifd                             169
+#   rewrite                          19
 #   xmp                              53
 
-## items (289 lines)
+## items (309 lines)
 
 pub mod apple
 pub mod apple::compatibility
@@ -265,6 +266,26 @@ pub fn ifd::walk::type_size(u16) -> core::option::Option<u64>
 pub fn ifd::walk::union_fate(&ifd::walk::Ifd, impl core::ops::function::Fn(ifd::walk::Kind, bool) -> ifd::walk::Fate) -> ifd::walk::Fate
 pub fn ifd::walk::walk<'a>(&'a [u8], u64, u64, &dyn ifd::walk::Rules) -> ifd::walk::Walk<'a>
 pub fn ifd::walk::walk_ifd<'a>(&'a [u8], u64, u64, ifd::walk::Layout, u64, ifd::walk::Kind, alloc::string::String, u8, &dyn ifd::walk::Rules) -> ifd::walk::Walk<'a>
+pub mod rewrite
+pub struct rewrite::Context<'a>
+pub fn rewrite::Context<'a>::decompress(&self, zencodec::metadata_rewrite::Compression, &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, zencodec::metadata_rewrite::Error>
+pub fn rewrite::Context<'a>::exif(&self, &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, zencodec::metadata_rewrite::Error>
+pub fn rewrite::Context<'a>::icc(&self, &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, zencodec::metadata_rewrite::Error>
+pub fn rewrite::Context<'a>::new(&zencodec::metadata_rewrite::Request<'a>) -> core::result::Result<Self, zencodec::metadata_rewrite::Error>
+pub fn rewrite::Context<'a>::services(&self) -> core::result::Result<&dyn zencodec::metadata_rewrite::Services, zencodec::metadata_rewrite::Error>
+pub fn rewrite::Context<'a>::with_input(self, &'a [u8]) -> Self
+pub fn rewrite::Context<'a>::with_xmp_editing(self, bool) -> Self
+pub fn rewrite::Context<'a>::xmp(&self, &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, zencodec::metadata_rewrite::Error>
+pub struct rewrite::PlanBuilder<'a>
+pub fn rewrite::PlanBuilder<'a>::append(&mut self, &rewrite::Context<'_>, Self, usize) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
+pub fn rewrite::PlanBuilder<'a>::finish(self) -> core::result::Result<zencodec::metadata_rewrite::Plan<'a>, zencodec::metadata_rewrite::Error>
+pub fn rewrite::PlanBuilder<'a>::inject_after_first(&mut self, &rewrite::Context<'_>, alloc::vec::Vec<u8>, &'static str) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
+pub fn rewrite::PlanBuilder<'a>::keep(&mut self, &rewrite::Context<'a>, core::ops::range::Range<usize>, &'static str) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
+pub fn rewrite::PlanBuilder<'a>::new() -> Self
+pub fn rewrite::PlanBuilder<'a>::output_len(&self) -> usize
+pub fn rewrite::PlanBuilder<'a>::record(&mut self, &rewrite::Context<'_>, core::ops::range::Range<usize>, &'static str, zencodec::metadata_rewrite::Action, core::option::Option<alloc::borrow::Cow<'a, [u8]>>) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
+pub fn rewrite::PlanBuilder<'a>::remove(&mut self, &rewrite::Context<'_>, core::ops::range::Range<usize>, &'static str) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
+pub fn rewrite::PlanBuilder<'a>::remove_kept_range(&mut self, &rewrite::Context<'_>, &core::ops::range::Range<usize>) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
 pub mod xmp
 pub mod xmp::container
 #[non_exhaustive] pub enum xmp::container::ItemSemantic
@@ -320,7 +341,7 @@ pub fn xmp::Property::name(&self) -> &str
 pub fn xmp::Property::namespace(&self) -> &str
 pub fn xmp::Property::value(&self) -> &str
 
-## trait impls (23 types)
+## trait impls (25 types)
 
 apple::AppleHdrInfo: Clone, Copy, Debug, Default, PartialEq
 apple::AppleMakerNote<'a>: Debug
@@ -338,6 +359,8 @@ ifd::walk::Ifd: Debug
 ifd::walk::Kind: Clone, Copy, Debug, Eq, PartialEq
 ifd::walk::Layout: Clone, Copy, Debug
 ifd::walk::Placed: Default
+rewrite::Context<'a>: Clone, Deref
+rewrite::PlanBuilder<'a>: Debug, Default
 xmp::Error: Clone, Debug, Display, Eq, Error, PartialEq
 xmp::Field: Clone, Debug, Eq, PartialEq
 xmp::Packet<'a>: Debug
@@ -348,5 +371,6 @@ xmp::gainmap::XmpError: Debug, Display, Error
 
 ## auto traits
 
-29 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+30 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 ifd::walk::Walk<'a>: !Freeze !RefUnwindSafe !Sync
+rewrite::Context<'a>: !RefUnwindSafe !Send !Sync !UnwindSafe

@@ -32,3 +32,7 @@ See [source provenance](PROVENANCE.md) and the workspace
 The `xmp` feature also provides gain-map XMP parsing/generation and Google
 container-directory inspection under `zenmeta::xmp::{gainmap, container}`.
 JPEG APP framing and packet reassembly remain codec responsibilities.
+
+Optional `rewrite` supplies bounded EXIF processing and fallible plan assembly
+for codec-owned rewriters. Requests, services and completed plans are zencodec
+types, so a codec need not expose zenmeta types in its public API.

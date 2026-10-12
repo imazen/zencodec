@@ -46,3 +46,11 @@ commit `74e727f649a23063e3de1d964af2ced99b8bcd26`,
 in zenjpeg. The controlled source is included under the authorized Apache-2.0
 OR MIT terms. Consumer wrappers retain their own nominal types; these zenmeta
 implementation types are not re-exported by codecs.
+
+## Metadata rewrite support
+
+`rewrite` reuses common plan/request/EXIF processing from zenpipe's
+`zencodecs/src/metadata` at `aa21cba0`, separating the stable contracts into
+zencodec and implementation helpers into zenmeta. The owner authorized
+Apache-2.0 OR MIT for the controlled source in this extraction. JPEG/PNG/JXL
+container framing is not moved into zenmeta.
