@@ -41,11 +41,27 @@ pub enum PlistValue {
 
 /// Maximum container nesting depth before parsing bails (cycle/DoS guard).
 const MAX_DEPTH: usize = 32;
+const MAX_NODES: usize = 65_536;
+const MAX_BYTES: usize = 16 * 1024 * 1024;
+
+struct Budget {
+    nodes: usize,
+    bytes: usize,
+}
+
+impl Budget {
+    fn charge(&mut self, bytes: usize) -> Option<()> {
+        self.bytes = self.bytes.checked_sub(bytes)?;
+        Some(())
+    }
+}
 
 /// Parse a `bplist00` blob and return the top-level object, or `None` if the
 /// data is not a well-formed binary plist within our supported subset.
+/// Input and requested output allocations are each limited to 16 MiB;
+/// expansion is limited to 65,536 visited values and 32 nested containers.
 pub fn parse_bplist(data: &[u8]) -> Option<PlistValue> {
-    if data.len() < 8 + 32 || &data[..8] != b"bplist00" {
+    if data.len() < 8 + 32 || data.len() > MAX_BYTES || &data[..8] != b"bplist00" {
         return None;
     }
     let trailer = &data[data.len() - 32..];
@@ -54,10 +70,10 @@ pub fn parse_bplist(data: &[u8]) -> Option<PlistValue> {
     if offset_size == 0 || offset_size > 8 || ref_size == 0 || ref_size > 8 {
         return None;
     }
-    let num_objects = read_uint_be(trailer, 8, 8)? as usize;
-    let top_object = read_uint_be(trailer, 16, 8)? as usize;
-    let offset_table_off = read_uint_be(trailer, 24, 8)? as usize;
-    if top_object >= num_objects {
+    let num_objects = usize::try_from(read_uint_be(trailer, 8, 8)?).ok()?;
+    let top_object = usize::try_from(read_uint_be(trailer, 16, 8)?).ok()?;
+    let offset_table_off = usize::try_from(read_uint_be(trailer, 24, 8)?).ok()?;
+    if top_object >= num_objects || offset_table_off < 8 {
         return None;
     }
     // The offset table must fit before the trailer.
@@ -72,7 +88,14 @@ pub fn parse_bplist(data: &[u8]) -> Option<PlistValue> {
         ref_size,
         offset_table_off,
     };
-    ctx.read_object(top_object, 0)
+    ctx.read_object(
+        top_object,
+        0,
+        &mut Budget {
+            nodes: MAX_NODES,
+            bytes: MAX_BYTES,
+        },
+    )
 }
 
 /// Immutable parsing context shared across the recursive descent.
@@ -91,20 +114,27 @@ impl Ctx<'_> {
             return None;
         }
         let pos = self.offset_table_off + index * self.offset_size;
-        read_uint_be(self.data, pos, self.offset_size).map(|v| v as usize)
+        let offset = usize::try_from(read_uint_be(self.data, pos, self.offset_size)?).ok()?;
+        (offset >= 8 && offset < self.offset_table_off).then_some(offset)
     }
 
     /// Read an object reference (used inside arrays/dicts) at byte `pos`.
     fn read_ref(&self, pos: usize) -> Option<usize> {
-        read_uint_be(self.data, pos, self.ref_size).map(|v| v as usize)
+        usize::try_from(read_uint_be(self.payload(), pos, self.ref_size)?).ok()
     }
 
-    fn read_object(&self, index: usize, depth: usize) -> Option<PlistValue> {
+    fn payload(&self) -> &[u8] {
+        &self.data[..self.offset_table_off]
+    }
+
+    fn read_object(&self, index: usize, depth: usize, budget: &mut Budget) -> Option<PlistValue> {
         if depth > MAX_DEPTH {
             return None;
         }
+        budget.nodes = budget.nodes.checked_sub(1)?;
         let off = self.object_offset(index)?;
-        let marker = *self.data.get(off)?;
+        let data = self.payload();
+        let marker = *data.get(off)?;
         let hi = marker >> 4;
         let lo = (marker & 0x0F) as usize;
         match hi {
@@ -118,13 +148,14 @@ impl Ctx<'_> {
                 // unsigned and 8-byte ints are signed; `raw as i64` is correct
                 // for all (the 8-byte bit pattern reinterprets as signed).
                 let n = 1usize << lo;
-                let raw = read_uint_be(self.data, off + 1, n.min(8))?;
+                let bytes = data.get(off + 1..off.checked_add(1)?.checked_add(n)?)?;
+                let raw = read_uint_be(bytes, n.saturating_sub(8), n.min(8))?;
                 Some(PlistValue::Integer(raw as i64))
             }
             0x2 => {
                 // Real: 2^lo bytes (4 = f32, 8 = f64).
                 let n = 1usize << lo;
-                let bytes = self.data.get(off + 1..off + 1 + n)?;
+                let bytes = data.get(off + 1..off.checked_add(1)?.checked_add(n)?)?;
                 let v = match n {
                     4 => f32::from_be_bytes(bytes.try_into().ok()?) as f64,
                     8 => f64::from_be_bytes(bytes.try_into().ok()?),
@@ -134,19 +165,31 @@ impl Ctx<'_> {
             }
             0x3 => {
                 // Date: always an 8-byte f64.
-                let bytes = self.data.get(off + 1..off + 9)?;
+                if marker != 0x33 {
+                    return None;
+                }
+                let bytes = data.get(off + 1..off.checked_add(9)?)?;
                 Some(PlistValue::Date(f64::from_be_bytes(bytes.try_into().ok()?)))
             }
             0x4 => {
                 let (count, base) = self.read_count(off, lo)?;
-                let bytes = self.data.get(base..base + count)?;
-                Some(PlistValue::Data(bytes.to_vec()))
+                let bytes = data.get(base..base.checked_add(count)?)?;
+                budget.charge(count)?;
+                let mut out = Vec::new();
+                out.try_reserve_exact(count).ok()?;
+                out.extend_from_slice(bytes);
+                Some(PlistValue::Data(out))
             }
             0x5 => {
                 // ASCII string: `count` bytes, one byte per char.
                 let (count, base) = self.read_count(off, lo)?;
-                let bytes = self.data.get(base..base + count)?;
-                Some(PlistValue::String(core::str::from_utf8(bytes).ok()?.into()))
+                let bytes = data.get(base..base.checked_add(count)?)?;
+                let text = core::str::from_utf8(bytes).ok()?;
+                budget.charge(count)?;
+                let mut out = String::new();
+                out.try_reserve_exact(count).ok()?;
+                out.push_str(text);
+                Some(PlistValue::String(out))
             }
             0x6 => {
                 // UTF-16BE string: `count` UTF-16 code units (2 bytes each).
@@ -155,31 +198,45 @@ impl Ctx<'_> {
                 // count cannot overflow usize and wrap past the data.get bound
                 // (which then bounds the Vec reservation to `count <= len/2`).
                 let end = count.checked_mul(2).and_then(|n| base.checked_add(n))?;
-                let bytes = self.data.get(base..end)?;
-                let mut units = Vec::with_capacity(count);
-                for c in bytes.as_chunks::<2>().0 {
-                    units.push(u16::from_be_bytes([c[0], c[1]]));
+                let bytes = data.get(base..end)?;
+                let capacity = count.checked_mul(3)?;
+                budget.charge(capacity)?;
+                let mut s = String::new();
+                s.try_reserve_exact(capacity).ok()?;
+                let units = bytes
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|c| u16::from_be_bytes(*c));
+                for ch in char::decode_utf16(units) {
+                    s.push(ch.unwrap_or('\u{FFFD}'));
                 }
-                let s: String = char::decode_utf16(units)
-                    .map(|r| r.unwrap_or('\u{FFFD}'))
-                    .collect();
                 Some(PlistValue::String(s))
             }
             0x8 => {
                 // UID: lo+1 bytes.
                 let n = lo + 1;
-                Some(PlistValue::Uid(read_uint_be(self.data, off + 1, n.min(8))?))
+                let bytes = data.get(off + 1..off.checked_add(1)?.checked_add(n)?)?;
+                Some(PlistValue::Uid(read_uint_be(
+                    bytes,
+                    n.saturating_sub(8),
+                    n.min(8),
+                )?))
             }
             0xA | 0xC => {
                 // Array (0xA) or set (0xC): `count` object refs.
                 let (count, base) = self.read_count(off, lo)?;
-                // `count` is attacker-controlled; cap the upfront reservation by
-                // the input length (each ref needs >=1 byte). The loop fails fast
-                // via read_ref on the first out-of-range reference.
-                let mut out = Vec::with_capacity(count.min(self.data.len()));
+                let end = base.checked_add(count.checked_mul(self.ref_size)?)?;
+                data.get(base..end)?;
+                if count > budget.nodes {
+                    return None;
+                }
+                budget.charge(count.checked_mul(core::mem::size_of::<PlistValue>())?)?;
+                let mut out = Vec::new();
+                out.try_reserve_exact(count).ok()?;
                 for i in 0..count {
                     let r = self.read_ref(base + i * self.ref_size)?;
-                    out.push(self.read_object(r, depth + 1)?);
+                    out.push(self.read_object(r, depth + 1, budget)?);
                 }
                 Some(PlistValue::Array(out))
             }
@@ -187,20 +244,25 @@ impl Ctx<'_> {
                 // Dict: `count` key refs followed by `count` value refs.
                 let (count, base) = self.read_count(off, lo)?;
                 let keys_base = base;
-                // checked + capped: `count` is attacker-controlled. The loop
-                // self-limits via read_ref; this just bounds the reservation.
                 let vals_base = count
                     .checked_mul(self.ref_size)
                     .and_then(|n| base.checked_add(n))?;
-                let mut out = Vec::with_capacity(count.min(self.data.len()));
+                let end = vals_base.checked_add(count.checked_mul(self.ref_size)?)?;
+                data.get(base..end)?;
+                if count.checked_mul(2)? > budget.nodes {
+                    return None;
+                }
+                budget.charge(count.checked_mul(core::mem::size_of::<(String, PlistValue)>())?)?;
+                let mut out = Vec::new();
+                out.try_reserve_exact(count).ok()?;
                 for i in 0..count {
                     let k = self.read_ref(keys_base + i * self.ref_size)?;
                     let v = self.read_ref(vals_base + i * self.ref_size)?;
-                    let key = match self.read_object(k, depth + 1)? {
+                    let key = match self.read_object(k, depth + 1, budget)? {
                         PlistValue::String(s) => s,
                         _ => return None, // non-string keys are unsupported
                     };
-                    out.push((key, self.read_object(v, depth + 1)?));
+                    out.push((key, self.read_object(v, depth + 1, budget)?));
                 }
                 Some(PlistValue::Dict(out))
             }
@@ -215,13 +277,17 @@ impl Ctx<'_> {
         if lo != 0x0F {
             return Some((lo, off + 1));
         }
-        let size_marker = *self.data.get(off + 1)?;
+        let size_marker = *self.payload().get(off.checked_add(1)?)?;
         if size_marker >> 4 != 0x1 {
             return None;
         }
         let n = 1usize << (size_marker & 0x0F);
-        let count = read_uint_be(self.data, off + 2, n.min(8))? as usize;
-        Some((count, off + 2 + n))
+        // Lengths are unsigned machine-sized counts, never truncated integers.
+        if n > 8 {
+            return None;
+        }
+        let count = usize::try_from(read_uint_be(self.payload(), off + 2, n)?).ok()?;
+        Some((count, off.checked_add(2)?.checked_add(n)?))
     }
 }
 
@@ -241,6 +307,51 @@ fn read_uint_be(data: &[u8], off: usize, size: usize) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn plist(objects: &[&[u8]]) -> Vec<u8> {
+        let mut data = b"bplist00".to_vec();
+        let mut offsets = Vec::new();
+        for object in objects {
+            offsets.push(u8::try_from(data.len()).unwrap());
+            data.extend_from_slice(object);
+        }
+        let table = data.len();
+        data.extend_from_slice(&offsets);
+        data.extend_from_slice(&[0; 6]);
+        data.extend_from_slice(&[1, 1]);
+        data.extend_from_slice(&(objects.len() as u64).to_be_bytes());
+        data.extend_from_slice(&0u64.to_be_bytes());
+        data.extend_from_slice(&(table as u64).to_be_bytes());
+        data
+    }
+
+    #[test]
+    fn rejects_exponential_shared_reference_expansion() {
+        let mut objects: Vec<Vec<u8>> = (1..=17).map(|n| alloc::vec![0xa2, n, n]).collect();
+        objects.push(alloc::vec![0x09]);
+        let refs: Vec<_> = objects.iter().map(Vec::as_slice).collect();
+        assert!(parse_bplist(&plist(&refs)).is_none());
+    }
+
+    #[test]
+    fn oversized_data_length_is_rejected_without_overflow() {
+        let mut object = alloc::vec![0x4f, 0x13];
+        object.extend_from_slice(&u64::MAX.to_be_bytes());
+        assert!(parse_bplist(&plist(&[&object])).is_none());
+    }
+
+    #[test]
+    fn wide_integer_uses_documented_low_bits_and_requires_complete_value() {
+        let mut object = alloc::vec![0x14];
+        object.extend_from_slice(&1u64.to_be_bytes());
+        object.extend_from_slice(&7u64.to_be_bytes());
+        assert_eq!(
+            parse_bplist(&plist(&[&object])),
+            Some(PlistValue::Integer(7))
+        );
+        // An object's payload cannot spill into the offset table/trailer.
+        assert!(parse_bplist(&plist(&[&object[..9]])).is_none());
+    }
 
     /// `{"a": true, "b": 5}` encoded as a real bplist00 (built by Apple's
     /// `plutil`). Verifies header, trailer, dict, bool, and integer decode.
