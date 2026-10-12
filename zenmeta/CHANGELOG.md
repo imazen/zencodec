@@ -7,11 +7,6 @@
   use zencodec-owned request/plan/error types. Container planners remain with codecs.
 
 
-### Fixed
-
-- Explicit package contents exclude repository instruction files; public API
-  snapshot validation checks the packaged surface.
-
 ### QUEUED BREAKING CHANGES
 
 - None: zenmeta has no crates.io release yet. Changes to proposed PR-only paths
@@ -19,7 +14,7 @@
 
 ### Added
 
-- Namespace-aware GContainer `Directory` inspection and length/padding editing share the existing RDF traversal. Recovered lossless tests retain semantic ordering, quote style and the malformed-input time bound; malformed or ambiguous directories now fail explicitly. No codec signatures expose this implementation type.
+- Namespace-aware GContainer `Directory` inspection and length/padding editing share the existing RDF traversal. Recovered lossless tests retain semantic ordering, quote style and the malformed-input time bound; malformed or ambiguous directories now fail explicitly. No codec signatures expose this implementation type (`a81daf76`).
 
 - Shared gain-map XMP parsing/generation and container-directory interpretation
   from zenjpeg PR 210 (`74e727f6`), behind `xmp`; no JPEG framing or codec
@@ -41,6 +36,9 @@
   color, orientation and ISO gain-map types.
 
 ### Fixed
+
+- Explicit package contents exclude repository instruction files; public API
+  snapshot validation checks the packaged surface.
 
 - Apple EXIF entry sizes use checked arithmetic, including on 32-bit targets;
   oversized counts reject instead of the released ultrahdr reader's overflow panic.

@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zenmeta.txt 8 lines (supported surface) | zenmeta.features.txt 337 added (features: apple,audit,inventory,rewrite,std,xmp) | zenmeta.internal.txt 17 lines (18 hidden + 0 excluded-feature)
+# files: zenmeta.txt 8 lines (supported surface) | zenmeta.features.txt 341 added (features: apple,audit,inventory,rewrite,std,xmp) | zenmeta.internal.txt 17 lines (18 hidden + 0 excluded-feature)
 
 ## summary
 #

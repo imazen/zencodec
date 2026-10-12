@@ -220,3 +220,17 @@ tests, including independent readers, are recorded in each codec report. The
 zencodecs regression suite passes with those planners, and application-supplied
 compression/XML callbacks preserve one-shot timeout reasons through I/O adapters.
 The all-crate replacement PR set and final remote CI verification are still open.
+
+### GContainer implementation revision
+
+The follow-up `a81daf76` adds `zenmeta::xmp::container::Directory` with
+`parse`, `items`, and `rewrite_item_lengths`. This is zenmeta's own advanced
+API, behind its default-off `xmp` feature. JPEG calls it privately; its public
+wrapper types remain JPEG-owned. The generated zenmeta API snapshot includes
+these additions.
+
+`git diff a31a9b6 a81daf7 -- src Cargo.toml` is empty: the zencodec source and
+manifest used by the final 0.1.26 compatibility comparison are unchanged.
+Directory parsing/editing passed native and i686 tests, a no_std WASM check,
+and inspection by Python ElementTree and ExifTool. This validates the shared
+editor; the JPEG lossless consumer still has separate integration gates.

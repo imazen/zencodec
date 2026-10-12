@@ -10,14 +10,14 @@
 ## summary
 #
 #   pub modules                                12
-#   pub types (struct/enum/trait/alias)        33
+#   pub types (struct/enum/trait/alias)        34
 #   pub consts/statics                         20
 #   free functions                             32
-#   inherent methods                           91
+#   inherent methods                           94
 #   struct fields                              81
 #   enum variants                              43
 #   trait roster entries (type × trait)        83
-#   auto-trait-complete types                  30
+#   auto-trait-complete types                  31
 #   auto-trait exceptions                       2
 #
 # per-module pub lines:
@@ -27,9 +27,9 @@
 #   bplist                           11
 #   ifd                             169
 #   rewrite                          19
-#   xmp                              53
+#   xmp                              57
 
-## items (309 lines)
+## items (313 lines)
 
 pub mod apple
 pub mod apple::compatibility
@@ -303,6 +303,10 @@ pub xmp::container::ContainerItem::padding: core::option::Option<usize>
 pub xmp::container::ContainerItem::semantic: xmp::container::ItemSemantic
 pub fn xmp::container::ContainerItem::primary(impl core::convert::Into<alloc::string::String>) -> Self
 pub fn xmp::container::ContainerItem::secondary(xmp::container::ItemSemantic, impl core::convert::Into<alloc::string::String>, usize) -> Self
+pub struct xmp::container::Directory<'a>
+pub fn xmp::container::Directory<'a>::items(&self) -> impl core::iter::traits::exact_size::ExactSizeIterator<Item = &xmp::container::ContainerItem>
+pub fn xmp::container::Directory<'a>::parse(&'a str) -> core::result::Result<Self, xmp::Error>
+pub fn xmp::container::Directory<'a>::rewrite_item_lengths(&self, &[(&str, usize)]) -> core::result::Result<alloc::string::String, xmp::Error>
 pub fn xmp::container::generate_container_directory(&[xmp::container::ContainerItem]) -> alloc::string::String
 pub fn xmp::container::parse_container_items(&str) -> alloc::vec::Vec<xmp::container::ContainerItem>
 pub mod xmp::gainmap
@@ -371,6 +375,6 @@ xmp::gainmap::XmpError: Debug, Display, Error
 
 ## auto traits
 
-30 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+31 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 ifd::walk::Walk<'a>: !Freeze !RefUnwindSafe !Sync
 rewrite::Context<'a>: !RefUnwindSafe !Send !Sync !UnwindSafe

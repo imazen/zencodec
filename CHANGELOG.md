@@ -1,16 +1,10 @@
 # Changelog
 
-All notable changes to zencodec are documented here. Sections below the
-`zencodec-testkit` heading refer to the root `zencodec` crate.
+Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELOG.md).
 
 ## zencodec-testkit
 
 ### [Unreleased]
-
-- Add `metadata_rewrite` request, report, output-plan and runtime-service contracts
-  without a dependency on zenmeta or a codec. Existing published metadata APIs
-  remain in place; the new contract is additive relative to 0.1.26.
-
 
 #### QUEUED BREAKING CHANGES
 
@@ -18,18 +12,6 @@ All notable changes to zencodec are documented here. Sections below the
 
 #### Added
 
-- `LimitKind::InventoryParts` and categorization for `InventoryError`: hitting
-  the part cap is a recoverable resource failure with its typed cause retained;
-  inconsistent maps are internal errors. New variants append after released
-  discriminants. Malformed file bytes remain reportable inventory parts.
-
-- Retain the exact animation timing additions from `20310944`, already used by
-  PNG main: `animation::FrameDuration`, exact frame accessors/constructors,
-  and static/dynamic `push_frame_timed`. Existing millisecond APIs remain.
-  This coordinated integration preserves both inventory and animation APIs;
-  it adds no video implementation. See `docs/animation-timing.md`.
-  New unsupported-operation variants follow all released variants, preserving
-  the numeric discriminants checked against crates.io 0.1.26.
 - `check_inventory_dispatch` compares generic/dynamic results and disabled-operation
   errors. `check_all` also checks the disabled inventory contract without changing
   its published generic bounds; erased-dispatch checks remain separately callable.
@@ -133,6 +115,23 @@ removes that whole class).
   inventory/metadata PR consumers require migration; those are recorded separately.
 
 ### Added
+
+- Add `metadata_rewrite` request, report, output-plan and runtime-service contracts
+  without a dependency on zenmeta or a codec. Existing published metadata APIs
+  remain in place; the new contract is additive relative to 0.1.26 (`a31a9b68`).
+
+- `LimitKind::InventoryParts` and categorization for `InventoryError`: hitting
+  the part cap is a recoverable resource failure with its typed cause retained;
+  inconsistent maps are internal errors. New variants append after released
+  discriminants. Malformed file bytes remain reportable inventory parts (`c1c3292f`).
+
+- Retain the exact animation timing additions from `20310944`, already used by
+  PNG main: `animation::FrameDuration`, exact frame accessors/constructors,
+  and static/dynamic `push_frame_timed`. Existing millisecond APIs remain.
+  This coordinated integration preserves both inventory and animation APIs;
+  it adds no video implementation. See `docs/animation-timing.md`.
+  New unsupported-operation variants follow all released variants, preserving
+  the numeric discriminants checked against crates.io 0.1.26.
 
 - `UnsupportedOperation::Inventory` and an inventory default returning the
   existing `At<CodecError>` envelope, without new bounds on `DecodeJob::Error`.
