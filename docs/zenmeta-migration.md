@@ -11,12 +11,15 @@ final API review and PR splitting. These are not crate releases.
 
 | Owner | Verified work | Remaining work |
 |---|---|---|
-| zencodec | EXIF metadata subset of PR 130, baseline contract, typed unsupported inventory; registry comparison against 0.1.26 passes | Final public-surface snapshots and dependency guards |
+| zencodec | EXIF metadata subset of PR 130, baseline contract, typed unsupported inventory; existing PNG timing contract combined without changing released discriminants (`ee1a2305`); registry comparison and public snapshots pass | Final dependency guards and review |
 | zenmeta | XMP/audit/display/Apple/IFD extraction, plist bounds, strict/legacy Apple distinction, shared gain-map XMP source (`ddb6f905`) | JPEG consumers, generic scrub analysis, final review |
-| ultrahdr | Apple/plist delegation preserving 0.6.0 nominal types (`8db388f9`); registry comparison passes | PR 35 encoder metadata-policy integration, remote CI |
-| TIFF | Default-off shared-IFD inventory, dispatch/error tests, six-platform CI configuration; native/i686 suites pass (`e61b3460`) | Finish remote CI and final API review |
-| RAW | Default-off shared-IFD inventory for both backends, saved crashes, native/i686 suites, independent ExifTool checks (`47aeffac`) | Finish remote CI and final API review |
+| ultrahdr | Apple/plist delegation preserving 0.6.0 nominal types (`8db388f9`); registry comparison passes; SIMD CI compatibility repaired (`1d86bffc`) | PR 35 encoder metadata-policy integration, finish remote CI |
+| TIFF | Default-off shared-IFD inventory, approved architecture-specific ICC checks, one-shot timeout propagation (`c38ed0d3`); native/i686 and full CI pass | Final API review and dependency normalization |
+| RAW | Default-off shared-IFD inventory for both backends, saved crashes, native/i686 suites, ExifTool checks; DNG/RAF/CR3 one-shot timeout propagation (`89b54052`); full CI passes | Final API review and dependency normalization |
 | JPEG | Extended-inspection source and tests imported; shared gain-map XMP source extracted | Reconcile PRs 210/225/221, wrappers, inventory gating and all corpus/oracle tests |
+| HEIC | PRs 51/57 integrated (`2cbd95a2`), private Apple delegation, native/i686 inventory and mutation suites, existing decode/behavior suites, external-tool framing checks | Finish remote CI and final dependency normalization |
+| zenflate | Existing count-only scanner gated behind default-off scan (`a0ea0363`); original regressions retained as lossless text; native/i686 differential tests and semver pass | Finish remote CI |
+| PNG | PR 32 reused against current animation-aware main, default-off inventory/scanner, typed dispatch and cancellation checks | Input-limit expectation decision, final portability/API validation |
 | Other codecs and zenpipe | Source/PR map below | Consumer migration and codec-owned rewrite planners |
 
 The semver audit found existing unreleased breaks independently of this
