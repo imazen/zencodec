@@ -41,3 +41,6 @@ metadata-semver:
 metadata-target-check:
     cargo check -p zenmeta --target wasm32-wasip1 --no-default-features --features apple,audit,inventory,xmp
     cargo +1.88.0 check -p zencodec -p zenmeta --all-features
+
+metadata-i686-check runner="env":
+    CARGO_TARGET_I686_UNKNOWN_LINUX_GNU_RUNNER="{{runner}}" cargo test -p zenmeta --all-features --target i686-unknown-linux-gnu

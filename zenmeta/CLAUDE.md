@@ -14,3 +14,8 @@ Feature combinations must work independently; default builds have no XML parser.
   returned high rather than documented low bits for wide integers. Regression
   cases failed before the fix and pass after it. Compatibility-wrapper consumers
   must document these behavior changes when switching implementations.
+
+- Apple compatibility CI found an i686 overflow in the released reader's
+  `type_size * count` arithmetic. Production zenmeta already checks it; the
+  test-only released oracle now models the 64-bit reference result with checked
+  conversion on 32-bit hosts. Keep the explicit oversized-count regression.

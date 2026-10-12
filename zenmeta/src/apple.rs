@@ -555,7 +555,7 @@ fn read_int(value: &[u8], dtype: u16, endian: Endian) -> Option<i32> {
     }
 }
 
-// Frozen published implementation is a test-only compatibility oracle.
+// Published implementation is a test-only compatibility oracle; see PROVENANCE.md.
 #[cfg(test)]
 #[path = "../tests/support/apple_0_6_0.rs"]
 mod released;
@@ -600,6 +600,16 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn oversized_exif_value_count_is_rejected_on_every_pointer_width() {
+        let mut exif = build_exif_with_apple_makernote();
+        // IFD0's Exif pointer claims u32::MAX LONG values: 4 * count
+        // overflows usize on i686 in the released reader.
+        exif[14..18].copy_from_slice(&u32::MAX.to_be_bytes());
+        assert_eq!(compatibility::parse_exif_for_apple_hdr(&exif), None);
+        assert_eq!(parse_exif_for_apple_hdr(&exif), None);
     }
 
     #[test]

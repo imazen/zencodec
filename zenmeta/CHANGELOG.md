@@ -26,6 +26,9 @@
 
 ### Fixed
 
+- Apple EXIF entry sizes use checked arithmetic, including on 32-bit targets;
+  oversized counts reject instead of the released ultrahdr reader's overflow panic.
+
 - Binary-plist parsing now checks count/offset arithmetic and stops values at the
   object-table boundary. Existing ultrahdr-core 0.6.0 parsing could panic on a
   crafted data length or consume offset-table bytes as a truncated value.

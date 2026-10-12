@@ -33,7 +33,8 @@ IFD implementation and Apache-licensed Apple implementation. This does not
 relicense dependencies or remove any third-party notices.
 
 The test-only `tests/support/apple_0_6_0.rs` is the published Apache-2.0 Apple
-reader, retained as a frozen compatibility oracle (only its GainMapMetadata
-import changes). Mutation/truncation comparisons pin tolerance differences;
+reader, retained as a compatibility oracle. Its GainMapMetadata
+import changes, and size/offset arithmetic is checked so 32-bit test hosts model
+the released 64-bit reader's out-of-range rejection instead of panicking. Mutation/truncation comparisons pin tolerance differences;
 it is not used by shipped code. Strict and compatibility interpretations share
 the production entry reader and numeric conversion helpers.

@@ -301,12 +301,14 @@ fn ifd_find(tiff: &[u8], endian: Endian, ifd_off: usize, want: u16) -> Option<(u
         }
         let dtype = endian.u16(tiff, e + 2)?;
         let n = endian.u32(tiff, e + 4)?;
-        let total = type_size(dtype) * n as usize;
+        // Model the released 64-bit reader on 32-bit test hosts as well.
+        // The released usize multiplication itself panics on i686.
+        let total = usize::try_from(type_size(dtype) as u64 * u64::from(n)).ok()?;
         let value = if total <= 4 {
             tiff.get(e + 8..e + 8 + total.min(4))?.to_vec()
         } else {
             let off = endian.u32(tiff, e + 8)? as usize;
-            tiff.get(off..off + total)?.to_vec()
+            tiff.get(off..off.checked_add(total)?)?.to_vec()
         };
         return Some((dtype, n, value));
     }
