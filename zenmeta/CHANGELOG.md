@@ -9,6 +9,10 @@
 
 ### Added
 
+- Shared gain-map XMP parsing/generation and container-directory interpretation
+  from zenjpeg PR 210 (`74e727f6`), behind `xmp`; no JPEG framing or codec
+  dependency. Existing tests move with their parser.
+
 - Explicit Apple compatibility helpers share the strict reader while retaining
   ultrahdr-core 0.6.0 selection, malformed-entry and numeric behavior. A frozen
   released reader checks mutations and truncations; no codec re-export is required.

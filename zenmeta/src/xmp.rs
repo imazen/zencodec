@@ -4,6 +4,9 @@
 //! RDF reasoner or an Adobe alias-normalization engine. Unknown structures remain
 //! visible in the audit snapshot. DTDs/external entities are rejected. Reading
 //! metadata never reads, scans or allocates image pixels.
+pub mod container;
+pub mod gainmap;
+
 use alloc::{
     collections::BTreeMap,
     format,

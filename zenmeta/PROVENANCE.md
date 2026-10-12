@@ -38,3 +38,11 @@ import changes, and size/offset arithmetic is checked so 32-bit test hosts model
 the released 64-bit reader's out-of-range rejection instead of panicking. Mutation/truncation comparisons pin tolerance differences;
 it is not used by shipped code. Strict and compatibility interpretations share
 the production entry reader and numeric conversion helpers.
+
+XMP gain-map interpretation, generation, container-directory values and their
+inline tests come from [zenjpeg PR 210](https://github.com/imazen/zenjpeg/pull/210),
+commit `74e727f649a23063e3de1d964af2ced99b8bcd26`,
+`zenjpeg/src/container/{xmp,types}.rs`. JPEG APP1 framing and MPF types/tests stay
+in zenjpeg. The controlled source is included under the authorized Apache-2.0
+OR MIT terms. Consumer wrappers retain their own nominal types; these zenmeta
+implementation types are not re-exported by codecs.

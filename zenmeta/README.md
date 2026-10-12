@@ -28,3 +28,7 @@ an inventory is not a safe generic deletion recipe.
 
 See [source provenance](PROVENANCE.md) and the workspace
 [design](../docs/zenmeta-design.md).
+
+The `xmp` feature also provides gain-map XMP parsing/generation and Google
+container-directory inspection under `zenmeta::xmp::{gainmap, container}`.
+JPEG APP framing and packet reassembly remain codec responsibilities.

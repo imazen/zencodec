@@ -28,3 +28,6 @@ required-features = ["audit", "xmp"]
 [[example]]
 name = "audit_metadata"
 required-features = ["audit", "xmp"]
+
+[dev-dependencies]
+proptest = "1.11.0"
