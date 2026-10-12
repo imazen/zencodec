@@ -9,6 +9,10 @@
 
 ### Added
 
+- Explicit Apple compatibility helpers share the strict reader while retaining
+  ultrahdr-core 0.6.0 selection, malformed-entry and numeric behavior. A frozen
+  released reader checks mutations and truncations; no codec re-export is required.
+
 - Shared TIFF/BigTIFF walker and tag names from zenextras PR 30 (`601682d3`),
   gated by the default-off `inventory` feature. Existing decoder-specific Rules
   stay in their codecs. No zenifd package is introduced.

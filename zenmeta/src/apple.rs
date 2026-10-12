@@ -77,6 +77,12 @@ impl AppleHdrInfo {
         if !maker33.is_finite() || !maker48.is_finite() {
             return None;
         }
+        self.headroom_stops_compatibility()
+    }
+
+    fn headroom_stops_compatibility(&self) -> Option<f64> {
+        let maker33 = self.hdr_headroom?;
+        let maker48 = self.hdr_gain;
         let stops = if maker33 < 1.0 {
             if maker48 <= 0.01 {
                 -20.0 * maker48 + 1.8
@@ -137,21 +143,25 @@ pub fn from_apple_headroom(info: &AppleHdrInfo) -> Option<GainMapMetadata> {
 /// IFD. Returns `None` if the bytes are not a parseable TIFF, lack an Apple
 /// MakerNote, or carry no HDR tags.
 pub fn parse_exif_for_apple_hdr(exif: &[u8]) -> Option<AppleHdrInfo> {
+    parse_exif_with_mode(exif, Interpretation::Strict)
+}
+
+fn parse_exif_with_mode(exif: &[u8], mode: Interpretation) -> Option<AppleHdrInfo> {
     let (tiff, endian) = tiff_start(exif)?;
     // IFD0 offset is the u32 at byte 4 of the TIFF header.
     let ifd0_off = endian.u32(tiff, 4)? as usize;
     // Find the Exif sub-IFD pointer in IFD0.
-    let (kind, count, exif_ptr) = ifd_find(tiff, endian, ifd0_off, TIFF_TAG_EXIF_IFD)?;
-    if kind != 4 || count != 1 {
+    let (kind, count, exif_ptr) = ifd_find(tiff, endian, ifd0_off, TIFF_TAG_EXIF_IFD, mode)?;
+    if mode == Interpretation::Strict && (kind != 4 || count != 1) {
         return None;
     }
     let exif_ifd_off = endian.u32(exif_ptr, 0)? as usize;
     // Find the MakerNote blob in the Exif sub-IFD.
-    let (kind, _, maker) = ifd_find(tiff, endian, exif_ifd_off, TIFF_TAG_MAKERNOTE)?;
-    if kind != 7 {
+    let (kind, _, maker) = ifd_find(tiff, endian, exif_ifd_off, TIFF_TAG_MAKERNOTE, mode)?;
+    if mode == Interpretation::Strict && kind != 7 {
         return None;
     }
-    parse_apple_makernote(maker)
+    parse_makernote_with_mode(maker, mode)
 }
 
 /// One borrowed vendor entry, including unknown/private tags.
@@ -201,7 +211,14 @@ pub struct AppleMakerNote<'a> {
 impl<'a> AppleMakerNote<'a> {
     /// Recognize an Apple note, bounded to 16 MiB and 4096 entries.
     pub fn parse(data: &'a [u8]) -> Option<Self> {
-        if data.len() > 16 * 1024 * 1024 || data.get(..10)? != b"Apple iOS\0" {
+        Self::parse_with_mode(data, Interpretation::Strict)
+    }
+
+    fn parse_with_mode(data: &'a [u8], mode: Interpretation) -> Option<Self> {
+        if (mode == Interpretation::Strict && data.len() > 16 * 1024 * 1024)
+            || (mode == Interpretation::Compatibility && data.len() < 20)
+            || data.get(..10)? != b"Apple iOS\0"
+        {
             return None;
         }
         let endian = match data.get(12..14)? {
@@ -215,7 +232,7 @@ impl<'a> AppleMakerNote<'a> {
             14
         };
         let count = endian.u16(data, ifd)? as usize;
-        if count > 4096 {
+        if mode == Interpretation::Strict && count > 4096 {
             return None;
         }
         Some(Self {
@@ -237,17 +254,34 @@ impl<'a> AppleMakerNote<'a> {
         &self,
     ) -> impl Iterator<Item = core::result::Result<MakerNoteEntry<'a>, MakerNoteEntryError>> + '_
     {
-        (0..self.count).map(|index| {
+        self.entries_with_mode(Interpretation::Strict)
+    }
+
+    fn entries_with_mode(
+        &self,
+        mode: Interpretation,
+    ) -> impl Iterator<Item = core::result::Result<MakerNoteEntry<'a>, MakerNoteEntryError>> + '_
+    {
+        (0..self.count).map(move |index| {
             let offset = self.entries + index * 12;
             let tag = self.endian.u16(self.data, offset);
             let error = MakerNoteEntryError { index, tag };
+            if mode == Interpretation::Compatibility {
+                self.data.get(offset..offset + 12).ok_or(error)?;
+            }
             let tag = tag.ok_or(error)?;
             let kind = self.endian.u16(self.data, offset + 2).ok_or(error)?;
             let count = self.endian.u32(self.data, offset + 4).ok_or(error)?;
-            if !(1..=13).contains(&kind) && !(16..=18).contains(&kind) {
+            if mode == Interpretation::Strict
+                && !(1..=13).contains(&kind)
+                && !(16..=18).contains(&kind)
+            {
                 return Err(error);
             }
-            let size = type_size(kind).checked_mul(count as usize).ok_or(error)?;
+            let size = mode
+                .type_size(kind)
+                .checked_mul(count as usize)
+                .ok_or(error)?;
             let start = if size <= 4 {
                 offset + 8
             } else {
@@ -276,17 +310,50 @@ impl<'a> AppleMakerNote<'a> {
 /// (`maker[0]`). Unrecognized notes, malformed entries or duplicate rendering
 /// tags refuse extraction. The inspection view reports malformed entries individually.
 pub fn parse_apple_makernote(maker: &[u8]) -> Option<AppleHdrInfo> {
-    let view = AppleMakerNote::parse(maker)?;
+    parse_makernote_with_mode(maker, Interpretation::Strict)
+}
+
+fn parse_makernote_with_mode(maker: &[u8], mode: Interpretation) -> Option<AppleHdrInfo> {
+    let view = AppleMakerNote::parse_with_mode(maker, mode)?;
     let mut info = AppleHdrInfo::default();
     let mut seen = 0u8;
-    for entry in view.entries() {
-        let entry = entry.ok()?;
+    for entry in view.entries_with_mode(mode) {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(_) if mode == Interpretation::Compatibility => continue,
+            Err(_) => return None,
+        };
         let bit = match entry.tag {
             tags::HDR_HEADROOM => 1,
             tags::HDR_GAIN => 2,
             tags::HDR_IMAGE_TYPE => 4,
             _ => continue,
         };
+        if mode == Interpretation::Compatibility {
+            match entry.tag {
+                tags::HDR_HEADROOM => {
+                    info.hdr_headroom = read_rational(entry.value, entry.kind, view.endian)
+                }
+                tags::HDR_GAIN => {
+                    if let Some(gain) = read_rational(entry.value, entry.kind, view.endian) {
+                        info.hdr_gain = gain;
+                    }
+                }
+                tags::HDR_IMAGE_TYPE => {
+                    info.hdr_image_type = read_int(
+                        entry.value,
+                        match entry.kind {
+                            6 => 1,
+                            8 => 3,
+                            kind => kind,
+                        },
+                        view.endian,
+                    )
+                }
+                _ => unreachable!(),
+            }
+            continue;
+        }
         if seen & bit != 0 || entry.count != 1 {
             return None;
         }
@@ -303,6 +370,47 @@ pub fn parse_apple_makernote(maker: &[u8]) -> Option<AppleHdrInfo> {
         }
     }
     Some(info)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Interpretation {
+    Strict,
+    Compatibility,
+}
+
+impl Interpretation {
+    fn type_size(self, kind: u16) -> usize {
+        if self == Self::Compatibility && matches!(kind, 13 | 16..=18) {
+            1 // The released helper treats these as unknown one-byte types.
+        } else {
+            type_size(kind)
+        }
+    }
+}
+
+/// Compatibility with ultrahdr-core 0.6.0's published Apple helpers.
+///
+/// These operations preserve first-match EXIF selection, last-readable-value
+/// MakerNote selection, malformed-entry tolerance, and the historical numeric
+/// interpretation. Use the parent module's strict operations for validation.
+/// No value copies are needed; directory work is bounded by TIFF's u16 count.
+pub mod compatibility {
+    use super::{AppleHdrInfo, Interpretation};
+
+    /// Extract using the released helper's tolerant EXIF selection rules.
+    pub fn parse_exif_for_apple_hdr(exif: &[u8]) -> Option<AppleHdrInfo> {
+        super::parse_exif_with_mode(exif, Interpretation::Compatibility)
+    }
+
+    /// Extract using the released helper's tolerant MakerNote rules.
+    pub fn parse_apple_makernote(maker: &[u8]) -> Option<AppleHdrInfo> {
+        super::parse_makernote_with_mode(maker, Interpretation::Compatibility)
+    }
+
+    /// Preserve the released formula, including its non-finite-input behavior.
+    pub fn headroom_stops(info: &AppleHdrInfo) -> Option<f64> {
+        info.headroom_stops_compatibility()
+    }
 }
 
 // ── TIFF/IFD primitives ──────────────────────────────────────────────────
@@ -368,7 +476,13 @@ fn tiff_start(exif: &[u8]) -> Option<(&[u8], Endian)> {
 /// Find an IFD entry by tag and return `(dtype, count, value_bytes)`. Value
 /// bytes are read inline (≤ 4 bytes) or from the pointed-to offset (relative
 /// to the TIFF start). `None` if the tag is absent or the data is truncated.
-fn ifd_find(tiff: &[u8], endian: Endian, ifd_off: usize, want: u16) -> Option<(u16, u32, &[u8])> {
+fn ifd_find(
+    tiff: &[u8],
+    endian: Endian,
+    ifd_off: usize,
+    want: u16,
+    mode: Interpretation,
+) -> Option<(u16, u32, &[u8])> {
     let count = endian.u16(tiff, ifd_off)? as usize;
     let entries = ifd_off.checked_add(2)?;
     let mut result = None;
@@ -382,13 +496,16 @@ fn ifd_find(tiff: &[u8], endian: Endian, ifd_off: usize, want: u16) -> Option<(u
         }
         let dtype = endian.u16(tiff, e + 2)?;
         let n = endian.u32(tiff, e + 4)?;
-        let total = type_size(dtype).checked_mul(n as usize)?;
+        let total = mode.type_size(dtype).checked_mul(n as usize)?;
         let value = if total <= 4 {
             tiff.get(e + 8..e + 8 + total.min(4))?
         } else {
             let off = endian.u32(tiff, e + 8)? as usize;
             tiff.get(off..off.checked_add(total)?)?
         };
+        if mode == Interpretation::Compatibility {
+            return Some((dtype, n, value));
+        }
         if result.replace((dtype, n, value)).is_some() {
             return None;
         }
@@ -438,10 +555,98 @@ fn read_int(value: &[u8], dtype: u16, endian: Endian) -> Option<i32> {
     }
 }
 
+// Frozen published implementation is a test-only compatibility oracle.
+#[cfg(test)]
+#[path = "../tests/support/apple_0_6_0.rs"]
+mod released;
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use alloc::vec;
+
+    fn assert_released_parity(data: &[u8], exif: bool) {
+        let old = if exif {
+            released::parse_exif_for_apple_hdr(data)
+        } else {
+            released::parse_apple_makernote(data)
+        }
+        .map(|info| (info.hdr_headroom, info.hdr_gain, info.hdr_image_type));
+        let new = if exif {
+            compatibility::parse_exif_for_apple_hdr(data)
+        } else {
+            compatibility::parse_apple_makernote(data)
+        }
+        .map(|info| (info.hdr_headroom, info.hdr_gain, info.hdr_image_type));
+        assert_eq!(new, old, "exif={exif}, bytes={data:?}");
+    }
+
+    #[test]
+    fn compatibility_matches_released_parser_on_mutations_and_truncations() {
+        for (data, exif) in [
+            (build_apple_makernote_be(1686, 1000, 1, 20, 3), false),
+            (build_exif_with_apple_makernote(), true),
+        ] {
+            for end in 0..=data.len() {
+                assert_released_parity(&data[..end], exif);
+            }
+            for offset in 0..data.len() {
+                for value in [
+                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 13, 16, 17, 18, 42, 127, 128, 255,
+                ] {
+                    let mut changed = data.clone();
+                    changed[offset] = value;
+                    assert_released_parity(&changed, exif);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn compatibility_preserves_nonfinite_formula_behavior() {
+        for maker33 in [
+            f64::NEG_INFINITY,
+            -1.0,
+            0.0,
+            0.5,
+            1.0,
+            2.0,
+            f64::INFINITY,
+            f64::NAN,
+        ] {
+            for maker48 in [
+                f64::NEG_INFINITY,
+                -1.0,
+                0.0,
+                0.01,
+                0.5,
+                f64::INFINITY,
+                f64::NAN,
+            ] {
+                let old = released::AppleHdrInfo {
+                    hdr_headroom: Some(maker33),
+                    hdr_gain: maker48,
+                    hdr_image_type: None,
+                };
+                let new = AppleHdrInfo {
+                    hdr_headroom: Some(maker33),
+                    hdr_gain: maker48,
+                    hdr_image_type: None,
+                };
+                assert_eq!(compatibility::headroom_stops(&new), old.headroom_stops());
+            }
+        }
+    }
+
+    #[test]
+    fn strict_and_compatibility_rules_remain_distinct() {
+        let mut note = build_apple_makernote_be(1686, 1000, 1, 20, 3);
+        // Duplicate HDRHeadroom in the third directory entry (originally HDRGain).
+        note[40..42].copy_from_slice(&tags::HDR_HEADROOM.to_be_bytes());
+        assert!(parse_apple_makernote(&note).is_none());
+        assert_released_parity(&note, false);
+        assert!(compatibility::parse_apple_makernote(&note).is_some());
+    }
 
     #[test]
     fn headroom_formula_all_branches() {

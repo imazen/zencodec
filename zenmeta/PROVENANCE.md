@@ -31,3 +31,9 @@ On 2026-10-12 the copyright holder authorized Apache-2.0 OR MIT licensing for
 the controlled source moved into zenmeta, including the formerly AGPL/commercial
 IFD implementation and Apache-licensed Apple implementation. This does not
 relicense dependencies or remove any third-party notices.
+
+The test-only `tests/support/apple_0_6_0.rs` is the published Apache-2.0 Apple
+reader, retained as a frozen compatibility oracle (only its GainMapMetadata
+import changes). Mutation/truncation comparisons pin tolerance differences;
+it is not used by shipped code. Strict and compatibility interpretations share
+the production entry reader and numeric conversion helpers.
