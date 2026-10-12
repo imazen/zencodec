@@ -7,7 +7,14 @@ All notable changes to zencodec are documented here. Sections below the
 
 ### [Unreleased]
 
+#### QUEUED BREAKING CHANGES
+
+- None against crates.io zencodec-testkit 0.1.0.
+
 #### Added
+- `check_inventory_dispatch` compares generic/dynamic results and disabled-operation
+  errors. `check_all` also checks the disabled inventory contract without changing
+  its published generic bounds; erased-dispatch checks remain separately callable.
 - **`check_inventory`** (in `check_all` when a decoder declares `inventory`): on a valid file,
   the file plus appended junk, and every truncation, the inventory exists, validates, and never
   claims the junk as consumed. The `reference` codec implements `inventory` as the worked example.
@@ -109,6 +116,9 @@ removes that whole class).
 
 ### Added
 
+- `UnsupportedOperation::Inventory` and an inventory default returning the
+  existing `At<CodecError>` envelope, without new bounds on `DecodeJob::Error`.
+  The inventory method itself is new relative to crates.io 0.1.26.
 - Metadata additions extracted from the metadata portion of PR 130 (source
   `27cfae5d`, including PRs 123–125 and 128): `exif::Ifd`, `exif::EntryRef`,
   `Exif::entries`, and separate color, time-offset, device-ID, camera-owner and
@@ -117,6 +127,9 @@ removes that whole class).
 
 ### Changed
 
+- Unpublished inventory callers now receive `Result<Inventory, At<CodecError>>`
+  (dynamic dispatch retains `BoxedError`), replacing `Result<Option<Inventory>, _>`.
+  Disabled implementations return unsupported; no released inventory API changes.
 - EXIF publishing presets retain validated color declarations and remove camera
   ownership independently of creator attribution. Timestamp/camera opt-ins no
   longer automatically retain UTC offsets or device/image identifiers; those have

@@ -10,11 +10,15 @@ This guide is for codec authors implementing `DecodeJob::inventory`.
 
 ## The contract
 
-`DecodeJob::inventory(&self, data) -> Result<Option<Inventory>, Self::Error>`:
+`DecodeJob::inventory(&self, data) -> Result<Inventory, At<CodecError>>`:
 
-- **Opting in.** `Ok(None)` is the trait default and means "not implemented". A codec that
-  implements inventories sets `DecodeCapabilities::with_inventory(true)` and never returns
-  `None`.
+- **Opting in.** The trait default returns `UnsupportedOperation::Inventory` in the
+  shared error envelope. Codecs gate walkers and inventory-only dependencies behind a
+  default-off `inventory` Cargo feature. Enabled implementations set
+  `DecodeCapabilities::with_inventory(true)` and return an inventory or an error.
+  The method stays callable when the feature is off. This adds no constructor bound
+  to the decoder's native error type. Dynamic dispatch retains `BoxedError` and the
+  shared envelope/cause inside it.
 - **Full coverage.** Every byte of `data` belongs to exactly one top-level part, and
   `Inventory::validate` checks it.
 - **Bad input still gets an inventory.** For malformed or truncated input, record what you
@@ -106,7 +110,9 @@ Minimums; more is welcome where the codec already parses it.
 
 1. Run `zencodec_testkit::check_inventory` on encoder output and on the codec's corpus files. It
    checks a valid file, the same file with junk appended, and every truncation, and it is part of
-   `check_all` once the capability is declared.
+   `check_all`, including the disabled-feature unsupported result. Also run
+   `check_inventory_dispatch` to check generic/dynamic parity; erased configuration
+   dispatch requires a `'static` config, without adding that bound to `check_all`.
 2. Pin a fixture's full part list: every unit type the format defines, plus a private unit and
    trailing data.
 3. Mutate in both directions:

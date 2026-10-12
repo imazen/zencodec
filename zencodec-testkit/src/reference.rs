@@ -1222,8 +1222,8 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
         Ok(build_info(&parse_header(data)?))
     }
 
-    fn inventory(&self, data: &[u8]) -> Result<Option<zencodec::inventory::Inventory>, RefError> {
-        zcr_inventory(data, self.format).map(Some)
+    fn inventory(&self, data: &[u8]) -> Result<zencodec::inventory::Inventory, At<CodecError>> {
+        zcr_inventory(data, self.format).map_err(Into::into)
     }
 
     fn output_info(&self, data: &[u8]) -> Result<OutputInfo, RefError> {

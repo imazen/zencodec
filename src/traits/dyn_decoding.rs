@@ -215,10 +215,10 @@ pub trait DynDecodeJob<'a> {
     /// Map every structural part of `data`; see
     /// [`DecodeJob::inventory`](crate::decode::DecodeJob::inventory).
     ///
-    /// Default: `Ok(None)`.
-    fn inventory(&self, data: &[u8]) -> Result<Option<crate::inventory::Inventory>, BoxedError> {
+    /// Default: an unsupported-inventory error with a recoverable shared envelope.
+    fn inventory(&self, data: &[u8]) -> Result<crate::inventory::Inventory, BoxedError> {
         let _ = data;
-        Ok(None)
+        Err(Box::new(crate::inventory::unsupported()))
     }
 
     /// Hint: crop to this region in source coordinates.
@@ -350,7 +350,7 @@ where
             .map_err(|e| Box::new(e) as BoxedError)
     }
 
-    fn inventory(&self, data: &[u8]) -> Result<Option<crate::inventory::Inventory>, BoxedError> {
+    fn inventory(&self, data: &[u8]) -> Result<crate::inventory::Inventory, BoxedError> {
         self.as_ref()?
             .inventory(data)
             .map_err(|e| Box::new(e) as BoxedError)

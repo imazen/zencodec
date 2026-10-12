@@ -541,6 +541,19 @@ impl fmt::Display for InventoryError {
 
 impl core::error::Error for InventoryError {}
 
+/// Shared default keeps native codec errors unconstrained and the cause visible
+/// through both generic and erased dispatch.
+pub(crate) fn unsupported() -> crate::At<crate::CodecError> {
+    use crate::{CategorizedError, ErrorAtExt, UnsupportedOperation};
+    let operation = UnsupportedOperation::Inventory;
+    crate::CodecError::from_parts(
+        None,
+        operation.category(),
+        alloc::boxed::Box::new(operation),
+    )
+    .start_at()
+}
+
 /// A byte-exact map of a file's structural parts. See the
 /// [module documentation](self).
 #[derive(Clone, Debug, PartialEq, Eq)]

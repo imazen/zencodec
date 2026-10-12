@@ -3039,7 +3039,7 @@ where
 /// For a decoder that declares
 /// [`inventory`](zencodec::decode::DecodeCapabilities::inventory):
 ///
-/// - `inventory(valid)` returns `Some`, for the decoder's format, covering
+/// - `inventory(valid)` succeeds, for the decoder's format, covering
 ///   exactly `valid.len()` bytes, passing
 ///   [`Inventory::validate`](zencodec::inventory::Inventory::validate), and
 ///   attributing at least one part to
@@ -3051,7 +3051,7 @@ where
 ///   failing, because truncated and malformed input is exactly what an audit
 ///   needs to see.
 ///
-/// A decoder that does not declare the capability must return `Ok(None)`.
+/// A decoder that does not declare the capability must return an unsupported-inventory error.
 ///
 /// `valid` must be a complete file with a logical end (JPEG EOI, PNG IEND, the
 /// last box). On a stream that is already cut short, appended bytes can
@@ -3065,7 +3065,7 @@ where
     use zencodec::inventory::{Disposition, Inventory};
     const CHECK: &str = "inventory";
 
-    let run = |data: &[u8]| -> Result<Option<Inventory>, String> {
+    let run = |data: &[u8]| -> Result<Inventory, String> {
         let job = dec.clone().job();
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| job.inventory(data))) {
             Err(_) => Err(format!("inventory panicked on {} bytes", data.len())),
@@ -3075,26 +3075,25 @@ where
     };
 
     if !D::capabilities().inventory() {
-        return match run(valid).map_err(|e| fail(CHECK, e))? {
-            None => Ok(()),
-            Some(_) => Err(fail(
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            dec.clone().job().inventory(valid)
+        }))
+        .map_err(|_| fail(CHECK, "disabled inventory panicked"))?;
+        let err = result
+            .err()
+            .ok_or_else(|| fail(CHECK, "undeclared inventory succeeded"))?;
+        if err.unsupported_operation() != Some(&UnsupportedOperation::Inventory) {
+            return Err(fail(
                 CHECK,
-                "inventory() returned Some but the decoder does not declare the `inventory` \
-                 capability",
-            )),
-        };
+                format!("wrong disabled-inventory error: {err}"),
+            ));
+        }
+        return Ok(());
     }
 
     let formats = D::formats();
     let checked = |data: &[u8], what: &str| -> Result<Inventory, Failure> {
-        let inv = run(data)
-            .map_err(|e| fail(CHECK, format!("{what}: {e}")))?
-            .ok_or_else(|| {
-                fail(
-                    CHECK,
-                    format!("{what}: the decoder declares `inventory` but returned None"),
-                )
-            })?;
+        let inv = run(data).map_err(|e| fail(CHECK, format!("{what}: {e}")))?;
         if inv.input_len() != data.len() as u64 {
             return Err(fail(
                 CHECK,
@@ -3166,6 +3165,40 @@ where
     Ok(())
 }
 
+/// Check inventory parity through generic and dynamic dispatch under the same
+/// configuration. Unlike [`check_all`], erased config dispatch requires a
+/// `'static` config. Native error types need no additional bounds.
+pub fn check_inventory_dispatch<D: DecoderConfig + 'static>(dec: D, valid: &[u8]) -> Conformance {
+    check_inventory(dec.clone(), valid)?;
+    let dynamic: Box<dyn zencodec::decode::DynDecoderConfig> = Box::new(dec.clone());
+    let check = |data: &[u8]| -> Conformance {
+        let generic = dec.clone().job().inventory(data);
+        let erased = dynamic.dyn_job().inventory(data);
+        match (generic, erased) {
+            (Ok(a), Ok(b)) if a == b => Ok(()),
+            (Err(a), Err(b))
+                if !D::capabilities().inventory()
+                    && a.unsupported_operation() == Some(&UnsupportedOperation::Inventory)
+                    && b.unsupported_operation() == Some(&UnsupportedOperation::Inventory) =>
+            {
+                Ok(())
+            }
+            (a, b) => Err(fail(
+                "inventory dispatch",
+                format!("generic/dynamic disagreement: {a:?} vs {b:?}"),
+            )),
+        }
+    };
+    check(valid)?;
+    let mut trailing = valid.to_vec();
+    trailing.extend_from_slice(&[0xA5; 37]);
+    check(&trailing)?;
+    for n in truncation_lengths(valid.len()) {
+        check(&valid[..n])?;
+    }
+    Ok(())
+}
+
 /// Run every conformance check with sensible default inputs, returning the first
 /// failure. The one-call entry point for a codec's test suite; for control over
 /// image sizes or animation frames, call the individual `check_*` functions.
@@ -3187,7 +3220,7 @@ where
     check_color_authority_spec(enc.clone(), dec.clone(), &img)?;
     check_native_hdr_roundtrip(enc.clone(), dec.clone())?;
     check_gain_map_roundtrip(enc.clone(), dec.clone())?;
-    if D::capabilities().inventory() {
+    {
         let bytes = enc_oneshot(&enc, &img, Metadata::none(), MetadataPolicy::PreserveExact)
             .map_err(|e| fail("inventory", format!("encode: {e}")))?;
         check_inventory(dec.clone(), &bytes)?;
@@ -4050,9 +4083,9 @@ mod tests {
             .with_icc(fixtures::sample_icc())
             .with_cicp(Cicp::SRGB);
         let bytes = encode_animation(&e, &frames, meta).unwrap();
-        check_inventory(d.clone(), &bytes).unwrap();
+        check_inventory_dispatch(d.clone(), &bytes).unwrap();
 
-        let inv = d.clone().job().inventory(&bytes).unwrap().unwrap();
+        let inv = d.clone().job().inventory(&bytes).unwrap();
         let count = |disp: Disposition| {
             inv.parts()
                 .iter()
@@ -4077,7 +4110,7 @@ mod tests {
 
         let mut tail = bytes.clone();
         tail.extend_from_slice(b"camera serial 12345");
-        let inv = d.job().inventory(&tail).unwrap().unwrap();
+        let inv = d.job().inventory(&tail).unwrap();
         let unconsumed: Vec<_> = inv.unconsumed().collect();
         assert_eq!(unconsumed.len(), 1, "{inv}");
         assert_eq!(unconsumed[0].1.disposition(), Disposition::Trailing);
@@ -4087,9 +4120,9 @@ mod tests {
         );
     }
 
-    /// A decoder that does not declare `inventory` passes by returning `None`.
+    /// A decoder that does not declare `inventory` must return the explicit unsupported error.
     #[test]
-    fn undeclared_inventory_is_none() {
+    fn undeclared_inventory_is_unsupported() {
         let bytes = enc_oneshot(
             &MinimalEncoderConfig::new(),
             &TestImage::rgba8_gradient(5, 3),
@@ -4098,7 +4131,7 @@ mod tests {
         )
         .unwrap();
         assert!(!<MinimalDecoderConfig as DecoderConfig>::capabilities().inventory());
-        check_inventory(MinimalDecoderConfig::new(), &bytes).unwrap();
+        check_inventory_dispatch(MinimalDecoderConfig::new(), &bytes).unwrap();
     }
 
     /// The reference round-trips metadata faithfully, so under PreserveExact the
