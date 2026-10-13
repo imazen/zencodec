@@ -262,6 +262,12 @@ for `zenmeta::`: an alias or re-export can hide the dependency. Maintain old-cli
 compile fixtures alongside semver checks. Avoid speculative additions to
 zencodec's stable types; add only data needed across a real codec boundary.
 
+The [JPEG integration findings](zenmeta-migration.md#findings-from-the-completed-jpeg-adapter-checks-2026-10-13)
+show where these contracts need continued attention: extraction versus pixel
+interpretation, truncation versus strictness, and resolved metadata versus
+adapter-specific detection. The report distinguishes fixed implementations from
+possible future API changes; it does not propose speculative public types.
+
 ## Licensing and release boundaries
 
 The source manifests differ: zencodec is Apache-2.0 OR MIT, ultrahdr-core is

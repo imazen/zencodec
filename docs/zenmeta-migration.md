@@ -26,7 +26,7 @@ that every new main run has finished.
 | PNG | [41](https://github.com/imazen/zenpng/pull/41), `e04f734a`: optional inventory and standalone rewrite; current-main threading/APNG behavior retained and tested | Monitor main CI |
 | GIF | [27](https://github.com/imazen/zengif/pull/27), `10f96266`: optional inventory and typed limits; review CI passed | Monitor main CI |
 | Bitmaps | [29](https://github.com/imazen/zenbitmaps/pull/29), `ed0f474a`: six format inventories, typed limits, traversal cancellation; corpus mount verified locally | Monitor main CI |
-| JPEG | [226](https://github.com/imazen/zenjpeg/pull/226), review `9a5694d4`: metadata stacks plus recovered lossless edits; approved layout tests pass | CI exposes one legacy overlapping-MPF expectation. Approval requested to suppress an invalid gain-map entry without promoting a different image. PRs210/213/221/225 remain open until replacement lands |
+| JPEG | [226](https://github.com/imazen/zenjpeg/pull/226), review `442748fe`: recovered lossless edits, default embedded-MPF compatibility, TEM, EXIF selection, extraction policy, depth padding, checked native offsets, and ISO/aliased-XMP HDR rendering | Complete combined CI and the real-file ICC sequence-zero compatibility decision; PRs210/213/221/225 remain open until replacement lands |
 | zenpipe / zencodecs | [90](https://github.com/imazen/zenpipe/pull/90), review `78750a6c`: codec-owned rewriting dispatch, independent services, original inventory dispatch/CLI; full SVT/AOM codec graph, PDF inventory, API snapshots, current-main filters, standalone demo/fuzz and pin guards pass | Remote CI and landing; JPEG dependency remains the review revision |
 
 Superseded metadata PRs were closed only after their replacement landed. The
@@ -258,3 +258,34 @@ now have successful remote CI runs. JPEG's Windows ARM/i686 corpus failures
 are addressed by serial prefetch and a cross cache mount (`709f78ff`), pending
 remote verification. The remote JPEG colorspace session also has interrupted
 lossless/metadata work outside the M3 stack; it has not been reconciled yet.
+
+## Findings from the completed JPEG adapter checks (2026-10-13)
+
+The [JPEG integration report](https://github.com/imazen/zenjpeg/blob/442748fe/zenjpeg/docs/METADATA_INTEGRATION.md)
+records the fixes and residual implementation boundaries. These checks support
+the dependency split, but expose policy/API weaknesses worth addressing before
+adding more metadata services:
+
+| Finding | Evidence and consequence | Contract guidance |
+|---|---|---|
+| Extraction and rendering are coupled ambiguously | JPEG's adapter overwrote metadata denial; fixing that exposed HDR's dependence on ICC/XMP. `DecodePolicy::allow_icc` currently promises both skipped parsing and no returned profile | Separate returned metadata, interpretation needed for pixels, and admission policy in a future additive design. Do not silently relabel pixels when extraction is denied |
+| Shared parsing can be bypassed by adapter heuristics | The parser accepted ISO and namespace aliases, while HDR dispatch searched for literal `hdrgm:` and returned SDR | Resolve metadata once, then let rendering and inventory consume the same result. Test the native and generic adapter outputs, not only parsers |
+| Absence differs from malformed metadata | Ordinary XMP was reported as a failing gain map | Preserve an explicit absent/valid/error distinction across wrappers; avoid lossy `Option` conversions |
+| Strict validation differs from rewrite support | A bounded embedded MPF image is readable by default but cannot safely be relocated by the current lossless rewriter | Shared parsers take interpretation policy; rewrite capability is a separate decision |
+| Truncation control is broader than its name | JPEG maps denied truncation to full strictness, also changing metadata/layout acceptance | Keep this documented compatibility behavior for now; review whether a future contract needs independent controls |
+| Source color is not output color | HDR labeled every base sRGB and applied requested correction before gain-map reconstruction | Preserve source interpretation through reconstruction, convert afterward, and describe the output pixels and mastering primaries accurately |
+| Generic limits drift in integrations | PNG/WebP/bitmaps expected annotated input-cap violations; GIF used a memory error for a part cap | Shared typed input/part-limit errors and testkit checks provide the synchronization point |
+| Public signatures do not describe all compatibility changes | Native EXIF retains APP1 framing; shared metadata uses bare TIFF. Strictness and source-selection changes also affect callers | Keep semantic boundary fixtures and accepted-input changelog entries alongside semver checks |
+
+JPEG's native recovery, structural inspector, and inventory still have separate
+walks. First-EXIF selection and MPF bounds/admission now share primitives; this
+is not a claim that all marker parsing has been unified. The native i686 MPF
+bug showed why common bounds arithmetic matters even when public types stay
+codec-owned. A metadata-only resolved-component view could also eliminate the
+extra ordinary-image decode currently possible for an explicit HDR request.
+That is a design finding, not a new public API added speculatively.
+
+The real corpus Display P3 ICC exposed a missing shared profile-table entry.
+That fix is on [zenpixels main](https://github.com/imazen/zenpixels/commit/8f7ee871900b54a8c9c53feafeb7664a92b116f5);
+JPEG's regression retains the original corpus and assertions. It does not add
+ICC interpretation to zenmeta or copy the profile parser into the codec.
