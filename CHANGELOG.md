@@ -130,6 +130,10 @@ removes that whole class).
 
 ### Changed
 
+- Inventory growth and coverage validation use fallible allocation; add typed
+  allocation failures and `try_children`. Gap filling rejects a part cap before
+  changing topology. The part cap is not a total byte-memory budget.
+
 - Unpublished rewrite requests are data contracts; validation, cancellation and
   packet-budget execution move to `zenmeta::rewrite::Context`. Completed plans
   validate report bounds against an explicit input length. `PreserveExact` XMP

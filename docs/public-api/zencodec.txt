@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1765 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 118 lines (118 hidden + 0 excluded-feature)
+# files: zencodec.txt 1767 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 118 lines (118 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -14,9 +14,9 @@
 #   pub types (struct/enum/trait/alias)       190
 #   pub consts/statics                        197
 #   free functions                             46
-#   inherent methods                          767
+#   inherent methods                          768
 #   struct fields                             220
-#   enum variants                             264
+#   enum variants                             265
 #   re-exports                                 12
 #   trait roster entries (type × trait)       488
 #   conditional trait impls (verbatim)          4
@@ -33,11 +33,11 @@
 #   gainmap                         126
 #   helpers                          13
 #   icc                               1
-#   inventory                       101
+#   inventory                       103
 #   metadata_rewrite                 58
 #   prelude                         182
 
-## items (1649 lines)
+## items (1651 lines)
 
 pub mod zencodec
 pub use At
@@ -777,6 +777,7 @@ pub inventory::Disposition::Unreferenced
 pub const fn inventory::Disposition::is_consumed(self) -> bool
 pub const fn inventory::Disposition::name(self) -> &'static str
 #[non_exhaustive] pub enum inventory::InventoryError
+pub inventory::InventoryError::Allocation
 pub inventory::InventoryError::BadParent
 pub inventory::InventoryError::BadParent::part: inventory::PartId
 pub inventory::InventoryError::EmptyPart
@@ -842,6 +843,7 @@ pub fn inventory::Inventory::parts(&self) -> &[inventory::Part]
 pub fn inventory::Inventory::push(&mut self, core::option::Option<inventory::PartId>, inventory::Part) -> core::result::Result<inventory::PartId, inventory::InventoryError>
 pub fn inventory::Inventory::set_detail(&mut self, inventory::PartId, impl core::convert::Into<alloc::string::String>) -> bool
 pub fn inventory::Inventory::set_disposition(&mut self, inventory::PartId, inventory::Disposition) -> core::option::Option<inventory::Disposition>
+pub fn inventory::Inventory::try_children(&self, core::option::Option<inventory::PartId>) -> core::result::Result<alloc::vec::Vec<inventory::PartId>, inventory::InventoryError>
 pub fn inventory::Inventory::unconsumed(&self) -> impl core::iter::traits::iterator::Iterator<Item = (inventory::PartId, &inventory::Part)>
 pub fn inventory::Inventory::validate(&self) -> core::result::Result<(), inventory::InventoryError>
 pub fn inventory::Inventory::with_max_parts(self, u32) -> Self
