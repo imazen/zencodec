@@ -6,12 +6,6 @@ in [the published-API audit](zencodec-contract-audit-2026-10-13.md).
 
 ## Remaining gaps
 
-- The testkit has a pre-existing publication blocker: `RefDecodeJob` was a public
-  unit struct in crates.io 0.1.0. Unreleased gain-map work (`857fab1`) made it
-  stateful. `just testkit-semver` fails `unit_struct_changed_kind`; zencodec's own
-  semver checks pass, but cannot certify this separate package. Do not publish
-  the testkit as a patch without repairing this break.
-
 - AVIF integration is blocked by interrupted, uncommitted adapter changes awaiting
   ownership approval. Its ravif, AOM and SVT configurations have not run these new
   helpers. Do not count an earlier native timing test as shared-suite coverage.
@@ -24,6 +18,16 @@ in [the published-API audit](zencodec-contract-audit-2026-10-13.md).
   format-specific wire inspection; the metadata struct is not a complete inventory.
 - HEIC coverage here uses the Rust backend. Runtime testing of every hardware
   decoder is a separate gate, even when its adapter compiles in CI.
+
+## Approved testkit release boundary
+
+The implementor-only testkit may break independently of zencodec. Version 0.2.0
+carries the approved `RefDecodeJob` construction break from `857fab1`; use the
+reference config's `job()` method instead of constructing the former unit value.
+`just testkit-semver` evaluates the declared 0.2.0 release against crates.io 0.1.0.
+It does not claim source compatibility across that breaking boundary. Zencodec's
+separate checks against 0.1.26 remain enforcing. Publication is not authorized by
+approval of this API break.
 
 ## Adapter matrix
 

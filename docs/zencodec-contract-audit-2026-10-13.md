@@ -659,8 +659,8 @@ milliseconds; its migration must specify rounding explicitly.
 
 ## Testkit publication audit after consumer integration
 
-`just testkit-semver` compares the separate zencodec-testkit package against its
-crates.io 0.1.0 source. It reports one breaking check:
+The initial `just testkit-semver` comparison of zencodec-testkit against its
+crates.io 0.1.0 source reported one breaking check:
 `unit_struct_changed_kind` for `reference::RefDecodeJob`. Published clients can
 construct that unit value directly. Commit `857fab1` changed it to a stateful
 private-field struct for gain-map handling; current main retains that change.
@@ -668,10 +668,14 @@ The new inventory limit state is not the origin of the construction break.
 
 The seven new fixture-driven conformance functions are additive; the regenerated
 [public API snapshot](public-api/zencodec-testkit.txt) records their signatures.
-The testkit construction break is now tracked separately in its changelog queue.
-An explicitly approved breaking testkit release or a compatibility repair is
-required before publication. Passing zencodec's semver checks against 0.1.26
-must not be reported as a successful semver check for zencodec-testkit.
+The user approved independent breaking changes to this implementor-only testkit
+on 2026-10-13. Testkit is now versioned 0.2.0 and requires zencodec 0.1.27 or
+later in the existing allowed range. Consumers construct reference jobs through
+`ReferenceDecoderConfig::job()` or `ReferenceZcrDecoderConfig::job()`.
+
+The testkit semver gate uses the declared breaking version; it does not assert
+source compatibility with 0.1.0. Zencodec stays at 0.1.27 with both compatibility
+checks against 0.1.26 unchanged. This approval does not authorize publication.
 
 The [behavioral coverage matrix](testkit-contract-coverage.md) records the actual
 consumer checks and unresolved coverage boundaries.

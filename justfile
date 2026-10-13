@@ -130,6 +130,7 @@ testkit-contract-check:
     cargo test -p zencodec-testkit
     cargo clippy -p zencodec-testkit --all-targets -- -D warnings
 
-# Public test helpers remain compatible with the published testkit.
+# Check the independently versioned testkit against its published baseline.
+# Version 0.2.0 carries the approved implementor-only breaking changes.
 testkit-semver:
     cargo semver-checks check-release -p zencodec-testkit --baseline-version 0.1.0

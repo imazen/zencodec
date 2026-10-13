@@ -208,6 +208,11 @@ jobs:
           cargo semver-checks check-release -p zencodec --baseline-version 0.1.26 --all-features
           cargo semver-checks check-release -p zencodec --baseline-version 0.1.26 --only-explicit-features
 
+      - name: Check testkit release version
+        # Testkit 0.2.0 intentionally permits implementor-test API breaks.
+        # This does not relax either zencodec compatibility check above.
+        run: cargo semver-checks check-release -p zencodec-testkit --baseline-version 0.1.0
+
   # ==========================================================================
   # Code coverage
   # ==========================================================================

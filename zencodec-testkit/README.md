@@ -1,5 +1,10 @@
 # zencodec-testkit [![CI](https://img.shields.io/github/actions/workflow/status/imazen/zencodec/ci.yml?style=flat-square&label=CI)](https://github.com/imazen/zencodec/actions/workflows/ci.yml) [![crates.io](https://img.shields.io/crates/v/zencodec-testkit?style=flat-square)](https://crates.io/crates/zencodec-testkit) [![lib.rs](https://img.shields.io/crates/v/zencodec-testkit?style=flat-square&label=lib.rs&color=blue)](https://lib.rs/crates/zencodec-testkit) [![docs.rs](https://img.shields.io/docsrs/zencodec-testkit?style=flat-square)](https://docs.rs/zencodec-testkit) [![license](https://img.shields.io/crates/l/zencodec-testkit?style=flat-square)](#license)
 
+The testkit versions independently from zencodec and may make breaking changes
+to implementor tests. The upcoming 0.2.0 requires zencodec 0.1.27; construct
+reference decode jobs through the config's `job()` method instead of the former
+`RefDecodeJob` unit value. See the [changelog](../CHANGELOG.md#zencodec-testkit).
+
 Conformance test harness for [`zencodec`](https://crates.io/crates/zencodec) codec
 implementations. A codec crate (`zenjpeg`, `zenpng`, `zenwebp`, …) adds this as a
 `dev-dependency` and runs the checks against its own `EncoderConfig` /

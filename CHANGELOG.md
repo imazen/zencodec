@@ -8,7 +8,11 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 #### QUEUED BREAKING CHANGES
 
-- `RefDecodeJob` changed from a publicly constructible unit struct to a private-field stateful struct in the unreleased gain-map harness (`857fab1`). `cargo semver-checks` against testkit 0.1.0 flags `unit_struct_changed_kind`. Restore compatible construction or include this in an explicitly approved breaking testkit release; do not publish it as a compatible patch.
+- Approved for testkit **0.2.0**: `RefDecodeJob` changed from a publicly constructible unit struct to a private-field stateful struct in the gain-map harness (`857fab1`). Implementor tests should obtain jobs from `ReferenceDecoderConfig::job()` or `ReferenceZcrDecoderConfig::job()`. This is a testkit-only break; zencodec retains its compatibility gate.
+
+#### Changed
+
+- Prepare the independently versioned testkit 0.2.0 release. Its zencodec requirement now starts at 0.1.27, which supplies the new contract APIs. No crate has been published.
 
 #### Added
 
