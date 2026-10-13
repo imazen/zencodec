@@ -6,6 +6,10 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### [Unreleased]
 
+### Added
+
+- Testkit policy checks compare builder, mutable and erased admission, metadata, and decoded pixels; rejected requests must preserve the initial output.
+
 #### QUEUED BREAKING CHANGES
 
 - None against crates.io zencodec-testkit 0.1.0.

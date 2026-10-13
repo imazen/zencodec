@@ -242,7 +242,7 @@ where
         .try_with_policy(initial)
         .map_err(|e| fail(CHECK, format!("initial: {e}")))?;
     let mut dynamic = enc.dyn_job();
-    dynamic.set_metadata_policy(metadata, MetadataPolicy::PreserveExact);
+    dynamic.set_metadata_policy(metadata.clone(), MetadataPolicy::PreserveExact);
     dynamic
         .try_set_policy(initial)
         .map_err(|e| fail(CHECK, format!("erased initial: {e}")))?;
@@ -259,15 +259,43 @@ where
     {
         return Err(fail(CHECK, "rejection lost typed EncodePolicy error"));
     }
+    let builder = enc
+        .clone()
+        .job()
+        .with_metadata_policy(metadata.clone(), MetadataPolicy::PreserveExact)
+        .try_with_policy(initial)
+        .map_err(|e| fail(CHECK, e.to_string()))?
+        .try_with_policy(request);
+    if builder.is_ok() != accepted {
+        return Err(fail(CHECK, "builder and mutable admission disagree"));
+    }
+    let baseline = match builder {
+        Ok(job) => job,
+        Err(UnsupportedOperation::EncodePolicy) => enc
+            .job()
+            .with_metadata_policy(metadata, MetadataPolicy::PreserveExact)
+            .try_with_policy(initial)
+            .map_err(|e| fail(CHECK, e.to_string()))?,
+        Err(e) => return Err(fail(CHECK, format!("wrong builder rejection: {e}"))),
+    }
+    .encode(pixels.clone())
+    .map_err(|e| fail(CHECK, e.to_string()))?;
+    let (baseline_pixels, baseline_metadata) =
+        dec_oneshot(&dec, baseline.data()).map_err(|e| fail(CHECK, e))?;
     let a = job
         .encode(pixels.clone())
         .map_err(|e| fail(CHECK, e.to_string()))?;
     let b = dynamic
-        .encode(pixels)
+        .encode(pixels.clone())
         .map_err(|e| fail(CHECK, e.to_string()))?;
     let (pa, ma) = dec_oneshot(&dec, a.data()).map_err(|e| fail(CHECK, e))?;
     let (pb, mb) = dec_oneshot(&dec, b.data()).map_err(|e| fail(CHECK, e))?;
-    if pa != pb || ma != *expected || mb != *expected {
+    if pa != pb
+        || pa != baseline_pixels
+        || ma != baseline_metadata
+        || ma != *expected
+        || mb != *expected
+    {
         return Err(fail(
             CHECK,
             format!("output mismatch: generic {ma:?}, erased {mb:?}, expected {expected:?}"),
@@ -311,6 +339,28 @@ pub fn check_decode_policy_admission<D: DecoderConfig + 'static>(
     {
         return Err(fail(CHECK, "rejection lost typed DecodePolicy error"));
     }
+    let builder = dec
+        .clone()
+        .job()
+        .try_with_policy(initial)
+        .map_err(|e| fail(CHECK, e.to_string()))?
+        .try_with_policy(request);
+    if builder.is_ok() != accepted {
+        return Err(fail(CHECK, "builder and mutable admission disagree"));
+    }
+    let baseline = match builder {
+        Ok(job) => job,
+        Err(UnsupportedOperation::DecodePolicy) => dec
+            .clone()
+            .job()
+            .try_with_policy(initial)
+            .map_err(|e| fail(CHECK, e.to_string()))?,
+        Err(e) => return Err(fail(CHECK, format!("wrong builder rejection: {e}"))),
+    }
+    .decoder(Cow::Borrowed(bytes), &[])
+    .map_err(|e| fail(CHECK, e.to_string()))?
+    .decode()
+    .map_err(|e| fail(CHECK, e.to_string()))?;
     let a = job
         .decoder(Cow::Borrowed(bytes), &[])
         .map_err(|e| fail(CHECK, e.to_string()))?
@@ -330,18 +380,11 @@ pub fn check_decode_policy_admission<D: DecoderConfig + 'static>(
             "decoded pixels/metadata disagree with expected policy outcome",
         ));
     }
-    if !accepted {
-        let baseline = dec
-            .job()
-            .try_with_policy(initial)
-            .map_err(|e| fail(CHECK, e.to_string()))?
-            .decoder(Cow::Borrowed(bytes), &[])
-            .map_err(|e| fail(CHECK, e.to_string()))?
-            .decode()
-            .map_err(|e| fail(CHECK, e.to_string()))?;
-        if grab(a.pixels()) != grab(baseline.pixels()) || a.metadata() != baseline.metadata() {
-            return Err(fail(CHECK, "rejected policy changed output"));
-        }
+    if grab(a.pixels()) != grab(baseline.pixels()) || a.metadata() != baseline.metadata() {
+        return Err(fail(
+            CHECK,
+            "builder/mutable output differs or rejection changed output",
+        ));
     }
     Ok(())
 }
