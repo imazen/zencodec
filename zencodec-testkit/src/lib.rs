@@ -110,8 +110,9 @@ pub(crate) mod fixtures;
 pub(crate) mod minimal;
 pub mod reference;
 pub use contracts::{
-    check_animation_durations, check_animation_timing, check_decode_policy_admission,
-    check_encode_policy_admission, check_inventory_input_limit, check_metadata_rewrite,
+    check_animation_durations, check_animation_timing, check_animation_timing_unsupported,
+    check_decode_policy_admission, check_encode_policy_admission, check_inventory_input_limit,
+    check_metadata_rewrite,
 };
 
 #[cfg(test)]
@@ -696,6 +697,40 @@ where
     let bytes = encode_animation(&enc, frames, Metadata::none())
         .map_err(|e| fail(CHECK, format!("encode: {e}")))?;
     let want: Vec<Pixels> = frames.iter().map(|f| f.pixels()).collect();
+
+    // Keep timing in the published one-call suite too, without adding the
+    // static bounds needed by erased-dispatch conformance checks.
+    let mut borrowed = dec
+        .clone()
+        .job()
+        .animation_frame_decoder(Cow::Borrowed(&bytes), &[])
+        .map_err(|e| fail(CHECK, e.to_string()))?;
+    let mut owned = dec
+        .clone()
+        .job()
+        .animation_frame_decoder(Cow::Borrowed(&bytes), &[])
+        .map_err(|e| fail(CHECK, e.to_string()))?;
+    for index in 0..frames.len() {
+        let expected = zencodec::animation::FrameDuration::from_millis(40 + index as u32 * 10);
+        let a = borrowed
+            .render_next_frame(None)
+            .map_err(|e| fail(CHECK, e.to_string()))?
+            .ok_or_else(|| fail(CHECK, "missing borrowed frame"))?;
+        let b = owned
+            .render_next_frame_owned(None)
+            .map_err(|e| fail(CHECK, e.to_string()))?
+            .ok_or_else(|| fail(CHECK, "missing owned frame"))?;
+        if a.duration() != expected || b.duration() != expected {
+            return Err(fail(
+                CHECK,
+                format!(
+                    "frame {index} lost timing: {:?}/{:?}, expected {expected:?}",
+                    a.duration(),
+                    b.duration()
+                ),
+            ));
+        }
+    }
 
     let paths = [
         ("render_next_frame", decode_anim_borrowed(&dec, &bytes)),

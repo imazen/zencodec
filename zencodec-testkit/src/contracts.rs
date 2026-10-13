@@ -440,3 +440,86 @@ pub fn check_metadata_rewrite<'a>(
     }
     Ok(())
 }
+
+/// Verify the conservative compatibility default for an animation adapter that
+/// has not adopted rational encoding. Both timing methods must reject with
+/// `AnimationTiming`, leave buffered frames intact, and allow legacy encoding
+/// to continue. A false timing capability must not silently quantize requests.
+pub fn check_animation_timing_unsupported<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
+where
+    E: EncoderConfig + 'static,
+    D: DecoderConfig + 'static,
+    <E::Job as EncodeJob>::Enc: Encoder + Send,
+    <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
+{
+    const CHECK: &str = "unsupported animation timing";
+    if E::capabilities().animation_timing() {
+        return Err(fail(
+            CHECK,
+            "timing-enabled adapter needs explicit timing cases",
+        ));
+    }
+    let mut generic = enc
+        .clone()
+        .job()
+        .animation_frame_encoder()
+        .map_err(|e| fail(CHECK, e.to_string()))?;
+    let mut dynamic = enc
+        .dyn_job()
+        .into_animation_frame_encoder()
+        .map_err(|e| fail(CHECK, e.to_string()))?;
+    for delay in [40, 60] {
+        for duration in [
+            FrameDuration::from_millis(0),
+            FrameDuration::from_millis(10),
+            FrameDuration::new(1, 30000).unwrap(),
+            FrameDuration::new(u64::MAX, 1).unwrap(),
+        ] {
+            for exact in [true, false] {
+                let a = if exact {
+                    generic.push_frame_exact(img.as_slice(), duration, None)
+                } else {
+                    generic
+                        .push_frame_timed(img.as_slice(), duration, None)
+                        .map(|_| ())
+                };
+                let b = if exact {
+                    dynamic.push_frame_exact(img.as_slice(), duration, None)
+                } else {
+                    dynamic
+                        .push_frame_timed(img.as_slice(), duration, None)
+                        .map(|_| ())
+                };
+                let a = a
+                    .err()
+                    .ok_or_else(|| fail(CHECK, "generic accepted unsupported timing"))?;
+                let b = b
+                    .err()
+                    .ok_or_else(|| fail(CHECK, "erased accepted unsupported timing"))?;
+                if a.unsupported_operation() != Some(&UnsupportedOperation::AnimationTiming)
+                    || b.unsupported_operation() != Some(&UnsupportedOperation::AnimationTiming)
+                {
+                    return Err(fail(CHECK, format!("wrong rejection: {a}, {b}")));
+                }
+            }
+        }
+        generic
+            .push_frame(img.as_slice(), delay, None)
+            .map_err(|e| fail(CHECK, e.to_string()))?;
+        dynamic
+            .push_frame(img.as_slice(), delay, None)
+            .map_err(|e| fail(CHECK, e.to_string()))?;
+    }
+    let a = generic
+        .finish(None)
+        .map_err(|e| fail(CHECK, e.to_string()))?;
+    let b = dynamic
+        .finish(None)
+        .map_err(|e| fail(CHECK, e.to_string()))?;
+    let expected = [
+        FrameDuration::from_millis(40),
+        FrameDuration::from_millis(60),
+    ];
+    check_animation_durations(dec.clone(), a.data(), &expected)?;
+    check_animation_durations(dec, b.data(), &expected)
+}

@@ -12,6 +12,10 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 #### Added
 
+- The default animation cross-path suite now checks source durations, and
+  `check_animation_timing_unsupported` tests typed refusal without damaging
+  buffered legacy frames on adapters that do not support rational encoding.
+
 - Fixture-driven timing, checked-policy, inventory input-limit and metadata-rewrite
   conformance checks compare generic and erased dispatch and explicit expected outputs.
 

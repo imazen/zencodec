@@ -237,3 +237,11 @@ fn rewrite_harness_catches_ignored_limits_cancellation_and_changed_output() {
         .is_err()
     );
 }
+
+#[test]
+fn undeclared_timing_check_rejects_a_timing_enabled_adapter() {
+    assert!(
+        tk::check_animation_timing_unsupported(E::new(), D, &TestImage::rgb8_gradient(4, 3))
+            .is_err()
+    );
+}
