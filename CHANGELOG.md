@@ -12,18 +12,20 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 #### Added
 
+- The [contract coverage matrix](docs/testkit-contract-coverage.md) records consumer evidence, independent readbacks, and remaining API/testing gaps.
+
 - Checked policy tests compare builder, mutable and erased results, including pixels after rejection (`43061fcd`).
 - Native pixel fixtures preserve stride and color context with zenpixels 0.2.14 as well as newer versions. All tri-state metadata embed-gate combinations and each decode-policy field are exercised.
 
 - New fixture-driven encode checks accept native `PixelSlice` views, including
-  strided, 16-bit and floating-point inputs, without an RGB8-only fixture type.
+  strided, 16-bit and floating-point inputs, without an RGB8-only fixture type (`304a03bb`, `ab420b6c`).
 
 - The default animation cross-path suite now checks source durations, and
   `check_animation_timing_unsupported` tests typed refusal without damaging
-  buffered legacy frames on adapters that do not support rational encoding.
+  buffered legacy frames on adapters that do not support rational encoding (`3ef1cfde`).
 
 - Fixture-driven timing, checked-policy, inventory input-limit and metadata-rewrite
-  conformance checks compare generic and erased dispatch and explicit expected outputs.
+  conformance checks compare generic and erased dispatch and explicit expected outputs (`919dd678`).
 
 - `check_inventory_dispatch` compares generic/dynamic results and disabled-operation
   errors. `check_all` also checks the disabled inventory contract without changing
@@ -181,7 +183,7 @@ removes that whole class).
 
 - Animation sink decoding must return frame duration and index alongside output
   geometry; its current `OutputInfo` result cannot transport timing. Until that
-  contract is added, testkit can verify sink pixels but cannot verify sink timing.
+  contract is added, testkit can verify sink pixels but cannot verify sink timing (`919dd678`).
 
 
 Target for the upcoming coordinated breaking release; these removals and contract
