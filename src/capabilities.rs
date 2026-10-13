@@ -119,6 +119,7 @@ pub struct EncodeCapabilities {
     // Operation support
     stop: bool,
     animation: bool,
+    animation_timing: bool,
     push_rows: bool,
     encode_from: bool,
     // Format capabilities
@@ -161,6 +162,7 @@ impl EncodeCapabilities {
             cicp_safe_sole_carrier: false,
             stop: false,
             animation: false,
+            animation_timing: false,
             push_rows: false,
             encode_from: false,
             lossy: false,
@@ -343,8 +345,8 @@ impl EncodeCapabilities {
             UnsupportedOperation::AnimationEncode => self.animation,
             UnsupportedOperation::GainMapEncode => self.gain_map,
             UnsupportedOperation::Inventory => false,
-            UnsupportedOperation::AnimationTiming
-            | UnsupportedOperation::DecodeInto
+            UnsupportedOperation::AnimationTiming => self.animation_timing,
+            UnsupportedOperation::DecodeInto
             | UnsupportedOperation::RowLevelDecode
             | UnsupportedOperation::AnimationDecode
             | UnsupportedOperation::MultiImageDecode
@@ -353,6 +355,19 @@ impl EncodeCapabilities {
     }
 
     // --- Const builder methods ---
+
+    /// Whether rational timing operations are implemented. This does not promise
+    /// that every duration is exactly representable; the destination field still
+    /// limits the exact path. Ordinary timed pushes report their rounded duration.
+    pub const fn animation_timing(&self) -> bool {
+        self.animation_timing
+    }
+
+    /// Advertise both ordinary rational and explicit exact timing operations.
+    pub const fn with_animation_timing(mut self, enabled: bool) -> Self {
+        self.animation_timing = enabled;
+        self
+    }
 
     /// Set whether the encoder embeds ICC color profiles.
     pub const fn with_icc(mut self, v: bool) -> Self {
@@ -491,6 +506,7 @@ impl fmt::Debug for EncodeCapabilities {
             .field("cicp_safe_sole_carrier", &self.cicp_safe_sole_carrier)
             .field("stop", &self.stop)
             .field("animation", &self.animation)
+            .field("animation_timing", &self.animation_timing)
             .field("lossy", &self.lossy)
             .field("lossless", &self.lossless)
             .field("hdr", &self.hdr)

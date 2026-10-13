@@ -175,6 +175,25 @@ pub trait AnimationFrameEncoder: Sized {
         stop: Option<&dyn Stop>,
     ) -> Result<(), Self::Error>;
 
+    /// Push a frame using the destination's timing resolution.
+    ///
+    /// Returns the actual encoded duration so rounding is observable. Codecs
+    /// retain cumulative rounding error rather than rounding each frame in
+    /// isolation. Zero is not clamped to a player minimum. Field overflow and
+    /// unsupported zero-duration frames remain errors. A failure must not
+    /// advance timing state. Use [`Self::push_frame_exact`] to forbid rounding.
+    /// The compatibility default uses the exact path; adapters with a finite
+    /// clock override this with destination-aware quantization.
+    fn push_frame_timed(
+        &mut self,
+        pixels: PixelSlice<'_>,
+        duration: crate::animation::FrameDuration,
+        stop: Option<&dyn Stop>,
+    ) -> Result<crate::animation::FrameDuration, Self::Error> {
+        self.push_frame_exact(pixels, duration, stop)?;
+        Ok(duration)
+    }
+
     /// Push a frame with its exact encoded source duration.
     ///
     /// Implementations must represent this duration exactly or reject it before
@@ -183,7 +202,7 @@ pub trait AnimationFrameEncoder: Sized {
     /// format; JXL display helpers and codecs requiring positive durations can
     /// reject it. The default rejects even whole milliseconds because legacy
     /// `push_frame` implementations may silently quantize those values.
-    fn push_frame_timed(
+    fn push_frame_exact(
         &mut self,
         _pixels: PixelSlice<'_>,
         _duration: crate::animation::FrameDuration,

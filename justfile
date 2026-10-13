@@ -108,3 +108,10 @@ test-animation-hdr:
     cargo check --workspace --no-default-features --target wasm32-unknown-unknown
     RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
     just api-doc
+
+# Rational input, ordinary rounding and explicit exact timing contracts.
+animation-policy-check:
+    cargo fmt -p zencodec -p zenmeta -p zencodec-testkit --check
+    cargo test -p zencodec --all-features
+    cargo clippy -p zencodec --all-targets --all-features -- -D warnings
+    just metadata-semver

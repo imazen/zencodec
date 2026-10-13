@@ -159,9 +159,21 @@ pub trait DynAnimationFrameEncoder: Send {
         stop: Option<&dyn Stop>,
     ) -> Result<(), BoxedError>;
 
-    /// Push an exact source duration, or reject without silently quantizing it.
+    /// Push with destination-aware rounding and return the actual duration.
     /// See [`AnimationFrameEncoder::push_frame_timed`].
     fn push_frame_timed(
+        &mut self,
+        pixels: PixelSlice<'_>,
+        duration: crate::animation::FrameDuration,
+        stop: Option<&dyn Stop>,
+    ) -> Result<crate::animation::FrameDuration, BoxedError> {
+        self.push_frame_exact(pixels, duration, stop)?;
+        Ok(duration)
+    }
+
+    /// Push an exact source duration, or reject without silently quantizing it.
+    /// See [`AnimationFrameEncoder::push_frame_exact`].
+    fn push_frame_exact(
         &mut self,
         _pixels: PixelSlice<'_>,
         _duration: crate::animation::FrameDuration,
@@ -214,9 +226,20 @@ impl<F: AnimationFrameEncoder + Send + 'static> DynAnimationFrameEncoder
         pixels: PixelSlice<'_>,
         duration: crate::animation::FrameDuration,
         stop: Option<&dyn Stop>,
-    ) -> Result<(), BoxedError> {
+    ) -> Result<crate::animation::FrameDuration, BoxedError> {
         self.0
             .push_frame_timed(pixels, duration, stop)
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn push_frame_exact(
+        &mut self,
+        pixels: PixelSlice<'_>,
+        duration: crate::animation::FrameDuration,
+        stop: Option<&dyn Stop>,
+    ) -> Result<(), BoxedError> {
+        self.0
+            .push_frame_exact(pixels, duration, stop)
             .map_err(|e| Box::new(e) as BoxedError)
     }
 

@@ -68,6 +68,85 @@ impl FrameDuration {
     }
 }
 
+/// Rounds cumulative presentation endpoints to a fixed destination clock.
+///
+/// Ties round upward. Zero is not clamped to a playback minimum. The fractional
+/// phase is retained as an exact rational, so repeated fractional frames do not
+/// drift. Arithmetic and destination-field overflow return an error without
+/// changing state. For a failed pixel encode, discard the advanced copy too:
+/// copy this value, quantize, submit the frame, then commit the copy on success.
+#[derive(Clone, Copy, Debug)]
+pub struct TimingQuantizer {
+    clock: NonZeroU32,
+    max_ticks: u64,
+    phase_num: u128,
+    phase_den: u128,
+    rounded_up: bool,
+}
+
+impl TimingQuantizer {
+    /// Select the destination ticks per second and maximum ticks per frame.
+    pub const fn new(clock: u32, max_ticks: u64) -> Result<Self, TimingError> {
+        let Some(clock) = NonZeroU32::new(clock) else {
+            return Err(TimingError::ZeroDenominator);
+        };
+        Ok(Self {
+            clock,
+            max_ticks,
+            phase_num: 0,
+            phase_den: 1,
+            rounded_up: false,
+        })
+    }
+
+    /// Return the duration actually to encode and advance only on success.
+    ///
+    /// Mixed source clocks are supported. An exact fractional phase whose
+    /// reduced denominator exceeds u128 is rejected, never approximated.
+    pub fn quantize(&mut self, duration: FrameDuration) -> Result<FrameDuration, TimingError> {
+        let scaled = u128::from(duration.numerator()) * u128::from(self.clock.get());
+        let den = u128::from(duration.denominator());
+        let whole = scaled / den;
+        let frac = scaled % den;
+        let common = gcd(self.phase_den, den);
+        let left_scale = den / common;
+        let right_scale = self.phase_den / common;
+        let sum_den = self
+            .phase_den
+            .checked_mul(left_scale)
+            .ok_or(TimingError::Overflow)?;
+        let sum_num = self
+            .phase_num
+            .checked_mul(left_scale)
+            .and_then(|n| frac.checked_mul(right_scale).and_then(|r| n.checked_add(r)))
+            .ok_or(TimingError::Overflow)?;
+        let carry = sum_num / sum_den;
+        let remainder = sum_num % sum_den;
+        // Compare without overflowing on 2 * remainder.
+        let rounded_up = remainder >= sum_den - remainder;
+        let ticks = whole
+            .checked_add(carry)
+            .and_then(|n| n.checked_add(u128::from(rounded_up)))
+            .and_then(|n| n.checked_sub(u128::from(self.rounded_up)))
+            .and_then(|n| u64::try_from(n).ok())
+            .filter(|&n| n <= self.max_ticks)
+            .ok_or(TimingError::Overflow)?;
+        let result = FrameDuration::new(ticks, self.clock.get())?;
+        let reduce = gcd(remainder, sum_den);
+        self.phase_num = remainder / reduce;
+        self.phase_den = sum_den / reduce;
+        self.rounded_up = rounded_up;
+        Ok(result)
+    }
+}
+
+fn gcd(mut a: u128, mut b: u128) -> u128 {
+    while b != 0 {
+        (a, b) = (b, a % b);
+    }
+    a
+}
+
 /// Invalid duration construction or an exact destination-clock conversion.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]

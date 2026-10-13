@@ -109,6 +109,15 @@ removes that whole class).
 
 ## [Unreleased]
 
+### Changed
+
+- Unpublished animation timing now distinguishes ordinary `push_frame_timed`
+  (reports the encoded duration) from explicit `push_frame_exact`. Add shared
+  cumulative timing quantization and an honest timing capability flag. Existing
+  millisecond APIs remain compatible with crates.io 0.1.26; legacy exact callers
+  migrate to the explicitly named operation. No video transport is added.
+
+
 ### QUEUED BREAKING CHANGES
 
 - None against crates.io zencodec 0.1.26 for the metadata extraction. Unpublished

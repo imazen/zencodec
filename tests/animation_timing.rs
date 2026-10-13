@@ -66,3 +66,60 @@ fn borrowing_and_copying_frames_preserves_fractional_and_large_durations() {
     assert_eq!(legacy.duration(), FrameDuration::from_millis(u32::MAX));
     assert_eq!(legacy.duration_ms(), u32::MAX);
 }
+
+#[test]
+fn quantization_preserves_timeline_and_reports_encoded_durations() {
+    use zencodec::animation::TimingQuantizer;
+    let source = FrameDuration::new(1001, 30000).unwrap();
+    for clock in [100, 1000, 90000] {
+        let mut quantizer = TimingQuantizer::new(clock, u64::MAX).unwrap();
+        let mut encoded_ticks = 0_u128;
+        for frame in 1..=30000_u128 {
+            let actual = quantizer.quantize(source).unwrap();
+            encoded_ticks += u128::from(actual.ticks_at(clock).unwrap());
+            // Independent endpoint oracle: every prefix is within half a tick.
+            let target = frame * 1001 * u128::from(clock);
+            assert!(2 * (encoded_ticks * 30000).abs_diff(target) <= 30000);
+        }
+        assert_eq!(encoded_ticks, 1001 * u128::from(clock));
+    }
+}
+
+#[test]
+fn mixed_source_clocks_do_not_accumulate_independent_rounding_error() {
+    use zencodec::animation::TimingQuantizer;
+    let mut quantizer = TimingQuantizer::new(100, u16::MAX.into()).unwrap();
+    let mut source_units = 0_u128;
+    let mut actual_ticks = 0_u128;
+    for _ in 0..231 {
+        for (denominator, units) in [(3, 77), (7, 33), (11, 21)] {
+            let actual = quantizer
+                .quantize(FrameDuration::new(1, denominator).unwrap())
+                .unwrap();
+            actual_ticks += u128::from(actual.ticks_at(100).unwrap());
+            source_units += units;
+            assert!(2 * (actual_ticks * 231).abs_diff(source_units * 100) <= 231);
+        }
+    }
+    assert_eq!(actual_ticks, 13100);
+}
+
+#[test]
+fn zero_and_rejection_do_not_corrupt_rounding_state() {
+    use zencodec::animation::TimingQuantizer;
+    let mut quantizer = TimingQuantizer::new(100, 65535).unwrap();
+    let fractional = FrameDuration::new(1, 30).unwrap();
+    quantizer.quantize(fractional).unwrap();
+    let mut control = quantizer;
+    assert_eq!(
+        quantizer.quantize(FrameDuration::new(u64::MAX, 1).unwrap()),
+        Err(TimingError::Overflow)
+    );
+    assert_eq!(
+        quantizer.quantize(FrameDuration::from_millis(0)).unwrap(),
+        FrameDuration::from_millis(0)
+    );
+    assert_eq!(quantizer.quantize(fractional), control.quantize(fractional));
+    assert_eq!(quantizer.quantize(fractional), control.quantize(fractional));
+    assert!(TimingQuantizer::new(0, 65535).is_err());
+}

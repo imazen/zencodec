@@ -2229,7 +2229,7 @@ fn exact_animation_default_rejects_and_dyn_shim_does_not_fall_back_to_millisecon
             .animation_frame_encoder()
             .unwrap();
         let err = enc
-            .push_frame_timed(buf.as_slice(), duration, None)
+            .push_frame_exact(buf.as_slice(), duration, None)
             .unwrap_err();
         assert!(matches!(
             err,
@@ -2241,7 +2241,7 @@ fn exact_animation_default_rejects_and_dyn_shim_does_not_fall_back_to_millisecon
             .dyn_animation_frame_encoder()
             .unwrap();
         let err = enc
-            .push_frame_timed(buf.as_slice(), duration, None)
+            .push_frame_exact(buf.as_slice(), duration, None)
             .unwrap_err();
         assert!(matches!(
             err.downcast_ref::<mock_anim::MockError>(),

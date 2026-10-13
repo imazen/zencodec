@@ -7,32 +7,37 @@ native JXL durations. It applies no player minimum or estimated frame rate.
 value through borrowing and ownership changes. The legacy `duration_ms()`
 accessor truncates fractional milliseconds and saturates to `u32::MAX`.
 
-An exact transcode calls `AnimationFrameEncoder::push_frame_timed()` (also
-available through `DynAnimationFrameEncoder`). An implementation must either
-encode the supplied duration exactly or reject it before accepting the frame.
-The default rejects with `UnsupportedOperation::AnimationTiming`, even for
-integer milliseconds: older `push_frame()` implementations may round, clamp or
-narrow their native timing fields. Do not fall back to that method after an
-exact-timing rejection.
+Ordinary encoding uses `AnimationFrameEncoder::push_frame_timed()` (and the
+same method on `DynAnimationFrameEncoder`). It returns the actual encoded
+`FrameDuration`, making quantization observable. Adapters preserve representable
+source timing where possible and otherwise round to their destination clock.
+`TimingQuantizer` shares exact rational phase accounting: it rounds cumulative
+presentation endpoints, not every frame independently. Zero is not changed to a
+browser playback minimum. Adapters advance a copy and commit it only after the
+frame has been accepted. Invalid pixels, cancellation and timing overflow must
+not consume that frame's quantizer state.
 
-Native adapters validate the actual destination field: GIF has a 16-bit count
-of centiseconds; WebP has a 24-bit count of milliseconds; APNG has a 16-bit
-numerator and denominator (encoded denominator zero means 100); AVIF has a
-track clock and 32-bit sample durations; JXL has a rational tick clock and
-32-bit frame durations. AVIF/JXL may choose a common clock only when all
-rescaled durations and the clock fit their native fields.
+An exact transcode explicitly calls `push_frame_exact()`. The adapter must encode
+the duration exactly or reject it before accepting the frame. This returns an
+ordinary error, never a timing-induced panic; earlier frames are not rolled back.
+The default rejects even integer milliseconds because an unadapted legacy
+`push_frame()` might clamp or narrow them. The normal method's compatibility
+default delegates to the exact path; codecs override it to offer quantization.
+`EncodeCapabilities::animation_timing()` advertises these implemented operations,
+not representability of every possible rational.
 
-Quantization is a caller policy. A media pipeline can reject an unrepresentable
-duration, or explicitly choose a destination clock and quantize cumulative
-presentation endpoints. Rounding each duration independently causes drift.
-Zero-delay playback clamps, loop repetition, compositing-helper frames and
-end-of-stream hold behavior are separate decisions. This type does not resolve
-them by changing the source duration.
+Legacy millisecond constructors remain useful, exact conveniences. The legacy
+`push_frame` entry point remains source-compatible. The lossy `duration_ms()`
+projection is a compatibility path; migrate callers to `duration()` before
+removing it in a future breaking release. No playback clamps or pixel conversions
+are introduced by rational timing.
 
-This additive bridge is suitable for the remaining 0.1 release and the next
-breaking zencodec release. A future breaking API can make the exact duration
-the only timing input; existing image traits need not host the video transport,
-seek index or network I/O abstraction to carry accurate animation timing.
+Native adapters validate destination fields: GIF centiseconds, WebP milliseconds,
+APNG rational delays, and AVIF/JXL clocks. Long durations still cannot wrap or
+saturate. A buffered encoder can preflight a complete timeline; streaming cannot
+promise that a later frame will be representable. The shared quantizer bounds
+its exact rational phase to u128 and rejects arithmetic overflow without mutation.
+Video transport, DTS/PTS and playback scheduling remain outside these contracts.
 
 ## Main integration validation
 
