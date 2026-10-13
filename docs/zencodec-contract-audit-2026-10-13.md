@@ -627,3 +627,31 @@ pixels or encoded output. Before removing the old setters, demonstrate required
 operation admission and outcomes with real codec adapters across all feeding
 modes. This is migration work, not a signature-compatibility blocker for these
 two additive proposals.
+
+### Final comparison artifacts
+
+Registry rechecked: 0.1.26 remains the published release. Regenerated source
+diffs verify the same archive against both actual main and the proposal:
+
+| Comparison | Revision | Diff SHA-256 |
+|---|---|---|
+| Main vs registry | `c73078989015e00c510c423e0219f521f26e2628` | `11cde6dc5868926026ac7fb3fc6729045a909137166cc61a3ae7f732572ce850` |
+| Proposed zencodec source vs registry | `4d542d6412469d0c99e2e3e723cdcecd9d1208a1` | `56ca5b366e1e78b4bb05e86ee429618387d841c0184d4d1ff3fef4c0bfb5fb8b` |
+
+Regenerate with `just contract-diff` and the revision above. The source/manifest
+diff covers zencodec; zenmeta has no published baseline. Its additional nested
+plan check (`bcc2ac50`) rejects a child whose borrowed input is not the exact
+parent subrange. The unchanged JPEG gain-map rewrite tests exposed a stale
+caller: generated child carriers used the outer context. The corrected planner
+uses component contexts and combines both child plans under a fresh parent.
+This validates the need for input provenance at the shared builder boundary.
+
+Both minimal and all-feature semver checks against 0.1.26 pass locally. Workspace
+tests, Clippy, MSRV 1.88, WASI and warning-free rustdoc also pass. CI now runs for
+stacked PRs as well as PRs targeting main, and checks both semver feature modes.
+Actual codec validation includes PNG/APNG metadata and timing, JXL metadata and
+timing, JPEG gain-map rewrite preservation, GIF owned frames and WebP animation.
+This does not claim every codec/backend has adopted checked policies, or that
+all consumers have migrated from the legacy getters. AVIF has interrupted timing
+work requiring reconciliation, and zenpipe's `FrameInfo` still stores only
+milliseconds; its migration must specify rounding explicitly.
