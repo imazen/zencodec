@@ -9,6 +9,8 @@
 //!
 //! Run: `cargo bench --bench exif_filter`
 
+#![allow(deprecated)] // Benchmark the retained compatibility implementation.
+
 use zenbench::prelude::*;
 
 use zencodec::exif::{Exif, ExifPolicy, Retention, retain};

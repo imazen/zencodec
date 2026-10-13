@@ -286,6 +286,7 @@ pub trait EncodeJob: Sized {
     /// [`with_metadata`](Self::with_metadata). The codec embeds what its format
     /// supports and skips the rest.
     #[must_use]
+    #[allow(deprecated)] // Published provided method retains its no-zenmeta behavior.
     fn with_metadata_policy(self, meta: Metadata, policy: crate::MetadataPolicy) -> Self {
         #[allow(deprecated)]
         self.with_metadata(meta.filtered(&policy))

@@ -132,6 +132,7 @@ impl Metadata {
 
     /// Shared helper for [`with_copyright`]/[`with_artist`]: parse the existing
     /// EXIF (or start fresh via [`Exif::new`]), apply `set`, and re-serialize.
+    #[allow(deprecated)] // Published convenience uses the retained compatibility serializer.
     fn set_exif_string(mut self, text: &str, set: impl FnOnce(&mut Exif<'_>, &str)) -> Self {
         let bytes = {
             // `exif` borrows `self.exif` here; `to_bytes` copies values out, so
@@ -296,6 +297,10 @@ impl Metadata {
     /// not rejected, so a `Custom` policy that drops color signaling should drop
     /// `hdr` too.
     #[must_use]
+    #[deprecated(
+        since = "0.1.27",
+        note = "compatibility helper; use zenmeta::metadata::filter for metadata processing"
+    )]
     pub fn filtered(&self, policy: &MetadataPolicy) -> Metadata {
         let f = policy.fields();
         let mut out = Metadata::none();
@@ -616,6 +621,7 @@ fn parse_exif_orientation(blob: &[u8]) -> Option<Orientation> {
 }
 
 #[cfg(test)]
+#[allow(deprecated)] // Exercise the published compatibility implementation.
 mod tests {
     use super::*;
     use crate::ImageFormat;

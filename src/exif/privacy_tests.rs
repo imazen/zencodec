@@ -1,3 +1,4 @@
+#![allow(deprecated)] // Retained compatibility behavior is the subject of these tests.
 use super::*;
 use crate::{Metadata, MetadataPolicy};
 use alloc::vec;

@@ -248,6 +248,7 @@ fn oracle_colour(blob: &[u8]) -> (Option<u32>, Option<String>) {
 /// become implicit sRGB under a preset that promises to keep colour
 /// (`Web` = `ATTRIBUTED_ORIENTATION`, `ColorAndRotation` = `ORIENTATION_ONLY`).
 #[test]
+#[allow(deprecated)] // Differential coverage of the retained published writer.
 fn colour_declaration_survives_retaining_presets() {
     use zencodec::exif::{ExifPolicy, retain};
 

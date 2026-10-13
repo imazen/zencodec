@@ -1,3 +1,4 @@
+#![allow(deprecated)] // Keep testing the published compatibility surface.
 //! Comprehensive test suite exercising every aspect of zencodec.
 //!
 //! Uses a mock animation codec (mock_anim) that supports all encoder/decoder

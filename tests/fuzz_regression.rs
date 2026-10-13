@@ -1,3 +1,4 @@
+#![allow(deprecated)] // Keep testing the published compatibility surface.
 //! Fuzz crash regression suite.
 //!
 //! Runs every file in `fuzz/regression/` through the same logic as the

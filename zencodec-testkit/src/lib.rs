@@ -773,6 +773,7 @@ where
     ];
 
     for (name, policy) in policies {
+        #[allow(deprecated)] // The published codec wrapper still uses this compatibility path.
         let expected = rich.clone().filtered(&policy);
         let bytes = enc_oneshot(&enc, img, rich.clone(), policy)
             .map_err(|e| fail(CHECK, format!("[{name}] encode: {e}")))?;
@@ -3235,6 +3236,7 @@ where
 }
 
 #[cfg(test)]
+#[allow(deprecated)] // Compare published compatibility policy semantics.
 mod tests {
     use super::*;
 
