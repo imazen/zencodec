@@ -129,3 +129,7 @@ testkit-contract-check:
     cargo fmt -p zencodec-testkit
     cargo test -p zencodec-testkit
     cargo clippy -p zencodec-testkit --all-targets -- -D warnings
+
+# Public test helpers remain compatible with the published testkit.
+testkit-semver:
+    cargo semver-checks check-release -p zencodec-testkit --baseline-version 0.1.0

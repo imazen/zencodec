@@ -6,6 +6,12 @@ in [the published-API audit](zencodec-contract-audit-2026-10-13.md).
 
 ## Remaining gaps
 
+- The testkit has a pre-existing publication blocker: `RefDecodeJob` was a public
+  unit struct in crates.io 0.1.0. Unreleased gain-map work (`857fab1`) made it
+  stateful. `just testkit-semver` fails `unit_struct_changed_kind`; zencodec's own
+  semver checks pass, but cannot certify this separate package. Do not publish
+  the testkit as a patch without repairing this break.
+
 - AVIF integration is blocked by interrupted, uncommitted adapter changes awaiting
   ownership approval. Its ravif, AOM and SVT configurations have not run these new
   helpers. Do not count an earlier native timing test as shared-suite coverage.

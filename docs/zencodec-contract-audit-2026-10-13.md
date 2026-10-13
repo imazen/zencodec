@@ -655,3 +655,23 @@ This does not claim every codec/backend has adopted checked policies, or that
 all consumers have migrated from the legacy getters. AVIF has interrupted timing
 work requiring reconciliation, and zenpipe's `FrameInfo` still stores only
 milliseconds; its migration must specify rounding explicitly.
+
+
+## Testkit publication audit after consumer integration
+
+`just testkit-semver` compares the separate zencodec-testkit package against its
+crates.io 0.1.0 source. It reports one breaking check:
+`unit_struct_changed_kind` for `reference::RefDecodeJob`. Published clients can
+construct that unit value directly. Commit `857fab1` changed it to a stateful
+private-field struct for gain-map handling; current main retains that change.
+The new inventory limit state is not the origin of the construction break.
+
+The seven new fixture-driven conformance functions are additive; the regenerated
+[public API snapshot](public-api/zencodec-testkit.txt) records their signatures.
+The testkit construction break is now tracked separately in its changelog queue.
+An explicitly approved breaking testkit release or a compatibility repair is
+required before publication. Passing zencodec's semver checks against 0.1.26
+must not be reported as a successful semver check for zencodec-testkit.
+
+The [behavioral coverage matrix](testkit-contract-coverage.md) records the actual
+consumer checks and unresolved coverage boundaries.

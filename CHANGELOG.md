@@ -8,7 +8,7 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 #### QUEUED BREAKING CHANGES
 
-- None against crates.io zencodec-testkit 0.1.0.
+- `RefDecodeJob` changed from a publicly constructible unit struct to a private-field stateful struct in the unreleased gain-map harness (`857fab1`). `cargo semver-checks` against testkit 0.1.0 flags `unit_struct_changed_kind`. Restore compatible construction or include this in an explicitly approved breaking testkit release; do not publish it as a compatible patch.
 
 #### Added
 
