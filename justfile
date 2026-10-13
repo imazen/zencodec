@@ -38,6 +38,23 @@ metadata-check:
 metadata-semver:
     cargo semver-checks check-release -p zencodec --baseline-version 0.1.26 --all-features
 
+# Complete source diff from the cargo-read artifact, with VCS provenance checks.
+contract-diff published_dir output revision="origin/main":
+    python3 scripts/audit-published-contract.py "{{published_dir}}" "{{output}}" --revision "{{revision}}"
+
+# Observational probes; these do not enshrine design gaps as test expectations.
+contract-probes:
+    cargo run -p zencodec --example contract_audit_probes
+
+contract-semver-minimal:
+    cargo semver-checks check-release -p zencodec --baseline-version 0.1.26 --only-explicit-features
+
+contract-audit-check:
+    cargo fmt -p zencodec --check
+    cargo clippy -p zencodec --example contract_audit_probes -- -D warnings
+    just contract-probes
+    just contract-semver-minimal
+
 metadata-target-check:
     cargo check -p zenmeta --target wasm32-wasip1 --no-default-features --features apple,audit,inventory,xmp
     cargo +1.88.0 check -p zencodec -p zenmeta --all-features

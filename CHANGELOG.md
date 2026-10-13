@@ -114,7 +114,27 @@ removes that whole class).
 - None against crates.io zencodec 0.1.26 for the metadata extraction. Unpublished
   inventory/metadata PR consumers require migration; those are recorded separately.
 
+- Proposed next-release contract work, **not implemented** (audit of `717a55d7`):
+  replace silently ignored correctness requirements with validated operations;
+  separate decode interpretation, returned metadata and admission controls;
+  establish one authority for current pixel color/orientation at encode time.
+  Add compatible migration paths first; public signatures still require review.
+  [Audit, rationale and acceptance gates](docs/zencodec-contract-audit-2026-10-13.md).
+- Conditional follow-ups from the same audit: replace static capability guarantees
+  only where effective job queries exist, and retire millisecond-only animation
+  contracts after exact timing and loop-count migrations. Inventory, rewrite and
+  CodecSet corrections are unpublished API work, not breaks against 0.1.26.
+- Reassess the older resource-limit removal proposal below before implementing it:
+  lack of enforcement does not establish that output-size or playback-duration
+  requirements are unnecessary. The audit leaves the existing proposal intact
+  and records the alternatives and evidence needed for a decision.
+
 ### Added
+
+- Reproducible whole-contract comparison against crates.io 0.1.26, including
+  archive/VCS verification, both zencodec feature selections, and executable
+  observations of rewrite/color/capability contract gaps. No library API changes;
+  source baseline `717a55d7`, report linked above.
 
 - Add `metadata_rewrite` request, report, output-plan and runtime-service contracts
   without a dependency on zenmeta or a codec. Existing published metadata APIs

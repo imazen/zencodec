@@ -190,6 +190,15 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Open contract gaps verified by `just contract-probes` (2026-10-13):
+  `EncodeCapabilities::supports(AnimationTiming)` cannot report true;
+  rewrite `PreserveExact` rejects a request with no XMP editor before inspecting
+  whether XMP is present. The color resolver can request ICC synthesis when the
+  target cannot carry ICC, so callers still need a realizability check.
+  `Plan::from_parts` trusts codec validation and does not check report ranges
+  against the input length. See `docs/zencodec-contract-audit-2026-10-13.md` for
+  the trust boundaries, inherited versus unpublished issues, and proposed fixes.
+
 - Fixed during metadata/timing integration (2026-10-12): the existing timing
   proposal inserted `AnimationTiming` in the middle of `UnsupportedOperation`,
   changing numeric casts of six released variants. Append new variants after
