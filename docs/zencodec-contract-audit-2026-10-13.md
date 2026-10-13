@@ -6,8 +6,14 @@ break for enforceable operation requirements, independent parsing/extraction
 controls, and an unambiguous contract between output pixels and their metadata.
 Resolve the new dispatch/rewrite ambiguities before publishing them.
 
-This is a source/API audit, not authorization to implement the proposed API.
-The recommendations below are unimplemented. No release is being made.
+This records the source/API audit at the baseline below. Later implementation
+separates ordinary and exact timing and moves rewrite execution to zenmeta.
+The user has approved completing the boundary in the next coordinated breaking
+release; the current target and acceptance gates are in
+[zenmeta design](zenmeta-design.md#next-breaking-release-target) and the
+[changelog queue](../CHANGELOG.md). Historical findings below describe the audited
+commit, not a claim that those issues remain in every later revision. No release
+is being made by this audit.
 
 ## Baseline and reproducible diff
 

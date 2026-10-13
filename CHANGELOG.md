@@ -123,9 +123,6 @@ removes that whole class).
   validate report bounds against an explicit input length. `PreserveExact` XMP
   retention no longer requires an editor; explicit editing still does.
 
-
-### Changed
-
 - Unpublished animation timing now distinguishes ordinary `push_frame_timed`
   (reports the encoded duration) from explicit `push_frame_exact`. Add shared
   cumulative timing quantization and an honest timing capability flag. Existing
@@ -135,23 +132,69 @@ removes that whole class).
 
 ### QUEUED BREAKING CHANGES
 
-- None against crates.io zencodec 0.1.26 for the metadata extraction. Unpublished
-  inventory/metadata PR consumers require migration; those are recorded separately.
+Target for the upcoming coordinated breaking release; these removals and contract
+replacements are **planned, not implemented**. The current extraction remains
+compatible with crates.io 0.1.26. Implementation and signature review precede any
+version bump or publication. [Target boundary and release gates](docs/zenmeta-design.md#next-breaking-release-target).
 
-- Proposed next-release contract work, **not implemented** (audit of `717a55d7`):
-  replace silently ignored correctness requirements with validated operations;
-  separate decode interpretation, returned metadata and admission controls;
-  establish one authority for current pixel color/orientation at encode time.
-  Add compatible migration paths first; public signatures still require review.
-  [Audit, rationale and acceptance gates](docs/zencodec-contract-audit-2026-10-13.md).
-- Conditional follow-ups from the same audit: replace static capability guarantees
-  only where effective job queries exist, and retire millisecond-only animation
-  contracts after exact timing and loop-count migrations. Inventory, rewrite and
-  CodecSet corrections are unpublished API work, not breaks against 0.1.26.
-- Reassess the older resource-limit removal proposal below before implementing it:
-  lack of enforcement does not establish that output-size or playback-duration
-  requirements are unnecessary. The audit leaves the existing proposal intact
-  and records the alternatives and evidence needed for a decision.
+- Move the owned EXIF editing tree, tag mutation, serialization and category
+  filtering out of zencodec into zenmeta, including `Exif::{new,set_artist,
+  set_copyright,set_orientation,filtered,to_bytes}`, `exif::retain`,
+  `Metadata::filtered` and blob-editing artist/copyright conveniences. Migrate
+  direct specialist callers to zenmeta; codec signatures use bytes and
+  zencodec-owned request/result contracts. Preserve lightweight orientation/color
+  reading and ISO gain-map interpretation without zenmeta (`0f4814dc`, `54040cc3`).
+- Replace ambiguous decode policy with independent parser compatibility,
+  metadata extraction and content/operation admission. Ordinary decoding accepts
+  bounded, unambiguous real-world recovery; strict parsing is explicit. Required
+  rendering interpretation cannot be silently disabled by extraction policy
+  (`760562a2`).
+- Replace silently ignored correctness requirements with validated admission and
+  reported outcomes. Unsupported required fidelity, alpha, HDR, metadata or exact
+  timing must return typed errors; tuning hints may remain best-effort. Verify
+  generic/dynamic and one-shot/streaming/animation parity (`760562a2`, `9f8ad523`).
+- Make current pixel color/orientation authoritative at encode time, separate
+  from source provenance and descriptive metadata. Replace legacy independently
+  authoritative inputs only after a checked migration path exists. Require
+  realizable container signaling or an explicit conversion requirement/error;
+  never introduce an implicit color conversion (`760562a2`).
+- Make rational duration the canonical animation contract, with ordinary
+  quantization that reports actual timing and separately requested exactness.
+  Retire lossy `duration_ms()` getters and millisecond-only trait requirements
+  after consumer migration; retain exact `from_millis` conveniences. Specify
+  zero-frame semantics and total plays across codecs; rejected frames must not
+  advance timing state. Exactness is never the implicit default (`9f8ad523`).
+- Replace capability promises that depend on configuration with effective
+  operation admission/queries. Retain static booleans as coarse discovery where
+  useful. Cover backend, depth, alpha, animation and gain-map combinations without
+  a shared enum of every backend setting (`760562a2`).
+- Keep output-byte and animation-duration limits; distinguish output final-size
+  limits, incremental enforcement and media-duration admission from wall-clock
+  limits. Retire misleading omnibus helpers only after callers migrate. Do not
+  delete useful requirements because an old adapter failed to enforce them
+  (`760562a2`).
+- Remove deprecated threading aliases after consumers use `Sequential`/`Parallel`;
+  exact thread counts remain backend-specific. Do not promise a Rayon limit
+  governs internally threaded AV1 backends (`760562a2`).
+- Remove deprecated ICC/descriptor compatibility helpers after migration to
+  canonical zenpixels APIs, including `icc_extract_cicp`, the top-level `icc`
+  module, `IccMatchTolerance`, `identify_well_known_icc`, `icc_profile_is_srgb`
+  and `descriptor_for_decoded_pixels`. Preserve cheap color queries without
+  zenmeta or a pipeline; do not remove `SourceColor::has_hdr_transfer` merely to
+  force pipeline use (`760562a2`).
+- Remove ambiguous ISO gain-map fraction/format aliases after migration to
+  `from_f64_cf` and explicit `Iso21496Format` APIs; keep standardized gain-map
+  contracts and small format readers/writers available without zenmeta
+  (`760562a2`).
+- Separate predicted output information from completed output facts where their
+  contracts differ; do not globally rename `OutputInfo` without auditing its
+  completed push-decode uses. Remove `ComputeEnvironment::new` only after caller
+  migration to `conservative`/`host` (`760562a2`).
+
+Inventory, rewrite and CodecSet are unpublished relative to 0.1.26: correct their
+contracts before first release, without labeling that work a released API break.
+Inventory stays independent of decoding configuration and default-off in codecs.
+No video transport or universal metadata tree is part of this release.
 
 ### Added
 
@@ -233,48 +276,6 @@ removes that whole class).
   pushes supersede each other. The two workflows keep distinct groups via the
   `${{ github.workflow }}` prefix, so they still never cancel one another.
 
-### QUEUED BREAKING CHANGES
-<!-- Breaking changes that will ship together in the next 0.x minor release.
-     Add items here as you discover them. Do NOT ship these piecemeal — batch them. -->
-- Rename `OutputInfo` → `PredictedOutputInfo` (`decode::PredictedOutputInfo`): it is the decoder's
-  *predicted* output shape, not a measured fact — the name should say so.
-- Ablate `ThreadingPolicy` to what codecs can actually honor — keep `Sequential` and `Parallel`,
-  remove the deprecated variants (`SingleThread`, `LimitOrSingle`, `LimitOrAny`, and the two
-  deprecated aliases that map to `Parallel`). Rayon codecs cannot reliably cap thread count from
-  inside, so those modes were never real.
-- Ablate `ResourceLimits` to the caps codecs actually enforce (per the 2026-06-20 enforcement
-  audit): **remove** the fields no codec honors — `max_animation_ms` (a duration, not a resource;
-  2 callers) and the running `max_output_bytes` cap (no encoder honors it mid-stream) — and the
-  never-called `check_image_info` / `check_output_info` omnibus helpers. Keep the load-bearing caps
-  (`max_pixels`, `max_memory_bytes`, `max_width` / `max_height`, `max_input_bytes`, `max_frames`),
-  `threading`, and `prefer_fallible_allocations`. (Non-breaking follow-up, done separately: wire
-  `max_total_pixels` + a per-cap `enforces_*` honesty flag.)
-- Remove `icc_extract_cicp` re-export and the top-level `icc` module.
-  Callers should use `zenpixels::icc::extract_cicp`, which returns a typed
-  `Cicp` instead of a `(u8, u8, u8, bool)` tuple.
-- Remove `helpers::IccMatchTolerance`, `helpers::identify_well_known_icc`,
-  and `helpers::icc_profile_is_srgb`. Callers should use
-  `zenpixels::icc::{identify_common, is_common_srgb}` which return the
-  richer `IccIdentification` (adds `valid_use: IdentificationUse` so
-  callers can distinguish metadata-only matches from matrix+TRC-safe
-  substitution). `descriptor_for_decoded_pixels` will drop its
-  `IccMatchTolerance` parameter — it is currently a placebo.
-- Remove `helpers::descriptor_for_decoded_pixels` (deprecated in 0.1.17).
-  Callers migrate to `descriptor_for_decoded_pixels_v2` which drops the
-  placebo `IccMatchTolerance` and widens `corrected_to` to
-  `Option<&ColorProfileSource>`.
-- Remove `gainmap::Fraction::from_f64` and `gainmap::UFraction::from_f64`
-  (deprecated since 0.1.12). Callers should use `from_f64_cf`, which
-  produces canonical continued-fraction encodings matching libultrahdr.
-- Remove `gainmap::parse_iso21496` and `gainmap::serialize_iso21496`
-  (deprecated since 0.1.12). Callers should use `parse_iso21496_fmt` /
-  `serialize_iso21496_fmt` with an explicit `Iso21496Format` (AvifTmap
-  vs. JpegApp2) to avoid the format ambiguity that motivated the rename.
-- Remove `SourceColor::has_hdr_transfer()` — moves to a pipeline-level
-  utility that consults `ColorProfileSource` and `HdrPolicy` together
-  rather than inspecting raw CICP/ICC fields.
-- Remove `ComputeEnvironment::new()` (deprecated in 0.1.27) — construction
-  goes through the explicit `conservative()` / `host()` constructors.
 
 ### Added
 

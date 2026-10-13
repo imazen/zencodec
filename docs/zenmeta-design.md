@@ -298,3 +298,87 @@ points delegate to those implementations; this is a staged physical extraction,
 not a claim that all writer code has left zencodec. Removing those implementations
 requires the queued breaking release. Baseline color, orientation, EXIF and ISO
 gain-map reading remain usable without zenmeta or any pipeline/codec registry.
+
+## Next breaking release target
+
+The next coordinated breaking release is intended to complete the boundary, not
+merely rename the deprecated wrappers. Until then the compatibility implementation
+remains in zencodec. This section is the target design; it does not claim the
+migration has shipped. The changelog's single queued-breaking list is authoritative.
+
+### Useful without zenmeta
+
+A caller using a codec and zencodec must still obtain ICC bytes, CICP, source and
+residual orientation, HDR light/mastering signals, and standardized ISO gain-map
+parameters and components. Lightweight reading needed to interpret pixels stays
+available. ICC bytes do not imply a complete ICC color-management engine: pixel
+conversion and gain-map application belong to the corresponding color/pixel
+libraries, independently of zenmeta. An absent or unknown declaration must remain
+distinguishable from an explicit sRGB/BT.709 declaration on checked paths.
+
+Copying an opaque EXIF/XMP packet unchanged needs no rich parser. Resolving a
+changed orientation inside that packet, removing selected tags, editing XML or
+relocating MakerNotes does. When a requested operation needs an unavailable
+service, reject that operation explicitly; do not silently retain stale tags or
+strip rendering-critical information.
+
+The full owned EXIF editing tree and its implementation move to zenmeta. Core
+retains the small reading path needed above and stable packet/policy/result
+contracts, rather than a second general-purpose EXIF engine. Direct specialist
+users may use zenmeta's own types; codec public signatures must not expose them.
+Existing tree-based bridge functions are transitional and may change before
+zenmeta's first publication. Move the original implementation and its tests;
+share low-level reading primitives instead of maintaining two parsers.
+
+### Implementation ownership and failure semantics
+
+Codecs own container framing, carrier selection and order, offsets, compressed
+packet transport, item relationships and safe output assembly. Zenmeta owns
+shared packet interpretation, editing, retention and audits. Zencodec owns the
+interchange requests, limits, results and errors. No dependency runs from zencodec
+to zenmeta, zencodecs or zenpipe. Multiple zenmeta implementation versions may
+serve the same compatible contracts; incompatible zencodec versions still have
+distinct Rust type identities and require deliberate migration.
+
+Inventory is an optional codec operation, independent of decode configuration and
+of rewrite support. A codec compiled without it returns typed unsupported. Small
+interchange types can remain available in zencodec without pulling in a scanner.
+Neither a successful inventory nor a generic byte plan certifies whole-file
+privacy or semantic rewrite safety. That claim belongs to the codec planner that
+validated every affected carrier and relationship.
+
+Ordinary decoding accepts bounded, unambiguous compatibility recovery. Explicit
+strict parsing and safe rewriting can impose tighter validation. Metadata return
+policy controls what leaves the decoder; parser mode controls interpretation;
+content admission controls which operations are allowed. If honoring all three
+is impossible, return an explicit error rather than label pixels incorrectly.
+
+### Migration and acceptance gates
+
+- Compare the final public API against the actual latest registry archive and
+  record intentional removals individually. Separate already-published breaks
+  from changes to unpublished timing/inventory/rewrite proposals.
+- Prove a baseline codec dependency build and decode with zenmeta, inventory,
+  zencodecs and zenpipe absent. Verify ICC/CICP/orientation and ISO gain-map
+  fixtures through that build, including unknown and conflicting declarations.
+- Move existing EXIF/XMP/MakerNote tests with implementation. Run retained
+  real-world compatibility cases in ordinary and strict modes; a strict rewrite
+  rejection must not redefine the ordinary decoder's acceptance policy.
+- Exercise source metadata after orientation correction, color conversion and
+  HDR reconstruction. Encode admission must use current pixels, retain source
+  provenance separately and reject unrealizable signaling.
+- Exercise animation exactness, cumulative quantization, zero and extreme
+  durations, failed-push state, and total plays through static and erased APIs.
+  Include JXL, WebP, APNG, GIF and each enabled AVIF backend. A capability bit is
+  discovery, not proof that every rational duration fits a container.
+- Keep output-size and media-duration requirements and test their actual
+  enforcement points. Do not confuse final-size checks with bounded output
+  allocation, or media duration with elapsed compute time.
+- Validate rewritten/encoded files with independent implementations in codec
+  tests. Keep those oracle dependencies outside shipped product graphs.
+- Keep page/item topology distinct from animation; leave room for future video
+  without adding video packets, scheduling, DTS/PTS, audio or a new pipeline now.
+
+No new zenifd crate, universal metadata document, mandatory plugin registry,
+per-vendor strictness flag collection, or backend-specific settings enum is
+needed to establish this boundary.
