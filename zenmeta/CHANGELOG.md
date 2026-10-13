@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Reject mixed rewrite inputs by borrowed input identity, validate an entire child
+  plan before appending it, and preserve builder state when an append fails.
+- Recheck input limits after replacing a context's input and poll cancellation
+  before packet services. Preflight expanded EXIF storage, including overlapping
+  values and thumbnails, before invoking the compatibility serializer; recheck
+  its final output against the metadata budget.
+
 ### Added
 
 - Metadata/EXIF processing entry points bridge retained zencodec compatibility

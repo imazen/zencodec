@@ -27,9 +27,6 @@ impl<'a> Context<'a> {
             request: request.clone(),
         };
         context.check()?;
-        if request.input().len() > request.max_input() {
-            return Err(Error::Limit("input bytes"));
-        }
         if (request.edit_xmp() || request.normalize_icc()) && request.services().is_none() {
             return Err(Error::Unsupported("metadata service not supplied"));
         }
@@ -40,10 +37,15 @@ impl<'a> Context<'a> {
         self.stop().check().map_err(|reason| match reason {
             enough::StopReason::Cancelled => Error::Cancelled,
             other => Error::Stopped(other),
-        })
+        })?;
+        if self.input().len() > self.max_input() {
+            return Err(Error::Limit("input bytes"));
+        }
+        Ok(())
     }
     /// Enforce the parsed/expanded packet or regenerated metadata budget.
     pub fn packet(&self, size: usize) -> Result<(), Error> {
+        self.check()?;
         if size > self.max_metadata() {
             Err(Error::Limit("metadata bytes"))
         } else {
@@ -135,7 +137,9 @@ impl<'a> Context<'a> {
                 "removing orientation requires explicit pixel transformation",
             ));
         }
-        Ok(crate::exif::serialize(&filtered))
+        let output = crate::exif::serialize(&filtered);
+        self.packet(output.len())?;
+        Ok(output)
     }
 }
 
@@ -146,7 +150,7 @@ pub struct PlanBuilder<'a> {
     entries: Vec<Entry>,
     size: usize,
     rewritten: usize,
-    input_len: Option<usize>,
+    input: Option<&'a [u8]>,
 }
 impl<'a> PlanBuilder<'a> {
     /// Start an empty plan; each carrier operation checks its request budget.
@@ -156,7 +160,7 @@ impl<'a> PlanBuilder<'a> {
     /// Record one input carrier and an optional output chunk, enforcing budgets.
     pub fn record(
         &mut self,
-        req: &Context<'_>,
+        req: &Context<'a>,
         range: Range<usize>,
         carrier: &'static str,
         action: Action,
@@ -166,7 +170,11 @@ impl<'a> PlanBuilder<'a> {
         if range.start > range.end || range.end > req.input().len() {
             return Err(Error::Malformed("rewrite source range"));
         }
-        if self.input_len.is_some_and(|n| n != req.input().len()) {
+        let input = req.input();
+        if self
+            .input
+            .is_some_and(|previous| !core::ptr::eq(previous, input))
+        {
             return Err(Error::Malformed("mixed rewrite inputs"));
         }
         if self.entries.len() >= req.max_carriers() {
@@ -198,7 +206,7 @@ impl<'a> PlanBuilder<'a> {
         }
         self.size = size;
         self.rewritten = rewritten;
-        self.input_len = Some(req.input().len());
+        self.input = Some(input);
         Ok(())
     }
 
@@ -218,7 +226,7 @@ impl<'a> PlanBuilder<'a> {
     /// Record a removed input carrier.
     pub fn remove(
         &mut self,
-        req: &Context<'_>,
+        req: &Context<'a>,
         range: Range<usize>,
         name: &'static str,
     ) -> Result<(), Error> {
@@ -231,7 +239,7 @@ impl<'a> PlanBuilder<'a> {
     /// Insert a generated carrier immediately after the first output chunk.
     pub fn inject_after_first(
         &mut self,
-        req: &Context<'_>,
+        req: &Context<'a>,
         bytes: Vec<u8>,
         name: &'static str,
     ) -> Result<(), Error> {
@@ -249,9 +257,17 @@ impl<'a> PlanBuilder<'a> {
     /// Remove a previously retained carrier before inserting its replacement.
     pub fn remove_kept_range(
         &mut self,
-        req: &Context<'_>,
+        req: &Context<'a>,
         range: &Range<usize>,
     ) -> Result<(), Error> {
+        req.check()?;
+        let input = req.input();
+        if self
+            .input
+            .is_some_and(|previous| !core::ptr::eq(previous, input))
+        {
+            return Err(Error::Malformed("mixed rewrite inputs"));
+        }
         let source = req
             .input()
             .get(range.clone())
@@ -267,12 +283,21 @@ impl<'a> PlanBuilder<'a> {
         Ok(())
     }
     /// Append a contained-image plan, translating its report to parent offsets.
-    pub fn append(&mut self, req: &Context<'_>, other: Self, offset: usize) -> Result<(), Error> {
+    pub fn append(&mut self, req: &Context<'a>, other: Self, offset: usize) -> Result<(), Error> {
         req.check()?;
-        if self.input_len.is_some_and(|n| n != req.input().len()) {
+        let input = req.input();
+        if self
+            .input
+            .is_some_and(|previous| !core::ptr::eq(previous, input))
+        {
             return Err(Error::Malformed("mixed rewrite inputs"));
         }
-        self.input_len = Some(req.input().len());
+        if offset
+            .checked_add(other.input.map_or(0, <[u8]>::len))
+            .is_none_or(|end| end > req.input().len())
+        {
+            return Err(Error::Malformed("contained input range"));
+        }
         let size = self
             .size
             .checked_add(other.size)
@@ -291,6 +316,17 @@ impl<'a> PlanBuilder<'a> {
         {
             return Err(Error::Limit("carrier count"));
         }
+        for entry in &other.entries {
+            let range = entry.source_range();
+            if range.start.checked_add(offset).is_none()
+                || range
+                    .end
+                    .checked_add(offset)
+                    .is_none_or(|end| end > req.input().len())
+            {
+                return Err(Error::Malformed("report offset"));
+            }
+        }
         self.parts
             .try_reserve(other.parts.len())
             .map_err(|_| Error::Allocation)?;
@@ -298,19 +334,14 @@ impl<'a> PlanBuilder<'a> {
             .try_reserve(other.entries.len())
             .map_err(|_| Error::Allocation)?;
         for entry in other.entries {
-            let r = entry.source_range();
-            let start = r
-                .start
-                .checked_add(offset)
-                .ok_or(Error::Limit("report offset"))?;
-            let end = r
-                .end
-                .checked_add(offset)
-                .filter(|n| *n <= req.input().len())
-                .ok_or(Error::Malformed("report offset"))?;
-            self.entries
-                .push(Entry::new(start..end, entry.carrier(), entry.action()));
+            let range = entry.source_range();
+            self.entries.push(Entry::new(
+                range.start + offset..range.end + offset,
+                entry.carrier(),
+                entry.action(),
+            ));
         }
+        self.input = Some(input);
         self.parts.extend(other.parts);
         self.size = size;
         self.rewritten = rewritten;
@@ -318,7 +349,7 @@ impl<'a> PlanBuilder<'a> {
     }
     /// Finish with the stable zencodec-owned plan type.
     pub fn finish(self) -> Result<Plan<'a>, Error> {
-        let plan = Plan::from_parts(self.input_len.unwrap_or(0), self.parts, self.entries)?;
+        let plan = Plan::from_parts(self.input.map_or(0, <[u8]>::len), self.parts, self.entries)?;
         if plan.output_len() != self.size {
             return Err(Error::Malformed("rewrite length accounting"));
         }

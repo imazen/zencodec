@@ -118,3 +118,8 @@ animation-policy-check:
 
 metadata-clippy:
     cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+# Adversarial review cases for the shared timing/rewrite boundary.
+review-contract-check:
+    cargo test -p zenmeta --features rewrite --test rewrite
+    cargo test -p zencodec --test animation_timing

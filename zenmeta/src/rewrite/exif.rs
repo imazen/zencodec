@@ -5,6 +5,11 @@ use super::*;
 use alloc::collections::BTreeSet;
 
 pub(super) fn validate(req: &Context<'_>, bytes: &[u8]) -> Result<(), Error> {
+    let mut expanded = if bytes.starts_with(b"Exif\0\0") {
+        14usize
+    } else {
+        8
+    };
     let bytes = bytes.strip_prefix(b"Exif\0\0").unwrap_or(bytes);
     let le = match bytes.get(..2) {
         Some(b"II") => true,
@@ -51,6 +56,12 @@ pub(super) fn validate(req: &Context<'_>, bytes: &[u8]) -> Result<(), Error> {
             return Err(Error::Malformed("EXIF cyclic/excessive IFDs"));
         }
         let count = u16at(p)? as usize;
+        expanded = expanded
+            .checked_add(6 + 12 * count)
+            .ok_or(Error::Limit("metadata bytes"))?;
+        req.packet(expanded)?;
+        let mut external_values = BTreeSet::new();
+        let (mut thumbnail_offset, mut thumbnail_size) = (None, None);
         entries = entries
             .checked_add(count)
             .ok_or(Error::Limit("EXIF entries"))?;
@@ -67,6 +78,7 @@ pub(super) fn validate(req: &Context<'_>, bytes: &[u8]) -> Result<(), Error> {
         }
         let mut tags = BTreeSet::new();
         for i in 0..count {
+            req.check()?;
             let e = p + 2 + 12 * i;
             let tag = u16at(e)?;
             let ty = u16at(e + 2)?;
@@ -88,6 +100,25 @@ pub(super) fn validate(req: &Context<'_>, bytes: &[u8]) -> Result<(), Error> {
             };
             if value.checked_add(size).is_none_or(|v| v > bytes.len()) {
                 return Err(Error::Malformed("EXIF value bounds"));
+            }
+            if size > 4 && external_values.insert((value, size)) {
+                expanded = expanded
+                    .checked_add(size)
+                    .and_then(|n| n.checked_add(size & 1))
+                    .ok_or(Error::Limit("metadata bytes"))?;
+                req.packet(expanded)?;
+            }
+            if n == 1 && matches!(ty, 3 | 4) && matches!(tag, 0x0201 | 0x0202) {
+                let scalar = if ty == 3 {
+                    usize::from(u16at(value)?)
+                } else {
+                    u32at(value)? as usize
+                };
+                if tag == 0x0201 {
+                    thumbnail_offset = Some(scalar);
+                } else {
+                    thumbnail_size = Some(scalar);
+                }
             }
             if matches!(tag, 0x0112 | 0x8769 | 0x8825 | 0xa005) && !tags.insert(tag) {
                 return Err(Error::Malformed("duplicate EXIF orientation/pointer"));
@@ -114,6 +145,15 @@ pub(super) fn validate(req: &Context<'_>, bytes: &[u8]) -> Result<(), Error> {
                     pending.push(child);
                 }
             }
+        }
+        if let (Some(offset), Some(size)) = (thumbnail_offset, thumbnail_size) {
+            if offset.checked_add(size).is_none_or(|end| end > bytes.len()) {
+                return Err(Error::Malformed("EXIF thumbnail bounds"));
+            }
+            expanded = expanded
+                .checked_add(size)
+                .ok_or(Error::Limit("metadata bytes"))?;
+            req.packet(expanded)?;
         }
     }
     Ok(())

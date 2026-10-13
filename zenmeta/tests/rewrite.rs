@@ -114,3 +114,65 @@ fn empty_and_service_requests_are_validated_by_zenmeta() {
         Err(Error::Limit("input bytes"))
     ));
 }
+
+#[test]
+fn failed_child_append_does_not_add_partial_reports() {
+    use zenmeta::rewrite::PlanBuilder;
+    let parent = Context::new(&Request::new(b"123456")).unwrap();
+    let child = Context::new(&Request::new(b"abcdef")).unwrap();
+    let mut builder = PlanBuilder::new();
+    builder.keep(&parent, 0..1, "prefix").unwrap();
+    let mut nested = PlanBuilder::new();
+    nested.keep(&child, 0..2, "one").unwrap();
+    nested.keep(&child, 2..6, "two").unwrap();
+    assert!(builder.append(&parent, nested, 2).is_err());
+    let plan = builder.finish().unwrap();
+    assert_eq!(plan.to_vec().unwrap(), b"1");
+    assert_eq!(plan.report().len(), 1);
+}
+
+#[test]
+fn equal_length_inputs_cannot_be_mixed_in_one_builder() {
+    use zenmeta::rewrite::PlanBuilder;
+    let first = Context::new(&Request::new(b"123456")).unwrap();
+    let other = Context::new(&Request::new(b"abcdef")).unwrap();
+    let mut builder = PlanBuilder::new();
+    builder.keep(&first, 0..3, "one").unwrap();
+    assert!(builder.keep(&other, 3..6, "two").is_err());
+    assert_eq!(builder.finish().unwrap().to_vec().unwrap(), b"123");
+}
+
+#[test]
+fn replacing_context_input_cannot_bypass_input_budget() {
+    let context = Context::new(
+        &Request::new(b"1")
+            .with_byte_limits(1, 10)
+            .with_policy(zencodec::MetadataPolicy::PreserveExact),
+    )
+    .unwrap()
+    .with_input(b"123");
+    assert_eq!(context.xmp(b"a"), Err(Error::Limit("input bytes")));
+}
+
+#[test]
+fn overlapping_exif_values_obey_expanded_metadata_budget() {
+    let mut exif = b"II*\0\x08\0\0\0".to_vec();
+    exif.extend(2u16.to_le_bytes());
+    for (index, tag) in [0x013bu16, 0x8298].into_iter().enumerate() {
+        exif.extend(tag.to_le_bytes());
+        exif.extend(2u16.to_le_bytes());
+        exif.extend(130u32.to_le_bytes());
+        exif.extend((38u32 + index as u32).to_le_bytes());
+    }
+    exif.extend(0u32.to_le_bytes());
+    exif.extend([b'a'; 130]);
+    exif.push(0);
+    assert!(exif.len() <= 190);
+    let context = Context::new(
+        &Request::new(b"")
+            .with_metadata_limit(190)
+            .with_policy(zencodec::MetadataPolicy::PreserveExact),
+    )
+    .unwrap();
+    assert_eq!(context.exif(&exif), Err(Error::Limit("metadata bytes")));
+}
