@@ -472,3 +472,57 @@ clippy, and both registry comparisons. Each semver profile against the actual
 exercises the focused adversarial cases. Regenerated API snapshots are checked
 with `just api-doc-check`. CI and review status remain live on the PR; no crate
 has been published or merge authorized by this audit.
+
+## Post-merge YAGNI pass: crates.io 0.1.26 to main
+
+PR 138 merged at `e924793ec30bb69477ce32306678b4547ec9e644` on
+2026-10-13. `cargo search zencodec --limit 1` still returned 0.1.26 at this
+review. The [source comparison script](../scripts/audit-published-contract.py)
+verified that every released source file and original manifest matches the
+archive's VCS commit `998edf5f5152f675bbe3b4e959470dffe1536c36`, then
+compared it with `origin/main`. The 222,215-byte patch changes 22 source or
+manifest paths; its SHA-256 is
+`19a7d95ccc865cea39b071e6e18f5666cebcf1fa0534c303e398e07143c49b76`.
+Regenerate it with:
+
+```sh
+just contract-diff /home/lilith/.cache/cargo-read/zencodec-0.1.26 \
+  /mnt/v/output/zencodec/yagni-2026-10-13 origin/main
+```
+
+This is source volume, not a build-time, binary-size or memory measurement.
+`cargo metadata --no-deps` confirms zencodec has four normal dependencies
+(`almost-enough`, `enough`, `whereat`, `zenpixels`) and no dependency on
+zenmeta, zencodecs or zenpipe. Zenmeta is a separate workspace package;
+`roxmltree` is optional there.
+
+| Delta | Evidence and decision |
+|---|---|
+| Rational frame duration, cumulative quantizer and explicit exact encoding (`animation.rs`, 185 lines) | **Keep.** JXL and WebP adapters exercise the same contract and independent native readers checked encoded timing. The shared integer rounding rule prevents each codec inventing its own. The old millisecond methods are published and remain compatible. Finish the remaining adapter matrix before release. |
+| Shared structural inventory (`inventory.rs`, 1,278 lines) | **Keep the interchange type and the job method.** Public code search finds inventory implementations in JPEG XL, AVIF, HEIC, TIFF, RAW, PNG, WebP, GIF and bitmap codecs. The large per-codec walkers belong behind each codec's default-off inventory feature; making the shared types themselves conditional would spread feature coordination through every consumer. This review did not measure the core type's compile cost. |
+| Rewrite requests, results and services (`metadata_rewrite.rs`, 353 lines) | **Keep the minimum codec interchange.** Indexed JXL and PNG source files use this surface; zenmeta executes the common packet operations. Before its first release, require a concrete codec caller for each option and callback. `Services::merge_xmp`, `Services::compress` and `Request::with_jpeg_reconstruction_removal` have no caller in this workspace; the last is a JPEG XL policy embedded in a generic request. Move unsupported format choices to codec extensions or remove them if consumer review finds no use. Do not claim that workspace absence proves no external caller. |
+| `CodecSet` (`set.rs`, 829 lines) | **Strongest trim candidate before first publication.** It bundles registration, format detection, policy defaults, decode, encode, transcode and cost estimates into the contracts crate. Indexed public code search found examples/tests here and no production use of the name in the imazen org; private or unindexed consumers remain unknown. Keep the dynamic codec traits, which adapters use independently. Review whether `CodecSet` should be behind a default-off `registry` feature and whether the convenience transcode/estimate methods have a real caller. `zencodecs` already offers format dispatch, but its current license differs, so moving this API there would change who can use it. A feature within zencodec preserves permissive access without requiring a pipeline. |
+| Additional EXIF filtering and `EntryRef`/`Ifd` (`exif.rs`, +738/-83 lines) | **Keep current compatibility, finish the planned move.** The added categories support retention tests, but the owned editing tree still sits in zencodec. Moving its implementation into zenmeta is the substantive next-break reduction; deleting basic EXIF orientation reading would defeat the standalone core. |
+| One-shot trait defaults and estimate constructors | **Keep.** These are short forwards, reuse existing traits, and add no dependency. Remove only after a demonstrated ambiguity or consumer migration, not to optimize line count. |
+
+Two immediate contract risks matter more than deleting helpers. `CodecSet::transcode`
+forwards a `Fidelity` request through setters that can ignore it, and it builds
+metadata from source info even if a second decode changes the selected pixel
+descriptor. Require checked admission and current-pixel color/orientation
+authority before presenting that method as a safe generic transcode. These are
+correctness gates on a convenience method, not reasons to add a new universal
+pipeline. The rewrite `Error::Limit(&'static str)` likewise needs typed limit
+classification before the new API is published.
+
+The published-to-main comparison is source-compatible in both checked feature
+profiles; behavior still changed in EXIF filtering and metadata retention as
+listed above. No current API removal is needed for the YAGNI pass. Inventory,
+rewrite and `CodecSet` have not appeared on crates.io yet, so changes to those
+proposals can be reviewed before publication without spending the planned
+breaking release. The [breaking queue](../CHANGELOG.md#queued-breaking-changes)
+should focus on released compatibility debt and codec correctness requirements.
+
+The GitHub README currently suggests `zencodec = "0.1.27"` while the packaged
+`README.crates.md` says 0.1.26. Only 0.1.26 is available from crates.io at this
+review. Reconcile the two before treating the README as installation guidance
+for the next release.
