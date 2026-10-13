@@ -20,7 +20,8 @@ use crate::traits::{AnimationFrameDecoder, Decode, DecodeJob};
 mod exif;
 mod icc;
 #[cfg(feature = "std")]
-mod sansio;
+pub mod sansio;
+
 
 pub use exif::{parse_exif_orientation, set_exif_orientation};
 pub use icc::descriptor_for_decoded_pixels_v2;

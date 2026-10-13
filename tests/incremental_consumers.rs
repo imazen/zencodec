@@ -1,6 +1,9 @@
 //! Tests for stdio and tokio incremental consumers.
 
+#![cfg(feature = "std")]
+
 use enough::Stop;
+
 use zencodec::decode::OutputInfo;
 use zencodec::decode::{
     DecodeRowSink, DynIncrementalDecoder, IncrementalDecode, IncrementalDecoderShim, PushOutcome,
