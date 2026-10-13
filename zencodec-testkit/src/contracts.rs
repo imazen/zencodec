@@ -96,7 +96,7 @@ pub fn check_animation_durations<D: DecoderConfig + 'static>(
 pub fn check_animation_timing<E, D>(
     enc: E,
     dec: D,
-    img: &TestImage,
+    pixels: PixelSlice<'_>,
     exact: bool,
     cases: &[(FrameDuration, Option<FrameDuration>)],
 ) -> Conformance
@@ -122,34 +122,22 @@ where
         .into_animation_frame_encoder()
         .map_err(|e| err(&e))?;
     for (index, (requested, expected)) in cases.iter().enumerate() {
-        let mut data = img.data.clone();
-        // Vary content to prevent identical-frame coalescing from concealing
-        // a consumed rejected input. Preserve the caller's native descriptor.
-        for byte in &mut data {
-            *byte ^= index as u8;
-        }
-        let frame = TestImage {
-            width: img.width,
-            height: img.height,
-            desc: img.desc,
-            data,
-        };
         if exact && expected.is_some_and(|v| v != *requested) {
             return Err(fail(CHECK, "exact test case requests rounding"));
         }
         let a = if exact {
             generic
-                .push_frame_exact(frame.as_slice(), *requested, None)
+                .push_frame_exact(pixels.clone(), *requested, None)
                 .map(|()| *requested)
         } else {
-            generic.push_frame_timed(frame.as_slice(), *requested, None)
+            generic.push_frame_timed(pixels.clone(), *requested, None)
         };
         let b = if exact {
             erased
-                .push_frame_exact(frame.as_slice(), *requested, None)
+                .push_frame_exact(pixels.clone(), *requested, None)
                 .map(|()| *requested)
         } else {
-            erased.push_frame_timed(frame.as_slice(), *requested, None)
+            erased.push_frame_timed(pixels.clone(), *requested, None)
         };
         for (path, result) in [
             ("generic", a.map_err(|e| e.to_string())),
@@ -233,7 +221,7 @@ pub fn check_inventory_input_limit<D: DecoderConfig + 'static>(
 pub fn check_encode_policy_admission<E, D>(
     enc: E,
     dec: D,
-    img: &TestImage,
+    pixels: PixelSlice<'_>,
     metadata: Metadata,
     initial: EncodePolicy,
     request: EncodePolicy,
@@ -272,10 +260,10 @@ where
         return Err(fail(CHECK, "rejection lost typed EncodePolicy error"));
     }
     let a = job
-        .encode(img.as_slice())
+        .encode(pixels.clone())
         .map_err(|e| fail(CHECK, e.to_string()))?;
     let b = dynamic
-        .encode(img.as_slice())
+        .encode(pixels)
         .map_err(|e| fail(CHECK, e.to_string()))?;
     let (pa, ma) = dec_oneshot(&dec, a.data()).map_err(|e| fail(CHECK, e))?;
     let (pb, mb) = dec_oneshot(&dec, b.data()).map_err(|e| fail(CHECK, e))?;
@@ -445,7 +433,11 @@ pub fn check_metadata_rewrite<'a>(
 /// has not adopted rational encoding. Both timing methods must reject with
 /// `AnimationTiming`, leave buffered frames intact, and allow legacy encoding
 /// to continue. A false timing capability must not silently quantize requests.
-pub fn check_animation_timing_unsupported<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
+pub fn check_animation_timing_unsupported<E, D>(
+    enc: E,
+    dec: D,
+    pixels: PixelSlice<'_>,
+) -> Conformance
 where
     E: EncoderConfig + 'static,
     D: DecoderConfig + 'static,
@@ -477,17 +469,17 @@ where
         ] {
             for exact in [true, false] {
                 let a = if exact {
-                    generic.push_frame_exact(img.as_slice(), duration, None)
+                    generic.push_frame_exact(pixels.clone(), duration, None)
                 } else {
                     generic
-                        .push_frame_timed(img.as_slice(), duration, None)
+                        .push_frame_timed(pixels.clone(), duration, None)
                         .map(|_| ())
                 };
                 let b = if exact {
-                    dynamic.push_frame_exact(img.as_slice(), duration, None)
+                    dynamic.push_frame_exact(pixels.clone(), duration, None)
                 } else {
                     dynamic
-                        .push_frame_timed(img.as_slice(), duration, None)
+                        .push_frame_timed(pixels.clone(), duration, None)
                         .map(|_| ())
                 };
                 let a = a
@@ -504,10 +496,10 @@ where
             }
         }
         generic
-            .push_frame(img.as_slice(), delay, None)
+            .push_frame(pixels.clone(), delay, None)
             .map_err(|e| fail(CHECK, e.to_string()))?;
         dynamic
-            .push_frame(img.as_slice(), delay, None)
+            .push_frame(pixels.clone(), delay, None)
             .map_err(|e| fail(CHECK, e.to_string()))?;
     }
     let a = generic

@@ -22,7 +22,14 @@ fn exact_timing_checks_boundaries_and_rejected_frame_atomicity() {
         (duration(1001, 30000), None),
         (ms(60), Some(ms(60))),
     ];
-    tk::check_animation_timing(E::new(), D, &TestImage::rgb8_gradient(4, 3), true, &cases).unwrap();
+    tk::check_animation_timing(
+        E::new(),
+        D,
+        TestImage::rgb8_gradient(4, 3).as_slice(),
+        true,
+        &cases,
+    )
+    .unwrap();
 }
 
 #[test]
@@ -37,14 +44,26 @@ fn ordinary_timing_preserves_phase_across_rejection() {
         (ms(0), Some(ms(0))),
         (source, Some(ms(33))),
     ];
-    tk::check_animation_timing(E::new(), D, &TestImage::rgb8_gradient(4, 3), false, &cases)
-        .unwrap();
+    tk::check_animation_timing(
+        E::new(),
+        D,
+        TestImage::rgb8_gradient(4, 3).as_slice(),
+        false,
+        &cases,
+    )
+    .unwrap();
     // Independent per-frame rounding would report 33 instead of 34: must fail.
     let mut wrong = cases;
     wrong[2].1 = Some(ms(33));
     assert!(
-        tk::check_animation_timing(E::new(), D, &TestImage::rgb8_gradient(4, 3), false, &wrong)
-            .is_err()
+        tk::check_animation_timing(
+            E::new(),
+            D,
+            TestImage::rgb8_gradient(4, 3).as_slice(),
+            false,
+            &wrong
+        )
+        .is_err()
     );
 }
 
@@ -72,7 +91,7 @@ fn checked_encode_policy_verifies_delivery_and_atomic_rejection() {
         tk::check_encode_policy_admission(
             E::new(),
             D,
-            &image,
+            image.as_slice(),
             meta.clone(),
             EncodePolicy::none(),
             request,
@@ -84,7 +103,7 @@ fn checked_encode_policy_verifies_delivery_and_atomic_rejection() {
     tk::check_encode_policy_admission(
         E::new(),
         D,
-        &image,
+        image.as_slice(),
         meta.clone(),
         EncodePolicy::none(),
         strip,
@@ -98,7 +117,7 @@ fn checked_encode_policy_verifies_delivery_and_atomic_rejection() {
     tk::check_encode_policy_admission(
         E::new(),
         D,
-        &image,
+        image.as_slice(),
         meta.clone(),
         strip,
         mixed,
@@ -110,7 +129,7 @@ fn checked_encode_policy_verifies_delivery_and_atomic_rejection() {
         tk::check_encode_policy_admission(
             E::new(),
             D,
-            &image,
+            image.as_slice(),
             meta.clone(),
             strip,
             mixed,
@@ -123,7 +142,7 @@ fn checked_encode_policy_verifies_delivery_and_atomic_rejection() {
         tk::check_encode_policy_admission(
             E::new(),
             D,
-            &image,
+            image.as_slice(),
             meta.clone(),
             strip,
             mixed,
@@ -241,7 +260,11 @@ fn rewrite_harness_catches_ignored_limits_cancellation_and_changed_output() {
 #[test]
 fn undeclared_timing_check_rejects_a_timing_enabled_adapter() {
     assert!(
-        tk::check_animation_timing_unsupported(E::new(), D, &TestImage::rgb8_gradient(4, 3))
-            .is_err()
+        tk::check_animation_timing_unsupported(
+            E::new(),
+            D,
+            TestImage::rgb8_gradient(4, 3).as_slice()
+        )
+        .is_err()
     );
 }

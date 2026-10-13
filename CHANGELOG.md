@@ -12,6 +12,9 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 #### Added
 
+- New fixture-driven encode checks accept native `PixelSlice` views, including
+  strided, 16-bit and floating-point inputs, without an RGB8-only fixture type.
+
 - The default animation cross-path suite now checks source durations, and
   `check_animation_timing_unsupported` tests typed refusal without damaging
   buffered legacy frames on adapters that do not support rational encoding.
