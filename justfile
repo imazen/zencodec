@@ -115,3 +115,6 @@ animation-policy-check:
     cargo test -p zencodec --all-features
     cargo clippy -p zencodec --all-targets --all-features -- -D warnings
     just metadata-semver
+
+metadata-clippy:
+    cargo clippy --workspace --all-targets --all-features -- -D warnings

@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- Metadata/EXIF processing entry points bridge retained zencodec compatibility
+  writers without duplicating their implementation. Reading needs no zenmeta.
+
+### Changed
+
+- Rewrite execution checks now live in Context instead of the zencodec request.
+  Retaining XMP can copy it byte-for-byte without an editor. PlanBuilder checks
+  source bounds and does not record a carrier whose output exceeds its budget.
+
+
 - Add optional `rewrite` support: bounded shared EXIF validation/filtering,
   application-service limits and fallible plan assembly. Codec public signatures
   use zencodec-owned request/plan/error types. Container planners remain with codecs.

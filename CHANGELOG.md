@@ -109,6 +109,21 @@ removes that whole class).
 
 ## [Unreleased]
 
+### Deprecated
+
+- Published `Metadata::filtered`, `Exif::filtered`, `Exif::to_bytes`, and
+  `exif::retain` remain compatible, with zenmeta processing entry points as their
+  migration targets. The implementation remains single-owned in zencodec until
+  a breaking release can relocate it; basic metadata reading stays available.
+
+### Changed
+
+- Unpublished rewrite requests are data contracts; validation, cancellation and
+  packet-budget execution move to `zenmeta::rewrite::Context`. Completed plans
+  validate report bounds against an explicit input length. `PreserveExact` XMP
+  retention no longer requires an editor; explicit editing still does.
+
+
 ### Changed
 
 - Unpublished animation timing now distinguishes ordinary `push_frame_timed`

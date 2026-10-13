@@ -281,3 +281,20 @@ intact and new trait methods retain compatible defaults. Unreleased PR consumers
 still need coordinated migration. New public APIs go through review before
 publication; this document does not authorize publishing packages or removing
 existing PRs.
+
+
+## Contract boundary update (2026-10-13)
+
+The codec-facing rewrite request and completed plan remain zencodec types.
+Request execution (admission, cancellation, packet limits, XMP retention) and
+bounded plan assembly live in zenmeta. Codecs own container validation and use
+`zenmeta::rewrite::Context` internally; public signatures need not expose it.
+`Plan::from_parts` accepts an input length and checks report bounds, but the
+constructor does not certify that report actions match a codec's emitted bytes.
+
+Published EXIF writing and Metadata filtering remain deprecated compatibility
+implementations, as explicitly chosen for this migration. The new zenmeta entry
+points delegate to those implementations; this is a staged physical extraction,
+not a claim that all writer code has left zencodec. Removing those implementations
+requires the queued breaking release. Baseline color, orientation, EXIF and ISO
+gain-map reading remain usable without zenmeta or any pipeline/codec registry.
