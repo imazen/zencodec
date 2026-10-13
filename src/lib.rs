@@ -112,7 +112,7 @@ pub use limits::{AllocPreference, LimitExceeded, LimitKind, ResourceLimits, Thre
 pub use metadata::{IccRetention, Metadata, MetadataFields, MetadataPolicy};
 pub use orientation::{Orientation, OrientationHint};
 pub use output::{AnimationFrame, OwnedAnimationFrame};
-pub use set::{CodecSet, CodecSetError};
+pub use set::{CodecSet, CodecSetError, TranscodeBarrier};
 pub use zenpixels::ColorAuthority;
 
 pub use capabilities::UnsupportedOperation;

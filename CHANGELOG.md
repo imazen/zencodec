@@ -118,6 +118,10 @@ removes that whole class).
 
 ### Fixed
 
+- Unpublished `CodecSet::transcode` now refuses known animations, auxiliary
+  images and descriptor downgrades with `TranscodeRequiresExplicitHandling`.
+  Its documentation states that fidelity and metadata-carrier delivery are
+  still best-effort under the published trait contracts.
 - PR138 audit: reduce incoming destination-tick fractions before combining
   timing phases; avoid intermediate numerator overflow when carrying a tick.
   Integral ticks no longer fail solely because earlier source clocks produced

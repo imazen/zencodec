@@ -12,10 +12,12 @@ use std::sync::LazyLock;
 use zencodec::estimate::{ComputeEnvironment, ImageCharacteristics};
 use zencodec::prelude::*;
 use zencodec::{
-    CodecSet, CodecSetError, ColorEmitPolicy, ImageFormat, Metadata, MetadataPolicy, ResourceLimits,
+    CodecSet, CodecSetError, ColorEmitPolicy, ImageFormat, Metadata, MetadataPolicy,
+    ResourceLimits, TranscodeBarrier,
 };
+use zencodec_testkit::reference::RefEncodeJob;
 use zencodec_testkit::{
-    ReferenceDecoderConfig, ReferenceEncoderConfig, ReferenceZcrDecoderConfig, ZCR_FORMAT,
+    RefError, ReferenceDecoderConfig, ReferenceEncoderConfig, ReferenceZcrDecoderConfig, ZCR_FORMAT,
 };
 use zenpixels::{PixelDescriptor, PixelSlice};
 
@@ -259,6 +261,52 @@ fn transcode_roundtrips_pixels_and_carries_metadata() {
     );
 }
 
+#[derive(Clone)]
+struct Rgb8OnlyEncoder;
+
+impl EncoderConfig for Rgb8OnlyEncoder {
+    type Error = RefError;
+    type Job = RefEncodeJob;
+
+    fn format() -> ImageFormat {
+        ImageFormat::Pnm
+    }
+
+    fn supported_descriptors() -> &'static [PixelDescriptor] {
+        &[PixelDescriptor::RGB8_SRGB]
+    }
+
+    fn job(self) -> Self::Job {
+        ReferenceEncoderConfig::new().job()
+    }
+}
+
+#[test]
+fn transcode_refuses_implicit_precision_loss() {
+    let samples = [0u8; 24];
+    let pixels =
+        PixelSlice::new(&samples, W, H, 12, PixelDescriptor::RGB16_SRGB).expect("16-bit pixels");
+    let source = ReferenceEncoderConfig::new()
+        .encode(pixels)
+        .expect("encode 16-bit source");
+    let set = CodecSet::new()
+        .with_decoder(ReferenceZcrDecoderConfig)
+        .with_encoder(Rgb8OnlyEncoder);
+
+    assert!(matches!(
+        set.transcode(
+            source.data(),
+            ImageFormat::Pnm,
+            zencodec::encode::Fidelity::Lossless,
+            MetadataPolicy::Web,
+            ColorEmitPolicy::Verbatim,
+        ),
+        Err(CodecSetError::TranscodeRequiresExplicitHandling(
+            TranscodeBarrier::PixelDescriptor
+        ))
+    ));
+}
+
 #[test]
 fn animation_roundtrip_through_set() {
     let set = CodecSet::new()
@@ -278,6 +326,19 @@ fn animation_roundtrip_through_set() {
     enc.push_frame(rgb_pixels(&frame_b, W, H), 200, None)
         .expect("frame b");
     let out = enc.finish(None).expect("finish");
+
+    assert!(matches!(
+        set.transcode(
+            out.data(),
+            ImageFormat::Pnm,
+            zencodec::encode::Fidelity::Lossless,
+            MetadataPolicy::Web,
+            ColorEmitPolicy::Verbatim,
+        ),
+        Err(CodecSetError::TranscodeRequiresExplicitHandling(
+            TranscodeBarrier::Sequence
+        ))
+    ));
 
     let mut dec = set
         .animation_decoder(out.data(), &[])
