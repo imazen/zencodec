@@ -55,6 +55,8 @@ pub enum UnsupportedOperation {
     DecodePolicy,
     /// A required encode policy cannot be admitted by this job.
     EncodePolicy,
+    /// Incremental Sans-I/O decoding ([`IncrementalDecode`](crate::decode::IncrementalDecode)).
+    IncrementalDecode,
 }
 
 impl UnsupportedOperation {
@@ -74,6 +76,7 @@ impl UnsupportedOperation {
             Self::MultiImageDecode => "multi_image_decode",
             Self::GainMapEncode => "gain_map_encode",
             Self::Inventory => "inventory",
+            Self::IncrementalDecode => "incremental_decode",
         }
     }
 }
@@ -358,7 +361,8 @@ impl EncodeCapabilities {
             | UnsupportedOperation::RowLevelDecode
             | UnsupportedOperation::AnimationDecode
             | UnsupportedOperation::MultiImageDecode
-            | UnsupportedOperation::PixelFormat => false,
+            | UnsupportedOperation::PixelFormat
+            | UnsupportedOperation::IncrementalDecode => false,
         }
     }
 
@@ -577,6 +581,7 @@ pub struct DecodeCapabilities {
     cheap_probe: bool,
     decode_into: bool,
     streaming: bool,
+    incremental: bool,
     // Format capabilities
     hdr: bool,
     gain_map: bool,
@@ -617,6 +622,7 @@ impl DecodeCapabilities {
             cheap_probe: false,
             decode_into: false,
             streaming: false,
+            incremental: false,
             hdr: false,
             gain_map: false,
             inventory: false,
@@ -676,6 +682,10 @@ impl DecodeCapabilities {
     /// Whether `StreamingDecode` / `streaming_decoder()` is implemented.
     pub const fn streaming(&self) -> bool {
         self.streaming
+    }
+    /// Whether `IncrementalDecode` / `into_incremental_decoder()` is implemented.
+    pub const fn incremental(&self) -> bool {
+        self.incremental
     }
     /// Whether the codec supports HDR content.
     pub const fn hdr(&self) -> bool {
@@ -780,6 +790,7 @@ impl DecodeCapabilities {
         match op {
             UnsupportedOperation::DecodeInto => self.decode_into,
             UnsupportedOperation::RowLevelDecode => self.streaming,
+            UnsupportedOperation::IncrementalDecode => self.incremental,
             UnsupportedOperation::AnimationDecode => self.animation,
             UnsupportedOperation::MultiImageDecode => self.multi_image,
             UnsupportedOperation::Inventory => self.inventory,
@@ -844,6 +855,11 @@ impl DecodeCapabilities {
     /// Set whether `StreamingDecode` / `streaming_decoder()` is supported.
     pub const fn with_streaming(mut self, v: bool) -> Self {
         self.streaming = v;
+        self
+    }
+    /// Set whether `IncrementalDecode` / `into_incremental_decoder()` is supported.
+    pub const fn with_incremental(mut self, v: bool) -> Self {
+        self.incremental = v;
         self
     }
     /// Set whether HDR content is supported.

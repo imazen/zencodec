@@ -228,9 +228,16 @@ pub trait IncrementalDecode {
     /// Image metadata, available as soon as sufficient header bytes have been pushed.
     fn info(&self) -> Option<&ImageInfo>;
 
+    /// Negotiated output pixel descriptor, available once the header has been parsed.
+    fn output_descriptor(&self) -> Option<zenpixels::PixelDescriptor> {
+        None
+    }
+
+
     /// Whether decoding has fully completed.
     fn is_complete(&self) -> bool;
 }
+
 
 /// Full-frame composited animation decode.
 ///

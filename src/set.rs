@@ -926,6 +926,14 @@ impl CodecSetIncrementalDecoder {
         self.info.as_ref()
     }
 
+    /// Output pixel descriptor, available once format detection and header parsing have completed.
+    pub fn output_descriptor(&self) -> Option<PixelDescriptor> {
+        match &self.state {
+            CodecSetIncState::Decoding(dec) => dec.output_descriptor(),
+            _ => None,
+        }
+    }
+
     /// Whether decoding has completely finished.
     pub fn is_complete(&self) -> bool {
         match &self.state {
@@ -972,10 +980,15 @@ impl DynIncrementalDecoder for CodecSetIncrementalDecoder {
         self.info()
     }
 
+    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+        self.output_descriptor()
+    }
+
     fn is_complete(&self) -> bool {
         self.is_complete()
     }
 }
+
 
 // ===========================================================================
 // Tests (codec-free; end-to-end behavior tests live in zencodec-testkit)

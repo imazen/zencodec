@@ -228,9 +228,13 @@ pub trait DynIncrementalDecoder: Send {
     /// Image metadata, available as soon as sufficient header bytes have been pushed.
     fn info(&self) -> Option<&ImageInfo>;
 
+    /// Negotiated output pixel descriptor, available once the header has been parsed.
+    fn output_descriptor(&self) -> Option<PixelDescriptor>;
+
     /// Whether decoding has fully completed.
     fn is_complete(&self) -> bool;
 }
+
 
 impl core::fmt::Debug for dyn DynIncrementalDecoder + '_ {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -291,10 +295,15 @@ impl<I: super::decoder::IncrementalDecode + Send> DynIncrementalDecoder
         self.0.info()
     }
 
+    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+        self.0.output_descriptor()
+    }
+
     fn is_complete(&self) -> bool {
         self.0.is_complete()
     }
 }
+
 
 // ===========================================================================
 // DynDecodeJob

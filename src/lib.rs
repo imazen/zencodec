@@ -112,7 +112,7 @@ pub use limits::{AllocPreference, LimitExceeded, LimitKind, ResourceLimits, Thre
 pub use metadata::{IccRetention, Metadata, MetadataFields, MetadataPolicy};
 pub use orientation::{Orientation, OrientationHint};
 pub use output::{AnimationFrame, OwnedAnimationFrame};
-pub use set::{CodecSet, CodecSetError, TranscodeBarrier};
+pub use set::{CodecSet, CodecSetError, CodecSetIncrementalDecoder, TranscodeBarrier};
 pub use zenpixels::ColorAuthority;
 
 pub use capabilities::UnsupportedOperation;
@@ -136,6 +136,8 @@ pub use traits::Unsupported;
 pub use almost_enough::StopToken;
 pub use enough;
 pub use enough::Unstoppable;
+pub use how_far;
+pub use how_far::Pulse;
 
 /// Location-tracing error wrapper, re-exported from [`whereat`].
 ///
@@ -220,8 +222,8 @@ pub mod encode {
 pub mod decode {
     // Traits — config, job, execution
     pub use crate::traits::{
-        AnimationFrameDecoder, Decode, DecodeJob, DecoderConfig, IncrementalDecode, PushOutcome,
-        PushStatus, StreamingDecode,
+        AnimationFrameDecoder, BatchMeta, Decode, DecodeJob, DecoderConfig, IncrementalDecode,
+        PushOutcome, PushStatus, StreamingDecode,
     };
 
     // Object-safe dyn dispatch
@@ -265,4 +267,5 @@ pub mod prelude {
         AnimationFrameEncoder, DynAnimationFrameEncoder, DynEncodeJob, DynEncoder,
         DynEncoderConfig, EncodeJob, Encoder, EncoderConfig,
     };
+    pub use how_far::Pulse;
 }

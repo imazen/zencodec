@@ -67,29 +67,39 @@ where
     let mut drain_batches =
         |dec: &mut D, dst_sink: &mut (dyn DecodeRowSink + '_)| -> Result<(), PumpError<D::Error>> {
             if !sink_begun {
-                // Read height from info before mutable borrow by pull_batch_meta
-                let info_h = dec.info().map(|i| i.height);
-                if let Some((meta, slice)) = dec.pull_batch_meta().map_err(PumpError::Codec)? {
-                    let desc = slice.descriptor();
+                if let (Some(info), Some(desc)) = (dec.info(), dec.output_descriptor()) {
+                    total_w = info.width;
+                    total_h = info.height;
                     chosen_desc = Some(desc);
-                    let w = slice.width();
-                    let h = info_h.unwrap_or(slice.rows() as u32);
-                    total_w = w;
-                    total_h = h;
                     dst_sink
-                        .begin(w, h, desc)
+                        .begin(info.width, info.height, desc)
                         .map_err(|e| PumpError::Codec(D::wrap_sink_error(e)))?;
                     sink_begun = true;
+                } else {
+                    let info_h = dec.info().map(|i| i.height);
+                    if let Some((meta, slice)) = dec.pull_batch_meta().map_err(PumpError::Codec)? {
+                        let desc = slice.descriptor();
+                        chosen_desc = Some(desc);
+                        let w = slice.width();
+                        let h = info_h.unwrap_or(slice.rows() as u32);
+                        total_w = w;
+                        total_h = h;
+                        dst_sink
+                            .begin(w, h, desc)
+                            .map_err(|e| PumpError::Codec(D::wrap_sink_error(e)))?;
+                        sink_begun = true;
 
-                    let batch_rows = slice.rows() as u32;
-                    let mut dst = dst_sink
-                        .provide_next_buffer(meta.y, batch_rows, w, desc)
-                        .map_err(|e| PumpError::Codec(D::wrap_sink_error(e)))?;
-                    for row_idx in 0..batch_rows {
-                        dst.row_mut(row_idx).copy_from_slice(slice.row(row_idx));
+                        let batch_rows = slice.rows() as u32;
+                        let mut dst = dst_sink
+                            .provide_next_buffer(meta.y, batch_rows, w, desc)
+                            .map_err(|e| PumpError::Codec(D::wrap_sink_error(e)))?;
+                        for row_idx in 0..batch_rows {
+                            dst.row_mut(row_idx).copy_from_slice(slice.row(row_idx));
+                        }
                     }
                 }
             }
+
 
             // Pull any subsequent batches directly into the sink
             if sink_begun {
@@ -182,28 +192,39 @@ where
                              dst_sink: &mut (dyn DecodeRowSink + '_)|
      -> Result<(), PumpError<BoxedError>> {
         if !sink_begun {
-            let info_h = dec.info().map(|i| i.height);
-            if let Some((meta, slice)) = dec.pull_batch_meta().map_err(PumpError::Codec)? {
-                let desc = slice.descriptor();
+            if let (Some(info), Some(desc)) = (dec.info(), dec.output_descriptor()) {
+                total_w = info.width;
+                total_h = info.height;
                 chosen_desc = Some(desc);
-                let w = slice.width();
-                let h = info_h.unwrap_or(slice.rows() as u32);
-                total_w = w;
-                total_h = h;
                 dst_sink
-                    .begin(w, h, desc)
+                    .begin(info.width, info.height, desc)
                     .map_err(|e| PumpError::Codec(e as BoxedError))?;
                 sink_begun = true;
+            } else {
+                let info_h = dec.info().map(|i| i.height);
+                if let Some((meta, slice)) = dec.pull_batch_meta().map_err(PumpError::Codec)? {
+                    let desc = slice.descriptor();
+                    chosen_desc = Some(desc);
+                    let w = slice.width();
+                    let h = info_h.unwrap_or(slice.rows() as u32);
+                    total_w = w;
+                    total_h = h;
+                    dst_sink
+                        .begin(w, h, desc)
+                        .map_err(|e| PumpError::Codec(e as BoxedError))?;
+                    sink_begun = true;
 
-                let batch_rows = slice.rows() as u32;
-                let mut dst = dst_sink
-                    .provide_next_buffer(meta.y, batch_rows, w, desc)
-                    .map_err(|e| PumpError::Codec(e as BoxedError))?;
-                for row_idx in 0..batch_rows {
-                    dst.row_mut(row_idx).copy_from_slice(slice.row(row_idx));
+                    let batch_rows = slice.rows() as u32;
+                    let mut dst = dst_sink
+                        .provide_next_buffer(meta.y, batch_rows, w, desc)
+                        .map_err(|e| PumpError::Codec(e as BoxedError))?;
+                    for row_idx in 0..batch_rows {
+                        dst.row_mut(row_idx).copy_from_slice(slice.row(row_idx));
+                    }
                 }
             }
         }
+
 
         if sink_begun {
             while let Some(_rows) = dec.pull_batch_into(dst_sink).map_err(PumpError::Codec)? {}
