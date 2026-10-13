@@ -123,3 +123,69 @@ fn zero_and_rejection_do_not_corrupt_rounding_state() {
     assert_eq!(quantizer.quantize(fractional), control.quantize(fractional));
     assert!(TimingQuantizer::new(0, 65535).is_err());
 }
+
+#[test]
+fn integer_ticks_do_not_expand_a_large_fractional_phase() {
+    use zencodec::animation::TimingQuantizer;
+    let mut quantizer = TimingQuantizer::new(1000, u64::MAX).unwrap();
+    for denominator in [4294967291, 4294967279, 4294967231, 4294967197] {
+        quantizer
+            .quantize(FrameDuration::new(1, denominator).unwrap())
+            .unwrap();
+    }
+    assert_eq!(
+        quantizer
+            .quantize(FrameDuration::new(1, 100).unwrap())
+            .unwrap(),
+        FrameDuration::from_millis(10)
+    );
+    let mut control = quantizer;
+    assert_eq!(
+        quantizer.quantize(FrameDuration::new(1, 4294967189).unwrap()),
+        Err(TimingError::Overflow)
+    );
+    assert_eq!(
+        quantizer.quantize(FrameDuration::from_millis(7)),
+        control.quantize(FrameDuration::from_millis(7))
+    );
+}
+
+#[test]
+fn mixed_timing_matches_an_independent_integer_endpoint_oracle() {
+    use zencodec::animation::TimingQuantizer;
+    const PERIOD: u128 = 9_699_690; // lcm of the source clocks below
+    for clock in [1, 100, 1000, u32::MAX] {
+        let mut quantizer = TimingQuantizer::new(clock, u64::MAX).unwrap();
+        let mut units = 0u128;
+        let mut encoded = 0u128;
+        let mut random = 17u32;
+        for index in 0..4096 {
+            random = random.wrapping_mul(1664525).wrapping_add(1013904223);
+            let denominator = [2, 3, 5, 7, 11, 13, 17, 19][index % 8];
+            let duration = FrameDuration::new(u64::from(random), denominator).unwrap();
+            units += u128::from(random) * (PERIOD / u128::from(denominator));
+            encoded += u128::from(
+                quantizer
+                    .quantize(duration)
+                    .unwrap()
+                    .ticks_at(clock)
+                    .unwrap(),
+            );
+            assert_eq!(encoded, (units * u128::from(clock) + PERIOD / 2) / PERIOD);
+        }
+    }
+}
+
+#[test]
+fn adding_large_phases_carries_without_a_129_bit_intermediate() {
+    use zencodec::animation::TimingQuantizer;
+    let mut quantizer = TimingQuantizer::new(1, u64::MAX).unwrap();
+    for denominator in [4294967291, 4294967279, 4294967231, 4294967197] {
+        assert_eq!(
+            quantizer
+                .quantize(FrameDuration::new(u64::from(denominator - 1), denominator).unwrap())
+                .unwrap(),
+            FrameDuration::new(1, 1).unwrap()
+        );
+    }
+}

@@ -515,3 +515,111 @@ where
         Box::new(EncodeJobShim(Some(self.clone().job())))
     }
 }
+
+#[cfg(test)]
+mod timing_dispatch_tests {
+    use super::*;
+    use crate::{
+        UnsupportedOperation,
+        animation::{FrameDuration, TimingQuantizer},
+    };
+
+    struct Timed {
+        quantizer: TimingQuantizer,
+        accepted: alloc::vec::Vec<u8>,
+    }
+    impl Timed {
+        fn new() -> Self {
+            Self {
+                quantizer: TimingQuantizer::new(100, 255).unwrap(),
+                accepted: alloc::vec::Vec::new(),
+            }
+        }
+    }
+    impl AnimationFrameEncoder for Timed {
+        type Error = UnsupportedOperation;
+        fn reject(op: UnsupportedOperation) -> Self::Error {
+            op
+        }
+        fn push_frame(
+            &mut self,
+            _: PixelSlice<'_>,
+            _: u32,
+            _: Option<&dyn Stop>,
+        ) -> Result<(), Self::Error> {
+            panic!("rational dispatch must not call the legacy path")
+        }
+        fn push_frame_exact(
+            &mut self,
+            _: PixelSlice<'_>,
+            duration: FrameDuration,
+            _: Option<&dyn Stop>,
+        ) -> Result<(), Self::Error> {
+            let ticks = duration
+                .ticks_at(100)
+                .ok()
+                .and_then(|ticks| u8::try_from(ticks).ok())
+                .ok_or(UnsupportedOperation::AnimationTiming)?;
+            self.accepted.push(ticks);
+            Ok(())
+        }
+        fn push_frame_timed(
+            &mut self,
+            pixels: PixelSlice<'_>,
+            duration: FrameDuration,
+            stop: Option<&dyn Stop>,
+        ) -> Result<FrameDuration, Self::Error> {
+            let mut next = self.quantizer;
+            let encoded = next
+                .quantize(duration)
+                .map_err(|_| UnsupportedOperation::AnimationTiming)?;
+            self.push_frame_exact(pixels, encoded, stop)?;
+            self.quantizer = next;
+            Ok(encoded)
+        }
+        fn finish(self, _: Option<&dyn Stop>) -> Result<EncodeOutput, Self::Error> {
+            Ok(EncodeOutput::new(self.accepted, ImageFormat::Gif))
+        }
+    }
+
+    #[test]
+    fn shim_preserves_actual_timing_errors_and_accepted_frame_sequence() {
+        let buffer = zenpixels::PixelBuffer::new(1, 1, PixelDescriptor::RGB8_SRGB);
+        let mut generic = Timed::new();
+        let mut erased: Box<dyn DynAnimationFrameEncoder> =
+            Box::new(AnimationFrameEncoderShim(Timed::new()));
+        for _ in 0..9 {
+            let duration = FrameDuration::new(1, 30).unwrap();
+            assert_eq!(
+                generic.push_frame_exact(buffer.as_slice(), duration, None),
+                Err(UnsupportedOperation::AnimationTiming)
+            );
+            let error = erased
+                .push_frame_exact(buffer.as_slice(), duration, None)
+                .unwrap_err();
+            assert_eq!(
+                error.downcast_ref::<UnsupportedOperation>(),
+                Some(&UnsupportedOperation::AnimationTiming)
+            );
+            assert_eq!(
+                generic
+                    .push_frame_timed(buffer.as_slice(), duration, None)
+                    .unwrap(),
+                erased
+                    .push_frame_timed(buffer.as_slice(), duration, None)
+                    .unwrap()
+            );
+        }
+        let exact = FrameDuration::new(1, 100).unwrap();
+        generic
+            .push_frame_exact(buffer.as_slice(), exact, None)
+            .unwrap();
+        erased
+            .push_frame_exact(buffer.as_slice(), exact, None)
+            .unwrap();
+        assert_eq!(
+            generic.finish(None).unwrap().data(),
+            erased.finish(None).unwrap().data()
+        );
+    }
+}

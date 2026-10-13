@@ -105,9 +105,14 @@ impl TimingQuantizer {
     /// reduced denominator exceeds u128 is rejected, never approximated.
     pub fn quantize(&mut self, duration: FrameDuration) -> Result<FrameDuration, TimingError> {
         let scaled = u128::from(duration.numerator()) * u128::from(self.clock.get());
-        let den = u128::from(duration.denominator());
+        let mut den = u128::from(duration.denominator());
         let whole = scaled / den;
-        let frac = scaled % den;
+        let mut frac = scaled % den;
+        // Reduce in destination ticks before combining phases. In particular,
+        // an integral tick duration must not grow the stored denominator.
+        let reduce = gcd(frac, den);
+        frac /= reduce;
+        den /= reduce;
         let common = gcd(self.phase_den, den);
         let left_scale = den / common;
         let right_scale = self.phase_den / common;
@@ -115,13 +120,18 @@ impl TimingQuantizer {
             .phase_den
             .checked_mul(left_scale)
             .ok_or(TimingError::Overflow)?;
-        let sum_num = self
+        let left = self
             .phase_num
             .checked_mul(left_scale)
-            .and_then(|n| frac.checked_mul(right_scale).and_then(|r| n.checked_add(r)))
             .ok_or(TimingError::Overflow)?;
-        let carry = sum_num / sum_den;
-        let remainder = sum_num % sum_den;
+        let right = frac.checked_mul(right_scale).ok_or(TimingError::Overflow)?;
+        // Each fraction is below one, but their sum may need 129 bits.
+        // Subtract the denominator before adding when the sum carries a tick.
+        let (carry, remainder) = if left >= sum_den - right {
+            (1, left - (sum_den - right))
+        } else {
+            (0, left + right)
+        };
         // Compare without overflowing on 2 * remainder.
         let rounded_up = remainder >= sum_den - remainder;
         let ticks = whole

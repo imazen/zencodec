@@ -116,6 +116,13 @@ removes that whole class).
   migration targets. The implementation remains single-owned in zencodec until
   a breaking release can relocate it; basic metadata reading stays available.
 
+### Fixed
+
+- PR138 audit: reduce incoming destination-tick fractions before combining
+  timing phases; avoid intermediate numerator overflow when carrying a tick.
+  Integral ticks no longer fail solely because earlier source clocks produced
+  a large phase denominator. Generic/dynamic timing forwarding is checked.
+
 ### Changed
 
 - Unpublished rewrite requests are data contracts; validation, cancellation and
