@@ -552,3 +552,37 @@ The GitHub README currently suggests `zencodec = "0.1.27"` while the packaged
 `README.crates.md` says 0.1.26. Only 0.1.26 is available from crates.io at this
 review. Reconcile the two before treating the README as installation guidance
 for the next release.
+
+## Which contracts need parallel migration?
+
+Checked again against the actual 0.1.26 archive on 2026-10-13. A published
+method must keep working while callers adopt a replacement. A main-only API
+can be corrected before 0.1.27 without consuming the future breaking-release
+budget, although git-pinned consumers still need coordinated updates. The
+proposals below are design targets, not approved public signatures.
+
+| Wart or boundary | In crates.io 0.1.26? | Migration path |
+|---|---|---|
+| `CodecSet`, including `transcode` | **No.** Keep the registry and its direct decode/probe path available by default. | Correct `transcode` now: distinguish requested fidelity and metadata retention from what the encode actually carried; reject unrequested precision/auxiliary loss. Keep basic multi-format decoding simple. Do not spend a breaking release on its unpublished signature. |
+| `metadata_rewrite::Error::Limit(&'static str)`, `Request`, `Services`, `Plan` | **No.** The entire module is main-only; zenmeta's rewrite helpers are also unpublished. | Replace string-matched limits with typed categories before the first release. Reuse `LimitKind` for input/output where it fits; metadata bytes, rewritten bytes and carrier counts need names of their own. Keep the proven PNG compression and JXL reconstruction hooks. Review XMP merge against a real carrier operation. |
+| `DecodeJob::with_policy` and `EncodeJob::with_policy` no-op defaults, `DecodePolicy` fields | **Yes.** Codecs may ignore these setters. | Add a fallible, checked operation for *required* parser behavior, extraction and content admission; default implementations must reject unsupported requirements. Carry it through generic jobs, erased jobs and `CodecSet`. Keep existing setters as compatibility hints until codec adoption, then deprecate the ambiguous required use. Split the old coupled decode fields only at the coordinated break. |
+| `EncoderConfig::with_fidelity`, `EncodeJob::with_metadata_policy`, `Metadata::from(&ImageInfo)` | **Yes.** Fidelity is documented as best-effort; metadata filtering can still lead to unsupported fields being skipped, and `ImageInfo` describes the source rather than every later pixel transformation. | Add an encode-time required-operation path that can inspect actual pixels, plus a report of which requested metadata and color carriers were emitted. Tie emission to the final pixel descriptor and color context while retaining source provenance. A config-time `FidelityMatch` cannot settle content-dependent losslessness; do not revive it as a guarantee. Keep best-effort quality/effort knobs for callers that want hints. |
+| `Exif::to_bytes`, `Exif::filtered`, `exif::retain`, `Metadata::filtered` | **Yes.** Main marks them deprecated but retains their implementation. | Build the owned, fallible EXIF edit/serialize path in zenmeta, move its existing tests and real-file cases, then migrate consumers. Keep small EXIF orientation reading in zencodec. Remove the legacy editing tree only at the approved breaking release; zenmeta's current wrapper is a bridge, not the final fallible writer. |
+| `AnimationFrame::duration_ms`, `OwnedAnimationFrame::duration_ms`, millisecond constructors and `push_frame` | **Yes.** The getters truncate or saturate rational durations on main; legacy encoding may quantize the requested milliseconds. | Main already adds rational `duration()`/`with_duration`, ordinary `push_frame_timed` returning actual timing and explicit `push_frame_exact`. Migrate adapters and consumers, then deprecate the lossy getters and millisecond-only trait requirement. Retain exact `from_millis` as a useful constructor. |
+| `ComputeEnvironment::new` | **Yes.** | Main already adds `conservative()` and `host()` and deprecates `new()`. No larger abstraction is needed. |
+
+The checked paths should have one invariant: **an unsupported requirement fails
+at the earliest stage that can know, and no accepted operation silently drops
+it later**. A codec may reject a static impossibility when building a job; an
+alpha/palette/HDR-dependent requirement may need the actual input pixels. The
+same outcome must hold through direct, erased and `CodecSet` calls. Use the
+existing error chain and category model where it fits rather than creating a
+parallel error universe. Tests need unsupported codecs as well as capable
+ones, including a requirement that fails only after inspecting pixels.
+
+Deprecation is a migration signal, not a correctness fix. First land checked
+alternatives and conformance cases, then migrate codec implementations and
+known consumers, then deprecate the old entry points. Keep the old behavior
+through the compatible release. The eventual breaking release can remove
+published legacy methods after the replacement has demonstrated equivalent
+coverage on real files.
