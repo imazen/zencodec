@@ -95,3 +95,17 @@ fn my_codec_privacy() {
 ## License
 
 Apache-2.0 OR MIT.
+
+## Explicit contract fixtures
+
+The fixture-driven checks `check_animation_timing`, `check_animation_durations`,
+`check_encode_policy_admission`, `check_decode_policy_admission`,
+`check_inventory_input_limit`, and `check_metadata_rewrite` supplement `check_all`.
+They require caller-provided expected outcomes: format clocks, supported policy
+fields, and rewrite output observations. A successful setter is not proof of
+metadata delivery. Rewrite observers should inspect encoded payloads and use an
+independent decoder/parser as well as the codec under test.
+
+Animation sink results currently carry no duration or frame index; the testkit
+cannot verify information the API does not expose. Coverage is tracked in
+[the contract matrix](../docs/testkit-contract-coverage.md).

@@ -102,12 +102,17 @@ use zenpixels::{
     ColorContext, PixelBuffer, PixelDescriptor, PixelSlice, PixelSliceMut, TransferFunction,
 };
 
+mod contracts;
 pub(crate) mod fixtures;
 /// The false-direction exemplar codec — consumed only by this crate's own
 /// tests, so it is compiled only with them.
 #[cfg(test)]
 pub(crate) mod minimal;
 pub mod reference;
+pub use contracts::{
+    check_animation_durations, check_animation_timing, check_decode_policy_admission,
+    check_encode_policy_admission, check_inventory_input_limit, check_metadata_rewrite,
+};
 
 #[cfg(test)]
 pub(crate) use minimal::{MinimalDecoderConfig, MinimalEncoderConfig};

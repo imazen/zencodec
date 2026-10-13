@@ -12,6 +12,9 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 #### Added
 
+- Fixture-driven timing, checked-policy, inventory input-limit and metadata-rewrite
+  conformance checks compare generic and erased dispatch and explicit expected outputs.
+
 - `check_inventory_dispatch` compares generic/dynamic results and disabled-operation
   errors. `check_all` also checks the disabled inventory contract without changing
   its published generic bounds; erased-dispatch checks remain separately callable.
@@ -165,6 +168,11 @@ removes that whole class).
 
 
 ### QUEUED BREAKING CHANGES
+
+- Animation sink decoding must return frame duration and index alongside output
+  geometry; its current `OutputInfo` result cannot transport timing. Until that
+  contract is added, testkit can verify sink pixels but cannot verify sink timing.
+
 
 Target for the upcoming coordinated breaking release; these removals and contract
 replacements are **planned, not implemented**. The current extraction remains

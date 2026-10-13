@@ -123,3 +123,9 @@ metadata-clippy:
 review-contract-check:
     cargo test -p zenmeta --features rewrite --test rewrite
     cargo test -p zencodec --test animation_timing
+
+# Reusable contract checks and harness regression tests.
+testkit-contract-check:
+    cargo fmt -p zencodec-testkit
+    cargo test -p zencodec-testkit
+    cargo clippy -p zencodec-testkit --all-targets -- -D warnings

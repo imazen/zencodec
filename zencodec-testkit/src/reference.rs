@@ -802,6 +802,7 @@ pub(crate) fn encode_single(
 // instantly so there's nothing to cancel, and has no quality knob. Declaring them
 // would be the exact dishonesty the check exists to catch.)
 static ENCODE_CAPS: EncodeCapabilities = EncodeCapabilities::new()
+    .with_animation_timing(true)
     .with_lossless(true)
     .with_native_alpha(true)
     .with_native_16bit(true)
@@ -1007,6 +1008,7 @@ impl EncodeJob for RefEncodeJob {
             metadata,
             gain_map: self.gain_map,
             frames: Vec::new(),
+            timing: zencodec::animation::TimingQuantizer::new(1000, u32::MAX.into()).unwrap(),
         })
     }
 }
@@ -1068,6 +1070,7 @@ impl Encoder for RefEnc {
 
 /// Reference animation encoder.
 pub struct RefAnimEnc {
+    timing: zencodec::animation::TimingQuantizer,
     metadata: Metadata,
     gain_map: Option<GainMapWire>,
     frames: Vec<(Vec<u8>, u32, u32, u32, PixelDescriptor)>, // bytes, w, h, dur, desc
@@ -1096,6 +1099,35 @@ impl AnimationFrameEncoder for RefAnimEnc {
         }
         self.frames.push((bytes, w, h, duration_ms, desc));
         Ok(())
+    }
+
+    fn push_frame_exact(
+        &mut self,
+        pixels: PixelSlice<'_>,
+        duration: zencodec::animation::FrameDuration,
+        stop: Option<&dyn Stop>,
+    ) -> Result<(), RefError> {
+        let ticks = duration
+            .ticks_at(1000)
+            .map_err(|e| RefError::Invalid(e.to_string()))?;
+        let ticks =
+            u32::try_from(ticks).map_err(|_| RefError::Invalid("duration overflow".into()))?;
+        self.push_frame(pixels, ticks, stop)
+    }
+
+    fn push_frame_timed(
+        &mut self,
+        pixels: PixelSlice<'_>,
+        duration: zencodec::animation::FrameDuration,
+        stop: Option<&dyn Stop>,
+    ) -> Result<zencodec::animation::FrameDuration, RefError> {
+        let mut timing = self.timing;
+        let encoded = timing
+            .quantize(duration)
+            .map_err(|e| RefError::Invalid(e.to_string()))?;
+        self.push_frame_exact(pixels, encoded, stop)?;
+        self.timing = timing;
+        Ok(encoded)
     }
 
     fn finish(self, stop: Option<&dyn Stop>) -> Result<EncodeOutput, RefError> {
@@ -1150,6 +1182,7 @@ impl DecoderConfig for ReferenceDecoderConfig {
     }
     fn job<'a>(self) -> Self::Job<'a> {
         RefDecodeJob {
+            limits: ResourceLimits::none(),
             render: GainMapRender::BaseOnly,
             format: ImageFormat::Pnm,
         }
@@ -1212,6 +1245,7 @@ impl DecoderConfig for ReferenceZcrDecoderConfig {
     }
     fn job<'a>(self) -> Self::Job<'a> {
         RefDecodeJob {
+            limits: ResourceLimits::none(),
             render: GainMapRender::BaseOnly,
             format: ZCR_FORMATS[0],
         }
@@ -1220,6 +1254,7 @@ impl DecoderConfig for ReferenceZcrDecoderConfig {
 
 /// Reference decode job.
 pub struct RefDecodeJob {
+    limits: ResourceLimits,
     render: GainMapRender,
     /// The format the job's config registered under; inventories report it.
     format: ImageFormat,
@@ -1234,7 +1269,8 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
     fn with_stop(self, _stop: StopToken) -> Self {
         self
     }
-    fn with_limits(self, _limits: ResourceLimits) -> Self {
+    fn with_limits(mut self, limits: ResourceLimits) -> Self {
+        self.limits = limits;
         self
     }
     /// The 2-way toggle is exactly `Components` / `BaseOnly`.
@@ -1256,6 +1292,9 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
     }
 
     fn inventory(&self, data: &[u8]) -> Result<zencodec::inventory::Inventory, At<CodecError>> {
+        self.limits
+            .check_input_size(data.len() as u64)
+            .map_err(RefError::from)?;
         zcr_inventory(data, self.format).map_err(Into::into)
     }
 
