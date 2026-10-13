@@ -130,6 +130,11 @@ removes that whole class).
 
 ### Changed
 
+- Unpublished metadata rewrite limits now carry `LimitKind`, including packet,
+  cumulative rewrite, carrier-count and EXIF-entry budgets. Existing published
+  limit discriminants remain unchanged. Git-pinned planners must migrate their
+  string constructors together with the contract revision.
+
 - Inventory growth and coverage validation use fallible allocation; add typed
   allocation failures and `try_children`. Gap filling rejects a part cap before
   changing topology. The part cap is not a total byte-memory budget.

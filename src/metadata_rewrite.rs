@@ -2,7 +2,7 @@
 //!
 //! Codec crates own container validation and output planning. These types do not
 //! require zenmeta, zencodecs, zenpipe, XML, compression or pixel decoding.
-use crate::MetadataPolicy;
+use crate::{LimitKind, MetadataPolicy};
 use alloc::{borrow::Cow, vec::Vec};
 use core::ops::Range;
 
@@ -15,7 +15,7 @@ pub enum Error {
     /// Preserving the rendering contract requires an unsupported operation.
     Unsupported(&'static str),
     /// A configured resource budget was exceeded.
-    Limit(&'static str),
+    Limit(LimitKind),
     /// An allocation failed.
     Allocation,
     /// An explicitly injected service refused its input.
@@ -187,7 +187,7 @@ impl<'a> Plan<'a> {
         let size = parts
             .iter()
             .try_fold(0usize, |size, part| size.checked_add(part.len()))
-            .ok_or(Error::Limit("output bytes"))?;
+            .ok_or(Error::Limit(LimitKind::OutputSize))?;
         Ok(Self {
             parts,
             entries,

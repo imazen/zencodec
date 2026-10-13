@@ -749,6 +749,14 @@ pub enum LimitKind {
     /// The structural inventory reached its configured part-count cap.
     /// Recover the cap from [`crate::inventory::InventoryError::TooManyParts`].
     InventoryParts,
+    /// Expanded size of an individual metadata packet.
+    MetadataSize,
+    /// Cumulative regenerated metadata in a rewrite plan.
+    MetadataRewriteSize,
+    /// Number of metadata/container carriers inspected or reported.
+    MetadataCarriers,
+    /// Number of EXIF entries visited while rewriting.
+    MetadataEntries,
 }
 
 impl LimitExceeded {

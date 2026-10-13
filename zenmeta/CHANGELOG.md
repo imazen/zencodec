@@ -19,6 +19,10 @@
 
 ### Changed
 
+- Return typed shared limit kinds for rewrite budgets. Distinguish individual
+  packet limits from cumulative regenerated metadata using the same configured
+  metadata cap. Rejection still leaves a plan builder usable.
+
 - Rewrite execution checks now live in Context instead of the zencodec request.
   Retaining XMP can copy it byte-for-byte without an editor. PlanBuilder checks
   source bounds and does not record a carrier whose output exceeds its budget.
