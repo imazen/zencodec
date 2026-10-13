@@ -18,16 +18,16 @@ that every new main run has finished.
 | JXL decoder | [62](https://github.com/imazen/zenjxl-decoder/pull/62), `d44393e5`: bounded header scan and codestream-length API; complete PR CI passed | Monitor main CI |
 | WebP | [112](https://github.com/imazen/zenwebp/pull/112), `d12fe2bb`: optional inventory, typed limits and corpus mount; review CI passed | Monitor main CI |
 | AVIF | [66](https://github.com/imazen/zenavif/pull/66), `45d79e8d`: three encoders/two decoders, gain-map transport, retained animation contracts and approved AOM routing; standalone SVT/AOM consumer compiles | Monitor main CI |
-| ultrahdr | [36](https://github.com/imazen/ultrahdr/pull/36), `f7c46146`: Apple/plist compatibility wrappers and policy assembly; final workspace pin check passes | JPEG dependency is a pinned review revision; monitor main CI |
+| ultrahdr | [36](https://github.com/imazen/ultrahdr/pull/36), `f8bc5073`: Apple/plist compatibility wrappers, policy assembly and final JPEG/ICC pins; consumer checks pass | JPEG dependency is a pinned review revision; monitor main CI |
 | HEIC | [59](https://github.com/imazen/heic/pull/59), `7180d019`: Apple delegation and optional inventory; final native/fuzz/WASI checks pass | Monitor main CI |
 | TIFF / JPEG 2000 / SVG / PDF / EXR | [zenextras 43](https://github.com/imazen/zenextras/pull/43), `1cd349a1`: codec-specific inventory with shared IFD traversal; final workspace/fuzz checks pass | Monitor main CI |
 | RAW | [23](https://github.com/imazen/zenraw/pull/23), `a2063d8f`: both backend inventories; final backend checks pass | Monitor main CI |
 | zenflate | [16](https://github.com/imazen/zenflate/pull/16), `acc70801`: optional count-only scanner; review CI passed | Monitor main CI |
 | PNG | [41](https://github.com/imazen/zenpng/pull/41), `e04f734a`: optional inventory and standalone rewrite; current-main threading/APNG behavior retained and tested | Monitor main CI |
-| GIF | [27](https://github.com/imazen/zengif/pull/27), `10f96266`: optional inventory and typed limits; review CI passed | Monitor main CI |
+| GIF | [27](https://github.com/imazen/zengif/pull/27), `4f88c49b`: optional inventory, typed limits and native color-admission correction; original consumer capability/conversion assertions pass | Monitor main CI |
 | Bitmaps | [29](https://github.com/imazen/zenbitmaps/pull/29), `ed0f474a`: six format inventories, typed limits, traversal cancellation; corpus mount verified locally | Monitor main CI |
 | JPEG | [226](https://github.com/imazen/zenjpeg/pull/226), review `56da4bb7`: recovered lossless edits, default embedded-MPF compatibility, TEM, EXIF selection, extraction policy, depth padding, checked native offsets, and ISO/aliased-XMP HDR rendering | Complete combined CI; approved real-file sequence-zero ICC compatibility is implemented; PRs210/213/221/225 remain open until replacement lands |
-| zenpipe / zencodecs | [90](https://github.com/imazen/zenpipe/pull/90), review `0592aa9c`: codec-owned rewriting dispatch, independent services, original inventory dispatch/CLI; full SVT/AOM codec graph, PDF inventory, API snapshots, current-main filters, standalone demo/fuzz and pin guards pass | Remote CI and landing; JPEG dependency remains the review revision |
+| zenpipe / zencodecs | [90](https://github.com/imazen/zenpipe/pull/90), review `91427810`: codec-owned rewriting dispatch, independent services, original inventory dispatch/CLI; full SVT/AOM codec graph, PDF inventory, API snapshots, current-main filters, standalone demo/fuzz and pin guards pass | Remote CI and landing; JPEG dependency remains the review revision |
 
 Superseded metadata PRs were closed only after their replacement landed. The
 metadata portion of zencodec PR130 is incorporated; its experimental media/video
@@ -295,9 +295,10 @@ ICC interpretation to zenmeta or copy the profile parser into the codec.
 
 Zenpipe CI's existing GIF ICC-rejection test failed because zengif computed a
 color-emission plan and discarded it. A successful plan did not mean the
-encoder could preserve the profile or convert the pixels. zengif `38984a62`
-now rejects retained ICC/CICP for both still and animation jobs; its native
-regression passes and no existing consumer assertion is relaxed. The shared
+encoder could preserve the profile or convert the pixels. zengif `4f88c49b`
+now rejects retained ICC/non-sRGB CICP for both still and animation jobs; its native
+regression passes, explicit sRGB CICP after conversion is accepted, and no
+existing consumer assertion is relaxed. The shared
 contract should make required conversion or unsupported emission actionable,
 so an adapter cannot mistake a metadata plan for completed color conversion.
 
@@ -305,3 +306,22 @@ The real JPEG file with one ICC chunk numbered zero of one retains its complete
 profile by default, while strict decode/inspection/rewrite reject its numbering.
 The original malformed-payload and inspector corpus assertions remain unchanged.
 This is another tested distinction between readable metadata and rewrite support.
+
+### Final local validation and remote landing gate
+
+JPEG `56da4bb7` contains the validated code from `7cf22c68` plus documentation
+reconciliation. Its complete local metadata regression recipe passes, including
+i686 and independent lossless/metadata oracles. The final consumer codec feature
+set also passes all targets with GIF `4f88c49b`; standalone metadata, all-backend
+compilation, API snapshots and consumer checks are recorded in the codec reports.
+
+Zenpipe `91427810` pins snapshot generation to nightly-2026-10-12 and extends
+its manifest/lock guard to the metadata, JPEG, GIF and pixel crates. The guard's
+self-tests detect revision drift and registry fallback for every added package.
+
+At this verification, [JPEG PR226](https://github.com/imazen/zenjpeg/pull/226)
+and [zenpipe PR90](https://github.com/imazen/zenpipe/pull/90) remain open while
+remote CI finishes. JPEG's i686, Linux C++ parity, coverage, API, Clippy, MSRV,
+WASI and fuzz jobs pass; macOS jobs are queued and other platform tests are
+still running. No claim is made that these two replacement PRs are on main.
+The prior metadata PRs stay open until their replacement lands.
