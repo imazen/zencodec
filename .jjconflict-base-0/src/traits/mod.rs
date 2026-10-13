@@ -30,7 +30,8 @@ mod encoding;
 mod unsupported;
 
 pub use decoder::{
-    AnimationFrameDecoder, Decode, IncrementalDecode, PushOutcome, PushStatus, StreamingDecode,
+    AnimationFrameDecoder, BatchMeta, Decode, IncrementalDecode, PushOutcome, PushStatus,
+    StreamingDecode,
 };
 pub use decoding::{DecodeJob, DecoderConfig};
 pub use dyn_decoding::{

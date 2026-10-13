@@ -203,8 +203,27 @@ pub trait DynIncrementalDecoder: Send {
         stop: Option<&dyn Stop>,
     ) -> Result<super::decoder::PushOutcome, BoxedError>;
 
+    /// Push a chunk with an optional `&dyn Pulse` for cancellation and progress reporting.
+    fn push_chunk_pulse(
+        &mut self,
+        chunk: &[u8],
+        is_eof: bool,
+        pulse: Option<&dyn how_far::Pulse>,
+    ) -> Result<super::decoder::PushOutcome, BoxedError>;
+
     /// Pull the next batch of decoded scanlines, if available.
     fn pull_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, BoxedError>;
+
+    /// Pull the next batch of decoded scanlines with pass and finality metadata.
+    fn pull_batch_meta(
+        &mut self,
+    ) -> Result<Option<(super::decoder::BatchMeta, PixelSlice<'_>)>, BoxedError>;
+
+    /// Decoupled-lifetime pull: push decoded scanlines directly into a caller-owned sink.
+    fn pull_batch_into(
+        &mut self,
+        sink: &mut dyn crate::DecodeRowSink,
+    ) -> Result<Option<u32>, BoxedError>;
 
     /// Image metadata, available as soon as sufficient header bytes have been pushed.
     fn info(&self) -> Option<&ImageInfo>;
@@ -236,9 +255,35 @@ impl<I: super::decoder::IncrementalDecode + Send> DynIncrementalDecoder
             .map_err(|e| Box::new(e) as BoxedError)
     }
 
-    fn pull_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, BoxedError> {
+    fn push_chunk_pulse(
+        &mut self,
+        chunk: &[u8],
+        is_eof: bool,
+        pulse: Option<&dyn how_far::Pulse>,
+    ) -> Result<super::decoder::PushOutcome, BoxedError> {
         self.0
-            .pull_batch()
+            .push_chunk_pulse(chunk, is_eof, pulse)
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn pull_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, BoxedError> {
+        self.0.pull_batch().map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn pull_batch_meta(
+        &mut self,
+    ) -> Result<Option<(super::decoder::BatchMeta, PixelSlice<'_>)>, BoxedError> {
+        self.0
+            .pull_batch_meta()
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn pull_batch_into(
+        &mut self,
+        sink: &mut dyn crate::DecodeRowSink,
+    ) -> Result<Option<u32>, BoxedError> {
+        self.0
+            .pull_batch_into(sink)
             .map_err(|e| Box::new(e) as BoxedError)
     }
 
@@ -364,7 +409,9 @@ pub trait DynDecodeJob<'a> {
         preferred: &[PixelDescriptor],
     ) -> Result<Box<dyn DynIncrementalDecoder>, BoxedError> {
         let _ = preferred;
-        Err(Box::new(crate::capabilities::UnsupportedOperation::IncrementalDecode))
+        Err(Box::new(
+            crate::capabilities::UnsupportedOperation::IncrementalDecode,
+        ))
     }
 }
 

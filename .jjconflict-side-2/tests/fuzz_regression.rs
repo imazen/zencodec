@@ -1,0 +1,280 @@
+#![allow(deprecated)] // Keep testing the published compatibility surface.
+//! Fuzz crash regression suite.
+//!
+//! Runs every file in `fuzz/regression/` through the same logic as the
+//! `exif_parse`, `exif_roundtrip`, `exif_filter`, `exif_author`, and
+//! `metadata_filtered` fuzz targets, but as a regular `cargo test` — no
+//! nightly toolchain needed. Each seed is a previously-found crash that has
+//! been fixed; a failure here is a regression.
+//!
+//! To add a seed: drop the (minimized) crash file into `fuzz/regression/` with
+//! a `crash-<sha>` name. The working corpus and unminimized artifacts live in
+//! block storage (`/mnt/v/fuzzes/zencodec/`), not git.
+
+use std::fs;
+use std::path::PathBuf;
+
+use zencodec::exif::{Exif, ExifPolicy, Retention, TextEncoding};
+use zencodec::{IccRetention, Metadata, MetadataFields, MetadataPolicy, Orientation};
+
+fn regression_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fuzz/regression")
+}
+
+fn ret(bit: bool) -> Retention {
+    if bit {
+        Retention::Keep
+    } else {
+        Retention::Discard
+    }
+}
+
+/// Mirror of `exif_parse`: parse + accessors never panic.
+fn run_parse(data: &[u8]) {
+    if let Some(x) = Exif::parse(data) {
+        let _ = x.orientation();
+        let _ = x.copyright();
+        let _ = x.artist();
+        let _ = x.has_gps();
+        let _ = x.has_thumbnail();
+    }
+}
+
+/// Mirror of `exif_roundtrip`: serializer output re-parses, accessors preserved.
+fn run_roundtrip(data: &[u8]) {
+    if let Some(x) = Exif::parse(data) {
+        let bytes = x.to_bytes();
+        let y = Exif::parse(&bytes).expect("serializer output must re-parse");
+        assert_eq!(x.orientation(), y.orientation());
+        assert_eq!(x.copyright(), y.copyright());
+        assert_eq!(x.artist(), y.artist());
+        assert_eq!(x.has_gps(), y.has_gps());
+        assert_eq!(x.has_thumbnail(), y.has_thumbnail());
+    }
+}
+
+/// Mirror of `exif_filter`: prune + serialize + retain never panic.
+fn run_filter(data: &[u8]) {
+    let (cfg, rest) = match data.split_first() {
+        Some((c, r)) => (*c, r),
+        None => return,
+    };
+    let policy = ExifPolicy::DISCARD_ALL
+        .with_orientation(ret(cfg & 0x01 != 0))
+        .with_rights(ret(cfg & 0x02 != 0))
+        .with_thumbnail(ret(cfg & 0x04 != 0))
+        .with_gps(ret(cfg & 0x08 != 0))
+        .with_datetimes(ret(cfg & 0x10 != 0))
+        .with_camera(ret(cfg & 0x20 != 0))
+        .with_other(ret(cfg & 0x40 != 0));
+    if let Some(x) = Exif::parse(rest) {
+        let bytes = x.filtered(&policy).to_bytes();
+        // Canonical / idempotent: re-filtering the output is a byte-exact
+        // fixpoint (regression for a fuzz-found non-idempotence).
+        if let Some(y) = Exif::parse(&bytes) {
+            assert_eq!(
+                bytes,
+                y.filtered(&policy).to_bytes(),
+                "filter not idempotent"
+            );
+        }
+    }
+    let _ = zencodec::exif::retain(rest, &policy);
+}
+
+/// Mirror of `exif_author`: the write API (`Exif::new` / edit-after-parse +
+/// `set_orientation` / `set_copyright` / `set_artist`) always produces a
+/// parseable, value-faithful, canonical TIFF. Input layout matches the fuzz
+/// target: `[cfg, o, len_c, c…, len_a, a…, rest…]`.
+fn run_author(data: &[u8]) {
+    fn take_string(data: &mut &[u8]) -> String {
+        let Some((&len, rest)) = data.split_first() else {
+            return String::new();
+        };
+        let len = (len as usize).min(rest.len());
+        let (s, tail) = rest.split_at(len);
+        *data = tail;
+        String::from_utf8_lossy(s).into_owned()
+    }
+    fn expected_read(s: &str) -> Option<&str> {
+        let head = s.split('\0').next().unwrap_or("");
+        if head.is_empty() { None } else { Some(head) }
+    }
+
+    let mut data = data;
+    let Some((&cfg, rest)) = data.split_first() else {
+        return;
+    };
+    data = rest;
+    let Some((&o, rest)) = data.split_first() else {
+        return;
+    };
+    data = rest;
+    let copyright = take_string(&mut data);
+    let artist = take_string(&mut data);
+
+    let encoding = if cfg & 0x01 != 0 {
+        TextEncoding::Utf8
+    } else {
+        TextEncoding::Ascii
+    };
+    let mut x = if cfg & 0x02 != 0 {
+        match Exif::parse(data) {
+            Some(x) => x,
+            None => return,
+        }
+    } else {
+        Exif::new(encoding)
+    };
+
+    let orientation = Orientation::from_exif((o % 8) + 1).expect("1-8 is always valid");
+    if cfg & 0x04 != 0 {
+        x.set_orientation(orientation);
+    }
+    if cfg & 0x08 != 0 {
+        x.set_copyright(&copyright);
+    }
+    if cfg & 0x10 != 0 {
+        x.set_artist(&artist);
+    }
+
+    let out = x.to_bytes();
+    let y = Exif::parse(&out).expect("authored output must parse");
+    if cfg & 0x04 != 0 {
+        assert_eq!(
+            y.orientation(),
+            Some(orientation),
+            "orientation not faithful"
+        );
+    }
+    if cfg & 0x08 != 0 {
+        assert_eq!(
+            y.copyright().as_deref(),
+            expected_read(&copyright),
+            "copyright not faithful"
+        );
+    }
+    if cfg & 0x10 != 0 {
+        assert_eq!(
+            y.artist().as_deref(),
+            expected_read(&artist),
+            "artist not faithful"
+        );
+    }
+    assert_eq!(
+        out,
+        y.to_bytes(),
+        "authored output not a serializer fixpoint"
+    );
+}
+
+/// Mirror of `metadata_filtered`: `Metadata::filtered` never panics and is
+/// idempotent (re-filtering the output under the same policy is stable) for
+/// every policy the fuzz target drives.
+fn run_metadata_filtered(data: &[u8]) {
+    let (sel, rest) = match data.split_first() {
+        Some(x) => x,
+        None => return,
+    };
+    let meta = Metadata::none()
+        .with_exif(rest.to_vec())
+        .with_xmp(rest.to_vec())
+        .with_icc(rest.to_vec());
+
+    let policy = match sel % 6 {
+        0 => MetadataPolicy::PreserveExact,
+        1 => MetadataPolicy::Preserve,
+        2 => MetadataPolicy::Web,
+        3 => MetadataPolicy::ColorAndRotation,
+        4 => MetadataPolicy::Custom(
+            MetadataFields::KEEP_ALL.with_exif(ExifPolicy::KEEP_ALL.with_gps(Retention::Discard)),
+        ),
+        _ => MetadataPolicy::Custom(
+            MetadataFields::DISCARD_ALL
+                .with_icc(IccRetention::KeepNonSrgb)
+                .with_exif(ExifPolicy::ATTRIBUTED_ORIENTATION),
+        ),
+    };
+
+    let out = meta.filtered(&policy);
+    let out2 = out.filtered(&policy);
+    assert_eq!(out.exif, out2.exif, "filtered EXIF not idempotent");
+    assert_eq!(out.orientation, out2.orientation);
+}
+
+/// Every seed committed to `fuzz/regression/`, by name.
+///
+/// This list is what stops the suite from passing vacuously. Without it, a
+/// renamed, moved, or emptied `fuzz/regression/` turns the whole test into a
+/// no-op that still reports green — the failure mode the gate exists to catch
+/// (the directory is not in the published `include` list, so it is easy to
+/// lose in a packaging or path refactor and never notice).
+///
+/// Adding a seed does NOT require touching this list; removing or renaming one
+/// does, deliberately. Each entry names a bug that was found by fuzzing and
+/// fixed — dropping the seed silently would retire a regression gate.
+const EXPECTED_SEEDS: &[&str] = &[
+    "crash-idempotence-10a1002a",
+    "exif_author_fixpoint_96",
+    "exif_author_issue_113_farm_artifact",
+    "exif_roundtrip_dup_interop_pointer",
+    "exif_roundtrip_gps_drift_30",
+    "exif_roundtrip_gps_drift_dup_unresolved_pointer",
+    "exif_roundtrip_issue_114_farm_artifact",
+    "exif_roundtrip_issue_115_farm_artifact",
+    "metadata_filtered_idempotent_97",
+    "metadata_filtered_issue_111_farm_artifact",
+    "metadata_filtered_orientation_entry_overlap",
+    "metadata_filtered_orientation_header_overlap",
+];
+
+#[test]
+fn fuzz_regression_seeds() {
+    let dir = regression_dir();
+    // No `Err(_) => return`: a missing or renamed directory is a broken gate,
+    // not "nothing to regress".
+    let entries = fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("cannot read seed dir {}: {e}", dir.display()));
+
+    let mut names = Vec::new();
+    let mut count = 0;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        // Skip dotfiles (e.g. .gitkeep).
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+        if name.starts_with('.') {
+            continue;
+        }
+        let name = name.to_owned();
+        let data = fs::read(&path).unwrap_or_else(|e| panic!("read seed {name}: {e}"));
+        // Name the seed as it runs: test output is captured on success, so
+        // this only surfaces on failure — where the panic itself doesn't say
+        // which seed (or which target mirror) tripped it.
+        eprintln!("fuzz_regression: seed {name}");
+        run_parse(&data);
+        run_roundtrip(&data);
+        run_filter(&data);
+        run_author(&data);
+        run_metadata_filtered(&data);
+        names.push(name);
+        count += 1;
+    }
+
+    let missing: Vec<_> = EXPECTED_SEEDS
+        .iter()
+        .filter(|want| !names.iter().any(|got| got == *want))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "seed(s) missing from {}: {missing:?} — every entry in EXPECTED_SEEDS \
+         guards a fixed bug; if one was intentionally retired, drop it from the \
+         list in the same change",
+        dir.display()
+    );
+    eprintln!("fuzz_regression: replayed {count} seed(s)");
+}

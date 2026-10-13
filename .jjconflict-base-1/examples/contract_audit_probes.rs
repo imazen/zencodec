@@ -1,0 +1,34 @@
+//! Observations for the published-contract audit, not regression expectations.
+//! Re-run after contract changes; output is allowed to change as gaps are fixed.
+use std::borrow::Cow;
+use zencodec::encode::EncodeCapabilities;
+use zencodec::metadata_rewrite::{Action, Entry, Plan};
+use zencodec::{
+    ColorEmitPolicy, IccDisposition, SourceColor, UnsupportedOperation, resolve_color_emit,
+};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let bytes = [1_u8];
+    let plan = Plan::from_parts(
+        bytes.len(),
+        vec![Cow::Borrowed(&bytes)],
+        vec![Entry::new(100..101, "example", Action::Keep)],
+    );
+    println!("out_of_bounds_report_accepted={}", plan.is_ok());
+
+    let no_carriers = EncodeCapabilities::new();
+    let source = SourceColor::default().with_cicp(zencodec::Cicp::DISPLAY_P3);
+    let plan = resolve_color_emit(&source, &no_carriers, ColorEmitPolicy::Balanced);
+    println!(
+        "icc_required_without_target_icc={}",
+        matches!(plan.icc, IccDisposition::SynthesizeFrom(_)) && !no_carriers.icc()
+    );
+    println!(
+        "animation_capability_reports_exact_timing={}",
+        EncodeCapabilities::new()
+            .with_animation(true)
+            .with_animation_timing(true)
+            .supports(UnsupportedOperation::AnimationTiming)
+    );
+    Ok(())
+}

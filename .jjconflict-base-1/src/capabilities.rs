@@ -1,0 +1,1185 @@
+//! Codec capability descriptors.
+//!
+//! Encoders return [`EncodeCapabilities`] and decoders return
+//! [`DecodeCapabilities`] describing what they support. This lets callers
+//! discover behavior before calling methods that might be no-ops or expensive.
+//!
+//! [`UnsupportedOperation`] provides a standard enum for codecs to report
+//! which operations they don't support. Use [`CodecErrorExt`](crate::CodecErrorExt)
+//! to find these in any error's source chain.
+
+use core::fmt;
+
+/// Identifies an operation that a codec does not support.
+///
+/// Codecs include this in their error types (e.g. as a variant payload)
+/// so callers can generically detect "this codec doesn't support this
+/// operation" without downcasting. See [`CodecErrorExt`](crate::CodecErrorExt).
+///
+/// # Example
+///
+/// ```
+/// use zencodec::UnsupportedOperation;
+///
+/// let op = UnsupportedOperation::DecodeInto;
+/// assert_eq!(format!("{op}"), "unsupported operation: decode_into");
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum UnsupportedOperation {
+    /// `Encoder::push_rows()` + `finish()` (row-level encode).
+    RowLevelEncode,
+    /// `Encoder::encode_from()` (pull-from-source encode).
+    PullEncode,
+    /// All `AnimationFrameEncoder` methods (animation encoding).
+    AnimationEncode,
+    /// `Decoder::decode_into()` (decode into caller buffer).
+    DecodeInto,
+    /// `Decoder::decode_rows()` (row-level decode).
+    RowLevelDecode,
+    /// All `AnimationFrameDecoder` methods (animation decoding).
+    AnimationDecode,
+    /// A specific pixel format is not supported.
+    PixelFormat,
+    /// All `MultiPageDecoder` methods (multi-image decode).
+    MultiImageDecode,
+    /// Gain-map embedding on encode
+    /// ([`with_gain_map_pixels`](crate::encode::EncodeJob::with_gain_map_pixels) /
+    /// [`with_gain_map_encoded`](crate::encode::EncodeJob::with_gain_map_encoded)).
+    GainMapEncode,
+    /// Incremental Sans-I/O decoding ([`IncrementalDecode`](crate::decode::IncrementalDecode)).
+    IncrementalDecode,
+}
+
+impl UnsupportedOperation {
+    /// Short name for the operation (suitable for error messages).
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::RowLevelEncode => "row_level_encode",
+            Self::PullEncode => "pull_encode",
+            Self::AnimationEncode => "animation_encode",
+            Self::DecodeInto => "decode_into",
+            Self::RowLevelDecode => "row_level_decode",
+            Self::AnimationDecode => "animation_decode",
+            Self::PixelFormat => "pixel_format",
+            Self::MultiImageDecode => "multi_image_decode",
+            Self::GainMapEncode => "gain_map_encode",
+            Self::IncrementalDecode => "incremental_decode",
+        }
+    }
+}
+
+impl fmt::Display for UnsupportedOperation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "unsupported operation: {}", self.name())
+    }
+}
+
+impl core::error::Error for UnsupportedOperation {}
+
+// ===========================================================================
+// EncodeCapabilities
+// ===========================================================================
+
+/// Describes what an encoder supports.
+///
+/// Returned by [`EncoderConfig::capabilities()`](crate::encode::EncoderConfig::capabilities)
+/// as a `&'static` reference. Uses getter methods so fields can be added
+/// without breaking changes.
+///
+/// # Example
+///
+/// ```
+/// use zencodec::encode::EncodeCapabilities;
+///
+/// static CAPS: EncodeCapabilities = EncodeCapabilities::new()
+///     .with_icc(true)
+///     .with_exif(true)
+///     .with_xmp(true)
+///     .with_stop(true)
+///     .with_native_gray(true);
+///
+/// assert!(CAPS.icc());
+/// assert!(CAPS.native_gray());
+/// ```
+#[derive(Clone, PartialEq)]
+#[non_exhaustive]
+pub struct EncodeCapabilities {
+    // Metadata embedding
+    icc: bool,
+    exif: bool,
+    xmp: bool,
+    cicp: bool,
+    // CICP carrier quality (distinct from `cicp` = "has a CICP carrier slot")
+    cicp_is_valid_carrier: bool,
+    cicp_safe_sole_carrier: bool,
+    // Operation support
+    stop: bool,
+    animation: bool,
+    push_rows: bool,
+    encode_from: bool,
+    // Format capabilities
+    lossy: bool,
+    lossless: bool,
+    hdr: bool,
+    gain_map: bool,
+    native_gray: bool,
+    native_16bit: bool,
+    native_f32: bool,
+    native_alpha: bool,
+    // Limit enforcement
+    enforces_max_pixels: bool,
+    enforces_max_memory: bool,
+    // Tuning ranges
+    effort_range: Option<[i32; 2]>,
+    quality_range: Option<[f32; 2]>,
+    // Threading
+    threads_supported_range: (u16, u16),
+}
+
+impl Default for EncodeCapabilities {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EncodeCapabilities {
+    /// Empty capabilities (everything disabled, single-threaded).
+    pub const EMPTY: Self = Self::new();
+
+    /// Create capabilities with everything disabled.
+    pub const fn new() -> Self {
+        Self {
+            icc: false,
+            exif: false,
+            xmp: false,
+            cicp: false,
+            cicp_is_valid_carrier: false,
+            cicp_safe_sole_carrier: false,
+            stop: false,
+            animation: false,
+            push_rows: false,
+            encode_from: false,
+            lossy: false,
+            lossless: false,
+            hdr: false,
+            gain_map: false,
+            native_gray: false,
+            native_16bit: false,
+            native_f32: false,
+            native_alpha: false,
+            enforces_max_pixels: false,
+            enforces_max_memory: false,
+            effort_range: None,
+            quality_range: None,
+            threads_supported_range: (1, 1),
+        }
+    }
+
+    // --- Getters ---
+
+    /// Whether the encoder embeds ICC color profiles from the supplied [`Metadata`](crate::Metadata).
+    pub const fn icc(&self) -> bool {
+        self.icc
+    }
+    /// Whether the encoder embeds EXIF data from the supplied [`Metadata`](crate::Metadata).
+    pub const fn exif(&self) -> bool {
+        self.exif
+    }
+    /// Whether the encoder embeds XMP data from the supplied [`Metadata`](crate::Metadata).
+    pub const fn xmp(&self) -> bool {
+        self.xmp
+    }
+    /// Whether the encoder embeds CICP color description from the supplied [`Metadata`](crate::Metadata).
+    pub const fn cicp(&self) -> bool {
+        self.cicp
+    }
+    /// Whether this format has a standardized, real-world-honored CICP carrier —
+    /// so CICP can be emitted as a color signal by default.
+    ///
+    /// True for JXL codestream enum, AVIF/HEIC `nclx`, and PNG `cICP`. Distinct
+    /// from [`cicp`](Self::cicp) (= "has a CICP carrier slot at all") and from
+    /// [`cicp_safe_sole_carrier`](Self::cicp_safe_sole_carrier) (= "safe to ship
+    /// CICP *only* and drop the ICC"). Gates CICP emission under
+    /// [`CicpEmission::WhereValidCarrier`](crate::color::CicpEmission::WhereValidCarrier).
+    pub const fn cicp_is_valid_carrier(&self) -> bool {
+        self.cicp_is_valid_carrier
+    }
+    /// Whether it is safe in practice to ship CICP as the *sole* color carrier
+    /// and drop a redundant ICC profile for this format.
+    ///
+    /// Stricter than [`cicp_is_valid_carrier`](Self::cicp_is_valid_carrier): a
+    /// format can have a valid CICP carrier yet still need an ICC kept for
+    /// real-world tool compatibility. As of 2026 this is true for **JXL, AVIF, and
+    /// HEIC** — their CICP carriers (JXL codestream enum color, AVIF/HEIC `nclx`)
+    /// have been spec-mandated and reader-authoritative since the first
+    /// JXL / MIAF (ISO/IEC 23000-22) / HEIF (ISO/IEC 23008-12) editions, so a
+    /// conforming reader honors them. **PNG** stays `false`: its `cICP` chunk is a
+    /// far newer, optional addition, so keep the ICC alongside.
+    pub const fn cicp_safe_sole_carrier(&self) -> bool {
+        self.cicp_safe_sole_carrier
+    }
+    /// Whether `with_stop` on encode jobs is respected (not a no-op).
+    pub const fn stop(&self) -> bool {
+        self.stop
+    }
+    /// Whether the codec supports encoding animation (multiple frames).
+    pub const fn animation(&self) -> bool {
+        self.animation
+    }
+    /// Whether `push_rows()` / `finish()` work (row-level encode).
+    pub const fn push_rows(&self) -> bool {
+        self.push_rows
+    }
+    /// Whether `encode_from()` works (pull-from-source encode).
+    pub const fn encode_from(&self) -> bool {
+        self.encode_from
+    }
+    /// Whether the codec supports lossy encoding.
+    pub const fn lossy(&self) -> bool {
+        self.lossy
+    }
+    /// Whether the codec supports mathematically lossless encoding.
+    pub const fn lossless(&self) -> bool {
+        self.lossless
+    }
+    /// Whether the codec supports HDR content.
+    pub const fn hdr(&self) -> bool {
+        self.hdr
+    }
+    /// Whether the codec supports gain map (HDR/SDR) embedding.
+    ///
+    /// The contract: `true` means
+    /// [`EncodeJob::with_gain_map_pixels`](crate::encode::EncodeJob::with_gain_map_pixels)
+    /// accepts a valid map (1- or 3-channel, either direction) and the output
+    /// carries it; `false` means both `with_gain_map_*` entry points fail with
+    /// [`UnsupportedOperation::GainMapEncode`] — never a silent drop. Verified
+    /// by `zencodec-testkit::check_gain_map_roundtrip`.
+    pub const fn gain_map(&self) -> bool {
+        self.gain_map
+    }
+    /// Whether the codec supports grayscale natively.
+    pub const fn native_gray(&self) -> bool {
+        self.native_gray
+    }
+    /// Whether the codec supports 16-bit per channel natively.
+    pub const fn native_16bit(&self) -> bool {
+        self.native_16bit
+    }
+    /// Whether the codec handles f32 pixel data natively.
+    pub const fn native_f32(&self) -> bool {
+        self.native_f32
+    }
+    /// Whether the codec handles alpha channel natively.
+    pub const fn native_alpha(&self) -> bool {
+        self.native_alpha
+    }
+    /// Whether the codec enforces `max_pixels` limits.
+    pub const fn enforces_max_pixels(&self) -> bool {
+        self.enforces_max_pixels
+    }
+    /// Whether the codec enforces
+    /// [`max_memory_bytes`](crate::ResourceLimits::max_memory_bytes) limits at all.
+    ///
+    /// `true` spans two enforcement strengths that this boolean does not
+    /// distinguish: byte-accurate *live cumulative tracking* and header-based
+    /// *pre-flight estimate* (see the field docs). `false` means the codec does
+    /// **not** guard memory at all; bound input via `max_pixels` / `max_width` /
+    /// `max_height` instead.
+    pub const fn enforces_max_memory(&self) -> bool {
+        self.enforces_max_memory
+    }
+
+    /// Meaningful effort range `[min, max]`.
+    ///
+    /// `None` means the codec has no effort tuning.
+    pub const fn effort_range(&self) -> Option<[i32; 2]> {
+        self.effort_range
+    }
+
+    /// Meaningful quality range `[min, max]` on the calibrated 0.0–100.0 scale.
+    ///
+    /// `None` means the codec is lossless-only.
+    pub const fn quality_range(&self) -> Option<[f32; 2]> {
+        self.quality_range
+    }
+
+    /// Supported thread count range `(min, max)`.
+    ///
+    /// `(1, 1)` means single-threaded only.
+    /// `(1, 16)` means the encoder can use 1 to 16 threads.
+    pub const fn threads_supported_range(&self) -> (u16, u16) {
+        self.threads_supported_range
+    }
+
+    /// Check whether this encoder supports a given operation.
+    ///
+    /// Returns `true` if the capability flag corresponding to `op` is set.
+    /// Returns `false` for decode-only operations or [`PixelFormat`](UnsupportedOperation::PixelFormat)
+    /// (which depends on the specific format, not a static flag).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use zencodec::UnsupportedOperation;
+    /// use zencodec::encode::EncodeCapabilities;
+    ///
+    /// static CAPS: EncodeCapabilities = EncodeCapabilities::new()
+    ///     .with_animation(true)
+    ///     .with_push_rows(true);
+    ///
+    /// assert!(CAPS.supports(UnsupportedOperation::AnimationEncode));
+    /// assert!(CAPS.supports(UnsupportedOperation::RowLevelEncode));
+    /// assert!(!CAPS.supports(UnsupportedOperation::PullEncode));
+    /// assert!(!CAPS.supports(UnsupportedOperation::DecodeInto));
+    /// ```
+    pub const fn supports(&self, op: UnsupportedOperation) -> bool {
+        match op {
+            UnsupportedOperation::RowLevelEncode => self.push_rows,
+            UnsupportedOperation::PullEncode => self.encode_from,
+            UnsupportedOperation::AnimationEncode => self.animation,
+            UnsupportedOperation::GainMapEncode => self.gain_map,
+            UnsupportedOperation::DecodeInto
+            | UnsupportedOperation::RowLevelDecode
+            | UnsupportedOperation::AnimationDecode
+            | UnsupportedOperation::MultiImageDecode
+            | UnsupportedOperation::PixelFormat
+            | UnsupportedOperation::IncrementalDecode => false,
+        }
+    }
+
+    // --- Const builder methods ---
+
+    /// Set whether the encoder embeds ICC color profiles.
+    pub const fn with_icc(mut self, v: bool) -> Self {
+        self.icc = v;
+        self
+    }
+    /// Set whether the encoder embeds EXIF data.
+    pub const fn with_exif(mut self, v: bool) -> Self {
+        self.exif = v;
+        self
+    }
+    /// Set whether the encoder embeds XMP data.
+    pub const fn with_xmp(mut self, v: bool) -> Self {
+        self.xmp = v;
+        self
+    }
+    /// Set whether the encoder embeds CICP color description.
+    pub const fn with_cicp(mut self, v: bool) -> Self {
+        self.cicp = v;
+        self
+    }
+    /// Set whether this format has a standardized CICP carrier.
+    /// See [`cicp_is_valid_carrier`](Self::cicp_is_valid_carrier).
+    pub const fn with_cicp_is_valid_carrier(mut self, v: bool) -> Self {
+        self.cicp_is_valid_carrier = v;
+        self
+    }
+    /// Set whether CICP is safe as the sole color carrier (drop redundant ICC).
+    /// See [`cicp_safe_sole_carrier`](Self::cicp_safe_sole_carrier).
+    pub const fn with_cicp_safe_sole_carrier(mut self, v: bool) -> Self {
+        self.cicp_safe_sole_carrier = v;
+        self
+    }
+    /// Set whether cooperative cancellation via [`Stop`](enough::Stop) is supported.
+    pub const fn with_stop(mut self, v: bool) -> Self {
+        self.stop = v;
+        self
+    }
+    /// Set whether animation encoding is supported.
+    pub const fn with_animation(mut self, v: bool) -> Self {
+        self.animation = v;
+        self
+    }
+    /// Set whether row-level (`push_rows`/`finish`) encoding is supported.
+    pub const fn with_push_rows(mut self, v: bool) -> Self {
+        self.push_rows = v;
+        self
+    }
+    /// Set whether pull-from-source (`encode_from`) encoding is supported.
+    pub const fn with_encode_from(mut self, v: bool) -> Self {
+        self.encode_from = v;
+        self
+    }
+    /// Set whether lossy encoding is supported.
+    pub const fn with_lossy(mut self, v: bool) -> Self {
+        self.lossy = v;
+        self
+    }
+    /// Set whether lossless encoding is supported.
+    pub const fn with_lossless(mut self, v: bool) -> Self {
+        self.lossless = v;
+        self
+    }
+    /// Set whether HDR content is supported.
+    pub const fn with_hdr(mut self, v: bool) -> Self {
+        self.hdr = v;
+        self
+    }
+    /// Set whether gain map (HDR/SDR) embedding is supported.
+    pub const fn with_gain_map(mut self, v: bool) -> Self {
+        self.gain_map = v;
+        self
+    }
+    /// Set whether native grayscale encoding is supported.
+    pub const fn with_native_gray(mut self, v: bool) -> Self {
+        self.native_gray = v;
+        self
+    }
+    /// Set whether native 16-bit per channel encoding is supported.
+    pub const fn with_native_16bit(mut self, v: bool) -> Self {
+        self.native_16bit = v;
+        self
+    }
+    /// Set whether native f32 pixel data is supported.
+    pub const fn with_native_f32(mut self, v: bool) -> Self {
+        self.native_f32 = v;
+        self
+    }
+    /// Set whether native alpha channel is supported.
+    pub const fn with_native_alpha(mut self, v: bool) -> Self {
+        self.native_alpha = v;
+        self
+    }
+    /// Set whether the encoder enforces `max_pixels` limits.
+    pub const fn with_enforces_max_pixels(mut self, v: bool) -> Self {
+        self.enforces_max_pixels = v;
+        self
+    }
+    /// Set whether the encoder enforces `max_memory_bytes` limits.
+    pub const fn with_enforces_max_memory(mut self, v: bool) -> Self {
+        self.enforces_max_memory = v;
+        self
+    }
+
+    /// Set the meaningful effort range `[min, max]`.
+    pub const fn with_effort_range(mut self, min: i32, max: i32) -> Self {
+        assert!(min <= max, "effort range: min must be <= max");
+        self.effort_range = Some([min, max]);
+        self
+    }
+
+    /// Set the meaningful quality range `[min, max]`.
+    pub const fn with_quality_range(mut self, min: f32, max: f32) -> Self {
+        assert!(min <= max, "quality range: min must be <= max");
+        self.quality_range = Some([min, max]);
+        self
+    }
+
+    /// Set supported thread count range.
+    pub const fn with_threads_supported_range(mut self, min: u16, max: u16) -> Self {
+        assert!(min >= 1, "threads range: min must be >= 1");
+        assert!(min <= max, "threads range: min must be <= max");
+        self.threads_supported_range = (min, max);
+        self
+    }
+}
+
+impl fmt::Debug for EncodeCapabilities {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut s = f.debug_struct("EncodeCapabilities");
+        s.field("icc", &self.icc)
+            .field("exif", &self.exif)
+            .field("xmp", &self.xmp)
+            .field("cicp", &self.cicp)
+            .field("cicp_is_valid_carrier", &self.cicp_is_valid_carrier)
+            .field("cicp_safe_sole_carrier", &self.cicp_safe_sole_carrier)
+            .field("stop", &self.stop)
+            .field("animation", &self.animation)
+            .field("lossy", &self.lossy)
+            .field("lossless", &self.lossless)
+            .field("hdr", &self.hdr)
+            .field("gain_map", &self.gain_map)
+            .field("native_gray", &self.native_gray)
+            .field("native_16bit", &self.native_16bit)
+            .field("native_f32", &self.native_f32)
+            .field("native_alpha", &self.native_alpha)
+            .field("push_rows", &self.push_rows)
+            .field("encode_from", &self.encode_from)
+            .field("enforces_max_pixels", &self.enforces_max_pixels)
+            .field("enforces_max_memory", &self.enforces_max_memory)
+            .field("threads_supported_range", &self.threads_supported_range);
+        if let Some(range) = &self.effort_range {
+            s.field("effort_range", range);
+        }
+        if let Some(range) = &self.quality_range {
+            s.field("quality_range", range);
+        }
+        s.finish_non_exhaustive()
+    }
+}
+
+// ===========================================================================
+// DecodeCapabilities
+// ===========================================================================
+
+/// Describes what a decoder supports.
+///
+/// Returned by [`DecoderConfig::capabilities()`](crate::decode::DecoderConfig::capabilities)
+/// as a `&'static` reference. Uses getter methods so fields can be added
+/// without breaking changes.
+///
+/// # Example
+///
+/// ```
+/// use zencodec::decode::DecodeCapabilities;
+///
+/// static CAPS: DecodeCapabilities = DecodeCapabilities::new()
+///     .with_icc(true)
+///     .with_exif(true)
+///     .with_stop(true)
+///     .with_cheap_probe(true);
+///
+/// assert!(CAPS.icc());
+/// assert!(CAPS.cheap_probe());
+/// ```
+#[derive(Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct DecodeCapabilities {
+    // Metadata extraction
+    icc: bool,
+    exif: bool,
+    xmp: bool,
+    cicp: bool,
+    // Operation support
+    stop: bool,
+    animation: bool,
+    multi_image: bool,
+    cheap_probe: bool,
+    decode_into: bool,
+    streaming: bool,
+    incremental: bool,
+    // Format capabilities
+    hdr: bool,
+    gain_map: bool,
+    reconstructs_hdr: bool,
+    native_gray: bool,
+    native_16bit: bool,
+    native_f32: bool,
+    native_alpha: bool,
+    // Limit enforcement
+    enforces_max_pixels: bool,
+    enforces_max_memory: bool,
+    enforces_max_input_bytes: bool,
+    // Threading
+    threads_supported_range: (u16, u16),
+}
+
+impl Default for DecodeCapabilities {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl DecodeCapabilities {
+    /// Empty capabilities (everything disabled, single-threaded).
+    pub const EMPTY: Self = Self::new();
+
+    /// Create capabilities with everything disabled.
+    pub const fn new() -> Self {
+        Self {
+            icc: false,
+            exif: false,
+            xmp: false,
+            cicp: false,
+            stop: false,
+            animation: false,
+            multi_image: false,
+            cheap_probe: false,
+            decode_into: false,
+            streaming: false,
+            incremental: false,
+            hdr: false,
+            gain_map: false,
+            reconstructs_hdr: false,
+            native_gray: false,
+            native_16bit: false,
+            native_f32: false,
+            native_alpha: false,
+            enforces_max_pixels: false,
+            enforces_max_memory: false,
+            enforces_max_input_bytes: false,
+            threads_supported_range: (1, 1),
+        }
+    }
+
+    // --- Getters ---
+
+    /// Whether the decoder extracts ICC color profiles into `ImageInfo`.
+    pub const fn icc(&self) -> bool {
+        self.icc
+    }
+    /// Whether the decoder extracts EXIF data into `ImageInfo`.
+    pub const fn exif(&self) -> bool {
+        self.exif
+    }
+    /// Whether the decoder extracts XMP data into `ImageInfo`.
+    pub const fn xmp(&self) -> bool {
+        self.xmp
+    }
+    /// Whether the decoder extracts CICP color description into `ImageInfo`.
+    pub const fn cicp(&self) -> bool {
+        self.cicp
+    }
+    /// Whether `with_stop` on decode jobs is respected (not a no-op).
+    pub const fn stop(&self) -> bool {
+        self.stop
+    }
+    /// Whether the codec supports decoding animation (multiple frames).
+    pub const fn animation(&self) -> bool {
+        self.animation
+    }
+    /// Whether this decoder supports multi-image containers (TIFF, HEIF, ICO).
+    ///
+    /// True for codecs with independently-addressable images.
+    /// False for single-image and animation-only codecs.
+    pub const fn multi_image(&self) -> bool {
+        self.multi_image
+    }
+    /// Whether `probe()` is cheap (header parse only, not a full decode).
+    pub const fn cheap_probe(&self) -> bool {
+        self.cheap_probe
+    }
+    /// Whether `decode_into()` is implemented.
+    pub const fn decode_into(&self) -> bool {
+        self.decode_into
+    }
+    /// Whether `StreamingDecode` / `streaming_decoder()` is implemented.
+    pub const fn streaming(&self) -> bool {
+        self.streaming
+    }
+    /// Whether `IncrementalDecode` / `into_incremental_decoder()` is implemented.
+    pub const fn incremental(&self) -> bool {
+        self.incremental
+    }
+    /// Whether the codec supports HDR content.
+    pub const fn hdr(&self) -> bool {
+        self.hdr
+    }
+    /// Whether the codec supports gain map (HDR/SDR) extraction.
+    ///
+    /// The contract: `true` means `probe()` reports a present map
+    /// ([`ImageInfo::gain_map`](crate::ImageInfo::gain_map) not `Absent`,
+    /// `supplements.gain_map` set) and a
+    /// [`GainMapRender::Components`](crate::decode::GainMapRender::Components) /
+    /// `with_extract_gain_map(true)` decode surfaces it as a
+    /// [`DecodedGainMap`](crate::gainmap::DecodedGainMap) — and *only* then;
+    /// the default `BaseOnly` never does. `false` means no map is ever
+    /// surfaced. Independent of [`reconstructs_hdr`](Self::reconstructs_hdr).
+    /// Verified by `zencodec-testkit::check_gain_map_roundtrip`.
+    pub const fn gain_map(&self) -> bool {
+        self.gain_map
+    }
+    /// Whether the codec *reconstructs* HDR itself (applies the gain map), as
+    /// opposed to only extracting/surfacing it.
+    ///
+    /// Gates [`GainMapRender::ReconstructHdr`](crate::decode::GainMapRender::ReconstructHdr):
+    /// when `false`, a decoder asked to reconstruct surfaces the gain map as
+    /// [`Components`](crate::decode::GainMapRender::Components) (or reports
+    /// [`UnsupportedOperation`](crate::UnsupportedOperation)) and the apply math is
+    /// done one layer up — zencodec carries no HDR math.
+    pub const fn reconstructs_hdr(&self) -> bool {
+        self.reconstructs_hdr
+    }
+    /// Whether the codec supports grayscale natively.
+    pub const fn native_gray(&self) -> bool {
+        self.native_gray
+    }
+    /// Whether the codec supports 16-bit per channel natively.
+    pub const fn native_16bit(&self) -> bool {
+        self.native_16bit
+    }
+    /// Whether the codec handles f32 pixel data natively.
+    pub const fn native_f32(&self) -> bool {
+        self.native_f32
+    }
+    /// Whether the codec handles alpha channel natively.
+    pub const fn native_alpha(&self) -> bool {
+        self.native_alpha
+    }
+    /// Whether the codec enforces `max_pixels` limits.
+    pub const fn enforces_max_pixels(&self) -> bool {
+        self.enforces_max_pixels
+    }
+    /// Whether the codec enforces
+    /// [`max_memory_bytes`](crate::ResourceLimits::max_memory_bytes) limits at all.
+    ///
+    /// `true` spans two enforcement strengths that this boolean does not
+    /// distinguish: byte-accurate *live cumulative tracking* and header-based
+    /// *pre-flight estimate* (see the field docs). `false` means the codec does
+    /// **not** guard memory at all; bound input via `max_pixels` / `max_width` /
+    /// `max_height` instead.
+    pub const fn enforces_max_memory(&self) -> bool {
+        self.enforces_max_memory
+    }
+    /// Whether the codec enforces `max_input_bytes` limits.
+    pub const fn enforces_max_input_bytes(&self) -> bool {
+        self.enforces_max_input_bytes
+    }
+
+    /// Supported thread count range `(min, max)`.
+    ///
+    /// `(1, 1)` means single-threaded only.
+    /// `(1, 8)` means the decoder can use 1 to 8 threads.
+    pub const fn threads_supported_range(&self) -> (u16, u16) {
+        self.threads_supported_range
+    }
+
+    /// Check whether this decoder supports a given operation.
+    ///
+    /// Returns `true` if the capability flag corresponding to `op` is set.
+    /// Returns `false` for encode-only operations or [`PixelFormat`](UnsupportedOperation::PixelFormat)
+    /// (which depends on the specific format, not a static flag).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use zencodec::UnsupportedOperation;
+    /// use zencodec::decode::DecodeCapabilities;
+    ///
+    /// static CAPS: DecodeCapabilities = DecodeCapabilities::new()
+    ///     .with_animation(true)
+    ///     .with_decode_into(true);
+    ///
+    /// assert!(CAPS.supports(UnsupportedOperation::AnimationDecode));
+    /// assert!(CAPS.supports(UnsupportedOperation::DecodeInto));
+    /// assert!(!CAPS.supports(UnsupportedOperation::RowLevelDecode));
+    /// assert!(!CAPS.supports(UnsupportedOperation::RowLevelEncode));
+    /// ```
+    pub const fn supports(&self, op: UnsupportedOperation) -> bool {
+        match op {
+            UnsupportedOperation::DecodeInto => self.decode_into,
+            UnsupportedOperation::RowLevelDecode => self.streaming,
+            UnsupportedOperation::IncrementalDecode => self.incremental,
+            UnsupportedOperation::AnimationDecode => self.animation,
+            UnsupportedOperation::MultiImageDecode => self.multi_image,
+            UnsupportedOperation::RowLevelEncode
+            | UnsupportedOperation::PullEncode
+            | UnsupportedOperation::AnimationEncode
+            | UnsupportedOperation::GainMapEncode
+            | UnsupportedOperation::PixelFormat => false,
+        }
+    }
+
+    // --- Const builder methods ---
+
+    /// Set whether the decoder extracts ICC color profiles.
+    pub const fn with_icc(mut self, v: bool) -> Self {
+        self.icc = v;
+        self
+    }
+    /// Set whether the decoder extracts EXIF data.
+    pub const fn with_exif(mut self, v: bool) -> Self {
+        self.exif = v;
+        self
+    }
+    /// Set whether the decoder extracts XMP data.
+    pub const fn with_xmp(mut self, v: bool) -> Self {
+        self.xmp = v;
+        self
+    }
+    /// Set whether the decoder extracts CICP color description.
+    pub const fn with_cicp(mut self, v: bool) -> Self {
+        self.cicp = v;
+        self
+    }
+    /// Set whether cooperative cancellation via [`Stop`](enough::Stop) is supported.
+    pub const fn with_stop(mut self, v: bool) -> Self {
+        self.stop = v;
+        self
+    }
+    /// Set whether animation decoding is supported.
+    pub const fn with_animation(mut self, v: bool) -> Self {
+        self.animation = v;
+        self
+    }
+    /// Set whether multi-image container decoding is supported.
+    pub const fn with_multi_image(mut self, v: bool) -> Self {
+        self.multi_image = v;
+        self
+    }
+    /// Set whether `probe()` is cheap (header parse only).
+    pub const fn with_cheap_probe(mut self, v: bool) -> Self {
+        self.cheap_probe = v;
+        self
+    }
+    /// Set whether `decode_into()` is implemented.
+    pub const fn with_decode_into(mut self, v: bool) -> Self {
+        self.decode_into = v;
+        self
+    }
+    /// Set whether `StreamingDecode` / `streaming_decoder()` is supported.
+    pub const fn with_streaming(mut self, v: bool) -> Self {
+        self.streaming = v;
+        self
+    }
+    /// Set whether `IncrementalDecode` / `into_incremental_decoder()` is supported.
+    pub const fn with_incremental(mut self, v: bool) -> Self {
+        self.incremental = v;
+        self
+    }
+    /// Set whether HDR content is supported.
+    pub const fn with_hdr(mut self, v: bool) -> Self {
+        self.hdr = v;
+        self
+    }
+    /// Set whether gain map (HDR/SDR) extraction is supported.
+    pub const fn with_gain_map(mut self, v: bool) -> Self {
+        self.gain_map = v;
+        self
+    }
+    /// Set whether the codec reconstructs HDR itself (applies the gain map).
+    /// See [`reconstructs_hdr`](Self::reconstructs_hdr).
+    pub const fn with_reconstructs_hdr(mut self, v: bool) -> Self {
+        self.reconstructs_hdr = v;
+        self
+    }
+    /// Set whether native grayscale decoding is supported.
+    pub const fn with_native_gray(mut self, v: bool) -> Self {
+        self.native_gray = v;
+        self
+    }
+    /// Set whether native 16-bit per channel decoding is supported.
+    pub const fn with_native_16bit(mut self, v: bool) -> Self {
+        self.native_16bit = v;
+        self
+    }
+    /// Set whether native f32 pixel data is supported.
+    pub const fn with_native_f32(mut self, v: bool) -> Self {
+        self.native_f32 = v;
+        self
+    }
+    /// Set whether native alpha channel is supported.
+    pub const fn with_native_alpha(mut self, v: bool) -> Self {
+        self.native_alpha = v;
+        self
+    }
+    /// Set whether the decoder enforces `max_pixels` limits.
+    pub const fn with_enforces_max_pixels(mut self, v: bool) -> Self {
+        self.enforces_max_pixels = v;
+        self
+    }
+    /// Set whether the decoder enforces `max_memory_bytes` limits.
+    pub const fn with_enforces_max_memory(mut self, v: bool) -> Self {
+        self.enforces_max_memory = v;
+        self
+    }
+    /// Set whether the decoder enforces `max_input_bytes` limits.
+    pub const fn with_enforces_max_input_bytes(mut self, v: bool) -> Self {
+        self.enforces_max_input_bytes = v;
+        self
+    }
+
+    /// Set supported thread count range.
+    pub const fn with_threads_supported_range(mut self, min: u16, max: u16) -> Self {
+        assert!(min >= 1, "threads range: min must be >= 1");
+        assert!(min <= max, "threads range: min must be <= max");
+        self.threads_supported_range = (min, max);
+        self
+    }
+}
+
+impl fmt::Debug for DecodeCapabilities {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut s = f.debug_struct("DecodeCapabilities");
+        s.field("icc", &self.icc)
+            .field("exif", &self.exif)
+            .field("xmp", &self.xmp)
+            .field("cicp", &self.cicp)
+            .field("stop", &self.stop)
+            .field("animation", &self.animation)
+            .field("multi_image", &self.multi_image)
+            .field("cheap_probe", &self.cheap_probe)
+            .field("decode_into", &self.decode_into)
+            .field("streaming", &self.streaming)
+            .field("hdr", &self.hdr)
+            .field("gain_map", &self.gain_map)
+            .field("reconstructs_hdr", &self.reconstructs_hdr)
+            .field("native_gray", &self.native_gray)
+            .field("native_16bit", &self.native_16bit)
+            .field("native_f32", &self.native_f32)
+            .field("native_alpha", &self.native_alpha)
+            .field("enforces_max_pixels", &self.enforces_max_pixels)
+            .field("enforces_max_memory", &self.enforces_max_memory)
+            .field("enforces_max_input_bytes", &self.enforces_max_input_bytes)
+            .field("threads_supported_range", &self.threads_supported_range);
+        s.finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn encode_default_all_false() {
+        let caps = EncodeCapabilities::new();
+        assert!(!caps.icc());
+        assert!(!caps.exif());
+        assert!(!caps.xmp());
+        assert!(!caps.cicp());
+        assert!(!caps.stop());
+        assert!(!caps.animation());
+        assert!(!caps.push_rows());
+        assert!(!caps.encode_from());
+        assert!(!caps.lossy());
+        assert!(!caps.lossless());
+        assert!(!caps.hdr());
+        assert!(!caps.native_gray());
+        assert!(!caps.native_16bit());
+        assert!(!caps.native_f32());
+        assert!(!caps.native_alpha());
+        assert!(!caps.enforces_max_pixels());
+        assert!(!caps.enforces_max_memory());
+        assert!(caps.effort_range().is_none());
+        assert!(caps.quality_range().is_none());
+        assert_eq!(caps.threads_supported_range(), (1, 1));
+    }
+
+    #[test]
+    fn decode_default_all_false() {
+        let caps = DecodeCapabilities::new();
+        assert!(!caps.icc());
+        assert!(!caps.exif());
+        assert!(!caps.xmp());
+        assert!(!caps.cicp());
+        assert!(!caps.stop());
+        assert!(!caps.animation());
+        assert!(!caps.cheap_probe());
+        assert!(!caps.decode_into());
+        assert!(!caps.streaming());
+        assert!(!caps.hdr());
+        assert!(!caps.native_gray());
+        assert!(!caps.native_16bit());
+        assert!(!caps.native_f32());
+        assert!(!caps.native_alpha());
+        assert!(!caps.enforces_max_pixels());
+        assert!(!caps.enforces_max_memory());
+        assert!(!caps.enforces_max_input_bytes());
+        assert_eq!(caps.threads_supported_range(), (1, 1));
+    }
+
+    #[test]
+    fn encode_builder() {
+        let caps = EncodeCapabilities::new()
+            .with_icc(true)
+            .with_stop(true)
+            .with_native_gray(true)
+            .with_animation(true)
+            .with_native_16bit(true)
+            .with_hdr(true)
+            .with_threads_supported_range(1, 8);
+        assert!(caps.icc());
+        assert!(!caps.exif());
+        assert!(caps.stop());
+        assert!(caps.native_gray());
+        assert!(caps.animation());
+        assert!(caps.native_16bit());
+        assert!(!caps.lossless());
+        assert!(caps.hdr());
+        assert_eq!(caps.threads_supported_range(), (1, 8));
+    }
+
+    #[test]
+    fn decode_builder() {
+        let caps = DecodeCapabilities::new()
+            .with_icc(true)
+            .with_cheap_probe(true)
+            .with_stop(true)
+            .with_animation(true)
+            .with_enforces_max_input_bytes(true)
+            .with_threads_supported_range(1, 4);
+        assert!(caps.icc());
+        assert!(caps.cheap_probe());
+        assert!(caps.stop());
+        assert!(caps.animation());
+        assert!(caps.enforces_max_input_bytes());
+        assert_eq!(caps.threads_supported_range(), (1, 4));
+    }
+
+    #[test]
+    fn decode_gain_map_reconstruct_flags() {
+        // gain_map (extraction) and reconstructs_hdr (applies the gain map) are
+        // independent and both default false.
+        let base = DecodeCapabilities::new();
+        assert!(!base.gain_map());
+        assert!(!base.reconstructs_hdr());
+        // A codec that only extracts (surfaces Components) but doesn't reconstruct.
+        let extract_only = DecodeCapabilities::new().with_gain_map(true);
+        assert!(extract_only.gain_map());
+        assert!(!extract_only.reconstructs_hdr());
+        // A codec that reconstructs HDR internally.
+        let recon = DecodeCapabilities::new()
+            .with_gain_map(true)
+            .with_reconstructs_hdr(true);
+        assert!(recon.gain_map());
+        assert!(recon.reconstructs_hdr());
+    }
+
+    #[test]
+    fn encode_static_construction() {
+        static CAPS: EncodeCapabilities = EncodeCapabilities::new()
+            .with_icc(true)
+            .with_exif(true)
+            .with_xmp(true)
+            .with_stop(true)
+            .with_animation(true)
+            .with_lossless(true)
+            .with_cicp(true)
+            .with_effort_range(0, 100)
+            .with_quality_range(0.0, 100.0)
+            .with_threads_supported_range(1, 16);
+        assert!(CAPS.icc());
+        assert!(CAPS.stop());
+        assert!(!CAPS.native_gray());
+        assert!(CAPS.animation());
+        assert!(CAPS.lossless());
+        assert!(CAPS.cicp());
+        assert_eq!(CAPS.effort_range(), Some([0, 100]));
+        assert_eq!(CAPS.quality_range(), Some([0.0, 100.0]));
+        assert_eq!(CAPS.threads_supported_range(), (1, 16));
+    }
+
+    #[test]
+    fn decode_static_construction() {
+        static CAPS: DecodeCapabilities = DecodeCapabilities::new()
+            .with_icc(true)
+            .with_cheap_probe(true)
+            .with_stop(true)
+            .with_animation(true)
+            .with_enforces_max_pixels(true)
+            .with_enforces_max_input_bytes(true);
+        assert!(CAPS.icc());
+        assert!(CAPS.cheap_probe());
+        assert!(CAPS.enforces_max_pixels());
+        assert!(!CAPS.enforces_max_memory());
+        assert!(CAPS.enforces_max_input_bytes());
+    }
+
+    #[test]
+    fn encode_effort_quality_ranges() {
+        let caps = EncodeCapabilities::new()
+            .with_effort_range(0, 10)
+            .with_quality_range(0.0, 100.0);
+        assert_eq!(caps.effort_range(), Some([0i32, 10]));
+        assert_eq!(caps.quality_range(), Some([0.0, 100.0]));
+    }
+
+    #[test]
+    fn encode_supports() {
+        let caps = EncodeCapabilities::new()
+            .with_push_rows(true)
+            .with_encode_from(true)
+            .with_animation(true);
+        assert!(caps.supports(UnsupportedOperation::RowLevelEncode));
+        assert!(caps.supports(UnsupportedOperation::PullEncode));
+        assert!(caps.supports(UnsupportedOperation::AnimationEncode));
+        assert!(!caps.supports(UnsupportedOperation::GainMapEncode));
+        assert!(
+            EncodeCapabilities::new()
+                .with_gain_map(true)
+                .supports(UnsupportedOperation::GainMapEncode)
+        );
+        assert!(!caps.supports(UnsupportedOperation::DecodeInto));
+        assert!(!caps.supports(UnsupportedOperation::RowLevelDecode));
+        assert!(!caps.supports(UnsupportedOperation::AnimationDecode));
+        assert!(!caps.supports(UnsupportedOperation::PixelFormat));
+    }
+
+    #[test]
+    fn decode_supports() {
+        let caps = DecodeCapabilities::new()
+            .with_decode_into(true)
+            .with_streaming(true)
+            .with_animation(true);
+        assert!(caps.supports(UnsupportedOperation::DecodeInto));
+        assert!(caps.supports(UnsupportedOperation::RowLevelDecode));
+        assert!(caps.supports(UnsupportedOperation::AnimationDecode));
+        assert!(!caps.supports(UnsupportedOperation::RowLevelEncode));
+        assert!(!caps.supports(UnsupportedOperation::PullEncode));
+        assert!(!caps.supports(UnsupportedOperation::AnimationEncode));
+        assert!(!caps.supports(UnsupportedOperation::PixelFormat));
+    }
+
+    #[test]
+    fn supports_empty_all_false() {
+        let enc = EncodeCapabilities::new();
+        let dec = DecodeCapabilities::new();
+        for op in [
+            UnsupportedOperation::RowLevelEncode,
+            UnsupportedOperation::PullEncode,
+            UnsupportedOperation::AnimationEncode,
+            UnsupportedOperation::DecodeInto,
+            UnsupportedOperation::RowLevelDecode,
+            UnsupportedOperation::AnimationDecode,
+            UnsupportedOperation::GainMapEncode,
+            UnsupportedOperation::PixelFormat,
+        ] {
+            assert!(
+                !enc.supports(op),
+                "EncodeCapabilities::EMPTY.supports({op:?})"
+            );
+            assert!(
+                !dec.supports(op),
+                "DecodeCapabilities::EMPTY.supports({op:?})"
+            );
+        }
+    }
+
+    #[test]
+    fn unsupported_operation_display() {
+        assert_eq!(
+            alloc::format!("{}", UnsupportedOperation::RowLevelEncode),
+            "unsupported operation: row_level_encode"
+        );
+        assert_eq!(
+            alloc::format!("{}", UnsupportedOperation::DecodeInto),
+            "unsupported operation: decode_into"
+        );
+        assert_eq!(
+            alloc::format!("{}", UnsupportedOperation::PixelFormat),
+            "unsupported operation: pixel_format"
+        );
+    }
+
+    #[test]
+    fn unsupported_operation_name() {
+        assert_eq!(UnsupportedOperation::PullEncode.name(), "pull_encode");
+        assert_eq!(
+            UnsupportedOperation::AnimationEncode.name(),
+            "animation_encode"
+        );
+        assert_eq!(
+            UnsupportedOperation::RowLevelDecode.name(),
+            "row_level_decode"
+        );
+        assert_eq!(
+            UnsupportedOperation::AnimationDecode.name(),
+            "animation_decode"
+        );
+        assert_eq!(
+            UnsupportedOperation::GainMapEncode.name(),
+            "gain_map_encode"
+        );
+    }
+
+    #[test]
+    fn unsupported_operation_is_error() {
+        let op = UnsupportedOperation::DecodeInto;
+        let err: &dyn core::error::Error = &op;
+        assert!(err.source().is_none());
+    }
+
+    #[test]
+    fn unsupported_operation_eq_hash() {
+        assert_eq!(
+            UnsupportedOperation::DecodeInto,
+            UnsupportedOperation::DecodeInto
+        );
+        assert_ne!(
+            UnsupportedOperation::DecodeInto,
+            UnsupportedOperation::PullEncode
+        );
+    }
+}

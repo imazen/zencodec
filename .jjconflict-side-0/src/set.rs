@@ -68,8 +68,8 @@ use crate::fidelity::Fidelity;
 use crate::format::{ImageFormat, ImageFormatRegistry};
 use crate::traits::{
     AnimationFrameEncoder, BoxedError, DecoderConfig, DynAnimationFrameDecoder, DynDecodeJob,
-    DynDecoderConfig, DynEncodeJob, DynEncoderConfig, DynStreamingDecoder, EncodeJob, Encoder,
-    EncoderConfig,
+    DynDecoderConfig, DynEncodeJob, DynEncoderConfig, DynIncrementalDecoder, DynStreamingDecoder,
+    EncodeJob, Encoder, EncoderConfig,
 };
 use crate::{
     ColorEmitPolicy, DecodeOutput, DecodePolicy, DecodeRowSink, EncodeOutput, EncodePolicy,
@@ -449,6 +449,17 @@ impl CodecSet {
             .into_streaming_decoder(Cow::Borrowed(data), preferred)?)
     }
 
+    /// Create an incremental Sans-I/O decoder that detects the format automatically
+    /// from initial pushed chunks and delegates to the appropriate registered decoder.
+    ///
+    /// The returned [`CodecSetIncrementalDecoder`] accepts arbitrary byte chunks via
+    /// [`push_chunk`](CodecSetIncrementalDecoder::push_chunk) or
+    /// [`push_chunk_pulse`](CodecSetIncrementalDecoder::push_chunk_pulse). Format detection
+    /// occurs seamlessly once sufficient probe bytes arrive.
+    pub fn incremental_decoder(&self, preferred: &[PixelDescriptor]) -> CodecSetIncrementalDecoder {
+        CodecSetIncrementalDecoder::new(self.clone(), preferred)
+    }
+
     /// A decode job for `format` with this set's defaults stamped on.
     ///
     /// The escape hatch behind every decode convenience: set decode hints
@@ -783,6 +794,186 @@ impl fmt::Debug for CodecSet {
             .field("encodable", &encodable)
             .field("limits", &self.limits)
             .finish_non_exhaustive()
+    }
+}
+
+// ===========================================================================
+// CodecSetIncrementalDecoder
+// ===========================================================================
+
+/// Incremental decoder that automatically detects image format from initial pushed chunks
+/// and delegates to the matching registered decoder in a [`CodecSet`].
+pub struct CodecSetIncrementalDecoder {
+    set: CodecSet,
+    preferred: Vec<PixelDescriptor>,
+    state: CodecSetIncState,
+    info: Option<ImageInfo>,
+}
+
+enum CodecSetIncState {
+    Probing { buffer: Vec<u8> },
+    Decoding(Box<dyn DynIncrementalDecoder>),
+    Failed,
+}
+
+impl CodecSetIncrementalDecoder {
+    /// Create a new incremental decoder tied to `set`.
+    pub fn new(set: CodecSet, preferred: &[PixelDescriptor]) -> Self {
+        Self {
+            set,
+            preferred: preferred.to_vec(),
+            state: CodecSetIncState::Probing {
+                buffer: Vec::with_capacity(ImageFormat::RECOMMENDED_PROBE_BYTES),
+            },
+            info: None,
+        }
+    }
+
+    /// Push a chunk of compressed bytes.
+    pub fn push_chunk(
+        &mut self,
+        chunk: &[u8],
+        is_eof: bool,
+        stop: Option<&dyn enough::Stop>,
+    ) -> Result<crate::traits::PushOutcome, BoxedError> {
+        match &mut self.state {
+            CodecSetIncState::Probing { buffer } => {
+                buffer.extend_from_slice(chunk);
+                if let Some(format) = self.set.detect(buffer) {
+                    let mut dec = self
+                        .set
+                        .decode_job(format)
+                        .map_err(|e| Box::new(e) as BoxedError)?
+                        .into_incremental_decoder(&self.preferred)?;
+                    let outcome = dec.push_chunk(buffer, is_eof, stop)?;
+                    self.info = dec.info().cloned();
+                    self.state = CodecSetIncState::Decoding(dec);
+                    Ok(outcome.with_header_ready(self.info.is_some()))
+                } else if is_eof || buffer.len() > 16384 {
+                    self.state = CodecSetIncState::Failed;
+                    Err(Box::new(CodecSetError::UnrecognizedFormat))
+                } else {
+                    Ok(crate::traits::PushOutcome::new(
+                        chunk.len(),
+                        crate::traits::PushStatus::NeedMoreInput,
+                    ))
+                }
+            }
+            CodecSetIncState::Decoding(dec) => {
+                let outcome = dec.push_chunk(chunk, is_eof, stop)?;
+                if self.info.is_none() {
+                    self.info = dec.info().cloned();
+                }
+                Ok(outcome)
+            }
+            CodecSetIncState::Failed => Err(Box::new(CodecSetError::UnrecognizedFormat)),
+        }
+    }
+
+    /// Push a chunk with an optional `&dyn Pulse`.
+    pub fn push_chunk_pulse(
+        &mut self,
+        chunk: &[u8],
+        is_eof: bool,
+        pulse: Option<&dyn how_far::Pulse>,
+    ) -> Result<crate::traits::PushOutcome, BoxedError> {
+        match &mut self.state {
+            CodecSetIncState::Probing { .. } => {
+                self.push_chunk(chunk, is_eof, pulse.map(|p| p as &dyn enough::Stop))
+            }
+            CodecSetIncState::Decoding(dec) => {
+                let outcome = dec.push_chunk_pulse(chunk, is_eof, pulse)?;
+                if self.info.is_none() {
+                    self.info = dec.info().cloned();
+                }
+                Ok(outcome)
+            }
+            CodecSetIncState::Failed => Err(Box::new(CodecSetError::UnrecognizedFormat)),
+        }
+    }
+
+    /// Pull the next batch of decoded scanlines.
+    pub fn pull_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, BoxedError> {
+        match &mut self.state {
+            CodecSetIncState::Decoding(dec) => dec.pull_batch(),
+            _ => Ok(None),
+        }
+    }
+
+    /// Pull the next batch of decoded scanlines with pass and finality metadata.
+    pub fn pull_batch_meta(
+        &mut self,
+    ) -> Result<Option<(crate::traits::BatchMeta, PixelSlice<'_>)>, BoxedError> {
+        match &mut self.state {
+            CodecSetIncState::Decoding(dec) => dec.pull_batch_meta(),
+            _ => Ok(None),
+        }
+    }
+
+    /// Pull decoded scanlines directly into a caller-owned sink.
+    pub fn pull_batch_into(
+        &mut self,
+        sink: &mut dyn DecodeRowSink,
+    ) -> Result<Option<u32>, BoxedError> {
+        match &mut self.state {
+            CodecSetIncState::Decoding(dec) => dec.pull_batch_into(sink),
+            _ => Ok(None),
+        }
+    }
+
+    /// Image metadata, available once format detection and header parsing have completed.
+    pub fn info(&self) -> Option<&ImageInfo> {
+        self.info.as_ref()
+    }
+
+    /// Whether decoding has completely finished.
+    pub fn is_complete(&self) -> bool {
+        match &self.state {
+            CodecSetIncState::Decoding(dec) => dec.is_complete(),
+            _ => false,
+        }
+    }
+}
+
+impl DynIncrementalDecoder for CodecSetIncrementalDecoder {
+    fn push_chunk(
+        &mut self,
+        chunk: &[u8],
+        is_eof: bool,
+        stop: Option<&dyn enough::Stop>,
+    ) -> Result<crate::traits::PushOutcome, BoxedError> {
+        self.push_chunk(chunk, is_eof, stop)
+    }
+
+    fn push_chunk_pulse(
+        &mut self,
+        chunk: &[u8],
+        is_eof: bool,
+        pulse: Option<&dyn how_far::Pulse>,
+    ) -> Result<crate::traits::PushOutcome, BoxedError> {
+        self.push_chunk_pulse(chunk, is_eof, pulse)
+    }
+
+    fn pull_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, BoxedError> {
+        self.pull_batch()
+    }
+
+    fn pull_batch_meta(
+        &mut self,
+    ) -> Result<Option<(crate::traits::BatchMeta, PixelSlice<'_>)>, BoxedError> {
+        self.pull_batch_meta()
+    }
+
+    fn pull_batch_into(&mut self, sink: &mut dyn DecodeRowSink) -> Result<Option<u32>, BoxedError> {
+        self.pull_batch_into(sink)
+    }
+
+    fn info(&self) -> Option<&ImageInfo> {
+        self.info()
+    }
+
+    fn is_complete(&self) -> bool {
+        self.is_complete()
     }
 }
 

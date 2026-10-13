@@ -64,6 +64,9 @@ pub enum PushStatus {
     NeedMoreInput,
     /// One or more batches of decoded scanlines/pixels are ready to be pulled via [`pull_batch`](IncrementalDecode::pull_batch).
     OutputReady,
+    /// Backpressure: internal output or intermediate buffer has reached its limit.
+    /// The caller must drain output via [`pull_batch`](IncrementalDecode::pull_batch) before pushing further bytes.
+    BlockedOnOutput,
     /// Decoding of the image has completed. All scanlines have been yielded.
     Complete,
 }
@@ -75,16 +78,56 @@ pub struct PushOutcome {
     pub bytes_consumed: usize,
     /// Decoder status after processing those bytes.
     pub status: PushStatus,
+    /// Whether the image header was parsed during this push (or previously known).
+    pub header_ready: bool,
 }
 
 impl PushOutcome {
-    /// Create a new push outcome.
+    /// Create a new push outcome with `header_ready = false`.
     #[inline]
     pub const fn new(bytes_consumed: usize, status: PushStatus) -> Self {
         Self {
             bytes_consumed,
             status,
+            header_ready: false,
         }
+    }
+
+    /// Sets whether the image header is ready.
+    #[inline]
+    pub const fn with_header_ready(mut self, header_ready: bool) -> Self {
+        self.header_ready = header_ready;
+        self
+    }
+}
+
+/// Metadata describing a batch of decoded scanlines.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct BatchMeta {
+    /// Starting row index (top row of this batch).
+    pub y: u32,
+    /// Progressive pass index (0 for baseline / non-progressive decode).
+    pub pass: u16,
+    /// Whether this batch represents the final pass for these scanlines.
+    pub is_final: bool,
+}
+
+impl BatchMeta {
+    /// Create a new batch metadata with baseline defaults (`pass = 0`, `is_final = true`).
+    #[inline]
+    pub const fn new(y: u32, is_final: bool) -> Self {
+        Self {
+            y,
+            pass: 0,
+            is_final,
+        }
+    }
+
+    /// Specify the progressive pass index.
+    #[inline]
+    pub const fn with_pass(mut self, pass: u16) -> Self {
+        self.pass = pass;
+        self
     }
 }
 
@@ -113,7 +156,8 @@ pub trait IncrementalDecode {
     ///
     /// - `chunk`: slice of input bytes.
     /// - `is_eof`: true if no further bytes will follow.
-    /// - `stop`: optional cancellation token.
+    /// - `stop`: optional cancellation token (`enough::Stop`). A `&dyn Pulse`
+    ///   can be passed directly since `Pulse: Stop`.
     fn push_chunk(
         &mut self,
         chunk: &[u8],
@@ -121,15 +165,67 @@ pub trait IncrementalDecode {
         stop: Option<&dyn Stop>,
     ) -> Result<PushOutcome, Self::Error>;
 
+    /// Push a chunk with an optional `&dyn Pulse` for cancellation and progress reporting.
+    ///
+    /// Default implementation delegates to [`push_chunk`](IncrementalDecode::push_chunk).
+    fn push_chunk_pulse(
+        &mut self,
+        chunk: &[u8],
+        is_eof: bool,
+        pulse: Option<&dyn how_far::Pulse>,
+    ) -> Result<PushOutcome, Self::Error> {
+        self.push_chunk(chunk, is_eof, pulse.map(|p| p as &dyn Stop))
+    }
+
     /// Pull the next batch of decoded scanlines, if available.
     ///
     /// Returns `Ok(Some((y, strip)))` with row offset and pixel slice,
     /// or `Ok(None)` if more input is needed before another batch can be produced.
     fn pull_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, Self::Error>;
 
-    /// Image metadata, available as soon as sufficient header bytes have been pushed.
+    /// Pull the next batch of decoded scanlines with pass and finality metadata.
     ///
-    /// Returns `Some(&ImageInfo)` once known, or `None` if more input is needed.
+    /// Default implementation calls [`pull_batch`](IncrementalDecode::pull_batch)
+    /// and tags the batch as `pass = 0`, `is_final = true`.
+    fn pull_batch_meta(&mut self) -> Result<Option<(BatchMeta, PixelSlice<'_>)>, Self::Error> {
+        match self.pull_batch()? {
+            Some((y, slice)) => Ok(Some((BatchMeta::new(y, true), slice))),
+            None => Ok(None),
+        }
+    }
+
+    /// Decoupled-lifetime pull: push decoded scanlines directly into a caller-owned sink.
+    ///
+    /// Writes the next available batch into `sink` via [`provide_next_buffer`](DecodeRowSink::provide_next_buffer).
+    /// Returns `Ok(Some(rows_written))` or `Ok(None)` if more input is needed.
+    ///
+    /// Default implementation pulls from [`pull_batch`](IncrementalDecode::pull_batch)
+    /// and copies rows into the sink.
+    fn pull_batch_into(
+        &mut self,
+        sink: &mut dyn crate::DecodeRowSink,
+    ) -> Result<Option<u32>, Self::Error> {
+        match self.pull_batch()? {
+            Some((y, slice)) => {
+                let h = slice.rows() as u32;
+                let w = slice.width();
+                let desc = slice.descriptor();
+                let mut dst = sink
+                    .provide_next_buffer(y, h, w, desc)
+                    .map_err(Self::wrap_sink_error)?;
+                for row_idx in 0..h {
+                    dst.row_mut(row_idx).copy_from_slice(slice.row(row_idx));
+                }
+                Ok(Some(h))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Wrap a [`SinkError`] into this decoder's error type.
+    fn wrap_sink_error(err: SinkError) -> Self::Error;
+
+    /// Image metadata, available as soon as sufficient header bytes have been pushed.
     fn info(&self) -> Option<&ImageInfo>;
 
     /// Whether decoding has fully completed.

@@ -510,6 +510,8 @@ pub trait DecodeJob<'a>: Sized {
         preferred: &[PixelDescriptor],
     ) -> Result<Box<dyn DynIncrementalDecoder>, BoxedError> {
         let _ = preferred;
-        Err(Box::new(crate::capabilities::UnsupportedOperation::IncrementalDecode))
+        Err(Box::new(
+            crate::capabilities::UnsupportedOperation::IncrementalDecode,
+        ))
     }
 }

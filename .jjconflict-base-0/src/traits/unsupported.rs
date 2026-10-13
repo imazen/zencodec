@@ -85,7 +85,9 @@ impl<E: core::error::Error + Send + Sync + 'static> AnimationFrameDecoder for Un
     }
 }
 
-impl<E: core::error::Error + Send + Sync + 'static> super::decoder::IncrementalDecode for Unsupported<E> {
+impl<E: core::error::Error + Send + Sync + 'static> super::decoder::IncrementalDecode
+    for Unsupported<E>
+{
     type Error = E;
 
     fn push_chunk(
@@ -101,6 +103,10 @@ impl<E: core::error::Error + Send + Sync + 'static> super::decoder::IncrementalD
         unreachable!("Unsupported: incremental decode stub should never be constructed")
     }
 
+    fn wrap_sink_error(_err: crate::sink::SinkError) -> E {
+        unreachable!("Unsupported: incremental decode stub should never be constructed")
+    }
+
     fn info(&self) -> Option<&ImageInfo> {
         unreachable!("Unsupported: incremental decode stub should never be constructed")
     }
@@ -109,4 +115,3 @@ impl<E: core::error::Error + Send + Sync + 'static> super::decoder::IncrementalD
         unreachable!("Unsupported: incremental decode stub should never be constructed")
     }
 }
-
