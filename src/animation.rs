@@ -101,8 +101,10 @@ impl TimingQuantizer {
 
     /// Return the duration actually to encode and advance only on success.
     ///
-    /// Mixed source clocks are supported. An exact fractional phase whose
-    /// reduced denominator exceeds u128 is rejected, never approximated.
+    /// Mixed source clocks are supported using bounded u128 phase arithmetic.
+    /// If the intermediate common denominator cannot fit, return overflow
+    /// without advancing state, even if arbitrary-precision reduction might fit.
+    /// A duration exceeding the configured maximum ticks is also rejected.
     pub fn quantize(&mut self, duration: FrameDuration) -> Result<FrameDuration, TimingError> {
         let scaled = u128::from(duration.numerator()) * u128::from(self.clock.get());
         let mut den = u128::from(duration.denominator());
@@ -157,7 +159,7 @@ fn gcd(mut a: u128, mut b: u128) -> u128 {
     a
 }
 
-/// Invalid duration construction or an exact destination-clock conversion.
+/// Invalid duration construction, destination-clock conversion or quantization.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum TimingError {
@@ -165,7 +167,8 @@ pub enum TimingError {
     ZeroDenominator,
     /// The destination clock cannot represent the duration without rounding.
     Inexact,
-    /// The exact destination tick count exceeds u64.
+    /// The tick count exceeds u64 or the configured maximum, or quantization
+    /// exceeds the bounded intermediate phase arithmetic.
     Overflow,
 }
 impl fmt::Display for TimingError {

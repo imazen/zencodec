@@ -443,8 +443,9 @@ bounds admitted serialized storage; it is **not** a measured peak-memory bound
 or a general allocator-failure guarantee. Relocation must preserve its existing
 fixtures and add fallible allocation before claiming that guarantee.
 
-Timing phase arithmetic is bounded by u128. An unrepresentable phase still
-returns an explicit error without advancing state. A timing capability bit is
+Timing phase arithmetic is bounded by u128. An intermediate common denominator
+that exceeds this bound returns an explicit error without advancing state, even
+if arbitrary-precision reduction could produce a representable final phase. A timing capability bit is
 coarse discovery, not a promise that every rational duration is encodable.
 
 Rewrite limit errors still use static strings. Align them with typed limit
