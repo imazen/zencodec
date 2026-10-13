@@ -10,7 +10,7 @@
 ## summary
 #
 #   inherent methods                           61
-#   trait roster entries (type × trait)        54
+#   trait roster entries (type × trait)        55
 #
 # per-module pub lines:
 #   (root)                           28
@@ -88,7 +88,7 @@ pub fn metadata_rewrite::Compression::assert_fields_are_eq(&self)
 pub fn metadata_rewrite::Entry::assert_fields_are_eq(&self)
 pub fn metadata_rewrite::Error::assert_fields_are_eq(&self)
 
-## trait impls (54 types)
+## trait impls (55 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -117,6 +117,7 @@ UnsupportedImageKind: TrivialClone
 UnsupportedOperation: TrivialClone
 animation::FrameDuration: TrivialClone
 animation::TimingError: TrivialClone
+animation::TimingQuantizer: TrivialClone
 decode::DecodePolicy: TrivialClone
 encode::EncodePolicy: TrivialClone
 encode::Fidelity: TrivialClone
