@@ -137,11 +137,11 @@ removes that whole class).
 - Unpublished metadata rewrite limits now carry `LimitKind`, including packet,
   cumulative rewrite, carrier-count and EXIF-entry budgets. Existing published
   limit discriminants remain unchanged. Git-pinned planners must migrate their
-  string constructors together with the contract revision.
+  string constructors together with the contract revision (`7325cfa9`).
 
 - Inventory growth and coverage validation use fallible allocation; add typed
   allocation failures and `try_children`. Gap filling rejects a part cap before
-  changing topology. The part cap is not a total byte-memory budget.
+  changing topology. The part cap is not a total byte-memory budget (`f39865b2`).
 
 - Unpublished rewrite requests are data contracts; validation, cancellation and
   packet-budget execution move to `zenmeta::rewrite::Context`. Completed plans
@@ -161,7 +161,7 @@ removes that whole class).
   codecs implement one fallible primitive used by both dispatch paths. Rejection
   leaves mutable jobs unchanged and usable. The reference encoder implements ICC/EXIF/XMP gates for one-shot and
   animation jobs; a generic/erased XMP suppression roundtrip is tested.
-  Published best-effort setters remain.
+  Published best-effort setters remain (`4b5e4d9e`).
 
 
 ### QUEUED BREAKING CHANGES

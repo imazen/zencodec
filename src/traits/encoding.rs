@@ -264,11 +264,10 @@ pub trait EncodeJob: Sized {
     ///
     /// # Note
     ///
-    /// The default implementation is a no-op that returns `self` unchanged.
-    /// Not all codecs implement policy support. Check the codec's documentation
-    /// or [`EncodeCapabilities`](crate::EncodeCapabilities) to determine whether
-    /// the codec honors policy settings. Calling this on a codec that does not
-    /// implement it will silently have no effect.
+    /// The default implementation is a no-op. This published setter is
+    /// best-effort; static capability flags do not confirm policy enforcement.
+    /// Use [`try_set_policy`](Self::try_set_policy) or
+    /// [`try_with_policy`](Self::try_with_policy) for a required policy.
     fn with_policy(self, _policy: crate::EncodePolicy) -> Self {
         self
     }

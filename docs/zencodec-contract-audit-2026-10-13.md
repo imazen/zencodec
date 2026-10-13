@@ -586,3 +586,44 @@ known consumers, then deprecate the old entry points. Keep the old behavior
 through the compatible release. The eventual breaking release can remove
 published legacy methods after the replacement has demonstrated equivalent
 coverage on real files.
+
+## Follow-up PR review: publication scope
+
+The compatible proposals are split into [PR139](https://github.com/imazen/zencodec/pull/139)
+and [PR140](https://github.com/imazen/zencodec/pull/140). Neither is a crate release.
+
+PR139 keeps CodecSet available by default, guards still-image transcode against
+known sequence/auxiliary loss and an unsupported native pixel descriptor, makes
+inventory construction/validation allocation failures recoverable, and replaces
+rewrite-limit strings with shared `LimitKind` values. PNG, JXL and JPEG planners
+must update their pinned contract revision with the typed constructors.
+
+Inventory's part cap bounds record count. It is **not** a total memory budget:
+caller-created labels, details, spare capacities and parser scratch remain
+separate. `try_children` exposes fallible collection; the convenience `children`,
+formatting, cloning and summary helpers can still allocate infallibly. No new
+byte-budget field is promised without an accounting model covering those inputs.
+
+PR140 adds one checked policy mutation primitive per generic job and delegates
+erased mutation to it. A separate `accepts_policy` predicate was removed during
+review because a predicate and setter could disagree and generic overrides
+could be bypassed by erased dispatch. A rejected mutable update leaves the job
+unchanged. The reference encoder demonstrates ICC/EXIF/XMP gates, including
+atomic rejection of a mixed supported/unsupported policy. Other codecs reject
+nonempty checked policies until they implement this primitive; their existing
+best-effort setters retain published behavior. CodecSet callers can obtain a job
+and use its checked setter without another registry policy abstraction.
+
+Rational getters and explicit timing submission are available in parallel with
+the deprecated millisecond getters. Deprecation does not complete consumer
+migration: callers must choose exact timing or intentional rounding, including
+when their destination is a millisecond-only API. The old methods still work.
+
+Required pixel fidelity, actual metadata/carrier delivery, and authoritative
+post-transform color/orientation remain in the coordinated breaking queue.
+Neither checked policy admission nor transcode's early guards proves these
+properties. Do not add a config-time success report that cannot inspect the
+pixels or encoded output. Before removing the old setters, demonstrate required
+operation admission and outcomes with real codec adapters across all feeding
+modes. This is migration work, not a signature-compatibility blocker for these
+two additive proposals.
