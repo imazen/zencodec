@@ -34,7 +34,7 @@ fn metadata_services_cannot_return_over_budget_packets() {
         .with_xmp_editing(true);
     assert_eq!(
         Context::new(&request).unwrap().xmp(b"small"),
-        Err(Error::Limit("metadata bytes"))
+        Err(Error::Limit(zencodec::LimitKind::MetadataSize))
     );
 }
 
@@ -64,7 +64,7 @@ fn preserving_xmp_needs_no_editor_and_keeps_exact_packet_bytes() {
     let bounded = request.with_metadata_limit(1);
     assert_eq!(
         Context::new(&bounded).unwrap().xmp(xml),
-        Err(Error::Limit("metadata bytes"))
+        Err(Error::Limit(zencodec::LimitKind::MetadataSize))
     );
 }
 
@@ -111,7 +111,7 @@ fn empty_and_service_requests_are_validated_by_zenmeta() {
     ));
     assert!(matches!(
         Context::new(&Request::new(b"123").with_byte_limits(2, 10)),
-        Err(Error::Limit("input bytes"))
+        Err(Error::Limit(zencodec::LimitKind::InputSize))
     ));
 }
 
@@ -151,7 +151,10 @@ fn replacing_context_input_cannot_bypass_input_budget() {
     )
     .unwrap()
     .with_input(b"123");
-    assert_eq!(context.xmp(b"a"), Err(Error::Limit("input bytes")));
+    assert_eq!(
+        context.xmp(b"a"),
+        Err(Error::Limit(zencodec::LimitKind::InputSize))
+    );
 }
 
 #[test]
@@ -174,7 +177,10 @@ fn overlapping_exif_values_obey_expanded_metadata_budget() {
             .with_policy(zencodec::MetadataPolicy::PreserveExact),
     )
     .unwrap();
-    assert_eq!(context.exif(&exif), Err(Error::Limit("metadata bytes")));
+    assert_eq!(
+        context.exif(&exif),
+        Err(Error::Limit(zencodec::LimitKind::MetadataSize))
+    );
 
     // Identical aliases are shared by the serializer, unlike overlapping windows.
     exif[30..34].copy_from_slice(&38u32.to_le_bytes());
@@ -235,4 +241,51 @@ fn cancellation_prevents_calling_a_packet_service() {
         Err(Error::Cancelled)
     );
     assert_eq!(service.0.load(Ordering::Relaxed), 0);
+}
+
+#[test]
+fn typed_plan_limits_distinguish_carriers_output_and_regenerated_metadata() {
+    use std::borrow::Cow;
+    use zencodec::{LimitKind, metadata_rewrite::Action};
+    use zenmeta::rewrite::PlanBuilder;
+    let input = b"abcd";
+    let request = Request::new(input)
+        .with_metadata_limit(3)
+        .with_byte_limits(4, 4);
+    let context = Context::new(&request).unwrap();
+    let mut builder = PlanBuilder::new();
+    builder
+        .record(
+            &context,
+            0..2,
+            "first",
+            Action::Rewrite,
+            Some(Cow::Owned(vec![1, 2])),
+        )
+        .unwrap();
+    assert_eq!(
+        builder.record(
+            &context,
+            2..4,
+            "second",
+            Action::Rewrite,
+            Some(Cow::Owned(vec![3, 4]))
+        ),
+        Err(Error::Limit(LimitKind::MetadataRewriteSize))
+    );
+    builder.keep(&context, 2..4, "borrowed").unwrap();
+    assert_eq!(
+        builder.finish().unwrap().to_vec().unwrap(),
+        [1, 2, b'c', b'd']
+    );
+    let context = Context::new(&request.with_byte_limits(4, 1)).unwrap();
+    assert_eq!(
+        PlanBuilder::new().keep(&context, 0..2, "output"),
+        Err(Error::Limit(LimitKind::OutputSize))
+    );
+    let context = Context::new(&Request::new(input).with_carrier_limit(0)).unwrap();
+    assert_eq!(
+        PlanBuilder::new().keep(&context, 0..1, "carrier"),
+        Err(Error::Limit(LimitKind::MetadataCarriers))
+    );
 }

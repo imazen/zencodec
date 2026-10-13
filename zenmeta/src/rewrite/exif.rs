@@ -58,15 +58,15 @@ pub(super) fn validate(req: &Context<'_>, bytes: &[u8]) -> Result<(), Error> {
         let count = u16at(p)? as usize;
         expanded = expanded
             .checked_add(6 + 12 * count)
-            .ok_or(Error::Limit("metadata bytes"))?;
+            .ok_or(Error::Limit(zencodec::LimitKind::MetadataSize))?;
         req.packet(expanded)?;
         let mut external_values = BTreeSet::new();
         let (mut thumbnail_offset, mut thumbnail_size) = (None, None);
         entries = entries
             .checked_add(count)
-            .ok_or(Error::Limit("EXIF entries"))?;
+            .ok_or(Error::Limit(zencodec::LimitKind::MetadataEntries))?;
         if entries > req.max_carriers() {
-            return Err(Error::Limit("EXIF entries"));
+            return Err(Error::Limit(zencodec::LimitKind::MetadataEntries));
         }
         let end = p
             .checked_add(2 + 12 * count)
@@ -105,7 +105,7 @@ pub(super) fn validate(req: &Context<'_>, bytes: &[u8]) -> Result<(), Error> {
                 expanded = expanded
                     .checked_add(size)
                     .and_then(|n| n.checked_add(size & 1))
-                    .ok_or(Error::Limit("metadata bytes"))?;
+                    .ok_or(Error::Limit(zencodec::LimitKind::MetadataSize))?;
                 req.packet(expanded)?;
             }
             if n == 1 && matches!(ty, 3 | 4) && matches!(tag, 0x0201 | 0x0202) {
@@ -152,7 +152,7 @@ pub(super) fn validate(req: &Context<'_>, bytes: &[u8]) -> Result<(), Error> {
             }
             expanded = expanded
                 .checked_add(size)
-                .ok_or(Error::Limit("metadata bytes"))?;
+                .ok_or(Error::Limit(zencodec::LimitKind::MetadataSize))?;
             req.packet(expanded)?;
         }
     }
