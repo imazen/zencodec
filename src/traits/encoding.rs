@@ -273,6 +273,28 @@ pub trait EncodeJob: Sized {
         self
     }
 
+    /// Whether this job can honor every specified field of `policy`.
+    ///
+    /// The default admits only [`EncodePolicy::none()`](crate::EncodePolicy::none),
+    /// since the published `with_policy` default ignores all fields.
+    fn accepts_policy(&self, policy: crate::EncodePolicy) -> bool {
+        policy == crate::EncodePolicy::none()
+    }
+
+    /// Apply a required policy or reject it before constructing an encoder.
+    ///
+    /// A rejection consumes this builder; create a fresh job to try another
+    /// policy. This confirms job-level admission, not content-dependent output.
+    fn try_with_policy(
+        self,
+        policy: crate::EncodePolicy,
+    ) -> Result<Self, crate::UnsupportedOperation> {
+        if !self.accepts_policy(policy) {
+            return Err(crate::UnsupportedOperation::EncodePolicy);
+        }
+        Ok(self.with_policy(policy))
+    }
+
     /// Set metadata to embed, **filtered by an explicit retention policy** — the
     /// blessed path. Metadata retention is a privacy decision, so the policy is
     /// required: [`MetadataPolicy::Web`](crate::MetadataPolicy::Web) is the

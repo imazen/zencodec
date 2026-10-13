@@ -49,7 +49,8 @@ use zencodec::decode::{
     DecoderConfig, OutputInfo, SinkError, SourceColor, StreamingDecode,
 };
 use zencodec::encode::{
-    AnimationFrameEncoder, EncodeCapabilities, EncodeJob, EncodeOutput, Encoder, EncoderConfig,
+    AnimationFrameEncoder, EncodeCapabilities, EncodeJob, EncodeOutput, EncodePolicy, Encoder,
+    EncoderConfig,
 };
 use zencodec::gainmap::{
     DecodedGainMap, GainMapInfo, GainMapPresence, GainMapRender, GainMapSource, Iso21496Format,
@@ -883,6 +884,7 @@ impl EncoderConfig for ReferenceEncoderConfig {
     fn job(self) -> RefEncodeJob {
         RefEncodeJob {
             metadata: Metadata::none(),
+            policy: EncodePolicy::none(),
             loop_count: None,
             gain_map: None,
         }
@@ -892,8 +894,22 @@ impl EncoderConfig for ReferenceEncoderConfig {
 /// Reference encode job.
 pub struct RefEncodeJob {
     metadata: Metadata,
+    policy: EncodePolicy,
     loop_count: Option<u32>,
     gain_map: Option<GainMapWire>,
+}
+
+fn apply_embed_policy(mut metadata: Metadata, policy: EncodePolicy) -> Metadata {
+    if policy.embed_icc == Some(false) {
+        metadata.icc_profile = None;
+    }
+    if policy.embed_exif == Some(false) {
+        metadata.exif = None;
+    }
+    if policy.embed_xmp == Some(false) {
+        metadata.xmp = None;
+    }
+    metadata
 }
 
 impl EncodeJob for RefEncodeJob {
@@ -906,6 +922,17 @@ impl EncodeJob for RefEncodeJob {
     }
     fn with_limits(self, _limits: ResourceLimits) -> Self {
         self
+    }
+    fn with_policy(mut self, policy: EncodePolicy) -> Self {
+        self.policy = policy;
+        self
+    }
+    fn accepts_policy(&self, policy: EncodePolicy) -> bool {
+        let mut unsupported = policy;
+        unsupported.embed_icc = None;
+        unsupported.embed_exif = None;
+        unsupported.embed_xmp = None;
+        unsupported == EncodePolicy::none()
     }
     fn with_metadata(mut self, meta: Metadata) -> Self {
         self.metadata = meta;
@@ -959,8 +986,9 @@ impl EncodeJob for RefEncodeJob {
     }
 
     fn encoder(self) -> Result<RefEnc, RefError> {
+        let metadata = apply_embed_policy(self.metadata, self.policy);
         Ok(RefEnc {
-            metadata: self.metadata,
+            metadata,
             gain_map: self.gain_map,
             accumulated: Vec::new(),
             width: None,
@@ -970,8 +998,9 @@ impl EncodeJob for RefEncodeJob {
     }
 
     fn animation_frame_encoder(self) -> Result<RefAnimEnc, RefError> {
+        let metadata = apply_embed_policy(self.metadata, self.policy);
         Ok(RefAnimEnc {
-            metadata: self.metadata,
+            metadata,
             gain_map: self.gain_map,
             frames: Vec::new(),
         })

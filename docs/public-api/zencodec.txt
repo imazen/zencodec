@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1765 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 118 lines (118 hidden + 0 excluded-feature)
+# files: zencodec.txt 1779 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 118 lines (118 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -14,9 +14,9 @@
 #   pub types (struct/enum/trait/alias)       190
 #   pub consts/statics                        197
 #   free functions                             46
-#   inherent methods                          767
+#   inherent methods                          779
 #   struct fields                             220
-#   enum variants                             264
+#   enum variants                             266
 #   re-exports                                 12
 #   trait roster entries (type × trait)       488
 #   conditional trait impls (verbatim)          4
@@ -24,10 +24,10 @@
 #   auto-trait exceptions                       9
 #
 # per-module pub lines:
-#   (root)                          784
+#   (root)                          786
 #   animation                         8
-#   decode                          170
-#   encode                          123
+#   decode                          173
+#   encode                          126
 #   estimate                         48
 #   exif                             94
 #   gainmap                         126
@@ -35,9 +35,9 @@
 #   icc                               1
 #   inventory                       101
 #   metadata_rewrite                 58
-#   prelude                         182
+#   prelude                         188
 
-## items (1649 lines)
+## items (1663 lines)
 
 pub mod zencodec
 pub use At
@@ -245,6 +245,7 @@ pub type decode::DecodeJob::AnimationFrameDec: decode::AnimationFrameDecoder<Err
 pub type decode::DecodeJob::Dec: decode::Decode<Error = Self::Error>
 pub type decode::DecodeJob::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub type decode::DecodeJob::StreamDec: decode::StreamingDecode<Error = Self::Error> + core::marker::Send
+pub fn decode::DecodeJob::accepts_policy(&self, decode::DecodePolicy) -> bool
 pub fn decode::DecodeJob::animation_frame_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<Self::AnimationFrameDec, Self::Error>
 pub fn decode::DecodeJob::decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<Self::Dec, Self::Error>
 pub fn decode::DecodeJob::dyn_animation_frame_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<dyn decode::DynAnimationFrameDecoder>, encode::BoxedError> where Self: 'a, Self::AnimationFrameDec: core::marker::Send
@@ -258,6 +259,7 @@ pub fn decode::DecodeJob::probe(&self, &[u8]) -> core::result::Result<ImageInfo,
 pub fn decode::DecodeJob::probe_full(&self, &[u8]) -> core::result::Result<ImageInfo, Self::Error>
 pub fn decode::DecodeJob::push_decoder(self, alloc::borrow::Cow<'a, [u8]>, &mut dyn decode::DecodeRowSink, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<decode::OutputInfo, Self::Error>
 pub fn decode::DecodeJob::streaming_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<Self::StreamDec, Self::Error>
+pub fn decode::DecodeJob::try_with_policy(self, decode::DecodePolicy) -> core::result::Result<Self, UnsupportedOperation>
 pub fn decode::DecodeJob::with_crop_hint(self, u32, u32, u32, u32) -> Self
 pub fn decode::DecodeJob::with_extract_gain_map(self, bool) -> Self
 pub fn decode::DecodeJob::with_gain_map_render(self, gainmap::GainMapRender) -> Self
@@ -308,6 +310,7 @@ pub fn decode::DynDecodeJob::set_orientation(&mut self, OrientationHint)
 pub fn decode::DynDecodeJob::set_policy(&mut self, decode::DecodePolicy)
 pub fn decode::DynDecodeJob::set_start_frame_index(&mut self, u32)
 pub fn decode::DynDecodeJob::set_stop(&mut self, almost_enough::stop_token::StopToken)
+pub fn decode::DynDecodeJob::try_set_policy(&mut self, decode::DecodePolicy) -> core::result::Result<(), encode::BoxedError>
 pub trait decode::DynDecoder [also: prelude]
 pub fn decode::DynDecoder::decode(alloc::boxed::Box<Self>) -> core::result::Result<decode::DecodeOutput, encode::BoxedError>
 pub trait decode::DynDecoderConfig: core::marker::Send + core::marker::Sync [also: prelude]
@@ -462,6 +465,7 @@ pub fn encode::DynEncodeJob::set_metadata(&mut self, Metadata)
 pub fn encode::DynEncodeJob::set_metadata_policy(&mut self, Metadata, MetadataPolicy)
 pub fn encode::DynEncodeJob::set_policy(&mut self, encode::EncodePolicy)
 pub fn encode::DynEncodeJob::set_stop(&mut self, almost_enough::stop_token::StopToken)
+pub fn encode::DynEncodeJob::try_set_policy(&mut self, encode::EncodePolicy) -> core::result::Result<(), encode::BoxedError>
 pub trait encode::DynEncoder: core::marker::Send [also: prelude]
 pub fn encode::DynEncoder::encode(alloc::boxed::Box<Self>, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
 pub fn encode::DynEncoder::encode_from(alloc::boxed::Box<Self>, &mut dyn core::ops::function::FnMut(u32, zenpixels::buffer::PixelSliceMut<'_>) -> usize) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
@@ -480,6 +484,7 @@ pub trait encode::EncodeJob: core::marker::Sized [also: prelude]
 pub type encode::EncodeJob::AnimationFrameEnc: core::marker::Sized + core::marker::Send + 'static
 pub type encode::EncodeJob::Enc: core::marker::Sized + 'static
 pub type encode::EncodeJob::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn encode::EncodeJob::accepts_policy(&self, encode::EncodePolicy) -> bool
 pub fn encode::EncodeJob::animation_frame_encoder(self) -> core::result::Result<Self::AnimationFrameEnc, Self::Error>
 pub fn encode::EncodeJob::dyn_animation_frame_encoder(self) -> core::result::Result<alloc::boxed::Box<dyn encode::DynAnimationFrameEncoder>, encode::BoxedError> where Self::AnimationFrameEnc: encode::AnimationFrameEncoder + core::marker::Send
 pub fn encode::EncodeJob::dyn_encoder(self) -> core::result::Result<alloc::boxed::Box<dyn encode::DynEncoder>, encode::BoxedError> where Self::Enc: encode::Encoder + core::marker::Send
@@ -487,6 +492,7 @@ pub fn encode::EncodeJob::encode(self, zenpixels::buffer::PixelSlice<'_>) -> cor
 pub fn encode::EncodeJob::encoder(self) -> core::result::Result<Self::Enc, Self::Error>
 pub fn encode::EncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn encode::EncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn encode::EncodeJob::try_with_policy(self, encode::EncodePolicy) -> core::result::Result<Self, UnsupportedOperation>
 pub fn encode::EncodeJob::with_canvas_size(self, u32, u32) -> Self
 pub fn encode::EncodeJob::with_gain_map_encoded(self, gainmap::GainMapSource) -> core::result::Result<Self, Self::Error> where Self::Enc: encode::Encoder<Error = Self::Error>
 pub fn encode::EncodeJob::with_gain_map_pixels(self, gainmap::DecodedGainMap) -> core::result::Result<Self, Self::Error> where Self::Enc: encode::Encoder<Error = Self::Error>
@@ -949,6 +955,7 @@ pub type prelude::DecodeJob::AnimationFrameDec: decode::AnimationFrameDecoder<Er
 pub type prelude::DecodeJob::Dec: decode::Decode<Error = Self::Error>
 pub type prelude::DecodeJob::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub type prelude::DecodeJob::StreamDec: decode::StreamingDecode<Error = Self::Error> + core::marker::Send
+pub fn prelude::DecodeJob::accepts_policy(&self, decode::DecodePolicy) -> bool
 pub fn prelude::DecodeJob::animation_frame_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<Self::AnimationFrameDec, Self::Error>
 pub fn prelude::DecodeJob::decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<Self::Dec, Self::Error>
 pub fn prelude::DecodeJob::dyn_animation_frame_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<dyn decode::DynAnimationFrameDecoder>, encode::BoxedError> where Self: 'a, Self::AnimationFrameDec: core::marker::Send
@@ -962,6 +969,7 @@ pub fn prelude::DecodeJob::probe(&self, &[u8]) -> core::result::Result<ImageInfo
 pub fn prelude::DecodeJob::probe_full(&self, &[u8]) -> core::result::Result<ImageInfo, Self::Error>
 pub fn prelude::DecodeJob::push_decoder(self, alloc::borrow::Cow<'a, [u8]>, &mut dyn decode::DecodeRowSink, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<decode::OutputInfo, Self::Error>
 pub fn prelude::DecodeJob::streaming_decoder(self, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<Self::StreamDec, Self::Error>
+pub fn prelude::DecodeJob::try_with_policy(self, decode::DecodePolicy) -> core::result::Result<Self, UnsupportedOperation>
 pub fn prelude::DecodeJob::with_crop_hint(self, u32, u32, u32, u32) -> Self
 pub fn prelude::DecodeJob::with_extract_gain_map(self, bool) -> Self
 pub fn prelude::DecodeJob::with_gain_map_render(self, gainmap::GainMapRender) -> Self
@@ -1012,6 +1020,7 @@ pub fn prelude::DynDecodeJob::set_orientation(&mut self, OrientationHint)
 pub fn prelude::DynDecodeJob::set_policy(&mut self, decode::DecodePolicy)
 pub fn prelude::DynDecodeJob::set_start_frame_index(&mut self, u32)
 pub fn prelude::DynDecodeJob::set_stop(&mut self, almost_enough::stop_token::StopToken)
+pub fn prelude::DynDecodeJob::try_set_policy(&mut self, decode::DecodePolicy) -> core::result::Result<(), encode::BoxedError>
 pub fn prelude::DynDecoder::decode(alloc::boxed::Box<Self>) -> core::result::Result<decode::DecodeOutput, encode::BoxedError>
 pub fn prelude::DynDecoderConfig::as_any(&self) -> &dyn core::any::Any
 pub fn prelude::DynDecoderConfig::capabilities(&self) -> &'static decode::DecodeCapabilities
@@ -1031,6 +1040,7 @@ pub fn prelude::DynEncodeJob::set_metadata(&mut self, Metadata)
 pub fn prelude::DynEncodeJob::set_metadata_policy(&mut self, Metadata, MetadataPolicy)
 pub fn prelude::DynEncodeJob::set_policy(&mut self, encode::EncodePolicy)
 pub fn prelude::DynEncodeJob::set_stop(&mut self, almost_enough::stop_token::StopToken)
+pub fn prelude::DynEncodeJob::try_set_policy(&mut self, encode::EncodePolicy) -> core::result::Result<(), encode::BoxedError>
 pub fn prelude::DynEncoder::encode(alloc::boxed::Box<Self>, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
 pub fn prelude::DynEncoder::encode_from(alloc::boxed::Box<Self>, &mut dyn core::ops::function::FnMut(u32, zenpixels::buffer::PixelSliceMut<'_>) -> usize) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
 pub fn prelude::DynEncoder::encode_srgba8(alloc::boxed::Box<Self>, &mut [u8], bool, u32, u32, u32) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
@@ -1048,6 +1058,7 @@ pub fn prelude::DynStreamingDecoder::next_batch(&mut self) -> core::result::Resu
 pub type prelude::EncodeJob::AnimationFrameEnc: core::marker::Sized + core::marker::Send + 'static
 pub type prelude::EncodeJob::Enc: core::marker::Sized + 'static
 pub type prelude::EncodeJob::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn prelude::EncodeJob::accepts_policy(&self, encode::EncodePolicy) -> bool
 pub fn prelude::EncodeJob::animation_frame_encoder(self) -> core::result::Result<Self::AnimationFrameEnc, Self::Error>
 pub fn prelude::EncodeJob::dyn_animation_frame_encoder(self) -> core::result::Result<alloc::boxed::Box<dyn encode::DynAnimationFrameEncoder>, encode::BoxedError> where Self::AnimationFrameEnc: encode::AnimationFrameEncoder + core::marker::Send
 pub fn prelude::EncodeJob::dyn_encoder(self) -> core::result::Result<alloc::boxed::Box<dyn encode::DynEncoder>, encode::BoxedError> where Self::Enc: encode::Encoder + core::marker::Send
@@ -1055,6 +1066,7 @@ pub fn prelude::EncodeJob::encode(self, zenpixels::buffer::PixelSlice<'_>) -> co
 pub fn prelude::EncodeJob::encoder(self) -> core::result::Result<Self::Enc, Self::Error>
 pub fn prelude::EncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn prelude::EncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn prelude::EncodeJob::try_with_policy(self, encode::EncodePolicy) -> core::result::Result<Self, UnsupportedOperation>
 pub fn prelude::EncodeJob::with_canvas_size(self, u32, u32) -> Self
 pub fn prelude::EncodeJob::with_gain_map_encoded(self, gainmap::GainMapSource) -> core::result::Result<Self, Self::Error> where Self::Enc: encode::Encoder<Error = Self::Error>
 pub fn prelude::EncodeJob::with_gain_map_pixels(self, gainmap::DecodedGainMap) -> core::result::Result<Self, Self::Error> where Self::Enc: encode::Encoder<Error = Self::Error>
@@ -1313,6 +1325,8 @@ pub UnsupportedOperation::AnimationDecode
 pub UnsupportedOperation::AnimationEncode
 pub UnsupportedOperation::AnimationTiming
 pub UnsupportedOperation::DecodeInto
+pub UnsupportedOperation::DecodePolicy
+pub UnsupportedOperation::EncodePolicy
 pub UnsupportedOperation::GainMapEncode
 pub UnsupportedOperation::Inventory
 pub UnsupportedOperation::MultiImageDecode

@@ -383,6 +383,9 @@ impl<'a> AnimationFrame<'a> {
     /// Zero means platform-dependent minimum display time for most formats.
     /// For JXL, zero-duration frames are compositing helpers and are never
     /// yielded by [`AnimationFrameDecoder`](crate::decode::AnimationFrameDecoder).
+    #[deprecated(
+        note = "truncates fractional milliseconds and saturates large durations; use duration()"
+    )]
     pub fn duration_ms(&self) -> u32 {
         self.duration.legacy_millis()
     }
@@ -433,7 +436,7 @@ impl core::fmt::Debug for AnimationFrame<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("AnimationFrame")
             .field("pixels", &self.pixels)
-            .field("duration_ms", &self.duration_ms())
+            .field("duration_ms", &self.duration.legacy_millis())
             .field("duration", &self.duration)
             .field("frame_index", &self.frame_index)
             .finish()
@@ -494,6 +497,9 @@ impl OwnedAnimationFrame {
 
     /// Legacy whole milliseconds: fractional milliseconds are truncated and
     /// values beyond u32::MAX saturate. Use `duration()` for exact timing.
+    #[deprecated(
+        note = "truncates fractional milliseconds and saturates large durations; use duration()"
+    )]
     pub fn duration_ms(&self) -> u32 {
         self.duration.legacy_millis()
     }
@@ -544,7 +550,7 @@ impl core::fmt::Debug for OwnedAnimationFrame {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("OwnedAnimationFrame")
             .field("pixels", &self.pixels)
-            .field("duration_ms", &self.duration_ms())
+            .field("duration_ms", &self.duration.legacy_millis())
             .field("duration", &self.duration)
             .field("frame_index", &self.frame_index)
             .field("extensions", &self.extensions)
@@ -656,7 +662,10 @@ mod tests {
         let buf = make_rgba8_buffer(4, 4);
         let ps = buf.as_slice();
         let frame = AnimationFrame::new(ps, 100, 0);
-        assert_eq!(frame.duration_ms(), 100);
+        assert_eq!(
+            frame.duration(),
+            crate::animation::FrameDuration::from_millis(100)
+        );
         assert_eq!(frame.frame_index(), 0);
         assert_eq!(frame.pixels().width(), 4);
         assert_eq!(frame.pixels().rows(), 4);
@@ -668,7 +677,10 @@ mod tests {
         let ps = buf.as_slice();
         let frame = AnimationFrame::new(ps, 50, 3);
         let owned = frame.to_owned_frame();
-        assert_eq!(owned.duration_ms(), 50);
+        assert_eq!(
+            owned.duration(),
+            crate::animation::FrameDuration::from_millis(50)
+        );
         assert_eq!(owned.frame_index(), 3);
         assert_eq!(owned.pixels().width(), 2);
         assert_eq!(owned.pixels().rows(), 2);
@@ -679,7 +691,10 @@ mod tests {
         let buf = make_rgb8_buffer(2, 2);
         let owned = OwnedAnimationFrame::new(buf, 100, 5);
         let borrowed = owned.as_animation_frame();
-        assert_eq!(borrowed.duration_ms(), 100);
+        assert_eq!(
+            borrowed.duration(),
+            crate::animation::FrameDuration::from_millis(100)
+        );
         assert_eq!(borrowed.frame_index(), 5);
     }
 

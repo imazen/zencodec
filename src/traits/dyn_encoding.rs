@@ -268,6 +268,18 @@ pub trait DynEncodeJob {
     /// Set encode security policy.
     fn set_policy(&mut self, policy: crate::EncodePolicy);
 
+    /// Apply a required policy or return a recoverable rejection.
+    ///
+    /// Manual implementations default to accepting only the empty policy;
+    /// generated shims consult the concrete job's `accepts_policy` first.
+    fn try_set_policy(&mut self, policy: crate::EncodePolicy) -> Result<(), BoxedError> {
+        if policy != crate::EncodePolicy::none() {
+            return Err(Box::new(crate::UnsupportedOperation::EncodePolicy));
+        }
+        self.set_policy(policy);
+        Ok(())
+    }
+
     /// Set metadata to embed, filtered by an explicit retention policy (blessed
     /// path; mirrors [`EncodeJob::with_metadata_policy`](crate::encode::EncodeJob::with_metadata_policy)).
     ///
@@ -372,6 +384,17 @@ where
 
     fn set_policy(&mut self, policy: crate::EncodePolicy) {
         self.try_apply(|job| job.with_policy(policy));
+    }
+
+    fn try_set_policy(&mut self, policy: crate::EncodePolicy) -> Result<(), BoxedError> {
+        let Some(job) = self.0.as_ref() else {
+            return Err("EncodeJobShim: job already consumed (double take)".into());
+        };
+        if !job.accepts_policy(policy) {
+            return Err(Box::new(crate::UnsupportedOperation::EncodePolicy));
+        }
+        self.try_apply(|job| job.with_policy(policy));
+        Ok(())
     }
 
     fn set_metadata_policy(&mut self, meta: Metadata, policy: crate::MetadataPolicy) {

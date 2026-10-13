@@ -177,6 +177,29 @@ pub trait DecodeJob<'a>: Sized {
         self
     }
 
+    /// Whether this job can honor every specified field of `policy`.
+    ///
+    /// The default admits only [`DecodePolicy::none()`](crate::DecodePolicy::none),
+    /// since the published `with_policy` default ignores all fields. Override
+    /// only after the codec has implemented and tested the fields it accepts.
+    fn accepts_policy(&self, policy: crate::DecodePolicy) -> bool {
+        policy == crate::DecodePolicy::none()
+    }
+
+    /// Apply a required policy or reject it before decoding or probing.
+    ///
+    /// A rejection consumes this builder; create a fresh job to try another
+    /// policy. This confirms job-level admission, not content-dependent parsing.
+    fn try_with_policy(
+        self,
+        policy: crate::DecodePolicy,
+    ) -> Result<Self, crate::UnsupportedOperation> {
+        if !self.accepts_policy(policy) {
+            return Err(crate::UnsupportedOperation::DecodePolicy);
+        }
+        Ok(self.with_policy(policy))
+    }
+
     // --- Probing (needs limits + stop context) ---
 
     /// Probe image metadata cheaply (header parse only).

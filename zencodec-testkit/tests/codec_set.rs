@@ -9,11 +9,13 @@
 
 use std::sync::LazyLock;
 
+use zencodec::decode::DecodePolicy;
+use zencodec::encode::EncodePolicy;
 use zencodec::estimate::{ComputeEnvironment, ImageCharacteristics};
 use zencodec::prelude::*;
 use zencodec::{
     CodecSet, CodecSetError, ColorEmitPolicy, ImageFormat, Metadata, MetadataPolicy,
-    ResourceLimits, TranscodeBarrier,
+    ResourceLimits, TranscodeBarrier, UnsupportedOperation,
 };
 use zencodec_testkit::reference::RefEncodeJob;
 use zencodec_testkit::{
@@ -308,6 +310,66 @@ fn transcode_refuses_implicit_precision_loss() {
 }
 
 #[test]
+fn checked_policy_admission_matches_generic_and_erased_jobs() {
+    let metadata = Metadata::none().with_xmp(b"private note".as_slice());
+    let strip_xmp = EncodePolicy::none().with_embed_xmp(false);
+
+    let typed = ReferenceEncoderConfig::new()
+        .job()
+        .with_metadata_policy(metadata.clone(), MetadataPolicy::PreserveExact)
+        .try_with_policy(strip_xmp)
+        .expect("reference admits XMP gate")
+        .encode(rgb_pixels(&PIXELS, W, H))
+        .expect("typed encode");
+
+    let set = CodecSet::new()
+        .with_decoder(ReferenceZcrDecoderConfig)
+        .with_encoder(ReferenceEncoderConfig::new());
+    let mut erased = set.encode_job(ImageFormat::Pnm).expect("erased job");
+    erased.set_metadata_policy(metadata, MetadataPolicy::PreserveExact);
+    erased.try_set_policy(strip_xmp).expect("erased XMP gate");
+    let erased = erased
+        .encode(rgb_pixels(&PIXELS, W, H))
+        .expect("erased encode");
+    assert_eq!(typed.data(), erased.data());
+    assert!(
+        set.decode(typed.data())
+            .expect("decode")
+            .info()
+            .embedded_metadata
+            .xmp
+            .is_none()
+    );
+
+    let color = EncodePolicy::none().with_color(ColorEmitPolicy::Compact);
+    assert_eq!(
+        ReferenceEncoderConfig::new()
+            .job()
+            .try_with_policy(color)
+            .err(),
+        Some(UnsupportedOperation::EncodePolicy)
+    );
+    let mut erased = set.encode_job(ImageFormat::Pnm).expect("erased job");
+    assert!(erased.try_set_policy(color).is_err());
+    erased.try_set_policy(strip_xmp).expect("recovered job");
+
+    assert_eq!(
+        ReferenceZcrDecoderConfig
+            .job()
+            .try_with_policy(DecodePolicy::strict())
+            .err(),
+        Some(UnsupportedOperation::DecodePolicy)
+    );
+    let mut decode = set
+        .decode_job(ImageFormat::Custom(&ZCR_FORMAT))
+        .expect("decode job");
+    assert!(decode.try_set_policy(DecodePolicy::strict()).is_err());
+    decode
+        .try_set_policy(DecodePolicy::none())
+        .expect("empty policy");
+}
+
+#[test]
 fn animation_roundtrip_through_set() {
     let set = CodecSet::new()
         .with_decoder(ReferenceZcrDecoderConfig)
@@ -348,12 +410,18 @@ fn animation_roundtrip_through_set() {
         .render_next_frame_owned(None)
         .expect("render")
         .expect("frame 0");
-    assert_eq!(first.duration_ms(), 100);
+    assert_eq!(
+        first.duration(),
+        zencodec::animation::FrameDuration::from_millis(100)
+    );
     let second = dec
         .render_next_frame_owned(None)
         .expect("render")
         .expect("frame 1");
-    assert_eq!(second.duration_ms(), 200);
+    assert_eq!(
+        second.duration(),
+        zencodec::animation::FrameDuration::from_millis(200)
+    );
     assert!(dec.render_next_frame_owned(None).expect("render").is_none());
 }
 

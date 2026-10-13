@@ -111,6 +111,10 @@ removes that whole class).
 
 ### Deprecated
 
+- `AnimationFrame::duration_ms()` and `OwnedAnimationFrame::duration_ms()` now
+  warn because they truncate fractional milliseconds and saturate long values;
+  `duration()` is the exact replacement. Constructors taking whole milliseconds
+  remain available and exact for those inputs.
 - Published `Metadata::filtered`, `Exif::filtered`, `Exif::to_bytes`, and
   `exif::retain` remain compatible, with zenmeta processing entry points as their
   migration targets. The implementation remains single-owned in zencodec until
@@ -140,6 +144,15 @@ removes that whole class).
   cumulative timing quantization and an honest timing capability flag. Existing
   millisecond APIs remain compatible with crates.io 0.1.26; legacy exact callers
   migrate to the explicitly named operation. No video transport is added.
+
+### Added
+
+- Add `accepts_policy` and `try_with_policy` to generic encode/decode jobs, and
+  `try_set_policy` to erased jobs. The default admits only an empty policy;
+  codecs opt into fields they actually honor. Rejection leaves erased jobs
+  usable. The reference encoder implements ICC/EXIF/XMP gates for one-shot and
+  animation jobs; a generic/erased XMP suppression roundtrip is tested.
+  Published best-effort setters remain.
 
 
 ### QUEUED BREAKING CHANGES
