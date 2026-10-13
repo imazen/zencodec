@@ -175,4 +175,64 @@ fn overlapping_exif_values_obey_expanded_metadata_budget() {
     )
     .unwrap();
     assert_eq!(context.exif(&exif), Err(Error::Limit("metadata bytes")));
+
+    // Identical aliases are shared by the serializer, unlike overlapping windows.
+    exif[30..34].copy_from_slice(&38u32.to_le_bytes());
+    assert!(context.exif(&exif).unwrap().len() <= 190);
+}
+
+#[test]
+fn valid_nested_plan_keeps_offsets_and_bytes() {
+    use zenmeta::rewrite::PlanBuilder;
+    let bytes = b"abcdef";
+    let parent = Context::new(&Request::new(bytes)).unwrap();
+    let child = parent.clone().with_input(&bytes[2..]);
+    let mut nested = PlanBuilder::new();
+    nested.keep(&child, 0..2, "one").unwrap();
+    nested.keep(&child, 2..4, "two").unwrap();
+    let mut builder = PlanBuilder::new();
+    builder.keep(&parent, 0..2, "prefix").unwrap();
+    builder.append(&parent, nested, 2).unwrap();
+    let plan = builder.finish().unwrap();
+    assert_eq!(plan.to_vec().unwrap(), bytes);
+    assert_eq!(plan.report()[1].source_range(), 2..4);
+    assert_eq!(plan.report()[2].source_range(), 4..6);
+}
+
+#[test]
+fn cancellation_prevents_calling_a_packet_service() {
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    struct Stop(AtomicBool);
+    impl zencodec::enough::Stop for Stop {
+        fn check(&self) -> Result<(), zencodec::enough::StopReason> {
+            if self.0.load(Ordering::Relaxed) {
+                Err(zencodec::enough::StopReason::Cancelled)
+            } else {
+                Ok(())
+            }
+        }
+    }
+    struct Service(AtomicUsize);
+    impl zencodec::metadata_rewrite::Services for Service {
+        fn decompress(
+            &self,
+            _: zencodec::metadata_rewrite::Compression,
+            _: &[u8],
+            _: usize,
+            _: &dyn zencodec::enough::Stop,
+        ) -> Result<Vec<u8>, Error> {
+            self.0.fetch_add(1, Ordering::Relaxed);
+            Ok(vec![])
+        }
+    }
+    let stop = Stop(AtomicBool::new(false));
+    let service = Service(AtomicUsize::new(0));
+    let context =
+        Context::new(&Request::new(b"").with_stop(&stop).with_services(&service)).unwrap();
+    stop.0.store(true, Ordering::Relaxed);
+    assert_eq!(
+        context.decompress(zencodec::metadata_rewrite::Compression::Zlib, b"packet"),
+        Err(Error::Cancelled)
+    );
+    assert_eq!(service.0.load(Ordering::Relaxed), 0);
 }
