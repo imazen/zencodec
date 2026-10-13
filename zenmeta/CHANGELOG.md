@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- Require appended child rewrite plans to borrow the exact parent subrange their
+  reports describe. Equal lengths or equal bytes from another allocation are not
+  sufficient provenance; rejection leaves the parent builder unchanged.
+
 - Reject mixed rewrite inputs by borrowed input identity, validate an entire child
   plan before appending it, and preserve builder state when an append fails
   (`eddbdd51`).

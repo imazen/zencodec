@@ -289,3 +289,24 @@ fn typed_plan_limits_distinguish_carriers_output_and_regenerated_metadata() {
         Err(Error::Limit(LimitKind::MetadataCarriers))
     );
 }
+
+#[test]
+fn nested_plan_rejects_unrelated_equal_bytes_without_mutating_parent() {
+    use zenmeta::rewrite::PlanBuilder;
+    let bytes = b"abcdef";
+    let copied_child = bytes[2..].to_vec();
+    let parent = Context::new(&Request::new(bytes)).unwrap();
+    let child = parent.clone().with_input(&copied_child);
+    let mut nested = PlanBuilder::new();
+    nested.keep(&child, 0..4, "child").unwrap();
+    let mut builder = PlanBuilder::new();
+    builder.keep(&parent, 0..2, "prefix").unwrap();
+    assert_eq!(
+        builder.append(&parent, nested, 2),
+        Err(Error::Malformed("contained input identity"))
+    );
+    builder.keep(&parent, 2..6, "recovery").unwrap();
+    let plan = builder.finish().unwrap();
+    assert_eq!(plan.to_vec().unwrap(), bytes);
+    assert_eq!(plan.report().len(), 2);
+}

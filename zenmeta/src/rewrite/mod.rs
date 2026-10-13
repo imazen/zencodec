@@ -300,6 +300,14 @@ impl<'a> PlanBuilder<'a> {
         {
             return Err(Error::Malformed("contained input range"));
         }
+        if let Some(child_input) = other.input {
+            // Range arithmetic was checked above. A matching length alone
+            // cannot prove that translated report offsets describe this input.
+            let expected = &input[offset..offset + child_input.len()];
+            if !core::ptr::eq(child_input, expected) {
+                return Err(Error::Malformed("contained input identity"));
+            }
+        }
         let size = self
             .size
             .checked_add(other.size)
