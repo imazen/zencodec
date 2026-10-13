@@ -190,6 +190,14 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- PR138 audit update (2026-10-13): the historical contract gaps below are fixed
+  on the PR for timing capability, editor-free XMP preservation and report bounds.
+  Adversarial review also fixed partial child-plan mutation, mixed-input plans,
+  replaced-input admission, expanded EXIF budgets and false timing overflow
+  (`eddbdd51`, `4ec35983`). The color realizability gap remains. Legacy EXIF
+  allocation is still not fully fallible. See the PR138 section of
+  `docs/zencodec-contract-audit-2026-10-13.md` for scope and remaining gates.
+
 - Open contract gaps verified by `just contract-probes` (2026-10-13):
   `EncodeCapabilities::supports(AnimationTiming)` cannot report true;
   rewrite `PreserveExact` rejects a request with no XMP editor before inspecting

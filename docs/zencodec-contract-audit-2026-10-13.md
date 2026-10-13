@@ -8,7 +8,7 @@ Resolve the new dispatch/rewrite ambiguities before publishing them.
 
 This records the source/API audit at the baseline below. Later implementation
 separates ordinary and exact timing and moves rewrite execution to zenmeta.
-The user has approved completing the boundary in the next coordinated breaking
+The proposed boundary is under review for the next coordinated breaking
 release; the current target and acceptance gates are in
 [zenmeta design](zenmeta-design.md#next-breaking-release-target) and the
 [changelog queue](../CHANGELOG.md). Historical findings below describe the audited
@@ -389,3 +389,85 @@ cargo-semver-checks. `just contract-audit-check` passed scoped formatting, clipp
 with warnings denied, and the four executable observations above. These probes
 print observations; they deliberately do not pin design gaps as desired test
 expectations. No existing tests or public library signatures were changed.
+
+
+## PR 138 adversarial review (2026-10-13)
+
+[PR 138](https://github.com/imazen/zencodec/pull/138) is a compatibility step,
+not approval or implementation of every queued breaking change. The initial
+review head was `bebdaf05153a`; fixes below are in `eddbdd51` and `4ec35983`.
+The original baseline observations above remain a historical record.
+
+**Verdict:** the ownership boundary and ordinary-versus-exact timing split are
+suitable for API review after these fixes. Do not merge on the assumption that
+the proposed breaking-release design has been approved. Do not describe this as
+complete physical extraction of EXIF processing or completion of all adapters.
+
+### Reproduced defects and resolutions
+
+| Finding | Reproduction / consequence | Resolution |
+|---|---|---|
+| Child append partially mutated a rejected plan | A later out-of-bounds child report left earlier reports in the parent without their output bytes | Validate the whole child extent and translated ranges, reserve storage, then mutate (`eddbdd51`) |
+| Same-length inputs were interchangeable | One builder accepted ranges from distinct six-byte inputs | Retain and compare borrowed input identity; lifetime keeps that source alive (`eddbdd51`) |
+| Replacing context input bypassed admission | A context admitted at one byte accepted a three-byte replacement under the same one-byte cap | Check the current input and cancellation before each packet operation (`eddbdd51`) |
+| EXIF expansion escaped the metadata cap | Two overlapping 130-byte values in a 169-byte packet serialize beyond a 190-byte cap | Preflight expanded storage, including tables, alignment and thumbnails, then check final output; exact aliases retain serializer deduplication (`eddbdd51`) |
+| Integral timing could report false overflow | Four distinct large source clocks followed by an integral ten destination ticks unnecessarily expanded the phase denominator | Reduce the incoming destination-clock fraction first; carry large fractional sums without a 129-bit intermediate (`4ec35983`) |
+
+The rewrite reproductions failed before their fixes. The integral-tick
+reproduction failed before its timing fix. Additional tests cover successful
+nested plans, cancellation before invoking a service, exact EXIF aliases,
+generic/erased timing results and errors, and an independent integer endpoint
+oracle across mixed clocks. Existing test expectations were not relaxed.
+
+### API and maintenance judgment
+
+- Published 0.1.26 APIs remain available. The deprecated EXIF/metadata helpers
+  retain their implementations. New ordinary timing reports its actual encoded
+  duration; exactness is explicit and rejection is a returned error.
+- `Request` is a zencodec data contract; execution checks belong to zenmeta's
+  `Context`. `Plan::from_parts` checks source bounds and output arithmetic,
+  while codec planners remain responsible for container validity, report/output
+  correspondence and carrier selection. No generic plan proves whole-file privacy.
+- Core color, orientation, ISO gain-map and opaque-packet contracts do not depend
+  on zenmeta. Rich parsing and editing can use zenmeta without leaking its
+  specialist types into codec signatures. Keep this dependency direction.
+- The public API snapshots now include the actual timing and rewrite signatures.
+  Changed unpublished methods are source changes for git-pinned consumers even
+  though they are not breaking changes against crates.io 0.1.26.
+
+### Limits and release gates still open
+
+The owned EXIF parser/writer remains in zencodec as the one compatibility
+implementation. Its allocations are not all fallible. The new expansion check
+bounds admitted serialized storage; it is **not** a measured peak-memory bound
+or a general allocator-failure guarantee. Relocation must preserve its existing
+fixtures and add fallible allocation before claiming that guarantee.
+
+Timing phase arithmetic is bounded by u128. An unrepresentable phase still
+returns an explicit error without advancing state. A timing capability bit is
+coarse discovery, not a promise that every rational duration is encodable.
+
+Rewrite limit errors still use static strings. Align them with typed limit
+classification before publishing the new rewrite surface; review that signature
+change with codec consumers instead of adding another competing error taxonomy.
+Effective capabilities, independent decode controls and current-pixel metadata
+authority remain proposals requiring their own implementation and review.
+
+[JXL integration](https://github.com/imazen/zenjxl/pull/27) and
+[WebP integration](https://github.com/imazen/zenwebp/pull/113) validate the timing
+split against native encoders and independent decoders. They pin the earlier
+PR implementation, not the final audit fixes. AVIF, APNG and GIF migration is
+not complete. All affected consumers need final-revision validation before a
+coordinated release; neither these two integrations nor semver checks prove the
+entire codec set agrees. The wider zenpixels dependency range also needs the
+supported-version matrix described above.
+
+### Validation after fixes
+
+`just metadata-check metadata-semver contract-semver-minimal` passed workspace
+all-feature tests and doctests, the zenmeta feature matrix, warnings-denied
+clippy, and both registry comparisons. Each semver profile against the actual
+0.1.26 archive reported 196 passed and 58 skipped. `just review-contract-check`
+exercises the focused adversarial cases. Regenerated API snapshots are checked
+with `just api-doc-check`. CI and review status remain live on the PR; no crate
+has been published or merge authorized by this audit.

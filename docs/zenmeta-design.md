@@ -303,8 +303,8 @@ gain-map reading remain usable without zenmeta or any pipeline/codec registry.
 
 The next coordinated breaking release is intended to complete the boundary, not
 merely rename the deprecated wrappers. Until then the compatibility implementation
-remains in zencodec. This section is the target design; it does not claim the
-migration has shipped. The changelog's single queued-breaking list is authoritative.
+remains in zencodec. This section is a proposed target under API review; it does not claim user
+approval or that the migration has shipped. The changelog's single queued-breaking list is authoritative.
 
 ### Useful without zenmeta
 
@@ -364,6 +364,9 @@ is impossible, return an explicit error rather than label pixels incorrectly.
 - Move existing EXIF/XMP/MakerNote tests with implementation. Run retained
   real-world compatibility cases in ordinary and strict modes; a strict rewrite
   rejection must not redefine the ordinary decoder's acceptance policy.
+- Replace infallible owned EXIF allocations when moving the implementation.
+  Test expansion, aliasing, allocation failure and cancellation; a serialized
+  packet cap alone does not establish a peak-memory bound.
 - Exercise source metadata after orientation correction, color conversion and
   HDR reconstruction. Encode admission must use current pixels, retain source
   provenance separately and reject unrealizable signaling.

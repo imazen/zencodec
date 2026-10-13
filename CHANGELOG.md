@@ -121,7 +121,8 @@ removes that whole class).
 - PR138 audit: reduce incoming destination-tick fractions before combining
   timing phases; avoid intermediate numerator overflow when carrying a tick.
   Integral ticks no longer fail solely because earlier source clocks produced
-  a large phase denominator. Generic/dynamic timing forwarding is checked.
+  a large phase denominator. Generic/dynamic timing forwarding is checked
+  (`4ec35983`).
 
 ### Changed
 

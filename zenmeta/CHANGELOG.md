@@ -5,11 +5,12 @@
 ### Fixed
 
 - Reject mixed rewrite inputs by borrowed input identity, validate an entire child
-  plan before appending it, and preserve builder state when an append fails.
+  plan before appending it, and preserve builder state when an append fails
+  (`eddbdd51`).
 - Recheck input limits after replacing a context's input and poll cancellation
   before packet services. Preflight expanded EXIF storage, including overlapping
   values and thumbnails, before invoking the compatibility serializer; recheck
-  its final output against the metadata budget.
+  its final output against the metadata budget (`eddbdd51`).
 
 ### Added
 
