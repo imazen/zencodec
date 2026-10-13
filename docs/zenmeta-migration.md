@@ -26,8 +26,8 @@ that every new main run has finished.
 | PNG | [41](https://github.com/imazen/zenpng/pull/41), `e04f734a`: optional inventory and standalone rewrite; current-main threading/APNG behavior retained and tested | Monitor main CI |
 | GIF | [27](https://github.com/imazen/zengif/pull/27), `10f96266`: optional inventory and typed limits; review CI passed | Monitor main CI |
 | Bitmaps | [29](https://github.com/imazen/zenbitmaps/pull/29), `ed0f474a`: six format inventories, typed limits, traversal cancellation; corpus mount verified locally | Monitor main CI |
-| JPEG | [226](https://github.com/imazen/zenjpeg/pull/226), review `442748fe`: recovered lossless edits, default embedded-MPF compatibility, TEM, EXIF selection, extraction policy, depth padding, checked native offsets, and ISO/aliased-XMP HDR rendering | Complete combined CI and the real-file ICC sequence-zero compatibility decision; PRs210/213/221/225 remain open until replacement lands |
-| zenpipe / zencodecs | [90](https://github.com/imazen/zenpipe/pull/90), review `78750a6c`: codec-owned rewriting dispatch, independent services, original inventory dispatch/CLI; full SVT/AOM codec graph, PDF inventory, API snapshots, current-main filters, standalone demo/fuzz and pin guards pass | Remote CI and landing; JPEG dependency remains the review revision |
+| JPEG | [226](https://github.com/imazen/zenjpeg/pull/226), review `56da4bb7`: recovered lossless edits, default embedded-MPF compatibility, TEM, EXIF selection, extraction policy, depth padding, checked native offsets, and ISO/aliased-XMP HDR rendering | Complete combined CI; approved real-file sequence-zero ICC compatibility is implemented; PRs210/213/221/225 remain open until replacement lands |
+| zenpipe / zencodecs | [90](https://github.com/imazen/zenpipe/pull/90), review `0592aa9c`: codec-owned rewriting dispatch, independent services, original inventory dispatch/CLI; full SVT/AOM codec graph, PDF inventory, API snapshots, current-main filters, standalone demo/fuzz and pin guards pass | Remote CI and landing; JPEG dependency remains the review revision |
 
 Superseded metadata PRs were closed only after their replacement landed. The
 metadata portion of zencodec PR130 is incorporated; its experimental media/video
@@ -220,9 +220,9 @@ Implementation order is now JXL, WebP, then AVIF backends. The imported GIF
 work is preserved as a WIP change while these take priority.
 
 A separate JPEG metadata review reports an unpushed stack based on `007920fb`,
-ending at `3c8f4057`. This stack is independent of PR225 and has **not** been
-incorporated into the integration branch. Its reported changes need source
-review and combined testing before the JPEG migration is complete:
+ending at `3c8f4057`. This stack is independent of PR225. Its source was
+reconciled into PR226, including the following changes; the JPEG integration
+report records the resulting tests and compatibility decisions:
 
 | Commit | Reported change |
 |---|---|
@@ -256,12 +256,13 @@ inventory feature: [JXL](https://github.com/imazen/zenjxl/blob/review/zenmeta-in
 PNG `e9bbecbc`, HEIC `eab27643`, ultrahdr `4db930c8` and zenflate `43c10e3d`
 now have successful remote CI runs. JPEG's Windows ARM/i686 corpus failures
 are addressed by serial prefetch and a cross cache mount (`709f78ff`), pending
-remote verification. The remote JPEG colorspace session also has interrupted
-lossless/metadata work outside the M3 stack; it has not been reconciled yet.
+remote verification. The interrupted lossless/metadata work outside the M3 stack is now reconciled
+in PR226. The table at the top tracks landing; this paragraph records the earlier
+validation sequence.
 
 ## Findings from the completed JPEG adapter checks (2026-10-13)
 
-The [JPEG integration report](https://github.com/imazen/zenjpeg/blob/442748fe/zenjpeg/docs/METADATA_INTEGRATION.md)
+The [JPEG integration report](https://github.com/imazen/zenjpeg/blob/56da4bb7/zenjpeg/docs/METADATA_INTEGRATION.md)
 records the fixes and residual implementation boundaries. These checks support
 the dependency split, but expose policy/API weaknesses worth addressing before
 adding more metadata services:
@@ -289,3 +290,18 @@ The real corpus Display P3 ICC exposed a missing shared profile-table entry.
 That fix is on [zenpixels main](https://github.com/imazen/zenpixels/commit/8f7ee871900b54a8c9c53feafeb7664a92b116f5);
 JPEG's regression retains the original corpus and assertions. It does not add
 ICC interpretation to zenmeta or copy the profile parser into the codec.
+
+### Consumer color-admission finding (2026-10-13)
+
+Zenpipe CI's existing GIF ICC-rejection test failed because zengif computed a
+color-emission plan and discarded it. A successful plan did not mean the
+encoder could preserve the profile or convert the pixels. zengif `38984a62`
+now rejects retained ICC/CICP for both still and animation jobs; its native
+regression passes and no existing consumer assertion is relaxed. The shared
+contract should make required conversion or unsupported emission actionable,
+so an adapter cannot mistake a metadata plan for completed color conversion.
+
+The real JPEG file with one ICC chunk numbered zero of one retains its complete
+profile by default, while strict decode/inspection/rewrite reject its numbering.
+The original malformed-payload and inspector corpus assertions remain unchanged.
+This is another tested distinction between readable metadata and rewrite support.
