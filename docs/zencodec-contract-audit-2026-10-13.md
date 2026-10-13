@@ -205,7 +205,7 @@ or changed guarantees of the old static methods need a breaking release.
 library, or global registry of all codec options. A query tied to an actual
 request is smaller and more truthful. Specialized settings stay on native APIs.
 
-### 5. CodecSet adds orchestration decisions to the contract crate
+### 5. CodecSet is the ergonomic codec entry point
 
 [Registration](../src/set.rs) is first-wins for duplicate formats. Two AVIF
 encoders with different capabilities cannot be selected independently through a
@@ -226,11 +226,14 @@ consumer needs it; a small caller-selected key or separate configured sets may
 suffice. Do not implement automatic retry across encoders without specified
 failure, cost and output semantics.
 
-**YAGNI verdict:** the registry is useful optional convenience, not part of the
-metadata foundation. Keep it free of pipeline processing, CMS, plugin discovery
-and a second format registry. Moving it to another crate is not justified by a
-measured cost here. Its estimate forwarding and one-shot wrappers are lower
-priority than getting these semantics right.
+**YAGNI verdict:** keep `CodecSet` available by default. Registering concrete
+codecs once and calling `decode(bytes)` is an essential ergonomic path for an
+application that handles several formats. It also permits that path without a
+zenpipe or zencodecs dependency. Its source line count and a search of indexed
+callers do not establish that this API is unnecessary or expensive to compile.
+Keep it free of pixel processing, CMS, plugin discovery and another format
+registry. Review the semantics of individual higher-level methods, especially
+`transcode`, without making basic decode harder to reach.
 
 ### 6. Rewrite policy and its reports need a clearer trust boundary
 
@@ -500,19 +503,42 @@ zenmeta, zencodecs or zenpipe. Zenmeta is a separate workspace package;
 |---|---|
 | Rational frame duration, cumulative quantizer and explicit exact encoding (`animation.rs`, 185 lines) | **Keep.** JXL and WebP adapters exercise the same contract and independent native readers checked encoded timing. The shared integer rounding rule prevents each codec inventing its own. The old millisecond methods are published and remain compatible. Finish the remaining adapter matrix before release. |
 | Shared structural inventory (`inventory.rs`, 1,278 lines) | **Keep the interchange type and the job method.** Public code search finds inventory implementations in JPEG XL, AVIF, HEIC, TIFF, RAW, PNG, WebP, GIF and bitmap codecs. The large per-codec walkers belong behind each codec's default-off inventory feature; making the shared types themselves conditional would spread feature coordination through every consumer. This review did not measure the core type's compile cost. |
-| Rewrite requests, results and services (`metadata_rewrite.rs`, 353 lines) | **Keep the minimum codec interchange.** Indexed JXL and PNG source files use this surface; zenmeta executes the common packet operations. Before its first release, require a concrete codec caller for each option and callback. `Services::merge_xmp`, `Services::compress` and `Request::with_jpeg_reconstruction_removal` have no caller in this workspace; the last is a JPEG XL policy embedded in a generic request. Move unsupported format choices to codec extensions or remove them if consumer review finds no use. Do not claim that workspace absence proves no external caller. |
-| `CodecSet` (`set.rs`, 829 lines) | **Strongest trim candidate before first publication.** It bundles registration, format detection, policy defaults, decode, encode, transcode and cost estimates into the contracts crate. Indexed public code search found examples/tests here and no production use of the name in the imazen org; private or unindexed consumers remain unknown. Keep the dynamic codec traits, which adapters use independently. Review whether `CodecSet` should be behind a default-off `registry` feature and whether the convenience transcode/estimate methods have a real caller. `zencodecs` already offers format dispatch, but its current license differs, so moving this API there would change who can use it. A feature within zencodec preserves permissive access without requiring a pipeline. |
+| Rewrite requests, results and services (`metadata_rewrite.rs`, 353 lines) | **Keep the codec interchange and the proven hooks.** [PNG rewrite](https://github.com/imazen/zenpng/blob/main/src/metadata.rs) calls `Services::compress` for a rewritten iCCP profile. [JXL rewrite](https://github.com/imazen/zenjxl/blob/main/src/metadata.rs) checks `Request::remove_reconstruction` before removing JPEG reconstruction data. Both are concrete uses outside this workspace. `Services::merge_xmp` has no caller in the workspace or the indexed imazen search examined here, so require a real merge operation before depending on that callback. One unused default method is a narrow API review item, not a reason to discard the service boundary. |
+| `CodecSet` (`set.rs`, 829 lines) | **Keep available by default.** It gives multi-format applications one registration point and a direct `decode(bytes)` path without requiring zencodecs or zenpipe. Source line count is not measured compile cost. The earlier suggestion to hide or move it was a mistaken YAGNI judgment. Review `transcode` as a separate, higher-level operation; retain the straightforward decode and probe methods. |
 | Additional EXIF filtering and `EntryRef`/`Ifd` (`exif.rs`, +738/-83 lines) | **Keep current compatibility, finish the planned move.** The added categories support retention tests, but the owned editing tree still sits in zencodec. Moving its implementation into zenmeta is the substantive next-break reduction; deleting basic EXIF orientation reading would defeat the standalone core. |
 | One-shot trait defaults and estimate constructors | **Keep.** These are short forwards, reuse existing traits, and add no dependency. Remove only after a demonstrated ambiguity or consumer migration, not to optimize line count. |
 
-Two immediate contract risks matter more than deleting helpers. `CodecSet::transcode`
-forwards a `Fidelity` request through setters that can ignore it, and it builds
-metadata from source info even if a second decode changes the selected pixel
-descriptor. Require checked admission and current-pixel color/orientation
-authority before presenting that method as a safe generic transcode. These are
-correctness gates on a convenience method, not reasons to add a new universal
-pipeline. The rewrite `Error::Limit(&'static str)` likewise needs typed limit
-classification before the new API is published.
+Two contract risks matter more than deleting helpers. `CodecSet::transcode`
+forwards a `Fidelity` request through setters that may ignore it. If the target
+cannot accept the first decoded pixel descriptor, it decodes a second time with
+preferred descriptors; a target encoder's lossless mode cannot undo a precision
+or color change made during that step. It correctly reads metadata from the
+**final** decoded result, so the earlier claim that it reuses the first result's
+metadata was wrong. The remaining question is whether that final info describes
+the transformed pixels and whether any requested rendering properties were
+lost. The provided `with_metadata_policy` filters metadata, then calls
+`with_metadata`, whose published contract permits a codec to skip unsupported
+fields. Thus `PreserveExact` is a retention request, not proof that every source
+carrier was re-emitted. Test concrete HDR/depth/alpha and metadata cases and
+require checked admission for stronger guarantees; keep ordinary decoding
+ergonomic. The rewrite
+`Error::Limit(&'static str)` also needs typed limit classification before the
+new API is published. Its strings currently distinguish input, output, packet
+and carrier caps, but callers cannot classify them without comparing text.
+
+The stronger policy concern is separate from format dispatch: `CodecSet` stamps
+a requested decode policy onto the chosen job, but the released
+`DecodeJob::with_policy` has a no-op default. A codec that does not override it
+can ignore `strict()` with no error. Keep the ergonomic `CodecSet::decode` path;
+introduce checked admission for *required* policy fields in the coordinated
+breaking release. Optional decode hints can remain best-effort.
+
+The EXIF ownership issue is maintenance and allocation semantics, not an
+argument against `CodecSet`. Zenmeta's EXIF entry points still call zencodec's
+published writer. That writer uses `Vec::with_capacity` and other infallible
+growth, while zenmeta's preflight only bounds the serialized packet. Moving the
+owned writer to zenmeta and making its untrusted-input allocations fallible is
+a separate breaking-release gate; the current preflight is not a heap cap.
 
 The published-to-main comparison is source-compatible in both checked feature
 profiles; behavior still changed in EXIF filtering and metadata retention as
