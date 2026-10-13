@@ -6,15 +6,14 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### [Unreleased]
 
-### Added
-
-- Testkit policy checks compare builder, mutable and erased admission, metadata, and decoded pixels; rejected requests must preserve the initial output.
-
 #### QUEUED BREAKING CHANGES
 
 - None against crates.io zencodec-testkit 0.1.0.
 
 #### Added
+
+- Checked policy tests compare builder, mutable and erased results, including pixels after rejection (`43061fcd`).
+- Native pixel fixtures preserve stride and color context with zenpixels 0.2.14 as well as newer versions. All tri-state metadata embed-gate combinations and each decode-policy field are exercised.
 
 - New fixture-driven encode checks accept native `PixelSlice` views, including
   strided, 16-bit and floating-point inputs, without an RGB8-only fixture type.

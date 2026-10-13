@@ -127,17 +127,17 @@ where
         }
         let a = if exact {
             generic
-                .push_frame_exact(pixels.clone(), *requested, None)
+                .push_frame_exact(pixels.sub_rows(0, pixels.rows()), *requested, None)
                 .map(|()| *requested)
         } else {
-            generic.push_frame_timed(pixels.clone(), *requested, None)
+            generic.push_frame_timed(pixels.sub_rows(0, pixels.rows()), *requested, None)
         };
         let b = if exact {
             erased
-                .push_frame_exact(pixels.clone(), *requested, None)
+                .push_frame_exact(pixels.sub_rows(0, pixels.rows()), *requested, None)
                 .map(|()| *requested)
         } else {
-            erased.push_frame_timed(pixels.clone(), *requested, None)
+            erased.push_frame_timed(pixels.sub_rows(0, pixels.rows()), *requested, None)
         };
         for (path, result) in [
             ("generic", a.map_err(|e| e.to_string())),
@@ -278,15 +278,15 @@ where
             .map_err(|e| fail(CHECK, e.to_string()))?,
         Err(e) => return Err(fail(CHECK, format!("wrong builder rejection: {e}"))),
     }
-    .encode(pixels.clone())
+    .encode(pixels.sub_rows(0, pixels.rows()))
     .map_err(|e| fail(CHECK, e.to_string()))?;
     let (baseline_pixels, baseline_metadata) =
         dec_oneshot(&dec, baseline.data()).map_err(|e| fail(CHECK, e))?;
     let a = job
-        .encode(pixels.clone())
+        .encode(pixels.sub_rows(0, pixels.rows()))
         .map_err(|e| fail(CHECK, e.to_string()))?;
     let b = dynamic
-        .encode(pixels.clone())
+        .encode(pixels.sub_rows(0, pixels.rows()))
         .map_err(|e| fail(CHECK, e.to_string()))?;
     let (pa, ma) = dec_oneshot(&dec, a.data()).map_err(|e| fail(CHECK, e))?;
     let (pb, mb) = dec_oneshot(&dec, b.data()).map_err(|e| fail(CHECK, e))?;
@@ -512,17 +512,17 @@ where
         ] {
             for exact in [true, false] {
                 let a = if exact {
-                    generic.push_frame_exact(pixels.clone(), duration, None)
+                    generic.push_frame_exact(pixels.sub_rows(0, pixels.rows()), duration, None)
                 } else {
                     generic
-                        .push_frame_timed(pixels.clone(), duration, None)
+                        .push_frame_timed(pixels.sub_rows(0, pixels.rows()), duration, None)
                         .map(|_| ())
                 };
                 let b = if exact {
-                    dynamic.push_frame_exact(pixels.clone(), duration, None)
+                    dynamic.push_frame_exact(pixels.sub_rows(0, pixels.rows()), duration, None)
                 } else {
                     dynamic
-                        .push_frame_timed(pixels.clone(), duration, None)
+                        .push_frame_timed(pixels.sub_rows(0, pixels.rows()), duration, None)
                         .map(|_| ())
                 };
                 let a = a
@@ -539,10 +539,10 @@ where
             }
         }
         generic
-            .push_frame(pixels.clone(), delay, None)
+            .push_frame(pixels.sub_rows(0, pixels.rows()), delay, None)
             .map_err(|e| fail(CHECK, e.to_string()))?;
         dynamic
-            .push_frame(pixels.clone(), delay, None)
+            .push_frame(pixels.sub_rows(0, pixels.rows()), delay, None)
             .map_err(|e| fail(CHECK, e.to_string()))?;
     }
     let a = generic

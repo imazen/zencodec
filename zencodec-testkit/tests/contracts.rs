@@ -268,3 +268,70 @@ fn undeclared_timing_check_rejects_a_timing_enabled_adapter() {
         .is_err()
     );
 }
+
+#[test]
+fn every_metadata_embed_gate_preserves_or_denies_its_own_field() {
+    let image = TestImage::rgb8_gradient(4, 3);
+    let metadata = Metadata::none()
+        .with_icc(b"profile".as_slice())
+        .with_exif([b'I', b'I', 42, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0].to_vec())
+        .with_xmp(b"private".as_slice());
+    for icc in [None, Some(false), Some(true)] {
+        for exif in [None, Some(false), Some(true)] {
+            for xmp in [None, Some(false), Some(true)] {
+                let mut policy = EncodePolicy::none();
+                policy.embed_icc = icc;
+                policy.embed_exif = exif;
+                policy.embed_xmp = xmp;
+                let mut expected = metadata.clone();
+                if icc == Some(false) {
+                    expected.icc_profile = None;
+                }
+                if exif == Some(false) {
+                    expected.exif = None;
+                }
+                if xmp == Some(false) {
+                    expected.xmp = None;
+                }
+                tk::check_encode_policy_admission(
+                    E::new(),
+                    D,
+                    image.as_slice(),
+                    metadata.clone(),
+                    EncodePolicy::none(),
+                    policy,
+                    true,
+                    &expected,
+                )
+                .unwrap();
+            }
+        }
+    }
+}
+
+#[test]
+fn every_decode_policy_field_has_explicit_typed_admission() {
+    let image = TestImage::rgb8_gradient(4, 3);
+    let bytes = E::new().job().encode(image.as_slice()).unwrap();
+    for value in [false, true] {
+        for policy in [
+            DecodePolicy::none().with_allow_icc(value),
+            DecodePolicy::none().with_allow_exif(value),
+            DecodePolicy::none().with_allow_xmp(value),
+            DecodePolicy::none().with_allow_progressive(value),
+            DecodePolicy::none().with_allow_animation(value),
+            DecodePolicy::none().with_allow_truncated(value),
+            DecodePolicy::none().with_strict(value),
+        ] {
+            tk::check_decode_policy_admission(
+                D,
+                bytes.data(),
+                DecodePolicy::none(),
+                policy,
+                false,
+                &Metadata::none(),
+            )
+            .unwrap();
+        }
+    }
+}
