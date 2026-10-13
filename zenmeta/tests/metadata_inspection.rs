@@ -76,9 +76,9 @@ fn rejects_dtd_malformed_and_deep_xml() {
 fn exif_typed_inspection_diff_and_coverage() {
     let mut exif = Exif::new(TextEncoding::Ascii);
     exif.set_artist("Public artist");
-    let before = Report::exif(&exif.to_bytes());
+    let before = Report::exif(&zenmeta::exif::serialize(&exif));
     exif.set_artist("Another artist");
-    let after = Report::exif(&exif.to_bytes());
+    let after = Report::exif(&zenmeta::exif::serialize(&exif));
     assert!(matches!(
         before.diff(&after).as_slice(),
         [Change::Modified { .. }]

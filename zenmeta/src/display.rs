@@ -44,7 +44,7 @@ pub fn filter_for_gain_map(
     policy: &MetadataPolicy,
 ) -> Result<Metadata, Error> {
     params.validate().map_err(Error::GainMap)?;
-    let out = meta.filtered(policy);
+    let out = crate::metadata::filter(meta, policy);
     if out.orientation != meta.orientation {
         return Err(Error::Removed("orientation"));
     }
