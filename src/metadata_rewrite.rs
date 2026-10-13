@@ -159,7 +159,9 @@ impl Entry {
     }
 }
 
-/// Validated rewrite. Chunks borrow unmodified encoded data from the input.
+/// Codec-produced rewrite result. Chunks borrow unmodified encoded data.
+/// Structural report bounds are checked here; container correctness and policy
+/// enforcement belong to the planner, typically backed by zenmeta.
 #[derive(Debug)]
 pub struct Plan<'a> {
     parts: Vec<Cow<'a, [u8]>>,
@@ -171,12 +173,16 @@ impl<'a> Plan<'a> {
     ///
     /// The codec must validate container framing and enforce its request budgets.
     /// This constructor checks output-length arithmetic and report ranges only.
-    pub fn from_parts(parts: Vec<Cow<'a, [u8]>>, entries: Vec<Entry>) -> Result<Self, Error> {
+    pub fn from_parts(
+        input_len: usize,
+        parts: Vec<Cow<'a, [u8]>>,
+        entries: Vec<Entry>,
+    ) -> Result<Self, Error> {
         if entries
             .iter()
-            .any(|entry| entry.range.start > entry.range.end)
+            .any(|entry| entry.range.start > entry.range.end || entry.range.end > input_len)
         {
-            return Err(Error::Malformed("reversed report range"));
+            return Err(Error::Malformed("invalid report range"));
         }
         let size = parts
             .iter()
@@ -247,7 +253,7 @@ impl<'a> Request<'a> {
             stop: &enough::Unstoppable,
         }
     }
-    /// EXIF retention. Source XMP retention requires explicit `with_xmp_editing`.
+    /// Metadata retention. Retained XMP is copied unless an editor is requested.
     /// Dropping rendering dependencies is refused; it needs a pixel operation.
     pub fn with_policy(mut self, policy: MetadataPolicy) -> Self {
         self.policy = policy;
@@ -294,37 +300,6 @@ impl<'a> Request<'a> {
     pub fn with_stop(mut self, stop: &'a dyn enough::Stop) -> Self {
         self.stop = stop;
         self
-    }
-    /// Validate common limits and service requirements before format parsing.
-    pub fn validate(&self) -> Result<(), Error> {
-        self.check()?;
-        if self.input.len() > self.max_input {
-            return Err(Error::Limit("input bytes"));
-        }
-        if self.policy.fields().xmp.keeps() && !self.edit_xmp {
-            return Err(Error::Unsupported(
-                "source XMP retention requires an explicit editor",
-            ));
-        }
-        if (self.edit_xmp || self.normalize_icc) && self.services.is_none() {
-            return Err(Error::Unsupported("metadata service not supplied"));
-        }
-        Ok(())
-    }
-    /// Poll the caller's stop token, preserving the stop reason.
-    pub fn check(&self) -> Result<(), Error> {
-        self.stop.check().map_err(|reason| match reason {
-            enough::StopReason::Cancelled => Error::Cancelled,
-            other => Error::Stopped(other),
-        })
-    }
-    /// Check a parsed packet or accumulated rewritten-metadata byte count.
-    pub fn packet(&self, size: usize) -> Result<(), Error> {
-        if size > self.max_metadata {
-            Err(Error::Limit("metadata bytes"))
-        } else {
-            Ok(())
-        }
     }
     /// Encoded source bytes.
     pub fn input(&self) -> &'a [u8] {

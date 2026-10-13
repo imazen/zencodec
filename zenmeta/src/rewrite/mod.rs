@@ -4,7 +4,7 @@
 use alloc::{borrow::Cow, vec::Vec};
 use core::ops::Range;
 use zencodec::{
-    Orientation,
+    Orientation, enough,
     metadata_rewrite::{Action, Compression, Entry, Error, Plan, Request, Services},
 };
 mod exif;
@@ -23,10 +23,32 @@ impl<'a> core::ops::Deref for Context<'a> {
 impl<'a> Context<'a> {
     /// Validate a metadata-only request before invoking a container walker.
     pub fn new(request: &Request<'a>) -> Result<Self, Error> {
-        request.validate()?;
-        Ok(Self {
+        let context = Self {
             request: request.clone(),
+        };
+        context.check()?;
+        if request.input().len() > request.max_input() {
+            return Err(Error::Limit("input bytes"));
+        }
+        if (request.edit_xmp() || request.normalize_icc()) && request.services().is_none() {
+            return Err(Error::Unsupported("metadata service not supplied"));
+        }
+        Ok(context)
+    }
+    /// Poll cancellation while preserving the caller's stop reason.
+    pub fn check(&self) -> Result<(), Error> {
+        self.stop().check().map_err(|reason| match reason {
+            enough::StopReason::Cancelled => Error::Cancelled,
+            other => Error::Stopped(other),
         })
+    }
+    /// Enforce the parsed/expanded packet or regenerated metadata budget.
+    pub fn packet(&self, size: usize) -> Result<(), Error> {
+        if size > self.max_metadata() {
+            Err(Error::Limit("metadata bytes"))
+        } else {
+            Ok(())
+        }
     }
     /// Reuse the parent policy and limits for a contained image.
     pub fn with_input(mut self, input: &'a [u8]) -> Self {
@@ -48,7 +70,16 @@ impl<'a> Context<'a> {
     pub fn xmp(&self, xml: &[u8]) -> Result<Option<Vec<u8>>, Error> {
         self.packet(xml.len())?;
         if !self.edit_xmp() {
-            return Ok(None);
+            self.check()?;
+            return if self.policy().fields().xmp.keeps() {
+                let mut kept = Vec::new();
+                kept.try_reserve_exact(xml.len())
+                    .map_err(|_| Error::Allocation)?;
+                kept.extend_from_slice(xml);
+                Ok(Some(kept))
+            } else {
+                Ok(None)
+            };
         }
         let out = self
             .services()?
@@ -98,13 +129,13 @@ impl<'a> Context<'a> {
         exif::validate(self, bytes)?;
         let exif = zencodec::exif::Exif::parse(bytes).ok_or(Error::Malformed("EXIF"))?;
         let orientation = exif.orientation().unwrap_or(Orientation::Identity);
-        let filtered = exif.filtered(&self.policy().fields().exif);
+        let filtered = crate::exif::filter(&exif, &self.policy().fields().exif);
         if filtered.orientation().unwrap_or(Orientation::Identity) != orientation {
             return Err(Error::Unsupported(
                 "removing orientation requires explicit pixel transformation",
             ));
         }
-        Ok(filtered.to_bytes())
+        Ok(crate::exif::serialize(&filtered))
     }
 }
 
@@ -115,6 +146,7 @@ pub struct PlanBuilder<'a> {
     entries: Vec<Entry>,
     size: usize,
     rewritten: usize,
+    input_len: Option<usize>,
 }
 impl<'a> PlanBuilder<'a> {
     /// Start an empty plan; each carrier operation checks its request budget.
@@ -131,31 +163,45 @@ impl<'a> PlanBuilder<'a> {
         bytes: Option<Cow<'a, [u8]>>,
     ) -> Result<(), Error> {
         req.check()?;
+        if range.start > range.end || range.end > req.input().len() {
+            return Err(Error::Malformed("rewrite source range"));
+        }
+        if self.input_len.is_some_and(|n| n != req.input().len()) {
+            return Err(Error::Malformed("mixed rewrite inputs"));
+        }
         if self.entries.len() >= req.max_carriers() {
             return Err(Error::Limit("carrier count"));
         }
+        let added = bytes.as_ref().map_or(0, |b| b.len());
+        let size = self
+            .size
+            .checked_add(added)
+            .filter(|n| *n <= req.max_output())
+            .ok_or(Error::Limit("output bytes"))?;
+        let rewritten = self
+            .rewritten
+            .checked_add(
+                bytes
+                    .as_ref()
+                    .filter(|b| matches!(b, Cow::Owned(_)))
+                    .map_or(0, |b| b.len()),
+            )
+            .ok_or(Error::Limit("rewritten metadata"))?;
+        req.packet(rewritten)?;
         self.entries.try_reserve(1).map_err(|_| Error::Allocation)?;
+        if bytes.is_some() {
+            self.parts.try_reserve(1).map_err(|_| Error::Allocation)?;
+        }
         self.entries.push(Entry::new(range, carrier, action));
         if let Some(bytes) = bytes {
-            self.size = self
-                .size
-                .checked_add(bytes.len())
-                .ok_or(Error::Limit("output bytes"))?;
-            if self.size > req.max_output() {
-                return Err(Error::Limit("output bytes"));
-            }
-            if matches!(bytes, Cow::Owned(_)) {
-                self.rewritten = self
-                    .rewritten
-                    .checked_add(bytes.len())
-                    .ok_or(Error::Limit("rewritten metadata"))?;
-                req.packet(self.rewritten)?;
-            }
-            self.parts.try_reserve(1).map_err(|_| Error::Allocation)?;
             self.parts.push(bytes);
         }
+        self.size = size;
+        self.rewritten = rewritten;
+        self.input_len = Some(req.input().len());
         Ok(())
     }
+
     /// Retain a validated range from the encoded input.
     pub fn keep(
         &mut self,
@@ -223,6 +269,10 @@ impl<'a> PlanBuilder<'a> {
     /// Append a contained-image plan, translating its report to parent offsets.
     pub fn append(&mut self, req: &Context<'_>, other: Self, offset: usize) -> Result<(), Error> {
         req.check()?;
+        if self.input_len.is_some_and(|n| n != req.input().len()) {
+            return Err(Error::Malformed("mixed rewrite inputs"));
+        }
+        self.input_len = Some(req.input().len());
         let size = self
             .size
             .checked_add(other.size)
@@ -268,7 +318,7 @@ impl<'a> PlanBuilder<'a> {
     }
     /// Finish with the stable zencodec-owned plan type.
     pub fn finish(self) -> Result<Plan<'a>, Error> {
-        let plan = Plan::from_parts(self.parts, self.entries)?;
+        let plan = Plan::from_parts(self.input_len.unwrap_or(0), self.parts, self.entries)?;
         if plan.output_len() != self.size {
             return Err(Error::Malformed("rewrite length accounting"));
         }
