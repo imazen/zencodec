@@ -147,10 +147,10 @@ removes that whole class).
 
 ### Added
 
-- Add `accepts_policy` and `try_with_policy` to generic encode/decode jobs, and
+- Add `try_set_policy` and `try_with_policy` to generic encode/decode jobs, and
   `try_set_policy` to erased jobs. The default admits only an empty policy;
-  codecs opt into fields they actually honor. Rejection leaves erased jobs
-  usable. The reference encoder implements ICC/EXIF/XMP gates for one-shot and
+  codecs implement one fallible primitive used by both dispatch paths. Rejection
+  leaves mutable jobs unchanged and usable. The reference encoder implements ICC/EXIF/XMP gates for one-shot and
   animation jobs; a generic/erased XMP suppression roundtrip is tested.
   Published best-effort setters remain.
 

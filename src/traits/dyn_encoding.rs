@@ -271,12 +271,12 @@ pub trait DynEncodeJob {
     /// Apply a required policy or return a recoverable rejection.
     ///
     /// Manual implementations default to accepting only the empty policy;
-    /// generated shims consult the concrete job's `accepts_policy` first.
+    /// generated shims delegate to the concrete job's `try_set_policy`.
+    /// A rejection must leave the job unchanged.
     fn try_set_policy(&mut self, policy: crate::EncodePolicy) -> Result<(), BoxedError> {
         if policy != crate::EncodePolicy::none() {
             return Err(Box::new(crate::UnsupportedOperation::EncodePolicy));
         }
-        self.set_policy(policy);
         Ok(())
     }
 
@@ -387,14 +387,11 @@ where
     }
 
     fn try_set_policy(&mut self, policy: crate::EncodePolicy) -> Result<(), BoxedError> {
-        let Some(job) = self.0.as_ref() else {
+        let Some(job) = self.0.as_mut() else {
             return Err("EncodeJobShim: job already consumed (double take)".into());
         };
-        if !job.accepts_policy(policy) {
-            return Err(Box::new(crate::UnsupportedOperation::EncodePolicy));
-        }
-        self.try_apply(|job| job.with_policy(policy));
-        Ok(())
+        job.try_set_policy(policy)
+            .map_err(|error| Box::new(error) as BoxedError)
     }
 
     fn set_metadata_policy(&mut self, meta: Metadata, policy: crate::MetadataPolicy) {

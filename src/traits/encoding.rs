@@ -273,26 +273,31 @@ pub trait EncodeJob: Sized {
         self
     }
 
-    /// Whether this job can honor every specified field of `policy`.
+    /// Apply every specified policy field, or reject without changing this job.
     ///
-    /// The default admits only [`EncodePolicy::none()`](crate::EncodePolicy::none),
-    /// since the published `with_policy` default ignores all fields.
-    fn accepts_policy(&self, policy: crate::EncodePolicy) -> bool {
-        policy == crate::EncodePolicy::none()
-    }
-
-    /// Apply a required policy or reject it before constructing an encoder.
-    ///
-    /// A rejection consumes this builder; create a fresh job to try another
-    /// policy. This confirms job-level admission, not content-dependent output.
-    fn try_with_policy(
-        self,
+    /// The default accepts only [`EncodePolicy::none()`](crate::EncodePolicy::none)
+    /// as a no-op. Codecs override this single primitive once they can enforce
+    /// the requested fields; type-erased jobs delegate to the same primitive.
+    /// Acceptance does not guarantee that content-dependent processing succeeds.
+    fn try_set_policy(
+        &mut self,
         policy: crate::EncodePolicy,
-    ) -> Result<Self, crate::UnsupportedOperation> {
-        if !self.accepts_policy(policy) {
+    ) -> Result<(), crate::UnsupportedOperation> {
+        if policy != crate::EncodePolicy::none() {
             return Err(crate::UnsupportedOperation::EncodePolicy);
         }
-        Ok(self.with_policy(policy))
+        Ok(())
+    }
+
+    /// Builder form of [`try_set_policy`](Self::try_set_policy).
+    ///
+    /// A rejection consumes this builder. Use the mutable setter to retain it.
+    fn try_with_policy(
+        mut self,
+        policy: crate::EncodePolicy,
+    ) -> Result<Self, crate::UnsupportedOperation> {
+        self.try_set_policy(policy)?;
+        Ok(self)
     }
 
     /// Set metadata to embed, **filtered by an explicit retention policy** — the

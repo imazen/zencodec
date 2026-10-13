@@ -341,6 +341,40 @@ fn checked_policy_admission_matches_generic_and_erased_jobs() {
             .is_none()
     );
 
+    // Reject a mixed supported/unsupported request atomically. The earlier
+    // strip policy must remain effective through both dispatch paths.
+    let mixed = EncodePolicy::none()
+        .with_embed_xmp(true)
+        .with_color(ColorEmitPolicy::Compact);
+    let metadata = Metadata::none().with_xmp(b"private note".as_slice());
+    let mut generic = ReferenceEncoderConfig::new()
+        .job()
+        .with_metadata_policy(metadata.clone(), MetadataPolicy::PreserveExact)
+        .try_with_policy(strip_xmp)
+        .expect("initial policy");
+    assert_eq!(
+        generic.try_set_policy(mixed),
+        Err(UnsupportedOperation::EncodePolicy)
+    );
+    let mut dynamic = set.encode_job(ImageFormat::Pnm).expect("erased job");
+    dynamic.set_metadata_policy(metadata, MetadataPolicy::PreserveExact);
+    dynamic.try_set_policy(strip_xmp).expect("initial policy");
+    let error = dynamic
+        .try_set_policy(mixed)
+        .expect_err("unsupported color");
+    assert_eq!(
+        error.downcast_ref::<UnsupportedOperation>(),
+        Some(&UnsupportedOperation::EncodePolicy)
+    );
+    let generic = generic
+        .encode(rgb_pixels(&PIXELS, W, H))
+        .expect("unchanged generic job");
+    let dynamic = dynamic
+        .encode(rgb_pixels(&PIXELS, W, H))
+        .expect("unchanged erased job");
+    assert_eq!(generic.data(), typed.data());
+    assert_eq!(dynamic.data(), typed.data());
+
     let color = EncodePolicy::none().with_color(ColorEmitPolicy::Compact);
     assert_eq!(
         ReferenceEncoderConfig::new()

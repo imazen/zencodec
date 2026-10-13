@@ -927,12 +927,16 @@ impl EncodeJob for RefEncodeJob {
         self.policy = policy;
         self
     }
-    fn accepts_policy(&self, policy: EncodePolicy) -> bool {
+    fn try_set_policy(&mut self, policy: EncodePolicy) -> Result<(), UnsupportedOperation> {
         let mut unsupported = policy;
         unsupported.embed_icc = None;
         unsupported.embed_exif = None;
         unsupported.embed_xmp = None;
-        unsupported == EncodePolicy::none()
+        if unsupported != EncodePolicy::none() {
+            return Err(UnsupportedOperation::EncodePolicy);
+        }
+        self.policy = policy;
+        Ok(())
     }
     fn with_metadata(mut self, meta: Metadata) -> Self {
         self.metadata = meta;

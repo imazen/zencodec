@@ -209,12 +209,12 @@ pub trait DynDecodeJob<'a> {
     /// Apply a required policy or return a recoverable rejection.
     ///
     /// Manual implementations default to accepting only the empty policy;
-    /// generated shims consult the concrete job's `accepts_policy` first.
+    /// generated shims delegate to the concrete job's `try_set_policy`.
+    /// A rejection must leave the job unchanged.
     fn try_set_policy(&mut self, policy: crate::DecodePolicy) -> Result<(), BoxedError> {
         if policy != crate::DecodePolicy::none() {
             return Err(Box::new(crate::UnsupportedOperation::DecodePolicy));
         }
-        self.set_policy(policy);
         Ok(())
     }
 
@@ -351,12 +351,11 @@ where
     }
 
     fn try_set_policy(&mut self, policy: crate::DecodePolicy) -> Result<(), BoxedError> {
-        let job = self.as_ref()?;
-        if !job.accepts_policy(policy) {
-            return Err(Box::new(crate::UnsupportedOperation::DecodePolicy));
-        }
-        self.try_apply(|job| job.with_policy(policy));
-        Ok(())
+        let Some(job) = self.0.as_mut() else {
+            return Err("DecodeJobShim: job already consumed (double take)".into());
+        };
+        job.try_set_policy(policy)
+            .map_err(|error| Box::new(error) as BoxedError)
     }
 
     fn probe(&self, data: &[u8]) -> Result<ImageInfo, BoxedError> {
