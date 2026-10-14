@@ -692,6 +692,137 @@ impl StreamingDecode for MyStreamDecoder {
 
 Set `with_streaming(true)` on your decode capabilities.
 
+## Incremental Decode (sans-I/O)
+
+A codec whose core can stop and resume between input chunks implements
+`IncrementalDecode` and returns it from `DecodeJob::dyn_incremental_decoder`.
+Drivers in `zencodec-io` then run it over slices, files, streams and async
+sources. The decoder holds no input of its own: each `step` is offered bytes
+the driver owns, and the decoder decodes them in place and reports how many it
+took. Full rules: [range-decoding-contract.md](range-decoding-contract.md).
+
+```rust
+use zencodec::decode::{Event, IncrementalDecode, Input, Progress, Request, StepError};
+
+impl IncrementalDecode for MyIncremental {
+    type Error = MyError;
+
+    fn step(&mut self, input: Input<'_>, sink: &mut dyn DecodeRowSink, stop: &dyn Stop)
+        -> Result<Progress, StepError<MyError>>
+    {
+        stop.check()?;                                   // at least once per step
+        // Only bytes starting where you stand are usable; ignore anything else.
+        let here = if input.offset == self.pos { input.bytes } else { &[] };
+        let at_end = input.offset == self.pos && input.reaches_end();
+
+        if self.info.is_none() {
+            if here.len() < HEADER_LEN {
+                if at_end { return Err(StepError::Codec(MyError::Truncated)); }
+                self.need = [Request::at_least(self.pos, HEADER_LEN)];
+                return Ok(Progress::need(0));            // took nothing, asked for more
+            }
+            self.parse_header(here)?;                    // then sink.begin(w, h, desc)
+            self.pos += HEADER_LEN as u64;
+            return Ok(Progress::new(HEADER_LEN, Event::Metadata(MetadataUpdate::HeaderReady)));
+        }
+        if self.next_row == self.height {
+            sink.finish().map_err(StepError::Sink)?;
+            return Ok(Progress::new(0, Event::Done(self.output_info())));
+        }
+        // Decode as many whole strips as `here` guarantees, straight into the sink.
+        // Otherwise ask for the contiguous span one strip can need at worst.
+        // ...
+    }
+
+    fn requested(&self) -> &[Request] { &self.need }
+    fn info(&self) -> Option<&ImageInfo> { self.info.as_ref() }
+}
+
+// In your DecodeJob:
+fn dyn_incremental_decoder(self, preferred: &[PixelDescriptor])
+    -> Result<Box<DynIncrementalDecoder>, BoxedError>
+{
+    Ok(zencodec::decode::erase_incremental(MyIncremental::new(self, preferred)?))
+}
+```
+
+Rules that keep drivers simple and fast:
+
+- **Ask for what one step needs in one piece.** `Request::AtLeast { offset,
+  min_len }` with `min_len` = the largest span one unit of progress can need
+  (QOI: one worst-case row, `width * 5`). Drivers then always offer at least
+  that much, so you never buffer or stitch input. `Request::Range` names exact
+  spans for random access; list every range you can at once so a driver
+  fetches them in one round. `Request::Len` asks for the total length.
+- **Take a prefix, report it.** `Progress::consumed` counts the bytes you
+  decoded or copied, plus any bytes before them you skipped. You may take
+  none; you may never need bytes you already consumed.
+- **Progress or fail.** When the offered input satisfies one of your requests,
+  take something or emit an event. Once `input.total_len` shows a request can
+  never be met, return a codec error (truncated input), not another `Need`;
+  drivers report a decoder that spins as a protocol violation.
+- **Rows.** `sink.begin` once before the first rows, final rows once each
+  through `provide_next_buffer` in increasing `y`, `sink.finish` before
+  `Done`. Progressive passes go through `provide_pass_buffer` only when
+  `sink.accepts_provisional()` was true at `begin`.
+- **Termination is free.** `erase_incremental` wraps the decoder in `Fused`,
+  which repeats `Done`, turns any step after an error into
+  `StepError::Finished`, and checks `stop` before every step.
+- **Keep hot kernels out of line.** A per-strip kernel inlined into a large
+  `step` can lose its register allocation; measure against your one-shot
+  path.
+
+Declare `with_incremental(true)` and, if your decoder seeks,
+`with_access_pattern(AccessPattern::RandomAccess)` (or `BoundedBacktrack`).
+Straight-line container walks can be written as `async` code with
+`zencodec-coroutine` instead of a hand-written state machine; it costs a copy
+of the input and of each strip, so bulk pixel paths are better hand-written.
+Worked examples: the testkit's reference codec
+(`zencodec-testkit/src/reference.rs`) and zenbitmaps' QOI decoder.
+
+### Pull-native cores: `push_decoder_from_source`
+
+A library that reads with seeks (or that you cannot make resumable) binds the
+input as a random-access source instead of a slice:
+
+```rust
+fn push_decoder_from_source(self, source: &mut dyn DynReadAt,
+    sink: &mut dyn DecodeRowSink, preferred: &[PixelDescriptor])
+    -> Result<OutputInfo, BoxedError>
+```
+
+Read exactly the ranges you need (`read_many_at` for several at once, so a
+network source overlaps them) and write rows into the sink as `push_decoder`
+does. Declare `with_seekable(true)`. Async drivers reach it through
+`zencodec_io::tokio_io::pull_decode_on_thread`.
+
+## Streaming Encode Output
+
+`push_rows` + `finish` already lets a caller feed strips. If your encoder can
+emit bytes before `finish`, also implement:
+
+```rust
+fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor) -> Result<(), MyError>;
+fn pending_output(&self) -> &[u8];      // encoded bytes not yet handed out
+fn consume_output(&mut self, n: usize); // the caller sent the first n
+```
+
+`begin` comes before the first `push_rows` and declares the final size, so the
+header can be written at once. Return an error if more or fewer rows than
+declared are pushed, if `begin` follows rows, or if the layout changes. Without
+`begin`, behave as before (patching the header at `finish` is fine; expose
+nothing from `pending_output` until then). `finish` returns only the bytes not
+consumed. Declare `with_push_rows(true)` and `with_streaming_output(true)`.
+`zencodec_io::EncoderSink` connects an incremental decoder to your encoder.
+
+## Conformance
+
+`zencodec_testkit::check_all(encoder_config, decoder_config)` runs, among the
+rest, `check_incremental_contract` (chunked input against one-shot pixels,
+row order, termination, cancellation, truncation) for decoders that declare
+`incremental`, the seekable honesty check for `seekable`, and
+`check_streaming_output_honesty` for encoders, in both directions.
+
 ## Checklist
 
 Before calling your implementation complete:
@@ -708,6 +839,10 @@ Before calling your implementation complete:
 - [ ] `ResourceLimits` are checked before allocation
 - [ ] Dyn dispatch works (test with `&dyn DynEncoderConfig` / `&dyn DynDecoderConfig`)
 - [ ] `no_std` compatible (no `std` imports, `alloc` only)
+- [ ] Incremental decoders: built with `erase_incremental`, ask with `min_len`,
+      never buffer input they could decode in place, pass `check_incremental_contract`
+- [ ] Streaming encoders: `begin` writes the header, `pending_output` streams,
+      `check_streaming_output_honesty` passes
 
 ## Reference Implementation
 

@@ -153,8 +153,8 @@ removes that whole class).
   and terminal; `Fused` and `erase_incremental` enforce the termination rules for any
   decoder, and `DynIncrementalDecoder` is `dyn IncrementalDecode<Error = ErasedError>`.
   Removed from the earlier feed/step draft: `feed`, `feed_and_step`,
-  `wrap_sink_error`, `Step`, `ByteRange::from_offset`, `IncrementalDecoderShim` as a
-  public wrapper. Removed before that: `push_chunk*`, `push_range*`,
+  `wrap_sink_error`, `Step`, `ByteRange::from_offset`. `IncrementalDecoderShim` stays
+  public for codecs that erase without `Fused`; `erase_incremental` is the default. Removed before that: `push_chunk*`, `push_range*`,
   `requested_ranges`, `pull_batch*`, `is_complete`, `PushStatus`, `PushOutcome`.
 - Sink routing: final rows always arrive once each through `provide_next_buffer` in
   increasing `y`; `provide_pass_buffer` receives only provisional rows, only for sinks

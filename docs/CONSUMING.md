@@ -185,6 +185,7 @@ if let Some([min, max]) = caps.quality_range() {
 
 // Advanced encode paths
 if caps.push_rows()   { /* push_rows() + finish() is supported */ }
+if caps.streaming_output() { /* begin() + pending_output() stream encoded bytes */ }
 if caps.encode_from() { /* encode_from() callback is supported */ }
 if caps.animation() { /* animation_frame_encoder() works */ }
 ```
@@ -196,6 +197,8 @@ let caps = JpegDecoderConfig::capabilities();
 if caps.cheap_probe() { /* probe() is fast, reads header only */ }
 if caps.animation()   { /* animation_frame_decoder() works */ }
 if caps.streaming()   { /* streaming_decoder() works */ }
+if caps.incremental() { /* dyn_incremental_decoder(): sans-I/O, decodes as bytes arrive */ }
+if caps.seekable()    { /* push_decoder_from_source(): reads ranges from a ReadAt */ }
 ```
 
 ## Resource Limits
@@ -405,6 +408,59 @@ let output_info = job.push_decoder(Cow::Borrowed(&data), &mut sink, &[])?;
 ```
 
 The codec calls `begin()` once, then `provide_next_buffer()` for each strip of rows, then `finish()`. You provide the buffer; the codec fills it. This avoids an extra copy compared to `Decode::decode()` → copy into your buffer.
+
+## Decoding as Bytes Arrive (`zencodec-io`)
+
+Codecs that declare `capabilities().incremental()` return a resumable decoder
+from `job.dyn_incremental_decoder(&[])`. It performs no I/O; the drivers in the
+`zencodec-io` workspace crate feed it from wherever the bytes are, and rows go
+into any `DecodeRowSink` as soon as the decoder has enough input.
+
+```rust
+use zencodec_io::{CollectSink, DriveOptions, FileReadAt, drive_from_read_at, pump_read_to_sink};
+
+// A file (or any ReadAt: object store, FFI callback). Range requests are
+// batched into one read_many_at per round.
+let mut dec = config.clone().job().dyn_incremental_decoder(&[])?;
+let mut src = FileReadAt::open("photo.qoi")?;
+let mut sink = CollectSink::new();
+let (info, _stats) = drive_from_read_at(&mut *dec, &mut src, &mut sink, None, DriveOptions::default())?;
+
+// A sequential stream (an HTTP body, stdin): rows come out while it downloads.
+let mut dec = config.job().dyn_incremental_decoder(&[])?;
+let info = pump_read_to_sink(body_reader, &mut *dec, &mut sink, None, 64 << 10, 16 << 20)?;
+```
+
+Bytes already in memory go through `drive_from_slice`, which copies nothing.
+A random-access decoder over a stream needs `BufferedReadAt` (choose the policy
+with `BufferPolicy::for_pattern(dec.access_pattern(), max_bytes)`); the pump
+reports `NeedsRandomAccess` instead of guessing.
+
+**Async (feature `tokio`).** `tokio_io::decode_async(decoder, sink, &mut source,
+compute, opts, pulse)` keeps the decoder in your task, awaits an `AsyncSource`
+(`AsyncReadSource` wraps any `AsyncRead`; implement `read_ranges` to overlap
+range requests) and runs decode batches on `compute`: a closure such as
+`|job| { tokio::task::spawn_blocking(job); }`, or `Inline` for single-threaded
+hosts. No thread waits on the network and no codec code is `async`. The futures
+are `Send`, so they go to `tokio::spawn`. To cancel while waiting for bytes,
+drop the future or race it in `tokio::select!`; the pulse stops a running batch
+within one step.
+
+**Transcode with bounded memory.** `tokio_io::transcode_async(decoder, encoder,
+&mut source, &mut writer, compute, opts, pulse)` routes rows into the encoder
+through `EncoderSink` and writes encoded bytes as they become available
+(encoders that declare `streaming_output`), so memory stays at the input
+window, one strip and the encoder's unsent output. Synchronously, drive a
+decoder into `EncoderSink::new(encoder)` and call `write_pending` between
+steps.
+
+**Pull-native codecs** (`capabilities().seekable()`) read from a source
+directly: `job.push_decoder_from_source(&mut source, &mut sink, &[])`, or
+`tokio_io::pull_decode_on_thread` under async.
+
+Every driver takes `Option<&dyn how_far::Pulse>` for cancellation and
+progress; a plain stop passes as `how_far::StopOnly::borrowed(&stop)`.
+Contract and measurements: [range-decoding-contract.md](range-decoding-contract.md).
 
 ## Format Detection
 

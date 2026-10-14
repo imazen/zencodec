@@ -172,7 +172,8 @@ Every codec gets both models via defaults:
 - `copy_frame_to_sink()` implements sink rendering via canvas copy
 
 Codecs with native row-level streaming override for true incremental decode.
-The `row_level` capability flag distinguishes native streaming from decode-then-copy.
+The `streaming` capability flag distinguishes native streaming from
+decode-then-copy; `incremental` marks the sans-I/O path (see below).
 
 Strip height is codec-determined: 1 row for PNG, 8-16 rows (MCU height) for JPEG,
 256 rows (group) for JXL, 512 rows (tile) for AVIF grid. Callers must not assume
@@ -359,26 +360,30 @@ concrete configs expose codec-specific knobs. `EncodeOutput` has `extras::<T>()`
 for codec-specific output data. The trait is the stable contract; the concrete
 type carries the richness.
 
-## I/O abstraction: deferred
+## I/O: a sans-I/O step, plus a random-access source
 
-The current API requires `&[u8]` (or `Cow<[u8]>`) — the full file must be in
-memory. A positioned-read trait (`ByteSource`) was explored:
+The slice-based API (`Cow<[u8]>`) stays for whole-file decoding. Two additions
+cover everything else, without making any codec trait `async` or generic over
+a reader:
 
-```rust
-trait ByteSource {
-    fn len(&self) -> Option<u64>;
-    fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<usize, Error>;
-    fn as_contiguous(&self) -> Option<&[u8]> { None }
-}
-```
+- **`IncrementalDecode`** for resumable cores. The driver owns the bytes and
+  offers them to `step`; the decoder decodes them in place, reports a consumed
+  prefix and one event, and names what it needs next (`Request::AtLeast` with
+  the contiguous span it needs, `Range`, or `Len`). One object-safe trait serves
+  slices, files, streams, FFI hosts and async runtimes; the loops live in
+  `zencodec-io`. A first draft copied input into the decoder (`feed` + `step`);
+  every decoder then needed a buffer and copies were the default, so the
+  driver-owned form replaced it before release.
+- **`ReadAt` / `DynReadAt` + `DecodeJob::push_decoder_from_source`** for cores
+  that read with seeks (third-party libraries). The `ByteSource` sketch that
+  sat here as a deferred idea became `ReadAt` with `read_at`, batched
+  `read_many_at` (so a network source overlaps range requests) and `as_slice`
+  (so in-memory input is read without copying).
 
-Stateless (`&self`, no cursor), matches image codec random-access patterns.
-Zero-cost for `&[u8]` via `as_contiguous()`.
-
-This was deferred because:
-- It needs validation on 2-3 codecs before becoming a trait-level API
-- Object-safety constraints make generic trait methods tricky
-- The `_from()` method pattern on concrete codec types works as an interim solution
+Async stays in the drivers: `zencodec_io::tokio_io` keeps a decoder in the task
+between batches and runs batches on a pool. Encoders gained `begin` /
+`pending_output` so a transcode streams in bounded memory. Decisions, trade-offs
+and measurements: [range-decoding-contract.md](range-decoding-contract.md).
 
 ## 16-bit convention
 

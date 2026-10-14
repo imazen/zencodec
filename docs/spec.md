@@ -1024,15 +1024,21 @@ with one `use`. Types are not included.
 
 Const-constructible structs with builder pattern. Returned by config `capabilities()`.
 
-**`EncodeCapabilities` flags:** `icc`, `exif`, `xmp`, `cicp`, `cancel`, `animation`,
-`row_level`, `pull`, `lossy`, `lossless`, `hdr`, `native_gray`, `native_16bit`,
-`native_f32`, `native_alpha`, `enforces_max_pixels`, `enforces_max_memory`,
-`effort_range`, `quality_range`, `threads_supported_range`.
+**`EncodeCapabilities` accessors:** `icc`, `exif`, `xmp`, `cicp`,
+`cicp_is_valid_carrier`, `cicp_safe_sole_carrier`, `stop`, `animation`,
+`animation_timing`, `push_rows`, `streaming_output`, `encode_from`, `lossy`,
+`lossless`, `hdr`, `gain_map`, `native_gray`, `native_16bit`, `native_f32`,
+`native_alpha`, `enforces_max_pixels`, `enforces_max_memory`, `effort_range`,
+`quality_range`, `threads_supported_range`.
 
-**`DecodeCapabilities` flags:** `icc`, `exif`, `xmp`, `cicp`, `cancel`, `animation`,
-`cheap_probe`, `decode_into`, `row_level`, `hdr`, `native_gray`, `native_16bit`,
-`native_f32`, `native_alpha`, `enforces_max_pixels`, `enforces_max_memory`,
+**`DecodeCapabilities` accessors:** `icc`, `exif`, `xmp`, `cicp`, `stop`,
+`animation`, `multi_image`, `cheap_probe`, `decode_into`, `streaming`,
+`incremental`, `seekable`, `access_pattern`, `hdr`, `gain_map`, `inventory`,
+`reconstructs_hdr`, `native_gray`, `native_16bit`, `native_f32`,
+`native_alpha`, `enforces_max_pixels`, `enforces_max_memory`,
 `enforces_max_input_bytes`, `threads_supported_range`.
+
+Each has a `with_*` builder.
 
 Sans-I/O flags: `streaming_output` (encode: bytes stream from
 `pending_output` after `begin`); `incremental`, `seekable` and

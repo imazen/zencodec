@@ -74,6 +74,11 @@ Tiny, stable crate defining the common interface that all zen* codecs implement:
 - **Type-erased encode**: `Encoder` accepts `PixelSlice<'_>` (type-erased, any format). Codecs do runtime dispatch internally. No per-format encode traits.
 - **`StreamingDecode`**: Pull-based scanline iterator. `impl StreamingDecode for ()` is the rejection stub for codecs that don't support streaming.
 - **Decode format negotiation**: Caller provides ranked `&[PixelDescriptor]` preference list. Decoder picks best match without lossy conversion.
+- **Sans-I/O**: `IncrementalDecode::step(input, sink, stop)` with driver-owned input
+  (the decoder takes a prefix and names its next `Request`); drivers live in
+  `zencodec-io`, never here. Final rows always go through `provide_next_buffer`.
+  Encoders stream through `begin`/`pending_output`. Contract and decisions:
+  `docs/range-decoding-contract.md`.
 
 ## Consumer version requirements: always current-plus-next minor (STANDING RULE)
 

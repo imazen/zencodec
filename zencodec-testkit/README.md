@@ -62,6 +62,20 @@ expensive to ship wrong:
   21496-1 params, falls back honestly on `ReconstructHdr` without
   `reconstructs_hdr`, and the surfaced map transcodes through a fresh
   `with_gain_map_pixels` unchanged.
+- **Sans-I/O decoding.** For decoders that declare `incremental`,
+  `check_incremental_contract` drives the erased decoder with 1-, 7- and 64-byte
+  windows and the whole file and requires the one-shot pixels, `begin` once,
+  final rows once each in order, `Done` repeating, unrequested input ignored,
+  cancellation within one step and then `Finished`, final rows through
+  `provide_next_buffer` even for a sink that accepts provisional rows, and a
+  codec error (never a protocol violation or a hang) on truncated input.
+  `check_seekable_capability_honesty` covers `push_decoder_from_source`, and
+  `check_read_at_contract` checks a `ReadAt` source.
+- **Streaming encode output.** `check_streaming_output_honesty`: an encoder
+  that declares `streaming_output` has bytes pending before `finish` once
+  `begin` has run, draining them leaves the file byte-identical, and the result
+  decodes to the `push_rows` pixels; an undeclared one keeps `pending_output`
+  empty.
 - **Error classification.** `check_decode_truncation_series` feeds a
   deterministic series of truncated prefixes of a known-good image and requires
   every failure to classify as *incomplete input* (never `Internal`, OOM, or an

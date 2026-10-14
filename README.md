@@ -355,6 +355,34 @@ for the full model.
 
 > These patterns are exercised end-to-end in `zencodec-testkit/tests/decode_parallelism.rs`.
 
+## Decoding as bytes arrive, and streaming transcode
+
+A codec that implements `IncrementalDecode` performs no I/O: whoever holds the
+bytes offers them to `step`, the decoder decodes them in place, writes rows
+straight into a `DecodeRowSink`, and says what it needs next (`AtLeast` a span
+from an offset, an exact `Range`, or the total `Len`). The same decoder runs
+over a file, an HTTP body, an object store with range requests, an FFI host
+that pushes buffers, or a single-threaded WASM loop, and starts emitting rows
+before the input is complete. Pull-native codecs bind to a random-access
+source instead (`DecodeJob::push_decoder_from_source`).
+
+Encoders that know the image size up front take `Encoder::begin` and, when
+they declare `EncodeCapabilities::streaming_output`, hand out encoded bytes
+through `pending_output` as rows arrive, so a decode-to-encode transcode holds
+one strip and a bounded window rather than two whole images.
+
+The loops live outside this crate, in the workspace's
+[`zencodec-io`](https://github.com/imazen/zencodec/tree/main/zencodec-io):
+`drive_from_slice`, `drive_from_read_at` (batched range reads),
+`pump_read_to_sink` (`std::io::Read`), and under its `tokio` feature
+`decode_async` / `transcode_async`, which keep the decoder in the task and run
+decode batches on a thread pool so no thread waits on the network.
+[`zencodec-coroutine`](https://github.com/imazen/zencodec/tree/main/zencodec-coroutine)
+lets a container walk be written as straight-line `async` code behind the same
+contract. Capabilities: `DecodeCapabilities::{incremental, seekable,
+access_pattern}`. Rules, drivers, decisions and measurements:
+[docs/range-decoding-contract.md](https://github.com/imazen/zencodec/blob/main/docs/range-decoding-contract.md).
+
 ## Encode fidelity
 
 `EncoderConfig::with_fidelity` is the codec-agnostic way to ask for a quality
@@ -450,7 +478,8 @@ let plan = resolve_color_emit(&source_color, &target_caps, ColorEmitPolicy::Bala
 | Module | Contents |
 |--------|----------|
 | `zencodec::encode` | `EncoderConfig`, `EncodeJob`, `Encoder`, `AnimationFrameEncoder`, `EncodeOutput`, `EncodeCapabilities`, `EncodePolicy`, `best_encode_format`, dyn dispatch traits (`DynEncoderConfig`, `DynEncodeJob`, `DynEncoder`, `DynAnimationFrameEncoder`) |
-| `zencodec::decode` | `DecoderConfig`, `DecodeJob`, `Decode`, `StreamingDecode`, `AnimationFrameDecoder`, `DecodeOutput`, `DecodeCapabilities`, `DecodePolicy`, `DecodeRowSink`, `SinkError`, `OutputInfo`, `SourceEncodingDetails`, `negotiate_pixel_format`, `is_format_available`, dyn dispatch traits (`DynDecoderConfig`, `DynDecodeJob`, `DynDecoder`, `DynStreamingDecoder`, `DynAnimationFrameDecoder`) |
+| `zencodec::decode` | `DecoderConfig`, `DecodeJob`, `Decode`, `StreamingDecode`, `AnimationFrameDecoder`, sans-I/O `IncrementalDecode` (`Input`, `Request`, `Event`, `Progress`, `StepError`, `Fused`, `erase_incremental`, `DynIncrementalDecoder`), `DecodeOutput`, `DecodeCapabilities`, `DecodePolicy`, `DecodeRowSink`, `SinkError`, `OutputInfo`, `SourceEncodingDetails`, `negotiate_pixel_format`, `is_format_available`, dyn dispatch traits (`DynDecoderConfig`, `DynDecodeJob`, `DynDecoder`, `DynStreamingDecoder`, `DynAnimationFrameDecoder`) |
+| `zencodec::source` | `ReadAt` (random-access source: `read_at`, batched `read_many_at`, `as_slice`), object-safe `DynReadAt`, `SliceReadAt`, `ReadAtShim`, `SourceError`, `AccessPattern` |
 | `zencodec::estimate` | `ResourceEstimate` (predicted peak memory / wall + CPU time / core-scaling, all `Option`), `ComputeEnvironment` (cores, RAM, `SimdTier`), `ImageCharacteristics`, `SimdTier`, `ThreadingInformation` — codec-agnostic resource estimation, surfaced via `EncoderConfig::estimate_encode_resources` / `DecoderConfig::estimate_decode_resources` |
 | `zencodec::gainmap` | `GainMapInfo`, `GainMapParams`, `GainMapChannel`, `GainMapDirection`, `GainMapPresence`, `Iso21496Format` (wire-format variant: `AvifTmap`, `JxlJhgm`, `JpegApp2BodyWithUrn`; the original `JpegApp2` is deprecated since 0.1.20), `ISO_21496_1_URN`, `ISO_21496_1_PRIMARY_APP2_BODY`, `serialize_iso21496_fmt` / `serialize_iso21496_fmt_into` / `parse_iso21496_fmt`, `GainMapParseError` — cross-codec gain map types and wire-format helpers (ISO 21496-1) |
 | `zencodec::exif` | Structured EXIF/TIFF: `Exif` (borrowing parse → prune → serialize), `ExifPolicy` (7 keep/discard categories), `Retention`, `ByteOrder`, `retain` |
@@ -458,7 +487,13 @@ let plan = resolve_color_emit(&source_color, &target_caps, ColorEmitPolicy::Bala
 | `zencodec::prelude` | One-import bundle of every encode/decode trait (generic + dyn) |
 | root | `CodecSet` / `CodecSetError` (multi-codec registry: registration-derived detection, format-keyed encode, shareable app-wide), `ImageFormat`, `ImageFormatDefinition`, `ImageFormatRegistry` (format detection via `ImageFormatRegistry::detect()`), `ImageInfo`, `Metadata`, `MetadataPolicy`, `MetadataFields`, `IccRetention`, `Exif`, `ExifPolicy`, `Retention`, `ByteOrder`, `Orientation`, `OrientationHint`, `ResourceLimits`, `AllocPreference`, `LimitExceeded`, `ThreadingPolicy`, `UnsupportedOperation`, `CodecErrorExt`, `find_cause`, `Unsupported`, `Extensions`, `AnimationFrame`, `OwnedAnimationFrame`, `resolve_color_emit`, `ColorEmitPolicy`, `ColorEmitPlan`, `ColorEmitFields`, `IccDisposition`, `CicpEmission`, `ColorAuthority`, `Cicp`, `ContentLightLevel`, `MasteringDisplay`, `StopToken`, `Unstoppable` |
 
-zencodec has no feature flags. The full API is always available.
+The full API is always available. The only feature, `std`, lets
+`ErrorCategory::Io` carry a `std::io::ErrorKind`.
+
+Workspace crates (unpublished): `zencodec-io` (drivers for slices, `ReadAt`
+sources, `std::io::Read` streams and tokio), `zencodec-coroutine` (`async`-authored
+incremental decoders) and `zencodec-testkit` (conformance checks for codec
+crates).
 
 ## Limitations
 
