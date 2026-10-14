@@ -2,7 +2,7 @@
 
 use super::{ImageFormat, ImageFormatDefinition};
 
-// ------- ISOBMFF helpers (shared by AVIF + HEIC) -------
+// ------- ISOBMFF helpers (shared container detection) -------
 
 pub(super) const HEIC_BRANDS: &[&[u8; 4]] = &[
     b"heic", b"heix", b"hevc", b"hevx", b"heim", b"heis", b"hevm", b"hevs",
@@ -701,7 +701,7 @@ pub static SVG: ImageFormatDefinition = ImageFormatDefinition {
 ///
 /// Order matters:
 /// - JPEG first (most common)
-/// - AVIF before HEIC (ambiguous mif1/msf1 containers → AVIF wins)
+/// - AVIF first (ambiguous mif1/msf1 containers → AVIF wins)
 /// - DNG before RAW before TIFF (share TIFF magic bytes; most specific first)
 /// - SVG last among magic-detected formats (XML heuristic, lower confidence)
 pub static ALL: &[&ImageFormatDefinition] = &[

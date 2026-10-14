@@ -1,7 +1,7 @@
 //! Cross-codec gain map types (ISO 21496-1).
 //!
 //! Canonical representation for gain map metadata used by JPEG (UltraHDR),
-//! AVIF (tmap), JXL (jhgm), and HEIF. All gains and headroom values are
+//! AVIF (tmap) and JXL (jhgm). All gains and headroom values are
 //! stored in **log2 domain** to match the ISO 21496-1 wire format and avoid
 //! domain confusion between codecs.
 //!
@@ -554,7 +554,7 @@ pub enum GainMapRender {
         /// applying via ultrahdr-core should use its
         /// `full_reconstruction_boost` helper. Double-rounding routes
         /// (`2f32.powf(stops as f32)`) can land 1 ULP away and break
-        /// bit-identical reconstruction across codecs (imazen/heic#20).
+        /// bit-identical reconstruction across codecs.
         ///
         /// **No-gain-map input:** decoders return the base rendition (the
         /// image *is* the image) rather than erroring; the error path is for
@@ -601,7 +601,6 @@ pub enum GainMapRender {
 /// | AVIF | `Avif` | Raw AV1 bitstream (OBUs) |
 /// | JXL | `Jxl` | Bare JXL codestream (no container boxes) |
 /// | JPEG (UltraHDR) | `Jpeg` | Complete JPEG file (MPF secondary image) |
-/// | HEIC | — | Not produced — HEIC parser decodes gain map internally, use [`DecodedGainMap`] |
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct GainMapSource {
@@ -645,7 +644,7 @@ impl GainMapSource {
 ///
 /// Produced either by:
 /// - Decoding a [`GainMapSource`] through the normal codec path
-/// - Codecs that decode the gain map internally (HEIC)
+/// - Codecs that decode the gain map internally
 ///
 /// Stored in [`DecodeOutput`](crate::decode::DecodeOutput) extensions
 /// via `output.with_extras(decoded_gain_map)`.

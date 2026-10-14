@@ -57,11 +57,11 @@ This guide is for codec authors implementing `DecodeJob::inventory`.
 - **Containers without a body** may list some children or none. Their own disposition covers the
   bytes they don't list.
 - **Finishing a walk.** End every walk with `fill_gaps(None, Trailing)`.
-- **Items stored elsewhere.** A logical unit whose bytes live elsewhere is split in two. A HEIF item
+- **Items stored elsewhere.** A logical unit whose bytes live elsewhere is split in two. An ISOBMFF item
   is an `Item` part for its `infe` entry, plus one `Extent` part per `iloc` extent inside the
   `mdat`/`idat` that holds it. Both carry the same `Code(item_id)` tag.
 - **Labels.** `label` is the identifying string an auditor scans for: an APPn signature, a PNG text
-  keyword, a GIF application identifier, a HEIF item name or `content_type`. Copy it from the file,
+  keyword, a GIF application identifier, an ISOBMFF item name or `content_type`. Copy it from the file,
   keep it to about 64 bytes, and never interpret it. `detail` is for the walker's own remarks.
 
 ## Coverage per format

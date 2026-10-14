@@ -46,10 +46,10 @@ produces (decode → `ImageInfo.source_color`; the bridge to encode is a flat
 
 - `cicp()` — has a CICP carrier slot at all.
 - `cicp_is_valid_carrier()` — the carrier is standardized/honored, so CICP is
-  emitted by default (JXL enum, AVIF/HEIC `nclx`, **PNG `cICP`**). Distinct from
+  emitted by default (JXL enum, AVIF `nclx`, **PNG `cICP`**). Distinct from
   authority — PNG isn't the decode authority but is a valid carrier.
 - `cicp_safe_sole_carrier()` — safe to ship CICP-only and drop the ICC (JXL only;
-  AVIF/HEIC/PNG keep the ICC alongside).
+  AVIF/PNG keep the ICC alongside).
 
 ## Lowering the plan (where the bytes happen)
 
@@ -57,7 +57,7 @@ A codec or the pipeline lowers `ColorEmitPlan` to bytes **by hand, per codec** �
 each codec maps the plan's fields onto its own container carriers:
 
 - `ColorEmitPlan.cicp` → the format's native CICP carrier (JXL enum colour,
-  AVIF/HEIC `nclx`, PNG `cICP`).
+  AVIF `nclx`, PNG `cICP`).
 - `IccDisposition::KeepSource` → re-embed the source ICC bytes unchanged.
 - `IccDisposition::SynthesizeFrom(cicp)` →
   `zenpixels_convert::icc_profiles::synthesize_icc_for_cicp(cicp)`, which is

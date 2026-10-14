@@ -731,7 +731,7 @@ Supplement data flows through three stages:
 
 2. **Opt-in (caller decides):** Supplement pixel decode is **never automatic**.
    Gain maps and depth maps require explicit opt-in because decoding them
-   is expensive (full AV1/HEVC decode at 1/4-1/8 primary resolution).
+   is expensive (a full auxiliary-image decode at 1/4-1/8 primary resolution).
    Opt-in happens via:
    - Decode node params (e.g., `extract_gain_map: true` on `heic.decode`)
    - Job-level extensions on `DecodeJob`
@@ -760,8 +760,8 @@ Cross-codec supplement types (defined in zencodec) that all codecs should use:
 
 | Type | When to use | Producers |
 |------|-------------|-----------|
-| `DecodedGainMap` | Decoded gain map pixels + ISO 21496-1 metadata | JPEG (UltraHDR), AVIF (tmap), JXL (jhgm), HEIC (Apple) |
-| `DecodedDepthMap` | Decoded depth map pixels | HEIC (Apple), JXL (extra channel) |
+| `DecodedGainMap` | Decoded gain map pixels + ISO 21496-1 metadata | JPEG (UltraHDR), AVIF (tmap), JXL (jhgm) |
+| `DecodedDepthMap` | Decoded depth map pixels | JXL (extra channel) |
 
 When a codec produces a gain map, it MUST use `DecodedGainMap` (not a
 codec-specific type) so that consumers work codec-agnostically.
@@ -772,7 +772,7 @@ Genuinely per-codec data that cannot be normalized belongs in `extras()` with
 the codec's own type. Examples:
 
 - JPEG `DecodedExtras` — DCT coefficients, quantization tables, raw APP markers
-- HEIC `HeicAuxiliaryInfo` — auxiliary image type list (URNs)
+- `HeicAuxiliaryInfo` — auxiliary image type list (URNs)
 - TIFF `TiffPageInfo` — multi-page IFD metadata
 
 These require `extras::<zenjpeg::DecodedExtras>()` — the caller must know the
@@ -908,7 +908,7 @@ enum CodecSetError {
 Semantics:
 
 - **Detection** consults only formats with a registered decoder: built-ins in
-  `ImageFormatRegistry::common()` priority order (so AVIF-before-HEIC and
+  `ImageFormatRegistry::common()` priority order (so AVIF-first and
   DNG-before-TIFF disambiguation is preserved regardless of registration
   order), then `Custom` formats in registration order.
 - **Encoder templates**: codec-specific options are set on the concrete config
@@ -1044,8 +1044,8 @@ pub enum IccDisposition { KeepSource, SynthesizeFrom(Cicp), Drop }
   the ICC; `Verbatim` carries the source's signals unchanged; `Custom(ColorEmitFields)`
   is explicit (`ColorEmitFields::new`).
 - **`EncodeCapabilities`** carrier methods: `cicp_is_valid_carrier` (the format has a
-  standardized CICP slot — JXL/AVIF/HEIC `nclx`, PNG `cICP`) and `cicp_safe_sole_carrier`
-  (CICP alone is spec-mandated and reader-authoritative — JXL, AVIF, HEIC).
+  standardized CICP slot — JXL/AVIF `nclx`, PNG `cICP`) and `cicp_safe_sole_carrier`
+  (CICP alone is spec-mandated and reader-authoritative — JXL, AVIF).
 - **`IccDisposition`** — `KeepSource` re-embeds the source ICC; `Drop` emits none;
   `SynthesizeFrom(cicp)` asks the caller to materialize bytes (this crate carries no
   CMS) via `zenpixels_convert`'s transfer-aware `synthesize_icc_for_cicp` — a bundled

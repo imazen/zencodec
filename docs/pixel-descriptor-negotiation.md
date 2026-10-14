@@ -149,7 +149,7 @@ The single biggest structural finding: there is **no shared negotiation path**.
 | **zenbitmaps ×6** | `decoder()` **ignores `preferred`** entirely (source-driven output); `preferred` only reaches the `push_decoder` sink path via `copy_decode_to_sink`. |
 
 A single source-aware `negotiate_pixel_format(source, preferred, available)`
-collapses all of these into one correct path. AVIF/HEIC keep their source-ordered
+collapses all of these into one correct path. AVIF keeps its source-ordered
 `available` (or drop the manual ordering once the helper is source-aware). PNG's
 flatten disappears. JPEG/GIF/WebP replace their bespoke logic. zenbitmaps gain
 `preferred` support for free.
@@ -237,7 +237,7 @@ because only it holds the exact source.
   signatures; contract doc updated to "closest-to-source, widen-only, native
   fallback, never flatten." Each decoder calls the new helper with its native
   descriptor. **Only PNG, JPEG, GIF, WebP, zenbitmaps change** (adopt the shared
-  helper); JXL/AVIF/HEIC are already correct.
+  helper); JXL/AVIF are already correct.
 - `ImageInfo.source_descriptor: Option<PixelDescriptor>` — best-effort, populated
   at probe per the Tier table (§1). Transparency only.
 - **Probe fidelity fixes surfaced by the survey** (separate, non-blocking):

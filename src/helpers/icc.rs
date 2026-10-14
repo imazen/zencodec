@@ -303,7 +303,7 @@ mod tests {
 
     #[test]
     fn cicp_takes_precedence_over_icc_when_cicp_authoritative() {
-        // When the codec declares CICP authoritative (AVIF/HEIF nclx, PNG
+        // When the codec declares CICP authoritative (AVIF nclx, PNG
         // cICP), the CICP field wins even if an ICC blob is also present.
         let fake_icc: Arc<[u8]> = Arc::from(alloc::vec![0u8; 64].into_boxed_slice());
         let sc = SourceColor::default()
@@ -507,7 +507,7 @@ mod tests {
         SourceColor::default().with_icc_profile(icc)
     }
     /// Helper for formats where BOTH CICP and ICC are present and CICP
-    /// is authoritative (PNG with cICP chunk, AVIF/HEIF with nclx colr box).
+    /// is authoritative (PNG with cICP chunk, AVIF with nclx colr box).
     fn sc_cicp_icc(c: Cicp, fill: u8, len: usize) -> SourceColor {
         let icc: Arc<[u8]> = Arc::from(alloc::vec![fill; len].into_boxed_slice());
         SourceColor::default()

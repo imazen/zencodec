@@ -44,6 +44,53 @@ let pixels = decoded.into_buffer();
 For untrusted input, attach a resource limit and a cancellation token to the
 **job** — see [Untrusted input](#untrusted-input-limits-cancellation-errors) below.
 
+### One-shots
+
+When default job settings are fine, each config trait ships one-shot
+conveniences — `EncoderConfig::encode`, `DecoderConfig::decode` / `probe`:
+
+```rust,ignore
+let jpeg = JpegEncoderConfig::new().with_generic_quality(85.0).encode(pixels)?;
+let info = JpegDecoderConfig::new().probe(jpeg.data())?;   // header only
+let image = JpegDecoderConfig::new().decode(jpeg.data())?; // full decode
+```
+
+`use zencodec::prelude::*;` brings every encode/decode trait into scope in one
+line.
+
+### Multi-codec: `CodecSet`
+
+To handle several formats behind one handle, register configs in a
+[`CodecSet`]: each decoder announces its own formats, magic-byte detection
+derives from what's registered (in the curated priority order — AVIF first,
+DNG before TIFF), and encoding is keyed by `ImageFormat`. The set is
+`Send + Sync` with `&self` operations, so build it once — in a
+`LazyLock`/`OnceLock` static or an `Arc` — and share it app-wide:
+
+```rust,ignore
+use std::sync::LazyLock;
+use zencodec::{CodecSet, ImageFormat, ResourceLimits};
+
+static CODECS: LazyLock<CodecSet> = LazyLock::new(|| {
+    CodecSet::new()
+        .with_limits(ResourceLimits::default())
+        .with_decoder(zenjpeg::JpegDecoderConfig::new())
+        .with_decoder(zenpng::PngDecoderConfig::new())
+        .with_encoder(zenjpeg::JpegEncoderConfig::new().with_generic_quality(85.0))
+});
+
+let image = CODECS.decode(&bytes)?;                            // detect → decode
+let jpeg  = CODECS.encode(ImageFormat::Jpeg, image.pixels())?; // format-keyed
+```
+
+Limits, stop tokens, and policies set on the set are stamped onto every job it
+creates; `decode_job` / `encode_job` expose the underlying job for
+per-operation control (decode hints, metadata, animation). Per-call quality
+goes through `encode_with(format, Fidelity, pixels)`, which clones the
+registered template.
+
+[`CodecSet`]: https://docs.rs/zencodec/latest/zencodec/struct.CodecSet.html
+
 ## Crates in the zen\* family
 
 | Crate | Format | Repo |
@@ -55,7 +102,6 @@ For untrusted input, attach a resource limit and a cancellation token to the
 | `zenavif` | AVIF | [imazen/zenavif](https://github.com/imazen/zenavif) |
 | `zenjxl` | JPEG XL | [imazen/zenjxl](https://github.com/imazen/zenjxl) |
 | `zenbitmaps` | PNM/BMP/Farbfeld | [imazen/zenbitmaps](https://github.com/imazen/zenbitmaps) |
-| `heic` | HEIC/HEIF | [imazen/heic](https://github.com/imazen/heic) |
 | `zentiff` | TIFF (experimental) | [imazen/zentiff](https://github.com/imazen/zentiff) |
 | `zenpdf` | PDF (experimental) | [imazen/zenpdf](https://github.com/imazen/zenpdf) |
 
@@ -410,7 +456,8 @@ let plan = resolve_color_emit(&source_color, &target_caps, ColorEmitPolicy::Bala
 | `zencodec::gainmap` | `GainMapInfo`, `GainMapParams`, `GainMapChannel`, `GainMapDirection`, `GainMapPresence`, `Iso21496Format` (wire-format variant: `AvifTmap`, `JxlJhgm`, `JpegApp2BodyWithUrn`; the original `JpegApp2` is deprecated since 0.1.20), `ISO_21496_1_URN`, `ISO_21496_1_PRIMARY_APP2_BODY`, `serialize_iso21496_fmt` / `serialize_iso21496_fmt_into` / `parse_iso21496_fmt`, `GainMapParseError` — cross-codec gain map types and wire-format helpers (ISO 21496-1) |
 | `zencodec::exif` | Structured EXIF/TIFF: `Exif` (borrowing parse → prune → serialize), `ExifPolicy` (7 keep/discard categories), `Retention`, `ByteOrder`, `retain` |
 | `zencodec::helpers` | Codec implementation helpers (not consumer API) — shared boilerplate for trait implementors, plus the lightweight `parse_exif_orientation` accessor |
-| root | `ImageFormat`, `ImageFormatDefinition`, `ImageFormatRegistry` (format detection via `ImageFormatRegistry::detect()`), `ImageInfo`, `Metadata`, `MetadataPolicy`, `MetadataFields`, `IccRetention`, `Exif`, `ExifPolicy`, `Retention`, `ByteOrder`, `Orientation`, `OrientationHint`, `ResourceLimits`, `AllocPreference`, `LimitExceeded`, `ThreadingPolicy`, `UnsupportedOperation`, `CodecErrorExt`, `find_cause`, `Unsupported`, `Extensions`, `AnimationFrame`, `OwnedAnimationFrame`, `resolve_color_emit`, `ColorEmitPolicy`, `ColorEmitPlan`, `ColorEmitFields`, `IccDisposition`, `CicpEmission`, `ColorAuthority`, `Cicp`, `ContentLightLevel`, `MasteringDisplay`, `StopToken`, `Unstoppable` |
+| `zencodec::prelude` | One-import bundle of every encode/decode trait (generic + dyn) |
+| root | `CodecSet` / `CodecSetError` (multi-codec registry: registration-derived detection, format-keyed encode, shareable app-wide), `ImageFormat`, `ImageFormatDefinition`, `ImageFormatRegistry` (format detection via `ImageFormatRegistry::detect()`), `ImageInfo`, `Metadata`, `MetadataPolicy`, `MetadataFields`, `IccRetention`, `Exif`, `ExifPolicy`, `Retention`, `ByteOrder`, `Orientation`, `OrientationHint`, `ResourceLimits`, `AllocPreference`, `LimitExceeded`, `ThreadingPolicy`, `UnsupportedOperation`, `CodecErrorExt`, `find_cause`, `Unsupported`, `Extensions`, `AnimationFrame`, `OwnedAnimationFrame`, `resolve_color_emit`, `ColorEmitPolicy`, `ColorEmitPlan`, `ColorEmitFields`, `IccDisposition`, `CicpEmission`, `ColorAuthority`, `Cicp`, `ContentLightLevel`, `MasteringDisplay`, `StopToken`, `Unstoppable` |
 
 zencodec has no feature flags. The full API is always available.
 
@@ -432,7 +479,7 @@ Licensed under either of [Apache-2.0](https://github.com/imazen/zencodec/blob/ma
 
 | | |
 |:--|:--|
-| **Codecs** ¹ | [zenjpeg] · [zenpng] · [zenwebp] · [zengif] · [zenavif] · [zenjxl] · [zenjxl-decoder] · [jxl-encoder] · [zenbitmaps] · [heic] · [zentiff] · [zenpdf] · [zensvg] · [zenjp2] · [zenraw] · [ultrahdr] |
+| **Codecs** ¹ | [zenjpeg] · [zenpng] · [zenwebp] · [zengif] · [zenavif] · [zenjxl] · [zenjxl-decoder] · [jxl-encoder] · [zenbitmaps] · [zentiff] · [zenpdf] · [zensvg] · [zenjp2] · [zenraw] · [ultrahdr] |
 | Codec internals | [zenrav1e] · [rav1d-safe] · [zenravif] · [zenavif-parse] · [zenavif-serialize] |
 | Compression | [zenflate] · [zenzop] · [zenzstd] |
 | Processing | [zenresize] · [zenquant] · [zenblend] · [zenfilters] · [zensally] · [zentone] |
@@ -460,7 +507,6 @@ Licensed under either of [Apache-2.0](https://github.com/imazen/zencodec/blob/ma
 [zenjxl-decoder]: https://github.com/imazen/zenjxl-decoder
 [jxl-encoder]: https://github.com/imazen/jxl-encoder
 [zenbitmaps]: https://github.com/imazen/zenbitmaps
-[heic]: https://github.com/imazen/heic
 [zentiff]: https://github.com/imazen/zenextras
 [zenpdf]: https://github.com/imazen/zenextras
 [zensvg]: https://github.com/imazen/zenextras

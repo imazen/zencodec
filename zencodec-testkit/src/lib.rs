@@ -23,7 +23,7 @@
 //!   (a decoder that read colour back must attach it).
 //! - [`check_color_authority_spec`] — the `ColorAuthority` a decoder names in
 //!   `source_color` is the one its format's spec assigns for the colour fields it
-//!   read back (PNG/JXL/HEIC: CICP outranks ICC; AVIF: MIAF order; the rest:
+//!   read back (PNG/JXL: CICP outranks ICC; AVIF: MIAF order; the rest:
 //!   ICC). [`check_source_color_authority`] is the unit form for a codec's own
 //!   fixtures, [`expected_color_authority`] the answer key.
 //! - [`check_native_hdr_roundtrip`] — when both ends declare `hdr`, BT.2100 PQ
@@ -1049,7 +1049,7 @@ fn hdr_envelope() -> (ContentLightLevel, MasteringDisplay) {
 }
 
 /// Container fixed-point tolerance: |Δ| ≤ 2e-5 for sub-unit values (xy
-/// chromaticities are stored in 1/50000 units by AVIF/HEIF, luminances in
+/// chromaticities are stored in 1/50000 units by AVIF, luminances in
 /// 1/10000), relative 1e-5 above 1.0 (peak luminance).
 fn hdr_close(got: f32, want: f32) -> bool {
     let tol = if want.abs() < 1.0 {
@@ -2232,7 +2232,6 @@ where
 /// |---|---|
 /// | PNG | `cICP` outranks `iCCP` (PNG 3rd ed.): `Cicp` when CICP was read, else `Icc` |
 /// | JXL | codestream colour encoding outranks an embedded ICC: `Cicp` when read, else `Icc` |
-/// | HEIC | `nclx` is the primary colour authority (ISO 23008-12): `Cicp` when read, else `Icc` |
 /// | AVIF | MIAF order: an ICC `colr` outranks `nclx` — `Icc` when an ICC was read, else `Cicp` when CICP was read, else `Icc` |
 /// | Radiance HDR | scene-linear BT.709 has no ICC carrier: `Cicp` when the codec expressed it as CICP, else `Icc` |
 /// | JPEG, WebP, GIF, TIFF, BMP, ICO, PNM, Farbfeld, QOI, TGA, DNG, RAW, PDF | ICC (or an sRGB assumption): always `Icc` |
@@ -2280,7 +2279,7 @@ pub fn expected_color_authority(
 /// format has no recorded rule.
 ///
 /// This is the "shared test helper" the issue #11 audit asked for: the
-/// authority-mismatch class of bug (HEIC naming `Icc` for an `nclx`-only file,
+/// authority-mismatch class of bug (naming `Icc` for an `nclx`-only file,
 /// so the CICP was dropped by `SourceColor::to_color_context()` and the pixels
 /// fell back to sRGB) is invisible to a pixel round trip and only shows up
 /// downstream in the CMS.
@@ -3640,7 +3639,7 @@ mod tests {
         }
     }
 
-    /// The HEIC bug the audit opened with: an `nclx`-only file whose decoder
+    /// The bug the audit opened with: an `nclx`-only file whose decoder
     /// left the authority at the `Icc` default. `to_color_context()` then drops
     /// the CICP and the pixels fall back to sRGB — invisible to a pixel round
     /// trip, caught here.

@@ -208,7 +208,7 @@ impl EncodeCapabilities {
     /// Whether this format has a standardized, real-world-honored CICP carrier —
     /// so CICP can be emitted as a color signal by default.
     ///
-    /// True for JXL codestream enum, AVIF/HEIC `nclx`, and PNG `cICP`. Distinct
+    /// True for JXL codestream enum, AVIF `nclx`, and PNG `cICP`. Distinct
     /// from [`cicp`](Self::cicp) (= "has a CICP carrier slot at all") and from
     /// [`cicp_safe_sole_carrier`](Self::cicp_safe_sole_carrier) (= "safe to ship
     /// CICP *only* and drop the ICC"). Gates CICP emission under
@@ -221,10 +221,10 @@ impl EncodeCapabilities {
     ///
     /// Stricter than [`cicp_is_valid_carrier`](Self::cicp_is_valid_carrier): a
     /// format can have a valid CICP carrier yet still need an ICC kept for
-    /// real-world tool compatibility. As of 2026 this is true for **JXL, AVIF, and
-    /// HEIC** — their CICP carriers (JXL codestream enum color, AVIF/HEIC `nclx`)
+    /// real-world tool compatibility. As of 2026 this is true for **JXL and
+    /// AVIF** — their CICP carriers (JXL codestream enum color, AVIF `nclx`)
     /// have been spec-mandated and reader-authoritative since the first
-    /// JXL / MIAF (ISO/IEC 23000-22) / HEIF (ISO/IEC 23008-12) editions, so a
+    /// JXL / MIAF (ISO/IEC 23000-22) editions, so a
     /// conforming reader honors them. **PNG** stays `false`: its `cICP` chunk is a
     /// far newer, optional addition, so keep the ICC alongside.
     pub const fn cicp_safe_sole_carrier(&self) -> bool {
@@ -658,7 +658,7 @@ impl DecodeCapabilities {
     pub const fn animation(&self) -> bool {
         self.animation
     }
-    /// Whether this decoder supports multi-image containers (TIFF, HEIF, ICO).
+    /// Whether this decoder supports multi-image containers (TIFF, ICO).
     ///
     /// True for codecs with independently-addressable images.
     /// False for single-image and animation-only codecs.
