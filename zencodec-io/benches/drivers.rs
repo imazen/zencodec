@@ -6,9 +6,9 @@ mod fixture;
 use fixture::*;
 use zenbench::prelude::*;
 
-// Per-iteration allocation counts in the report. Thread-local: the tokio
-// arm's decode thread is not counted here; `examples/alloc_audit.rs`
-// counts across threads.
+// Per-iteration allocation counts in the report. zenbench counts per
+// thread: every arm runs on the bench thread except the spawn_blocking one,
+// whose batches allocate on pool threads that are not counted.
 #[global_allocator]
 static ALLOC: zenbench::AllocProfiler = zenbench::AllocProfiler::system();
 
@@ -22,6 +22,9 @@ fn bench_drivers(suite: &mut Suite) {
         let strips = (h / strip_rows) as u64;
         suite.group(label, |g| {
             g.throughput(Throughput::Elements(strips));
+            g.config()
+                .max_time(std::time::Duration::from_secs(3))
+                .max_rounds(40);
             let f = file.clone();
             g.bench("direct sink writes", move |b| {
                 let f = f.clone();
@@ -53,6 +56,7 @@ fn bench_drivers(suite: &mut Suite) {
                         &mut sink,
                         None,
                         64 << 10,
+                        16 << 20,
                     )
                     .unwrap();
                     sink
@@ -89,25 +93,55 @@ fn bench_drivers(suite: &mut Suite) {
             #[cfg(feature = "tokio")]
             {
                 let f: std::sync::Arc<[u8]> = file.clone().into();
-                g.bench("hand-written via tokio decode_on_thread", move |b| {
+                g.bench("hand-written via tokio decode_async, inline", move |b| {
                     let f = f.clone();
+                    let rt = tokio::runtime::Builder::new_current_thread()
+                        .build()
+                        .unwrap();
                     b.iter(move || {
-                        let rt = tokio::runtime::Builder::new_current_thread()
-                            .build()
-                            .unwrap();
                         rt.block_on(async {
-                            zencodec_io::thread::decode_on_thread(
+                            let mut src = zencodec_io::tokio_io::BytesSource(f.clone());
+                            zencodec_io::tokio_io::decode_async(
                                 HandWritten::new(strip_rows),
                                 zencodec_io::CollectSink::new(),
+                                &mut src,
+                                zencodec_io::tokio_io::Inline,
+                                zencodec_io::DriveOptions::default(),
                                 None,
-                                zencodec_io::thread::ThreadOptions::default(),
-                                zencodec_io::thread::fetch_from_bytes(f.clone(), 1 << 20),
                             )
                             .await
                             .unwrap()
                         })
                     })
                 });
+                let f: std::sync::Arc<[u8]> = file.clone().into();
+                g.bench(
+                    "hand-written via tokio decode_async, spawn_blocking",
+                    move |b| {
+                        let f = f.clone();
+                        let rt = tokio::runtime::Builder::new_multi_thread()
+                            .worker_threads(2)
+                            .build()
+                            .unwrap();
+                        b.iter(move || {
+                            rt.block_on(async {
+                                let mut src = zencodec_io::tokio_io::BytesSource(f.clone());
+                                zencodec_io::tokio_io::decode_async(
+                                    HandWritten::new(strip_rows),
+                                    zencodec_io::CollectSink::new(),
+                                    &mut src,
+                                    |job: zencodec_io::tokio_io::Job| {
+                                        tokio::task::spawn_blocking(job);
+                                    },
+                                    zencodec_io::DriveOptions::default(),
+                                    None,
+                                )
+                                .await
+                                .unwrap()
+                            })
+                        })
+                    },
+                );
             }
         });
     }

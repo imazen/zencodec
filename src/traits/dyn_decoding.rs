@@ -188,177 +188,6 @@ impl<S: StreamingDecode + Send> DynStreamingDecoder for StreamingDecoderShim<S> 
 }
 
 // ===========================================================================
-// DynIncrementalDecoder
-// ===========================================================================
-
-/// Object-safe incremental (sans-I/O) decoder.
-///
-/// Wraps [`IncrementalDecode`](super::decoder::IncrementalDecode) for dyn
-/// dispatch. The protocol is identical; errors are boxed.
-pub trait DynIncrementalDecoder: Send {
-    /// Downcast to the concrete incremental decoder type.
-    fn as_any(&self) -> &dyn Any;
-
-    /// Downcast to the concrete incremental decoder type (mutable).
-    fn as_any_mut(&mut self) -> &mut dyn Any;
-
-    /// Consume and downcast to the concrete incremental decoder type.
-    fn into_any(self: Box<Self>) -> Box<dyn Any>;
-
-    /// Offer bytes at `offset`; returns how many were accepted.
-    fn feed(&mut self, offset: u64, bytes: &[u8], eof: bool) -> Result<usize, BoxedError>;
-
-    /// Advance the decode, writing rows into `sink`, and report the first event.
-    fn step(
-        &mut self,
-        sink: &mut dyn crate::DecodeRowSink,
-        stop: Option<&dyn Stop>,
-    ) -> Result<super::decoder::Step<'_>, BoxedError>;
-
-    /// Offer bytes and advance in one call; see
-    /// [`IncrementalDecode::feed_and_step`](super::decoder::IncrementalDecode::feed_and_step).
-    fn feed_and_step(
-        &mut self,
-        offset: u64,
-        bytes: &[u8],
-        eof: bool,
-        sink: &mut dyn crate::DecodeRowSink,
-        stop: Option<&dyn Stop>,
-    ) -> Result<(usize, super::decoder::Step<'_>), BoxedError> {
-        let accepted = self.feed(offset, bytes, eof)?;
-        let step = self.step(sink, stop)?;
-        Ok((accepted, step))
-    }
-
-    /// Image metadata, once the header has been parsed.
-    fn info(&self) -> Option<&ImageInfo>;
-
-    /// Negotiated output pixel descriptor, once the header has been parsed.
-    fn output_descriptor(&self) -> Option<PixelDescriptor>;
-
-    /// How this decoder reads its input.
-    fn access_pattern(&self) -> crate::source::AccessPattern {
-        crate::source::AccessPattern::Sequential
-    }
-}
-
-impl core::fmt::Debug for dyn DynIncrementalDecoder + '_ {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("DynIncrementalDecoder")
-            .finish_non_exhaustive()
-    }
-}
-
-/// Shim wrapping a concrete [`IncrementalDecode`](super::decoder::IncrementalDecode).
-pub struct IncrementalDecoderShim<I>(pub I);
-
-impl<I: super::decoder::IncrementalDecode + Send + 'static> DynIncrementalDecoder
-    for IncrementalDecoderShim<I>
-{
-    fn as_any(&self) -> &dyn Any {
-        &self.0
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        &mut self.0
-    }
-
-    fn into_any(self: Box<Self>) -> Box<dyn Any> {
-        Box::new(self.0)
-    }
-
-    fn feed(&mut self, offset: u64, bytes: &[u8], eof: bool) -> Result<usize, BoxedError> {
-        self.0
-            .feed(offset, bytes, eof)
-            .map_err(|e| Box::new(e) as BoxedError)
-    }
-
-    fn step(
-        &mut self,
-        sink: &mut dyn crate::DecodeRowSink,
-        stop: Option<&dyn Stop>,
-    ) -> Result<super::decoder::Step<'_>, BoxedError> {
-        self.0
-            .step(sink, stop)
-            .map_err(|e| Box::new(e) as BoxedError)
-    }
-
-    fn feed_and_step(
-        &mut self,
-        offset: u64,
-        bytes: &[u8],
-        eof: bool,
-        sink: &mut dyn crate::DecodeRowSink,
-        stop: Option<&dyn Stop>,
-    ) -> Result<(usize, super::decoder::Step<'_>), BoxedError> {
-        self.0
-            .feed_and_step(offset, bytes, eof, sink, stop)
-            .map_err(|e| Box::new(e) as BoxedError)
-    }
-
-    fn info(&self) -> Option<&ImageInfo> {
-        self.0.info()
-    }
-
-    fn output_descriptor(&self) -> Option<PixelDescriptor> {
-        self.0.output_descriptor()
-    }
-
-    fn access_pattern(&self) -> crate::source::AccessPattern {
-        self.0.access_pattern()
-    }
-}
-
-impl<D: DynIncrementalDecoder + ?Sized> DynIncrementalDecoder for Box<D> {
-    fn as_any(&self) -> &dyn Any {
-        (**self).as_any()
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        (**self).as_any_mut()
-    }
-
-    fn into_any(self: Box<Self>) -> Box<dyn Any> {
-        (*self).into_any()
-    }
-
-    fn feed(&mut self, offset: u64, bytes: &[u8], eof: bool) -> Result<usize, BoxedError> {
-        (**self).feed(offset, bytes, eof)
-    }
-
-    fn step(
-        &mut self,
-        sink: &mut dyn crate::DecodeRowSink,
-        stop: Option<&dyn Stop>,
-    ) -> Result<super::decoder::Step<'_>, BoxedError> {
-        (**self).step(sink, stop)
-    }
-
-    fn feed_and_step(
-        &mut self,
-        offset: u64,
-        bytes: &[u8],
-        eof: bool,
-        sink: &mut dyn crate::DecodeRowSink,
-        stop: Option<&dyn Stop>,
-    ) -> Result<(usize, super::decoder::Step<'_>), BoxedError> {
-        (**self).feed_and_step(offset, bytes, eof, sink, stop)
-    }
-
-    fn info(&self) -> Option<&ImageInfo> {
-        (**self).info()
-    }
-
-    fn output_descriptor(&self) -> Option<PixelDescriptor> {
-        (**self).output_descriptor()
-    }
-
-    fn access_pattern(&self) -> crate::source::AccessPattern {
-        (**self).access_pattern()
-    }
-}
-
-// ===========================================================================
 // DynDecodeJob
 // ===========================================================================
 
@@ -474,7 +303,7 @@ pub trait DynDecodeJob<'a> {
     fn into_incremental_decoder(
         self: Box<Self>,
         preferred: &[PixelDescriptor],
-    ) -> Result<Box<dyn DynIncrementalDecoder>, BoxedError> {
+    ) -> Result<Box<super::incremental::DynIncrementalDecoder>, BoxedError> {
         let _ = preferred;
         Err(Box::new(
             crate::capabilities::UnsupportedOperation::IncrementalDecode,
@@ -664,7 +493,7 @@ where
     fn into_incremental_decoder(
         mut self: Box<Self>,
         preferred: &[PixelDescriptor],
-    ) -> Result<Box<dyn DynIncrementalDecoder>, BoxedError> {
+    ) -> Result<Box<super::incremental::DynIncrementalDecoder>, BoxedError> {
         let job = self.take()?;
         job.dyn_incremental_decoder(preferred)
     }

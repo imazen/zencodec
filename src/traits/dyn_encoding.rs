@@ -68,6 +68,30 @@ pub trait DynEncoder: Send {
     /// Push scanline rows incrementally.
     fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), BoxedError>;
 
+    /// Declare the image before the first `push_rows`; see
+    /// [`Encoder::begin`](super::Encoder::begin).
+    fn begin(
+        &mut self,
+        width: u32,
+        height: u32,
+        descriptor: PixelDescriptor,
+    ) -> Result<(), BoxedError> {
+        let _ = (width, height, descriptor);
+        Ok(())
+    }
+
+    /// Encoded bytes ready to send; see
+    /// [`Encoder::pending_output`](super::Encoder::pending_output).
+    fn pending_output(&self) -> &[u8] {
+        &[]
+    }
+
+    /// Mark pending bytes as sent; see
+    /// [`Encoder::consume_output`](super::Encoder::consume_output).
+    fn consume_output(&mut self, n: usize) {
+        let _ = n;
+    }
+
     /// Finalize after push_rows. Returns encoded output.
     fn finish(self: Box<Self>) -> Result<EncodeOutput, BoxedError>;
 
@@ -112,6 +136,25 @@ impl<E: Encoder + Send> DynEncoder for EncoderShim<E> {
         self.0
             .push_rows(rows)
             .map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn begin(
+        &mut self,
+        width: u32,
+        height: u32,
+        descriptor: PixelDescriptor,
+    ) -> Result<(), BoxedError> {
+        self.0
+            .begin(width, height, descriptor)
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn pending_output(&self) -> &[u8] {
+        self.0.pending_output()
+    }
+
+    fn consume_output(&mut self, n: usize) {
+        self.0.consume_output(n)
     }
 
     fn finish(self: Box<Self>) -> Result<EncodeOutput, BoxedError> {

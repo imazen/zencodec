@@ -1,12 +1,13 @@
 //! A tiny tiled format decoded by a coroutine, driven every way a driver
 //! can drive it. Also pins the failure modes a coroutine decoder must not
 //! have: no panic after an error, truncation is an error, consumed input
-//! is released, sequential reads are sequential requests.
+//! is released, sequential reads ask for one contiguous span, gap bytes
+//! between requested ranges are not retained.
 
 use enough::StopReason;
 use zencodec::decode::{
-    BatchMeta, ByteRange, DecodeRowSink, IncrementalDecode, MetadataUpdate, OutputInfo, SinkError,
-    Step,
+    BatchMeta, DecodeRowSink, Event, IncrementalDecode, Input, MetadataUpdate, OutputInfo, Request,
+    SinkError, StepError,
 };
 use zencodec::source::{AccessPattern, ReadAt, SliceReadAt, SourceError};
 use zencodec::{ImageFormat, ImageInfo};
@@ -96,6 +97,7 @@ fn sequential_decoder() -> Dec {
         assert_eq!(&magic, b"SEQ1");
         ctx.set_info(ImageInfo::new(2, 1, ImageFormat::Png));
         ctx.set_output_descriptor(RGBA);
+        ctx.announce(MetadataUpdate::HeaderReady).await?;
         let mut row = [0u8; 8];
         ctx.read_exact(&mut row).await?;
         let s = PixelSlice::new(&row, 2, 1, 8, RGBA).unwrap();
@@ -128,6 +130,10 @@ impl ReadAt for CountingSource<'_> {
     }
 }
 
+fn stop() -> &'static dyn enough::Stop {
+    &enough::Unstoppable
+}
+
 #[test]
 fn random_access_decode_batches_tiles_in_one_round() {
     let file = minitile();
@@ -144,50 +150,60 @@ fn random_access_decode_batches_tiles_in_one_round() {
     assert_eq!(sink.bytes(), &expected_pixels()[..]);
     assert!(sink.finished());
     // header, index, tiles: three rounds; the two tiles in one batched call.
-    assert_eq!(stats.rounds, 3, "{stats:?}");
+    assert_eq!(stats.reads, 3, "{stats:?}");
     assert_eq!(src.calls, 3);
     assert_eq!(src.ranges_served, 4);
-    assert_eq!(stats.bytes_fetched, 16 + 16 + 64);
+    assert_eq!(stats.bytes_read, 16 + 16 + 64);
     assert_eq!(dec.retained_input(), 0, "consumed input is released");
     assert_eq!(dec.info().map(|i| (i.width, i.height)), Some((W, H)));
 }
 
 #[test]
-fn sequential_decode_from_one_byte_chunks() {
+fn one_large_window_serves_several_reads_in_one_step() {
+    // The whole file offered at once: header, index and both tiles come
+    // from the same input; gap bytes are consumed but not retained.
+    let file = minitile();
+    let mut dec = minitile_decoder();
+    let mut sink = CollectSink::new();
+    let (_, stats) = drive_from_slice(&mut dec, &file, &mut sink, None, file.len()).unwrap();
+    assert_eq!(sink.bytes(), &expected_pixels()[..]);
+    assert_eq!(dec.retained_input(), 0);
+    assert!(stats.steps <= 8, "{stats:?}");
+}
+
+#[test]
+fn sequential_decode_from_one_byte_windows() {
     let mut file = b"SEQ1".to_vec();
     file.extend_from_slice(&[7u8; 8]);
-    for chunk in [1usize, 3, 64] {
+    for window in [1usize, 3, 64] {
         let mut dec = sequential_decoder();
         let mut sink = CollectSink::new();
-        let (info, stats) = drive_from_slice(&mut dec, &file, &mut sink, None, chunk).unwrap();
+        let (info, _) = drive_from_slice(&mut dec, &file, &mut sink, None, window).unwrap();
         assert_eq!((info.width, info.height), (2, 1));
         assert_eq!(sink.bytes(), &[7u8; 8]);
-        assert!(
-            stats.rounds >= 12usize.div_ceil(chunk) as u64,
-            "{chunk}: {stats:?}"
-        );
     }
 }
 
 #[test]
-fn sequential_reads_are_zero_length_requests() {
+fn sequential_reads_ask_for_the_rest_of_the_read() {
     let mut dec = sequential_decoder();
     let mut sink = CollectSink::new();
+    let p = dec.step(Input::empty(), &mut sink, stop()).unwrap();
+    assert_eq!(p.event, Event::Need);
+    assert_eq!(dec.requested(), &[Request::at_least(0, 4)]);
+    let p = dec.step(Input::new(0, b"SE"), &mut sink, stop()).unwrap();
+    assert_eq!((p.consumed, p.event), (2, Event::Need));
     assert_eq!(
-        dec.step(&mut sink, None).unwrap(),
-        Step::Need(&[ByteRange::from_offset(0)])
+        dec.requested(),
+        &[Request::at_least(2, 2)],
+        "still short: one contiguous request for the rest of the read"
     );
-    assert_eq!(dec.feed(0, b"SE", false).unwrap(), 2);
-    assert_eq!(
-        dec.step(&mut sink, None).unwrap(),
-        Step::Need(&[ByteRange::from_offset(2)]),
-        "still short: ask from the first missing byte, not for a sized range"
-    );
-    assert_eq!(dec.feed(2, b"Q1", false).unwrap(), 2);
-    assert_eq!(
-        dec.step(&mut sink, None).unwrap(),
-        Step::Need(&[ByteRange::from_offset(4)])
-    );
+    let p = dec.step(Input::new(2, b"Q1"), &mut sink, stop()).unwrap();
+    assert_eq!(p.consumed, 2);
+    assert_eq!(p.event, Event::Metadata(MetadataUpdate::HeaderReady));
+    let p = dec.step(Input::empty(), &mut sink, stop()).unwrap();
+    assert_eq!(p.event, Event::Need);
+    assert_eq!(dec.requested(), &[Request::at_least(4, 8)]);
 }
 
 #[test]
@@ -200,57 +216,88 @@ fn error_is_terminal_and_never_panics() {
         }))
     });
     let mut sink = CollectSink::new();
-    assert!(matches!(dec.step(&mut sink, None).unwrap(), Step::Need(_)));
-    dec.feed(0, &[1, 2, 3, 4], false).unwrap();
-    let e = dec.step(&mut sink, None).unwrap_err();
+    assert_eq!(
+        dec.step(Input::empty(), &mut sink, stop()).unwrap().event,
+        Event::Need
+    );
+    let e = dec
+        .step(Input::new(0, &[1, 2, 3, 4]), &mut sink, stop())
+        .unwrap_err();
     assert!(e.to_string().contains("boom"));
+    assert!(matches!(e, StepError::Codec(_)));
     for _ in 0..3 {
         assert!(matches!(
-            dec.step(&mut sink, None),
-            Err(CoroutineError::Finished)
+            dec.step(Input::new(4, &[9]), &mut sink, stop()),
+            Err(StepError::Finished)
         ));
     }
-    assert_eq!(
-        dec.feed(4, &[9], false).unwrap(),
-        1,
-        "late bytes are swallowed, not refused"
-    );
+    assert!(dec.requested().is_empty());
 }
 
 #[test]
 fn truncated_input_is_an_eof_error_not_a_hang() {
     let mut dec = sequential_decoder();
     let mut sink = CollectSink::new();
-    let _ = dec.step(&mut sink, None).unwrap();
-    assert_eq!(dec.feed(0, b"SEQ1", false).unwrap(), 4);
-    let _ = dec.step(&mut sink, None).unwrap();
-    assert_eq!(dec.feed(4, &[1, 2, 3], true).unwrap(), 3);
-    match dec.step(&mut sink, None) {
-        Err(CoroutineError::Source(SourceError::UnexpectedEof { offset, len, total })) => {
+    let _ = dec.step(Input::empty(), &mut sink, stop()).unwrap();
+    let p = dec.step(Input::new(0, b"SEQ1"), &mut sink, stop()).unwrap();
+    assert_eq!(p.consumed, 4);
+    let _ = dec.step(Input::empty(), &mut sink, stop()).unwrap();
+    match dec.step(
+        Input::new(4, &[1, 2, 3]).with_total_len(7),
+        &mut sink,
+        stop(),
+    ) {
+        Err(StepError::Codec(CoroutineError::Source(SourceError::UnexpectedEof {
+            offset,
+            len,
+            total,
+        }))) => {
             assert_eq!((offset, len, total), (4, 8, Some(7)));
         }
         other => panic!("expected UnexpectedEof, got {other:?}"),
     }
-    // The same through the slice driver: it announces the length.
+    // The same through the slice driver: every input carries the length.
     let mut dec = sequential_decoder();
     let mut sink = CollectSink::new();
     let err = drive_from_slice(&mut dec, b"SEQ1abc", &mut sink, None, 64).unwrap_err();
-    assert!(matches!(
-        err,
-        DriveError::Codec(CoroutineError::Source(SourceError::UnexpectedEof { .. }))
-    ));
+    assert!(
+        matches!(
+            err,
+            DriveError::Step(StepError::Codec(CoroutineError::Source(
+                SourceError::UnexpectedEof { .. }
+            )))
+        ),
+        "{err:?}"
+    );
 }
 
 #[test]
-fn random_read_past_announced_end_fails() {
+fn random_read_past_the_end_fails() {
     let file = minitile();
-    let mut truncated = file.clone();
-    truncated.truncate(100);
+    let truncated = &file[..100];
+    // The slice driver gives the length: the decoder reports the overrun.
     let mut dec = minitile_decoder();
     let mut sink = CollectSink::new();
-    // The driver fetches sized ranges without asking the source's length
-    // first, so the source reports the overrun.
-    let err = drive_from_slice(&mut dec, &truncated, &mut sink, None, 64).unwrap_err();
+    let err = drive_from_slice(&mut dec, truncated, &mut sink, None, 64).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            DriveError::Step(StepError::Codec(CoroutineError::Source(
+                SourceError::UnexpectedEof { offset: 96, .. }
+            )))
+        ),
+        "{err:?}"
+    );
+    // A source that does not announce its length reports the overrun itself.
+    let mut src = CountingSource {
+        inner: SliceReadAt::new(truncated),
+        calls: 0,
+        ranges_served: 0,
+    };
+    let mut dec = minitile_decoder();
+    let mut sink = CollectSink::new();
+    let err = drive_from_read_at(&mut dec, &mut src, &mut sink, None, DriveOptions::default())
+        .unwrap_err();
     assert!(
         matches!(
             err,
@@ -258,28 +305,14 @@ fn random_read_past_announced_end_fails() {
         ),
         "{err:?}"
     );
-    // A decoder told the length up front reports the overrun itself.
-    let mut dec = minitile_decoder();
-    let mut sink = CollectSink::new();
-    dec.feed(100, &[], true).unwrap();
-    let err = drive_from_slice(&mut dec, &truncated, &mut sink, None, 64).unwrap_err();
-    assert!(
-        matches!(
-            err,
-            DriveError::Codec(CoroutineError::Source(SourceError::UnexpectedEof {
-                offset: 96,
-                ..
-            }))
-        ),
-        "{err:?}"
-    );
 }
 
 #[test]
-fn input_cap_bounds_memory_and_feed_accepts_partially() {
-    // Cap of 8 bytes; the decoder reads 4 then 8 sequentially.
-    let mut dec: Dec =
-        CoroutineDecoder::boxed_with_options(8, AccessPattern::Sequential, |mut ctx| async move {
+fn input_cap_bounds_memory() {
+    // Cap of 8 bytes; the decoder reads 4 then 8 sequentially. A 12-byte
+    // input is taken in parts so retention never exceeds the cap.
+    let make = |cap| -> Dec {
+        CoroutineDecoder::boxed_with_options(cap, AccessPattern::Sequential, |mut ctx| async move {
             let mut a = [0u8; 4];
             ctx.read_exact(&mut a).await?;
             let mut b = [0u8; 8];
@@ -289,59 +322,134 @@ fn input_cap_bounds_memory_and_feed_accepts_partially() {
             let s = PixelSlice::new(&b, 2, 1, 8, RGBA).unwrap();
             ctx.write_rows(BatchMeta::final_rows(0), &s).await?;
             Ok(OutputInfo::full_decode(2, 1, RGBA))
-        });
-    let mut sink = CollectSink::new();
-    let _ = dec.step(&mut sink, None).unwrap();
+        })
+    };
     let twelve: Vec<u8> = (1..=12).collect();
-    assert_eq!(
-        dec.feed(0, &twelve, true).unwrap(),
-        8,
-        "cap: only 8 accepted"
-    );
-    assert_eq!(dec.retained_input(), 8);
-    assert!(matches!(dec.step(&mut sink, None).unwrap(), Step::Need(_)));
-    assert_eq!(
-        dec.retained_input(),
-        4,
-        "the 4-byte read released its bytes"
-    );
-    assert_eq!(dec.feed(8, &twelve[8..], true).unwrap(), 4);
-    assert!(matches!(
-        dec.step(&mut sink, None).unwrap(),
-        Step::Rows { rows: 1, .. }
-    ));
+    let mut dec = make(8);
+    let mut sink = CollectSink::new();
+    let _ = dec.step(Input::empty(), &mut sink, stop()).unwrap();
+    let p = dec
+        .step(Input::new(0, &twelve).with_total_len(12), &mut sink, stop())
+        .unwrap();
+    assert_eq!(p.consumed, 12);
+    assert!(matches!(p.event, Event::Rows { rows: 1, .. }), "{p:?}");
     assert_eq!(sink.bytes(), &twelve[4..]);
     assert_eq!(dec.retained_input(), 0);
-    assert!(matches!(dec.step(&mut sink, None).unwrap(), Step::Done(_)));
+    assert!(
+        dec.step(Input::empty(), &mut sink, stop())
+            .unwrap()
+            .event
+            .is_done()
+    );
+
+    // A single read larger than the cap can never complete: an error, not a
+    // stall.
+    let mut dec = make(6);
+    let mut sink = CollectSink::new();
+    let err = drive_from_slice(&mut dec, &twelve, &mut sink, None, 64).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            DriveError::Step(StepError::Codec(CoroutineError::ReadExceedsInputCap {
+                len: 8,
+                cap: 6
+            }))
+        ),
+        "{err:?}"
+    );
 }
 
 #[test]
-fn one_strip_per_step_is_the_backpressure() {
+fn gap_bytes_between_ranges_are_not_retained() {
+    // A tile walk where every input is a large window containing unrequested
+    // bytes: the store holds only what reads still need.
+    let n = 40usize;
+    let tile = 16usize;
+    let mut file = vec![0u8; n * tile * 4];
+    for (i, b) in file.iter_mut().enumerate() {
+        *b = i as u8;
+    }
+    let file2 = file.clone();
+    let mut dec: Dec = CoroutineDecoder::boxed_with_options(
+        64,
+        AccessPattern::RandomAccess,
+        move |mut ctx| async move {
+            ctx.set_info(ImageInfo::new(1, 1, ImageFormat::Png));
+            ctx.set_output_descriptor(RGBA);
+            let mut sum = 0u64;
+            for i in 0..n {
+                let mut t = [0u8; 16];
+                ctx.read_exact_at((i * tile * 4) as u64, &mut t).await?;
+                sum += t.iter().map(|&v| v as u64).sum::<u64>();
+            }
+            let expected: u64 = (0..n)
+                .map(|i| {
+                    file2[i * tile * 4..i * tile * 4 + tile]
+                        .iter()
+                        .map(|&v| v as u64)
+                        .sum::<u64>()
+                })
+                .sum();
+            assert_eq!(sum, expected);
+            let px = [0u8; 4];
+            ctx.write_rows(
+                BatchMeta::final_rows(0),
+                &PixelSlice::new(&px, 1, 1, 4, RGBA).unwrap(),
+            )
+            .await?;
+            Ok(OutputInfo::full_decode(1, 1, RGBA))
+        },
+    );
+    let mut sink = CollectSink::new();
+    let mut src = CountingSource {
+        inner: SliceReadAt::new(&file),
+        calls: 0,
+        ranges_served: 0,
+    };
+    drive_from_read_at(
+        &mut dec,
+        &mut src,
+        &mut sink,
+        None,
+        DriveOptions::new(4096, 64 * 1024),
+    )
+    .unwrap();
+    assert_eq!(dec.retained_input(), 0);
+}
+
+#[test]
+fn one_strip_per_step_and_begin_before_rows() {
     let file = minitile();
     let mut dec = minitile_decoder();
     let mut sink = CollectSink::new();
     let mut rows_events = 0;
-    let mut src = SliceReadAt::new(&file);
+    let mut input_at = 0usize;
+    let mut input_len = 0usize;
     loop {
-        match dec.step(&mut sink, None).unwrap() {
-            Step::Need(ranges) => {
-                let ranges = ranges.to_vec();
-                for r in ranges {
-                    let mut buf = vec![0u8; r.length as usize];
-                    src.read_exact_at(r.offset, &mut buf).unwrap();
-                    dec.feed(r.offset, &buf, false).unwrap();
-                }
+        let input = Input::new(input_at as u64, &file[input_at..input_at + input_len])
+            .with_total_len(file.len() as u64);
+        let p = dec.step(input, &mut sink, stop()).unwrap();
+        input_at += p.consumed;
+        input_len -= p.consumed;
+        match p.event {
+            Event::Need => {
+                let r = match dec.requested()[0] {
+                    Request::Range(r) => r,
+                    other => panic!("{other:?}"),
+                };
+                input_at = r.offset as usize;
+                input_len = r.length as usize;
             }
-            Step::Rows { meta, rows } => {
+            Event::Rows { meta, rows } => {
                 rows_events += 1;
                 assert_eq!(rows, 2);
                 assert_eq!(sink.rows_written(), 2 * rows_events);
                 assert_eq!(meta.y, 2 * (rows_events as u32 - 1));
             }
-            Step::Metadata(MetadataUpdate::HeaderReady) => {
+            Event::Metadata(MetadataUpdate::HeaderReady) => {
                 assert_eq!(sink.width(), W, "begin ran at HeaderReady, before any rows");
             }
-            Step::Done(_) => break,
+            Event::Done(_) => break,
             _ => {}
         }
     }
@@ -350,23 +458,23 @@ fn one_strip_per_step_is_the_backpressure() {
 }
 
 #[test]
-fn cancellation_keeps_the_stop_reason() {
+fn cancellation_keeps_the_stop_reason_and_is_terminal() {
     let stopper = almost_enough::Stopper::new();
     let mut dec = minitile_decoder();
     let mut sink = CollectSink::new();
     use almost_enough::Cancellable;
-    assert!(matches!(
-        dec.step(&mut sink, Some(&stopper)).unwrap(),
-        Step::Need(_)
-    ));
+    assert_eq!(
+        dec.step(Input::empty(), &mut sink, &stopper).unwrap().event,
+        Event::Need
+    );
     stopper.stop();
-    match dec.step(&mut sink, Some(&stopper)) {
-        Err(CoroutineError::Cancelled(StopReason::Cancelled)) => {}
+    match dec.step(Input::empty(), &mut sink, &stopper) {
+        Err(StepError::Cancelled(StopReason::Cancelled)) => {}
         other => panic!("expected Cancelled, got {other:?}"),
     }
     assert!(matches!(
-        dec.step(&mut sink, None),
-        Err(CoroutineError::Finished)
+        dec.step(Input::empty(), &mut sink, stop()),
+        Err(StepError::Finished)
     ));
 }
 
@@ -415,14 +523,17 @@ impl DecodeRowSink for PassSink {
 }
 
 #[test]
-fn provisional_rows_reach_a_sink_that_accepts_them() {
+fn provisional_rows_reach_only_a_sink_that_accepts_them() {
     let progressive = |mut ctx: CoroutineContext| async move {
         ctx.set_info(ImageInfo::new(1, 1, ImageFormat::Png));
         ctx.set_output_descriptor(RGBA);
+        // Announcing the header calls the sink's `begin`, which is when
+        // `accepts_provisional` is read.
+        ctx.announce(MetadataUpdate::HeaderReady).await?;
         let coarse = [128u8; 4];
         let fine = [200u8; 4];
-        let s = PixelSlice::new(&coarse, 1, 1, 4, RGBA).unwrap();
         if ctx.accepts_provisional() {
+            let s = PixelSlice::new(&coarse, 1, 1, 4, RGBA).unwrap();
             ctx.write_rows(BatchMeta::new(0, false).with_pass(0), &s)
                 .await?;
         }
@@ -440,12 +551,34 @@ fn provisional_rows_reach_a_sink_that_accepts_them() {
     assert!(sink.passes[1].0.is_final);
     assert_eq!(sink.passes[1].1, [200u8; 4]);
 
-    // A final-only sink sees the final row once.
+    // A final-only sink sees the final row once, through provide_next_buffer.
     let mut dec: Dec = CoroutineDecoder::boxed(progressive);
     let mut sink = CollectSink::new();
     drive_from_slice(&mut dec, &[], &mut sink, None, 16).unwrap();
     assert_eq!(sink.rows_written(), 1);
     assert_eq!(sink.bytes(), &[200u8; 4]);
+}
+
+#[test]
+fn rows_before_the_header_are_an_error() {
+    let mut dec: Dec = CoroutineDecoder::boxed(|mut ctx| async move {
+        let px = [0u8; 4];
+        ctx.write_rows(
+            BatchMeta::final_rows(0),
+            &PixelSlice::new(&px, 1, 1, 4, RGBA).unwrap(),
+        )
+        .await?;
+        Ok(OutputInfo::full_decode(1, 1, RGBA))
+    });
+    let mut sink = CollectSink::new();
+    let err = drive_from_slice(&mut dec, &[], &mut sink, None, 16).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            DriveError::Step(StepError::Codec(CoroutineError::RowsBeforeHeader))
+        ),
+        "{err:?}"
+    );
 }
 
 #[test]
@@ -461,11 +594,17 @@ fn len_request_is_served_by_drivers() {
         ctx.write_rows(BatchMeta::final_rows(0), &s).await?;
         Ok(OutputInfo::full_decode(1, 1, PixelDescriptor::RGB8_SRGB))
     });
-    let mut sink = CollectSink::new();
     let data = [0u8, 0, 0, 0, 0, 42, 43];
-    let (_, stats) = drive_from_slice(&mut dec, &data, &mut sink, None, 64).unwrap();
+    let mut src = CountingSource {
+        inner: SliceReadAt::new(&data),
+        calls: 0,
+        ranges_served: 0,
+    };
+    let mut sink = CollectSink::new();
+    let (_, stats) =
+        drive_from_read_at(&mut dec, &mut src, &mut sink, None, DriveOptions::default()).unwrap();
     assert_eq!(sink.bytes(), &[42, 43, 0]);
-    assert_eq!(stats.bytes_fetched, 2, "only the tail was fetched");
+    assert_eq!(stats.bytes_read, 2, "only the tail was read");
 }
 
 #[test]
@@ -476,7 +615,7 @@ fn stalled_coroutine_is_an_error() {
     });
     let mut sink = CollectSink::new();
     assert!(matches!(
-        dec.step(&mut sink, None),
-        Err(CoroutineError::Stalled)
+        dec.step(Input::empty(), &mut sink, stop()),
+        Err(StepError::Codec(CoroutineError::Stalled))
     ));
 }

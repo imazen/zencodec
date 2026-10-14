@@ -180,6 +180,34 @@ impl<R: std::io::Read> ReadAt for BufferedReadAt<R> {
         Ok(())
     }
 
+    /// Reads forward only as far as `offset + out.len()`: the end of the
+    /// stream is found by a short read, never by consuming it to learn the
+    /// length.
+    fn read_at(&mut self, offset: u64, out: &mut [u8]) -> Result<usize, Self::Error> {
+        if out.is_empty() {
+            return Ok(0);
+        }
+        if offset < self.buf_start {
+            return Err(SourceError::BeyondWindow {
+                offset,
+                oldest_retained: self.buf_start,
+            });
+        }
+        let end = offset.saturating_add(out.len() as u64);
+        self.fill_to(end, offset)?;
+        if offset >= self.watermark {
+            return Ok(0);
+        }
+        let n = ((self.watermark - offset) as usize).min(out.len());
+        let start = (offset - self.buf_start) as usize;
+        out[..n].copy_from_slice(&self.buf[start..start + n]);
+        Ok(n)
+    }
+
+    fn len_hint(&self) -> Option<u64> {
+        self.eof.then_some(self.watermark)
+    }
+
     fn read_many_at(&mut self, reqs: &mut [(u64, &mut [u8])]) -> Result<(), Self::Error> {
         // Serve in stream order so the window only moves forward.
         reqs.sort_by_key(|(offset, _)| *offset);

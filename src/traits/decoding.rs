@@ -13,7 +13,7 @@ use super::BoxedError;
 use super::decoder::{AnimationFrameDecoder, Decode, StreamingDecode};
 use super::dyn_decoding::{
     AnimationFrameDecoderShim, DecoderShim, DynAnimationFrameDecoder, DynDecoder,
-    DynIncrementalDecoder, DynStreamingDecoder, StreamingDecoderShim,
+    DynStreamingDecoder, StreamingDecoderShim,
 };
 
 // ===========================================================================
@@ -519,7 +519,7 @@ pub trait DecodeJob<'a>: Sized {
     fn dyn_incremental_decoder(
         self,
         preferred: &[PixelDescriptor],
-    ) -> Result<Box<dyn DynIncrementalDecoder>, BoxedError> {
+    ) -> Result<Box<super::incremental::DynIncrementalDecoder>, BoxedError> {
         let _ = preferred;
         Err(Box::new(
             crate::capabilities::UnsupportedOperation::IncrementalDecode,

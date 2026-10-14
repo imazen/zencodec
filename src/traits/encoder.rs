@@ -101,6 +101,45 @@ pub trait Encoder: Sized {
         self.encode(pixels)
     }
 
+    /// Declare the image before the first [`push_rows`](Self::push_rows):
+    /// its full dimensions and the descriptor rows will arrive in.
+    ///
+    /// An encoder that knows the size up front can write its header at
+    /// once and, if it declares
+    /// [`streaming_output`](crate::encode::EncodeCapabilities::streaming_output),
+    /// make encoded bytes available through
+    /// [`pending_output`](Self::pending_output) as rows arrive. Pushing more
+    /// or fewer rows than declared is then an error at `push_rows` or
+    /// `finish`. Calling `begin` is optional; without it, encoders behave as
+    /// before and may hold all output until `finish`.
+    ///
+    /// Default: accepts and ignores the declaration.
+    fn begin(
+        &mut self,
+        width: u32,
+        height: u32,
+        descriptor: zenpixels::PixelDescriptor,
+    ) -> Result<(), Self::Error> {
+        let _ = (width, height, descriptor);
+        Ok(())
+    }
+
+    /// Encoded bytes ready to send, not yet consumed.
+    ///
+    /// Streaming encoders fill this as rows are pushed; a driver writes it
+    /// out and calls [`consume_output`](Self::consume_output), keeping output
+    /// memory bounded. [`finish`](Self::finish) returns only the bytes not
+    /// consumed. Default: empty (all output arrives from `finish`).
+    fn pending_output(&self) -> &[u8] {
+        &[]
+    }
+
+    /// Mark the first `n` bytes of [`pending_output`](Self::pending_output)
+    /// as sent. `n` must not exceed its length. Default: no-op.
+    fn consume_output(&mut self, n: usize) {
+        let _ = n;
+    }
+
     /// Push scanline rows incrementally.
     ///
     /// # Errors

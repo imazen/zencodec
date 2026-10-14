@@ -1,6 +1,7 @@
 //! Transcode without an intermediate image: a sink that hands the decoder
 //! its own strip buffer and pushes each finished strip into an encoder.
 
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt;
 
@@ -10,6 +11,7 @@ use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 
 /// Failure of [`EncoderSink::finish`].
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum EncoderSinkError<E> {
     /// The sink failed before the encoder could finish.
     Sink(SinkError),
@@ -35,21 +37,32 @@ impl<E: core::error::Error + 'static> core::error::Error for EncoderSinkError<E>
     }
 }
 
-/// [`DecodeRowSink`] that feeds an [`Encoder`]'s `push_rows`.
+/// [`DecodeRowSink`] that feeds an [`Encoder`].
 ///
+/// `begin` declares the image to the encoder ([`Encoder::begin`]), so an
+/// encoder with [`streaming_output`](zencodec::encode::EncodeCapabilities::streaming_output)
+/// writes its header at once and makes bytes available as rows arrive.
 /// `provide_next_buffer` returns the sink's own strip buffer, so the
-/// decoder writes straight into the bytes the encoder will read; the
-/// strip is pushed on the next `provide_*` call or on `finish`. No pixel
-/// is copied between decoder and encoder.
+/// decoder writes straight into the bytes the encoder reads; the strip is
+/// pushed on the next `provide_next_buffer` or on `finish`. No pixel is
+/// copied between decoder and encoder.
+///
+/// Drain encoded bytes between decode steps with
+/// [`pending_output`](Self::pending_output) and
+/// [`consume_output`](Self::consume_output) to keep output memory bounded.
+/// Encoder errors reach the decoder's caller as the sink error, typed, so
+/// they can be told apart from malformed input.
 pub struct EncoderSink<E> {
     encoder: Option<E>,
     strip: Vec<u8>,
     pending: Option<(u32, u32, PixelDescriptor)>,
     rows_pushed: u64,
-    error: Option<SinkError>,
 }
 
-impl<E: Encoder> EncoderSink<E> {
+impl<E: Encoder> EncoderSink<E>
+where
+    E::Error: Send + Sync,
+{
     /// Wrap `encoder`; rows go to its `push_rows`.
     pub fn new(encoder: E) -> Self {
         Self {
@@ -57,13 +70,40 @@ impl<E: Encoder> EncoderSink<E> {
             strip: Vec::new(),
             pending: None,
             rows_pushed: 0,
-            error: None,
         }
     }
 
     /// Rows pushed into the encoder so far.
     pub fn rows_pushed(&self) -> u64 {
         self.rows_pushed
+    }
+
+    /// The encoder.
+    pub fn encoder(&self) -> &E {
+        self.encoder.as_ref().expect("present until finish")
+    }
+
+    /// Encoded bytes ready to send; see [`Encoder::pending_output`].
+    pub fn pending_output(&self) -> &[u8] {
+        self.encoder().pending_output()
+    }
+
+    /// Mark the first `n` pending bytes as sent.
+    pub fn consume_output(&mut self, n: usize) {
+        if let Some(enc) = self.encoder.as_mut() {
+            enc.consume_output(n);
+        }
+    }
+
+    /// Write every pending byte to `w`. Returns how many were written.
+    #[cfg(feature = "std")]
+    pub fn write_pending(&mut self, w: &mut impl std::io::Write) -> std::io::Result<usize> {
+        let n = self.pending_output().len();
+        if n > 0 {
+            w.write_all(self.pending_output())?;
+            self.consume_output(n);
+        }
+        Ok(n)
     }
 
     fn push_pending(&mut self) -> Result<(), SinkError> {
@@ -83,20 +123,14 @@ impl<E: Encoder> EncoderSink<E> {
             .encoder
             .as_mut()
             .ok_or_else(|| SinkError::from("EncoderSink: encoder already finished"))?;
-        enc.push_rows(slice)
-            .map_err(|e| SinkError::from(alloc::format!("encoder: {e}")))?;
+        enc.push_rows(slice).map_err(|e| Box::new(e) as SinkError)?;
         self.rows_pushed += rows as u64;
         Ok(())
     }
 
-    /// Push any pending strip and finish the encoder.
-    ///
-    /// Call after the decode returned `Done` (the decoder called
-    /// `finish` on this sink, which pushed the last strip).
+    /// Push any pending strip and finish the encoder. Returns the bytes not
+    /// already taken through [`consume_output`](Self::consume_output).
     pub fn finish(mut self) -> Result<EncodeOutput, EncoderSinkError<E::Error>> {
-        if let Some(e) = self.error.take() {
-            return Err(EncoderSinkError::Sink(e));
-        }
         self.push_pending().map_err(EncoderSinkError::Sink)?;
         let enc = self.encoder.take().expect("encoder present until finish");
         enc.finish().map_err(EncoderSinkError::Encoder)
@@ -112,7 +146,24 @@ impl<E: Encoder> fmt::Debug for EncoderSink<E> {
     }
 }
 
-impl<E: Encoder> DecodeRowSink for EncoderSink<E> {
+impl<E: Encoder> DecodeRowSink for EncoderSink<E>
+where
+    E::Error: Send + Sync,
+{
+    fn begin(
+        &mut self,
+        width: u32,
+        height: u32,
+        descriptor: PixelDescriptor,
+    ) -> Result<(), SinkError> {
+        let enc = self
+            .encoder
+            .as_mut()
+            .ok_or_else(|| SinkError::from("EncoderSink: encoder already finished"))?;
+        enc.begin(width, height, descriptor)
+            .map_err(|e| Box::new(e) as SinkError)
+    }
+
     fn provide_next_buffer(
         &mut self,
         _y: u32,

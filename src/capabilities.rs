@@ -134,6 +134,7 @@ pub struct EncodeCapabilities {
     animation: bool,
     animation_timing: bool,
     push_rows: bool,
+    streaming_output: bool,
     encode_from: bool,
     // Format capabilities
     lossy: bool,
@@ -177,6 +178,7 @@ impl EncodeCapabilities {
             animation: false,
             animation_timing: false,
             push_rows: false,
+            streaming_output: false,
             encode_from: false,
             lossy: false,
             lossless: false,
@@ -248,6 +250,15 @@ impl EncodeCapabilities {
     /// Whether `push_rows()` / `finish()` work (row-level encode).
     pub const fn push_rows(&self) -> bool {
         self.push_rows
+    }
+    /// Whether encoded bytes become available through
+    /// [`Encoder::pending_output`](crate::encode::Encoder::pending_output)
+    /// while rows are pushed, after
+    /// [`Encoder::begin`](crate::encode::Encoder::begin) declared the image.
+    /// Encoders that must seek back (container sizes, trailing indexes)
+    /// leave it `false` and hold their output until `finish`.
+    pub const fn streaming_output(&self) -> bool {
+        self.streaming_output
     }
     /// Whether `encode_from()` works (pull-from-source encode).
     pub const fn encode_from(&self) -> bool {
@@ -433,6 +444,11 @@ impl EncodeCapabilities {
         self.push_rows = v;
         self
     }
+    /// Set whether encoded output streams while rows are pushed.
+    pub const fn with_streaming_output(mut self, v: bool) -> Self {
+        self.streaming_output = v;
+        self
+    }
     /// Set whether pull-from-source (`encode_from`) encoding is supported.
     pub const fn with_encode_from(mut self, v: bool) -> Self {
         self.encode_from = v;
@@ -588,6 +604,7 @@ pub struct DecodeCapabilities {
     streaming: bool,
     incremental: bool,
     seekable: bool,
+    access_pattern: crate::source::AccessPattern,
     // Format capabilities
     hdr: bool,
     gain_map: bool,
@@ -630,6 +647,7 @@ impl DecodeCapabilities {
             streaming: false,
             incremental: false,
             seekable: false,
+            access_pattern: crate::source::AccessPattern::Sequential,
             hdr: false,
             gain_map: false,
             inventory: false,
@@ -697,6 +715,13 @@ impl DecodeCapabilities {
     /// Whether `push_decoder_from_source()` decodes from a random-access source.
     pub const fn seekable(&self) -> bool {
         self.seekable
+    }
+    /// How this codec reads its input on the incremental and source-bound
+    /// paths, so a driver can choose a buffering strategy before decoding.
+    /// A decoder instance may refine it once the header is parsed
+    /// ([`IncrementalDecode::access_pattern`](crate::decode::IncrementalDecode::access_pattern)).
+    pub const fn access_pattern(&self) -> crate::source::AccessPattern {
+        self.access_pattern
     }
     /// Whether the codec supports HDR content.
     pub const fn hdr(&self) -> bool {
@@ -877,6 +902,11 @@ impl DecodeCapabilities {
     /// Set whether `push_decoder_from_source()` is supported.
     pub const fn with_seekable(mut self, v: bool) -> Self {
         self.seekable = v;
+        self
+    }
+    /// Set how this codec reads its input.
+    pub const fn with_access_pattern(mut self, v: crate::source::AccessPattern) -> Self {
+        self.access_pattern = v;
         self
     }
     /// Set whether HDR content is supported.

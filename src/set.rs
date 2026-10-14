@@ -68,8 +68,8 @@ use crate::fidelity::Fidelity;
 use crate::format::{ImageFormat, ImageFormatRegistry};
 use crate::traits::{
     AnimationFrameEncoder, BoxedError, DecoderConfig, DynAnimationFrameDecoder, DynDecodeJob,
-    DynDecoderConfig, DynEncodeJob, DynEncoderConfig, DynIncrementalDecoder, DynStreamingDecoder,
-    EncodeJob, Encoder, EncoderConfig,
+    DynDecoderConfig, DynEncodeJob, DynEncoderConfig, DynStreamingDecoder, EncodeJob, Encoder,
+    EncoderConfig,
 };
 use crate::{
     ColorEmitPolicy, DecodeOutput, DecodePolicy, DecodeRowSink, EncodeOutput, EncodePolicy,
@@ -464,23 +464,25 @@ impl CodecSet {
     }
 
     /// Create an incremental (sans-I/O) decoder that detects the format from
-    /// the first bytes fed and delegates to the registered decoder.
+    /// the first bytes offered and delegates to the registered decoder.
     ///
-    /// While probing, the returned decoder asks for the sequential prefix
-    /// (`Step::Need` at its cursor) and buffers at most 16 KiB; the format
-    /// must be recognised within that prefix.
+    /// While probing it asks for the first
+    /// [`ImageFormat::RECOMMENDED_PROBE_BYTES`] (or the whole source if
+    /// shorter), takes none of them, and hands the same input to the
+    /// detected decoder. Before detection it reports the most demanding
+    /// access pattern among the registered decoders.
     pub fn incremental_decoder(
         &self,
         preferred: &[PixelDescriptor],
-    ) -> Box<dyn DynIncrementalDecoder> {
-        Box::new(CodecSetIncrementalDecoder::new(self.clone(), preferred))
+    ) -> Box<crate::traits::DynIncrementalDecoder> {
+        crate::traits::erase_incremental(CodecSetIncrementalDecoder::new(self.clone(), preferred))
     }
 
     /// Decode from a random-access source into `sink`, detecting the format
     /// from the source's first bytes.
     ///
-    /// Probes offset 0 (at most [`ImageFormat::RECOMMENDED_PROBE_BYTES`]
-    /// plus headroom, or the whole source if shorter), then dispatches to
+    /// Probes offset 0 with a short read (at most
+    /// [`ImageFormat::RECOMMENDED_PROBE_BYTES`] plus headroom), then dispatches to
     /// the detected codec's
     /// [`push_decoder_from_source`](DynDecodeJob::push_decoder_from_source).
     /// A codec without the `seekable` capability reports
@@ -491,10 +493,11 @@ impl CodecSet {
         sink: &mut dyn DecodeRowSink,
         preferred: &[PixelDescriptor],
     ) -> Result<OutputInfo, BoxedError> {
-        let total = source.len()?;
-        let want = ((ImageFormat::RECOMMENDED_PROBE_BYTES + 1024) as u64).min(total) as usize;
-        let mut probe = alloc::vec![0u8; want];
-        source.read_exact_at(0, &mut probe)?;
+        // A short read (not `len()`) bounds the probe, so a stream-backed
+        // source is not consumed to its end before decoding starts.
+        let mut probe = alloc::vec![0u8; ImageFormat::RECOMMENDED_PROBE_BYTES + 1024];
+        let n = source.read_at(0, &mut probe)?;
+        probe.truncate(n);
         let format = self
             .detect(&probe)
             .ok_or_else(|| Box::new(CodecSetError::UnrecognizedFormat) as BoxedError)?;
@@ -849,34 +852,14 @@ impl fmt::Debug for CodecSet {
 // CodecSetIncrementalDecoder
 // ===========================================================================
 
-/// Largest prefix the set buffers while detecting the format.
-const PROBE_CAP: usize = 16 * 1024;
-
-/// Format-detecting incremental decoder: buffers the stream prefix until a
-/// registered format is recognised, then delegates every call to that
-/// codec's [`DynIncrementalDecoder`].
+/// Format-detecting incremental decoder: asks for the stream prefix until a
+/// registered format is recognised, then delegates every step to that
+/// codec's incremental decoder. It never copies input.
 pub struct CodecSetIncrementalDecoder {
     set: CodecSet,
     preferred: Vec<PixelDescriptor>,
-    state: CodecSetIncState,
-    /// Backing store for the `Step::Need` returned while probing.
-    need: [crate::traits::ByteRange; 1],
-}
-
-enum CodecSetIncState {
-    Probing {
-        buffer: Vec<u8>,
-        total: Option<u64>,
-    },
-    Decoding {
-        dec: Box<dyn DynIncrementalDecoder>,
-        /// Probe bytes the inner decoder has not accepted yet, with the
-        /// absolute offset of `pending[0]` and whether they end the source.
-        pending: Vec<u8>,
-        pending_offset: u64,
-        pending_eof: bool,
-    },
-    Failed,
+    inner: Option<Box<crate::traits::DynIncrementalDecoder>>,
+    probe: [crate::traits::Request; 1],
 }
 
 impl CodecSetIncrementalDecoder {
@@ -885,157 +868,92 @@ impl CodecSetIncrementalDecoder {
         Self {
             set,
             preferred: preferred.to_vec(),
-            state: CodecSetIncState::Probing {
-                buffer: Vec::with_capacity(ImageFormat::RECOMMENDED_PROBE_BYTES),
-                total: None,
-            },
-            need: [crate::traits::ByteRange::from_offset(0)],
+            inner: None,
+            probe: [crate::traits::Request::at_least(
+                0,
+                ImageFormat::RECOMMENDED_PROBE_BYTES,
+            )],
         }
-    }
-
-    fn check_stop(&self, stop: Option<&dyn enough::Stop>) -> Result<(), BoxedError> {
-        let stop = stop
-            .or_else(|| self.set.pulse.as_ref().map(|p| p as &dyn enough::Stop))
-            .or_else(|| self.set.stop.as_ref().map(|s| s as &dyn enough::Stop));
-        if let Some(s) = stop
-            && s.check().is_err()
-        {
-            return Err(Box::new(CodecSetError::Cancelled));
-        }
-        Ok(())
-    }
-
-    /// Re-offer buffered probe bytes to the inner decoder. Returns `true`
-    /// once nothing is pending.
-    fn drain_pending(
-        dec: &mut Box<dyn DynIncrementalDecoder>,
-        pending: &mut Vec<u8>,
-        pending_offset: &mut u64,
-        pending_eof: bool,
-    ) -> Result<bool, BoxedError> {
-        if pending.is_empty() {
-            return Ok(true);
-        }
-        let accepted = dec.feed(*pending_offset, pending, pending_eof)?;
-        pending.drain(..accepted);
-        *pending_offset += accepted as u64;
-        Ok(pending.is_empty())
     }
 }
 
-impl DynIncrementalDecoder for CodecSetIncrementalDecoder {
-    fn as_any(&self) -> &dyn core::any::Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
-        self
-    }
-
-    fn into_any(self: Box<Self>) -> Box<dyn core::any::Any> {
-        self
-    }
-
-    fn feed(&mut self, offset: u64, bytes: &[u8], eof: bool) -> Result<usize, BoxedError> {
-        match &mut self.state {
-            CodecSetIncState::Probing { buffer, total } => {
-                // Probing accepts only the sequential prefix.
-                if offset != buffer.len() as u64 {
-                    self.state = CodecSetIncState::Failed;
-                    return Err(Box::new(CodecSetError::UnrecognizedFormat));
-                }
-                let room = PROBE_CAP.saturating_sub(buffer.len());
-                let take = bytes.len().min(room);
-                buffer.extend_from_slice(&bytes[..take]);
-                if eof && take == bytes.len() {
-                    *total = Some(offset + bytes.len() as u64);
-                }
-                Ok(take)
-            }
-            CodecSetIncState::Decoding {
-                dec,
-                pending,
-                pending_offset,
-                pending_eof,
-            } => {
-                if !Self::drain_pending(dec, pending, pending_offset, *pending_eof)? {
-                    return Ok(0);
-                }
-                dec.feed(offset, bytes, eof)
-            }
-            CodecSetIncState::Failed => Err(Box::new(CodecSetError::UnrecognizedFormat)),
-        }
-    }
+impl crate::traits::IncrementalDecode for CodecSetIncrementalDecoder {
+    type Error = CodecSetError;
 
     fn step(
         &mut self,
+        input: crate::traits::Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: Option<&dyn enough::Stop>,
-    ) -> Result<crate::traits::Step<'_>, BoxedError> {
-        self.check_stop(stop)?;
-        if let CodecSetIncState::Probing { buffer, total } = &mut self.state {
-            let detected = self.set.detect(buffer);
-            let at_end = total.is_some_and(|t| t == buffer.len() as u64);
+        stop: &dyn enough::Stop,
+    ) -> Result<crate::traits::Progress, crate::traits::StepError<CodecSetError>> {
+        use crate::traits::{Progress, StepError};
+        for set_stop in [
+            self.set.pulse.as_ref().map(|p| p as &dyn enough::Stop),
+            self.set.stop.as_ref().map(|s| s as &dyn enough::Stop),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            set_stop.check()?;
+        }
+        if self.inner.is_none() {
+            if input.offset != 0 {
+                return Ok(Progress::need(0));
+            }
+            let detected = self.set.detect(input.bytes);
+            let complete = self.probe[0].is_satisfied_by(&input);
             let conclusive = match detected {
-                Some(ImageFormat::Tiff) if !at_end && buffer.len() < 1024 => false,
+                // TIFF magic is short and shared with TIFF-based raws: look
+                // at more of the file before committing.
+                Some(ImageFormat::Tiff) => complete,
                 Some(_) => true,
                 None => false,
             };
             if !conclusive {
-                if at_end || buffer.len() >= PROBE_CAP {
-                    self.state = CodecSetIncState::Failed;
-                    return Err(Box::new(CodecSetError::UnrecognizedFormat));
+                if complete {
+                    return Err(StepError::Codec(CodecSetError::UnrecognizedFormat));
                 }
-                self.need = [crate::traits::ByteRange::from_offset(buffer.len() as u64)];
-                return Ok(crate::traits::Step::Need(&self.need));
+                return Ok(Progress::need(0));
             }
             let format = detected.expect("conclusive implies detected");
-            let dec = self
-                .set
-                .decode_job(format)
-                .map_err(|e| Box::new(e) as BoxedError)?
-                .into_incremental_decoder(&self.preferred)?;
-            let pending = core::mem::take(buffer);
-            self.state = CodecSetIncState::Decoding {
-                dec,
-                pending,
-                pending_offset: 0,
-                pending_eof: at_end,
-            };
+            let job = self.set.decode_job(format).map_err(StepError::Codec)?;
+            let inner = job
+                .into_incremental_decoder(&self.preferred)
+                .map_err(|e| StepError::Codec(CodecSetError::Codec(e)))?;
+            self.inner = Some(inner);
         }
-        match &mut self.state {
-            CodecSetIncState::Decoding {
-                dec,
-                pending,
-                pending_offset,
-                pending_eof,
-            } => {
-                Self::drain_pending(dec, pending, pending_offset, *pending_eof)?;
-                dec.step(sink, stop)
-            }
-            CodecSetIncState::Failed => Err(Box::new(CodecSetError::UnrecognizedFormat)),
-            CodecSetIncState::Probing { .. } => unreachable!("probing resolved above"),
+        let inner = self.inner.as_mut().expect("set above");
+        inner
+            .step(input, sink, stop)
+            .map_err(|e| e.map_codec(|c| CodecSetError::Codec(c.into_inner())))
+    }
+
+    fn requested(&self) -> &[crate::traits::Request] {
+        match &self.inner {
+            Some(inner) => inner.requested(),
+            None => &self.probe,
         }
     }
 
     fn info(&self) -> Option<&ImageInfo> {
-        match &self.state {
-            CodecSetIncState::Decoding { dec, .. } => dec.info(),
-            _ => None,
-        }
+        self.inner.as_ref().and_then(|d| d.info())
     }
 
     fn output_descriptor(&self) -> Option<PixelDescriptor> {
-        match &self.state {
-            CodecSetIncState::Decoding { dec, .. } => dec.output_descriptor(),
-            _ => None,
-        }
+        self.inner.as_ref().and_then(|d| d.output_descriptor())
     }
 
     fn access_pattern(&self) -> crate::source::AccessPattern {
-        match &self.state {
-            CodecSetIncState::Decoding { dec, .. } => dec.access_pattern(),
-            _ => crate::source::AccessPattern::Sequential,
+        match &self.inner {
+            Some(inner) => inner.access_pattern(),
+            None => self
+                .set
+                .decoders
+                .iter()
+                .map(|d| d.capabilities().access_pattern())
+                .fold(crate::source::AccessPattern::Sequential, |a, b| {
+                    a.most_demanding(b)
+                }),
         }
     }
 }

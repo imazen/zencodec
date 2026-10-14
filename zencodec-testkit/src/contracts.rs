@@ -683,42 +683,171 @@ pub fn check_seekable_capability_honesty<D: DecoderConfig>(dec: D, data: &[u8]) 
     }
 }
 
-/// Verify the `incremental` capability flag in both directions, and that
-/// a declared incremental decoder is chunk-boundary independent: driven
-/// over `data` in 1-byte, 7-byte and whole-file chunks it must produce the
-/// one-shot pixels, call `finish`, and report `Done` with the one-shot
-/// dimensions. Truncated input (at a quarter and at half the file) must end
-/// in an error once the length is announced, never in a request that can
-/// never be served. Cuts stay inside the first half because a format may
-/// end in bytes that carry no pixels (QOI's end marker is classified as
-/// skipped), which a decoder is right to accept missing.
+/// Verify the `incremental` capability flag in both directions, then run
+/// [`check_incremental_contract`] on a declared incremental decoder.
 pub fn check_incremental_capability_honesty<D: DecoderConfig>(dec: D, data: &[u8]) -> Conformance {
     const CHECK: &str = "incremental_capability_honesty";
     let declared = D::capabilities().incremental();
-    let first = dec.clone().job().dyn_incremental_decoder(&[]);
-    let mut inc = match (declared, first) {
-        (true, Ok(inc)) => inc,
-        (true, Err(e)) => {
-            return Err(fail(
+    match (declared, dec.clone().job().dyn_incremental_decoder(&[])) {
+        (true, Ok(_)) => check_incremental_contract(dec, data),
+        (true, Err(e)) => Err(fail(
+            CHECK,
+            format!("declared incremental but dyn_incremental_decoder failed: {e}"),
+        )),
+        (false, Ok(_)) => Err(fail(
+            CHECK,
+            "did not declare incremental but dyn_incremental_decoder succeeded",
+        )),
+        (false, Err(e)) => match e.downcast_ref::<UnsupportedOperation>().copied() {
+            Some(UnsupportedOperation::IncrementalDecode) => Ok(()),
+            _ => Err(fail(
                 CHECK,
-                format!("declared incremental but dyn_incremental_decoder failed: {e}"),
-            ));
+                format!("undeclared incremental rejected with wrong error: {e}"),
+            )),
+        },
+    }
+}
+
+/// A sink that records every row write, for ordering checks.
+struct OrderSink {
+    inner: zencodec_io::CollectSink,
+    final_ys: Vec<(u32, u32)>,
+    began: u32,
+}
+
+impl zencodec::decode::DecodeRowSink for OrderSink {
+    fn begin(
+        &mut self,
+        w: u32,
+        h: u32,
+        d: PixelDescriptor,
+    ) -> Result<(), zencodec::decode::SinkError> {
+        self.began += 1;
+        self.inner.begin(w, h, d)
+    }
+    fn provide_next_buffer(
+        &mut self,
+        y: u32,
+        height: u32,
+        width: u32,
+        descriptor: PixelDescriptor,
+    ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
+        self.final_ys.push((y, height));
+        self.inner.provide_next_buffer(y, height, width, descriptor)
+    }
+    fn finish(&mut self) -> Result<(), zencodec::decode::SinkError> {
+        self.inner.finish()
+    }
+}
+
+/// A sink that accepts provisional rows and records every batch (tightly
+/// packed copies of the rows it was given), final or provisional.
+#[derive(Default)]
+struct PassSink {
+    batches: Vec<(zencodec::decode::BatchMeta, u32, Vec<u8>)>,
+    current: Option<(zencodec::decode::BatchMeta, zenpixels::PixelBuffer)>,
+    final_through_pass: u32,
+}
+
+impl PassSink {
+    fn ship(&mut self) {
+        if let Some((meta, buf)) = self.current.take() {
+            let s = buf.as_slice();
+            let mut packed = Vec::new();
+            for r in 0..s.rows() {
+                packed.extend_from_slice(s.row(r));
+            }
+            self.batches.push((meta, s.rows(), packed));
         }
-        (false, Ok(_)) => {
-            return Err(fail(
-                CHECK,
-                "did not declare incremental but dyn_incremental_decoder succeeded",
-            ));
+    }
+}
+
+impl zencodec::decode::DecodeRowSink for PassSink {
+    fn provide_next_buffer(
+        &mut self,
+        y: u32,
+        height: u32,
+        width: u32,
+        descriptor: PixelDescriptor,
+    ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
+        self.ship();
+        let (_, buf) = self.current.insert((
+            zencodec::decode::BatchMeta::final_rows(y),
+            zenpixels::PixelBuffer::new(width, height, descriptor),
+        ));
+        Ok(buf.as_slice_mut())
+    }
+    fn accepts_provisional(&self) -> bool {
+        true
+    }
+    fn provide_pass_buffer(
+        &mut self,
+        meta: zencodec::decode::BatchMeta,
+        height: u32,
+        width: u32,
+        descriptor: PixelDescriptor,
+    ) -> Result<zenpixels::PixelSliceMut<'_>, zencodec::decode::SinkError> {
+        if meta.is_final {
+            self.final_through_pass += 1;
         }
-        (false, Err(e)) => {
-            return match e.downcast_ref::<UnsupportedOperation>().copied() {
-                Some(UnsupportedOperation::IncrementalDecode) => Ok(()),
-                _ => Err(fail(
-                    CHECK,
-                    format!("undeclared incremental rejected with wrong error: {e}"),
-                )),
-            };
+        self.ship();
+        let (_, buf) = self
+            .current
+            .insert((meta, zenpixels::PixelBuffer::new(width, height, descriptor)));
+        Ok(buf.as_slice_mut())
+    }
+    fn finish(&mut self) -> Result<(), zencodec::decode::SinkError> {
+        self.ship();
+        Ok(())
+    }
+}
+
+/// A stop that trips after `n` checks.
+struct TripAfter {
+    left: std::sync::atomic::AtomicU32,
+}
+
+impl enough::Stop for TripAfter {
+    fn check(&self) -> Result<(), enough::StopReason> {
+        use std::sync::atomic::Ordering;
+        // Single-threaded use: a load and a store are enough.
+        let left = self.left.load(Ordering::SeqCst);
+        if left == 0 {
+            return Err(enough::StopReason::Cancelled);
         }
+        self.left.store(left - 1, Ordering::SeqCst);
+        Ok(())
+    }
+}
+
+/// Exercise a decoder's [`IncrementalDecode`](zencodec::decode::IncrementalDecode)
+/// contract through the erased decoder callers receive
+/// (`dyn_incremental_decoder`), against the one-shot pixels of `data`:
+///
+/// - driven from a slice with windows of 1, 7 and 64 bytes and the whole
+///   file, the pixels, descriptor and `Done` dimensions match one-shot, the
+///   sink is begun once and finished, and rows reach a final-only sink each
+///   exactly once in increasing order;
+/// - an input at an offset the decoder did not request is ignored without
+///   error (nothing taken, still asking);
+/// - after `Done`, further steps return `Done` again and take nothing;
+/// - a stop that trips mid-decode yields `Cancelled` within one step, then
+///   `Finished`;
+/// - a sink that accepts provisional rows still gets every final row once
+///   through `provide_next_buffer` (never through `provide_pass_buffer`),
+///   reproducing the one-shot pixels;
+/// - truncated input (cut at a quarter and at half) ends in a codec error,
+///   never a protocol violation;
+/// - no drive exceeds a step budget, so a decoder that spins fails here
+///   instead of hanging.
+pub fn check_incremental_contract<D: DecoderConfig>(dec: D, data: &[u8]) -> Conformance {
+    use zencodec::decode::{Event, IncrementalDecode, Input, StepError};
+    const CHECK: &str = "incremental_contract";
+    let new_dec = || {
+        dec.clone()
+            .job()
+            .dyn_incremental_decoder(&[])
+            .map_err(|e| fail(CHECK, format!("dyn_incremental_decoder: {e}")))
     };
     let reference = dec
         .clone()
@@ -727,80 +856,222 @@ pub fn check_incremental_capability_honesty<D: DecoderConfig>(dec: D, data: &[u8
         .and_then(|d| d.decode())
         .map_err(|e| fail(CHECK, format!("one-shot decode: {e}")))?;
     let (w, h, desc, bytes) = pixels_of(&reference);
+    let budget = 4 * data.len() as u64 + 4 * h as u64 + 1000;
 
-    for chunk in [1usize, 7, data.len().max(1)] {
-        if chunk != 1 {
-            inc = dec
-                .clone()
-                .job()
-                .dyn_incremental_decoder(&[])
-                .map_err(|e| fail(CHECK, format!("dyn_incremental_decoder: {e}")))?;
+    for window in [1usize, 7, 64, data.len().max(1)] {
+        let mut inc = new_dec()?;
+        let mut sink = OrderSink {
+            inner: zencodec_io::CollectSink::new(),
+            final_ys: Vec::new(),
+            began: 0,
+        };
+        let (info, stats) = zencodec_io::drive_from_slice(&mut *inc, data, &mut sink, None, window)
+            .map_err(|e| fail(CHECK, format!("window {window}: {e}")))?;
+        if stats.steps > budget {
+            return Err(fail(
+                CHECK,
+                format!(
+                    "window {window}: {} steps for {} bytes",
+                    stats.steps,
+                    data.len()
+                ),
+            ));
         }
-        let mut sink = zencodec_io::CollectSink::new();
-        let (info, _) = zencodec_io::drive_from_slice(
-            &mut zencodec_io::Dyn(&mut *inc),
-            data,
-            &mut sink,
-            None,
-            chunk,
-        )
-        .map_err(|e| fail(CHECK, format!("chunk {chunk}: {e}")))?;
         if (info.width, info.height) != (w, h) {
             return Err(fail(
                 CHECK,
                 format!(
-                    "chunk {chunk}: Done reports {}x{}, one-shot is {w}x{h}",
+                    "window {window}: Done reports {}x{}, one-shot is {w}x{h}",
                     info.width, info.height
                 ),
             ));
         }
-        if sink.descriptor() != Some(desc) {
+        if sink.inner.descriptor() != Some(desc) {
             return Err(fail(
                 CHECK,
                 format!(
-                    "chunk {chunk}: sink began with {:?}, one-shot is {desc:?}",
-                    sink.descriptor()
+                    "window {window}: sink began with {:?}, one-shot is {desc:?}",
+                    sink.inner.descriptor()
                 ),
             ));
         }
-        if !sink.finished() {
+        if sink.began != 1 || !sink.inner.finished() {
             return Err(fail(
                 CHECK,
-                format!("chunk {chunk}: sink.finish not called"),
+                format!(
+                    "window {window}: begin called {} times, finish {}",
+                    sink.began,
+                    sink.inner.finished()
+                ),
             ));
         }
-        if sink.bytes() != bytes {
+        let mut next = 0u32;
+        for &(y, rows) in &sink.final_ys {
+            if y != next {
+                return Err(fail(
+                    CHECK,
+                    format!(
+                        "window {window}: final rows out of order (got y={y}, expected {next})"
+                    ),
+                ));
+            }
+            next = y + rows;
+        }
+        if next != h {
             return Err(fail(
                 CHECK,
-                format!("chunk {chunk}: pixels differ from one-shot"),
+                format!("window {window}: {next} of {h} rows written"),
             ));
         }
-        let announced = inc.info().map(|i| (i.width, i.height));
-        if announced.is_none() {
+        if sink.inner.bytes() != bytes {
             return Err(fail(
                 CHECK,
-                format!("chunk {chunk}: info() is None after Done"),
+                format!("window {window}: pixels differ from one-shot"),
+            ));
+        }
+        if inc.info().map(|i| (i.width, i.height)).is_none() {
+            return Err(fail(
+                CHECK,
+                format!("window {window}: info() is None after Done"),
+            ));
+        }
+        // Done repeats and takes nothing.
+        let again = inc
+            .step(Input::new(0, data), &mut sink, &enough::Unstoppable)
+            .map_err(|e| fail(CHECK, format!("step after Done: {e}")))?;
+        if !again.event.is_done() || again.consumed != 0 {
+            return Err(fail(CHECK, format!("step after Done returned {again:?}")));
+        }
+    }
+
+    // Unrequested input is ignored, not an error.
+    {
+        let mut inc = new_dec()?;
+        let mut sink = zencodec_io::CollectSink::new();
+        let p = inc
+            .step(Input::empty(), &mut sink, &enough::Unstoppable)
+            .map_err(|e| fail(CHECK, format!("first step: {e}")))?;
+        if p.event == Event::Need {
+            let wanted: Vec<zencodec::decode::Request> = inc.requested().to_vec();
+            let first = wanted.first().and_then(|r| r.offset()).unwrap_or(0);
+            let bogus = first.saturating_add(1).min(data.len() as u64);
+            let tail = &data[bogus as usize..];
+            let p = inc
+                .step(Input::new(bogus, tail), &mut sink, &enough::Unstoppable)
+                .map_err(|e| fail(CHECK, format!("unrequested input at {bogus} failed: {e}")))?;
+            if p.consumed != 0 || p.event != Event::Need {
+                return Err(fail(
+                    CHECK,
+                    format!("unrequested input at {bogus} was used: {p:?}"),
+                ));
+            }
+        }
+    }
+
+    // Cancellation is terminal.
+    {
+        let mut inc = new_dec()?;
+        let mut sink = zencodec_io::CollectSink::new();
+        let stop = TripAfter {
+            left: std::sync::atomic::AtomicU32::new(2),
+        };
+        let mut input = Input::empty().with_total_len(data.len() as u64);
+        let mut saw_cancel = false;
+        for step in 0..budget {
+            match inc.step(input, &mut sink, &stop) {
+                Ok(p) => {
+                    if p.event.is_done() {
+                        break;
+                    }
+                    // The stop allows two checks; checked at least once per
+                    // step, the third step cannot succeed.
+                    if step >= 2 {
+                        return Err(fail(
+                            CHECK,
+                            format!("step {step} succeeded after the stop tripped: {p:?}"),
+                        ));
+                    }
+                    let next = match inc.requested().first() {
+                        Some(r) if p.event == Event::Need => r.offset().unwrap_or(0),
+                        _ => input.offset + p.consumed as u64,
+                    };
+                    let start = (next as usize).min(data.len());
+                    input =
+                        Input::new(start as u64, &data[start..]).with_total_len(data.len() as u64);
+                }
+                Err(StepError::Cancelled(_)) => {
+                    saw_cancel = true;
+                    break;
+                }
+                Err(e) => return Err(fail(CHECK, format!("cancelling: unexpected {e}"))),
+            }
+        }
+        if saw_cancel {
+            match inc.step(input, &mut sink, &enough::Unstoppable) {
+                Err(StepError::Finished) => {}
+                other => {
+                    return Err(fail(
+                        CHECK,
+                        format!("step after cancellation returned {other:?}, not Finished"),
+                    ));
+                }
+            }
+        }
+    }
+
+    // A sink that accepts provisional rows still receives final rows through
+    // provide_next_buffer; they cover the image once with the one-shot
+    // pixels.
+    {
+        let mut inc = new_dec()?;
+        let mut sink = PassSink::default();
+        zencodec_io::drive_from_slice(&mut *inc, data, &mut sink, None, 64)
+            .map_err(|e| fail(CHECK, format!("provisional sink: {e}")))?;
+        if sink.final_through_pass != 0 {
+            return Err(fail(
+                CHECK,
+                format!(
+                    "provisional sink: {} final batches came through provide_pass_buffer",
+                    sink.final_through_pass
+                ),
+            ));
+        }
+        let row = bytes.len() / h.max(1) as usize;
+        let mut covered = vec![false; h as usize];
+        let mut out = vec![0u8; bytes.len()];
+        for (meta, rows, px) in &sink.batches {
+            if !meta.is_final {
+                continue;
+            }
+            for r in 0..*rows {
+                let y = (meta.y + r) as usize;
+                if y >= covered.len() || covered[y] {
+                    return Err(fail(
+                        CHECK,
+                        format!("provisional sink: final row {y} written twice or out of range"),
+                    ));
+                }
+                covered[y] = true;
+                out[y * row..(y + 1) * row]
+                    .copy_from_slice(&px[r as usize * row..(r as usize + 1) * row]);
+            }
+        }
+        if covered.iter().any(|c| !c) || out != bytes {
+            return Err(fail(
+                CHECK,
+                "provisional sink: final batches do not reproduce the one-shot pixels",
             ));
         }
     }
 
+    // Truncation is a codec error, never a protocol violation or a hang.
     for cut in [data.len() / 4, data.len() / 2] {
         if cut >= data.len() {
             continue;
         }
-        let mut inc = dec
-            .clone()
-            .job()
-            .dyn_incremental_decoder(&[])
-            .map_err(|e| fail(CHECK, format!("dyn_incremental_decoder: {e}")))?;
+        let mut inc = new_dec()?;
         let mut sink = zencodec_io::CollectSink::new();
-        match zencodec_io::drive_from_slice(
-            &mut zencodec_io::Dyn(&mut *inc),
-            &data[..cut],
-            &mut sink,
-            None,
-            64,
-        ) {
+        match zencodec_io::drive_from_slice(&mut *inc, &data[..cut], &mut sink, None, 64) {
             Ok(_) => {
                 return Err(fail(
                     CHECK,
@@ -810,11 +1081,11 @@ pub fn check_incremental_capability_honesty<D: DecoderConfig>(dec: D, data: &[u8
                     ),
                 ));
             }
-            Err(zencodec_io::DriveError::Codec(_)) | Err(zencodec_io::DriveError::Source(_)) => {}
+            Err(zencodec_io::DriveError::Step(StepError::Codec(_))) => {}
             Err(e) => {
                 return Err(fail(
                     CHECK,
-                    format!("truncated to {cut}: driver fault instead of a decode error: {e}"),
+                    format!("truncated to {cut}: expected a codec error, got: {e}"),
                 ));
             }
         }

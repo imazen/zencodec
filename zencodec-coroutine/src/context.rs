@@ -9,7 +9,7 @@ use core::task::{Context, Poll};
 
 use enough::StopReason;
 use zencodec::ImageInfo;
-use zencodec::decode::{BatchMeta, ByteRange, MetadataUpdate, SinkError};
+use zencodec::decode::{BatchMeta, ByteRange, MetadataUpdate, Request, SinkError};
 use zencodec::source::SourceError;
 use zenpixels::{PixelDescriptor, PixelSlice};
 
@@ -29,6 +29,17 @@ pub enum CoroutineError {
     Finished,
     /// The coroutine suspended without asking for anything (author bug).
     Stalled,
+    /// The coroutine wrote rows before setting the image info and output
+    /// descriptor, so the sink could not be told the geometry (author bug).
+    RowsBeforeHeader,
+    /// One read asked for more bytes than the decoder's input cap can hold,
+    /// so it could never complete.
+    ReadExceedsInputCap {
+        /// Bytes the read needs.
+        len: usize,
+        /// The configured cap.
+        cap: usize,
+    },
 }
 
 impl fmt::Display for CoroutineError {
@@ -39,6 +50,14 @@ impl fmt::Display for CoroutineError {
             Self::Cancelled(r) => write!(f, "coroutine decode cancelled: {r:?}"),
             Self::Finished => write!(f, "coroutine decoder stepped after it finished"),
             Self::Stalled => write!(f, "coroutine suspended without a request"),
+            Self::ReadExceedsInputCap { len, cap } => write!(
+                f,
+                "coroutine read of {len} bytes exceeds its {cap}-byte input cap"
+            ),
+            Self::RowsBeforeHeader => write!(
+                f,
+                "coroutine wrote rows before set_info and set_output_descriptor"
+            ),
         }
     }
 }
@@ -86,11 +105,10 @@ pub(crate) struct PendingRows {
 /// side runs at a time, so the lock is never contended.
 pub(crate) struct Shared {
     pub(crate) input: InputStore,
-    pub(crate) need: Vec<ByteRange>,
+    pub(crate) need: Vec<Request>,
     /// Scratch for a read's satisfied spans and missing gaps, reused across polls.
     pub(crate) satisfied: Vec<(u64, usize)>,
     pub(crate) gaps: Vec<(u64, u64)>,
-    pub(crate) need_len: bool,
     pub(crate) rows: Option<PendingRows>,
     /// Strip buffer handed back after each `Rows` step, so steady state
     /// allocates nothing.
@@ -111,7 +129,6 @@ impl Shared {
             need: Vec::new(),
             satisfied: Vec::new(),
             gaps: Vec::new(),
-            need_len: false,
             rows: None,
             spare: Vec::new(),
             metadata: None,
@@ -264,7 +281,8 @@ impl CoroutineContext {
     }
 
     /// Whether the driver's sink takes provisional (progressive) rows.
-    /// Known after the first step.
+    /// Known once the header has been announced (the decoder reads it when
+    /// it calls the sink's `begin`); `false` before that.
     pub fn accepts_provisional(&self) -> bool {
         self.shared.lock().accepts_provisional
     }
@@ -308,6 +326,12 @@ impl Future for ReadMany<'_, '_> {
         satisfied.clear();
         gaps.clear();
         let mut check = |shared: &Shared, offset: u64, out: &mut [u8], sequential: bool| {
+            if out.len() > shared.input.cap() {
+                return Err(CoroutineError::ReadExceedsInputCap {
+                    len: out.len(),
+                    cap: shared.input.cap(),
+                });
+            }
             if shared.input.try_read(offset, out) {
                 satisfied.push((offset, out.len()));
                 Ok(())
@@ -324,11 +348,18 @@ impl Future for ReadMany<'_, '_> {
                 let before = gaps.len();
                 shared.input.missing_into(offset, out.len(), &mut gaps);
                 if sequential {
+                    // One contiguous request from the first missing byte to
+                    // the end of the read, so a stream driver supplies it
+                    // in one input.
                     let first = gaps.get(before).map(|(o, _)| *o).unwrap_or(offset);
                     gaps.truncate(before);
-                    missing.push(ByteRange::from_offset(first));
+                    let end = offset + out.len() as u64;
+                    missing.push(Request::at_least(first, (end - first) as usize));
                 } else {
-                    missing.extend(gaps.drain(before..).map(|(o, l)| ByteRange::new(o, l)));
+                    missing.extend(
+                        gaps.drain(before..)
+                            .map(|(o, l)| Request::Range(ByteRange::new(o, l))),
+                    );
                 }
                 Ok(())
             }
@@ -375,12 +406,10 @@ impl Future for Len<'_> {
             return Poll::Ready(Err(CoroutineError::Cancelled(r)));
         }
         match shared.input.total() {
-            Some(t) => {
-                shared.need_len = false;
-                Poll::Ready(Ok(t))
-            }
+            Some(t) => Poll::Ready(Ok(t)),
             None => {
-                shared.need_len = true;
+                shared.need.clear();
+                shared.need.push(Request::Len);
                 Poll::Pending
             }
         }

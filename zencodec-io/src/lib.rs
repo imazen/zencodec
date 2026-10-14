@@ -16,7 +16,7 @@
 //! | slice | [`drive_from_slice`] | [`SliceReadAt`](zencodec::source::SliceReadAt) |
 //! | `ReadAt` (file, object store, FFI callback) | [`drive_from_read_at`] | direct |
 //! | `std::io::Read` stream | [`pump_read_to_sink`] | [`BufferedReadAt`] |
-//! | async runtime | [`thread::decode_on_thread`] | [`thread::pull_decode_on_thread`] |
+//! | async runtime | [`tokio_io::decode_async`] | [`tokio_io::pull_decode_on_thread`] |
 //!
 //! Cancellation and progress share one handle: every driver takes an
 //! `Option<&dyn how_far::Pulse>` (`Pulse: Stop`), checks it each step,
@@ -36,11 +36,10 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
-mod drivable;
 mod drive;
 mod encoder_sink;
-mod feeder;
 mod sinks;
+mod window;
 
 #[cfg(feature = "std")]
 mod buffered;
@@ -49,16 +48,15 @@ mod file;
 #[cfg(feature = "std")]
 mod pump;
 #[cfg(feature = "tokio")]
-pub mod thread;
+pub mod tokio_io;
 
-pub use drivable::{Drivable, Dyn, DynCodecError};
 pub use drive::{
     DriveError, DriveOptions, DriveStats, coalesce_byte_ranges, coalesce_into, drive_from_read_at,
     drive_from_slice,
 };
 pub use encoder_sink::{EncoderSink, EncoderSinkError};
-pub use feeder::Feeder;
 pub use sinks::CollectSink;
+pub use window::ProtocolViolation;
 
 #[cfg(feature = "std")]
 pub use buffered::{BufferPolicy, BufferedReadAt};

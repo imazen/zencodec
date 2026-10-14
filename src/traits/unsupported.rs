@@ -85,24 +85,21 @@ impl<E: core::error::Error + Send + Sync + 'static> AnimationFrameDecoder for Un
     }
 }
 
-impl<E: core::error::Error + Send + Sync + 'static> super::decoder::IncrementalDecode
+impl<E: core::error::Error + Send + Sync + 'static> super::incremental::IncrementalDecode
     for Unsupported<E>
 {
     type Error = E;
 
-    fn feed(&mut self, _offset: u64, _bytes: &[u8], _eof: bool) -> Result<usize, E> {
-        unreachable!("Unsupported: incremental decode stub should never be constructed")
-    }
-
     fn step(
         &mut self,
+        _input: super::incremental::Input<'_>,
         _sink: &mut dyn crate::DecodeRowSink,
-        _stop: Option<&dyn Stop>,
-    ) -> Result<super::decoder::Step<'_>, E> {
+        _stop: &dyn Stop,
+    ) -> Result<super::incremental::Progress, super::incremental::StepError<E>> {
         unreachable!("Unsupported: incremental decode stub should never be constructed")
     }
 
-    fn wrap_sink_error(_err: crate::sink::SinkError) -> E {
+    fn requested(&self) -> &[super::incremental::Request] {
         unreachable!("Unsupported: incremental decode stub should never be constructed")
     }
 

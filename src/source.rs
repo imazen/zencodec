@@ -37,6 +37,28 @@ pub enum AccessPattern {
     RandomAccess,
 }
 
+impl AccessPattern {
+    /// The more demanding of two patterns (`RandomAccess` over
+    /// `BoundedBacktrack` over `Sequential`; the larger window between two
+    /// bounded ones).
+    pub const fn most_demanding(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::RandomAccess, _) | (_, Self::RandomAccess) => Self::RandomAccess,
+            (
+                Self::BoundedBacktrack { window_bytes: a },
+                Self::BoundedBacktrack { window_bytes: b },
+            ) => Self::BoundedBacktrack {
+                window_bytes: if a > b { a } else { b },
+            },
+            (Self::BoundedBacktrack { window_bytes }, _)
+            | (_, Self::BoundedBacktrack { window_bytes }) => {
+                Self::BoundedBacktrack { window_bytes }
+            }
+            _ => Self::Sequential,
+        }
+    }
+}
+
 /// Failure modes of a byte source.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -106,11 +128,18 @@ pub trait ReadAt {
     /// The source-specific error type.
     type Error: core::error::Error + Send + Sync + 'static;
 
-    /// Total length in bytes. A buffered stream source may consume to the
-    /// end of the stream to answer this.
+    /// Total length in bytes. May be expensive: a buffered stream source
+    /// consumes to the end of the stream to answer it. Callers that only
+    /// read forward use [`read_at`](Self::read_at), which reports the end
+    /// by returning fewer bytes, and never need this.
     fn len(&mut self) -> Result<u64, Self::Error>;
 
-    /// Whether the source holds no bytes.
+    /// Total length if it is known without reading ahead. Default `None`.
+    fn len_hint(&self) -> Option<u64> {
+        None
+    }
+
+    /// Whether the source is empty.
     fn is_empty(&mut self) -> Result<bool, Self::Error> {
         Ok(self.len()? == 0)
     }
@@ -119,6 +148,18 @@ pub trait ReadAt {
     /// a short read.
     fn read_exact_at(&mut self, offset: u64, out: &mut [u8]) -> Result<(), Self::Error>;
 
+    /// Read up to `out.len()` bytes at `offset`; returns the count, which is
+    /// smaller only where the source ends (zero at or past the end).
+    ///
+    /// The default asks [`len`](Self::len) to bound the read; sources over
+    /// streams override it to read forward without consuming to the end.
+    fn read_at(&mut self, offset: u64, out: &mut [u8]) -> Result<usize, Self::Error> {
+        let len = self.len()?;
+        let n = len.saturating_sub(offset).min(out.len() as u64) as usize;
+        self.read_exact_at(offset, &mut out[..n])?;
+        Ok(n)
+    }
+
     /// Fill each buffer from its offset. The default serves requests in
     /// the order given; concurrent sources override to overlap them.
     fn read_many_at(&mut self, reqs: &mut [(u64, &mut [u8])]) -> Result<(), Self::Error> {
@@ -126,6 +167,12 @@ pub trait ReadAt {
             self.read_exact_at(*offset, out)?;
         }
         Ok(())
+    }
+
+    /// The whole source as one slice, when it is already in memory. Drivers
+    /// and codecs use it to read without copying. Default `None`.
+    fn as_slice(&self) -> Option<&[u8]> {
+        None
     }
 }
 
@@ -158,6 +205,23 @@ impl ReadAt for SliceReadAt<'_> {
         Ok(self.bytes.len() as u64)
     }
 
+    fn len_hint(&self) -> Option<u64> {
+        Some(self.bytes.len() as u64)
+    }
+
+    fn read_at(&mut self, offset: u64, out: &mut [u8]) -> Result<usize, Self::Error> {
+        let start = usize::try_from(offset)
+            .unwrap_or(usize::MAX)
+            .min(self.bytes.len());
+        let n = (self.bytes.len() - start).min(out.len());
+        out[..n].copy_from_slice(&self.bytes[start..start + n]);
+        Ok(n)
+    }
+
+    fn as_slice(&self) -> Option<&[u8]> {
+        Some(self.bytes)
+    }
+
     fn read_exact_at(&mut self, offset: u64, out: &mut [u8]) -> Result<(), Self::Error> {
         let start = usize::try_from(offset).map_err(|_| self.eof(offset, out.len()))?;
         let end = start
@@ -175,20 +239,35 @@ impl ReadAt for SliceReadAt<'_> {
 /// Object-safe [`ReadAt`]. Jobs receive this; codecs wrap its boxed errors
 /// with their own source-error constructor.
 pub trait DynReadAt: Send {
-    /// Total length in bytes.
+    /// Total length in bytes (may be expensive; see [`ReadAt::len`]).
     fn len(&mut self) -> Result<u64, BoxedError>;
+    /// Total length if known without reading ahead.
+    fn len_hint(&self) -> Option<u64> {
+        None
+    }
     /// Whether the source holds no bytes.
     fn is_empty(&mut self) -> Result<bool, BoxedError> {
         Ok(self.len()? == 0)
     }
     /// Fill `out` with the bytes at `offset`.
     fn read_exact_at(&mut self, offset: u64, out: &mut [u8]) -> Result<(), BoxedError>;
+    /// Read up to `out.len()` bytes at `offset`; see [`ReadAt::read_at`].
+    fn read_at(&mut self, offset: u64, out: &mut [u8]) -> Result<usize, BoxedError> {
+        let len = self.len()?;
+        let n = len.saturating_sub(offset).min(out.len() as u64) as usize;
+        self.read_exact_at(offset, &mut out[..n])?;
+        Ok(n)
+    }
     /// Fill each buffer from its offset, concurrently where possible.
     fn read_many_at(&mut self, reqs: &mut [(u64, &mut [u8])]) -> Result<(), BoxedError> {
         for (offset, out) in reqs.iter_mut() {
             self.read_exact_at(*offset, out)?;
         }
         Ok(())
+    }
+    /// The whole source as one slice, when already in memory.
+    fn as_slice(&self) -> Option<&[u8]> {
+        None
     }
 }
 
@@ -204,6 +283,18 @@ impl<S: DynReadAt + ?Sized> DynReadAt for Box<S> {
     fn read_many_at(&mut self, reqs: &mut [(u64, &mut [u8])]) -> Result<(), BoxedError> {
         (**self).read_many_at(reqs)
     }
+
+    fn len_hint(&self) -> Option<u64> {
+        (**self).len_hint()
+    }
+
+    fn read_at(&mut self, offset: u64, out: &mut [u8]) -> Result<usize, BoxedError> {
+        (**self).read_at(offset, out)
+    }
+
+    fn as_slice(&self) -> Option<&[u8]> {
+        (**self).as_slice()
+    }
 }
 
 impl<S: DynReadAt + ?Sized> DynReadAt for &mut S {
@@ -217,6 +308,18 @@ impl<S: DynReadAt + ?Sized> DynReadAt for &mut S {
 
     fn read_many_at(&mut self, reqs: &mut [(u64, &mut [u8])]) -> Result<(), BoxedError> {
         (**self).read_many_at(reqs)
+    }
+
+    fn len_hint(&self) -> Option<u64> {
+        (**self).len_hint()
+    }
+
+    fn read_at(&mut self, offset: u64, out: &mut [u8]) -> Result<usize, BoxedError> {
+        (**self).read_at(offset, out)
+    }
+
+    fn as_slice(&self) -> Option<&[u8]> {
+        (**self).as_slice()
     }
 }
 
@@ -238,6 +341,20 @@ impl<S: ReadAt + Send> DynReadAt for ReadAtShim<S> {
         self.0
             .read_many_at(reqs)
             .map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn len_hint(&self) -> Option<u64> {
+        self.0.len_hint()
+    }
+
+    fn read_at(&mut self, offset: u64, out: &mut [u8]) -> Result<usize, BoxedError> {
+        self.0
+            .read_at(offset, out)
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn as_slice(&self) -> Option<&[u8]> {
+        self.0.as_slice()
     }
 }
 

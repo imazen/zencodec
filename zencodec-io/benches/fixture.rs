@@ -1,13 +1,13 @@
 //! A synthetic RGBA8 image whose decode is a memcpy per strip, written
-//! three ways: direct sink writes, a hand-written feed/step decoder, and
+//! three ways: direct sink writes, a hand-written step decoder, and
 //! coroutines (sequential and range-addressed). Shared by the benches and
 //! the allocation audit.
 
 #![allow(dead_code)]
 
 use zencodec::decode::{
-    BatchMeta, ByteRange, DecodeRowSink, IncrementalDecode, MetadataUpdate, OutputInfo, SinkError,
-    Step,
+    BatchMeta, DecodeRowSink, Event, IncrementalDecode, Input, MetadataUpdate, OutputInfo,
+    Progress, Request, StepError,
 };
 use zencodec::source::AccessPattern;
 use zencodec::{ImageFormat, ImageInfo};
@@ -72,144 +72,118 @@ impl From<CoroutineError> for SynError {
     }
 }
 
-/// The hand-written template: sequential buffer, cursor, strips written
-/// straight into the sink, consumed bytes released by advancing a head
-/// index (never by shifting the buffer), with amortised compaction.
+/// The hand-written template: no input buffer at all. Each step decodes
+/// one strip straight from the driver's input when the whole strip is
+/// there, and otherwise asks for it with one sequential request.
 pub struct HandWritten {
     strip_rows: u32,
-    buf: Vec<u8>,
-    /// Live bytes are `buf[head..]`, starting at absolute `buf_start`.
-    head: usize,
-    buf_start: u64,
-    total: Option<u64>,
     info: Option<ImageInfo>,
     begun: bool,
     next_row: u32,
     done: Option<OutputInfo>,
-    need: [ByteRange; 1],
+    failed: bool,
+    need: [Request; 1],
 }
 
 impl HandWritten {
     pub fn new(strip_rows: u32) -> Self {
         Self {
             strip_rows,
-            buf: Vec::new(),
-            head: 0,
-            buf_start: 0,
-            total: None,
             info: None,
             begun: false,
             next_row: 0,
             done: None,
-            need: [ByteRange::from_offset(0)],
+            failed: false,
+            need: [Request::at_least(0, HEADER)],
         }
     }
-    fn live_len(&self) -> usize {
-        self.buf.len() - self.head
-    }
-    fn release_before(&mut self, offset: u64) {
-        if offset > self.buf_start {
-            let drop = ((offset - self.buf_start) as usize).min(self.live_len());
-            self.head += drop;
-            self.buf_start += drop as u64;
-            // Compact once the dead prefix dominates: O(live) every O(n) bytes.
-            if self.head > self.buf.len() / 2 && self.head >= 64 * 1024 {
-                self.buf.drain(..self.head);
-                self.head = 0;
+
+    fn step_inner(
+        &mut self,
+        input: Input<'_>,
+        sink: &mut dyn DecodeRowSink,
+        stop: &dyn enough::Stop,
+    ) -> Result<Progress, StepError<SynError>> {
+        stop.check().map_err(StepError::Cancelled)?;
+        let Some(info) = &self.info else {
+            if input.offset == 0 && input.bytes.len() >= HEADER {
+                let (w, h) = dims(input.bytes);
+                self.info = Some(ImageInfo::new(w, h, ImageFormat::Png));
+                return Ok(Progress::new(
+                    HEADER,
+                    Event::Metadata(MetadataUpdate::HeaderReady),
+                ));
             }
+            if input.total_len.is_some_and(|t| t < HEADER as u64) {
+                return Err(StepError::Codec(SynError("short header".into())));
+            }
+            self.need = [Request::at_least(0, HEADER)];
+            return Ok(Progress::need(0));
+        };
+        let (w, h) = (info.width, info.height);
+        if !self.begun {
+            sink.begin(w, h, DESC).map_err(StepError::Sink)?;
+            self.begun = true;
         }
+        if self.next_row >= h {
+            sink.finish().map_err(StepError::Sink)?;
+            let out = OutputInfo::full_decode(w, h, DESC);
+            self.done = Some(out.clone());
+            return Ok(Progress::new(0, Event::Done(out)));
+        }
+        let row = w as usize * 4;
+        let rows = (h - self.next_row).min(self.strip_rows);
+        let len = rows as usize * row;
+        let at = HEADER as u64 + self.next_row as u64 * row as u64;
+        if input.offset == at && input.bytes.len() >= len {
+            let mut dst = sink
+                .provide_next_buffer(self.next_row, rows, w, DESC)
+                .map_err(StepError::Sink)?;
+            for r in 0..rows as usize {
+                dst.row_mut(r as u32)
+                    .copy_from_slice(&input.bytes[r * row..(r + 1) * row]);
+            }
+            let meta = BatchMeta::final_rows(self.next_row);
+            self.next_row += rows;
+            return Ok(Progress::new(len, Event::Rows { meta, rows }));
+        }
+        if input.total_len.is_some_and(|t| t < at + len as u64) {
+            return Err(StepError::Codec(SynError("truncated".into())));
+        }
+        self.need = [Request::at_least(at, len)];
+        Ok(Progress::need(0))
     }
 }
 
 impl IncrementalDecode for HandWritten {
     type Error = SynError;
-    fn feed(&mut self, offset: u64, bytes: &[u8], eof: bool) -> Result<usize, SynError> {
-        let cursor = self.buf_start + self.live_len() as u64;
-        if eof {
-            self.total = Some(offset + bytes.len() as u64);
-        }
-        if offset + (bytes.len() as u64) <= cursor || offset > cursor {
-            return Ok(bytes.len());
-        }
-        let skip = (cursor - offset) as usize;
-        self.buf.extend_from_slice(&bytes[skip..]);
-        Ok(bytes.len())
-    }
     fn step(
         &mut self,
+        input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: Option<&dyn enough::Stop>,
-    ) -> Result<Step<'_>, SynError> {
+        stop: &dyn enough::Stop,
+    ) -> Result<Progress, StepError<SynError>> {
         if let Some(d) = &self.done {
-            return Ok(Step::Done(d.clone()));
+            return Ok(Progress::new(0, Event::Done(d.clone())));
         }
-        if let Some(s) = stop {
-            s.check().map_err(|e| SynError(format!("{e:?}")))?;
+        if self.failed {
+            return Err(StepError::Finished);
         }
-        let cursor = self.buf_start + self.live_len() as u64;
-        let at_end = self.total.is_some_and(|t| cursor >= t);
-        if self.info.is_none() {
-            if self.live_len() < HEADER {
-                if at_end {
-                    return Err(SynError("short header".into()));
-                }
-                self.need = [ByteRange::from_offset(cursor)];
-                return Ok(Step::Need(&self.need));
-            }
-            let (w, h) = dims(&self.buf[self.head..]);
-            self.info = Some(ImageInfo::new(w, h, ImageFormat::Png));
-            return Ok(Step::Metadata(MetadataUpdate::HeaderReady));
-        }
-        let (w, h) = {
-            let i = self.info.as_ref().unwrap();
-            (i.width, i.height)
-        };
-        if !self.begun {
-            sink.begin(w, h, DESC)
-                .map_err(|e| SynError(e.to_string()))?;
-            self.begun = true;
-        }
-        if self.next_row >= h {
-            sink.finish().map_err(|e| SynError(e.to_string()))?;
-            let info = OutputInfo::full_decode(w, h, DESC);
-            self.done = Some(info.clone());
-            return Ok(Step::Done(info));
-        }
-        let row = w as usize * 4;
-        let rows = (h - self.next_row).min(self.strip_rows);
-        let strip_start = HEADER as u64 + self.next_row as u64 * row as u64;
-        let strip_end = strip_start + rows as u64 * row as u64;
-        self.release_before(strip_start);
-        if cursor < strip_end {
-            if at_end {
-                return Err(SynError("truncated".into()));
-            }
-            self.need = [ByteRange::from_offset(cursor)];
-            return Ok(Step::Need(&self.need));
-        }
-        let start = self.head + (strip_start - self.buf_start) as usize;
-        {
-            let mut dst = sink
-                .provide_next_buffer(self.next_row, rows, w, DESC)
-                .map_err(|e| SynError(e.to_string()))?;
-            for r in 0..rows {
-                let s = start + r as usize * row;
-                dst.row_mut(r).copy_from_slice(&self.buf[s..s + row]);
-            }
-        }
-        let meta = BatchMeta::final_rows(self.next_row);
-        self.next_row += rows;
-        self.release_before(strip_end);
-        Ok(Step::Rows { meta, rows })
+        let r = self.step_inner(input, sink, stop);
+        self.failed = r.is_err();
+        r
     }
-    fn wrap_sink_error(err: SinkError) -> SynError {
-        SynError(err.to_string())
+    fn requested(&self) -> &[Request] {
+        &self.need
     }
     fn info(&self) -> Option<&ImageInfo> {
         self.info.as_ref()
     }
     fn output_descriptor(&self) -> Option<PixelDescriptor> {
         Some(DESC)
+    }
+    fn access_pattern(&self) -> AccessPattern {
+        AccessPattern::Sequential
     }
 }
 

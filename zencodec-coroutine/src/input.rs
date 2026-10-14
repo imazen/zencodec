@@ -51,8 +51,16 @@ impl InputStore {
         self.total
     }
 
+    pub(crate) fn set_total(&mut self, total: u64) {
+        self.total = Some(total);
+    }
+
     pub(crate) fn retained(&self) -> usize {
         self.retained
+    }
+
+    pub(crate) fn cap(&self) -> usize {
+        self.cap
     }
 
     /// The segment holding `pos`, if any.

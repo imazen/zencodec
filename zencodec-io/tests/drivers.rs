@@ -1,21 +1,24 @@
 //! Every driver shape over the same two decoders: a random-access tiled
-//! format and a sequential one, both written as coroutines.
+//! format and a sequential one, both written as coroutines. Hand-written
+//! decoders pin partial consumption and the protocol checks that stop a
+//! misbehaving decoder from spinning a driver.
 
 #![cfg(feature = "std")]
 
 use std::io::Cursor;
 
 use zencodec::decode::{
-    BatchMeta, DecodeRowSink, IncrementalDecode, MetadataUpdate, OutputInfo, SinkError, Step,
+    BatchMeta, DecodeRowSink, Event, IncrementalDecode, Input, MetadataUpdate, OutputInfo,
+    Progress, Request, SinkError, StepError,
 };
-use zencodec::source::{AccessPattern, ReadAt, SourceError};
+use zencodec::source::{AccessPattern, ReadAt, SliceReadAt, SourceError};
 use zencodec::{ImageFormat, ImageInfo};
 use zencodec_coroutine::{
     BoxedCoroutineDecoder, CoroutineContext, CoroutineDecoder, CoroutineError,
 };
 use zencodec_io::{
-    BufferPolicy, BufferedReadAt, CollectSink, DriveError, DriveOptions, Feeder, PumpError,
-    drive_from_read_at, pump_read_to_sink,
+    BufferPolicy, BufferedReadAt, CollectSink, DriveError, DriveOptions, ProtocolViolation,
+    PumpError, drive_from_read_at, drive_from_slice, pump_read_to_sink,
 };
 use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 
@@ -119,20 +122,57 @@ fn sequential_decoder() -> Dec {
     })
 }
 
+/// A `std::io::Read` that hands out at most `chunk` bytes per call.
+struct Dribble<'a> {
+    data: &'a [u8],
+    pos: usize,
+    chunk: usize,
+}
+
+impl std::io::Read for Dribble<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = (self.data.len() - self.pos).min(buf.len()).min(self.chunk);
+        buf[..n].copy_from_slice(&self.data[self.pos..self.pos + n]);
+        self.pos += n;
+        Ok(n)
+    }
+}
+
+/// A `ReadAt` that is not in memory as far as drivers can tell, so the
+/// read path runs instead of the zero-copy slice path.
+struct Opaque<'a>(SliceReadAt<'a>);
+
+impl ReadAt for Opaque<'_> {
+    type Error = SourceError;
+    fn len(&mut self) -> Result<u64, SourceError> {
+        self.0.len()
+    }
+    fn read_exact_at(&mut self, offset: u64, out: &mut [u8]) -> Result<(), SourceError> {
+        self.0.read_exact_at(offset, out)
+    }
+    fn read_at(&mut self, offset: u64, out: &mut [u8]) -> Result<usize, SourceError> {
+        self.0.read_at(offset, out)
+    }
+}
+
 #[test]
 fn stream_pump_decodes_as_bytes_arrive() {
     let file = sequential_file(6);
-    for buffer in [1usize, 5, 512] {
+    for chunk in [1usize, 5, 512] {
         let mut dec = sequential_decoder();
         let mut sink = CollectSink::new();
-        let info =
-            pump_read_to_sink(Cursor::new(&file), &mut dec, &mut sink, None, buffer).unwrap();
+        let reader = Dribble {
+            data: &file,
+            pos: 0,
+            chunk,
+        };
+        let info = pump_read_to_sink(reader, &mut dec, &mut sink, None, 512, 1 << 20).unwrap();
         assert_eq!((info.width, info.height), (2, 6));
         for y in 0..6 {
             assert_eq!(
                 &sink.bytes()[y * 8..y * 8 + 8],
                 &[y as u8; 8],
-                "buffer {buffer}"
+                "chunk {chunk}"
             );
         }
         assert!(sink.finished());
@@ -141,23 +181,9 @@ fn stream_pump_decodes_as_bytes_arrive() {
 
 #[test]
 fn stream_pump_emits_rows_before_the_stream_ends() {
-    // A reader that counts how many bytes have been handed out; rows must
-    // appear while bytes remain unread.
-    struct Counting<'a> {
-        data: &'a [u8],
-        pos: usize,
-    }
-    impl std::io::Read for Counting<'_> {
-        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-            let n = (self.data.len() - self.pos).min(buf.len()).min(8);
-            buf[..n].copy_from_slice(&self.data[self.pos..self.pos + n]);
-            self.pos += n;
-            Ok(n)
-        }
-    }
     struct FirstRowAt {
         inner: CollectSink,
-        first_row_seen: Option<u64>,
+        first_row_seen: Option<usize>,
         bytes_read: std::rc::Rc<std::cell::Cell<usize>>,
     }
     impl DecodeRowSink for FirstRowAt {
@@ -172,7 +198,7 @@ fn stream_pump_emits_rows_before_the_stream_ends() {
             descriptor: PixelDescriptor,
         ) -> Result<PixelSliceMut<'_>, SinkError> {
             if self.first_row_seen.is_none() {
-                self.first_row_seen = Some(self.bytes_read.get() as u64);
+                self.first_row_seen = Some(self.bytes_read.get());
             }
             self.inner.provide_next_buffer(y, height, width, descriptor)
         }
@@ -180,10 +206,7 @@ fn stream_pump_emits_rows_before_the_stream_ends() {
             self.inner.finish()
         }
     }
-    let file = sequential_file(32);
-    let mut dec = sequential_decoder();
-    let bytes_read = std::rc::Rc::new(std::cell::Cell::new(0usize));
-    struct Tap<'a>(Counting<'a>, std::rc::Rc<std::cell::Cell<usize>>);
+    struct Tap<'a>(Dribble<'a>, std::rc::Rc<std::cell::Cell<usize>>);
     impl std::io::Read for Tap<'_> {
         fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
             let n = self.0.read(buf)?;
@@ -191,23 +214,27 @@ fn stream_pump_emits_rows_before_the_stream_ends() {
             Ok(n)
         }
     }
+    let file = sequential_file(32);
+    let mut dec = sequential_decoder();
+    let bytes_read = std::rc::Rc::new(std::cell::Cell::new(0usize));
     let mut sink = FirstRowAt {
         inner: CollectSink::new(),
         first_row_seen: None,
         bytes_read: bytes_read.clone(),
     };
     let reader = Tap(
-        Counting {
+        Dribble {
             data: &file,
             pos: 0,
+            chunk: 8,
         },
         bytes_read.clone(),
     );
-    pump_read_to_sink(reader, &mut dec, &mut sink, None, 8).unwrap();
+    pump_read_to_sink(reader, &mut dec, &mut sink, None, 512, 1 << 20).unwrap();
     let first = sink.first_row_seen.unwrap();
     assert!(
         first <= 16,
-        "first row should be written after the header and one row ({first} bytes read of {})",
+        "first row after the header and one row, not after {first} of {} bytes",
         file.len()
     );
     assert_eq!(sink.inner.rows_written(), 32);
@@ -216,34 +243,18 @@ fn stream_pump_emits_rows_before_the_stream_ends() {
 #[test]
 fn stream_pump_rejects_random_access_with_a_pointer_to_the_fix() {
     let file = minitile();
-    // A random-access decoder whose whole file fits its input store can
-    // be served by a stream: the coroutine keeps what the pump reads
-    // ahead and serves its own backward reads from the store.
+    // Header, then the index ahead of it, then two tiles: the pump skips
+    // forward to the index and to the second tile, but the first tile is
+    // behind the stream position by then.
     let mut dec = minitile_decoder();
     let mut sink = CollectSink::new();
-    pump_read_to_sink(Cursor::new(&file), &mut dec, &mut sink, None, 16).unwrap();
-    assert_eq!(sink.bytes(), &expected_pixels()[..]);
-
-    // With a store smaller than the distance to the index, the pump
-    // cannot buffer far enough: the error names the range and the fix.
-    let mut dec: Dec = CoroutineDecoder::boxed_with_options(
-        32,
-        AccessPattern::RandomAccess,
-        |mut ctx| async move {
-            let mut header = [0u8; 16];
-            ctx.read_exact_at(0, &mut header).await?;
-            let index_at = u32::from_le_bytes(header[12..16].try_into().unwrap()) as u64;
-            let mut index = [0u8; 16];
-            ctx.read_exact_at(index_at, &mut index).await?;
-            Ok(OutputInfo::full_decode(W, H, RGBA))
-        },
-    );
-    let mut sink = CollectSink::new();
-    let err = pump_read_to_sink(Cursor::new(&file), &mut dec, &mut sink, None, 16).unwrap_err();
+    let err =
+        pump_read_to_sink(Cursor::new(&file), &mut dec, &mut sink, None, 512, 1 << 20).unwrap_err();
     assert!(
-        matches!(err, PumpError::NeedsRandomAccess(r) if r.offset == 80),
+        matches!(err, PumpError::NeedsRandomAccess(Request::Range(r)) if r.offset == 32),
         "{err:?}"
     );
+    assert!(err.to_string().contains("random access"), "{err}");
 
     // The fix: buffer the stream and drive it as a source.
     let mut dec = minitile_decoder();
@@ -259,6 +270,78 @@ fn stream_pump_rejects_random_access_with_a_pointer_to_the_fix() {
     )
     .unwrap();
     assert_eq!(sink.bytes(), &expected_pixels()[..]);
+}
+
+#[test]
+fn stream_pump_enforces_its_window_limit() {
+    let file = sequential_file(4);
+    let mut dec: Dec = CoroutineDecoder::boxed_with_options(
+        1 << 20,
+        AccessPattern::Sequential,
+        |mut ctx| async move {
+            let mut big = vec![0u8; 4096];
+            ctx.read_exact(&mut big).await?;
+            Ok(OutputInfo::full_decode(1, 1, RGBA))
+        },
+    );
+    let mut sink = CollectSink::new();
+    let err =
+        pump_read_to_sink(Cursor::new(&file), &mut dec, &mut sink, None, 512, 1024).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            PumpError::WindowLimit {
+                needed: 4096,
+                limit: 1024
+            }
+        ),
+        "{err:?}"
+    );
+}
+
+#[test]
+fn every_driver_decodes_both_shapes() {
+    let tiled = minitile();
+    let seq = sequential_file(5);
+    let seq_pixels: Vec<u8> = (0..5u8).flat_map(|y| [y; 8]).collect();
+    for window in [1usize, 3, 16, 4096] {
+        let mut sink = CollectSink::new();
+        drive_from_slice(&mut minitile_decoder(), &tiled, &mut sink, None, window).unwrap();
+        assert_eq!(sink.bytes(), &expected_pixels()[..], "window {window}");
+        let mut sink = CollectSink::new();
+        drive_from_slice(&mut sequential_decoder(), &seq, &mut sink, None, window).unwrap();
+        assert_eq!(sink.bytes(), &seq_pixels[..], "window {window}");
+    }
+    for read_size in [1usize, 7, 64 * 1024] {
+        let opts = DriveOptions::new(0, read_size);
+        let mut sink = CollectSink::new();
+        let mut src = Opaque(SliceReadAt::new(&tiled));
+        drive_from_read_at(&mut minitile_decoder(), &mut src, &mut sink, None, opts).unwrap();
+        assert_eq!(sink.bytes(), &expected_pixels()[..], "read {read_size}");
+        let mut sink = CollectSink::new();
+        let mut src = Opaque(SliceReadAt::new(&seq));
+        drive_from_read_at(&mut sequential_decoder(), &mut src, &mut sink, None, opts).unwrap();
+        assert_eq!(sink.bytes(), &seq_pixels[..], "read {read_size}");
+    }
+}
+
+#[test]
+fn slice_driver_is_zero_copy_for_in_memory_sources() {
+    // A SliceReadAt reports itself as a slice: the read_at driver hands
+    // the decoder sub-slices instead of reading into a window.
+    let file = minitile();
+    let mut src = SliceReadAt::new(&file);
+    let mut sink = CollectSink::new();
+    let (_, stats) = drive_from_read_at(
+        &mut minitile_decoder(),
+        &mut src,
+        &mut sink,
+        None,
+        DriveOptions::default(),
+    )
+    .unwrap();
+    assert_eq!(sink.bytes(), &expected_pixels()[..]);
+    assert!(stats.steps > 0);
 }
 
 #[test]
@@ -323,469 +406,348 @@ fn buffered_policy_for_pattern_matches_declared_access() {
     assert_eq!(sink.bytes(), &expected_pixels()[..]);
 }
 
-/// A decoder that accepts at most `cap` bytes per feed and consumes them
-/// one step at a time; used to pin partial-acceptance handling.
+/// Takes at most `cap` bytes per step, collecting them, until `total`
+/// bytes have arrived; then writes one row and finishes. Pins that every
+/// driver re-offers what a decoder did not take.
 struct Trickle {
     cap: usize,
-    held: Vec<u8>,
-    consumed: usize,
-    want: usize,
-    need: [zencodec::decode::ByteRange; 1],
+    total: usize,
+    got: Vec<u8>,
+    req: [Request; 1],
+    begun: bool,
     done: bool,
+}
+
+impl Trickle {
+    fn new(cap: usize, total: usize) -> Self {
+        Self {
+            cap,
+            total,
+            got: Vec::new(),
+            req: [Request::at_least(0, 1)],
+            begun: false,
+            done: false,
+        }
+    }
 }
 
 #[derive(Debug)]
 struct Never;
 impl std::fmt::Display for Never {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "never")
+        f.write_str("never")
     }
 }
 impl std::error::Error for Never {}
 
 impl IncrementalDecode for Trickle {
     type Error = Never;
-    fn feed(&mut self, _offset: u64, bytes: &[u8], _eof: bool) -> Result<usize, Never> {
-        let take = bytes.len().min(self.cap.saturating_sub(self.held.len()));
-        self.held.extend_from_slice(&bytes[..take]);
-        Ok(take)
-    }
     fn step(
         &mut self,
+        input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        _: Option<&dyn enough::Stop>,
-    ) -> Result<Step<'_>, Never> {
+        _stop: &dyn enough::Stop,
+    ) -> Result<Progress, StepError<Never>> {
         if self.done {
-            return Ok(Step::Done(OutputInfo::full_decode(1, 1, RGBA)));
+            return Ok(Progress::new(
+                0,
+                Event::Done(OutputInfo::full_decode(1, 1, RGBA)),
+            ));
         }
-        if !self.held.is_empty() {
-            self.consumed += self.held.len();
-            self.held.clear();
-        }
-        if self.consumed >= self.want {
-            sink.begin(1, 1, RGBA).unwrap();
-            sink.finish().unwrap();
+        let pos = self.got.len() as u64;
+        if self.got.len() == self.total {
+            if !self.begun {
+                sink.begin(1, 1, RGBA).map_err(StepError::Sink)?;
+                self.begun = true;
+                let mut dst = sink
+                    .provide_next_buffer(0, 1, 1, RGBA)
+                    .map_err(StepError::Sink)?;
+                dst.row_mut(0).copy_from_slice(&[1, 2, 3, 4]);
+                return Ok(Progress::new(
+                    0,
+                    Event::Rows {
+                        meta: BatchMeta::final_rows(0),
+                        rows: 1,
+                    },
+                ));
+            }
+            sink.finish().map_err(StepError::Sink)?;
             self.done = true;
-            return Ok(Step::Done(OutputInfo::full_decode(1, 1, RGBA)));
+            return Ok(Progress::new(
+                0,
+                Event::Done(OutputInfo::full_decode(1, 1, RGBA)),
+            ));
         }
-        self.need = [zencodec::decode::ByteRange::from_offset(
-            self.consumed as u64,
-        )];
-        Ok(Step::Need(&self.need))
+        if input.offset != pos || input.bytes.is_empty() {
+            self.req = [Request::at_least(pos, 1)];
+            return Ok(Progress::need(0));
+        }
+        let n = input
+            .bytes
+            .len()
+            .min(self.cap)
+            .min(self.total - self.got.len());
+        self.got.extend_from_slice(&input.bytes[..n]);
+        self.req = [Request::at_least(self.got.len() as u64, 1)];
+        Ok(Progress::new(n, Event::Need))
     }
-    fn wrap_sink_error(_: SinkError) -> Never {
-        Never
+    fn requested(&self) -> &[Request] {
+        &self.req
     }
     fn info(&self) -> Option<&ImageInfo> {
         None
     }
+    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+        Some(RGBA)
+    }
+    fn access_pattern(&self) -> AccessPattern {
+        AccessPattern::Sequential
+    }
 }
 
 #[test]
-fn feeder_re_offers_partial_acceptance() {
-    let mut dec = Trickle {
-        cap: 3,
-        held: Vec::new(),
-        consumed: 0,
-        want: 10,
-        need: [zencodec::decode::ByteRange::from_offset(0)],
-        done: false,
-    };
-    let mut feeder = Feeder::new();
-    assert!(!feeder.offer(&mut dec, 0, &[0u8; 10], true).unwrap());
-    assert!(feeder.has_carry());
-    let mut sink = CollectSink::new();
-    let mut steps = 0;
-    while !matches!(dec.step(&mut sink, None).unwrap(), Step::Done(_)) {
-        steps += 1;
-        feeder.flush(&mut dec).unwrap();
-        assert!(steps < 20);
-    }
-    assert!(!feeder.has_carry());
-    assert_eq!(dec.consumed, 10);
+fn drivers_re_offer_what_the_decoder_did_not_take() {
+    let data: Vec<u8> = (0..200u8).collect();
+    for cap in [1usize, 3, 64] {
+        let mut dec = Trickle::new(cap, data.len());
+        let mut sink = CollectSink::new();
+        drive_from_slice(&mut dec, &data, &mut sink, None, 50).unwrap();
+        assert_eq!(dec.got, data, "slice, cap {cap}");
 
-    // Through the drive loop, with a 2-byte source chunk and a 3-byte cap.
-    let mut sink = CollectSink::new();
-    let mut dec = Trickle {
-        cap: 3,
-        held: Vec::new(),
-        consumed: 0,
-        want: 10,
-        need: [zencodec::decode::ByteRange::from_offset(0)],
-        done: false,
+        let mut dec = Trickle::new(cap, data.len());
+        let mut sink = CollectSink::new();
+        let mut src = Opaque(SliceReadAt::new(&data));
+        drive_from_read_at(
+            &mut dec,
+            &mut src,
+            &mut sink,
+            None,
+            DriveOptions::new(0, 37),
+        )
+        .unwrap();
+        assert_eq!(dec.got, data, "read_at, cap {cap}");
+
+        let mut dec = Trickle::new(cap, data.len());
+        let mut sink = CollectSink::new();
+        let reader = Dribble {
+            data: &data,
+            pos: 0,
+            chunk: 13,
+        };
+        pump_read_to_sink(reader, &mut dec, &mut sink, None, 512, 1024).unwrap();
+        assert_eq!(dec.got, data, "pump, cap {cap}");
+        assert_eq!(sink.bytes(), &[1, 2, 3, 4]);
+    }
+}
+
+/// Decoders that break the protocol in one specific way.
+#[derive(Clone, Copy, Debug)]
+enum Misbehave {
+    /// `Need` with an empty request list.
+    EmptyRequest,
+    /// `Need` for bytes it was just given, consuming none.
+    Spin,
+    /// `Need` for bytes past the announced end.
+    PastEnd,
+}
+
+struct Bad {
+    how: Misbehave,
+    req: Vec<Request>,
+}
+
+impl IncrementalDecode for Bad {
+    type Error = Never;
+    fn step(
+        &mut self,
+        input: Input<'_>,
+        _sink: &mut dyn DecodeRowSink,
+        _stop: &dyn enough::Stop,
+    ) -> Result<Progress, StepError<Never>> {
+        self.req = match self.how {
+            Misbehave::EmptyRequest => Vec::new(),
+            Misbehave::Spin => vec![Request::at_least(0, 4)],
+            Misbehave::PastEnd => vec![Request::range(input.total_len.unwrap_or(1 << 20) + 10, 4)],
+        };
+        Ok(Progress::need(0))
+    }
+    fn requested(&self) -> &[Request] {
+        &self.req
+    }
+    fn info(&self) -> Option<&ImageInfo> {
+        None
+    }
+    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+        None
+    }
+    fn access_pattern(&self) -> AccessPattern {
+        AccessPattern::RandomAccess
+    }
+}
+
+#[test]
+fn protocol_violations_are_errors_not_hangs() {
+    let data = [0u8; 64];
+    for how in [Misbehave::EmptyRequest, Misbehave::Spin, Misbehave::PastEnd] {
+        let expect = |v: &ProtocolViolation| match how {
+            Misbehave::EmptyRequest => matches!(v, ProtocolViolation::EmptyRequest),
+            Misbehave::Spin => matches!(v, ProtocolViolation::NoProgress(_)),
+            Misbehave::PastEnd => matches!(v, ProtocolViolation::NeedPastEnd { .. }),
+        };
+        let mut sink = CollectSink::new();
+        let mut dec = Bad {
+            how,
+            req: Vec::new(),
+        };
+        match drive_from_slice(&mut dec, &data, &mut sink, None, 64) {
+            Err(DriveError::Protocol(v)) => assert!(expect(&v), "slice {how:?}: {v:?}"),
+            other => panic!("slice {how:?}: {other:?}"),
+        }
+        let mut dec = Bad {
+            how,
+            req: Vec::new(),
+        };
+        let mut src = Opaque(SliceReadAt::new(&data));
+        match drive_from_read_at(&mut dec, &mut src, &mut sink, None, DriveOptions::default()) {
+            Err(DriveError::Protocol(v)) => {
+                // Without a length hint the read_at driver cannot see the
+                // end until it reads; a past-end range is then the
+                // source's error.
+                assert!(expect(&v), "read_at {how:?}: {v:?}")
+            }
+            Err(DriveError::Source(SourceError::UnexpectedEof { .. }))
+                if matches!(how, Misbehave::PastEnd) => {}
+            other => panic!("read_at {how:?}: {other:?}"),
+        }
+        let mut dec = Bad {
+            how,
+            req: Vec::new(),
+        };
+        match pump_read_to_sink(Cursor::new(&data), &mut dec, &mut sink, None, 512, 1024) {
+            Err(PumpError::Protocol(v)) => assert!(expect(&v), "pump {how:?}: {v:?}"),
+            other => panic!("pump {how:?}: {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn truncated_streams_are_codec_errors_in_every_driver() {
+    let file = sequential_file(6);
+    let cut = &file[..file.len() - 3];
+    let is_eof = |e: &StepError<CoroutineError>| {
+        matches!(
+            e,
+            StepError::Codec(CoroutineError::Source(SourceError::UnexpectedEof { .. }))
+        )
     };
-    let mut source = zencodec::source::SliceReadAt::new(&[7u8; 10]);
-    let (_, stats) = drive_from_read_at(
-        &mut dec,
-        &mut source,
+    let mut sink = CollectSink::new();
+    match drive_from_slice(&mut sequential_decoder(), cut, &mut sink, None, 7) {
+        Err(DriveError::Step(e)) => assert!(is_eof(&e), "{e:?}"),
+        other => panic!("{other:?}"),
+    }
+    let mut sink = CollectSink::new();
+    let mut src = Opaque(SliceReadAt::new(cut));
+    match drive_from_read_at(
+        &mut sequential_decoder(),
+        &mut src,
         &mut sink,
         None,
-        DriveOptions::new(0, 2),
+        DriveOptions::new(0, 7),
+    ) {
+        Err(DriveError::Step(e)) => assert!(is_eof(&e), "{e:?}"),
+        other => panic!("{other:?}"),
+    }
+    let mut sink = CollectSink::new();
+    match pump_read_to_sink(
+        Cursor::new(cut),
+        &mut sequential_decoder(),
+        &mut sink,
+        None,
+        512,
+        1024,
+    ) {
+        Err(PumpError::Step(e)) => assert!(is_eof(&e), "{e:?}"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn a_tripped_pulse_cancels_every_driver() {
+    let file = sequential_file(6);
+    let pulse = RecordingPulse::default();
+    pulse.cancel();
+    let cancelled = |e: &StepError<CoroutineError>| {
+        matches!(e, StepError::Cancelled(enough::StopReason::Cancelled))
+    };
+    let mut sink = CollectSink::new();
+    match drive_from_slice(
+        &mut sequential_decoder(),
+        &file,
+        &mut sink,
+        Some(&pulse),
+        64,
+    ) {
+        Err(DriveError::Step(e)) => assert!(cancelled(&e), "{e:?}"),
+        other => panic!("{other:?}"),
+    }
+    let mut src = Opaque(SliceReadAt::new(&file));
+    match drive_from_read_at(
+        &mut sequential_decoder(),
+        &mut src,
+        &mut sink,
+        Some(&pulse),
+        DriveOptions::default(),
+    ) {
+        Err(DriveError::Step(e)) => assert!(cancelled(&e), "{e:?}"),
+        other => panic!("{other:?}"),
+    }
+    match pump_read_to_sink(
+        Cursor::new(&file),
+        &mut sequential_decoder(),
+        &mut sink,
+        Some(&pulse),
+        512,
+        1024,
+    ) {
+        Err(PumpError::Step(e)) => assert!(cancelled(&e), "{e:?}"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn drivers_report_total_and_progress() {
+    let file = sequential_file(6);
+    let pulse = RecordingPulse::default();
+    let mut dec = sequential_decoder();
+    let mut sink = CollectSink::new();
+    drive_from_slice(&mut dec, &file, &mut sink, Some(&pulse), 5).unwrap();
+    assert_eq!(pulse.total(), Some(how_far::Total::Exact(6)));
+    assert_eq!(pulse.advanced(), 6);
+
+    let pulse = RecordingPulse::default();
+    let mut dec = sequential_decoder();
+    let mut sink = CollectSink::new();
+    pump_read_to_sink(
+        Cursor::new(&file),
+        &mut dec,
+        &mut sink,
+        Some(&pulse),
+        512,
+        1024,
     )
     .unwrap();
-    assert_eq!(dec.consumed, 10);
-    assert_eq!(stats.bytes_fetched, 10, "nothing fetched twice");
-}
+    assert_eq!(pulse.total(), Some(how_far::Total::Exact(6)));
+    assert_eq!(pulse.advanced(), 6);
 
-#[test]
-fn stalled_decoder_is_reported_not_spun() {
-    let mut dec = Trickle {
-        cap: 0,
-        held: Vec::new(),
-        consumed: 0,
-        want: 1,
-        need: [zencodec::decode::ByteRange::from_offset(0)],
-        done: false,
-    };
-    let mut source = zencodec::source::SliceReadAt::new(&[1u8; 4]);
+    // A plain Stop still works through the StopOnly adapter.
+    let stopper = almost_enough::Stopper::new();
+    let adapter = how_far::StopOnly::borrowed(&stopper);
+    let mut dec = sequential_decoder();
     let mut sink = CollectSink::new();
-    let err = drive_from_read_at(
-        &mut dec,
-        &mut source,
-        &mut sink,
-        None,
-        DriveOptions::default(),
-    )
-    .unwrap_err();
-    assert!(matches!(err, DriveError::Stalled), "{err:?}");
+    drive_from_slice(&mut dec, &file, &mut sink, Some(&adapter), 64).unwrap();
+    assert_eq!(sink.rows_written(), 6);
 }
 
-#[cfg(feature = "tokio")]
-mod tokio_bridge {
-    use super::*;
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-    use zencodec::decode::BoxedError;
-    use zencodec::source::DynReadAt;
-    use zencodec_io::thread::{
-        ChannelRowSink, Chunk, SourceReply, SourceRequest, StripEvent, ThreadError, ThreadOptions,
-        decode_on_thread, fetch_from_async_read, fetch_from_bytes, pull_decode_on_thread,
-    };
-
-    /// A fetcher standing in for an HTTP client: each range becomes its
-    /// own task, so one `Step::Need` with two ranges is two concurrent
-    /// requests. Records how many requests ran and on which thread.
-    fn concurrent_fetcher(
-        file: Arc<[u8]>,
-        requests: Arc<AtomicUsize>,
-        max_in_flight: Arc<AtomicUsize>,
-    ) -> impl FnMut(
-        SourceRequest,
-    ) -> std::pin::Pin<
-        Box<dyn Future<Output = Result<SourceReply, BoxedError>> + Send>,
-    > {
-        move |req| {
-            let file = file.clone();
-            let requests = requests.clone();
-            let max_in_flight = max_in_flight.clone();
-            Box::pin(async move {
-                let total = file.len() as u64;
-                match req {
-                    SourceRequest::Len => Ok(SourceReply::Len(total)),
-                    SourceRequest::Ranges(ranges) => {
-                        let in_flight = Arc::new(AtomicUsize::new(0));
-                        let mut set = tokio::task::JoinSet::new();
-                        for r in ranges {
-                            let file = file.clone();
-                            let in_flight = in_flight.clone();
-                            let max_in_flight = max_in_flight.clone();
-                            requests.fetch_add(1, Ordering::SeqCst);
-                            set.spawn(async move {
-                                let now = in_flight.fetch_add(1, Ordering::SeqCst) + 1;
-                                max_in_flight.fetch_max(now, Ordering::SeqCst);
-                                tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-                                let len = if r.is_empty() {
-                                    (total - r.offset).min(16)
-                                } else {
-                                    r.length
-                                };
-                                let end = (r.offset + len).min(total);
-                                in_flight.fetch_sub(1, Ordering::SeqCst);
-                                Chunk {
-                                    offset: r.offset,
-                                    bytes: file[r.offset as usize..end as usize].to_vec(),
-                                    eof: end == total,
-                                }
-                            });
-                        }
-                        let mut chunks = Vec::new();
-                        while let Some(c) = set.join_next().await {
-                            chunks.push(c.unwrap());
-                        }
-                        Ok(SourceReply::Chunks(chunks))
-                    }
-                    _ => Err(Box::new(ThreadError::ProtocolMismatch) as BoxedError),
-                }
-            })
-        }
-    }
-
-    /// Records the thread each sink call ran on.
-    struct ThreadNameSink {
-        inner: CollectSink,
-        names: Vec<Option<String>>,
-    }
-    impl DecodeRowSink for ThreadNameSink {
-        fn begin(&mut self, w: u32, h: u32, d: PixelDescriptor) -> Result<(), SinkError> {
-            self.names
-                .push(std::thread::current().name().map(String::from));
-            self.inner.begin(w, h, d)
-        }
-        fn provide_next_buffer(
-            &mut self,
-            y: u32,
-            height: u32,
-            width: u32,
-            descriptor: PixelDescriptor,
-        ) -> Result<PixelSliceMut<'_>, SinkError> {
-            self.names
-                .push(std::thread::current().name().map(String::from));
-            self.inner.provide_next_buffer(y, height, width, descriptor)
-        }
-        fn finish(&mut self) -> Result<(), SinkError> {
-            self.inner.finish()
-        }
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn resumable_decoder_runs_off_runtime_with_concurrent_fetches() {
-        let file: Arc<[u8]> = minitile().into();
-        let requests = Arc::new(AtomicUsize::new(0));
-        let max_in_flight = Arc::new(AtomicUsize::new(0));
-        let sink = ThreadNameSink {
-            inner: CollectSink::new(),
-            names: Vec::new(),
-        };
-        let (info, sink) = decode_on_thread(
-            minitile_decoder(),
-            sink,
-            None,
-            ThreadOptions::default(),
-            concurrent_fetcher(file, requests.clone(), max_in_flight.clone()),
-        )
-        .await
-        .unwrap();
-        assert_eq!((info.width, info.height), (W, H));
-        assert_eq!(sink.inner.bytes(), &expected_pixels()[..]);
-        assert_eq!(
-            requests.load(Ordering::SeqCst),
-            4,
-            "header, index, two tiles"
-        );
-        assert_eq!(
-            max_in_flight.load(Ordering::SeqCst),
-            2,
-            "both tiles fetched concurrently"
-        );
-        assert!(
-            sink.names
-                .iter()
-                .all(|n| n.as_deref() == Some("zencodec-decode")),
-            "decode ran on the dedicated thread, not a runtime worker: {:?}",
-            sink.names
-        );
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn strips_stream_back_to_the_async_side_with_backpressure() {
-        let file: Arc<[u8]> = sequential_file(8).into();
-        let (tx, mut rx) = tokio::sync::mpsc::channel(1);
-        let sink = ChannelRowSink::new(tx, false);
-        let decode = decode_on_thread(
-            sequential_decoder(),
-            sink,
-            None,
-            ThreadOptions::default(),
-            fetch_from_bytes(file, 8),
-        );
-        let consumer = async move {
-            let mut events = Vec::new();
-            while let Some(ev) = rx.recv().await {
-                // Slow consumer: the bounded channel throttles the thread.
-                tokio::time::sleep(std::time::Duration::from_millis(2)).await;
-                let finished = matches!(ev, StripEvent::Finish);
-                events.push(ev);
-                if finished {
-                    break;
-                }
-            }
-            events
-        };
-        let ((info, _sink), events) = tokio::join!(async { decode.await.unwrap() }, consumer);
-        assert_eq!(info.height, 8);
-        assert!(matches!(
-            events[0],
-            StripEvent::Begin {
-                width: 2,
-                height: 8,
-                ..
-            }
-        ));
-        assert!(matches!(events.last(), Some(StripEvent::Finish)));
-        let strips: Vec<_> = events
-            .iter()
-            .filter_map(|e| match e {
-                StripEvent::Strip { meta, pixels } => {
-                    Some((meta.y, pixels.as_slice().row(0).to_vec()))
-                }
-                _ => None,
-            })
-            .collect();
-        assert_eq!(strips.len(), 8);
-        for (y, row) in strips {
-            assert_eq!(row, vec![y as u8; 8]);
-        }
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn sequential_decoder_over_an_async_reader() {
-        let file = sequential_file(5);
-        let reader = tokio::io::BufReader::new(std::io::Cursor::new(file));
-        let (info, sink) = decode_on_thread(
-            sequential_decoder(),
-            CollectSink::new(),
-            None,
-            ThreadOptions::default(),
-            fetch_from_async_read(reader, 3),
-        )
-        .await
-        .unwrap();
-        assert_eq!(info.height, 5);
-        assert_eq!(sink.rows_written(), 5);
-        assert_eq!(&sink.bytes()[32..40], &[4u8; 8]);
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn pull_native_decoder_blocks_on_the_async_fetcher() {
-        let file: Arc<[u8]> = minitile().into();
-        let requests = Arc::new(AtomicUsize::new(0));
-        let max_in_flight = Arc::new(AtomicUsize::new(0));
-        // A pull-native decode: straight-line reads against a DynReadAt.
-        let run = |src: &mut dyn DynReadAt,
-                   sink: &mut dyn DecodeRowSink|
-         -> Result<OutputInfo, BoxedError> {
-            let mut header = [0u8; 16];
-            src.read_exact_at(0, &mut header)?;
-            let index_at = u32::from_le_bytes(header[12..16].try_into().unwrap()) as u64;
-            let mut index = [0u8; 16];
-            src.read_exact_at(index_at, &mut index)?;
-            let f = |i: usize| u32::from_le_bytes(index[i * 4..i * 4 + 4].try_into().unwrap());
-            let mut t0 = vec![0u8; f(1) as usize];
-            let mut t1 = vec![0u8; f(3) as usize];
-            src.read_many_at(&mut [(f(0) as u64, &mut t0[..]), (f(2) as u64, &mut t1[..])])?;
-            sink.begin(W, H, RGBA)?;
-            for (y, tile) in [(0u32, &t0), (2, &t1)] {
-                let mut dst = sink.provide_next_buffer(y, 2, W, RGBA)?;
-                for r in 0..2 {
-                    dst.row_mut(r)
-                        .copy_from_slice(&tile[r as usize * 16..r as usize * 16 + 16]);
-                }
-            }
-            sink.finish()?;
-            assert_eq!(src.len()?, 128);
-            Ok(OutputInfo::full_decode(W, H, RGBA))
-        };
-        let (info, sink) = pull_decode_on_thread(
-            run,
-            CollectSink::new(),
-            None,
-            ThreadOptions::default(),
-            concurrent_fetcher(file, requests.clone(), max_in_flight.clone()),
-        )
-        .await
-        .unwrap();
-        assert_eq!((info.width, info.height), (W, H));
-        assert_eq!(sink.bytes(), &expected_pixels()[..]);
-        assert_eq!(requests.load(Ordering::SeqCst), 4);
-        assert_eq!(
-            max_in_flight.load(Ordering::SeqCst),
-            2,
-            "read_many_at became concurrent fetches"
-        );
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn dropping_the_future_stops_the_thread() {
-        struct DropFlag(Arc<AtomicBool>, CollectSink);
-        impl Drop for DropFlag {
-            fn drop(&mut self) {
-                self.0.store(true, Ordering::SeqCst);
-            }
-        }
-        impl DecodeRowSink for DropFlag {
-            fn provide_next_buffer(
-                &mut self,
-                y: u32,
-                height: u32,
-                width: u32,
-                descriptor: PixelDescriptor,
-            ) -> Result<PixelSliceMut<'_>, SinkError> {
-                self.1.provide_next_buffer(y, height, width, descriptor)
-            }
-        }
-        let dropped = Arc::new(AtomicBool::new(false));
-        let sink = DropFlag(dropped.clone(), CollectSink::new());
-        let (gate_tx, gate_rx) = tokio::sync::oneshot::channel::<()>();
-        let gate = Arc::new(tokio::sync::Mutex::new(Some(gate_rx)));
-        let decode = decode_on_thread(
-            minitile_decoder(),
-            sink,
-            None,
-            ThreadOptions::default(),
-            move |_req| {
-                let gate = gate.clone();
-                async move {
-                    // Never answers: the client "hung".
-                    if let Some(rx) = gate.lock().await.take() {
-                        let _ = rx.await;
-                    }
-                    Err::<SourceReply, BoxedError>("gate".into())
-                }
-            },
-        );
-        let timed_out = tokio::time::timeout(std::time::Duration::from_millis(50), decode).await;
-        assert!(timed_out.is_err(), "the fetch never answers");
-        // The future is dropped by the timeout; the thread sees the
-        // closed channel and exits, dropping the sink.
-        for _ in 0..200 {
-            if dropped.load(Ordering::SeqCst) {
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-        }
-        assert!(
-            dropped.load(Ordering::SeqCst),
-            "decode thread did not exit after the driver went away"
-        );
-        drop(gate_tx);
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn fetch_errors_surface_and_pool_spawner_is_used() {
-        let used_pool = Arc::new(AtomicBool::new(false));
-        let flag = used_pool.clone();
-        let opts = ThreadOptions::default().with_spawner(move |work| {
-            flag.store(true, Ordering::SeqCst);
-            std::thread::spawn(work);
-        });
-        let err = decode_on_thread(
-            minitile_decoder(),
-            CollectSink::new(),
-            None,
-            opts,
-            |_req| async { Err::<SourceReply, BoxedError>("503 from origin".into()) },
-        )
-        .await
-        .unwrap_err();
-        assert!(
-            matches!(err, ThreadError::Fetch(ref e) if e.to_string().contains("503")),
-            "{err:?}"
-        );
-        assert!(used_pool.load(Ordering::SeqCst));
-    }
-}
-
-/// A pulse that records cancellation, the announced total and advances.
 mod pulse_support {
     use std::sync::Arc;
     use std::sync::Mutex;
@@ -794,14 +756,14 @@ mod pulse_support {
     use enough::{Stop, StopReason};
     use how_far::{Child, Execution, PhaseSpec, PlanError, Pulse, Report, SharedPulse, Total};
 
-    #[derive(Default)]
+    #[derive(Default, Debug)]
     struct Inner {
         cancelled: AtomicBool,
         advanced: AtomicU64,
         total: Mutex<Option<Total>>,
     }
 
-    #[derive(Clone, Default)]
+    #[derive(Clone, Default, Debug)]
     pub struct RecordingPulse(Arc<Inner>);
 
     impl RecordingPulse {
@@ -855,101 +817,737 @@ mod pulse_support {
 }
 use pulse_support::RecordingPulse;
 
-#[test]
-fn drivers_report_total_and_progress() {
-    let file = sequential_file(6);
-    let pulse = RecordingPulse::default();
-    let mut dec = sequential_decoder();
-    let mut sink = CollectSink::new();
-    zencodec_io::drive_from_slice(&mut dec, &file, &mut sink, Some(&pulse), 5).unwrap();
-    assert_eq!(pulse.total(), Some(how_far::Total::Exact(6)));
-    assert_eq!(pulse.advanced(), 6);
-
-    let pulse = RecordingPulse::default();
-    let mut dec = sequential_decoder();
-    let mut sink = CollectSink::new();
-    pump_read_to_sink(Cursor::new(&file), &mut dec, &mut sink, Some(&pulse), 7).unwrap();
-    assert_eq!(pulse.total(), Some(how_far::Total::Exact(6)));
-    assert_eq!(pulse.advanced(), 6);
-
-    // A plain Stop still works through the StopOnly adapter.
-    let stopper = almost_enough::Stopper::new();
-    let adapter = how_far::StopOnly::borrowed(&stopper);
-    let mut dec = sequential_decoder();
-    let mut sink = CollectSink::new();
-    zencodec_io::drive_from_slice(&mut dec, &file, &mut sink, Some(&adapter), 64).unwrap();
-    assert_eq!(sink.rows_written(), 6);
-}
-
 #[cfg(feature = "tokio")]
-mod tokio_cancellation {
+mod tokio_drivers {
     use super::*;
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::time::{Duration, Instant};
     use zencodec::decode::BoxedError;
     use zencodec::source::DynReadAt;
-    use zencodec_io::thread::{
-        ChannelRowSink, SourceReply, ThreadError, ThreadOptions, decode_on_thread,
-        fetch_from_bytes, pull_decode_on_thread,
+    use zencodec_io::tokio_io::{
+        AsyncDriveError, AsyncReadSource, AsyncSource, BytesSource, ChannelRowSink, Compute,
+        Inline, StripEvent, decode_async, pull_decode_on_thread, transcode_async,
     };
 
-    /// A fetch that never answers while `hold` is set.
-    fn hung_fetch(
-        hold: Arc<tokio::sync::Notify>,
-    ) -> impl FnMut(
-        zencodec_io::thread::SourceRequest,
-    ) -> std::pin::Pin<
-        Box<dyn Future<Output = Result<SourceReply, BoxedError>> + Send>,
-    > {
-        move |_req| {
-            let hold = hold.clone();
-            Box::pin(async move {
-                hold.notified().await;
-                Err::<SourceReply, BoxedError>("released".into())
-            })
+    /// An object store stand-in: every range is its own task, so a round
+    /// with two ranges is two requests in flight.
+    struct ConcurrentSource {
+        file: Arc<[u8]>,
+        requests: Arc<AtomicUsize>,
+        max_in_flight: Arc<AtomicUsize>,
+    }
+
+    impl ConcurrentSource {
+        fn new(file: Vec<u8>) -> Self {
+            Self {
+                file: file.into(),
+                requests: Arc::default(),
+                max_in_flight: Arc::default(),
+            }
+        }
+    }
+
+    impl AsyncSource for ConcurrentSource {
+        async fn read_at(&mut self, offset: u64, out: &mut [u8]) -> Result<usize, BoxedError> {
+            let start = (offset as usize).min(self.file.len());
+            let n = (self.file.len() - start).min(out.len());
+            out[..n].copy_from_slice(&self.file[start..start + n]);
+            Ok(n)
+        }
+        async fn read_ranges(&mut self, reqs: &mut [(u64, &mut [u8])]) -> Result<(), BoxedError> {
+            let in_flight = Arc::new(AtomicUsize::new(0));
+            let mut set = tokio::task::JoinSet::new();
+            for (i, (offset, out)) in reqs.iter().enumerate() {
+                let (file, in_flight, max) = (
+                    self.file.clone(),
+                    in_flight.clone(),
+                    self.max_in_flight.clone(),
+                );
+                let (offset, len) = (*offset as usize, out.len());
+                self.requests.fetch_add(1, Ordering::SeqCst);
+                set.spawn(async move {
+                    let now = in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+                    max.fetch_max(now, Ordering::SeqCst);
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                    in_flight.fetch_sub(1, Ordering::SeqCst);
+                    (i, file[offset..offset + len].to_vec())
+                });
+            }
+            while let Some(r) = set.join_next().await {
+                let (i, bytes) = r.map_err(|e| Box::new(e) as BoxedError)?;
+                reqs[i].1.copy_from_slice(&bytes);
+            }
+            Ok(())
+        }
+        fn len_hint(&self) -> Option<u64> {
+            Some(self.file.len() as u64)
+        }
+        async fn len(&mut self) -> Result<u64, BoxedError> {
+            Ok(self.file.len() as u64)
+        }
+    }
+
+    /// Runs each batch on a fresh named thread.
+    fn named_threads() -> impl Compute {
+        |job: zencodec_io::tokio_io::Job| {
+            std::thread::Builder::new()
+                .name("zencodec-decode".into())
+                .spawn(job)
+                .unwrap();
+        }
+    }
+
+    /// Records the thread each sink call ran on.
+    struct ThreadNameSink {
+        inner: CollectSink,
+        names: Vec<Option<String>>,
+    }
+    impl DecodeRowSink for ThreadNameSink {
+        fn begin(&mut self, w: u32, h: u32, d: PixelDescriptor) -> Result<(), SinkError> {
+            self.names
+                .push(std::thread::current().name().map(String::from));
+            self.inner.begin(w, h, d)
+        }
+        fn provide_next_buffer(
+            &mut self,
+            y: u32,
+            height: u32,
+            width: u32,
+            descriptor: PixelDescriptor,
+        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            self.names
+                .push(std::thread::current().name().map(String::from));
+            self.inner.provide_next_buffer(y, height, width, descriptor)
+        }
+        fn finish(&mut self) -> Result<(), SinkError> {
+            self.inner.finish()
         }
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn cancel_while_waiting_for_a_fetch_without_dropping_the_future() {
+    async fn decode_async_fetches_ranges_concurrently_and_decodes_off_runtime() {
+        let mut source = ConcurrentSource::new(minitile());
+        let sink = ThreadNameSink {
+            inner: CollectSink::new(),
+            names: Vec::new(),
+        };
+        let (info, sink) = decode_async(
+            minitile_decoder(),
+            sink,
+            &mut source,
+            named_threads(),
+            DriveOptions::default(),
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!((info.width, info.height), (W, H));
+        assert_eq!(sink.inner.bytes(), &expected_pixels()[..]);
+        assert_eq!(
+            source.requests.load(Ordering::SeqCst),
+            4,
+            "header, index, two tiles"
+        );
+        assert_eq!(
+            source.max_in_flight.load(Ordering::SeqCst),
+            2,
+            "both tiles in flight together"
+        );
+        assert!(
+            sink.names
+                .iter()
+                .all(|n| n.as_deref() == Some("zencodec-decode")),
+            "decode ran on the compute threads: {:?}",
+            sink.names
+        );
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn decode_async_inline_on_a_single_threaded_runtime() {
+        let file = sequential_file(5);
+        let mut source = AsyncReadSource::new(std::io::Cursor::new(file));
+        let (info, sink) = decode_async(
+            sequential_decoder(),
+            CollectSink::new(),
+            &mut source,
+            Inline,
+            DriveOptions::default(),
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!(info.height, 5);
+        assert_eq!(&sink.bytes()[32..40], &[4u8; 8]);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn decode_async_emits_rows_while_the_upload_is_still_running() {
+        // The writer sends the header and two rows, then waits until the
+        // sink has seen two rows before sending the rest. A driver that
+        // waited for a full read buffer, or for the end, deadlocks here.
+        let file = sequential_file(6);
+        let (client, server) = tokio::io::duplex(64);
+        let (seen_tx, seen_rx) = tokio::sync::oneshot::channel::<()>();
+        struct Notify {
+            inner: CollectSink,
+            at: u64,
+            tx: Option<tokio::sync::oneshot::Sender<()>>,
+        }
+        impl DecodeRowSink for Notify {
+            fn begin(&mut self, w: u32, h: u32, d: PixelDescriptor) -> Result<(), SinkError> {
+                self.inner.begin(w, h, d)
+            }
+            fn provide_next_buffer(
+                &mut self,
+                y: u32,
+                height: u32,
+                width: u32,
+                descriptor: PixelDescriptor,
+            ) -> Result<PixelSliceMut<'_>, SinkError> {
+                if self.inner.rows_written() + height as u64 >= self.at
+                    && let Some(tx) = self.tx.take()
+                {
+                    let _ = tx.send(());
+                }
+                self.inner.provide_next_buffer(y, height, width, descriptor)
+            }
+            fn finish(&mut self) -> Result<(), SinkError> {
+                self.inner.finish()
+            }
+        }
+        let writer = tokio::spawn(async move {
+            use tokio::io::AsyncWriteExt;
+            let mut client = client;
+            client.write_all(&file[..8 + 16]).await.unwrap();
+            seen_rx.await.unwrap();
+            client.write_all(&file[8 + 16..]).await.unwrap();
+        });
+        let mut source = AsyncReadSource::new(server);
+        let sink = Notify {
+            inner: CollectSink::new(),
+            at: 2,
+            tx: Some(seen_tx),
+        };
+        let decode = decode_async(
+            sequential_decoder(),
+            sink,
+            &mut source,
+            Inline,
+            DriveOptions::default(),
+            None,
+        );
+        let (info, sink) = tokio::time::timeout(Duration::from_secs(5), decode)
+            .await
+            .expect("rows must flow before the upload ends")
+            .unwrap();
+        writer.await.unwrap();
+        assert_eq!(info.height, 6);
+        assert_eq!(sink.inner.rows_written(), 6);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn strips_stream_back_to_the_async_side_with_backpressure() {
+        let mut source = BytesSource(sequential_file(8).into());
+        let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+        let sink = ChannelRowSink::new(tx, false);
+        let compute = |job: zencodec_io::tokio_io::Job| {
+            tokio::task::spawn_blocking(job);
+        };
+        let decode = decode_async(
+            sequential_decoder(),
+            sink,
+            &mut source,
+            compute,
+            DriveOptions::default(),
+            None,
+        );
+        let consumer = async move {
+            let mut events = Vec::new();
+            while let Some(ev) = rx.recv().await {
+                tokio::time::sleep(Duration::from_millis(2)).await;
+                let finished = matches!(ev, StripEvent::Finish);
+                events.push(ev);
+                if finished {
+                    break;
+                }
+            }
+            events
+        };
+        let ((info, _sink), events) = tokio::join!(async { decode.await.unwrap() }, consumer);
+        assert_eq!(info.height, 8);
+        assert!(matches!(
+            events[0],
+            StripEvent::Begin {
+                width: 2,
+                height: 8,
+                ..
+            }
+        ));
+        let strips: Vec<_> = events
+            .iter()
+            .filter_map(|e| match e {
+                StripEvent::Strip { meta, pixels } => {
+                    Some((meta.y, pixels.as_slice().row(0).to_vec()))
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(strips.len(), 8);
+        for (y, row) in strips {
+            assert_eq!(row, vec![y as u8; 8]);
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn many_decodes_share_a_small_pool() {
+        // Sixteen concurrent decodes over a two-worker runtime and the
+        // blocking pool: none holds a thread while waiting for bytes.
+        let mut set = tokio::task::JoinSet::new();
+        for i in 0..16u32 {
+            set.spawn(async move {
+                let rows = 4 + i % 5;
+                let mut source = BytesSource(sequential_file(rows).into());
+                let compute = |job: zencodec_io::tokio_io::Job| {
+                    tokio::task::spawn_blocking(job);
+                };
+                let (info, sink) = decode_async(
+                    sequential_decoder(),
+                    CollectSink::new(),
+                    &mut source,
+                    compute,
+                    DriveOptions::new(0, 8),
+                    None,
+                )
+                .await
+                .unwrap();
+                assert_eq!(info.height, rows);
+                assert_eq!(sink.rows_written(), rows as u64);
+            });
+        }
+        while let Some(r) = set.join_next().await {
+            r.unwrap();
+        }
+    }
+
+    /// Every async driver's future is `Send` for any decoder, sink and
+    /// source that are, so it can go to `tokio::spawn`.
+    #[allow(dead_code)]
+    fn async_drivers_are_send() {
+        fn send<T: Send>(_: T) {}
+        send(async {
+            let mut src = BytesSource(Vec::new().into());
+            let _ = decode_async(
+                sequential_decoder(),
+                CollectSink::new(),
+                &mut src,
+                Inline,
+                DriveOptions::default(),
+                None,
+            )
+            .await;
+        });
+        send(async {
+            let mut src = BytesSource(Vec::new().into());
+            let mut out = Vec::new();
+            let enc = RawEncoder {
+                out: Vec::new(),
+                drained: 0,
+                peak_pending: Arc::default(),
+            };
+            let _ = transcode_async(
+                sequential_decoder(),
+                enc,
+                &mut src,
+                &mut out,
+                Inline,
+                DriveOptions::default(),
+                None,
+            )
+            .await;
+        });
+        send(async {
+            let mut src = BytesSource(Vec::new().into());
+            let _ =
+                pull_decode_on_thread(pull_tiles, CollectSink::new(), &mut src, Inline, None).await;
+        });
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn source_errors_surface_and_the_pool_is_used() {
+        struct Failing;
+        impl AsyncSource for Failing {
+            async fn read_at(&mut self, _: u64, _: &mut [u8]) -> Result<usize, BoxedError> {
+                Err("503 from origin".into())
+            }
+            async fn read_ranges(&mut self, _: &mut [(u64, &mut [u8])]) -> Result<(), BoxedError> {
+                Err("503 from origin".into())
+            }
+            async fn len(&mut self) -> Result<u64, BoxedError> {
+                Err("503 from origin".into())
+            }
+        }
+        let used = Arc::new(AtomicBool::new(false));
+        let flag = used.clone();
+        let compute = move |job: zencodec_io::tokio_io::Job| {
+            flag.store(true, Ordering::SeqCst);
+            std::thread::spawn(job);
+        };
+        let err = decode_async(
+            minitile_decoder(),
+            CollectSink::new(),
+            &mut Failing,
+            compute,
+            DriveOptions::default(),
+            None,
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            matches!(err, AsyncDriveError::Source(ref e) if e.to_string().contains("503")),
+            "{err:?}"
+        );
+        assert!(used.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn dropping_the_future_while_the_source_hangs_drops_decoder_and_sink() {
+        struct DropFlag(Arc<AtomicBool>, CollectSink);
+        impl Drop for DropFlag {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::SeqCst);
+            }
+        }
+        impl DecodeRowSink for DropFlag {
+            fn provide_next_buffer(
+                &mut self,
+                y: u32,
+                height: u32,
+                width: u32,
+                descriptor: PixelDescriptor,
+            ) -> Result<PixelSliceMut<'_>, SinkError> {
+                self.1.provide_next_buffer(y, height, width, descriptor)
+            }
+        }
+        struct Hung;
+        impl AsyncSource for Hung {
+            async fn read_at(&mut self, _: u64, _: &mut [u8]) -> Result<usize, BoxedError> {
+                std::future::pending().await
+            }
+            async fn read_ranges(&mut self, _: &mut [(u64, &mut [u8])]) -> Result<(), BoxedError> {
+                std::future::pending().await
+            }
+            async fn len(&mut self) -> Result<u64, BoxedError> {
+                std::future::pending().await
+            }
+        }
+        let dropped = Arc::new(AtomicBool::new(false));
+        let sink = DropFlag(dropped.clone(), CollectSink::new());
+        let mut source = Hung;
+        let decode = decode_async(
+            minitile_decoder(),
+            sink,
+            &mut source,
+            Inline,
+            DriveOptions::default(),
+            None,
+        );
+        let timed_out = tokio::time::timeout(Duration::from_millis(30), decode).await;
+        assert!(timed_out.is_err());
+        assert!(
+            dropped.load(Ordering::SeqCst),
+            "between batches the future owns the sink; dropping it drops the sink"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn the_pulse_cancels_inside_a_batch() {
+        // The whole file is on hand, so one batch would decode every row;
+        // the sink trips the pulse at the second row, and the decoder stops
+        // at its next step.
+        #[derive(Debug)]
+        struct TripAt {
+            inner: CollectSink,
+            pulse: RecordingPulse,
+        }
+        impl DecodeRowSink for TripAt {
+            fn begin(&mut self, w: u32, h: u32, d: PixelDescriptor) -> Result<(), SinkError> {
+                self.inner.begin(w, h, d)
+            }
+            fn provide_next_buffer(
+                &mut self,
+                y: u32,
+                height: u32,
+                width: u32,
+                descriptor: PixelDescriptor,
+            ) -> Result<PixelSliceMut<'_>, SinkError> {
+                if y == 1 {
+                    self.pulse.cancel();
+                }
+                self.inner.provide_next_buffer(y, height, width, descriptor)
+            }
+        }
         let pulse = RecordingPulse::default();
-        let hold = Arc::new(tokio::sync::Notify::new());
+        let mut source = BytesSource(sequential_file(64).into());
+        let sink = TripAt {
+            inner: CollectSink::new(),
+            pulse: pulse.clone(),
+        };
+        let err = decode_async(
+            sequential_decoder(),
+            sink,
+            &mut source,
+            Inline,
+            DriveOptions::default(),
+            Some(pulse.shared()),
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                AsyncDriveError::Step(StepError::Cancelled(enough::StopReason::Cancelled))
+            ),
+            "{err:?}"
+        );
+        assert!(pulse.advanced() < 64, "stopped early: {}", pulse.advanced());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn decode_async_reports_total_and_progress() {
+        let pulse = RecordingPulse::default();
+        let mut source = BytesSource(sequential_file(8).into());
+        let (info, _) = decode_async(
+            sequential_decoder(),
+            CollectSink::new(),
+            &mut source,
+            Inline,
+            DriveOptions::default(),
+            Some(pulse.shared()),
+        )
+        .await
+        .unwrap();
+        assert_eq!(info.height, 8);
+        assert_eq!(pulse.total(), Some(how_far::Total::Exact(8)));
+        assert_eq!(pulse.advanced(), 8);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn async_drivers_report_protocol_violations() {
+        let mut source = BytesSource(vec![0u8; 64].into());
+        let err = decode_async(
+            Bad {
+                how: Misbehave::Spin,
+                req: Vec::new(),
+            },
+            CollectSink::new(),
+            &mut source,
+            Inline,
+            DriveOptions::default(),
+            None,
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            matches!(
+                err,
+                AsyncDriveError::Protocol(ProtocolViolation::NoProgress(_))
+            ),
+            "{err:?}"
+        );
+    }
+
+    /// A streaming encoder stand-in: writes a 4-byte header at `begin`
+    /// and each row's bytes as it is pushed, and makes them available as
+    /// pending output.
+    struct RawEncoder {
+        out: Vec<u8>,
+        drained: usize,
+        peak_pending: Arc<AtomicUsize>,
+    }
+
+    #[derive(Debug)]
+    struct EncErr;
+    impl std::fmt::Display for EncErr {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("enc")
+        }
+    }
+    impl std::error::Error for EncErr {}
+
+    impl zencodec::encode::Encoder for RawEncoder {
+        type Error = EncErr;
+        fn reject(_op: zencodec::UnsupportedOperation) -> EncErr {
+            EncErr
+        }
+        fn encode(self, _pixels: PixelSlice<'_>) -> Result<zencodec::encode::EncodeOutput, EncErr> {
+            Err(EncErr)
+        }
+        fn begin(&mut self, w: u32, h: u32, _d: PixelDescriptor) -> Result<(), EncErr> {
+            self.out.extend_from_slice(&[w as u8, h as u8, 0, 0]);
+            Ok(())
+        }
+        fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), EncErr> {
+            for r in 0..rows.rows() {
+                self.out.extend_from_slice(rows.row(r));
+            }
+            let pending = self.out.len() - self.drained;
+            self.peak_pending.fetch_max(pending, Ordering::SeqCst);
+            Ok(())
+        }
+        fn pending_output(&self) -> &[u8] {
+            &self.out[self.drained..]
+        }
+        fn consume_output(&mut self, n: usize) {
+            self.drained += n;
+        }
+        fn finish(self) -> Result<zencodec::encode::EncodeOutput, EncErr> {
+            Ok(zencodec::encode::EncodeOutput::new(
+                self.out[self.drained..].to_vec(),
+                ImageFormat::Png,
+            ))
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn transcode_async_writes_encoded_bytes_as_rows_arrive() {
+        let rows = 32u32;
+        let file = sequential_file(rows);
+        let mut source = BytesSource(file.into());
+        let peak = Arc::new(AtomicUsize::new(0));
+        let encoder = RawEncoder {
+            out: Vec::new(),
+            drained: 0,
+            peak_pending: peak.clone(),
+        };
+        let mut out = Vec::new();
+        // read_size 16: each batch decodes about two rows.
+        let written = transcode_async(
+            sequential_decoder(),
+            encoder,
+            &mut source,
+            &mut out,
+            Inline,
+            DriveOptions::new(0, 16),
+            None,
+        )
+        .await
+        .unwrap();
+        let mut expected = vec![2u8, rows as u8, 0, 0];
+        for y in 0..rows {
+            expected.extend_from_slice(&[y as u8; 8]);
+        }
+        assert_eq!(out, expected);
+        assert_eq!(written, expected.len() as u64);
+        assert!(
+            peak.load(Ordering::SeqCst) < 64,
+            "pending output drained per batch, peak {}",
+            peak.load(Ordering::SeqCst)
+        );
+    }
+
+    fn pull_tiles(
+        src: &mut dyn DynReadAt,
+        sink: &mut dyn DecodeRowSink,
+    ) -> Result<OutputInfo, BoxedError> {
+        let mut header = [0u8; 16];
+        src.read_exact_at(0, &mut header)?;
+        let index_at = u32::from_le_bytes(header[12..16].try_into().unwrap()) as u64;
+        let mut index = [0u8; 16];
+        src.read_exact_at(index_at, &mut index)?;
+        let f = |i: usize| u32::from_le_bytes(index[i * 4..i * 4 + 4].try_into().unwrap());
+        let mut t0 = vec![0u8; f(1) as usize];
+        let mut t1 = vec![0u8; f(3) as usize];
+        src.read_many_at(&mut [(f(0) as u64, &mut t0[..]), (f(2) as u64, &mut t1[..])])?;
+        sink.begin(W, H, RGBA)?;
+        for (y, tile) in [(0u32, &t0), (2, &t1)] {
+            let mut dst = sink.provide_next_buffer(y, 2, W, RGBA)?;
+            for r in 0..2 {
+                dst.row_mut(r)
+                    .copy_from_slice(&tile[r as usize * 16..r as usize * 16 + 16]);
+            }
+        }
+        sink.finish()?;
+        assert_eq!(src.len()?, 128);
+        Ok(OutputInfo::full_decode(W, H, RGBA))
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pull_native_decoder_blocks_on_the_async_source() {
+        let mut source = ConcurrentSource::new(minitile());
+        let (info, sink) = pull_decode_on_thread(
+            pull_tiles,
+            CollectSink::new(),
+            &mut source,
+            named_threads(),
+            None,
+        )
+        .await
+        .unwrap();
+        assert_eq!((info.width, info.height), (W, H));
+        assert_eq!(sink.bytes(), &expected_pixels()[..]);
+        assert_eq!(source.requests.load(Ordering::SeqCst), 2, "the two tiles");
+        assert_eq!(
+            source.max_in_flight.load(Ordering::SeqCst),
+            2,
+            "read_many_at became concurrent reads"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pull_native_read_at_fills_from_a_trickling_source() {
+        // An AsyncRead that returns a few bytes at a time: the bridge's
+        // read_exact_at must still see full reads.
+        let file = minitile();
+        let (client, server) = tokio::io::duplex(8);
+        let writer = tokio::spawn(async move {
+            use tokio::io::AsyncWriteExt;
+            let mut client = client;
+            for c in file.chunks(5) {
+                // The decode stops reading after the index; then the
+                // reader goes away and writes fail.
+                if client.write_all(c).await.is_err() {
+                    break;
+                }
+            }
+        });
+        let run = |src: &mut dyn DynReadAt,
+                   _sink: &mut dyn DecodeRowSink|
+         -> Result<OutputInfo, BoxedError> {
+            let mut header = [0u8; 16];
+            src.read_exact_at(0, &mut header)?;
+            assert_eq!(&header[..4], b"MTIL");
+            let mut index = [0u8; 16];
+            src.read_exact_at(80, &mut index)?;
+            assert_eq!(u32::from_le_bytes(index[..4].try_into().unwrap()), 32);
+            Ok(OutputInfo::full_decode(W, H, RGBA))
+        };
+        let mut source = AsyncReadSource::new(server);
+        pull_decode_on_thread(run, CollectSink::new(), &mut source, named_threads(), None)
+            .await
+            .unwrap();
+        drop(source);
+        writer.await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cancel_a_pull_native_decode_waiting_on_a_hung_source() {
+        struct Hung;
+        impl AsyncSource for Hung {
+            async fn read_at(&mut self, _: u64, _: &mut [u8]) -> Result<usize, BoxedError> {
+                std::future::pending().await
+            }
+            async fn len(&mut self) -> Result<u64, BoxedError> {
+                std::future::pending().await
+            }
+        }
+        let pulse = RecordingPulse::default();
         let p = pulse.clone();
         tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(30)).await;
             p.cancel();
         });
         let start = Instant::now();
-        let err = decode_on_thread(
-            minitile_decoder(),
-            CollectSink::new(),
-            Some(pulse.shared()),
-            ThreadOptions::default(),
-            hung_fetch(hold.clone()),
-        )
-        .await
-        .unwrap_err();
-        assert!(
-            matches!(err, ThreadError::Cancelled(enough::StopReason::Cancelled)),
-            "{err:?}"
-        );
-        assert!(
-            start.elapsed() < Duration::from_secs(2),
-            "took {:?}",
-            start.elapsed()
-        );
-        hold.notify_waiters();
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn cancel_a_pull_native_decode_waiting_for_a_fetch() {
-        let pulse = RecordingPulse::default();
-        let hold = Arc::new(tokio::sync::Notify::new());
-        let p = pulse.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(30)).await;
-            p.cancel();
-        });
         let run = |src: &mut dyn DynReadAt,
                    _sink: &mut dyn DecodeRowSink|
          -> Result<OutputInfo, BoxedError> {
@@ -960,24 +1558,29 @@ mod tokio_cancellation {
         let err = pull_decode_on_thread(
             run,
             CollectSink::new(),
+            &mut Hung,
+            named_threads(),
             Some(pulse.shared()),
-            ThreadOptions::default(),
-            hung_fetch(hold.clone()),
         )
         .await
         .unwrap_err();
-        // The read fails with the cancellation, which the codec returns as
-        // its error; the bridge recognises its own error type.
         assert!(
-            matches!(err, ThreadError::Cancelled(enough::StopReason::Cancelled)),
+            matches!(
+                err,
+                AsyncDriveError::Cancelled(enough::StopReason::Cancelled)
+            ),
             "{err:?}"
         );
-        hold.notify_waiters();
+        assert!(
+            start.elapsed() < Duration::from_secs(2),
+            "took {:?}",
+            start.elapsed()
+        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn cancel_while_blocked_on_a_stuck_strip_consumer() {
-        let file: Arc<[u8]> = sequential_file(8).into();
+        let mut source = BytesSource(sequential_file(8).into());
         let pulse = RecordingPulse::default();
         let (tx, rx) = tokio::sync::mpsc::channel(1);
         let sink = ChannelRowSink::new(tx, false).with_pulse(pulse.shared());
@@ -987,18 +1590,25 @@ mod tokio_cancellation {
             p.cancel();
         });
         let start = Instant::now();
-        // The consumer never reads: the thread blocks in the sink.
-        let err = decode_on_thread(
+        let compute = |job: zencodec_io::tokio_io::Job| {
+            tokio::task::spawn_blocking(job);
+        };
+        // The consumer never reads: the batch blocks in the sink.
+        let err = decode_async(
             sequential_decoder(),
             sink,
+            &mut source,
+            compute,
+            DriveOptions::default(),
             Some(pulse.shared()),
-            ThreadOptions::default(),
-            fetch_from_bytes(file, 8),
         )
         .await
         .unwrap_err();
         assert!(
-            matches!(err, ThreadError::Codec(_)) || matches!(err, ThreadError::Cancelled(_)),
+            matches!(
+                err,
+                AsyncDriveError::Step(StepError::Sink(_) | StepError::Cancelled(_))
+            ),
             "{err:?}"
         );
         assert!(
@@ -1007,23 +1617,5 @@ mod tokio_cancellation {
             start.elapsed()
         );
         drop(rx);
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn bridge_reports_total_and_progress() {
-        let file: Arc<[u8]> = sequential_file(8).into();
-        let pulse = RecordingPulse::default();
-        let (info, _sink) = decode_on_thread(
-            sequential_decoder(),
-            CollectSink::new(),
-            Some(pulse.shared()),
-            ThreadOptions::default(),
-            fetch_from_bytes(file, 8),
-        )
-        .await
-        .unwrap();
-        assert_eq!(info.height, 8);
-        assert_eq!(pulse.total(), Some(how_far::Total::Exact(8)));
-        assert_eq!(pulse.advanced(), 8);
     }
 }

@@ -27,20 +27,21 @@ mod dyn_decoding;
 mod dyn_encoding;
 mod encoder;
 mod encoding;
+mod incremental;
 mod unsupported;
 
-pub use decoder::{
-    AnimationFrameDecoder, BatchMeta, ByteRange, Decode, IncrementalDecode, MetadataUpdate, Step,
-    StreamingDecode,
-};
+pub use decoder::{AnimationFrameDecoder, Decode, StreamingDecode};
 pub use decoding::{DecodeJob, DecoderConfig};
 pub use dyn_decoding::{
-    DynAnimationFrameDecoder, DynDecodeJob, DynDecoder, DynDecoderConfig, DynIncrementalDecoder,
-    DynStreamingDecoder, IncrementalDecoderShim,
+    DynAnimationFrameDecoder, DynDecodeJob, DynDecoder, DynDecoderConfig, DynStreamingDecoder,
 };
 pub use dyn_encoding::{DynAnimationFrameEncoder, DynEncodeJob, DynEncoder, DynEncoderConfig};
 pub use encoder::{AnimationFrameEncoder, Encoder};
 pub use encoding::{EncodeJob, EncoderConfig};
+pub use incremental::{
+    BatchMeta, ByteRange, DynIncrementalDecoder, ErasedError, Event, Fused, IncrementalDecode,
+    IncrementalDecoderShim, Input, MetadataUpdate, Progress, Request, StepError, erase_incremental,
+};
 pub use unsupported::Unsupported;
 
 use alloc::boxed::Box;

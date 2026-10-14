@@ -41,7 +41,3 @@ required-features = ["std"]
 name = "drivers"
 harness = false
 required-features = ["std"]
-
-[[example]]
-name = "alloc_audit"
-required-features = ["std"]

@@ -39,6 +39,10 @@ impl ReadAt for FileReadAt {
         Ok(self.len)
     }
 
+    fn len_hint(&self) -> Option<u64> {
+        Some(self.len)
+    }
+
     fn read_exact_at(&mut self, offset: u64, out: &mut [u8]) -> Result<(), Self::Error> {
         if offset
             .checked_add(out.len() as u64)

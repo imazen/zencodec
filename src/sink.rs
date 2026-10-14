@@ -131,21 +131,27 @@ pub trait DecodeRowSink {
 
     /// Whether this sink wants provisional rows from progressive passes.
     ///
-    /// Default `false`: the decoder writes each row once, in its final
-    /// form, through [`provide_next_buffer`](Self::provide_next_buffer).
-    /// A sink that renders refinements (progressive display) returns
-    /// `true` and implements [`provide_pass_buffer`](Self::provide_pass_buffer).
+    /// Read once, when the decoder calls [`begin`](Self::begin). Final rows
+    /// always arrive once each through
+    /// [`provide_next_buffer`](Self::provide_next_buffer), in increasing `y`,
+    /// whatever this returns. A sink that renders refinements (progressive
+    /// display) returns `true` and implements
+    /// [`provide_pass_buffer`](Self::provide_pass_buffer) to also receive
+    /// provisional rows. Default `false`.
     fn accepts_provisional(&self) -> bool {
         false
     }
 
-    /// Provide a buffer for rows `meta.y .. meta.y + height` of pass
-    /// `meta.pass`. Called only when [`accepts_provisional`](Self::accepts_provisional)
-    /// is `true`; rows may arrive out of order and more than once, and
-    /// `meta.is_final` marks the last write for those rows.
+    /// Provide a buffer for provisional rows `meta.y .. meta.y + height` of
+    /// pass `meta.pass`: an approximation a later pass replaces. Called only
+    /// on sinks whose [`accepts_provisional`](Self::accepts_provisional)
+    /// returned `true`, never for final rows (`meta.is_final` is `false`),
+    /// and in any order relative to other provisional rows. The final rows
+    /// for the same region still arrive through
+    /// [`provide_next_buffer`](Self::provide_next_buffer).
     ///
-    /// Default: final rows go to `provide_next_buffer`; provisional rows
-    /// are refused.
+    /// Default: refuses, since a sink that does not accept provisional rows
+    /// is never sent any.
     fn provide_pass_buffer(
         &mut self,
         meta: crate::traits::BatchMeta,
@@ -153,11 +159,8 @@ pub trait DecodeRowSink {
         width: u32,
         descriptor: PixelDescriptor,
     ) -> Result<PixelSliceMut<'_>, SinkError> {
-        if meta.is_final {
-            self.provide_next_buffer(meta.y, height, width, descriptor)
-        } else {
-            Err("sink does not accept provisional rows".into())
-        }
+        let _ = (meta, height, width, descriptor);
+        Err("this sink does not accept provisional rows".into())
     }
 }
 
