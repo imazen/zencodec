@@ -16,6 +16,8 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 #### Added
 
+- Explicit structural-prefix and distinct-frame timing oracles require typed refusals and independent expected pixels. Existing compatibility checks remain unchanged.
+
 - The [contract coverage matrix](docs/testkit-contract-coverage.md) records consumer evidence, independent readbacks, and remaining API/testing gaps.
 
 - Checked policy tests compare builder, mutable and erased results, including pixels after rejection (`43061fcd`).
@@ -141,6 +143,8 @@ removes that whole class).
 
 ### Fixed
 
+- Format sniffing no longer mistakes an ordinary truecolor TGA header for an ICO/CUR directory containing zero images.
+
 - Unpublished `CodecSet::transcode` now refuses known animations, auxiliary
   images and descriptor downgrades with `TranscodeRequiresExplicitHandling`.
   Its documentation states that fidelity and metadata-carrier delivery are
@@ -174,6 +178,8 @@ removes that whole class).
   migrate to the explicitly named operation. No video transport is added.
 
 ### Added
+
+- Add configuration-level `EncoderConfig::{try_with_fidelity,check_fidelity_target,select_fidelity}` and equivalent erased job selection. Ordered preferences report each rejected target, reject non-finite requests, and isolate candidate configurations. These checks confirm target selection only; actual losslessness remains content-dependent and approximate metric targets do not become measured guarantees. No automatic retry of encode failures (`815fdfdd`).
 
 - Add `try_set_policy` and `try_with_policy` to generic encode/decode jobs, and
   `try_set_policy` to erased jobs. The default admits only an empty policy;

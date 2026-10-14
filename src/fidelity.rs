@@ -74,23 +74,131 @@ impl Fidelity {
     }
 }
 
+/// Why a configuration did not accept the requested fidelity target unchanged.
+/// This describes target selection, not a measured pixel-fidelity result.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub enum FidelityTargetError {
+    /// A floating-point target is NaN or infinite.
+    NonFinite,
+    /// The configuration cannot report what target it selected.
+    Unreported,
+    /// The legacy setter selected a different target or value.
+    Substituted { resolved: Fidelity },
+}
+
+impl core::fmt::Display for FidelityTargetError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::NonFinite => f.write_str("fidelity target must be finite"),
+            Self::Unreported => f.write_str("encoder cannot confirm the selected fidelity target"),
+            Self::Substituted { resolved } => write!(f, "encoder substituted {resolved:?}"),
+        }
+    }
+}
+impl core::error::Error for FidelityTargetError {}
+
+/// One rejected entry in an ordered fidelity preference list.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub struct FidelityRejection {
+    pub index: usize,
+    pub target: Fidelity,
+    pub reason: FidelityTargetError,
+}
+
+/// Failure to select a fidelity target. Unsupported targets are reported in
+/// caller order; selection never retries an encode or hides an encode failure.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum FidelitySelectionError {
+    Empty,
+    /// Invalid requests are caller errors, not a reason to downgrade fidelity.
+    InvalidPreference {
+        index: usize,
+        reason: FidelityTargetError,
+    },
+    Rejected(alloc::vec::Vec<FidelityRejection>),
+    /// Recording rejection reasons failed; no encoder has been run.
+    AllocationFailed,
+}
+impl core::fmt::Display for FidelitySelectionError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Empty => f.write_str("fidelity preference list is empty"),
+            Self::InvalidPreference { index, reason } => {
+                write!(f, "invalid fidelity preference {index}: {reason}")
+            }
+            Self::Rejected(attempts) => write!(
+                f,
+                "all {} fidelity preferences were rejected: {attempts:?}",
+                attempts.len()
+            ),
+            Self::AllocationFailed => f.write_str("could not allocate fidelity rejection report"),
+        }
+    }
+}
+impl core::error::Error for FidelitySelectionError {}
+
+impl Fidelity {
+    pub(crate) fn validate_target(self) -> Result<(), FidelityTargetError> {
+        let value = match self {
+            Self::Lossless => return Ok(()),
+            Self::Lossy(
+                LossyTarget::ApproxSsim2(v)
+                | LossyTarget::ApproxButteraugli(v)
+                | LossyTarget::ApproxZensimB(v)
+                | LossyTarget::CodecSpecificQuality(v),
+            ) => v,
+        };
+        if value.is_finite() {
+            Ok(())
+        } else {
+            Err(FidelityTargetError::NonFinite)
+        }
+    }
+}
+
+pub(crate) fn select_target<T>(
+    preferences: &[Fidelity],
+    mut attempt: impl FnMut(Fidelity) -> Result<T, FidelityTargetError>,
+) -> Result<(usize, T), FidelitySelectionError> {
+    if preferences.is_empty() {
+        return Err(FidelitySelectionError::Empty);
+    }
+    // Validate the entire request before trying candidates, even entries after
+    // a supported one. A malformed preference must not be silently ignored.
+    for (index, target) in preferences.iter().enumerate() {
+        target
+            .validate_target()
+            .map_err(|reason| FidelitySelectionError::InvalidPreference { index, reason })?;
+    }
+    let mut rejected = alloc::vec::Vec::new();
+    for (index, &target) in preferences.iter().enumerate() {
+        match attempt(target) {
+            Ok(value) => return Ok((index, value)),
+            Err(reason) => {
+                rejected
+                    .try_reserve(1)
+                    .map_err(|_| FidelitySelectionError::AllocationFailed)?;
+                rejected.push(FidelityRejection {
+                    index,
+                    target,
+                    reason,
+                });
+            }
+        }
+    }
+    Err(FidelitySelectionError::Rejected(rejected))
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
-// DEFERRED — `try_with_fidelity` / `FidelityMatch` (insufficiently settled).
+// DEFERRED — ordering or comparing distinct fidelity targets.
 //
-// A fail-fast counterpart to `with_fidelity` that reports how the codec resolved
-// the request. Deferred: the raised/lowered/translated + content-dependent
-// semantics aren't settled — a *config-time* verdict can't express GIF's
-// content-dependent lossless, nor the HDR/bit-depth "is it really lossless?"
-// question. Design + open questions: imazen/zencodec#104. Full prior impl in git
-// history (commit 44fe22e).
-//
-//   enum FidelityMatch { Exact, RaisedTo(Fidelity), LoweredTo(Fidelity),
-//                        Translated(Fidelity), Unsupported }
-//   //   is_honored() / meets_or_exceeds() / resolved()
-//   EncoderConfig::try_with_fidelity(&mut self, Fidelity) -> FidelityMatch
-//
-// What ships meanwhile: `with_fidelity` (infallible best-effort) +
-// `resolved_target_fidelity` (the simple `Option<Fidelity>` resolved report).
+// `try_with_fidelity` now confirms an unchanged configuration target. It does
+// not classify a substitution as better/worse, nor promise content-dependent
+// pixel fidelity. Those require a separate operation-level requirement model.
+// Prior FidelityMatch design: imazen/zencodec#104, commit 44fe22e.
 // ═════════════════════════════════════════════════════════════════════════════
 
 /// What a lossy encode aims at.

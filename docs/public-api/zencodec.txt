@@ -6,28 +6,28 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1785 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 118 lines (118 hidden + 0 excluded-feature)
+# files: zencodec.txt 1816 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 120 lines (120 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                12
-#   pub types (struct/enum/trait/alias)       190
+#   pub types (struct/enum/trait/alias)       193
 #   pub consts/statics                        197
 #   free functions                             46
-#   inherent methods                          780
-#   struct fields                             220
-#   enum variants                             271
+#   inherent methods                          792
+#   struct fields                             226
+#   enum variants                             278
 #   re-exports                                 12
-#   trait roster entries (type × trait)       488
+#   trait roster entries (type × trait)       503
 #   conditional trait impls (verbatim)          4
-#   auto-trait-complete types                  86
+#   auto-trait-complete types                  89
 #   auto-trait exceptions                       9
 #
 # per-module pub lines:
 #   (root)                          790
 #   animation                         8
 #   decode                          173
-#   encode                          126
+#   encode                          148
 #   estimate                         48
 #   exif                             94
 #   gainmap                         126
@@ -35,9 +35,9 @@
 #   icc                               1
 #   inventory                       103
 #   metadata_rewrite                 58
-#   prelude                         188
+#   prelude                         194
 
-## items (1669 lines)
+## items (1697 lines)
 
 pub mod zencodec
 pub use At
@@ -342,6 +342,18 @@ pub const fn encode::Fidelity::codec_quality(f32) -> Self
 pub const fn encode::Fidelity::is_lossless(self) -> bool
 pub const fn encode::Fidelity::ssim2(f32) -> Self
 pub const fn encode::Fidelity::zensim_b(f32) -> Self
+#[non_exhaustive] pub enum encode::FidelitySelectionError
+pub encode::FidelitySelectionError::AllocationFailed
+pub encode::FidelitySelectionError::Empty
+pub encode::FidelitySelectionError::InvalidPreference
+pub encode::FidelitySelectionError::InvalidPreference::index: usize
+pub encode::FidelitySelectionError::InvalidPreference::reason: encode::FidelityTargetError
+pub encode::FidelitySelectionError::Rejected(alloc::vec::Vec<encode::FidelityRejection>)
+#[non_exhaustive] pub enum encode::FidelityTargetError
+pub encode::FidelityTargetError::NonFinite
+pub encode::FidelityTargetError::Substituted
+pub encode::FidelityTargetError::Substituted::resolved: encode::Fidelity
+pub encode::FidelityTargetError::Unreported
 #[non_exhaustive] pub enum encode::LossyTarget
 pub encode::LossyTarget::ApproxButteraugli(f32)
 pub encode::LossyTarget::ApproxSsim2(f32)
@@ -431,6 +443,10 @@ pub const fn encode::EncodePolicy::with_color(self, ColorEmitPolicy) -> Self
 pub const fn encode::EncodePolicy::with_embed_exif(self, bool) -> Self
 pub const fn encode::EncodePolicy::with_embed_icc(self, bool) -> Self
 pub const fn encode::EncodePolicy::with_embed_xmp(self, bool) -> Self
+#[non_exhaustive] pub struct encode::FidelityRejection
+pub encode::FidelityRejection::index: usize
+pub encode::FidelityRejection::reason: encode::FidelityTargetError
+pub encode::FidelityRejection::target: encode::Fidelity
 pub trait encode::AnimationFrameEncoder: core::marker::Sized [also: prelude]
 pub type encode::AnimationFrameEncoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn encode::AnimationFrameEncoder::finish(self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, Self::Error>
@@ -476,10 +492,13 @@ pub fn encode::DynEncoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_
 pub trait encode::DynEncoderConfig: core::marker::Send + core::marker::Sync [also: prelude]
 pub fn encode::DynEncoderConfig::as_any(&self) -> &dyn core::any::Any
 pub fn encode::DynEncoderConfig::capabilities(&self) -> &'static encode::EncodeCapabilities
+pub fn encode::DynEncoderConfig::check_fidelity_target(&self, encode::Fidelity) -> core::result::Result<(), encode::FidelityTargetError>
 pub fn encode::DynEncoderConfig::dyn_job(&self) -> alloc::boxed::Box<(dyn encode::DynEncodeJob + 'static)>
 pub fn encode::DynEncoderConfig::estimate_encode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
 pub fn encode::DynEncoderConfig::format(&self) -> ImageFormat
+pub fn encode::DynEncoderConfig::select_fidelity_job(&self, &[encode::Fidelity]) -> core::result::Result<(usize, alloc::boxed::Box<dyn encode::DynEncodeJob>), encode::FidelitySelectionError>
 pub fn encode::DynEncoderConfig::supported_descriptors(&self) -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub fn encode::DynEncoderConfig::try_fidelity_job(&self, encode::Fidelity) -> core::result::Result<alloc::boxed::Box<dyn encode::DynEncodeJob>, encode::FidelityTargetError>
 pub trait encode::EncodeJob: core::marker::Sized [also: prelude]
 pub type encode::EncodeJob::AnimationFrameEnc: core::marker::Sized + core::marker::Send + 'static
 pub type encode::EncodeJob::Enc: core::marker::Sized + 'static
@@ -516,6 +535,7 @@ pub type encode::EncoderConfig::Error: core::error::Error + core::marker::Send +
 pub type encode::EncoderConfig::Job: encode::EncodeJob<Error = Self::Error>
 pub fn encode::EncoderConfig::alpha_quality(&self) -> core::option::Option<f32>
 pub fn encode::EncoderConfig::capabilities() -> &'static encode::EncodeCapabilities
+pub fn encode::EncoderConfig::check_fidelity_target(&self, encode::Fidelity) -> core::result::Result<(), encode::FidelityTargetError>
 pub fn encode::EncoderConfig::encode(self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, Self::Error> where Self: core::marker::Sized, <Self::Job as encode::EncodeJob>::Enc: encode::Encoder<Error = Self::Error>
 pub fn encode::EncoderConfig::estimate_encode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
 pub fn encode::EncoderConfig::format() -> ImageFormat
@@ -524,7 +544,9 @@ pub fn encode::EncoderConfig::generic_quality(&self) -> core::option::Option<f32
 pub fn encode::EncoderConfig::is_lossless(&self) -> core::option::Option<bool>
 pub fn encode::EncoderConfig::job(self) -> Self::Job
 pub fn encode::EncoderConfig::resolved_target_fidelity(&self) -> core::option::Option<encode::Fidelity>
+pub fn encode::EncoderConfig::select_fidelity(&self, &[encode::Fidelity]) -> core::result::Result<(usize, Self), encode::FidelitySelectionError>
 pub fn encode::EncoderConfig::supported_descriptors() -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub fn encode::EncoderConfig::try_with_fidelity(self, encode::Fidelity) -> core::result::Result<Self, encode::FidelityTargetError>
 pub fn encode::EncoderConfig::with_alpha_quality(self, f32) -> Self
 pub fn encode::EncoderConfig::with_fidelity(self, encode::Fidelity) -> Self
 pub fn encode::EncoderConfig::with_generic_effort(self, i32) -> Self
@@ -1051,10 +1073,13 @@ pub fn prelude::DynEncoder::preferred_strip_height(&self) -> u32
 pub fn prelude::DynEncoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), encode::BoxedError>
 pub fn prelude::DynEncoderConfig::as_any(&self) -> &dyn core::any::Any
 pub fn prelude::DynEncoderConfig::capabilities(&self) -> &'static encode::EncodeCapabilities
+pub fn prelude::DynEncoderConfig::check_fidelity_target(&self, encode::Fidelity) -> core::result::Result<(), encode::FidelityTargetError>
 pub fn prelude::DynEncoderConfig::dyn_job(&self) -> alloc::boxed::Box<(dyn encode::DynEncodeJob + 'static)>
 pub fn prelude::DynEncoderConfig::estimate_encode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
 pub fn prelude::DynEncoderConfig::format(&self) -> ImageFormat
+pub fn prelude::DynEncoderConfig::select_fidelity_job(&self, &[encode::Fidelity]) -> core::result::Result<(usize, alloc::boxed::Box<dyn encode::DynEncodeJob>), encode::FidelitySelectionError>
 pub fn prelude::DynEncoderConfig::supported_descriptors(&self) -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub fn prelude::DynEncoderConfig::try_fidelity_job(&self, encode::Fidelity) -> core::result::Result<alloc::boxed::Box<dyn encode::DynEncodeJob>, encode::FidelityTargetError>
 pub fn prelude::DynStreamingDecoder::info(&self) -> &ImageInfo
 pub fn prelude::DynStreamingDecoder::next_batch(&mut self) -> core::result::Result<core::option::Option<(u32, zenpixels::buffer::PixelSlice<'_>)>, encode::BoxedError>
 pub type prelude::EncodeJob::AnimationFrameEnc: core::marker::Sized + core::marker::Send + 'static
@@ -1090,6 +1115,7 @@ pub type prelude::EncoderConfig::Error: core::error::Error + core::marker::Send 
 pub type prelude::EncoderConfig::Job: encode::EncodeJob<Error = Self::Error>
 pub fn prelude::EncoderConfig::alpha_quality(&self) -> core::option::Option<f32>
 pub fn prelude::EncoderConfig::capabilities() -> &'static encode::EncodeCapabilities
+pub fn prelude::EncoderConfig::check_fidelity_target(&self, encode::Fidelity) -> core::result::Result<(), encode::FidelityTargetError>
 pub fn prelude::EncoderConfig::encode(self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, Self::Error> where Self: core::marker::Sized, <Self::Job as encode::EncodeJob>::Enc: encode::Encoder<Error = Self::Error>
 pub fn prelude::EncoderConfig::estimate_encode_resources(&self, &estimate::ImageCharacteristics, &estimate::ComputeEnvironment) -> estimate::ResourceEstimate
 pub fn prelude::EncoderConfig::format() -> ImageFormat
@@ -1098,7 +1124,9 @@ pub fn prelude::EncoderConfig::generic_quality(&self) -> core::option::Option<f3
 pub fn prelude::EncoderConfig::is_lossless(&self) -> core::option::Option<bool>
 pub fn prelude::EncoderConfig::job(self) -> Self::Job
 pub fn prelude::EncoderConfig::resolved_target_fidelity(&self) -> core::option::Option<encode::Fidelity>
+pub fn prelude::EncoderConfig::select_fidelity(&self, &[encode::Fidelity]) -> core::result::Result<(usize, Self), encode::FidelitySelectionError>
 pub fn prelude::EncoderConfig::supported_descriptors() -> &'static [zenpixels::descriptor::PixelDescriptor]
+pub fn prelude::EncoderConfig::try_with_fidelity(self, encode::Fidelity) -> core::result::Result<Self, encode::FidelityTargetError>
 pub fn prelude::EncoderConfig::with_alpha_quality(self, f32) -> Self
 pub fn prelude::EncoderConfig::with_fidelity(self, encode::Fidelity) -> Self
 pub fn prelude::EncoderConfig::with_generic_effort(self, i32) -> Self
@@ -1709,7 +1737,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (102 types)
+## trait impls (105 types)
 
 (): encode::AnimationFrameEncoder
 (dyn core::error::Error + 'static): CodecErrorExt
@@ -1771,6 +1799,9 @@ encode::EncodeCapabilities: Clone, Debug, Default, PartialEq
 encode::EncodeOutput: AsRef<[u8]>, Clone, Debug, Eq, PartialEq
 encode::EncodePolicy: Clone, Copy, Debug, Default, Eq, PartialEq
 encode::Fidelity: Clone, Copy, Debug, PartialEq
+encode::FidelityRejection: Clone, Copy, Debug, PartialEq
+encode::FidelitySelectionError: Clone, Debug, Display, Error, PartialEq
+encode::FidelityTargetError: Clone, Copy, Debug, Display, Error, PartialEq
 encode::LossyTarget: Clone, Copy, Debug, PartialEq
 enough::reason::StopReason: CategorizedError
 estimate::ComputeEnvironment: Clone, Copy, Debug, Default, Eq, PartialEq
@@ -1820,7 +1851,7 @@ impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static,
 
 ## auto traits
 
-86 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+89 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
 CodecSet: !RefUnwindSafe !UnwindSafe
 CodecSetError: !RefUnwindSafe !UnwindSafe

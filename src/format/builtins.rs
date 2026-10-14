@@ -353,11 +353,12 @@ pub static ICO: ImageFormatDefinition = ImageFormatDefinition {
     supports_lossy: false,
     magic_bytes_needed: 22,
     detect: |data| {
-        data.len() >= 4
+        data.len() >= 6
             && data[0] == 0
             && data[1] == 0
             && (data[2] == 1 || data[2] == 2)
             && data[3] == 0
+            && u16::from_le_bytes([data[4], data[5]]) != 0
     },
 };
 

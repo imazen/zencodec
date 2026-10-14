@@ -102,7 +102,12 @@ use zenpixels::{
     ColorContext, PixelBuffer, PixelDescriptor, PixelSlice, PixelSliceMut, TransferFunction,
 };
 
+mod adversarial;
 mod contracts;
+pub use adversarial::{
+    ExpectedError, PrefixCase, PrefixOutcome, TimingCase, check_animation_cases,
+    check_decode_prefix_cases,
+};
 pub(crate) mod fixtures;
 /// The false-direction exemplar codec — consumed only by this crate's own
 /// tests, so it is compiled only with them.
