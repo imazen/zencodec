@@ -679,3 +679,10 @@ checks against 0.1.26 unchanged. This approval does not authorize publication.
 
 The [behavioral coverage matrix](testkit-contract-coverage.md) records the actual
 consumer checks and unresolved coverage boundaries.
+
+## Operation matrix audit
+
+The [codec operation matrix audit](codec-operation-matrix.md) inventories the
+existing per-codec and cross-codec suites, identifies source-confirmed harness
+weaknesses, and separates current acceptance rules from next-release targets.
+Its proposed exhaustive registry is not yet implemented or executed.
