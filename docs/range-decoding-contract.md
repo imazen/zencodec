@@ -197,3 +197,76 @@ pub trait IncrementalDecode {
     }
 }
 ```
+
+---
+
+## 7. The Seekable (Pull) Tier
+
+Push-range is the right contract when the driver is already holding bytes
+(HTTP responses, stream chunks). When the source itself is seekable — a
+file, an object store, a host callback — making the codec suspend and
+resume at arbitrary byte boundaries (`NeedRanges` rounds) buys nothing:
+the codec can simply read what it needs, in straight-line code, exactly
+as imij's region reader does. That is the pull tier:
+
+```rust
+pub trait ReadAt {
+    type Error;
+    fn len(&mut self) -> Result<u64, Self::Error>;
+    fn read_exact_at(&mut self, offset: u64, out: &mut [u8]) -> Result<(), Self::Error>;
+    fn read_many_at(&mut self, reqs: &mut [(u64, &mut [u8])]) -> Result<(), Self::Error>;
+}
+
+pub trait SeekableDecode {
+    type Error;
+    fn run(&mut self, source: &mut dyn DynReadAt,
+           sink: &mut dyn DecodeRowSink, stop: Option<&dyn Stop>)
+        -> Result<OutputInfo, Self::Error>;
+}
+```
+
+Crop/region intent stays bound on the job (`with_crop_hint`); the sink's
+coordinate space is the output image, so no x-offset crosses the boundary.
+A codec declares `AccessPattern::{Sequential, BoundedBacktrack, RandomAccess}`
+and `DecodeCapabilities::with_seekable(true)`.
+
+### Adapters bridge the tiers; neither replaces the other
+
+- **Seekable source, push codec:** `zencodec::source::drive_ranges` runs
+  the `NeedRanges` loop, coalescing each round into one `read_many_at`
+  batch so concurrent sources overlap round trips. Dependency depth
+  (header, directory, tiles) costs the same round trips in both models.
+- **Unseekable stream, pull codec:** `zencodec::source::BufferedReadAt`
+  manufactures seeks by buffering, under an explicit policy:
+  `Window` (bounded retention, far-back reads fail with `BeyondWindow`),
+  `Cache` (retained prefix, capped), or `Spool` (arbitrary reads, capped).
+  Buffering cannot invent a seek: a read behind the window is an error,
+  and retention past a cap is an error — never silent corruption. A
+  re-openable source (file, HTTP) gives the driver a second escape hatch,
+  trading bandwidth for memory; a pipe does not.
+- **Stream, seekable codec, no source at all:** `SeekableIncrementalAdapter`
+  presents a `SeekableDecode` as an `IncrementalDecode` (buffer to EOF,
+  run once, serve batches), written once here instead of per codec.
+
+Which tier a run uses is decided by the source type, not the codec's
+preference. Drivers pick the buffering policy from the codec's declared
+`AccessPattern` and their memory budget (`ResourceLimits` caps the
+cache/spool the same way it caps input bytes).
+
+### Cancellation and progress
+
+One mechanism serves every caller. A rich progress type reaches the
+codec by downgrade — `how_far::Pulse: Stop`, so `&dyn Pulse` passes
+where `Option<&dyn Stop>` is expected — and a caller with nothing but a
+flag passes `almost_enough::FnStop` over an `AtomicBool`, owned as a
+`StopToken` at job construction. Codecs implement the `Stop` form;
+drivers report coarse progress (bytes pushed, rows pulled) themselves,
+and codecs that want fine-grained progress override the pulse entry
+points. No codec is required to name `how_far` types to be cancellable.
+
+### Provisional passes
+
+Progressive formats may emit a row several times before it is final.
+`BatchMeta { pass, is_final }` carries that on the batch; final-only
+sinks sit behind `ProvisionalFinalizer`, which retains provisional rows
+driver-side and forwards each row once, in its final form.

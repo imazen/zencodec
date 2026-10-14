@@ -10,22 +10,29 @@
 ## summary
 #
 #   pub modules                                 1
-#   pub types (struct/enum/trait/alias)         2
+#   pub types (struct/enum/trait/alias)         6
 #   pub consts/statics                          1
 #   free functions                              6
-#   inherent methods                            1
+#   inherent methods                            7
 #   enum variants                               8
-#   trait roster entries (type × trait)         5
-#   auto-trait exceptions                       1
+#   trait roster entries (type × trait)         7
+#   auto-trait-complete types                   1
+#   auto-trait exceptions                       2
 #
 # per-module pub lines:
 #   (root)                            1
-#   decode                            1
+#   decode                            3
 #   estimate                          1
 #   helpers                          16
+#   source                            8
 
-## items (15 lines)
+## items (23 lines)
 
+pub struct decode::BufferedReadAt<R: alloc::io::read::Read> [also: source]
+pub fn source::BufferedReadAt<R>::new(R, source::BufferPolicy) -> Self
+pub fn source::BufferedReadAt<R>::watermark(&self) -> u64
+pub struct decode::FileReadAt [also: source]
+pub fn source::FileReadAt::new(std::fs::File) -> core::result::Result<Self, source::SourceError>
 pub fn decode::coalesce_byte_ranges(&[decode::ByteRange], u64) -> alloc::vec::Vec<decode::ByteRange> [also: helpers::sansio]
 pub fn estimate::ComputeEnvironment::host() -> Self
 pub mod helpers::sansio
@@ -40,14 +47,20 @@ pub helpers::PumpError::Io(core::io::error::Error)
 pub helpers::PumpError::UnexpectedEof
 pub fn helpers::pump_dyn_read_to_sink<R>(R, &mut (dyn decode::DynIncrementalDecoder + '_), &mut (dyn decode::DecodeRowSink + '_), core::option::Option<&dyn how_far::pulse::Pulse>, usize) -> core::result::Result<decode::OutputInfo, helpers::sansio::PumpError<encode::BoxedError>> where R: alloc::io::read::Read [also: helpers::sansio]
 pub fn helpers::pump_read_to_sink<R, D>(R, &mut D, &mut (dyn decode::DecodeRowSink + '_), core::option::Option<&dyn how_far::pulse::Pulse>, usize) -> core::result::Result<decode::OutputInfo, helpers::sansio::PumpError<<D as decode::IncrementalDecode>::Error>> where R: alloc::io::read::Read, D: decode::IncrementalDecode [also: helpers::sansio]
+pub fn source::BufferedReadAt<R>::new(R, source::BufferPolicy) -> Self
+pub fn source::BufferedReadAt<R>::watermark(&self) -> u64
+pub fn source::FileReadAt::new(std::fs::File) -> core::result::Result<Self, source::SourceError>
 pub const fn CodecIoKind::kind(&self) -> core::option::Option<core::io::error::ErrorKind>
 
-## trait impls (2 types)
+## trait impls (4 types)
 
 CodecIoKind: From<&core::io::error::Error>, From<core::io::error::ErrorKind>
 helpers::sansio::PumpError<E>: Debug, Display, Error
+source::BufferedReadAt<R>: source::ReadAt
+source::FileReadAt: source::ReadAt
 
 ## auto traits
 
-0 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+1 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 helpers::sansio::PumpError<E>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+source::BufferedReadAt<R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe

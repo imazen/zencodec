@@ -82,6 +82,7 @@ mod output;
 mod policy;
 mod set;
 mod sink;
+pub mod source;
 mod traits;
 
 // =========================================================================
@@ -225,13 +226,14 @@ pub mod decode {
     // Traits — config, job, execution
     pub use crate::traits::{
         AnimationFrameDecoder, BatchMeta, Decode, DecodeJob, DecoderConfig, IncrementalDecode,
-        MetadataUpdate, PushOutcome, PushStatus, StreamingDecode,
+        MetadataUpdate, PushOutcome, PushStatus, SeekableDecode, StreamingDecode,
     };
 
     // Object-safe dyn dispatch
     pub use crate::traits::{
         BoxedError, DynAnimationFrameDecoder, DynDecodeJob, DynDecoder, DynDecoderConfig,
-        DynIncrementalDecoder, DynStreamingDecoder, IncrementalDecoderShim,
+        DynIncrementalDecoder, DynSeekableDecoder, DynStreamingDecoder, IncrementalDecoderShim,
+        SeekableDecoderShim,
     };
 
     // Types
@@ -239,7 +241,13 @@ pub mod decode {
     pub use crate::cost::OutputInfo;
     pub use crate::output::{AnimationFrame, DecodeOutput, OwnedAnimationFrame};
     pub use crate::policy::DecodePolicy;
-    pub use crate::sink::{DecodeRowSink, SinkError};
+    pub use crate::sink::{DecodeRowSink, ProvisionalFinalizer, SinkError};
+    pub use crate::source::{
+        AccessPattern, BufferPolicy, DynReadAt, ReadAt, SliceReadAt, SourceError,
+    };
+    #[cfg(feature = "std")]
+    pub use crate::source::{BufferedReadAt, FileReadAt};
+    pub use crate::source::{DriveError, DriveStats, SeekableIncrementalAdapter, drive_ranges};
     pub use crate::traits::ByteRange;
 
     #[cfg(feature = "std")]
@@ -266,8 +274,8 @@ pub mod decode {
 pub mod prelude {
     pub use crate::decode::{
         AnimationFrameDecoder, Decode, DecodeJob, DecoderConfig, DynAnimationFrameDecoder,
-        DynDecodeJob, DynDecoder, DynDecoderConfig, DynIncrementalDecoder, DynStreamingDecoder,
-        IncrementalDecode, StreamingDecode,
+        DynDecodeJob, DynDecoder, DynDecoderConfig, DynIncrementalDecoder, DynSeekableDecoder,
+        DynStreamingDecoder, IncrementalDecode, SeekableDecode, StreamingDecode,
     };
     pub use crate::encode::{
         AnimationFrameEncoder, DynAnimationFrameEncoder, DynEncodeJob, DynEncoder,

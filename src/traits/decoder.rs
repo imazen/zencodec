@@ -375,8 +375,59 @@ pub trait IncrementalDecode {
         None
     }
 
+    /// How this decoder reads its input, so a driver can choose a
+    /// buffering policy when the source is an unseekable stream.
+    fn access_pattern(&self) -> crate::source::AccessPattern {
+        crate::source::AccessPattern::Sequential
+    }
+
     /// Whether decoding has fully completed.
     fn is_complete(&self) -> bool;
+}
+
+/// Seekable (pull-based) decoder over a random-access source.
+///
+/// The codec reads exactly the ranges it needs from a
+/// [`DynReadAt`](crate::source::DynReadAt) in straight-line code and writes
+/// rows directly into the caller's sink. Crop or region intent is bound on
+/// the job (for example `with_crop_hint`); the sink's coordinate space is
+/// the output image, so no x-offset crosses this boundary.
+///
+/// Created by [`DecodeJob::dyn_seekable_decoder()`](super::DecodeJob::dyn_seekable_decoder).
+pub trait SeekableDecode {
+    /// The codec-specific error type.
+    type Error: core::error::Error + Send + Sync + 'static;
+
+    /// Decode from `source` into `sink`. Called once; the codec drives
+    /// the whole decode, reading ranges as it needs them.
+    fn run(
+        &mut self,
+        source: &mut dyn crate::source::DynReadAt,
+        sink: &mut dyn crate::DecodeRowSink,
+        stop: Option<&dyn Stop>,
+    ) -> Result<OutputInfo, Self::Error>;
+
+    /// Wrap a [`SinkError`] into this decoder's error type.
+    fn wrap_sink_error(err: SinkError) -> Self::Error;
+
+    /// Wrap a source (I/O, range, or buffering) failure into this
+    /// decoder's error type.
+    fn wrap_source_error(err: crate::traits::BoxedError) -> Self::Error;
+
+    /// Image metadata, available after construction or after `run` has
+    /// read the header.
+    fn info(&self) -> Option<&ImageInfo>;
+
+    /// Negotiated output pixel descriptor, when known before `run`.
+    fn output_descriptor(&self) -> Option<zenpixels::PixelDescriptor> {
+        None
+    }
+
+    /// How this decoder reads its source. Drivers use this to pick a
+    /// [`BufferPolicy`](crate::source::BufferPolicy) for streams.
+    fn access_pattern(&self) -> crate::source::AccessPattern {
+        crate::source::AccessPattern::RandomAccess
+    }
 }
 
 /// Full-frame composited animation decode.

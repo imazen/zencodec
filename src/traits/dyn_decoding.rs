@@ -261,6 +261,11 @@ pub trait DynIncrementalDecoder: Send {
     /// Negotiated output pixel descriptor, available once the header has been parsed.
     fn output_descriptor(&self) -> Option<PixelDescriptor>;
 
+    /// How this decoder reads its input.
+    fn access_pattern(&self) -> crate::source::AccessPattern {
+        crate::source::AccessPattern::Sequential
+    }
+
     /// Whether decoding has fully completed.
     fn is_complete(&self) -> bool;
 }
@@ -368,6 +373,10 @@ impl<I: super::decoder::IncrementalDecode + Send + 'static> DynIncrementalDecode
         self.0.output_descriptor()
     }
 
+    fn access_pattern(&self) -> crate::source::AccessPattern {
+        self.0.access_pattern()
+    }
+
     fn is_complete(&self) -> bool {
         self.0.is_complete()
     }
@@ -453,8 +462,97 @@ impl<D: DynIncrementalDecoder + ?Sized> DynIncrementalDecoder for Box<D> {
         (**self).output_descriptor()
     }
 
+    fn access_pattern(&self) -> crate::source::AccessPattern {
+        (**self).access_pattern()
+    }
+
     fn is_complete(&self) -> bool {
         (**self).is_complete()
+    }
+}
+
+// ===========================================================================
+// DynSeekableDecoder
+// ===========================================================================
+
+/// Object-safe seekable (pull-based) decoder.
+///
+/// Wraps [`SeekableDecode`](super::decoder::SeekableDecode) for dyn dispatch.
+pub trait DynSeekableDecoder: Send {
+    /// Downcast to the concrete seekable decoder type.
+    fn as_any(&self) -> &dyn Any;
+
+    /// Downcast to the concrete seekable decoder type (mutable).
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+
+    /// Consume and downcast to the concrete seekable decoder type.
+    fn into_any(self: Box<Self>) -> Box<dyn Any>;
+
+    /// Decode from the bound source into `sink`.
+    fn run(
+        &mut self,
+        source: &mut dyn crate::source::DynReadAt,
+        sink: &mut dyn crate::DecodeRowSink,
+        stop: Option<&dyn Stop>,
+    ) -> Result<OutputInfo, BoxedError>;
+
+    /// Image metadata, when known.
+    fn info(&self) -> Option<&ImageInfo>;
+
+    /// Negotiated output pixel descriptor, when known.
+    fn output_descriptor(&self) -> Option<PixelDescriptor>;
+
+    /// How this decoder reads its source.
+    fn access_pattern(&self) -> crate::source::AccessPattern {
+        crate::source::AccessPattern::RandomAccess
+    }
+}
+
+impl core::fmt::Debug for dyn DynSeekableDecoder + '_ {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("DynSeekableDecoder").finish_non_exhaustive()
+    }
+}
+
+/// Shim wrapping a concrete [`SeekableDecode`](super::decoder::SeekableDecode).
+pub struct SeekableDecoderShim<S>(pub S);
+
+impl<S: super::decoder::SeekableDecode + Send + 'static> DynSeekableDecoder
+    for SeekableDecoderShim<S>
+{
+    fn as_any(&self) -> &dyn Any {
+        &self.0
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        &mut self.0
+    }
+
+    fn into_any(self: Box<Self>) -> Box<dyn Any> {
+        Box::new(self.0)
+    }
+
+    fn run(
+        &mut self,
+        source: &mut dyn crate::source::DynReadAt,
+        sink: &mut dyn crate::DecodeRowSink,
+        stop: Option<&dyn Stop>,
+    ) -> Result<OutputInfo, BoxedError> {
+        self.0
+            .run(source, sink, stop)
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn info(&self) -> Option<&ImageInfo> {
+        self.0.info()
+    }
+
+    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+        self.0.output_descriptor()
+    }
+
+    fn access_pattern(&self) -> crate::source::AccessPattern {
+        self.0.access_pattern()
     }
 }
 
@@ -578,6 +676,18 @@ pub trait DynDecodeJob<'a> {
         let _ = preferred;
         Err(Box::new(
             crate::capabilities::UnsupportedOperation::IncrementalDecode,
+        ))
+    }
+
+    /// Create a seekable pull-based decoder (consumes this job).
+    fn into_seekable_decoder(
+        self: Box<Self>,
+        source: Box<dyn crate::source::DynReadAt>,
+        preferred: &[PixelDescriptor],
+    ) -> Result<Box<dyn DynSeekableDecoder>, BoxedError> {
+        let _ = (source, preferred);
+        Err(Box::new(
+            crate::capabilities::UnsupportedOperation::SeekableDecode,
         ))
     }
 }
@@ -754,6 +864,15 @@ where
     ) -> Result<Box<dyn DynIncrementalDecoder>, BoxedError> {
         let job = self.take()?;
         job.dyn_incremental_decoder(preferred)
+    }
+
+    fn into_seekable_decoder(
+        mut self: Box<Self>,
+        source: Box<dyn crate::source::DynReadAt>,
+        preferred: &[PixelDescriptor],
+    ) -> Result<Box<dyn DynSeekableDecoder>, BoxedError> {
+        let job = self.take()?;
+        job.dyn_seekable_decoder(source, preferred)
     }
 }
 

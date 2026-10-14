@@ -9,8 +9,8 @@
 
 ## summary
 #
-#   inherent methods                           41
-#   trait roster entries (type × trait)        63
+#   inherent methods                           45
+#   trait roster entries (type × trait)        66
 #
 # per-module pub lines:
 #   (root)                           18
@@ -22,8 +22,9 @@
 #   gainmap                           2
 #   inventory                         6
 #   metadata_rewrite                  2
+#   source                            4
 
-## items (41 lines)
+## items (45 lines)
 
 pub fn CodecIoKind::assert_fields_are_eq(&self)
 pub fn ColorEmitFields::assert_fields_are_eq(&self)
@@ -66,8 +67,12 @@ pub fn inventory::PartId::assert_fields_are_eq(&self)
 pub fn inventory::PartTag::assert_fields_are_eq(&self)
 pub fn metadata_rewrite::Entry::assert_fields_are_eq(&self)
 pub fn metadata_rewrite::Error::assert_fields_are_eq(&self)
+pub fn source::AccessPattern::assert_fields_are_eq(&self)
+pub fn source::BufferPolicy::assert_fields_are_eq(&self)
+pub fn source::DriveStats::assert_fields_are_eq(&self)
+pub fn source::SourceError::assert_fields_are_eq(&self)
 
-## trait impls (63 types)
+## trait impls (66 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -132,3 +137,6 @@ inventory::PartId: TrivialClone
 inventory::PartKind: TrivialClone
 metadata_rewrite::Action: TrivialClone
 metadata_rewrite::Compression: TrivialClone
+source::AccessPattern: TrivialClone
+source::BufferPolicy: TrivialClone
+source::DriveStats: TrivialClone

@@ -117,7 +117,7 @@ pub mod reference;
 pub use contracts::{
     check_animation_durations, check_animation_timing, check_animation_timing_unsupported,
     check_decode_policy_admission, check_encode_policy_admission, check_inventory_input_limit,
-    check_metadata_rewrite,
+    check_metadata_rewrite, check_read_at_contract, check_seekable_capability_honesty,
 };
 
 #[cfg(test)]

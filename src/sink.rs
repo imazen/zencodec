@@ -29,8 +29,10 @@
 //! sinks only need to implement `provide_next_buffer()`.
 
 use alloc::boxed::Box;
+use alloc::collections::BTreeMap;
+use alloc::vec::Vec;
 
-use zenpixels::{PixelDescriptor, PixelSliceMut};
+use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 
 /// Boxed error type for sink failures.
 pub type SinkError = Box<dyn core::error::Error + Send + Sync>;
@@ -127,6 +129,79 @@ pub trait DecodeRowSink {
     /// Return `Err(...)` to signal finalization failure. Default: no-op.
     fn finish(&mut self) -> Result<(), SinkError> {
         Ok(())
+    }
+}
+
+/// Driver-side finalizer for provisional (multi-pass) batches.
+///
+/// Progressive formats can emit a row several times as passes refine it;
+/// a final-only [`DecodeRowSink`] must see each row once, in its final
+/// form. Feed every batch from `pull_batch_meta` through
+/// [`accept`](ProvisionalFinalizer::accept): non-final batches are
+/// retained, and a final batch supersedes and forwards its rows.
+#[derive(Default)]
+pub struct ProvisionalFinalizer {
+    begun: bool,
+    pending: BTreeMap<u32, Vec<u8>>,
+}
+
+impl ProvisionalFinalizer {
+    /// Create an empty finalizer.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Forward `begin` to `sink` (once) with the output geometry.
+    pub fn begin(
+        &mut self,
+        width: u32,
+        height: u32,
+        descriptor: PixelDescriptor,
+        sink: &mut dyn DecodeRowSink,
+    ) -> Result<(), SinkError> {
+        if !self.begun {
+            sink.begin(width, height, descriptor)?;
+            self.begun = true;
+        }
+        Ok(())
+    }
+
+    /// Accept one batch. Returns the rows forwarded to `sink` (nonzero
+    /// only for a final batch).
+    pub fn accept(
+        &mut self,
+        meta: crate::traits::BatchMeta,
+        slice: PixelSlice<'_>,
+        sink: &mut dyn DecodeRowSink,
+    ) -> Result<Option<u32>, SinkError> {
+        let rows = slice.rows();
+        let width = slice.width();
+        let desc = slice.descriptor();
+        if meta.is_final {
+            for y in meta.y..meta.y + rows {
+                self.pending.remove(&y);
+            }
+            let mut dst = sink.provide_next_buffer(meta.y, rows, width, desc)?;
+            for row in 0..rows {
+                dst.row_mut(row).copy_from_slice(slice.row(row));
+            }
+            Ok(Some(rows))
+        } else {
+            for row in 0..rows {
+                self.pending.insert(meta.y + row, slice.row(row).to_vec());
+            }
+            Ok(None)
+        }
+    }
+
+    /// Rows still held as provisional (never finalized by the codec).
+    pub fn pending_rows(&self) -> usize {
+        self.pending.len()
+    }
+
+    /// Forward `finish` to `sink`.
+    pub fn finish(&mut self, sink: &mut dyn DecodeRowSink) -> Result<(), SinkError> {
+        sink.finish()
     }
 }
 

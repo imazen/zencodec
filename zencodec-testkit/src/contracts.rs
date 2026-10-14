@@ -558,3 +558,103 @@ where
     check_animation_durations(dec.clone(), a.data(), &expected)?;
     check_animation_durations(dec, b.data(), &expected)
 }
+
+/// Verify a [`DynReadAt`](zencodec::source::DynReadAt) driver source
+/// against the bytes it claims to serve: length, exact reads at the
+/// edges and middle, one batched multi-range read, and an error (never
+/// a short or zero-filled read) past the end.
+pub fn check_read_at_contract(
+    source: &mut dyn zencodec::source::DynReadAt,
+    expected: &[u8],
+) -> Conformance {
+    const CHECK: &str = "read_at_contract";
+    let err = |e: &dyn std::fmt::Display| fail(CHECK, e.to_string());
+
+    let total = source.len().map_err(|e| err(&e))?;
+    if total != expected.len() as u64 {
+        return Err(fail(
+            CHECK,
+            format!("len() = {total}, expected {}", expected.len()),
+        ));
+    }
+    if expected.is_empty() {
+        return Ok(());
+    }
+
+    // Full read.
+    let mut all = vec![0u8; expected.len()];
+    source.read_exact_at(0, &mut all).map_err(|e| err(&e))?;
+    if all != expected {
+        return Err(fail(CHECK, "full read bytes differ"));
+    }
+
+    // Middle slice.
+    let mid = expected.len() / 2;
+    let take = (expected.len() - mid).min(16);
+    let mut slice = vec![0u8; take];
+    source
+        .read_exact_at(mid as u64, &mut slice)
+        .map_err(|e| err(&e))?;
+    if slice != expected[mid..mid + take] {
+        return Err(fail(CHECK, "middle read bytes differ"));
+    }
+
+    // One batched read of two ranges, requested out of order.
+    let mut head = vec![0u8; take];
+    let mut tail = vec![0u8; take];
+    {
+        let mut reqs: Vec<(u64, &mut [u8])> = vec![
+            ((expected.len() - take) as u64, &mut tail[..]),
+            (0, &mut head[..]),
+        ];
+        source.read_many_at(&mut reqs).map_err(|e| err(&e))?;
+    }
+    if head != expected[..take] || tail != expected[expected.len() - take..] {
+        return Err(fail(CHECK, "batched read bytes differ"));
+    }
+
+    // Past-the-end must fail, never short-fill.
+    let mut one = [0u8; 1];
+    if source
+        .read_exact_at(expected.len() as u64, &mut one)
+        .is_ok()
+    {
+        return Err(fail(CHECK, "read past end unexpectedly succeeded"));
+    }
+    Ok(())
+}
+
+/// Verify the seekable capability flag tells the truth, in both
+/// directions: a decoder declaring `seekable` must produce a seekable
+/// decoder over a valid source, and one not declaring it must reject
+/// with [`UnsupportedOperation::SeekableDecode`].
+pub fn check_seekable_capability_honesty<D: DecoderConfig>(
+    dec: D,
+    source: Box<dyn zencodec::source::DynReadAt>,
+) -> Conformance {
+    const CHECK: &str = "seekable_capability_honesty";
+    let declared = D::capabilities().seekable();
+    let result = dec.job().dyn_seekable_decoder(source, &[]);
+    match (declared, result) {
+        (true, Ok(_)) => Ok(()),
+        (true, Err(e)) => Err(fail(
+            CHECK,
+            format!("declared seekable but dyn_seekable_decoder failed: {e}"),
+        )),
+        (false, Ok(_)) => Err(fail(
+            CHECK,
+            "did not declare seekable but dyn_seekable_decoder succeeded",
+        )),
+        (false, Err(e)) => {
+            let op = e.downcast_ref::<UnsupportedOperation>().copied();
+            if op == Some(UnsupportedOperation::SeekableDecode) {
+                Ok(())
+            } else {
+                Err(fail(
+                    CHECK,
+                    format!("undeclared seekable rejected with wrong error: {e}"),
+                ))
+            }
+        }
+    }
+}
