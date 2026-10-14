@@ -162,6 +162,23 @@ unpublished. It published as `0.1.0`; those git deps and the tag-pinned
 `[patch.crates-io]` entries that exist only to unify with them can become plain
 registry deps whenever someone verifies the swap.
 
+### Git pins cascade through git-pinned intermediaries
+
+While a zencodec version is unpublished, consumers pin it by git rev and
+`[patch.crates-io]`. That patch reaches only **registry** edges. A dependency
+taken from git with its own `zencodec = { git, rev }` (ultrahdr-core, which
+heic depends on and zenavif patches in; zenpng and zenjpeg revs used by
+ultrahdr and zenavif) brings its own zencodec copy, and cargo refuses a
+`[patch."https://github.com/imazen/zencodec"]` that points back at the same
+URL. So moving a consumer to a new zencodec rev means first moving every
+git-pinned intermediary in its graph to that same rev (2026-10-14: heic
+needed ultrahdr PR 40, which needed zenjpeg's matching branch). Put every
+codec in one rollout on one zencodec rev, and check a consumer's lock with
+`grep -c 'name = "zencodec"' Cargo.lock` in an export outside `~/work/zen`
+(the workspace `.cargo/config.toml` path patches hide the split). Publishing
+the version ends the cascade: registry edges unify through the range rule
+above.
+
 ## Release Requirements
 
 **CI MUST pass before any crates.io release.** This includes:
