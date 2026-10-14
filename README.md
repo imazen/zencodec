@@ -60,8 +60,8 @@ line.
 
 To handle several formats behind one handle, register configs in a
 [`CodecSet`]: each decoder announces its own formats, magic-byte detection
-derives from what's registered (in the curated priority order — AVIF before
-HEIC, DNG before TIFF), and encoding is keyed by `ImageFormat`. The set is
+derives from what's registered (in the curated priority order — AVIF first,
+DNG before TIFF), and encoding is keyed by `ImageFormat`. The set is
 `Send + Sync` with `&self` operations, so build it once — in a
 `LazyLock`/`OnceLock` static or an `Arc` — and share it app-wide:
 
@@ -100,7 +100,6 @@ registered template.
 | `zenavif` | AVIF | [imazen/zenavif](https://github.com/imazen/zenavif) |
 | `zenjxl` | JPEG XL | [imazen/zenjxl](https://github.com/imazen/zenjxl) |
 | `zenbitmaps` | PNM/BMP/Farbfeld | [imazen/zenbitmaps](https://github.com/imazen/zenbitmaps) |
-| `heic` | HEIC/HEIF | [imazen/heic](https://github.com/imazen/heic) |
 | `zentiff` | TIFF (experimental) | [imazen/zentiff](https://github.com/imazen/zentiff) |
 | `zenpdf` | PDF (experimental) | [imazen/zenpdf](https://github.com/imazen/zenpdf) |
 
@@ -478,7 +477,7 @@ Licensed under either of [Apache-2.0](https://github.com/imazen/zencodec/blob/ma
 
 | | |
 |:--|:--|
-| **Codecs** ¹ | [zenjpeg] · [zenpng] · [zenwebp] · [zengif] · [zenavif] · [zenjxl] · [zenjxl-decoder] · [jxl-encoder] · [zenbitmaps] · [heic] · [zentiff] · [zenpdf] · [zensvg] · [zenjp2] · [zenraw] · [ultrahdr] |
+| **Codecs** ¹ | [zenjpeg] · [zenpng] · [zenwebp] · [zengif] · [zenavif] · [zenjxl] · [zenjxl-decoder] · [jxl-encoder] · [zenbitmaps] · [zentiff] · [zenpdf] · [zensvg] · [zenjp2] · [zenraw] · [ultrahdr] |
 | Codec internals | [zenrav1e] · [rav1d-safe] · [zenravif] · [zenavif-parse] · [zenavif-serialize] |
 | Compression | [zenflate] · [zenzop] · [zenzstd] |
 | Processing | [zenresize] · [zenquant] · [zenblend] · [zenfilters] · [zensally] · [zentone] |
@@ -506,7 +505,6 @@ Licensed under either of [Apache-2.0](https://github.com/imazen/zencodec/blob/ma
 [zenjxl-decoder]: https://github.com/imazen/zenjxl-decoder
 [jxl-encoder]: https://github.com/imazen/jxl-encoder
 [zenbitmaps]: https://github.com/imazen/zenbitmaps
-[heic]: https://github.com/imazen/heic
 [zentiff]: https://github.com/imazen/zenextras
 [zenpdf]: https://github.com/imazen/zenextras
 [zensvg]: https://github.com/imazen/zenextras

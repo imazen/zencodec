@@ -62,7 +62,7 @@ pub enum ImageSequence {
     /// metadata. `Decode` returns the primary image only. Other images
     /// require a `MultiPageDecoder` (future) or the codec's native API.
     ///
-    /// Examples: multi-page TIFF, HEIF collections, ICO sizes, DICOM slices,
+    /// Examples: multi-page TIFF, ICO sizes, DICOM slices,
     /// GeoTIFF spectral bands.
     Multi {
         /// Number of primary-level images, excluding thumbnails, masks,
@@ -72,7 +72,7 @@ pub enum ImageSequence {
         image_count: Option<u32>,
         /// Whether image N can be decoded without decoding images 0..N-1.
         ///
-        /// True for most container formats (TIFF IFDs, HEIF items, ICO
+        /// True for most container formats (TIFF IFDs, ICO
         /// entries) where each image is independently addressable.
         random_access: bool,
     },
@@ -129,28 +129,27 @@ impl ImageSequence {
 pub struct Supplements {
     /// Reduced-resolution versions (image pyramid, thumbnails).
     ///
-    /// TIFF pyramids, HEIF thumbnails, JPEG JFIF thumbnails.
+    /// TIFF pyramids, JPEG JFIF thumbnails.
     pub pyramid: bool,
 
     /// HDR gain map for SDR/HDR tone mapping.
     ///
-    /// JPEG Ultra HDR (ISO 21496-1), AVIF gain map, JXL gain map,
-    /// HEIF gain map.
+    /// JPEG Ultra HDR (ISO 21496-1), AVIF gain map, JXL gain map.
     pub gain_map: bool,
 
     /// Depth map (portrait mode, 3D reconstruction).
     ///
-    /// HEIF depth maps, Google Camera depth in JPEG, AVIF depth auxiliary.
+    /// Google Camera depth in JPEG, AVIF depth auxiliary.
     pub depth_map: bool,
 
     /// Segmentation mattes (portrait effects, hair, skin, teeth, glasses, sky).
     ///
-    /// iPhone HEIC files with portrait mode or semantic segmentation.
+    /// Portrait mode or semantic segmentation mattes.
     pub segmentation_mattes: bool,
 
     /// Other auxiliary images not covered by named fields.
     ///
-    /// Alpha planes stored as separate images (HEIF), transparency masks
+    /// Alpha planes stored as separate images, transparency masks
     /// (TIFF), vendor-specific auxiliary data.
     pub auxiliary: bool,
 }
@@ -252,7 +251,7 @@ pub struct SourceColor {
     /// double-signalling, so prefer to set the default at the source layer:
     ///
     /// - **Explicitly signalled** (JPEG XL `intensity_target`, OpenEXR
-    ///   `whiteLuminance`, HEIF `ndwt`, JXL gain-map `alternate_hdr_headroom`
+    ///   `whiteLuminance`, JXL gain-map `alternate_hdr_headroom`
     ///   reconstruction): pass it through.
     /// - **Spec-defined implicit default** (JPEG XL `intensity_target = 255`
     ///   when the field is omitted, PQ container peak 10 000, HLG nominal
@@ -471,7 +470,7 @@ pub struct ImageInfo {
     /// | PNG | Adam7 interlace | |
     /// | GIF | interlace flag on the (first) image descriptor | |
     /// | JPEG XL | the frame is split into more than one pass (`num_passes > 1`) — ISO/IEC 18181-1 progressive AC passes; a lone DC frame (`kLfFrame`) is a downscaled preview, not a pass, so a DC frame alone does not qualify | single-pass VarDCT / modular frames |
-    /// | AVIF / HEIC | the primary item is a *layered* image (`a1lx` layer sizes, one operating point per layer — the AVIF specification's progressive rendering; HEIF layered items likewise) | a single AV1 / HEVC layer; **tiles are not progressive** |
+    /// | AVIF | the primary item is a *layered* image (`a1lx` layer sizes, one operating point per layer — the AVIF specification's progressive rendering) | a single AV1 layer; **tiles are not progressive** |
     /// | WebP | — | VP8 / VP8L have no refinement order |
     /// | TIFF | — | strips and tiles are spatial partitions; TIFF/EP, DNG and BigTIFF add none |
     /// | BMP / PNM / Farbfeld / QOI / TGA / Radiance HDR / EXR | — | raster order (EXR scanline/tile) |

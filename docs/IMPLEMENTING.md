@@ -479,13 +479,13 @@ Two rules, both checked by the testkit:
 
 `SourceColor::color_authority` decides which field
 `SourceColor::to_color_context()` keeps and which it drops, so a wrong value
-silently changes the colour of every downstream pixel (a HEIC that read only an
+silently changes the colour of every downstream pixel (a file that read only an
 `nclx` box but left the `Icc` default lost its CICP and fell back to sRGB).
 The rule per format is the testkit's `expected_color_authority` table:
 
 | format | authority |
 |---|---|
-| PNG, JXL, HEIC, Radiance HDR | `Cicp` when you read a CICP, else `Icc` |
+| PNG, JXL, Radiance HDR | `Cicp` when you read a CICP, else `Icc` |
 | AVIF | MIAF order — `Icc` when you read an ICC, else `Cicp` when you read a CICP, else `Icc` |
 | JPEG, WebP, GIF, TIFF, BMP, ICO, PNM, Farbfeld, QOI, TGA, DNG, RAW, PDF | always `Icc` (embedded ICC or the sRGB assumption) |
 
@@ -501,7 +501,7 @@ on your own fixtures (an `nclx`-only file, an ICC-only file, both); the
 AV1 sequence header, TIFF `BitsPerSample`), even where the format only has one
 answer today — a hardcoded `8` is right for WebP by accident and wrong the day
 the container grows. `content_light_level` / `mastering_display` are populated
-wherever the container carries them (PNG `cLLi`/`mDCv`, AVIF/HEIC `clli`/`mdcv`,
+wherever the container carries them (PNG `cLLi`/`mDCv`, AVIF `clli`/`mdcv`,
 UltraHDR JPEG). Leave a field `None` when the format genuinely has no source
 for it.
 
@@ -510,7 +510,7 @@ for it.
 Set `ImageInfo::is_progressive` only when the codestream is ordered so a
 decoder can show a coarse version of the **whole** image before the last byte:
 progressive JPEG (SOF2/6/10/14), Adam7 PNG, interlaced GIF, a JPEG XL frame
-with more than one pass, a layered (`a1lx`) AVIF/HEIC item. Strips, tiles,
+with more than one pass, a layered (`a1lx`) AVIF item. Strips, tiles,
 groups and row batches are spatial partitions — WebP, TIFF and the raster
 formats are never progressive, however well the decoder streams them. The
 full per-format table is on the field's rustdoc.

@@ -27,7 +27,7 @@ use crate::metadata::IccRetention;
 /// - [`Compatibility`](ColorEmitPolicy::Compatibility) — always embed an ICC; add CICP where reliable.
 /// - [`Balanced`](ColorEmitPolicy::Balanced) (**default**) — emit CICP where the format has a
 ///   standardized CICP carrier, drop a redundant ICC only where CICP is safe as the sole carrier
-///   (JXL/AVIF/HEIC today) or the ICC is plain sRGB.
+///   (JXL/AVIF today) or the ICC is plain sRGB.
 /// - [`Compact`](ColorEmitPolicy::Compact) — smallest: prefer CICP wherever the format carries it, drop the ICC.
 /// - [`Verbatim`](ColorEmitPolicy::Verbatim) — carry the source's signals unchanged.
 /// - [`Custom`](ColorEmitPolicy::Custom) — explicit [`ColorEmitFields`] for power users.
@@ -53,7 +53,7 @@ use crate::metadata::IccRetention;
 /// produced the pixels); a mislabeled source is emitted faithfully wrong.
 ///
 /// - [`ColorEmitPlan::cicp`] → the format's native CICP carrier (JXL enum color,
-///   AVIF/HEIC `nclx`, PNG `cICP`).
+///   AVIF `nclx`, PNG `cICP`).
 /// - [`IccDisposition::KeepSource`] → re-embed the source ICC bytes unchanged.
 /// - [`IccDisposition::SynthesizeFrom`]`(cicp)` → lower through
 ///   `zenpixels_convert::icc_profiles::synthesize_icc_for_cicp(cicp)`, which is
@@ -80,7 +80,7 @@ pub enum ColorEmitPolicy {
     /// **Default.** Emit CICP where it is the format's authority and drop a
     /// redundant ICC only where CICP is safe as the *sole* carrier
     /// ([`cicp_safe_sole_carrier`](EncodeCapabilities::cicp_safe_sole_carrier) —
-    /// JXL/AVIF/HEIC today) or the ICC is a plain sRGB profile. Otherwise keep the ICC.
+    /// JXL/AVIF today) or the ICC is a plain sRGB profile. Otherwise keep the ICC.
     #[default]
     Balanced,
     /// Smallest color overhead: prefer CICP wherever the format can carry it at
@@ -99,7 +99,7 @@ pub enum ColorEmitPolicy {
 pub enum CicpEmission {
     /// Emit CICP where the format has a standardized, real-world-honored CICP
     /// carrier ([`cicp_is_valid_carrier`](EncodeCapabilities::cicp_is_valid_carrier)):
-    /// JXL/AVIF/HEIC `nclx`, and PNG `cICP`. The default. Distinct from
+    /// JXL/AVIF `nclx`, and PNG `cICP`. The default. Distinct from
     /// "drop the ICC" — a valid carrier (PNG) still keeps the ICC alongside.
     #[default]
     WhereValidCarrier,
@@ -343,7 +343,7 @@ pub fn resolve_color_emit(
             || (matches!(policy, ColorEmitPolicy::Balanced) && !sole_safe))
     {
         // Compatibility always wants an ICC alongside CICP; Balanced synthesizes a
-        // companion when the CICP carrier isn't sole-safe (PNG cICP, AVIF/HEIC nclx)
+        // companion when the CICP carrier isn't sole-safe (PNG cICP, AVIF nclx)
         // so the color survives decoders that ignore the carrier — symmetric with
         // keeping a source ICC there. Compact accepts CICP-only (smallest); Verbatim
         // derives nothing. (non-sRGB only — see `synth_worthwhile`.)
@@ -372,8 +372,8 @@ mod tests {
             .with_cicp_safe_sole_carrier(true)
     }
     fn caps_avif() -> EncodeCapabilities {
-        // AVIF nclx is spec-mandated + reader-authoritative (MIAF/HEIF) → sole-safe,
-        // like JXL. (HEIC has identical caps.) PNG (`caps_png`) stays NOT sole-safe.
+        // AVIF nclx is spec-mandated + reader-authoritative (MIAF) → sole-safe,
+        // like JXL. PNG (`caps_png`) stays NOT sole-safe.
         EncodeCapabilities::new()
             .with_icc(true)
             .with_cicp(true)

@@ -7,7 +7,7 @@ are made by this document.
 ## What exists
 
 - [Contract coverage](testkit-contract-coverage.md): fixture integrations for
-  17 of 18 format adapters. AVIF, hardware HEIC runtime coverage, allocation-failure
+  17 of 18 format adapters. AVIF, hardware-backend runtime coverage, allocation-failure
   injection, and animation sink timing remain explicit gaps. This is not all-pairs
   transcode coverage.
 - [Testkit](../zencodec-testkit/src/lib.rs): capability, fidelity, metadata,

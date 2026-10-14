@@ -1,6 +1,6 @@
 //! Apple iOS MakerNote HDR gain-map metadata extraction.
 //!
-//! Apple HEIC/JPEG captures encode their HDR gain-map *headroom* inside the
+//! Apple captures encode their HDR gain-map *headroom* inside the
 //! EXIF MakerNote (TIFF tag `0x927C`), **not** in XMP — the embedded gain-map
 //! image's XMP carries only `HDRGainMapVersion`. The headroom is derived from
 //! two Apple MakerNote tags, per exiftool's `Image::ExifTool::Apple`:
@@ -136,7 +136,7 @@ pub fn from_apple_headroom(info: &AppleHdrInfo) -> Option<GainMapMetadata> {
 }
 
 /// Extract Apple HDR info directly from EXIF TIFF bytes (e.g. the payload of a
-/// HEIF `Exif` item or a JPEG `APP1` segment, with any leading TIFF-offset
+/// container `Exif` item or a JPEG `APP1` segment, with any leading TIFF-offset
 /// prefix tolerated).
 ///
 /// Walks IFD0 → Exif sub-IFD (`0x8769`) → MakerNote (`0x927C`) → Apple iOS
@@ -459,7 +459,7 @@ fn type_size(dtype: u16) -> usize {
 }
 
 /// Locate the TIFF header within an EXIF blob, tolerating a leading offset
-/// prefix (HEIF `Exif` items prepend a 4-byte `tiff_header_offset`). Returns
+/// prefix (container `Exif` items prepend a 4-byte `tiff_header_offset`). Returns
 /// the TIFF slice (starting at the byte-order marker) and its endianness.
 fn tiff_start(exif: &[u8]) -> Option<(&[u8], Endian)> {
     let window = exif.len().min(16);
@@ -885,7 +885,7 @@ mod tests {
 
     #[test]
     fn tolerates_leading_tiff_offset_prefix() {
-        // HEIF Exif items prepend a 4-byte offset before the TIFF header.
+        // Container Exif items prepend a 4-byte offset before the TIFF header.
         let mut exif = vec![0u8, 0, 0, 0];
         exif.extend_from_slice(&build_exif_with_apple_makernote());
         let hi = parse_exif_for_apple_hdr(&exif).unwrap();

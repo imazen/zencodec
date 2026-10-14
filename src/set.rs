@@ -51,7 +51,7 @@
 //! [`CodecSet::detect`] consults only the formats that have a registered
 //! decoder, in the priority order of
 //! [`ImageFormatRegistry::common()`](crate::ImageFormatRegistry::common)
-//! (which resolves ambiguous ISOBMFF containers — AVIF before HEIC — and DNG
+//! (which resolves ambiguous ISOBMFF containers — AVIF first — and DNG
 //! before TIFF), followed by any [`ImageFormat::Custom`] formats in
 //! registration order. Registration order therefore cannot break the curated
 //! magic-byte priority.

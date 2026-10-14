@@ -341,8 +341,8 @@ impl ImageFormatRegistry {
     /// Registry containing all built-in format definitions.
     ///
     /// Detection order follows priority: JPEG, PNG, GIF, WebP, AVIF, JXL,
-    /// HEIC, BMP, farbfeld, PNM, TIFF, ICO, QOI. AVIF is checked before
-    /// HEIC so that ambiguous ISOBMFF containers (mif1/msf1 with both
+    /// BMP, farbfeld, PNM, TIFF, ICO, QOI. AVIF is checked before other
+    /// ISOBMFF containers so that ambiguous containers (mif1/msf1 with both
     /// brands) resolve to AVIF.
     ///
     /// Zero allocation — backed by a static slice.
@@ -740,7 +740,7 @@ mod tests {
         assert_eq!(ImageFormat::Farbfeld.extensions(), &["ff"]);
     }
 
-    // --- HEIC tests ---
+    // --- ISOBMFF container detection tests ---
 
     #[test]
     fn detect_heic() {
@@ -860,7 +860,7 @@ mod tests {
         assert_eq!(ImageFormat::Heic.magic_bytes_needed(), 512);
     }
 
-    // --- msf1 HEIF sequence tests ---
+    // --- msf1 sequence tests ---
 
     #[test]
     fn detect_msf1_with_heic_compat() {
@@ -1211,7 +1211,7 @@ mod tests {
         // box_size=1 → 64-bit extended size at offset 8.
         // ISOBMFF layout: [4:size=1][4:type][8:ext_size][4:major][4:minor][brands...]
         //
-        // Note: detect_avif/detect_heic always read data[8..12] as the major
+        // Note: the ISOBMFF brand detectors always read data[8..12] as the major
         // brand. For box_size=1, data[8..15] is the extended size, so the
         // "major brand" read is actually the high bytes of the extended size.
         // We encode the extended size so its high bytes spell "mif1" to trigger

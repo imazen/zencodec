@@ -86,13 +86,13 @@ pub enum PartKind {
     Chunk,
     /// An ISOBMFF, JPEG XL container or JPEG 2000 box.
     Box,
-    /// A HEIF/AVIF item's declaration (its `infe` entry). The item's data is
+    /// An ISOBMFF item's declaration (its `infe` entry). The item's data is
     /// its [`Extent`](PartKind::Extent) parts inside `mdat` or `idat`, tagged
     /// with the same item ID.
     Item,
     /// One extent of an item's data, tagged with the item ID.
     Extent,
-    /// A HEIF item property (a child of `ipco`).
+    /// An ISOBMFF item property (a child of `ipco`).
     Property,
     /// A GIF block: an extension, an image descriptor, a colour table, image
     /// data, the trailer.
@@ -105,7 +105,7 @@ pub enum PartKind {
     Attribute,
     /// A complete embedded image stream: an MPF secondary image, a thumbnail.
     EmbeddedImage,
-    /// A coded unit inside a bitstream: an AV1 OBU, an HEVC NAL unit.
+    /// A coded unit inside a bitstream: an AV1 OBU.
     CodedUnit,
     /// Bytes after the format's logical end (after JPEG EOI, PNG IEND, the GIF
     /// trailer, the RIFF size, the last box).
@@ -150,7 +150,7 @@ pub enum PartTag {
     /// item or property type.
     FourCc([u8; 4]),
     /// A numeric code: a TIFF tag, a GIF extension label, an AV1 OBU type, an
-    /// HEVC NAL unit type, a HEIF item ID.
+    /// ISOBMFF item ID.
     Code(u32),
     /// A name: an OpenEXR attribute, an XML element.
     Name(Cow<'static, str>),
@@ -323,7 +323,7 @@ pub struct Part {
     tag: PartTag,
     /// A short identifying label taken from the file: an APPn signature
     /// (`"Exif"`, `"ICC_PROFILE"`), a PNG text keyword, a GIF application
-    /// identifier, a HEIF item name or content type.
+    /// identifier, an ISOBMFF item name or content type.
     label: Option<Cow<'static, str>>,
     /// Absolute byte range in the input, headers included.
     range: Range<u64>,

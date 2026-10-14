@@ -5,12 +5,12 @@
 zencodec's current `ImageInfo` has `has_animation: bool` and `frame_count: Option<u32>`.
 This conflates "multiple images in a file" with "temporal animation frames."
 
-TIFF, HEIF, DICOM, and ICO contain multiple independent images that are NOT animation.
+TIFF, DICOM, and ICO contain multiple independent images that are NOT animation.
 Forcing them through `AnimationFrameDecoder` causes data corruption: compositing applied to
 independent pages, fixed canvas cropping variable-size pages, format negotiation committed
 once for heterogeneous content.
 
-JPEG, AVIF, JXL, and HEIF increasingly carry gain maps (SDR-to-HDR tone mapping data)
+JPEG, AVIF, and JXL increasingly carry gain maps (SDR-to-HDR tone mapping data)
 as supplemental images. These are not pages and not animation frames — they modify the
 primary image.
 
@@ -228,7 +228,7 @@ for typical files). The header is small and fixed-layout.
 
 **When `cheap_probe` capability is false**: `probe()` may still do work proportional
 to header size, but not pixel-proportional. Some formats have large headers
-(e.g., HEIF with many items, TIFF with many IFDs chained).
+(e.g., containers with many items, TIFF with many IFDs chained).
 
 ### `probe_full(&self, data: &[u8]) -> Result<ImageInfo, E>`
 
@@ -261,7 +261,6 @@ decode()        → DecodeOutput (pixels + ImageInfo for primary image)
 `output_info()` and `decode()` always operate on the **primary image**. For multi-image
 files, the primary image is:
 - **TIFF**: first IFD that is a full-resolution image (not a thumbnail/mask)
-- **HEIF**: the item marked as primary (`pitm` box)
 - **ICO**: the largest/highest-quality entry
 - **GIF/APNG/WebP animation**: frame 0
 

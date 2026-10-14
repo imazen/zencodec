@@ -114,7 +114,7 @@ pub enum ImageError {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum UnsupportedImageKind {
     /// The format / container / codec / profile itself is not handled
-    /// (e.g. "not a PNG", an unknown variant, an unsupported HEVC profile).
+    /// (e.g. "not a PNG", an unknown variant, an unsupported profile).
     Type,
     /// The format *is* handled, but the bitstream uses a feature this codec
     /// hasn't implemented (e.g. arithmetic-coded JPEG, an unsupported chunk).
@@ -1144,7 +1144,7 @@ mod tests {
 
     #[test]
     fn category_is_preserved_through_at() {
-        // A located error (the form heic/zenbitmaps return) keeps its category,
+        // A located error (the form codecs like zenbitmaps return) keeps its category,
         // and the inner error is still reachable for its detail.
         let located = At::wrap(TestCodecError::Cancelled(StopReason::TimedOut));
         assert_eq!(

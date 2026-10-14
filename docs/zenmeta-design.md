@@ -176,7 +176,7 @@ preserve each caller's behavior until a separately reviewed fix changes it.
 
 Codec-owned operations must be callable directly, without a registry or pipeline.
 JPEG owns markers, ICC/extended-XMP reassembly, MPF offsets and JPEG emission.
-TIFF owns image layout and pointers. HEIF owns items, extents and associations.
+TIFF owns image layout and pointers. ISOBMFF owns items, extents and associations.
 PNG owns chunks and checksums. Analogous rules apply to other formats.
 
 Use inventory as evidence and a verification tool, not as a generic deletion
