@@ -6,10 +6,6 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### [Unreleased]
 
-### Added
-
-- Add configuration-level `EncoderConfig::{try_with_fidelity,check_fidelity_target,select_fidelity}` and equivalent erased job selection. Ordered preferences report each rejected target, reject non-finite requests, and isolate candidate configurations. These checks confirm target selection only; actual losslessness remains content-dependent and approximate metric targets do not become measured guarantees. No automatic retry of encode failures. (`815fdfdd`).
-
 #### QUEUED BREAKING CHANGES
 
 - Approved for testkit **0.2.0**: `RefDecodeJob` changed from a publicly constructible unit struct to a private-field stateful struct in the gain-map harness (`857fab1`). Implementor tests should obtain jobs from `ReferenceDecoderConfig::job()` or `ReferenceZcrDecoderConfig::job()`. This is a testkit-only break; zencodec retains its compatibility gate.
@@ -147,6 +143,8 @@ removes that whole class).
 
 ### Fixed
 
+- Format sniffing no longer mistakes an ordinary truecolor TGA header for an ICO/CUR directory containing zero images.
+
 - Unpublished `CodecSet::transcode` now refuses known animations, auxiliary
   images and descriptor downgrades with `TranscodeRequiresExplicitHandling`.
   Its documentation states that fidelity and metadata-carrier delivery are
@@ -180,6 +178,8 @@ removes that whole class).
   migrate to the explicitly named operation. No video transport is added.
 
 ### Added
+
+- Add configuration-level `EncoderConfig::{try_with_fidelity,check_fidelity_target,select_fidelity}` and equivalent erased job selection. Ordered preferences report each rejected target, reject non-finite requests, and isolate candidate configurations. These checks confirm target selection only; actual losslessness remains content-dependent and approximate metric targets do not become measured guarantees. No automatic retry of encode failures (`815fdfdd`).
 
 - Add `try_set_policy` and `try_with_policy` to generic encode/decode jobs, and
   `try_set_policy` to erased jobs. The default admits only an empty policy;

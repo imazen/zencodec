@@ -146,3 +146,18 @@ fn lossless_reference_confirms_lossless_but_reports_lossy_substitution() {
         })
     ));
 }
+
+#[test]
+fn codec_set_exposes_checked_preferences_without_a_second_registry() {
+    let set = zencodec::CodecSet::new().with_encoder(Reference::new());
+    let encoder = set
+        .encoder_for(<Reference as EncoderConfig>::format())
+        .unwrap();
+    let (index, job) = encoder
+        .select_fidelity_job(&[Fidelity::codec_quality(80.0), Fidelity::Lossless])
+        .unwrap();
+    assert_eq!(index, 1);
+    let pixels = TestImage::rgb8_gradient(3, 2);
+    let output = job.encode(pixels.as_slice()).unwrap();
+    assert!(!output.data().is_empty());
+}

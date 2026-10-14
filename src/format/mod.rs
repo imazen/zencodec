@@ -436,6 +436,18 @@ mod tests {
     }
 
     #[test]
+    fn tga_truecolor_header_is_not_an_empty_icon_directory() {
+        let mut tga = [0u8; 21];
+        tga[2] = 2;
+        tga[12] = 1;
+        tga[14] = 1;
+        tga[16] = 24;
+        assert_eq!(reg().detect(&tga), Some(ImageFormat::Tga));
+        assert_eq!(reg().detect(&[0, 0, 1, 0, 1, 0]), Some(ImageFormat::Ico));
+        assert_eq!(reg().detect(&[0, 0, 2, 0, 1, 0]), Some(ImageFormat::Ico));
+    }
+
+    #[test]
     fn detect_jpeg() {
         assert_eq!(
             reg().detect(&[0xFF, 0xD8, 0xFF, 0xE0]),
