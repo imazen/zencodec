@@ -299,6 +299,17 @@ pub trait EncodeJob: Sized {
     /// `stop.into_token()` or `StopToken::new(stop)`.
     fn with_stop(self, stop: crate::StopToken) -> Self;
 
+    /// Set progress and cancellation pulse.
+    ///
+    /// [`SharedPulse`](how_far::SharedPulse) is `Clone + Send + Sync + 'static` —
+    /// an owned, type-erased pulse.
+    ///
+    /// Default implementation delegates to [`with_stop`](EncodeJob::with_stop)
+    /// via `StopToken::new(pulse)`.
+    fn with_pulse(self, pulse: how_far::SharedPulse) -> Self {
+        self.with_stop(crate::StopToken::new(pulse))
+    }
+
     /// Override resource limits for this operation.
     fn with_limits(self, limits: ResourceLimits) -> Self;
 

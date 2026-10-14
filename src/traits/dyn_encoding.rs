@@ -262,6 +262,11 @@ pub trait DynEncodeJob {
     /// Set cooperative cancellation token.
     fn set_stop(&mut self, stop: StopToken);
 
+    /// Set progress and cancellation pulse.
+    fn set_pulse(&mut self, pulse: how_far::SharedPulse) {
+        self.set_stop(crate::StopToken::new(pulse));
+    }
+
     /// Override resource limits.
     fn set_limits(&mut self, limits: ResourceLimits);
 
@@ -376,6 +381,10 @@ where
 {
     fn set_stop(&mut self, stop: StopToken) {
         self.try_apply(|job| job.with_stop(stop));
+    }
+
+    fn set_pulse(&mut self, pulse: how_far::SharedPulse) {
+        self.try_apply(|job| job.with_pulse(pulse));
     }
 
     fn set_limits(&mut self, limits: ResourceLimits) {

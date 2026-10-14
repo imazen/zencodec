@@ -57,6 +57,328 @@ pub trait StreamingDecode {
     fn info(&self) -> &ImageInfo;
 }
 
+/// Status returned after pushing input bytes to an incremental decoder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum PushStatus {
+    /// The decoder needs more input data before further output scanlines can be produced.
+    NeedMoreInput,
+    /// The decoder requires specific non-contiguous byte ranges to continue.
+    /// Query [`requested_ranges()`](IncrementalDecode::requested_ranges).
+    NeedRanges,
+    /// One or more batches of decoded scanlines/pixels are ready to be pulled via [`pull_batch`](IncrementalDecode::pull_batch).
+    OutputReady,
+    /// Backpressure: internal output or intermediate buffer has reached its limit.
+    /// The caller must drain output via [`pull_batch`](IncrementalDecode::pull_batch) before pushing further bytes.
+    BlockedOnOutput,
+    /// Decoding of the image has completed. All scanlines have been yielded.
+    Complete,
+}
+
+/// A byte span within an image file or stream.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[non_exhaustive]
+pub struct ByteRange {
+    /// Starting byte offset from the beginning of the stream.
+    pub offset: u64,
+    /// Number of bytes in this range.
+    pub length: u64,
+}
+
+impl ByteRange {
+    /// Create a new byte range.
+    #[inline]
+    pub const fn new(offset: u64, length: u64) -> Self {
+        Self { offset, length }
+    }
+
+    /// The ending byte offset (exclusive).
+    #[inline]
+    pub const fn end(&self) -> u64 {
+        self.offset + self.length
+    }
+
+    /// Returns `true` if this range is empty (`length == 0`).
+    #[inline]
+    pub const fn is_empty(&self) -> bool {
+        self.length == 0
+    }
+
+    /// Returns `true` if this range contains `target_offset`.
+    #[inline]
+    pub const fn contains(&self, target_offset: u64) -> bool {
+        target_offset >= self.offset && target_offset < self.end()
+    }
+}
+
+/// Metadata update notification returned from [`push_chunk`](IncrementalDecode::push_chunk).
+///
+/// Image containers may deliver metadata across multiple stages:
+/// - Basic container / dimensions header
+/// - Color profile (ICC, CICP)
+/// - Supplementary or trailing metadata (EXIF, XMP, gain maps, text chunks)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[non_exhaustive]
+pub enum MetadataUpdate {
+    /// No new metadata was discovered during this push.
+    #[default]
+    None,
+    /// Image dimensions and basic format header are now available in [`info()`](IncrementalDecode::info).
+    HeaderReady,
+    /// Color profile or color primaries (ICC / CICP) are now available or refined.
+    ColorReady,
+    /// Supplementary or trailing metadata (EXIF, XMP, gain map) was discovered or updated.
+    Updated,
+}
+
+impl MetadataUpdate {
+    /// Returns `true` if any new metadata was discovered during this push.
+    #[inline]
+    pub const fn is_some(&self) -> bool {
+        !matches!(self, Self::None)
+    }
+
+    /// Returns `true` if basic image dimensions and format are ready.
+    #[inline]
+    pub const fn is_header_ready(&self) -> bool {
+        matches!(self, Self::HeaderReady | Self::ColorReady | Self::Updated)
+    }
+}
+
+/// Outcome of a [`push_chunk`](IncrementalDecode::push_chunk) call.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct PushOutcome {
+    /// Number of bytes consumed from the provided chunk.
+    pub bytes_consumed: usize,
+    /// Decoder status after processing those bytes.
+    pub status: PushStatus,
+    /// Metadata update event discovered during this push, if any.
+    pub metadata: MetadataUpdate,
+}
+
+impl PushOutcome {
+    /// Create a new push outcome with `metadata = MetadataUpdate::None`.
+    #[inline]
+    pub const fn new(bytes_consumed: usize, status: PushStatus) -> Self {
+        Self {
+            bytes_consumed,
+            status,
+            metadata: MetadataUpdate::None,
+        }
+    }
+
+    /// Sets the metadata update event.
+    #[inline]
+    pub const fn with_metadata(mut self, metadata: MetadataUpdate) -> Self {
+        self.metadata = metadata;
+        self
+    }
+
+    /// Sets whether the image header is ready (convenience helper).
+    ///
+    /// Setting `true` sets `metadata` to [`MetadataUpdate::HeaderReady`]
+    /// unless a more specific metadata update (such as [`MetadataUpdate::ColorReady`]) is already set.
+    #[inline]
+    pub const fn with_header_ready(mut self, header_ready: bool) -> Self {
+        if header_ready {
+            if matches!(self.metadata, MetadataUpdate::None) {
+                self.metadata = MetadataUpdate::HeaderReady;
+            }
+        } else {
+            self.metadata = MetadataUpdate::None;
+        }
+        self
+    }
+
+    /// Convenience check: returns `true` if this push provided (or refined) header metadata.
+    #[inline]
+    pub const fn header_ready(&self) -> bool {
+        self.metadata.is_header_ready()
+    }
+}
+
+/// Metadata describing a batch of decoded scanlines.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct BatchMeta {
+    /// Starting row index (top row of this batch).
+    pub y: u32,
+    /// Progressive pass index (0 for baseline / non-progressive decode).
+    pub pass: u16,
+    /// Whether this batch represents the final pass for these scanlines.
+    pub is_final: bool,
+}
+
+impl BatchMeta {
+    /// Create a new batch metadata with baseline defaults (`pass = 0`, `is_final = true`).
+    #[inline]
+    pub const fn new(y: u32, is_final: bool) -> Self {
+        Self {
+            y,
+            pass: 0,
+            is_final,
+        }
+    }
+
+    /// Specify the progressive pass index.
+    #[inline]
+    pub const fn with_pass(mut self, pass: u16) -> Self {
+        self.pass = pass;
+        self
+    }
+}
+
+/// Incremental (Sans-I/O) scanline/batch decoder.
+///
+/// Accepts compressed input bytes in arbitrary chunks without performing any I/O,
+/// and yields strips/scanlines as soon as sufficient data has been pushed.
+///
+/// # Usage
+///
+/// ```text
+/// let mut dec = job.into_incremental_decoder(&[])?;
+/// while !dec.is_complete() {
+///     let chunk = read_chunk_from_network();
+///     let outcome = dec.push_chunk(chunk, is_eof, stop)?;
+///     while let Some((y, strip)) = dec.pull_batch()? {
+///         // process scanlines starting at row y
+///     }
+/// }
+/// ```
+pub trait IncrementalDecode {
+    /// The codec-specific error type.
+    type Error: core::error::Error + Send + Sync + 'static;
+
+    /// Push a chunk of compressed input bytes into the decoder.
+    ///
+    /// - `chunk`: slice of input bytes.
+    /// - `is_eof`: true if no further bytes will follow.
+    /// - `stop`: optional cancellation token (`enough::Stop`). A `&dyn Pulse`
+    ///   can be passed directly since `Pulse: Stop`.
+    fn push_chunk(
+        &mut self,
+        chunk: &[u8],
+        is_eof: bool,
+        stop: Option<&dyn Stop>,
+    ) -> Result<PushOutcome, Self::Error>;
+
+    /// Push a chunk with an optional `&dyn Pulse` for cancellation and progress reporting.
+    ///
+    /// Default implementation delegates to [`push_chunk`](IncrementalDecode::push_chunk).
+    fn push_chunk_pulse(
+        &mut self,
+        chunk: &[u8],
+        is_eof: bool,
+        pulse: Option<&dyn how_far::Pulse>,
+    ) -> Result<PushOutcome, Self::Error> {
+        self.push_chunk(chunk, is_eof, pulse.map(|p| p as &dyn Stop))
+    }
+
+    /// Returns non-contiguous byte ranges requested by the decoder to make progress.
+    ///
+    /// When [`push_chunk`](IncrementalDecode::push_chunk) or [`push_range`](IncrementalDecode::push_range)
+    /// returns [`PushStatus::NeedRanges`], this method yields the specific spans of bytes
+    /// needed from the input stream.
+    ///
+    /// For purely sequential decoders or when sequential input is sufficient,
+    /// this returns an empty slice.
+    fn requested_ranges(&self) -> &[ByteRange] {
+        &[]
+    }
+
+    /// Push a chunk of input bytes tagged with an absolute stream byte offset.
+    ///
+    /// - `offset`: the absolute 0-based byte position of the first byte of `chunk` in the source stream.
+    /// - `chunk`: slice of input bytes at `offset`.
+    /// - `is_eof`: true if no further bytes will follow in the entire stream.
+    /// - `stop`: optional cooperative cancellation token.
+    ///
+    /// The default implementation discards `offset` and delegates to [`push_chunk`](IncrementalDecode::push_chunk).
+    fn push_range(
+        &mut self,
+        offset: u64,
+        chunk: &[u8],
+        is_eof: bool,
+        stop: Option<&dyn Stop>,
+    ) -> Result<PushOutcome, Self::Error> {
+        let _ = offset;
+        self.push_chunk(chunk, is_eof, stop)
+    }
+
+    /// Push a chunk of input bytes tagged with an absolute stream offset, with an optional [`Pulse`](how_far::Pulse).
+    ///
+    /// Default implementation delegates to [`push_range`](IncrementalDecode::push_range).
+    fn push_range_pulse(
+        &mut self,
+        offset: u64,
+        chunk: &[u8],
+        is_eof: bool,
+        pulse: Option<&dyn how_far::Pulse>,
+    ) -> Result<PushOutcome, Self::Error> {
+        self.push_range(offset, chunk, is_eof, pulse.map(|p| p as &dyn Stop))
+    }
+
+    /// Pull the next batch of decoded scanlines, if available.
+    ///
+    /// Returns `Ok(Some((y, strip)))` with row offset and pixel slice,
+    /// or `Ok(None)` if more input is needed before another batch can be produced.
+    fn pull_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, Self::Error>;
+
+    /// Pull the next batch of decoded scanlines with pass and finality metadata.
+    ///
+    /// Default implementation calls [`pull_batch`](IncrementalDecode::pull_batch)
+    /// and tags the batch as `pass = 0`, `is_final = true`.
+    fn pull_batch_meta(&mut self) -> Result<Option<(BatchMeta, PixelSlice<'_>)>, Self::Error> {
+        match self.pull_batch()? {
+            Some((y, slice)) => Ok(Some((BatchMeta::new(y, true), slice))),
+            None => Ok(None),
+        }
+    }
+
+    /// Decoupled-lifetime pull: push decoded scanlines directly into a caller-owned sink.
+    ///
+    /// Writes the next available batch into `sink` via [`provide_next_buffer`](DecodeRowSink::provide_next_buffer).
+    /// Returns `Ok(Some(rows_written))` or `Ok(None)` if more input is needed.
+    ///
+    /// Default implementation pulls from [`pull_batch`](IncrementalDecode::pull_batch)
+    /// and copies rows into the sink.
+    fn pull_batch_into(
+        &mut self,
+        sink: &mut dyn crate::DecodeRowSink,
+    ) -> Result<Option<u32>, Self::Error> {
+        match self.pull_batch()? {
+            Some((y, slice)) => {
+                let h = slice.rows();
+                let w = slice.width();
+                let desc = slice.descriptor();
+                let mut dst = sink
+                    .provide_next_buffer(y, h, w, desc)
+                    .map_err(Self::wrap_sink_error)?;
+                for row_idx in 0..h {
+                    dst.row_mut(row_idx).copy_from_slice(slice.row(row_idx));
+                }
+                Ok(Some(h))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Wrap a [`SinkError`] into this decoder's error type.
+    fn wrap_sink_error(err: SinkError) -> Self::Error;
+
+    /// Image metadata, available as soon as sufficient header bytes have been pushed.
+    fn info(&self) -> Option<&ImageInfo>;
+
+    /// Negotiated output pixel descriptor, available once the header has been parsed.
+    fn output_descriptor(&self) -> Option<zenpixels::PixelDescriptor> {
+        None
+    }
+
+    /// Whether decoding has fully completed.
+    fn is_complete(&self) -> bool;
+}
+
 /// Full-frame composited animation decode.
 ///
 /// The decoder composites internally (handling disposal, blending,

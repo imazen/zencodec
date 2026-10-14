@@ -112,7 +112,7 @@ pub use limits::{AllocPreference, LimitExceeded, LimitKind, ResourceLimits, Thre
 pub use metadata::{IccRetention, Metadata, MetadataFields, MetadataPolicy};
 pub use orientation::{Orientation, OrientationHint};
 pub use output::{AnimationFrame, OwnedAnimationFrame};
-pub use set::{CodecSet, CodecSetError, TranscodeBarrier};
+pub use set::{CodecSet, CodecSetError, CodecSetIncrementalDecoder, TranscodeBarrier};
 pub use zenpixels::ColorAuthority;
 
 pub use capabilities::UnsupportedOperation;
@@ -136,6 +136,8 @@ pub use traits::Unsupported;
 pub use almost_enough::StopToken;
 pub use enough;
 pub use enough::Unstoppable;
+pub use how_far;
+pub use how_far::Pulse;
 
 /// Location-tracing error wrapper, re-exported from [`whereat`].
 ///
@@ -222,13 +224,14 @@ pub mod encode {
 pub mod decode {
     // Traits — config, job, execution
     pub use crate::traits::{
-        AnimationFrameDecoder, Decode, DecodeJob, DecoderConfig, StreamingDecode,
+        AnimationFrameDecoder, BatchMeta, Decode, DecodeJob, DecoderConfig, IncrementalDecode,
+        MetadataUpdate, PushOutcome, PushStatus, StreamingDecode,
     };
 
     // Object-safe dyn dispatch
     pub use crate::traits::{
         BoxedError, DynAnimationFrameDecoder, DynDecodeJob, DynDecoder, DynDecoderConfig,
-        DynStreamingDecoder,
+        DynIncrementalDecoder, DynStreamingDecoder, IncrementalDecoderShim,
     };
 
     // Types
@@ -237,6 +240,10 @@ pub mod decode {
     pub use crate::output::{AnimationFrame, DecodeOutput, OwnedAnimationFrame};
     pub use crate::policy::DecodePolicy;
     pub use crate::sink::{DecodeRowSink, SinkError};
+    pub use crate::traits::ByteRange;
+
+    #[cfg(feature = "std")]
+    pub use crate::helpers::sansio::coalesce_byte_ranges;
 
     pub use crate::negotiate::{is_format_available, negotiate_pixel_format};
 
@@ -259,10 +266,12 @@ pub mod decode {
 pub mod prelude {
     pub use crate::decode::{
         AnimationFrameDecoder, Decode, DecodeJob, DecoderConfig, DynAnimationFrameDecoder,
-        DynDecodeJob, DynDecoder, DynDecoderConfig, DynStreamingDecoder, StreamingDecode,
+        DynDecodeJob, DynDecoder, DynDecoderConfig, DynIncrementalDecoder, DynStreamingDecoder,
+        IncrementalDecode, StreamingDecode,
     };
     pub use crate::encode::{
         AnimationFrameEncoder, DynAnimationFrameEncoder, DynEncodeJob, DynEncoder,
         DynEncoderConfig, EncodeJob, Encoder, EncoderConfig,
     };
+    pub use how_far::Pulse;
 }

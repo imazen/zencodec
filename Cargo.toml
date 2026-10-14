@@ -56,9 +56,11 @@ std = []
 zenpixels = { version = ">=0.2.14, <0.4.0", features = ["icc"] }
 almost-enough = { version = "0.4.4", default-features = false, features = ["alloc"] }
 enough = "0.4.4"
+how-far = { version = "0.1.0", default-features = false }
 whereat = { version = "0.1.5" }
 
 [dev-dependencies]
+tokio = { version = "1", features = ["rt", "io-util", "macros"] }
 # Differential-test oracle for the EXIF parser (tests/exif_differential.rs).
 # Pure-Rust, BSD-2-Clause; only built for tests, never shipped.
 kamadak-exif = "0.6.1"
@@ -68,6 +70,11 @@ walkdir = "2.5.0"
 rayon = "1.10.0"
 moxcms = { version = ">=0.8.1, <0.10", features = ["options"] }
 
+[[test]]
+name = "incremental_consumers"
+required-features = ["std"]
+
 [[bench]]
 name = "exif_filter"
 harness = false
+

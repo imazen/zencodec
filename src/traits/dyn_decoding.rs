@@ -188,6 +188,277 @@ impl<S: StreamingDecode + Send> DynStreamingDecoder for StreamingDecoderShim<S> 
 }
 
 // ===========================================================================
+// DynIncrementalDecoder
+// ===========================================================================
+
+/// Object-safe incremental Sans-I/O decoder.
+///
+/// Wraps [`IncrementalDecode`](super::decoder::IncrementalDecode) for dyn dispatch.
+pub trait DynIncrementalDecoder: Send {
+    /// Downcast to the concrete incremental decoder type.
+    fn as_any(&self) -> &dyn Any;
+
+    /// Downcast to the concrete incremental decoder type (mutable).
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+
+    /// Consume and downcast to the concrete incremental decoder type.
+    fn into_any(self: Box<Self>) -> Box<dyn Any>;
+
+    /// Push a chunk of compressed input bytes into the decoder.
+    fn push_chunk(
+        &mut self,
+        chunk: &[u8],
+        is_eof: bool,
+        stop: Option<&dyn Stop>,
+    ) -> Result<super::decoder::PushOutcome, BoxedError>;
+
+    /// Push a chunk with an optional `&dyn Pulse` for cancellation and progress reporting.
+    fn push_chunk_pulse(
+        &mut self,
+        chunk: &[u8],
+        is_eof: bool,
+        pulse: Option<&dyn how_far::Pulse>,
+    ) -> Result<super::decoder::PushOutcome, BoxedError>;
+
+    /// Returns non-contiguous byte ranges requested by the decoder to make progress.
+    fn requested_ranges(&self) -> &[super::decoder::ByteRange];
+
+    /// Push a chunk of input bytes tagged with an absolute stream byte offset.
+    fn push_range(
+        &mut self,
+        offset: u64,
+        chunk: &[u8],
+        is_eof: bool,
+        stop: Option<&dyn Stop>,
+    ) -> Result<super::decoder::PushOutcome, BoxedError>;
+
+    /// Push a chunk of input bytes tagged with an absolute stream offset, with an optional [`Pulse`](how_far::Pulse).
+    fn push_range_pulse(
+        &mut self,
+        offset: u64,
+        chunk: &[u8],
+        is_eof: bool,
+        pulse: Option<&dyn how_far::Pulse>,
+    ) -> Result<super::decoder::PushOutcome, BoxedError>;
+
+    /// Pull the next batch of decoded scanlines, if available.
+    fn pull_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, BoxedError>;
+
+    /// Pull the next batch of decoded scanlines with pass and finality metadata.
+    fn pull_batch_meta(
+        &mut self,
+    ) -> Result<Option<(super::decoder::BatchMeta, PixelSlice<'_>)>, BoxedError>;
+
+    /// Decoupled-lifetime pull: push decoded scanlines directly into a caller-owned sink.
+    fn pull_batch_into(
+        &mut self,
+        sink: &mut dyn crate::DecodeRowSink,
+    ) -> Result<Option<u32>, BoxedError>;
+
+    /// Image metadata, available as soon as sufficient header bytes have been pushed.
+    fn info(&self) -> Option<&ImageInfo>;
+
+    /// Negotiated output pixel descriptor, available once the header has been parsed.
+    fn output_descriptor(&self) -> Option<PixelDescriptor>;
+
+    /// Whether decoding has fully completed.
+    fn is_complete(&self) -> bool;
+}
+
+impl core::fmt::Debug for dyn DynIncrementalDecoder + '_ {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("DynIncrementalDecoder")
+            .finish_non_exhaustive()
+    }
+}
+
+pub struct IncrementalDecoderShim<I>(pub I);
+
+impl<I: super::decoder::IncrementalDecode + Send + 'static> DynIncrementalDecoder
+    for IncrementalDecoderShim<I>
+{
+    fn as_any(&self) -> &dyn Any {
+        &self.0
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        &mut self.0
+    }
+
+    fn into_any(self: Box<Self>) -> Box<dyn Any> {
+        Box::new(self.0)
+    }
+
+    fn push_chunk(
+        &mut self,
+        chunk: &[u8],
+        is_eof: bool,
+        stop: Option<&dyn Stop>,
+    ) -> Result<super::decoder::PushOutcome, BoxedError> {
+        self.0
+            .push_chunk(chunk, is_eof, stop)
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn push_chunk_pulse(
+        &mut self,
+        chunk: &[u8],
+        is_eof: bool,
+        pulse: Option<&dyn how_far::Pulse>,
+    ) -> Result<super::decoder::PushOutcome, BoxedError> {
+        self.0
+            .push_chunk_pulse(chunk, is_eof, pulse)
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn requested_ranges(&self) -> &[super::decoder::ByteRange] {
+        self.0.requested_ranges()
+    }
+
+    fn push_range(
+        &mut self,
+        offset: u64,
+        chunk: &[u8],
+        is_eof: bool,
+        stop: Option<&dyn Stop>,
+    ) -> Result<super::decoder::PushOutcome, BoxedError> {
+        self.0
+            .push_range(offset, chunk, is_eof, stop)
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn push_range_pulse(
+        &mut self,
+        offset: u64,
+        chunk: &[u8],
+        is_eof: bool,
+        pulse: Option<&dyn how_far::Pulse>,
+    ) -> Result<super::decoder::PushOutcome, BoxedError> {
+        self.0
+            .push_range_pulse(offset, chunk, is_eof, pulse)
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn pull_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, BoxedError> {
+        self.0.pull_batch().map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn pull_batch_meta(
+        &mut self,
+    ) -> Result<Option<(super::decoder::BatchMeta, PixelSlice<'_>)>, BoxedError> {
+        self.0
+            .pull_batch_meta()
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn pull_batch_into(
+        &mut self,
+        sink: &mut dyn crate::DecodeRowSink,
+    ) -> Result<Option<u32>, BoxedError> {
+        self.0
+            .pull_batch_into(sink)
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn info(&self) -> Option<&ImageInfo> {
+        self.0.info()
+    }
+
+    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+        self.0.output_descriptor()
+    }
+
+    fn is_complete(&self) -> bool {
+        self.0.is_complete()
+    }
+}
+
+impl<D: DynIncrementalDecoder + ?Sized> DynIncrementalDecoder for Box<D> {
+    fn as_any(&self) -> &dyn Any {
+        (**self).as_any()
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        (**self).as_any_mut()
+    }
+
+    fn into_any(self: Box<Self>) -> Box<dyn Any> {
+        (*self).into_any()
+    }
+
+    fn push_chunk(
+        &mut self,
+        chunk: &[u8],
+        is_eof: bool,
+        stop: Option<&dyn Stop>,
+    ) -> Result<super::decoder::PushOutcome, BoxedError> {
+        (**self).push_chunk(chunk, is_eof, stop)
+    }
+
+    fn push_chunk_pulse(
+        &mut self,
+        chunk: &[u8],
+        is_eof: bool,
+        pulse: Option<&dyn how_far::Pulse>,
+    ) -> Result<super::decoder::PushOutcome, BoxedError> {
+        (**self).push_chunk_pulse(chunk, is_eof, pulse)
+    }
+
+    fn requested_ranges(&self) -> &[super::decoder::ByteRange] {
+        (**self).requested_ranges()
+    }
+
+    fn push_range(
+        &mut self,
+        offset: u64,
+        chunk: &[u8],
+        is_eof: bool,
+        stop: Option<&dyn Stop>,
+    ) -> Result<super::decoder::PushOutcome, BoxedError> {
+        (**self).push_range(offset, chunk, is_eof, stop)
+    }
+
+    fn push_range_pulse(
+        &mut self,
+        offset: u64,
+        chunk: &[u8],
+        is_eof: bool,
+        pulse: Option<&dyn how_far::Pulse>,
+    ) -> Result<super::decoder::PushOutcome, BoxedError> {
+        (**self).push_range_pulse(offset, chunk, is_eof, pulse)
+    }
+
+    fn pull_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, BoxedError> {
+        (**self).pull_batch()
+    }
+
+    fn pull_batch_meta(
+        &mut self,
+    ) -> Result<Option<(super::decoder::BatchMeta, PixelSlice<'_>)>, BoxedError> {
+        (**self).pull_batch_meta()
+    }
+
+    fn pull_batch_into(
+        &mut self,
+        sink: &mut dyn crate::DecodeRowSink,
+    ) -> Result<Option<u32>, BoxedError> {
+        (**self).pull_batch_into(sink)
+    }
+
+    fn info(&self) -> Option<&ImageInfo> {
+        (**self).info()
+    }
+
+    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+        (**self).output_descriptor()
+    }
+
+    fn is_complete(&self) -> bool {
+        (**self).is_complete()
+    }
+}
+
+// ===========================================================================
 // DynDecodeJob
 // ===========================================================================
 
@@ -199,6 +470,11 @@ impl<S: StreamingDecode + Send> DynStreamingDecoder for StreamingDecoderShim<S> 
 pub trait DynDecodeJob<'a> {
     /// Set cooperative cancellation token.
     fn set_stop(&mut self, stop: StopToken);
+
+    /// Set progress and cancellation pulse.
+    fn set_pulse(&mut self, pulse: how_far::SharedPulse) {
+        self.set_stop(StopToken::new(pulse));
+    }
 
     /// Override resource limits.
     fn set_limits(&mut self, limits: ResourceLimits);
@@ -293,6 +569,17 @@ pub trait DynDecodeJob<'a> {
         data: Cow<'a, [u8]>,
         preferred: &[PixelDescriptor],
     ) -> Result<Box<dyn DynAnimationFrameDecoder>, BoxedError>;
+
+    /// Create an incremental Sans-I/O decoder (consumes this job).
+    fn into_incremental_decoder(
+        self: Box<Self>,
+        preferred: &[PixelDescriptor],
+    ) -> Result<Box<dyn DynIncrementalDecoder>, BoxedError> {
+        let _ = preferred;
+        Err(Box::new(
+            crate::capabilities::UnsupportedOperation::IncrementalDecode,
+        ))
+    }
 }
 
 struct DecodeJobShim<J>(Option<J>);
@@ -340,6 +627,10 @@ where
 {
     fn set_stop(&mut self, stop: StopToken) {
         self.try_apply(|job| job.with_stop(stop));
+    }
+
+    fn set_pulse(&mut self, pulse: how_far::SharedPulse) {
+        self.try_apply(|job| job.with_pulse(pulse));
     }
 
     fn set_limits(&mut self, limits: ResourceLimits) {
@@ -455,6 +746,14 @@ where
             .animation_frame_decoder(data, preferred)
             .map_err(|e| Box::new(e) as BoxedError)?;
         Ok(Box::new(AnimationFrameDecoderShim(dec)))
+    }
+
+    fn into_incremental_decoder(
+        mut self: Box<Self>,
+        preferred: &[PixelDescriptor],
+    ) -> Result<Box<dyn DynIncrementalDecoder>, BoxedError> {
+        let job = self.take()?;
+        job.dyn_incremental_decoder(preferred)
     }
 }
 
