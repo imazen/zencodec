@@ -549,7 +549,9 @@ where
 ///   Draining with [`consume_output`](Encoder::consume_output) after every
 ///   strip yields, once `finish`'s remainder is appended, exactly the bytes
 ///   of the same encode left undrained, and those bytes decode to the
-///   pixels of a plain `push_rows` encode without `begin`.
+///   pixels of the one-shot [`encode`](Encoder::encode). (Not to a plain
+///   `push_rows` encode: an encoder may need the image size before its
+///   first row, through `begin` or `with_canvas_size`.)
 /// - Two runs report the same timing.
 pub fn check_streaming_output_honesty<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
 where
@@ -676,14 +678,15 @@ where
             "draining pending_output changed the encoded bytes",
         ));
     }
-    let plain = enc_push_rows(&enc, img).map_err(|e| fail(CHECK, format!("push_rows: {e}")))?;
-    let (want, _) = dec_oneshot(&dec, &plain).map_err(|e| fail(CHECK, format!("decode: {e}")))?;
+    let one = enc_oneshot(&enc, img, Metadata::none(), MetadataPolicy::PreserveExact)
+        .map_err(|e| fail(CHECK, format!("one-shot encode: {e}")))?;
+    let (want, _) = dec_oneshot(&dec, &one).map_err(|e| fail(CHECK, format!("decode: {e}")))?;
     let (got, _) = dec_oneshot(&dec, &drained.file)
         .map_err(|e| fail(CHECK, format!("decode streamed: {e}")))?;
     if got != want {
         return Err(fail(
             CHECK,
-            "streamed encode decodes to different pixels than push_rows",
+            "streamed encode decodes to different pixels than the one-shot encode",
         ));
     }
     Ok(())

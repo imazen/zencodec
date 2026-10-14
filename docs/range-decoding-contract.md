@@ -474,7 +474,7 @@ Rules learned on the way, each recorded where it was measured:
   kept. A streaming timing needs the codec's `streaming_output`; once more
   than `lag_rows` rows are pushed, bytes beyond those available at `begin`
   are pending; draining leaves the file byte-identical, and the result
-  decodes to the `push_rows` pixels. `AT_FINISH` keeps `pending_output`
+  decodes to the one-shot pixels. `AT_FINISH` keeps `pending_output`
   empty. A `RowLevelEncode` rejection at `begin` passes. Run it with a
   streaming configuration as well as the default.
 - `check_read_at_contract` for sources.
