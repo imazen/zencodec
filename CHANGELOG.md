@@ -18,6 +18,8 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 - Explicit structural-prefix and distinct-frame timing oracles require typed refusals and independent expected pixels. Existing compatibility checks remain unchanged.
 
+- `check_read_at_contract` verifies a `DynReadAt` driver source (length, edge/middle/batched reads, past-end error), and `check_seekable_capability_honesty` verifies the `seekable` capability flag in both directions.
+
 - The [contract coverage matrix](docs/testkit-contract-coverage.md) records consumer evidence, independent readbacks, and remaining API/testing gaps.
 
 - Checked policy tests compare builder, mutable and erased results, including pixels after rejection (`43061fcd`).
@@ -129,6 +131,14 @@ removes that whole class).
 ## zencodec
 
 ## [Unreleased]
+
+### Added
+
+- Compiler-synthesized Sans-I/O coroutine decoders (`zencodec::coroutine::{CoroutineContext, CoroutineDecoder}`): straight-line procedural decode logic using standard `async`/`await` syntax with zero Tokio, zero async runtime, zero OS threads, 100% safe Rust, and automatic compilation into standard synchronous `IncrementalDecode`.
+- Integrated multi-chunk stream stitching, backpressure yielding, cooperative cancellation tokens (`Stop`, `Pulse`), and end-to-end multi-tier integration with `ReadAt` and Tokio async network drivers.
+- Seekable pull-based decoding: `zencodec::source::ReadAt` (with `SliceReadAt`, std `FileReadAt`, and the object-safe `DynReadAt`), `SeekableDecode` / `DynSeekableDecoder` with `DecodeJob::dyn_seekable_decoder`, `DynDecodeJob::into_seekable_decoder`, and `CodecSet::seekable_decoder`.
+- `AccessPattern` declarations and the `DecodeCapabilities::seekable` capability (`UnsupportedOperation::SeekableDecode`, appended without renumbering released variants).
+- Tier-bridging adapters: `source::drive_ranges` (one batched `read_many_at` per `NeedRanges` round), std `BufferedReadAt` with `BufferPolicy::{Window, Cache, Spool}`, `SeekableIncrementalAdapter`, and `ProvisionalFinalizer` for multi-pass batches.
 
 ### Deprecated
 

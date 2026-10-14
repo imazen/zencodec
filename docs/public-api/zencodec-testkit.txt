@@ -6,14 +6,14 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec-testkit.txt 97 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 1 lines (2 hidden + 0 excluded-feature)
+# files: zencodec-testkit.txt 99 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 1 lines (2 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 2
 #   pub types (struct/enum/trait/alias)        22
 #   pub consts/statics                          2
-#   free functions                             29
+#   free functions                             31
 #   inherent methods                            7
 #   struct fields                               7
 #   enum variants                              14
@@ -22,10 +22,10 @@
 #   auto-trait exceptions                       3
 #
 # per-module pub lines:
-#   (root)                           64
+#   (root)                           66
 #   reference                        19
 
-## items (78 lines)
+## items (80 lines)
 
 pub mod zencodec_testkit
 pub mod reference
@@ -102,6 +102,8 @@ pub fn check_metadata_rewrite<'a>(zencodec::metadata_rewrite::Request<'a>, impl 
 pub fn check_native_hdr_roundtrip<E, D>(E, D) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
 pub fn check_orientation_roundtrip<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
 pub fn check_pixel_roundtrip<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
+pub fn check_read_at_contract(&mut dyn zencodec::source::DynReadAt, &[u8]) -> Conformance
+pub fn check_seekable_capability_honesty<D: zencodec::traits::decoding::DecoderConfig>(D, alloc::boxed::Box<dyn zencodec::source::DynReadAt>) -> Conformance
 pub fn check_source_color_authority(zencodec::format::ImageFormat, &zencodec::info::SourceColor) -> Conformance
 pub fn expected_color_authority(zencodec::format::ImageFormat, bool, bool) -> core::option::Option<zenpixels::color::ColorAuthority>
 pub type Conformance = core::result::Result<(), Failure>

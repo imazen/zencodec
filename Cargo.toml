@@ -74,6 +74,10 @@ moxcms = { version = ">=0.8.1, <0.10", features = ["options"] }
 name = "incremental_consumers"
 required-features = ["std"]
 
+[[test]]
+name = "coroutine_decoder"
+required-features = ["std"]
+
 [[bench]]
 name = "exif_filter"
 harness = false

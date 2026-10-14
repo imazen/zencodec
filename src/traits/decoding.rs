@@ -525,4 +525,19 @@ pub trait DecodeJob<'a>: Sized {
             crate::capabilities::UnsupportedOperation::IncrementalDecode,
         ))
     }
+
+    /// Create a type-erased seekable (pull-based) decoder bound to `source`.
+    ///
+    /// Codecs that support seekable decoding override this method.
+    /// Default implementation returns [`UnsupportedOperation::SeekableDecode`].
+    fn dyn_seekable_decoder(
+        self,
+        source: Box<dyn crate::source::DynReadAt>,
+        preferred: &[PixelDescriptor],
+    ) -> Result<Box<dyn super::dyn_decoding::DynSeekableDecoder>, BoxedError> {
+        let _ = (source, preferred);
+        Err(Box::new(
+            crate::capabilities::UnsupportedOperation::SeekableDecode,
+        ))
+    }
 }

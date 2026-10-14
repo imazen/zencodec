@@ -477,6 +477,34 @@ impl CodecSet {
         Box::new(CodecSetIncrementalDecoder::new(self.clone(), preferred))
     }
 
+    /// Create a seekable pull-based decoder over `source`, detecting the
+    /// format from the source's first bytes.
+    ///
+    /// The source is probed at offset 0 (at most
+    /// [`ImageFormat::RECOMMENDED_PROBE_BYTES`] plus format headroom),
+    /// then handed to the detected codec's seekable decoder. This entry
+    /// requires the seekable capability and reports
+    /// [`UnsupportedOperation::SeekableDecode`](crate::UnsupportedOperation)
+    /// otherwise.
+    pub fn seekable_decoder(
+        &self,
+        source: Box<dyn crate::source::DynReadAt>,
+        preferred: &[PixelDescriptor],
+    ) -> Result<Box<dyn crate::traits::DynSeekableDecoder>, BoxedError> {
+        let mut source = source;
+        let probe_len = (ImageFormat::RECOMMENDED_PROBE_BYTES + 1024) as u64;
+        let total = source.len().unwrap_or(probe_len);
+        let want = probe_len.min(total) as usize;
+        let mut probe = alloc::vec![0u8; want];
+        source.read_exact_at(0, &mut probe)?;
+        let format = self
+            .detect(&probe)
+            .ok_or_else(|| Box::new(CodecSetError::UnrecognizedFormat) as BoxedError)?;
+        self.decode_job(format)
+            .map_err(|e| Box::new(e) as BoxedError)?
+            .into_seekable_decoder(source, preferred)
+    }
+
     /// A decode job for `format` with this set's defaults stamped on.
     ///
     /// The escape hatch behind every decode convenience: set decode hints

@@ -9,23 +9,57 @@
 
 ## summary
 #
-#   pub modules                                 1
-#   pub types (struct/enum/trait/alias)         2
+#   pub modules                                 2
+#   pub types (struct/enum/trait/alias)        10
 #   pub consts/statics                          1
 #   free functions                              6
-#   inherent methods                            1
-#   enum variants                               8
-#   trait roster entries (type × trait)         5
-#   auto-trait exceptions                       1
+#   inherent methods                           17
+#   enum variants                              20
+#   trait roster entries (type × trait)         8
+#   conditional trait impls (verbatim)          4
+#   auto-trait-complete types                   2
+#   auto-trait exceptions                       3
 #
 # per-module pub lines:
-#   (root)                            1
-#   decode                            1
+#   (root)                           14
+#   coroutine                        12
+#   decode                            5
 #   estimate                          1
 #   helpers                          16
+#   source                            8
 
-## items (15 lines)
+## items (48 lines)
 
+pub mod coroutine
+pub fn coroutine::CoroutineContext::is_cancelled(&self) -> bool
+pub async fn coroutine::CoroutineContext::read_exact(&mut self, &mut [u8]) -> core::result::Result<(), source::SourceError>
+pub async fn coroutine::CoroutineContext::read_exact_at(&mut self, u64, &mut [u8]) -> core::result::Result<(), source::SourceError>
+pub async fn coroutine::CoroutineContext::read_many_at(&mut self, &mut [(u64, &mut [u8])]) -> core::result::Result<(), source::SourceError>
+pub async fn coroutine::CoroutineContext::read_range_vec(&mut self, u64, u64) -> core::result::Result<alloc::vec::Vec<u8>, source::SourceError>
+pub fn coroutine::CoroutineContext::set_info(&mut self, ImageInfo)
+pub fn coroutine::CoroutineContext::set_output_descriptor(&mut self, zenpixels::descriptor::PixelDescriptor)
+pub async fn coroutine::CoroutineContext::yield_batch(&mut self, decode::BatchMeta, &zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), decode::SinkError>
+pub async fn coroutine::CoroutineContext::yield_scanlines(&mut self, u32, &zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), decode::SinkError>
+pub fn coroutine::CoroutineDecoder<F, E>::new<Init>(Init) -> Self where Init: core::ops::function::FnOnce(coroutine::CoroutineContext) -> F
+pub fn coroutine::CoroutineDecoder<F, E>::with_max_pending_batches<Init>(usize, Init) -> Self where Init: core::ops::function::FnOnce(coroutine::CoroutineContext) -> F
+pub struct decode::BufferedReadAt<R: alloc::io::read::Read> [also: source]
+pub fn source::BufferedReadAt<R>::new(R, source::BufferPolicy) -> Self
+pub fn source::BufferedReadAt<R>::watermark(&self) -> u64
+pub struct decode::CoroutineContext [also: coroutine]
+pub fn coroutine::CoroutineContext::is_cancelled(&self) -> bool
+pub async fn coroutine::CoroutineContext::read_exact(&mut self, &mut [u8]) -> core::result::Result<(), source::SourceError>
+pub async fn coroutine::CoroutineContext::read_exact_at(&mut self, u64, &mut [u8]) -> core::result::Result<(), source::SourceError>
+pub async fn coroutine::CoroutineContext::read_many_at(&mut self, &mut [(u64, &mut [u8])]) -> core::result::Result<(), source::SourceError>
+pub async fn coroutine::CoroutineContext::read_range_vec(&mut self, u64, u64) -> core::result::Result<alloc::vec::Vec<u8>, source::SourceError>
+pub fn coroutine::CoroutineContext::set_info(&mut self, ImageInfo)
+pub fn coroutine::CoroutineContext::set_output_descriptor(&mut self, zenpixels::descriptor::PixelDescriptor)
+pub async fn coroutine::CoroutineContext::yield_batch(&mut self, decode::BatchMeta, &zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), decode::SinkError>
+pub async fn coroutine::CoroutineContext::yield_scanlines(&mut self, u32, &zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), decode::SinkError>
+pub struct decode::CoroutineDecoder<F, E> [also: coroutine]
+pub fn coroutine::CoroutineDecoder<F, E>::new<Init>(Init) -> Self where Init: core::ops::function::FnOnce(coroutine::CoroutineContext) -> F
+pub fn coroutine::CoroutineDecoder<F, E>::with_max_pending_batches<Init>(usize, Init) -> Self where Init: core::ops::function::FnOnce(coroutine::CoroutineContext) -> F
+pub struct decode::FileReadAt [also: source]
+pub fn source::FileReadAt::new(std::fs::File) -> core::result::Result<Self, source::SourceError>
 pub fn decode::coalesce_byte_ranges(&[decode::ByteRange], u64) -> alloc::vec::Vec<decode::ByteRange> [also: helpers::sansio]
 pub fn estimate::ComputeEnvironment::host() -> Self
 pub mod helpers::sansio
@@ -40,14 +74,26 @@ pub helpers::PumpError::Io(core::io::error::Error)
 pub helpers::PumpError::UnexpectedEof
 pub fn helpers::pump_dyn_read_to_sink<R>(R, &mut (dyn decode::DynIncrementalDecoder + '_), &mut (dyn decode::DecodeRowSink + '_), core::option::Option<&dyn how_far::pulse::Pulse>, usize) -> core::result::Result<decode::OutputInfo, helpers::sansio::PumpError<encode::BoxedError>> where R: alloc::io::read::Read [also: helpers::sansio]
 pub fn helpers::pump_read_to_sink<R, D>(R, &mut D, &mut (dyn decode::DecodeRowSink + '_), core::option::Option<&dyn how_far::pulse::Pulse>, usize) -> core::result::Result<decode::OutputInfo, helpers::sansio::PumpError<<D as decode::IncrementalDecode>::Error>> where R: alloc::io::read::Read, D: decode::IncrementalDecode [also: helpers::sansio]
+pub fn source::BufferedReadAt<R>::new(R, source::BufferPolicy) -> Self
+pub fn source::BufferedReadAt<R>::watermark(&self) -> u64
+pub fn source::FileReadAt::new(std::fs::File) -> core::result::Result<Self, source::SourceError>
 pub const fn CodecIoKind::kind(&self) -> core::option::Option<core::io::error::ErrorKind>
 
-## trait impls (2 types)
+## trait impls (5 types)
 
 CodecIoKind: From<&core::io::error::Error>, From<core::io::error::ErrorKind>
+coroutine::CoroutineContext: Clone
 helpers::sansio::PumpError<E>: Debug, Display, Error
+source::BufferedReadAt<R>: source::ReadAt
+source::FileReadAt: source::ReadAt
+impl<F, E> decode::IncrementalDecode for coroutine::CoroutineDecoder<F, E> where F: core::future::future::Future<Output = core::result::Result<decode::OutputInfo, E>> + core::marker::Send + 'static, E: core::error::Error + core::marker::Send + core::marker::Sync + core::convert::From<decode::SinkError> + 'static
+impl<F, E> decode::IncrementalDecode for coroutine::CoroutineDecoder<F, E> where F: core::future::future::Future<Output = core::result::Result<decode::OutputInfo, E>> + core::marker::Send + 'static, E: core::error::Error + core::marker::Send + core::marker::Sync + core::convert::From<decode::SinkError> + 'static
+impl<F, E> decode::IncrementalDecode for coroutine::CoroutineDecoder<F, E> where F: core::future::future::Future<Output = core::result::Result<decode::OutputInfo, E>> + core::marker::Send + 'static, E: core::error::Error + core::marker::Send + core::marker::Sync + core::convert::From<decode::SinkError> + 'static
+impl<F, E> decode::IncrementalDecode for coroutine::CoroutineDecoder<F, E> where F: core::future::future::Future<Output = core::result::Result<decode::OutputInfo, E>> + core::marker::Send + 'static, E: core::error::Error + core::marker::Send + core::marker::Sync + core::convert::From<decode::SinkError> + 'static
 
 ## auto traits
 
-0 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+2 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+coroutine::CoroutineDecoder<F, E>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 helpers::sansio::PumpError<E>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+source::BufferedReadAt<R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
