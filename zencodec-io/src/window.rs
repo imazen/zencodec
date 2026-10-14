@@ -6,11 +6,16 @@ use core::fmt;
 
 use zencodec::decode::{Input, Request};
 
-/// Bytes the driver holds: `buf[head..]` starts at absolute `base`.
+/// Bytes the driver holds: `buf[head..end]` starts at absolute `base`.
+///
+/// `buf` is zeroed once as it grows and then reused: reads go straight into
+/// `buf[end..]`, so no read pays for a memset, and live bytes move to the
+/// front only when the tail has no room for the next read.
 #[derive(Debug, Default)]
 pub(crate) struct Window {
     buf: Vec<u8>,
     head: usize,
+    end: usize,
     base: u64,
     /// Total source length, once known.
     pub(crate) total: Option<u64>,
@@ -26,7 +31,7 @@ impl Window {
     }
 
     pub(crate) fn len(&self) -> usize {
-        self.buf.len() - self.head
+        self.end - self.head
     }
 
     pub(crate) fn end(&self) -> u64 {
@@ -34,7 +39,7 @@ impl Window {
     }
 
     pub(crate) fn bytes(&self) -> &[u8] {
-        &self.buf[self.head..]
+        &self.buf[self.head..self.end]
     }
 
     pub(crate) fn input(&self) -> Input<'_> {
@@ -46,44 +51,61 @@ impl Window {
         let n = n.min(self.len());
         self.head += n;
         self.base += n as u64;
-        if self.head == self.buf.len() {
-            self.buf.clear();
+        if self.head == self.end {
             self.head = 0;
-        } else if self.head > self.buf.len() / 2 && self.head >= 64 * 1024 {
-            self.buf.drain(..self.head);
-            self.head = 0;
+            self.end = 0;
         }
     }
 
     /// Forget everything and start at `offset`.
     pub(crate) fn reset_to(&mut self, offset: u64) {
-        self.buf.clear();
         self.head = 0;
+        self.end = 0;
         self.base = offset;
     }
 
-    /// Spare capacity of `n` zeroed bytes after the held bytes, to read into;
-    /// follow with [`commit`](Self::commit).
+    /// Room for `n` more bytes after the held bytes, to read into; follow
+    /// with [`commit`](Self::commit). The contents are stale, not zeroed.
     pub(crate) fn spare(&mut self, n: usize) -> &mut [u8] {
-        if self.head > 0 && self.head >= self.buf.len() / 2 {
-            self.buf.drain(..self.head);
+        if self.buf.len() - self.end < n && self.head > 0 {
+            self.buf.copy_within(self.head..self.end, 0);
+            self.end -= self.head;
             self.head = 0;
         }
-        let start = self.buf.len();
-        self.buf.resize(start + n, 0);
-        &mut self.buf[start..]
+        if self.buf.len() - self.end < n {
+            // Grow geometrically so a stream of reads zeroes O(total) bytes.
+            let want = (self.end + n).max(self.buf.len().saturating_mul(2));
+            self.buf.resize(want, 0);
+        }
+        &mut self.buf[self.end..self.end + n]
     }
 
-    /// Keep `n` of the bytes last handed out by [`spare`](Self::spare).
-    pub(crate) fn commit(&mut self, spare: usize, n: usize) {
-        let keep = self.buf.len() - spare + n;
-        self.buf.truncate(keep);
+    /// Room to read into: the whole free tail, up to `max` bytes, when it
+    /// holds at least `min` bytes and half of `max`; otherwise
+    /// [`spare(max)`](Self::spare), which compacts or grows. Reading into
+    /// the tail as it stands moves live bytes only when the tail runs out,
+    /// not on every read.
+    pub(crate) fn spare_up_to(&mut self, min: usize, max: usize) -> &mut [u8] {
+        let max = max.max(min);
+        let room = self.buf.len() - self.end;
+        if room >= min.max(max / 2) {
+            let n = room.min(max);
+            return &mut self.buf[self.end..self.end + n];
+        }
+        self.spare(max)
+    }
+
+    /// Keep `n` of the bytes last handed out by [`spare`](Self::spare) or
+    /// [`spare_up_to`](Self::spare_up_to).
+    pub(crate) fn commit(&mut self, n: usize) {
+        self.end += n;
     }
 
     /// Take ownership of `buf`, holding bytes from `offset`. The old
     /// contents are dropped; no bytes are copied.
     #[cfg_attr(not(feature = "tokio"), allow(dead_code))]
     pub(crate) fn adopt(&mut self, offset: u64, buf: Vec<u8>) {
+        self.end = buf.len();
         self.buf = buf;
         self.head = 0;
         self.base = offset;
@@ -93,6 +115,7 @@ impl Window {
     #[allow(dead_code)]
     pub(crate) fn extend(&mut self, bytes: &[u8]) {
         self.spare(bytes.len()).copy_from_slice(bytes);
+        self.commit(bytes.len());
     }
 }
 
@@ -177,7 +200,7 @@ mod tests {
         assert_eq!((w.base(), w.bytes()), (1, &[2u8, 3, 4][..]));
         let s = w.spare(4);
         s[..2].copy_from_slice(&[5, 6]);
-        w.commit(4, 2);
+        w.commit(2);
         assert_eq!(w.bytes(), &[2, 3, 4, 5, 6]);
         w.consume(5);
         assert_eq!((w.base(), w.len()), (6, 0));

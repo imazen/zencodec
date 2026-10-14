@@ -406,16 +406,15 @@ fn fill<'a, Src: AsyncSource + ?Sized, E: 'a>(
                 // Read until the request is met (or the source ends), asking
                 // for up to `read_size` more each time; a network source returns
                 // what has arrived, so the decoder steps as soon as it can.
-                let want = min_len.max(opts.read_size);
                 while window.len() < min_len.max(1) && window.total != Some(window.end()) {
                     let end = window.end();
-                    let n_want = want - window.len().min(want);
-                    let spare = window.spare(n_want);
+                    let need = min_len.max(1) - window.len();
+                    let spare = window.spare_up_to(need, opts.read_size.max(need));
                     let n = source
                         .read_at(end, spare)
                         .await
                         .map_err(AsyncDriveError::Source)?;
-                    window.commit(n_want, n);
+                    window.commit(n);
                     if n == 0 {
                         window.total = Some(end);
                     }

@@ -290,13 +290,16 @@ where
                 } else {
                     window.consume((offset - window.base()) as usize);
                 }
-                let want = min_len.max(opts.read_size);
-                while window.len() < want && window.total != Some(window.end()) {
+                // Read until the request is met or the source ends, each read
+                // `read_size` bytes or the room the window has left (a short
+                // read marks the end of the source).
+                while window.len() < min_len.max(1) && window.total != Some(window.end()) {
                     let end = window.end();
-                    let n_want = want - window.len();
-                    let spare = window.spare(n_want);
+                    let need = min_len.max(1) - window.len();
+                    let spare = window.spare_up_to(need, opts.read_size.max(need));
+                    let n_want = spare.len();
                     let n = source.read_at(end, spare).map_err(DriveError::Source)?;
-                    window.commit(n_want, n);
+                    window.commit(n);
                     stats.reads += 1;
                     stats.bytes_read += n as u64;
                     if n < n_want {

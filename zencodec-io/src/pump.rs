@@ -126,7 +126,7 @@ where
             let want = ((offset - end) as usize).min(read_size);
             let spare = window.spare(want);
             let n = reader.read(spare).map_err(PumpError::Io)?;
-            window.commit(want, n);
+            window.commit(n);
             if n == 0 {
                 window.total = Some(end);
             }
@@ -137,10 +137,10 @@ where
         // Read until `min_len` bytes from `offset` are held, or the end.
         while window.len() < min_len.max(1) && window.total.is_none() {
             let end = window.end();
-            let want = read_size.max(min_len - window.len().min(min_len));
-            let spare = window.spare(want);
+            let need = min_len.max(1) - window.len();
+            let spare = window.spare_up_to(need, read_size.max(need));
             let n = reader.read(spare).map_err(PumpError::Io)?;
-            window.commit(want, n);
+            window.commit(n);
             if n == 0 {
                 window.total = Some(end);
             }
