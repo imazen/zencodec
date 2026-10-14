@@ -179,6 +179,16 @@ codec in one rollout on one zencodec rev, and check a consumer's lock with
 the version ends the cascade: registry edges unify through the range rule
 above.
 
+Two more traps in the same rollouts (2026-10-14):
+
+- A local build under `~/work/zen` rewrites the consumer's `Cargo.lock` to
+  the path sources of the workspace patches. Regenerate the lock in the export
+  starting from the committed lock (`git show <rev>:Cargo.lock`), and copy it
+  back after the last local build, just before committing.
+- A codec PR stacked on another codec PR (base = a feature branch) gets no CI
+  where the workflow triggers only on `pull_request: branches: [main]`
+  (zenjpeg). Dispatch it on the branch: `gh workflow run ci.yml --ref <branch>`.
+
 ## Release Requirements
 
 **CI MUST pass before any crates.io release.** This includes:
