@@ -37,8 +37,9 @@ not a tradeoff.
 
 ## Metadata retention: one primitive, one safe wrapper
 
-Retention is a privacy decision, so the API makes it impossible to ship metadata
-without choosing one — at compile time, without a breaking change.
+Retention is a privacy decision. The policy-taking wrapper makes that choice
+explicit; calling the deprecated primitive only produces a warning. It remains
+possible to call the primitive, so deprecation is not compile-time enforcement.
 
 `EncodeJob::with_metadata(meta)` is the storage *primitive*. Every codec
 implements it: store the bytes, embed what the format supports at encode time.
@@ -61,7 +62,8 @@ only ever receives what the policy kept. A codec cannot leak what it never saw.
 `MetadataPolicy` has no `Default`; callers name one. `Web` is the privacy-safe
 choice for publishing (keeps ICC, EXIF orientation + rights, and color signaling;
 drops GPS, timestamps, camera identity, thumbnail, and all XMP). `PreserveExact`
-is a verbatim round trip. The per-variant promises and the edges where they don't
+requests retaining supplied metadata, subject to orientation reconciliation and
+the target codec's supported carriers. It does not guarantee a verbatim round trip. The per-variant promises and the edges where they don't
 hold are documented on [`MetadataPolicy`](../src/metadata.rs) under "Delivery
 exceptions" — the short version: a partial policy fails *safe* on an unparseable
 or oversized EXIF blob (it drops the whole blob rather than risk leaking), and
@@ -94,8 +96,12 @@ alternatives are in [color-emit-model.md](color-emit-model.md).
 
 The coarse `EncodePolicy.embed_icc/embed_exif/embed_xmp` flags remain as a
 best-effort whole-channel gate, but they are not the retention control — they
-no-op on a codec that doesn't implement `with_policy`. For privacy, use a
-`MetadataPolicy`.
+no-op on a codec that doesn't implement `with_policy`. For privacy, filter with a `MetadataPolicy`. For required embed gates, use
+`try_set_policy` / `try_with_policy`. A codec accepts only fields it implements;
+the default rejects every nonempty policy. Generic and erased jobs share the
+same mutable implementation, and rejection must leave the job unchanged.
+These checks confirm policy support, not successful metadata delivery or
+lossless pixel fidelity. Those need codec-specific, content-dependent evidence.
 
 ## Gain-map HDR: signal on the buffer, envelope on the info
 

@@ -25,7 +25,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
   workflow_dispatch:
 
 # Superseded runs waste runner queue; only the newest commit per ref matters.

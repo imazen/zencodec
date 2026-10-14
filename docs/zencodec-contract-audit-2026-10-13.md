@@ -586,3 +586,96 @@ known consumers, then deprecate the old entry points. Keep the old behavior
 through the compatible release. The eventual breaking release can remove
 published legacy methods after the replacement has demonstrated equivalent
 coverage on real files.
+
+## Follow-up PR review: publication scope
+
+The compatible proposals are split into [PR139](https://github.com/imazen/zencodec/pull/139)
+and [PR140](https://github.com/imazen/zencodec/pull/140). Neither is a crate release.
+
+PR139 keeps CodecSet available by default, guards still-image transcode against
+known sequence/auxiliary loss and an unsupported native pixel descriptor, makes
+inventory construction/validation allocation failures recoverable, and replaces
+rewrite-limit strings with shared `LimitKind` values. PNG, JXL and JPEG planners
+must update their pinned contract revision with the typed constructors.
+
+Inventory's part cap bounds record count. It is **not** a total memory budget:
+caller-created labels, details, spare capacities and parser scratch remain
+separate. `try_children` exposes fallible collection; the convenience `children`,
+formatting, cloning and summary helpers can still allocate infallibly. No new
+byte-budget field is promised without an accounting model covering those inputs.
+
+PR140 adds one checked policy mutation primitive per generic job and delegates
+erased mutation to it. A separate `accepts_policy` predicate was removed during
+review because a predicate and setter could disagree and generic overrides
+could be bypassed by erased dispatch. A rejected mutable update leaves the job
+unchanged. The reference encoder demonstrates ICC/EXIF/XMP gates, including
+atomic rejection of a mixed supported/unsupported policy. Other codecs reject
+nonempty checked policies until they implement this primitive; their existing
+best-effort setters retain published behavior. CodecSet callers can obtain a job
+and use its checked setter without another registry policy abstraction.
+
+Rational getters and explicit timing submission are available in parallel with
+the deprecated millisecond getters. Deprecation does not complete consumer
+migration: callers must choose exact timing or intentional rounding, including
+when their destination is a millisecond-only API. The old methods still work.
+
+Required pixel fidelity, actual metadata/carrier delivery, and authoritative
+post-transform color/orientation remain in the coordinated breaking queue.
+Neither checked policy admission nor transcode's early guards proves these
+properties. Do not add a config-time success report that cannot inspect the
+pixels or encoded output. Before removing the old setters, demonstrate required
+operation admission and outcomes with real codec adapters across all feeding
+modes. This is migration work, not a signature-compatibility blocker for these
+two additive proposals.
+
+### Final comparison artifacts
+
+Registry rechecked: 0.1.26 remains the published release. Regenerated source
+diffs verify the same archive against both actual main and the proposal:
+
+| Comparison | Revision | Diff SHA-256 |
+|---|---|---|
+| Main vs registry | `c73078989015e00c510c423e0219f521f26e2628` | `11cde6dc5868926026ac7fb3fc6729045a909137166cc61a3ae7f732572ce850` |
+| Proposed zencodec source vs registry | `4d542d6412469d0c99e2e3e723cdcecd9d1208a1` | `56ca5b366e1e78b4bb05e86ee429618387d841c0184d4d1ff3fef4c0bfb5fb8b` |
+
+Regenerate with `just contract-diff` and the revision above. The source/manifest
+diff covers zencodec; zenmeta has no published baseline. Its additional nested
+plan check (`bcc2ac50`) rejects a child whose borrowed input is not the exact
+parent subrange. The unchanged JPEG gain-map rewrite tests exposed a stale
+caller: generated child carriers used the outer context. The corrected planner
+uses component contexts and combines both child plans under a fresh parent.
+This validates the need for input provenance at the shared builder boundary.
+
+Both minimal and all-feature semver checks against 0.1.26 pass locally. Workspace
+tests, Clippy, MSRV 1.88, WASI and warning-free rustdoc also pass. CI now runs for
+stacked PRs as well as PRs targeting main, and checks both semver feature modes.
+Actual codec validation includes PNG/APNG metadata and timing, JXL metadata and
+timing, JPEG gain-map rewrite preservation, GIF owned frames and WebP animation.
+This does not claim every codec/backend has adopted checked policies, or that
+all consumers have migrated from the legacy getters. AVIF has interrupted timing
+work requiring reconciliation, and zenpipe's `FrameInfo` still stores only
+milliseconds; its migration must specify rounding explicitly.
+
+
+## Testkit publication audit after consumer integration
+
+The initial `just testkit-semver` comparison of zencodec-testkit against its
+crates.io 0.1.0 source reported one breaking check:
+`unit_struct_changed_kind` for `reference::RefDecodeJob`. Published clients can
+construct that unit value directly. Commit `857fab1` changed it to a stateful
+private-field struct for gain-map handling; current main retains that change.
+The new inventory limit state is not the origin of the construction break.
+
+The seven new fixture-driven conformance functions are additive; the regenerated
+[public API snapshot](public-api/zencodec-testkit.txt) records their signatures.
+The user approved independent breaking changes to this implementor-only testkit
+on 2026-10-13. Testkit is now versioned 0.2.0 and requires zencodec 0.1.27 or
+later in the existing allowed range. Consumers construct reference jobs through
+`ReferenceDecoderConfig::job()` or `ReferenceZcrDecoderConfig::job()`.
+
+The testkit semver gate uses the declared breaking version; it does not assert
+source compatibility with 0.1.0. Zencodec stays at 0.1.27 with both compatibility
+checks against 0.1.26 unchanged. This approval does not authorize publication.
+
+The [behavioral coverage matrix](testkit-contract-coverage.md) records the actual
+consumer checks and unresolved coverage boundaries.

@@ -49,7 +49,8 @@ use zencodec::decode::{
     DecoderConfig, OutputInfo, SinkError, SourceColor, StreamingDecode,
 };
 use zencodec::encode::{
-    AnimationFrameEncoder, EncodeCapabilities, EncodeJob, EncodeOutput, Encoder, EncoderConfig,
+    AnimationFrameEncoder, EncodeCapabilities, EncodeJob, EncodeOutput, EncodePolicy, Encoder,
+    EncoderConfig,
 };
 use zencodec::gainmap::{
     DecodedGainMap, GainMapInfo, GainMapPresence, GainMapRender, GainMapSource, Iso21496Format,
@@ -801,6 +802,7 @@ pub(crate) fn encode_single(
 // instantly so there's nothing to cancel, and has no quality knob. Declaring them
 // would be the exact dishonesty the check exists to catch.)
 static ENCODE_CAPS: EncodeCapabilities = EncodeCapabilities::new()
+    .with_animation_timing(true)
     .with_lossless(true)
     .with_native_alpha(true)
     .with_native_16bit(true)
@@ -883,6 +885,7 @@ impl EncoderConfig for ReferenceEncoderConfig {
     fn job(self) -> RefEncodeJob {
         RefEncodeJob {
             metadata: Metadata::none(),
+            policy: EncodePolicy::none(),
             loop_count: None,
             gain_map: None,
         }
@@ -892,8 +895,22 @@ impl EncoderConfig for ReferenceEncoderConfig {
 /// Reference encode job.
 pub struct RefEncodeJob {
     metadata: Metadata,
+    policy: EncodePolicy,
     loop_count: Option<u32>,
     gain_map: Option<GainMapWire>,
+}
+
+fn apply_embed_policy(mut metadata: Metadata, policy: EncodePolicy) -> Metadata {
+    if policy.embed_icc == Some(false) {
+        metadata.icc_profile = None;
+    }
+    if policy.embed_exif == Some(false) {
+        metadata.exif = None;
+    }
+    if policy.embed_xmp == Some(false) {
+        metadata.xmp = None;
+    }
+    metadata
 }
 
 impl EncodeJob for RefEncodeJob {
@@ -906,6 +923,21 @@ impl EncodeJob for RefEncodeJob {
     }
     fn with_limits(self, _limits: ResourceLimits) -> Self {
         self
+    }
+    fn with_policy(mut self, policy: EncodePolicy) -> Self {
+        self.policy = policy;
+        self
+    }
+    fn try_set_policy(&mut self, policy: EncodePolicy) -> Result<(), UnsupportedOperation> {
+        let mut unsupported = policy;
+        unsupported.embed_icc = None;
+        unsupported.embed_exif = None;
+        unsupported.embed_xmp = None;
+        if unsupported != EncodePolicy::none() {
+            return Err(UnsupportedOperation::EncodePolicy);
+        }
+        self.policy = policy;
+        Ok(())
     }
     fn with_metadata(mut self, meta: Metadata) -> Self {
         self.metadata = meta;
@@ -959,8 +991,9 @@ impl EncodeJob for RefEncodeJob {
     }
 
     fn encoder(self) -> Result<RefEnc, RefError> {
+        let metadata = apply_embed_policy(self.metadata, self.policy);
         Ok(RefEnc {
-            metadata: self.metadata,
+            metadata,
             gain_map: self.gain_map,
             accumulated: Vec::new(),
             width: None,
@@ -970,10 +1003,12 @@ impl EncodeJob for RefEncodeJob {
     }
 
     fn animation_frame_encoder(self) -> Result<RefAnimEnc, RefError> {
+        let metadata = apply_embed_policy(self.metadata, self.policy);
         Ok(RefAnimEnc {
-            metadata: self.metadata,
+            metadata,
             gain_map: self.gain_map,
             frames: Vec::new(),
+            timing: zencodec::animation::TimingQuantizer::new(1000, u32::MAX.into()).unwrap(),
         })
     }
 }
@@ -1035,6 +1070,7 @@ impl Encoder for RefEnc {
 
 /// Reference animation encoder.
 pub struct RefAnimEnc {
+    timing: zencodec::animation::TimingQuantizer,
     metadata: Metadata,
     gain_map: Option<GainMapWire>,
     frames: Vec<(Vec<u8>, u32, u32, u32, PixelDescriptor)>, // bytes, w, h, dur, desc
@@ -1063,6 +1099,35 @@ impl AnimationFrameEncoder for RefAnimEnc {
         }
         self.frames.push((bytes, w, h, duration_ms, desc));
         Ok(())
+    }
+
+    fn push_frame_exact(
+        &mut self,
+        pixels: PixelSlice<'_>,
+        duration: zencodec::animation::FrameDuration,
+        stop: Option<&dyn Stop>,
+    ) -> Result<(), RefError> {
+        let ticks = duration
+            .ticks_at(1000)
+            .map_err(|e| RefError::Invalid(e.to_string()))?;
+        let ticks =
+            u32::try_from(ticks).map_err(|_| RefError::Invalid("duration overflow".into()))?;
+        self.push_frame(pixels, ticks, stop)
+    }
+
+    fn push_frame_timed(
+        &mut self,
+        pixels: PixelSlice<'_>,
+        duration: zencodec::animation::FrameDuration,
+        stop: Option<&dyn Stop>,
+    ) -> Result<zencodec::animation::FrameDuration, RefError> {
+        let mut timing = self.timing;
+        let encoded = timing
+            .quantize(duration)
+            .map_err(|e| RefError::Invalid(e.to_string()))?;
+        self.push_frame_exact(pixels, encoded, stop)?;
+        self.timing = timing;
+        Ok(encoded)
     }
 
     fn finish(self, stop: Option<&dyn Stop>) -> Result<EncodeOutput, RefError> {
@@ -1117,6 +1182,7 @@ impl DecoderConfig for ReferenceDecoderConfig {
     }
     fn job<'a>(self) -> Self::Job<'a> {
         RefDecodeJob {
+            limits: ResourceLimits::none(),
             render: GainMapRender::BaseOnly,
             format: ImageFormat::Pnm,
         }
@@ -1179,6 +1245,7 @@ impl DecoderConfig for ReferenceZcrDecoderConfig {
     }
     fn job<'a>(self) -> Self::Job<'a> {
         RefDecodeJob {
+            limits: ResourceLimits::none(),
             render: GainMapRender::BaseOnly,
             format: ZCR_FORMATS[0],
         }
@@ -1187,6 +1254,7 @@ impl DecoderConfig for ReferenceZcrDecoderConfig {
 
 /// Reference decode job.
 pub struct RefDecodeJob {
+    limits: ResourceLimits,
     render: GainMapRender,
     /// The format the job's config registered under; inventories report it.
     format: ImageFormat,
@@ -1201,7 +1269,8 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
     fn with_stop(self, _stop: StopToken) -> Self {
         self
     }
-    fn with_limits(self, _limits: ResourceLimits) -> Self {
+    fn with_limits(mut self, limits: ResourceLimits) -> Self {
+        self.limits = limits;
         self
     }
     /// The 2-way toggle is exactly `Components` / `BaseOnly`.
@@ -1223,6 +1292,9 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
     }
 
     fn inventory(&self, data: &[u8]) -> Result<zencodec::inventory::Inventory, At<CodecError>> {
+        self.limits
+            .check_input_size(data.len() as u64)
+            .map_err(RefError::from)?;
         zcr_inventory(data, self.format).map_err(Into::into)
     }
 

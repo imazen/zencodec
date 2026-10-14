@@ -206,6 +206,18 @@ pub trait DynDecodeJob<'a> {
     /// Set decode security policy.
     fn set_policy(&mut self, policy: crate::DecodePolicy);
 
+    /// Apply a required policy or return a recoverable rejection.
+    ///
+    /// Manual implementations default to accepting only the empty policy;
+    /// generated shims delegate to the concrete job's `try_set_policy`.
+    /// A rejection must leave the job unchanged.
+    fn try_set_policy(&mut self, policy: crate::DecodePolicy) -> Result<(), BoxedError> {
+        if policy != crate::DecodePolicy::none() {
+            return Err(Box::new(crate::UnsupportedOperation::DecodePolicy));
+        }
+        Ok(())
+    }
+
     /// Probe image metadata without decoding pixels (header parse).
     fn probe(&self, data: &[u8]) -> Result<ImageInfo, BoxedError>;
 
@@ -336,6 +348,14 @@ where
 
     fn set_policy(&mut self, policy: crate::DecodePolicy) {
         self.try_apply(|job| job.with_policy(policy));
+    }
+
+    fn try_set_policy(&mut self, policy: crate::DecodePolicy) -> Result<(), BoxedError> {
+        let Some(job) = self.0.as_mut() else {
+            return Err("DecodeJobShim: job already consumed (double take)".into());
+        };
+        job.try_set_policy(policy)
+            .map_err(|error| Box::new(error) as BoxedError)
     }
 
     fn probe(&self, data: &[u8]) -> Result<ImageInfo, BoxedError> {

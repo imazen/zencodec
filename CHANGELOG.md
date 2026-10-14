@@ -8,9 +8,28 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 #### QUEUED BREAKING CHANGES
 
-- None against crates.io zencodec-testkit 0.1.0.
+- Approved for testkit **0.2.0**: `RefDecodeJob` changed from a publicly constructible unit struct to a private-field stateful struct in the gain-map harness (`857fab1`). Implementor tests should obtain jobs from `ReferenceDecoderConfig::job()` or `ReferenceZcrDecoderConfig::job()`. This is a testkit-only break; zencodec retains its compatibility gate.
+
+#### Changed
+
+- Prepare the independently versioned testkit 0.2.0 release. Its zencodec requirement now starts at 0.1.27, which supplies the new contract APIs. No crate has been published.
 
 #### Added
+
+- The [contract coverage matrix](docs/testkit-contract-coverage.md) records consumer evidence, independent readbacks, and remaining API/testing gaps.
+
+- Checked policy tests compare builder, mutable and erased results, including pixels after rejection (`43061fcd`).
+- Native pixel fixtures preserve stride and color context with zenpixels 0.2.14 as well as newer versions. All tri-state metadata embed-gate combinations and each decode-policy field are exercised.
+
+- New fixture-driven encode checks accept native `PixelSlice` views, including
+  strided, 16-bit and floating-point inputs, without an RGB8-only fixture type (`304a03bb`, `ab420b6c`).
+
+- The default animation cross-path suite now checks source durations, and
+  `check_animation_timing_unsupported` tests typed refusal without damaging
+  buffered legacy frames on adapters that do not support rational encoding (`3ef1cfde`).
+
+- Fixture-driven timing, checked-policy, inventory input-limit and metadata-rewrite
+  conformance checks compare generic and erased dispatch and explicit expected outputs (`919dd678`).
 
 - `check_inventory_dispatch` compares generic/dynamic results and disabled-operation
   errors. `check_all` also checks the disabled inventory contract without changing
@@ -111,6 +130,10 @@ removes that whole class).
 
 ### Deprecated
 
+- `AnimationFrame::duration_ms()` and `OwnedAnimationFrame::duration_ms()` now
+  warn because they truncate fractional milliseconds and saturate long values;
+  `duration()` is the exact replacement. Constructors taking whole milliseconds
+  remain available and exact for those inputs.
 - Published `Metadata::filtered`, `Exif::filtered`, `Exif::to_bytes`, and
   `exif::retain` remain compatible, with zenmeta processing entry points as their
   migration targets. The implementation remains single-owned in zencodec until
@@ -133,11 +156,11 @@ removes that whole class).
 - Unpublished metadata rewrite limits now carry `LimitKind`, including packet,
   cumulative rewrite, carrier-count and EXIF-entry budgets. Existing published
   limit discriminants remain unchanged. Git-pinned planners must migrate their
-  string constructors together with the contract revision.
+  string constructors together with the contract revision (`7325cfa9`).
 
 - Inventory growth and coverage validation use fallible allocation; add typed
   allocation failures and `try_children`. Gap filling rejects a part cap before
-  changing topology. The part cap is not a total byte-memory budget.
+  changing topology. The part cap is not a total byte-memory budget (`f39865b2`).
 
 - Unpublished rewrite requests are data contracts; validation, cancellation and
   packet-budget execution move to `zenmeta::rewrite::Context`. Completed plans
@@ -150,8 +173,22 @@ removes that whole class).
   millisecond APIs remain compatible with crates.io 0.1.26; legacy exact callers
   migrate to the explicitly named operation. No video transport is added.
 
+### Added
+
+- Add `try_set_policy` and `try_with_policy` to generic encode/decode jobs, and
+  `try_set_policy` to erased jobs. The default admits only an empty policy;
+  codecs implement one fallible primitive used by both dispatch paths. Rejection
+  leaves mutable jobs unchanged and usable. The reference encoder implements ICC/EXIF/XMP gates for one-shot and
+  animation jobs; a generic/erased XMP suppression roundtrip is tested.
+  Published best-effort setters remain (`4b5e4d9e`).
+
 
 ### QUEUED BREAKING CHANGES
+
+- Animation sink decoding must return frame duration and index alongside output
+  geometry; its current `OutputInfo` result cannot transport timing. Until that
+  contract is added, testkit can verify sink pixels but cannot verify sink timing (`919dd678`).
+
 
 Target for the upcoming coordinated breaking release; these removals and contract
 replacements are **planned, not implemented**. The current extraction remains

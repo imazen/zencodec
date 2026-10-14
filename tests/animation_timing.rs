@@ -43,6 +43,7 @@ fn destination_clocks_are_exact_or_fail_without_wrapping() {
 }
 
 #[test]
+#[allow(deprecated)] // This test keeps the published legacy getter's conversion contract.
 fn borrowing_and_copying_frames_preserves_fractional_and_large_durations() {
     let pixels =
         PixelBuffer::from_vec(vec![1, 2, 3, 4, 5, 6], 2, 1, PixelDescriptor::RGB8_SRGB).unwrap();
