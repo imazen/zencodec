@@ -812,6 +812,7 @@ static ENCODE_CAPS: EncodeCapabilities = EncodeCapabilities::new()
     .with_gain_map(true) // with_gain_map_pixels / _encoded (check_gain_map_roundtrip)
     .with_animation(true)
     .with_push_rows(true)
+    .with_streaming_output(true) // begin writes the header; rows stream out
     .with_encode_from(false) // reference declines the pull path (see encoder)
     .with_icc(true)
     .with_exif(true)
@@ -1003,6 +1004,8 @@ impl EncodeJob for RefEncodeJob {
             width: None,
             rows: 0,
             desc: None,
+            declared_height: None,
+            drained: 0,
         })
     }
 
@@ -1019,13 +1022,23 @@ impl EncodeJob for RefEncodeJob {
 
 /// Reference single-image encoder. Supports one-shot `encode` and incremental
 /// `push_rows` + `finish`; declines the pull path (`encode_from`).
+///
+/// After [`begin`](Encoder::begin) the header is written at once and each
+/// pushed row is appended to the output, which
+/// [`pending_output`](Encoder::pending_output) exposes: the streaming
+/// encoder pattern. Without `begin`, rows accumulate and the file is built
+/// at `finish`.
 pub struct RefEnc {
     metadata: Metadata,
     gain_map: Option<GainMapWire>,
+    /// Without `begin`: raw rows. With `begin`: the encoded file so far,
+    /// of which `accumulated[..drained]` was handed out.
     accumulated: Vec<u8>,
     width: Option<u32>,
     rows: u32,
     desc: Option<PixelDescriptor>,
+    declared_height: Option<u32>,
+    drained: usize,
 }
 
 impl Encoder for RefEnc {
@@ -1046,10 +1059,42 @@ impl Encoder for RefEnc {
         ))
     }
 
+    fn begin(&mut self, width: u32, height: u32, desc: PixelDescriptor) -> Result<(), RefError> {
+        if self.width.is_some() {
+            return Err(RefError::Invalid("begin after push_rows".into()));
+        }
+        self.width = Some(width);
+        self.desc = Some(desc);
+        self.declared_height = Some(height);
+        write_header(
+            &mut self.accumulated,
+            width,
+            height,
+            1,
+            desc.bytes_per_pixel() as u8,
+            &self.metadata,
+            self.gain_map.as_ref(),
+        );
+        push_u32(&mut self.accumulated, 0); // duration
+        Ok(())
+    }
+
     fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), RefError> {
         if self.width.is_none() {
             self.width = Some(rows.width());
             self.desc = Some(rows.descriptor());
+        }
+        if Some(rows.width()) != self.width || Some(rows.descriptor()) != self.desc {
+            return Err(RefError::Invalid(
+                "push_rows: width or format changed".into(),
+            ));
+        }
+        if let Some(h) = self.declared_height
+            && self.rows.saturating_add(rows.rows()) > h
+        {
+            return Err(RefError::Invalid(format!(
+                "push_rows: more than the {h} rows declared at begin"
+            )));
         }
         for y in 0..rows.rows() {
             self.accumulated.extend_from_slice(rows.row(y));
@@ -1058,7 +1103,35 @@ impl Encoder for RefEnc {
         Ok(())
     }
 
-    fn finish(self) -> Result<EncodeOutput, RefError> {
+    fn pending_output(&self) -> &[u8] {
+        match self.declared_height {
+            Some(_) => &self.accumulated[self.drained..],
+            None => &[],
+        }
+    }
+
+    fn consume_output(&mut self, n: usize) {
+        if self.declared_height.is_none() {
+            return;
+        }
+        self.drained = (self.drained + n).min(self.accumulated.len());
+        if self.drained == self.accumulated.len() {
+            self.accumulated.clear();
+            self.drained = 0;
+        }
+    }
+
+    fn finish(mut self) -> Result<EncodeOutput, RefError> {
+        if let Some(h) = self.declared_height {
+            if self.rows != h {
+                return Err(RefError::Invalid(format!(
+                    "finish: {} rows pushed, {h} declared at begin",
+                    self.rows
+                )));
+            }
+            self.accumulated.drain(..self.drained);
+            return Ok(EncodeOutput::new(self.accumulated, ImageFormat::Pnm));
+        }
         let w = self
             .width
             .ok_or_else(|| RefError::Invalid("finish before push_rows".into()))?;
