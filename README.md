@@ -364,7 +364,12 @@ from an offset, an exact `Range`, or the total `Len`). The same decoder runs
 over a file, an HTTP body, an object store with range requests, an FFI host
 that pushes buffers, or a single-threaded WASM loop, and starts emitting rows
 before the input is complete. Pull-native codecs bind to a random-access
-source instead (`DecodeJob::push_decoder_from_source`).
+source instead (`DecodeJob::push_decoder_from_source`). A codec whose core
+needs the complete file still serves every driver through
+`helpers::WholeFileIncremental`: it reports the header as soon as a prefix
+probes and writes its rows once the input is complete, with pixels identical
+to its push path. zenbitmaps decodes rows as bytes arrive; codecs built on
+`WholeFileIncremental` emit rows only at the end.
 
 Encoders that know the image size up front take `Encoder::begin` and, when
 they declare `EncodeCapabilities::streaming_output`, hand out encoded bytes
