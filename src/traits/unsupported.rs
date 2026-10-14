@@ -84,3 +84,34 @@ impl<E: core::error::Error + Send + Sync + 'static> AnimationFrameDecoder for Un
         unreachable!("Unsupported: full frame decode stub should never be constructed")
     }
 }
+
+impl<E: core::error::Error + Send + Sync + 'static> super::decoder::IncrementalDecode
+    for Unsupported<E>
+{
+    type Error = E;
+
+    fn push_chunk(
+        &mut self,
+        _chunk: &[u8],
+        _is_eof: bool,
+        _stop: Option<&dyn Stop>,
+    ) -> Result<super::decoder::PushOutcome, E> {
+        unreachable!("Unsupported: incremental decode stub should never be constructed")
+    }
+
+    fn pull_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, E> {
+        unreachable!("Unsupported: incremental decode stub should never be constructed")
+    }
+
+    fn wrap_sink_error(_err: crate::sink::SinkError) -> E {
+        unreachable!("Unsupported: incremental decode stub should never be constructed")
+    }
+
+    fn info(&self) -> Option<&ImageInfo> {
+        unreachable!("Unsupported: incremental decode stub should never be constructed")
+    }
+
+    fn is_complete(&self) -> bool {
+        unreachable!("Unsupported: incremental decode stub should never be constructed")
+    }
+}
