@@ -687,9 +687,11 @@ pub fn check_seekable_capability_honesty<D: DecoderConfig>(dec: D, data: &[u8]) 
 /// a declared incremental decoder is chunk-boundary independent: driven
 /// over `data` in 1-byte, 7-byte and whole-file chunks it must produce the
 /// one-shot pixels, call `finish`, and report `Done` with the one-shot
-/// dimensions. Truncated input (at a quarter, half and all-but-one bytes)
-/// must end in an error once the length is announced, never in a request
-/// that can never be served.
+/// dimensions. Truncated input (at a quarter and at half the file) must end
+/// in an error once the length is announced, never in a request that can
+/// never be served. Cuts stay inside the first half because a format may
+/// end in bytes that carry no pixels (QOI's end marker is classified as
+/// skipped), which a decoder is right to accept missing.
 pub fn check_incremental_capability_honesty<D: DecoderConfig>(dec: D, data: &[u8]) -> Conformance {
     const CHECK: &str = "incremental_capability_honesty";
     let declared = D::capabilities().incremental();
@@ -782,7 +784,7 @@ pub fn check_incremental_capability_honesty<D: DecoderConfig>(dec: D, data: &[u8
         }
     }
 
-    for cut in [data.len() / 4, data.len() / 2, data.len().saturating_sub(1)] {
+    for cut in [data.len() / 4, data.len() / 2] {
         if cut >= data.len() {
             continue;
         }
