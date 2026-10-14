@@ -214,7 +214,10 @@ where
                     } else if shared.need_len {
                         Pending::NeedLen
                     } else if !shared.need.is_empty() {
-                        Pending::Need(shared.need.clone())
+                        // Hand the request list to the decoder without a
+                        // copy; the next poll takes it back as scratch.
+                        core::mem::swap(&mut self.need, &mut shared.need);
+                        Pending::Need
                     } else {
                         Pending::Stalled
                     }
@@ -239,10 +242,7 @@ where
                         Ok(Step::Metadata(update))
                     }
                     Pending::NeedLen => Ok(Step::NeedLen),
-                    Pending::Need(ranges) => {
-                        self.need = ranges;
-                        Ok(Step::Need(&self.need))
-                    }
+                    Pending::Need => Ok(Step::Need(&self.need)),
                     Pending::Stalled => self.fail(E::from(CoroutineError::Stalled)),
                 }
             }
@@ -270,7 +270,7 @@ enum Pending {
     Rows(crate::context::PendingRows),
     Metadata(MetadataUpdate),
     NeedLen,
-    Need(Vec<ByteRange>),
+    Need,
     Stalled,
 }
 

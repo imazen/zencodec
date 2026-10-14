@@ -1548,8 +1548,11 @@ impl StreamingDecode for RefStreamDec<'_> {
 /// frame is decoded, like the one-shot path.
 pub struct RefIncDec {
     limits: ResourceLimits,
-    /// Buffered input; `buf[0]` is at absolute offset `buf_start`.
+    /// Buffered input; `buf[head..]` is live and starts at absolute
+    /// offset `buf_start`. Consumed bytes are released by advancing
+    /// `head`, never by shifting the buffer; compaction is amortised.
     buf: Vec<u8>,
+    head: usize,
     buf_start: u64,
     total: Option<u64>,
     header: Option<(Header, PixelDescriptor, ImageInfo)>,
@@ -1568,6 +1571,7 @@ impl RefIncDec {
         Self {
             limits,
             buf: Vec::new(),
+            head: 0,
             buf_start: 0,
             total: None,
             header: None,
@@ -1584,11 +1588,19 @@ impl RefIncDec {
         Step::Need(&self.need)
     }
 
+    fn live_len(&self) -> usize {
+        self.buf.len() - self.head
+    }
+
     fn release_before(&mut self, offset: u64) {
         if offset > self.buf_start {
-            let drop = ((offset - self.buf_start) as usize).min(self.buf.len());
-            self.buf.drain(..drop);
+            let drop = ((offset - self.buf_start) as usize).min(self.live_len());
+            self.head += drop;
             self.buf_start += drop as u64;
+            if self.head > self.buf.len() / 2 && self.head >= 16 * 1024 {
+                self.buf.drain(..self.head);
+                self.head = 0;
+            }
         }
     }
 }
@@ -1597,7 +1609,7 @@ impl IncrementalDecode for RefIncDec {
     type Error = RefError;
 
     fn feed(&mut self, offset: u64, bytes: &[u8], eof: bool) -> Result<usize, RefError> {
-        let cursor = self.buf_start + self.buf.len() as u64;
+        let cursor = self.buf_start + self.live_len() as u64;
         if eof {
             self.total = Some(offset + bytes.len() as u64);
             if let Some(total) = self.total {
@@ -1616,7 +1628,7 @@ impl IncrementalDecode for RefIncDec {
             return Ok(bytes.len());
         }
         let skip = (cursor - offset) as usize;
-        let room = REF_INC_BUFFER_CAP.saturating_sub(self.buf.len());
+        let room = REF_INC_BUFFER_CAP.saturating_sub(self.live_len());
         let take = (bytes.len() - skip).min(room);
         self.buf.extend_from_slice(&bytes[skip..skip + take]);
         Ok(skip + take)
@@ -1636,7 +1648,7 @@ impl IncrementalDecode for RefIncDec {
         if let Some(s) = stop {
             s.check()?;
         }
-        let cursor = self.buf_start + self.buf.len() as u64;
+        let cursor = self.buf_start + self.live_len() as u64;
         let at_end = self.total.is_some_and(|t| cursor >= t);
 
         if self.header.is_none() {
@@ -1644,11 +1656,12 @@ impl IncrementalDecode for RefIncDec {
                 self.failed = true;
                 return Err(RefError::Invalid("header bytes released early".into()));
             }
-            if self.buf.len() >= MAGIC.len() && !self.buf.starts_with(MAGIC) {
+            let live = &self.buf[self.head..];
+            if live.len() >= MAGIC.len() && !live.starts_with(MAGIC) {
                 self.failed = true;
                 return Err(RefError::Invalid("bad magic".into()));
             }
-            match parse_header(&self.buf) {
+            match parse_header(live) {
                 Ok(h) => {
                     let desc = descriptor_for_header(&h).inspect_err(|_| self.failed = true)?;
                     let info = build_info(&h);
@@ -1698,7 +1711,7 @@ impl IncrementalDecode for RefIncDec {
             }
             return Ok(self.need(cursor));
         }
-        let start = (strip_start - self.buf_start) as usize;
+        let start = self.head + (strip_start - self.buf_start) as usize;
         {
             let mut dst = sink
                 .provide_next_buffer(self.next_row, rows, width, desc)

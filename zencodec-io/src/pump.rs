@@ -4,6 +4,7 @@ use alloc::vec;
 use core::fmt;
 
 use enough::Stop;
+use how_far::{Pulse, Total};
 use zencodec::decode::{ByteRange, DecodeRowSink, OutputInfo, Step};
 
 use crate::drivable::Drivable;
@@ -68,13 +69,15 @@ pub fn pump_read_to_sink<R, D>(
     mut reader: R,
     decoder: &mut D,
     sink: &mut dyn DecodeRowSink,
-    stop: Option<&dyn Stop>,
+    pulse: Option<&dyn Pulse>,
     buffer_size: usize,
 ) -> Result<OutputInfo, PumpError<D::Error>>
 where
     R: std::io::Read,
     D: Drivable + ?Sized,
 {
+    let stop = pulse.map(|p| p as &dyn Stop);
+    let mut told_total = false;
     let mut buf = vec![0u8; buffer_size.max(512)];
     let mut cursor = 0u64;
     let mut eof = false;
@@ -87,9 +90,22 @@ where
                 .copied()
                 .unwrap_or(ByteRange::from_offset(cursor)),
             Step::NeedLen => return Err(PumpError::NeedsLength),
+            Step::Rows { rows, .. } => {
+                if let Some(p) = pulse {
+                    p.advance(rows as u64);
+                }
+                continue;
+            }
+            Step::Metadata(update) => {
+                if update.is_header_ready() {
+                    tell_total(pulse, decoder.info(), &mut told_total);
+                }
+                continue;
+            }
             Step::Done(info) => return Ok(info),
             _ => continue,
         };
+        tell_total(pulse, decoder.info(), &mut told_total);
         if feeder.has_carry() {
             if !feeder.flush(decoder).map_err(PumpError::Codec)? {
                 if refused_at == Some(need.offset) {
@@ -133,5 +149,15 @@ where
             .offer(decoder, cursor, &buf[..n], false)
             .map_err(PumpError::Codec)?;
         cursor += n as u64;
+    }
+}
+
+fn tell_total(pulse: Option<&dyn Pulse>, info: Option<&zencodec::ImageInfo>, told: &mut bool) {
+    if *told {
+        return;
+    }
+    if let (Some(p), Some(info)) = (pulse, info) {
+        let _ = p.set_total(Total::Exact(info.height as u64));
+        *told = true;
     }
 }

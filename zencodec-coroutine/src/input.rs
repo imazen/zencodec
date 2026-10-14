@@ -3,13 +3,37 @@
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 
+/// One run of held bytes. `data[head..]` is live and starts at absolute
+/// offset `start`; releasing from the front moves `head` instead of
+/// copying, and the buffer is compacted once the dead prefix dominates.
+struct Segment {
+    start: u64,
+    data: Vec<u8>,
+    head: usize,
+}
+
+impl Segment {
+    fn live(&self) -> &[u8] {
+        &self.data[self.head..]
+    }
+    fn len(&self) -> usize {
+        self.data.len() - self.head
+    }
+    fn end(&self) -> u64 {
+        self.start + self.len() as u64
+    }
+}
+
 /// Fed-but-unread bytes. Segments are keyed by their start offset and
 /// never overlap; adjacent feeds merge; reads release what they consume.
 pub(crate) struct InputStore {
-    segments: BTreeMap<u64, Vec<u8>>,
+    segments: BTreeMap<u64, Segment>,
     retained: usize,
     cap: usize,
     total: Option<u64>,
+    /// Buffer of the last fully consumed segment, reused by the next
+    /// feed so a strip-per-chunk stream allocates no new buffer.
+    spare: Option<Vec<u8>>,
 }
 
 impl InputStore {
@@ -19,6 +43,7 @@ impl InputStore {
             retained: 0,
             cap: cap.max(1),
             total: None,
+            spare: None,
         }
     }
 
@@ -28,6 +53,14 @@ impl InputStore {
 
     pub(crate) fn retained(&self) -> usize {
         self.retained
+    }
+
+    /// The segment holding `pos`, if any.
+    fn segment_at(&self, pos: u64) -> Option<(&u64, &Segment)> {
+        self.segments
+            .range(..=pos)
+            .next_back()
+            .filter(|(_, seg)| pos < seg.end())
     }
 
     /// Store as much of `bytes` as fits. Returns bytes accepted (bytes
@@ -41,10 +74,13 @@ impl InputStore {
         }
         // Skip any prefix we already hold.
         let mut skip = 0usize;
-        while skip < bytes.len() && self.contains(offset + skip as u64) {
-            skip += 1;
+        while skip < bytes.len() {
+            match self.segment_at(offset + skip as u64) {
+                Some((_, seg)) => skip = (seg.end() - offset) as usize,
+                None => break,
+            }
         }
-        if skip == bytes.len() {
+        if skip >= bytes.len() {
             return bytes.len();
         }
         let offset = offset + skip as u64;
@@ -65,24 +101,27 @@ impl InputStore {
         let bytes = &bytes[..take];
         // Merge onto a segment that ends exactly here.
         let merged = match self.segments.range_mut(..offset).next_back() {
-            Some((start, seg)) if *start + seg.len() as u64 == offset => {
-                seg.extend_from_slice(bytes);
+            Some((_, seg)) if seg.end() == offset => {
+                seg.data.extend_from_slice(bytes);
                 true
             }
             _ => false,
         };
         if !merged {
-            self.segments.insert(offset, bytes.to_vec());
+            let mut data = self.spare.take().unwrap_or_default();
+            data.clear();
+            data.extend_from_slice(bytes);
+            self.segments.insert(
+                offset,
+                Segment {
+                    start: offset,
+                    data,
+                    head: 0,
+                },
+            );
         }
         self.retained += take;
         skip + take
-    }
-
-    fn contains(&self, pos: u64) -> bool {
-        self.segments
-            .range(..=pos)
-            .next_back()
-            .is_some_and(|(start, seg)| pos < *start + seg.len() as u64)
     }
 
     /// Copy `out.len()` bytes from `offset` if every byte is held.
@@ -90,32 +129,26 @@ impl InputStore {
         let mut filled = 0usize;
         while filled < out.len() {
             let pos = offset + filled as u64;
-            let Some((start, seg)) = self.segments.range(..=pos).next_back() else {
+            let Some((_, seg)) = self.segment_at(pos) else {
                 return false;
             };
-            let seg_end = *start + seg.len() as u64;
-            if pos >= seg_end {
-                return false;
-            }
-            let from = (pos - start) as usize;
-            let n = (seg.len() - from).min(out.len() - filled);
-            out[filled..filled + n].copy_from_slice(&seg[from..from + n]);
+            let from = (pos - seg.start) as usize;
+            let live = seg.live();
+            let n = (live.len() - from).min(out.len() - filled);
+            out[filled..filled + n].copy_from_slice(&live[from..from + n]);
             filled += n;
         }
         true
     }
 
-    /// The spans of `offset .. offset + len` that are not held, in order.
-    pub(crate) fn missing(&self, offset: u64, len: usize) -> Vec<(u64, u64)> {
+    /// Append the spans of `offset .. offset + len` that are not held.
+    pub(crate) fn missing_into(&self, offset: u64, len: usize, gaps: &mut Vec<(u64, u64)>) {
         let end = offset + len as u64;
-        let mut gaps = Vec::new();
         let mut pos = offset;
         while pos < end {
-            match self.segments.range(..=pos).next_back() {
-                Some((start, seg)) if pos < *start + seg.len() as u64 => {
-                    pos = *start + seg.len() as u64;
-                }
-                _ => {
+            match self.segment_at(pos) {
+                Some((_, seg)) => pos = seg.end(),
+                None => {
                     let next_start = self
                         .segments
                         .range(pos..)
@@ -128,7 +161,6 @@ impl InputStore {
                 }
             }
         }
-        gaps
     }
 
     /// Whether a read of `len` at `offset` can never be satisfied.
@@ -138,30 +170,68 @@ impl InputStore {
     }
 
     /// Drop every held byte in `offset .. offset + len`.
+    ///
+    /// Releasing a segment's front moves its head (no copy, amortised
+    /// compaction); releasing its back truncates; a hole in the middle
+    /// splits it, which is the only case that copies.
     pub(crate) fn release(&mut self, offset: u64, len: usize) {
         if len == 0 {
             return;
         }
         let end = offset + len as u64;
-        let keys: Vec<u64> = self
+        // One overlapping segment at a time, so a release allocates
+        // nothing: find the last segment that starts before `end` and
+        // overlaps, handle it, repeat.
+        let mut scan_end = end;
+        while let Some(key) = self
             .segments
-            .range(..end)
-            .filter(|(start, seg)| *start + seg.len() as u64 > offset)
+            .range(..scan_end)
+            .next_back()
+            .filter(|(_, seg)| seg.end() > offset)
             .map(|(k, _)| *k)
-            .collect();
-        for start in keys {
-            let seg = self.segments.remove(&start).expect("key listed");
-            let seg_end = start + seg.len() as u64;
-            self.retained -= seg.len();
-            if start < offset {
-                let head = seg[..(offset - start) as usize].to_vec();
-                self.retained += head.len();
-                self.segments.insert(start, head);
+        {
+            scan_end = key;
+            let mut seg = self.segments.remove(&key).expect("key listed");
+            let seg_start = seg.start;
+            let seg_end = seg.end();
+            let cut_lo = offset.max(seg_start);
+            let cut_hi = end.min(seg_end);
+            self.retained -= (cut_hi - cut_lo) as usize;
+            if cut_lo == seg_start && cut_hi == seg_end {
+                // Whole segment gone: keep its buffer for the next feed.
+                if self
+                    .spare
+                    .as_ref()
+                    .is_none_or(|s| s.capacity() < seg.data.capacity())
+                {
+                    self.spare = Some(seg.data);
+                }
+                continue;
             }
-            if seg_end > end {
-                let tail = seg[(end - start) as usize..].to_vec();
-                self.retained += tail.len();
-                self.segments.insert(end, tail);
+            if cut_lo == seg_start {
+                // Front release: advance the head, compact occasionally.
+                seg.head += (cut_hi - seg_start) as usize;
+                seg.start = cut_hi;
+                if seg.head > seg.data.len() / 2 && seg.head >= 4096 {
+                    seg.data.drain(..seg.head);
+                    seg.head = 0;
+                }
+                self.segments.insert(seg.start, seg);
+            } else if cut_hi == seg_end {
+                // Back release: truncate.
+                seg.data.truncate(seg.head + (cut_lo - seg_start) as usize);
+                self.segments.insert(seg.start, seg);
+            } else {
+                // Hole: keep both sides.
+                let tail_from = seg.head + (cut_hi - seg_start) as usize;
+                let tail = Segment {
+                    start: cut_hi,
+                    data: seg.data[tail_from..].to_vec(),
+                    head: 0,
+                };
+                seg.data.truncate(seg.head + (cut_lo - seg_start) as usize);
+                self.segments.insert(seg.start, seg);
+                self.segments.insert(tail.start, tail);
             }
         }
     }
@@ -181,6 +251,12 @@ impl InputStore {
 mod tests {
     use super::*;
 
+    fn missing(s: &InputStore, offset: u64, len: usize) -> Vec<(u64, u64)> {
+        let mut v = Vec::new();
+        s.missing_into(offset, len, &mut v);
+        v
+    }
+
     #[test]
     fn feed_merge_read_release() {
         let mut s = InputStore::new(1024);
@@ -193,19 +269,23 @@ mod tests {
         assert!(s.try_read(0, &mut out));
         assert_eq!(out, [1, 2, 3, 4, 5]);
         assert!(!s.try_read(4, &mut [0u8; 3]), "gap at 5..10");
-        assert_eq!(s.missing(3, 9), [(5, 5)]);
-        assert!(s.missing(0, 2).is_empty());
-        assert_eq!(s.missing(5, 2), [(5, 2)]);
-        assert_eq!(s.missing(9, 5), [(9, 1), (12, 2)]);
+        assert_eq!(missing(&s, 3, 9), [(5, 5)]);
+        assert!(missing(&s, 0, 2).is_empty());
+        assert_eq!(missing(&s, 5, 2), [(5, 2)]);
+        assert_eq!(missing(&s, 9, 5), [(9, 1), (12, 2)]);
         assert!(s.beyond_end(11, 2));
         s.release(1, 2);
         assert_eq!(s.retained(), 5);
         assert!(s.try_read(0, &mut [0u8; 1]));
         assert!(!s.try_read(1, &mut [0u8; 1]));
-        assert!(s.try_read(3, &mut [0u8; 2]));
+        let mut two = [0u8; 2];
+        assert!(s.try_read(3, &mut two));
+        assert_eq!(two, [4, 5]);
         s.release_before(11);
         assert_eq!(s.retained(), 1);
-        assert!(s.try_read(11, &mut [0u8; 1]));
+        let mut one = [0u8; 1];
+        assert!(s.try_read(11, &mut one));
+        assert_eq!(one, [9]);
     }
 
     #[test]
@@ -216,5 +296,31 @@ mod tests {
         assert_eq!(s.feed(4, &[5, 6], false), 0, "full");
         s.release(0, 2);
         assert_eq!(s.feed(4, &[5, 6], false), 2);
+        let mut out = [0u8; 4];
+        assert!(s.try_read(2, &mut out));
+        assert_eq!(out, [3, 4, 5, 6]);
+    }
+
+    #[test]
+    fn front_release_is_a_head_move_and_compacts() {
+        let mut s = InputStore::new(1 << 20);
+        let data: Vec<u8> = (0..20_000u32).map(|i| i as u8).collect();
+        assert_eq!(s.feed(0, &data, true), 20_000);
+        let cap_before = s.segments[&0].data.capacity();
+        let mut buf = [0u8; 100];
+        for i in 0..100u64 {
+            assert!(s.try_read(i * 100, &mut buf));
+            assert_eq!(buf[0], (i * 100) as u8);
+            s.release(i * 100, 100);
+        }
+        assert_eq!(s.retained(), 10_000);
+        let seg = s.segments.values().next().unwrap();
+        assert_eq!(seg.start, 10_000);
+        assert!(
+            seg.data.capacity() <= cap_before,
+            "no reallocation on front release"
+        );
+        assert!(s.try_read(10_000, &mut buf));
+        assert_eq!(buf[0], 10_000u32 as u8);
     }
 }

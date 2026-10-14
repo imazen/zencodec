@@ -22,13 +22,26 @@ tokio = ["std", "dep:tokio"]
 zencodec = { path = "..", version = ">=0.1.27, <0.3.0" }
 zenpixels = { version = ">=0.2.14, <0.4.0" }
 enough = "0.4.4"
-tokio = { version = "1.53.3", default-features = false, features = ["sync", "io-util"], optional = true }
+how-far = { version = "0.1.0", default-features = false }
+tokio = { version = "1.53.3", default-features = false, features = ["sync", "io-util", "macros"], optional = true }
 
 [dev-dependencies]
 tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "io-util", "sync", "time"] }
 zencodec-coroutine = { path = "../zencodec-coroutine" }
 enough = "0.4.4"
+almost-enough = "0.4.4"
+
+zenbench = "0.1.11"
 
 [[test]]
 name = "drivers"
+required-features = ["std"]
+
+[[bench]]
+name = "drivers"
+harness = false
+required-features = ["std"]
+
+[[example]]
+name = "alloc_audit"
 required-features = ["std"]

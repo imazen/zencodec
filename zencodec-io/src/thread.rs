@@ -12,7 +12,11 @@
 //! `spawn_blocking` per chunk: one thread per decode (or one from a pool the
 //! caller supplies), two bounded channels, and no `async` anywhere in codec
 //! code. Dropping the async future closes the request channel and the
-//! thread exits at its next request; a [`StopToken`] cancels it mid-strip.
+//! thread exits at its next request. A [`SharedPulse`] cancels it at the
+//! next step and inside every blocking wait (for a fetch reply, or for a
+//! slow strip consumer), and receives the row total and per-strip progress.
+//! A caller with only a `StopToken` passes
+//! `how_far::StopOnly::new(token).share()`.
 
 use alloc::boxed::Box;
 use alloc::string::String;
@@ -20,16 +24,16 @@ use alloc::vec::Vec;
 use core::fmt;
 use core::future::Future;
 
+use enough::{Stop, StopReason};
+use how_far::{Pulse, SharedPulse, Total};
 use tokio::sync::{mpsc, oneshot};
 use zencodec::decode::{
     BatchMeta, BoxedError, ByteRange, DecodeRowSink, OutputInfo, SinkError, Step,
 };
-
-use crate::drivable::Drivable;
-use zencodec::StopToken;
 use zencodec::source::{DynReadAt, SourceError};
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSliceMut};
 
+use crate::drivable::Drivable;
 use crate::feeder::Feeder;
 
 /// Bytes the decoder is waiting for, sent from the thread to the async side.
@@ -79,6 +83,8 @@ pub enum ThreadError {
     Stalled,
     /// The fetcher answered a request with the wrong kind of reply.
     ProtocolMismatch,
+    /// The pulse tripped while the thread was waiting on a channel.
+    Cancelled(StopReason),
 }
 
 impl fmt::Display for ThreadError {
@@ -89,6 +95,7 @@ impl fmt::Display for ThreadError {
             Self::Disconnected => write!(f, "decode thread and driver disconnected"),
             Self::Stalled => write!(f, "decoder refused bytes it keeps requesting"),
             Self::ProtocolMismatch => write!(f, "fetcher replied with the wrong kind of data"),
+            Self::Cancelled(r) => write!(f, "decode thread cancelled while waiting: {r:?}"),
         }
     }
 }
@@ -155,19 +162,96 @@ impl ThreadOptions {
     }
 }
 
+/// Outcome of one non-blocking attempt in [`wait_with_stop`].
+enum Attempt<T> {
+    Ready(T),
+    Pending,
+    Closed,
+}
+
+/// Block until `attempt` is ready, re-checking `stop` between attempts.
+///
+/// Without a stop the caller uses the channel's own blocking call; with
+/// one, a short spin then a sleep that doubles from 50 µs to 2 ms bounds
+/// both the cancellation latency and the idle wakeups.
+fn wait_with_stop<T>(
+    stop: Option<&dyn Stop>,
+    mut attempt: impl FnMut() -> Attempt<T>,
+) -> Result<T, ThreadError> {
+    let mut sleep = core::time::Duration::from_micros(50);
+    let mut spins = 0u32;
+    loop {
+        match attempt() {
+            Attempt::Ready(v) => return Ok(v),
+            Attempt::Closed => return Err(ThreadError::Disconnected),
+            Attempt::Pending => {}
+        }
+        if let Some(s) = stop
+            && let Err(reason) = s.check()
+        {
+            return Err(ThreadError::Cancelled(reason));
+        }
+        if spins < 64 {
+            spins += 1;
+            core::hint::spin_loop();
+        } else {
+            std::thread::sleep(sleep);
+            sleep = (sleep * 2).min(core::time::Duration::from_millis(2));
+        }
+    }
+}
+
 struct Links {
     requests: mpsc::Sender<SourceRequest>,
     replies: mpsc::Receiver<SourceReply>,
+    pulse: Option<SharedPulse>,
 }
 
 impl Links {
+    fn stop(&self) -> Option<&dyn Stop> {
+        self.pulse.as_ref().map(|p| p as &dyn Stop)
+    }
+
     fn ask(&mut self, req: SourceRequest) -> Result<SourceReply, ThreadError> {
-        self.requests
-            .blocking_send(req)
-            .map_err(|_| ThreadError::Disconnected)?;
-        self.replies
-            .blocking_recv()
-            .ok_or(ThreadError::Disconnected)
+        if let Some(s) = self.stop()
+            && let Err(reason) = s.check()
+        {
+            return Err(ThreadError::Cancelled(reason));
+        }
+        match &self.pulse {
+            None => {
+                self.requests
+                    .blocking_send(req)
+                    .map_err(|_| ThreadError::Disconnected)?;
+                self.replies
+                    .blocking_recv()
+                    .ok_or(ThreadError::Disconnected)
+            }
+            Some(pulse) => {
+                let stop: &dyn Stop = pulse;
+                let mut slot = Some(req);
+                let tx = &self.requests;
+                wait_with_stop(Some(stop), || {
+                    let Some(r) = slot.take() else {
+                        return Attempt::Ready(());
+                    };
+                    match tx.try_send(r) {
+                        Ok(()) => Attempt::Ready(()),
+                        Err(mpsc::error::TrySendError::Full(r)) => {
+                            slot = Some(r);
+                            Attempt::Pending
+                        }
+                        Err(mpsc::error::TrySendError::Closed(_)) => Attempt::Closed,
+                    }
+                })?;
+                let rx = &mut self.replies;
+                wait_with_stop(Some(stop), || match rx.try_recv() {
+                    Ok(reply) => Attempt::Ready(reply),
+                    Err(mpsc::error::TryRecvError::Empty) => Attempt::Pending,
+                    Err(mpsc::error::TryRecvError::Disconnected) => Attempt::Closed,
+                })
+            }
+        }
     }
 }
 
@@ -184,7 +268,15 @@ where
 {
     let mut fetch_error = None;
     while let Some(req) = requests.recv().await {
-        match fetch(req).await {
+        // Race the fetch against the thread going away (cancelled by its
+        // pulse, failed, or finished): a fetch that never completes must
+        // not keep the driver alive.
+        let fetched = tokio::select! {
+            biased;
+            () = replies.closed() => break,
+            r = fetch(req) => r,
+        };
+        match fetched {
             Ok(reply) => {
                 if replies.send(reply).await.is_err() {
                     break;
@@ -213,11 +305,13 @@ where
 ///
 /// `fetch` receives each [`SourceRequest`] and returns the bytes; it is
 /// the only async code involved. The sink is moved onto the thread and
-/// returned with the result.
+/// returned with the result. `pulse` cancels the thread at its next step
+/// or blocking wait, is told the row total once the header is known, and
+/// is advanced by every strip.
 pub async fn decode_on_thread<D, S, F, Fut>(
     mut decoder: D,
     mut sink: S,
-    stop: Option<StopToken>,
+    pulse: Option<SharedPulse>,
     opts: ThreadOptions,
     fetch: F,
 ) -> Result<(OutputInfo, S), ThreadError>
@@ -233,9 +327,10 @@ where
     let mut links = Links {
         requests: req_tx,
         replies: rep_rx,
+        pulse,
     };
     opts.spawn(Box::new(move || {
-        let result = run_resumable(&mut decoder, &mut sink, stop.as_ref(), &mut links);
+        let result = run_resumable(&mut decoder, &mut sink, &mut links);
         let _ = done_tx.send(result.map(|info| (info, sink)));
     }))?;
     serve(req_rx, rep_tx, done_rx, fetch).await
@@ -244,16 +339,22 @@ where
 fn run_resumable<D: Drivable + ?Sized>(
     decoder: &mut D,
     sink: &mut dyn DecodeRowSink,
-    stop: Option<&StopToken>,
     links: &mut Links,
 ) -> Result<OutputInfo, ThreadError> {
-    let stop = stop.map(|s| s as &dyn enough::Stop);
+    let pulse = links.pulse.clone();
+    let pulse: Option<&dyn Pulse> = pulse.as_ref().map(|p| p as &dyn Pulse);
+    let stop = pulse.map(|p| p as &dyn Stop);
     let mut feeder = Feeder::new();
+    let mut need: Vec<ByteRange> = Vec::new();
+    let mut told_total = false;
     let mut last_refused: Option<Vec<ByteRange>> = None;
     let codec = |e: D::Error| ThreadError::Codec(Box::new(e));
     loop {
-        let need: Vec<ByteRange> = match decoder.step(sink, stop).map_err(codec)? {
-            Step::Need(ranges) => ranges.to_vec(),
+        match decoder.step(sink, stop).map_err(codec)? {
+            Step::Need(ranges) => {
+                need.clear();
+                need.extend_from_slice(ranges);
+            }
             Step::NeedLen => match links.ask(SourceRequest::Len)? {
                 SourceReply::Len(len) => {
                     decoder.feed(len, &[], true).map_err(codec)?;
@@ -261,21 +362,31 @@ fn run_resumable<D: Drivable + ?Sized>(
                 }
                 _ => return Err(ThreadError::ProtocolMismatch),
             },
+            Step::Rows { rows, .. } => {
+                if let Some(p) = pulse {
+                    p.advance(rows as u64);
+                }
+                continue;
+            }
             Step::Done(info) => return Ok(info),
             _ => continue,
-        };
+        }
+        if !told_total && let (Some(p), Some(info)) = (pulse, decoder.info()) {
+            let _ = p.set_total(Total::Exact(info.height as u64));
+            told_total = true;
+        }
         if feeder.has_carry() {
             if !feeder.flush(decoder).map_err(codec)? {
                 if last_refused.as_deref() == Some(&need[..]) {
                     return Err(ThreadError::Stalled);
                 }
-                last_refused = Some(need);
+                last_refused = Some(need.clone());
                 continue;
             }
             last_refused = None;
             continue;
         }
-        match links.ask(SourceRequest::Ranges(need))? {
+        match links.ask(SourceRequest::Ranges(need.clone()))? {
             SourceReply::Chunks(chunks) => {
                 for chunk in chunks {
                     feeder
@@ -292,9 +403,16 @@ fn run_resumable<D: Drivable + ?Sized>(
 /// [`DynReadAt`] whose reads block on the async fetcher, so a codec written
 /// against [`push_decoder_from_source`](zencodec::decode::DecodeJob::push_decoder_from_source)
 /// streams from an async transport with no buffering beyond each read.
+///
+/// `pulse` cancels at the next read (every read checks it, and the waits
+/// for a fetch reply re-check it); the codec's own job-level stop still
+/// applies inside `run`. Progress is whatever the sink observes: wrap it
+/// in [`ChannelRowSink`] or a counting sink; the bridge cannot see rows
+/// written by a pull-native core.
 pub async fn pull_decode_on_thread<R, S, F, Fut>(
     run: R,
     mut sink: S,
+    pulse: Option<SharedPulse>,
     opts: ThreadOptions,
     fetch: F,
 ) -> Result<(OutputInfo, S), ThreadError>
@@ -313,6 +431,7 @@ where
         links: Links {
             requests: req_tx,
             replies: rep_rx,
+            pulse,
         },
         len: None,
     };
@@ -366,7 +485,11 @@ impl DynReadAt for ChannelReadAt {
         if let Some(len) = self.len {
             return Ok(len);
         }
-        match self.links.ask(SourceRequest::Len).map_err(Box::new)? {
+        match self
+            .links
+            .ask(SourceRequest::Len)
+            .map_err(|e| Box::new(e) as BoxedError)?
+        {
             SourceReply::Len(len) => {
                 self.len = Some(len);
                 Ok(len)
@@ -387,7 +510,7 @@ impl DynReadAt for ChannelReadAt {
         match self
             .links
             .ask(SourceRequest::Ranges(ranges))
-            .map_err(Box::new)?
+            .map_err(|e| Box::new(e) as BoxedError)?
         {
             SourceReply::Chunks(chunks) => {
                 for c in &chunks {
@@ -542,6 +665,16 @@ pub struct ChannelRowSink {
     tx: mpsc::Sender<StripEvent>,
     current: Option<(BatchMeta, PixelBuffer)>,
     provisional: bool,
+    pulse: Option<SharedPulse>,
+}
+
+impl fmt::Debug for ChannelRowSink {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ChannelRowSink")
+            .field("provisional", &self.provisional)
+            .field("pulse", &self.pulse.is_some())
+            .finish_non_exhaustive()
+    }
 }
 
 impl ChannelRowSink {
@@ -552,14 +685,47 @@ impl ChannelRowSink {
             tx,
             current: None,
             provisional,
+            pulse: None,
+        }
+    }
+
+    /// Re-check `pulse` while blocked on a full channel, so a cancelled
+    /// decode is not held hostage by a consumer that stopped consuming.
+    pub fn with_pulse(mut self, pulse: SharedPulse) -> Self {
+        self.pulse = Some(pulse);
+        self
+    }
+
+    fn send(&self, event: StripEvent) -> Result<(), SinkError> {
+        match &self.pulse {
+            None => self
+                .tx
+                .blocking_send(event)
+                .map_err(|_| SinkError::from("strip consumer went away")),
+            Some(pulse) => {
+                let stop: &dyn Stop = pulse;
+                let mut slot = Some(event);
+                wait_with_stop(Some(stop), || {
+                    let Some(ev) = slot.take() else {
+                        return Attempt::Ready(());
+                    };
+                    match self.tx.try_send(ev) {
+                        Ok(()) => Attempt::Ready(()),
+                        Err(mpsc::error::TrySendError::Full(ev)) => {
+                            slot = Some(ev);
+                            Attempt::Pending
+                        }
+                        Err(mpsc::error::TrySendError::Closed(_)) => Attempt::Closed,
+                    }
+                })
+                .map_err(|e| SinkError::from(alloc::format!("{e}")))
+            }
         }
     }
 
     fn ship(&mut self) -> Result<(), SinkError> {
         if let Some((meta, pixels)) = self.current.take() {
-            self.tx
-                .blocking_send(StripEvent::Strip { meta, pixels })
-                .map_err(|_| SinkError::from("strip consumer went away"))?;
+            self.send(StripEvent::Strip { meta, pixels })?;
         }
         Ok(())
     }
@@ -586,13 +752,11 @@ impl DecodeRowSink for ChannelRowSink {
         height: u32,
         descriptor: PixelDescriptor,
     ) -> Result<(), SinkError> {
-        self.tx
-            .blocking_send(StripEvent::Begin {
-                width,
-                height,
-                descriptor,
-            })
-            .map_err(|_| SinkError::from("strip consumer went away"))
+        self.send(StripEvent::Begin {
+            width,
+            height,
+            descriptor,
+        })
     }
 
     fn provide_next_buffer(
@@ -621,8 +785,6 @@ impl DecodeRowSink for ChannelRowSink {
 
     fn finish(&mut self) -> Result<(), SinkError> {
         self.ship()?;
-        self.tx
-            .blocking_send(StripEvent::Finish)
-            .map_err(|_| SinkError::from("strip consumer went away"))
+        self.send(StripEvent::Finish)
     }
 }

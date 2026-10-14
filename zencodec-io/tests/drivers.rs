@@ -688,6 +688,7 @@ mod tokio_bridge {
         let (info, sink) = pull_decode_on_thread(
             run,
             CollectSink::new(),
+            None,
             ThreadOptions::default(),
             concurrent_fetcher(file, requests.clone(), max_in_flight.clone()),
         )
@@ -781,5 +782,248 @@ mod tokio_bridge {
             "{err:?}"
         );
         assert!(used_pool.load(Ordering::SeqCst));
+    }
+}
+
+/// A pulse that records cancellation, the announced total and advances.
+mod pulse_support {
+    use std::sync::Arc;
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
+    use enough::{Stop, StopReason};
+    use how_far::{Child, Execution, PhaseSpec, PlanError, Pulse, Report, SharedPulse, Total};
+
+    #[derive(Default)]
+    struct Inner {
+        cancelled: AtomicBool,
+        advanced: AtomicU64,
+        total: Mutex<Option<Total>>,
+    }
+
+    #[derive(Clone, Default)]
+    pub struct RecordingPulse(Arc<Inner>);
+
+    impl RecordingPulse {
+        #[allow(dead_code)] // used by the tokio cancellation tests only
+        pub fn cancel(&self) {
+            self.0.cancelled.store(true, Ordering::SeqCst);
+        }
+        pub fn advanced(&self) -> u64 {
+            self.0.advanced.load(Ordering::SeqCst)
+        }
+        pub fn total(&self) -> Option<Total> {
+            *self.0.total.lock().unwrap()
+        }
+        pub fn shared(&self) -> SharedPulse {
+            SharedPulse::new(self.clone())
+        }
+    }
+
+    impl Stop for RecordingPulse {
+        fn check(&self) -> Result<(), StopReason> {
+            if self.0.cancelled.load(Ordering::SeqCst) {
+                Err(StopReason::Cancelled)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    impl Report for RecordingPulse {
+        fn advance(&self, completed: u64) {
+            self.0.advanced.fetch_add(completed, Ordering::SeqCst);
+        }
+    }
+
+    impl Pulse for RecordingPulse {
+        fn split(
+            &self,
+            _execution: Execution,
+            _parts: &[PhaseSpec<'_>],
+        ) -> Result<Vec<Child<'_>>, PlanError> {
+            Err(PlanError::Unsupported)
+        }
+        fn set_total(&self, total: Total) -> Result<(), PlanError> {
+            *self.0.total.lock().unwrap() = Some(total);
+            Ok(())
+        }
+        fn share(&self) -> Result<SharedPulse, PlanError> {
+            Ok(self.shared())
+        }
+    }
+}
+use pulse_support::RecordingPulse;
+
+#[test]
+fn drivers_report_total_and_progress() {
+    let file = sequential_file(6);
+    let pulse = RecordingPulse::default();
+    let mut dec = sequential_decoder();
+    let mut sink = CollectSink::new();
+    zencodec_io::drive_from_slice(&mut dec, &file, &mut sink, Some(&pulse), 5).unwrap();
+    assert_eq!(pulse.total(), Some(how_far::Total::Exact(6)));
+    assert_eq!(pulse.advanced(), 6);
+
+    let pulse = RecordingPulse::default();
+    let mut dec = sequential_decoder();
+    let mut sink = CollectSink::new();
+    pump_read_to_sink(Cursor::new(&file), &mut dec, &mut sink, Some(&pulse), 7).unwrap();
+    assert_eq!(pulse.total(), Some(how_far::Total::Exact(6)));
+    assert_eq!(pulse.advanced(), 6);
+
+    // A plain Stop still works through the StopOnly adapter.
+    let stopper = almost_enough::Stopper::new();
+    let adapter = how_far::StopOnly::borrowed(&stopper);
+    let mut dec = sequential_decoder();
+    let mut sink = CollectSink::new();
+    zencodec_io::drive_from_slice(&mut dec, &file, &mut sink, Some(&adapter), 64).unwrap();
+    assert_eq!(sink.rows_written(), 6);
+}
+
+#[cfg(feature = "tokio")]
+mod tokio_cancellation {
+    use super::*;
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
+    use zencodec::decode::BoxedError;
+    use zencodec::source::DynReadAt;
+    use zencodec_io::thread::{
+        ChannelRowSink, SourceReply, ThreadError, ThreadOptions, decode_on_thread,
+        fetch_from_bytes, pull_decode_on_thread,
+    };
+
+    /// A fetch that never answers while `hold` is set.
+    fn hung_fetch(
+        hold: Arc<tokio::sync::Notify>,
+    ) -> impl FnMut(
+        zencodec_io::thread::SourceRequest,
+    ) -> std::pin::Pin<
+        Box<dyn Future<Output = Result<SourceReply, BoxedError>> + Send>,
+    > {
+        move |_req| {
+            let hold = hold.clone();
+            Box::pin(async move {
+                hold.notified().await;
+                Err::<SourceReply, BoxedError>("released".into())
+            })
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cancel_while_waiting_for_a_fetch_without_dropping_the_future() {
+        let pulse = RecordingPulse::default();
+        let hold = Arc::new(tokio::sync::Notify::new());
+        let p = pulse.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(30)).await;
+            p.cancel();
+        });
+        let start = Instant::now();
+        let err = decode_on_thread(
+            minitile_decoder(),
+            CollectSink::new(),
+            Some(pulse.shared()),
+            ThreadOptions::default(),
+            hung_fetch(hold.clone()),
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            matches!(err, ThreadError::Cancelled(enough::StopReason::Cancelled)),
+            "{err:?}"
+        );
+        assert!(
+            start.elapsed() < Duration::from_secs(2),
+            "took {:?}",
+            start.elapsed()
+        );
+        hold.notify_waiters();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cancel_a_pull_native_decode_waiting_for_a_fetch() {
+        let pulse = RecordingPulse::default();
+        let hold = Arc::new(tokio::sync::Notify::new());
+        let p = pulse.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(30)).await;
+            p.cancel();
+        });
+        let run = |src: &mut dyn DynReadAt,
+                   _sink: &mut dyn DecodeRowSink|
+         -> Result<OutputInfo, BoxedError> {
+            let mut header = [0u8; 16];
+            src.read_exact_at(0, &mut header)?;
+            Ok(OutputInfo::full_decode(W, H, RGBA))
+        };
+        let err = pull_decode_on_thread(
+            run,
+            CollectSink::new(),
+            Some(pulse.shared()),
+            ThreadOptions::default(),
+            hung_fetch(hold.clone()),
+        )
+        .await
+        .unwrap_err();
+        // The read fails with the cancellation, which the codec returns as
+        // its error; the bridge recognises its own error type.
+        assert!(
+            matches!(err, ThreadError::Cancelled(enough::StopReason::Cancelled)),
+            "{err:?}"
+        );
+        hold.notify_waiters();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cancel_while_blocked_on_a_stuck_strip_consumer() {
+        let file: Arc<[u8]> = sequential_file(8).into();
+        let pulse = RecordingPulse::default();
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        let sink = ChannelRowSink::new(tx, false).with_pulse(pulse.shared());
+        let p = pulse.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(30)).await;
+            p.cancel();
+        });
+        let start = Instant::now();
+        // The consumer never reads: the thread blocks in the sink.
+        let err = decode_on_thread(
+            sequential_decoder(),
+            sink,
+            Some(pulse.shared()),
+            ThreadOptions::default(),
+            fetch_from_bytes(file, 8),
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            matches!(err, ThreadError::Codec(_)) || matches!(err, ThreadError::Cancelled(_)),
+            "{err:?}"
+        );
+        assert!(
+            start.elapsed() < Duration::from_secs(2),
+            "took {:?}",
+            start.elapsed()
+        );
+        drop(rx);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn bridge_reports_total_and_progress() {
+        let file: Arc<[u8]> = sequential_file(8).into();
+        let pulse = RecordingPulse::default();
+        let (info, _sink) = decode_on_thread(
+            sequential_decoder(),
+            CollectSink::new(),
+            Some(pulse.shared()),
+            ThreadOptions::default(),
+            fetch_from_bytes(file, 8),
+        )
+        .await
+        .unwrap();
+        assert_eq!(info.height, 8);
+        assert_eq!(pulse.total(), Some(how_far::Total::Exact(8)));
+        assert_eq!(pulse.advanced(), 8);
     }
 }

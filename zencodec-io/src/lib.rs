@@ -18,6 +18,11 @@
 //! | `std::io::Read` stream | [`pump_read_to_sink`] | [`BufferedReadAt`] |
 //! | async runtime | [`thread::decode_on_thread`] | [`thread::pull_decode_on_thread`] |
 //!
+//! Cancellation and progress share one handle: every driver takes an
+//! `Option<&dyn how_far::Pulse>` (`Pulse: Stop`), checks it each step,
+//! tells it the row total once the header is known and advances it per
+//! strip. A caller with only a `Stop` passes `how_far::StopOnly::borrowed`.
+//!
 //! The crate is `no_std + alloc` by default. The `std` feature adds the
 //! stream pump, file source and buffered stream adapter; `tokio` adds the
 //! dedicated-thread bridge (it uses `tokio::sync` channels only and never
@@ -47,7 +52,7 @@ pub mod thread;
 
 pub use drivable::{Drivable, Dyn, DynCodecError};
 pub use drive::{
-    DriveError, DriveOptions, DriveStats, coalesce_byte_ranges, drive_from_read_at,
+    DriveError, DriveOptions, DriveStats, coalesce_byte_ranges, coalesce_into, drive_from_read_at,
     drive_from_slice,
 };
 pub use feeder::Feeder;

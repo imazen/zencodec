@@ -163,7 +163,12 @@ removes that whole class).
 - Workspace crates (unpublished): `zencodec-io` (slice/`ReadAt`/`Read` drivers, the
   buffered stream source, `CollectSink`, and the `tokio` dedicated-thread bridge with
   `ChannelRowSink`) and `zencodec-coroutine` (`async`-authored incremental decoders,
-  `no_std`).
+  `no_std`). Drivers take one `how_far::Pulse` for cancellation and progress (row
+  total on header, advance per strip); the bridge re-checks it inside every blocking
+  wait and races each fetch against the thread exiting; `pull_decode_on_thread` takes
+  the pulse too. Steady state allocates nothing per round in the drive loop and the
+  coroutine's read path; measured allocation and timing overhead is recorded in
+  `zencodec-io/benchmarks/`.
 
 ### Deprecated
 

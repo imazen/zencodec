@@ -269,6 +269,38 @@ pull shape is one job method with the `push_decoder` signature.
   decoder did not accept and reports a decoder that refuses what it keeps
   asking for as `Stalled` instead of spinning.
 
+### Cancellation and progress: one handle
+
+Every driver takes `Option<&dyn how_far::Pulse>`. `Pulse: Stop + Report`,
+so one value cancels and reports. A caller with only a `Stop` passes
+`how_far::StopOnly::borrowed(&stop)`; a `StopToken` becomes a
+`SharedPulse` with `StopOnly::new(token).share()`.
+
+- The driver passes the pulse to every `step` as its stop, so the codec
+  checks it at least once per strip.
+- The driver calls `set_total(Total::Exact(height))` once the header is
+  known (on `Step::Metadata(HeaderReady)`, or the first step after
+  `info()` is available) and `advance(rows)` on every `Step::Rows`. A
+  pulse that cannot take a total records its own issue; drivers ignore the
+  result.
+- Codec-side reporting inside a single step goes through the job-level
+  pulse (`DecodeJob::with_pulse`), not through `step`. The step contract
+  deliberately exposes only `Stop` to codecs.
+- The thread bridge takes `Option<SharedPulse>`. Besides the per-step
+  check, every blocking wait on the decode thread re-checks it: the wait
+  for a fetch reply, and `ChannelRowSink::with_pulse`'s wait on a full
+  strip channel. The wait spins briefly, then sleeps from 50 µs doubling to
+  2 ms, so cancellation latency while blocked is at most a few
+  milliseconds and an idle decode wakes at most 500 times a second.
+  Without a pulse the waits are the channels' own blocking calls (no
+  wakeups) and only dropping the future ends them.
+- The async side races each fetch against the thread going away, so a
+  fetch that never completes cannot keep a cancelled decode alive.
+- `pull_decode_on_thread` cancels at the next read: every read through its
+  `DynReadAt` checks the pulse, and the reply wait re-checks it. Row
+  progress for a pull-native core is whatever its sink observes; the
+  bridge cannot see rows written by code it does not drive.
+
 ### The async bridge, without async in codecs
 
 `thread::decode_on_thread(decoder, sink, stop, opts, fetch)` runs the
@@ -320,9 +352,32 @@ surface. No runtime, no executor, no threads; `no_std + alloc`,
 
 Cost: each suspending `.await` is one poll round trip through the driver.
 Rows are copied once, from the codec's strip into the sink. Input is
-retained only until read, under a byte cap; bytes the coroutine has not
-asked for are discarded; sequential reads release everything behind the
-cursor. The decoder is terminal after an error, reports `UnexpectedEof`
-once the announced length shows a read can never be served, and names
-only the missing gaps of a partially satisfied read so a driver never
-fetches the same bytes twice.
+copied once into the store and retained only until read, under a byte
+cap; sequential reads release everything behind the cursor without
+copying (segments release from the front by moving a head index, and
+buffers of consumed segments are reused). The decoder is terminal after
+an error, reports `UnexpectedEof` once the announced length shows a read
+can never be served, and names only the missing gaps of a partially
+satisfied read so a driver never fetches the same bytes twice.
+
+## 9. Measured overhead
+
+The framework's cost with a decoder whose own work is a memcpy per strip
+(`zencodec-io/benches/fixture.rs`), so the numbers are the driver and
+coroutine overhead, not codec work. Allocation counts from
+`zencodec-io/examples/alloc_audit.rs` (a counting global allocator, all
+threads); timings from `zencodec-io/benches/drivers.rs` (zenbench, with
+its per-iteration allocation profiler on the bench thread). Records with
+host and commit: `zencodec-io/benchmarks/`.
+
+Rule for hand-written decoders, learned from the first run of this
+bench: release consumed input by advancing a head index and compact the
+buffer only when the dead prefix dominates. Releasing with `Vec::drain`
+shifts the whole remaining buffer on every strip and cost 13x at
+16-row strips and 70x at 1-row strips over direct writes before the fix.
+The testkit reference codec and the bench fixture are the template.
+
+Known inherent costs: the coroutine copies each fed chunk into its store
+and each strip into the sink; `ChannelRowSink` allocates one owned
+`PixelBuffer` per strip because the strip changes threads; the bridge
+allocates per request for the request list and the fetched chunks.

@@ -4,6 +4,7 @@ use alloc::vec::Vec;
 use core::fmt;
 
 use enough::Stop;
+use how_far::{Pulse, Total};
 use zencodec::decode::{ByteRange, DecodeRowSink, OutputInfo, Step};
 
 use crate::drivable::Drivable;
@@ -95,24 +96,46 @@ impl<CE: core::error::Error + 'static, SE: core::error::Error + 'static> core::e
 /// Merge overlapping or near-adjacent ranges (gap `<= max_gap`) into one.
 /// Zero-length (sequential) ranges are passed through unchanged.
 pub fn coalesce_byte_ranges(ranges: &[ByteRange], max_gap: u64) -> Vec<ByteRange> {
-    let mut sized: Vec<ByteRange> = ranges.iter().copied().filter(|r| !r.is_empty()).collect();
-    let mut out: Vec<ByteRange> = ranges.iter().copied().filter(|r| r.is_empty()).collect();
+    let mut out = Vec::new();
+    coalesce_into(ranges, max_gap, &mut out);
+    out
+}
+
+/// [`coalesce_byte_ranges`] writing into `out` (cleared first), so a driver
+/// loop reuses one allocation across rounds.
+pub fn coalesce_into(ranges: &[ByteRange], max_gap: u64, out: &mut Vec<ByteRange>) {
+    out.clear();
+    out.extend(ranges.iter().copied().filter(|r| r.is_empty()));
+    let sequential = out.len();
+    out.extend(ranges.iter().copied().filter(|r| !r.is_empty()));
+    let sized = &mut out[sequential..];
     if sized.is_empty() {
-        return out;
+        return;
     }
     sized.sort_by_key(|r| (r.offset, r.length));
-    let mut cur = sized[0];
-    for r in sized.into_iter().skip(1) {
+    let mut write = 0usize;
+    for i in 1..sized.len() {
+        let r = sized[i];
+        let cur = sized[write];
         if r.offset <= cur.end().saturating_add(max_gap) {
             let end = cur.end().max(r.end());
-            cur.length = end - cur.offset;
+            sized[write].length = end - cur.offset;
         } else {
-            out.push(cur);
-            cur = r;
+            write += 1;
+            sized[write] = r;
         }
     }
-    out.push(cur);
-    out
+    out.truncate(sequential + write + 1);
+}
+
+/// Per-drive scratch so steady state allocates nothing per round.
+#[derive(Default)]
+struct Scratch {
+    need: Vec<ByteRange>,
+    resolved: Vec<ByteRange>,
+    coalesced: Vec<ByteRange>,
+    buffers: Vec<(u64, Vec<u8>)>,
+    requests: Vec<(u64, u64)>,
 }
 
 /// Run `decoder` to completion over `source`, writing rows into `sink`.
@@ -122,25 +145,36 @@ pub fn coalesce_byte_ranges(ranges: &[ByteRange], max_gap: u64) -> Vec<ByteRange
 /// concurrently overlaps their round trips. Sequential requests fetch
 /// `sequential_chunk` bytes from the cursor. The final chunk of the source
 /// is fed with `eof`.
+///
+/// `pulse` is checked for cancellation at every step (a plain `Stop` is
+/// passed as `how_far::StopOnly::borrowed(&stop)`), told the row total once
+/// the header is known, and advanced by every strip written. After the
+/// first round, steady state allocates nothing per round or per strip.
 pub fn drive_from_read_at<D, S>(
     decoder: &mut D,
     source: &mut S,
     sink: &mut dyn DecodeRowSink,
-    stop: Option<&dyn Stop>,
+    pulse: Option<&dyn Pulse>,
     opts: DriveOptions,
 ) -> Result<(OutputInfo, DriveStats), DriveError<D::Error, S::Error>>
 where
     D: Drivable + ?Sized,
     S: ReadAt + ?Sized,
 {
+    let stop = pulse.map(|p| p as &dyn Stop);
     let mut stats = DriveStats::default();
     let mut feeder = Feeder::new();
+    let mut scratch = Scratch::default();
     let mut total: Option<u64> = None;
+    let mut told_total = false;
     let mut last_refused: Option<Vec<ByteRange>> = None;
     loop {
         stats.steps += 1;
-        let need: Vec<ByteRange> = match decoder.step(sink, stop).map_err(DriveError::Codec)? {
-            Step::Need(ranges) => ranges.to_vec(),
+        match decoder.step(sink, stop).map_err(DriveError::Codec)? {
+            Step::Need(ranges) => {
+                scratch.need.clear();
+                scratch.need.extend_from_slice(ranges);
+            }
             Step::NeedLen => {
                 let len = *total.get_or_insert(source.len().map_err(DriveError::Source)?);
                 decoder.feed(len, &[], true).map_err(DriveError::Codec)?;
@@ -148,23 +182,34 @@ where
             }
             Step::Rows { rows, .. } => {
                 stats.rows += rows as u64;
+                if let Some(p) = pulse {
+                    p.advance(rows as u64);
+                }
                 continue;
             }
-            Step::Metadata(_) => continue,
+            Step::Metadata(update) => {
+                if update.is_header_ready() {
+                    tell_total(pulse, decoder.info(), &mut told_total);
+                }
+                continue;
+            }
             Step::Done(info) => return Ok((info, stats)),
             _ => continue,
-        };
-        if need.is_empty() {
+        }
+        if !told_total {
+            tell_total(pulse, decoder.info(), &mut told_total);
+        }
+        if scratch.need.is_empty() {
             return Err(DriveError::EmptyRequest);
         }
         // Carried-over bytes first; if the decoder still refuses exactly
         // what it asks for, it is stalled.
         if feeder.has_carry() {
             if !feeder.flush(decoder).map_err(DriveError::Codec)? {
-                if last_refused.as_deref() == Some(&need[..]) {
+                if last_refused.as_deref() == Some(&scratch.need[..]) {
                     return Err(DriveError::Stalled);
                 }
-                last_refused = Some(need);
+                last_refused = Some(scratch.need.clone());
                 continue;
             }
             last_refused = None;
@@ -173,42 +218,51 @@ where
         // Resolve sequential requests against the source length. The
         // length is asked for only when needed: a buffered stream source
         // answers it by consuming to EOF.
-        let mut resolved: Vec<ByteRange> = Vec::with_capacity(need.len());
+        scratch.resolved.clear();
         let mut announce_eof = false;
-        for r in &need {
+        for i in 0..scratch.need.len() {
+            let r = scratch.need[i];
             if r.is_empty() {
                 let len = *total.get_or_insert(source.len().map_err(DriveError::Source)?);
                 if r.offset >= len {
                     announce_eof = true;
                 } else {
                     let n = (len - r.offset).min(opts.sequential_chunk as u64);
-                    resolved.push(ByteRange::new(r.offset, n));
+                    scratch.resolved.push(ByteRange::new(r.offset, n));
                 }
             } else {
-                resolved.push(*r);
+                scratch.resolved.push(r);
             }
         }
         if announce_eof {
             let len = total.expect("set when resolving a sequential request");
             decoder.feed(len, &[], true).map_err(DriveError::Codec)?;
         }
-        if resolved.is_empty() {
+        if scratch.resolved.is_empty() {
             continue;
         }
-        let coalesced = coalesce_byte_ranges(&resolved, opts.max_gap);
+        coalesce_into(&scratch.resolved, opts.max_gap, &mut scratch.coalesced);
         stats.rounds += 1;
-        let mut buffers: Vec<(u64, Vec<u8>)> = coalesced
-            .iter()
-            .map(|r| (r.offset, alloc::vec![0u8; r.length as usize]))
-            .collect();
+        // Reuse fetch buffers across rounds.
+        let n = scratch.coalesced.len();
+        scratch
+            .buffers
+            .resize_with(n.max(scratch.buffers.len()), Default::default);
+        for (i, r) in scratch.coalesced.iter().enumerate() {
+            let (off, buf) = &mut scratch.buffers[i];
+            *off = r.offset;
+            buf.clear();
+            buf.resize(r.length as usize, 0);
+        }
         {
-            let mut reqs: Vec<(u64, &mut [u8])> = buffers
+            let mut reqs: Vec<(u64, &mut [u8])> = scratch.buffers[..n]
                 .iter_mut()
                 .map(|(off, buf)| (*off, &mut buf[..]))
                 .collect();
+            scratch.requests.clear();
             source.read_many_at(&mut reqs).map_err(DriveError::Source)?;
         }
-        for (offset, buf) in &buffers {
+        for (offset, buf) in &scratch.buffers[..n] {
             stats.requests += 1;
             stats.bytes_fetched += buf.len() as u64;
             let eof = total.is_some_and(|len| offset + buf.len() as u64 >= len);
@@ -219,6 +273,17 @@ where
     }
 }
 
+fn tell_total(pulse: Option<&dyn Pulse>, info: Option<&zencodec::ImageInfo>, told: &mut bool) {
+    if *told {
+        return;
+    }
+    if let (Some(p), Some(info)) = (pulse, info) {
+        // A pulse that cannot take a total records the issue itself.
+        let _ = p.set_total(Total::Exact(info.height as u64));
+        *told = true;
+    }
+}
+
 /// Run `decoder` over an in-memory image, offering it `chunk` bytes per
 /// sequential request (so chunk boundaries are exercised) and serving
 /// range requests directly from the slice.
@@ -226,7 +291,7 @@ pub fn drive_from_slice<D>(
     decoder: &mut D,
     bytes: &[u8],
     sink: &mut dyn DecodeRowSink,
-    stop: Option<&dyn Stop>,
+    pulse: Option<&dyn Pulse>,
     chunk: usize,
 ) -> Result<(OutputInfo, DriveStats), DriveError<D::Error, zencodec::source::SourceError>>
 where
@@ -237,7 +302,7 @@ where
         decoder,
         &mut source,
         sink,
-        stop,
+        pulse,
         DriveOptions::new(0, chunk.max(1)),
     )
 }

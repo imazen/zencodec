@@ -87,6 +87,9 @@ pub(crate) struct PendingRows {
 pub(crate) struct Shared {
     pub(crate) input: InputStore,
     pub(crate) need: Vec<ByteRange>,
+    /// Scratch for a read's satisfied spans and missing gaps, reused across polls.
+    pub(crate) satisfied: Vec<(u64, usize)>,
+    pub(crate) gaps: Vec<(u64, u64)>,
     pub(crate) need_len: bool,
     pub(crate) rows: Option<PendingRows>,
     /// Strip buffer handed back after each `Rows` step, so steady state
@@ -106,6 +109,8 @@ impl Shared {
         Self {
             input: InputStore::new(cap),
             need: Vec::new(),
+            satisfied: Vec::new(),
+            gaps: Vec::new(),
             need_len: false,
             rows: None,
             spare: Vec::new(),
@@ -294,8 +299,14 @@ impl Future for ReadMany<'_, '_> {
         if let Some(r) = shared.cancelled {
             return Poll::Ready(Err(CoroutineError::Cancelled(r)));
         }
-        let mut missing: Vec<ByteRange> = Vec::new();
-        let mut satisfied: Vec<(u64, usize)> = Vec::new();
+        // Reuse the shared scratch vectors: `need` collects the gaps and
+        // `satisfied` the spans to release, so a poll allocates nothing.
+        let mut missing = core::mem::take(&mut shared.need);
+        let mut satisfied = core::mem::take(&mut shared.satisfied);
+        let mut gaps = core::mem::take(&mut shared.gaps);
+        missing.clear();
+        satisfied.clear();
+        gaps.clear();
         let mut check = |shared: &Shared, offset: u64, out: &mut [u8], sequential: bool| {
             if shared.input.try_read(offset, out) {
                 satisfied.push((offset, out.len()));
@@ -310,12 +321,14 @@ impl Future for ReadMany<'_, '_> {
                 // Name only the gaps, so a driver that fetched part of the
                 // span (a sequential chunk, a coalesced neighbour) is asked
                 // for the rest rather than the same bytes again.
-                let gaps = shared.input.missing(offset, out.len());
+                let before = gaps.len();
+                shared.input.missing_into(offset, out.len(), &mut gaps);
                 if sequential {
-                    let first = gaps.first().map(|(o, _)| *o).unwrap_or(offset);
+                    let first = gaps.get(before).map(|(o, _)| *o).unwrap_or(offset);
+                    gaps.truncate(before);
                     missing.push(ByteRange::from_offset(first));
                 } else {
-                    missing.extend(gaps.into_iter().map(|(o, l)| ByteRange::new(o, l)));
+                    missing.extend(gaps.drain(before..).map(|(o, l)| ByteRange::new(o, l)));
                 }
                 Ok(())
             }
@@ -327,19 +340,23 @@ impl Future for ReadMany<'_, '_> {
                 .iter_mut()
                 .try_for_each(|(offset, out)| check(&shared, *offset, out, false)),
         };
+        shared.gaps = gaps;
         if let Err(e) = result {
+            shared.need = missing;
+            shared.satisfied = satisfied;
             return Poll::Ready(Err(e));
         }
-        if missing.is_empty() {
-            shared.need.clear();
-            if this.release {
-                for (offset, len) in satisfied {
-                    shared.input.release(offset, len);
-                }
+        let ready = missing.is_empty();
+        if ready && this.release {
+            for (offset, len) in &satisfied {
+                shared.input.release(*offset, *len);
             }
+        }
+        shared.need = missing;
+        shared.satisfied = satisfied;
+        if ready {
             Poll::Ready(Ok(()))
         } else {
-            shared.need = missing;
             Poll::Pending
         }
     }
