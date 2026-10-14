@@ -55,3 +55,35 @@ reference) released input with `Vec::drain`, shifting the whole remaining
 buffer each strip: 1,044 µs at 16-row strips and 7,947 µs at 1-row strips
 for the same image, versus 266 µs and 310 µs after switching to a head
 index with amortised compaction. The first bench run caught it.
+
+## dev (AMD Ryzen 9 9950X3D, Linux), same tree at `1053613c`
+
+Throwaway clone at `~/tmp/zencodec-bench` on dev, built with
+`run-heavy` (peak RSS 0.61 GiB). zenbench refused verified placement on
+the 9950X3D's two L3 classes; this run is `--cpu-policy=unrestricted`
+(UNVERIFIED_UNRESTRICTED, exploratory).
+
+Allocation audit: identical counts to the mac run except the tokio
+bridge (32 allocs, 0.50 per strip; 98 and 1.53 with `ChannelRowSink`),
+the difference being tokio's thread-local setup.
+
+heaptrack over the whole audit binary (all seven decodes):
+298 calls to allocation functions, 117 temporary, peak heap 15.81 MB,
+peak RSS including heaptrack 23.09 MB, 948 B reported leaked (runtime
+statics).
+
+| group | direct | hand-written / drive | hand-written / pump | coroutine seq | coroutine ranges | tokio bridge |
+|---|---|---|---|---|---|---|
+| 1024x1024, 16-row strips | 93.1 µs | 289.0 µs | 203.6 µs | 381.2 µs | 264.1 µs | 597.9 µs |
+| 1024x1024, 1-row strips | 106.7 µs | 288.7 µs | 212.9 µs | 403.2 µs | 337.6 µs | 650.9 µs |
+| 256x256, 4-row strips | 4.7 µs | 12.2 µs | 10.1 µs | 21.9 µs | 20.3 µs | 61.7 µs |
+
+Reading: the stream pump beats the 1 MiB-chunk drive loop here because
+its 64 KiB chunks stay in L2 while a 1 MiB fetch buffer does not
+(`DriveOptions::sequential_chunk` is the knob). The tokio bridge's fixed
+cost on Linux is about 50 to 60 µs per decode (thread spawn, two futex
+hand-offs per fetch round, and the fetcher's chunk copy), which is why
+`ThreadOptions::with_spawner` exists for a pool and why small images
+should not cross a thread at all. Per-step machinery stays in the tens of
+nanoseconds: 1-row versus 16-row differs by about 0 to 60 µs over 960
+extra steps for every in-thread shape.
