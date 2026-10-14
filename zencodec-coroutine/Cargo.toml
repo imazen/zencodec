@@ -1,0 +1,24 @@
+[package]
+name = "zencodec-coroutine"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "Apache-2.0 OR MIT"
+description = "Write zencodec incremental decoders as straight-line async code; the compiler synthesises the resumable state machine"
+categories = ["multimedia::images"]
+keywords = ["image", "codec", "sans-io", "coroutine"]
+repository = "https://github.com/imazen/zencodec"
+include = ["/src/**", "/README.md", "/LICENSE*"]
+publish = false
+
+[dependencies]
+zencodec = { path = "..", version = ">=0.1.27, <0.3.0" }
+zenpixels = { version = ">=0.2.14, <0.4.0" }
+enough = "0.4.4"
+# Single-threaded hand-off cell between the decoder and the coroutine it
+# polls; never contended, so the lock never spins. Keeps the crate no_std.
+spin = { version = "0.12.3", default-features = false, features = ["mutex", "spin_mutex"] }
+
+[dev-dependencies]
+zencodec-io = { path = "../zencodec-io" }
+almost-enough = "0.4.4"

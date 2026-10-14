@@ -1,0 +1,421 @@
+//! The codec author's API: read bytes, write rows, announce metadata.
+
+use alloc::sync::Arc;
+use alloc::vec::Vec;
+use core::fmt;
+use core::future::Future;
+use core::pin::Pin;
+use core::task::{Context, Poll};
+
+use enough::StopReason;
+use zencodec::ImageInfo;
+use zencodec::decode::{BatchMeta, ByteRange, MetadataUpdate, SinkError};
+use zencodec::source::SourceError;
+use zenpixels::{PixelDescriptor, PixelSlice};
+
+use crate::input::InputStore;
+
+/// Failure inside a coroutine decode, convertible into the codec's error.
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum CoroutineError {
+    /// A read could not be satisfied (past the announced end).
+    Source(SourceError),
+    /// The sink refused rows.
+    Sink(SinkError),
+    /// The driver's stop token tripped.
+    Cancelled(StopReason),
+    /// The decoder was stepped after it finished or failed.
+    Finished,
+    /// The coroutine suspended without asking for anything (author bug).
+    Stalled,
+}
+
+impl fmt::Display for CoroutineError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Source(e) => write!(f, "coroutine decode: {e}"),
+            Self::Sink(e) => write!(f, "coroutine decode: sink: {e}"),
+            Self::Cancelled(r) => write!(f, "coroutine decode cancelled: {r:?}"),
+            Self::Finished => write!(f, "coroutine decoder stepped after it finished"),
+            Self::Stalled => write!(f, "coroutine suspended without a request"),
+        }
+    }
+}
+
+impl core::error::Error for CoroutineError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Source(e) => Some(e),
+            Self::Sink(e) => Some(e.as_ref()),
+            _ => None,
+        }
+    }
+}
+
+impl From<SourceError> for CoroutineError {
+    fn from(e: SourceError) -> Self {
+        Self::Source(e)
+    }
+}
+
+impl From<SinkError> for CoroutineError {
+    fn from(e: SinkError) -> Self {
+        Self::Sink(e)
+    }
+}
+
+impl From<StopReason> for CoroutineError {
+    fn from(r: StopReason) -> Self {
+        Self::Cancelled(r)
+    }
+}
+
+/// Rows the coroutine handed over, waiting for the decoder to copy them
+/// into the sink.
+pub(crate) struct PendingRows {
+    pub(crate) meta: BatchMeta,
+    pub(crate) data: Vec<u8>,
+    pub(crate) width: u32,
+    pub(crate) rows: u32,
+    pub(crate) stride: usize,
+    pub(crate) descriptor: PixelDescriptor,
+}
+
+/// State shared between the decoder and the coroutine it polls. Only one
+/// side runs at a time, so the lock is never contended.
+pub(crate) struct Shared {
+    pub(crate) input: InputStore,
+    pub(crate) need: Vec<ByteRange>,
+    pub(crate) need_len: bool,
+    pub(crate) rows: Option<PendingRows>,
+    /// Strip buffer handed back after each `Rows` step, so steady state
+    /// allocates nothing.
+    pub(crate) spare: Vec<u8>,
+    pub(crate) metadata: Option<MetadataUpdate>,
+    pub(crate) info: Option<ImageInfo>,
+    /// Bumped on every `set_info`, so the decoder refreshes its cached copy.
+    pub(crate) info_generation: u64,
+    pub(crate) descriptor: Option<PixelDescriptor>,
+    pub(crate) accepts_provisional: bool,
+    pub(crate) cancelled: Option<StopReason>,
+}
+
+impl Shared {
+    pub(crate) fn new(cap: usize) -> Self {
+        Self {
+            input: InputStore::new(cap),
+            need: Vec::new(),
+            need_len: false,
+            rows: None,
+            spare: Vec::new(),
+            metadata: None,
+            info: None,
+            info_generation: 0,
+            descriptor: None,
+            accepts_provisional: false,
+            cancelled: None,
+        }
+    }
+}
+
+pub(crate) type SharedCell = Arc<spin::Mutex<Shared>>;
+
+/// Handle a coroutine decode uses to read input and emit output.
+///
+/// Every `async fn` here suspends the coroutine when it cannot proceed and
+/// resumes it on the step after the driver supplied what was missing.
+pub struct CoroutineContext {
+    shared: SharedCell,
+    cursor: u64,
+}
+
+impl CoroutineContext {
+    pub(crate) fn new(shared: SharedCell) -> Self {
+        Self { shared, cursor: 0 }
+    }
+
+    /// Read exactly `out.len()` bytes at `offset`.
+    ///
+    /// Suspends with `Step::Need` until the driver feeds the span. Fails
+    /// with [`SourceError::UnexpectedEof`] once the announced length shows
+    /// the span can never arrive.
+    pub fn read_exact_at<'a>(
+        &'a mut self,
+        offset: u64,
+        out: &'a mut [u8],
+    ) -> impl Future<Output = Result<(), CoroutineError>> + 'a {
+        ReadMany {
+            shared: &self.shared,
+            reqs: ReqSlot::One(offset, out),
+            release: true,
+        }
+    }
+
+    /// Read several spans at once. The driver sees one `Step::Need` naming
+    /// every missing span, so a batching source fetches them in one round.
+    pub fn read_many_at<'a, 'b: 'a>(
+        &'a mut self,
+        reqs: &'a mut [(u64, &'b mut [u8])],
+    ) -> impl Future<Output = Result<(), CoroutineError>> + 'a {
+        ReadMany {
+            shared: &self.shared,
+            reqs: ReqSlot::Many(reqs),
+            release: true,
+        }
+    }
+
+    /// Read the next `out.len()` bytes at the sequential cursor and
+    /// advance it. Suspends with a zero-length `Step::Need` at the cursor,
+    /// which stream pumps serve by reading forward. Bytes behind the cursor
+    /// are released.
+    pub async fn read_exact(&mut self, out: &mut [u8]) -> Result<(), CoroutineError> {
+        let offset = self.cursor;
+        ReadMany {
+            shared: &self.shared,
+            reqs: ReqSlot::Sequential(offset, out),
+            release: true,
+        }
+        .await?;
+        self.cursor = offset + out.len() as u64;
+        self.shared.lock().input.release_before(self.cursor);
+        Ok(())
+    }
+
+    /// The sequential cursor used by [`read_exact`](Self::read_exact).
+    pub fn cursor(&self) -> u64 {
+        self.cursor
+    }
+
+    /// Move the sequential cursor (bytes behind it are released).
+    pub fn seek(&mut self, offset: u64) {
+        self.cursor = offset;
+        self.shared.lock().input.release_before(offset);
+    }
+
+    /// Total source length. Suspends with `Step::NeedLen` until announced.
+    pub fn len(&mut self) -> impl Future<Output = Result<u64, CoroutineError>> + '_ {
+        Len {
+            shared: &self.shared,
+        }
+    }
+
+    /// Hand a strip of rows to the driver. Suspends until the decoder has
+    /// copied it into the sink (one `Step::Rows`).
+    ///
+    /// Provisional rows (`!meta.is_final`) may be written only when
+    /// [`accepts_provisional`](Self::accepts_provisional) is `true`.
+    pub fn write_rows<'a>(
+        &'a mut self,
+        meta: BatchMeta,
+        rows: &PixelSlice<'_>,
+    ) -> impl Future<Output = Result<(), CoroutineError>> + 'a {
+        let width = rows.width();
+        let count = rows.rows();
+        let descriptor = rows.descriptor();
+        let stride = width as usize * descriptor.bytes_per_pixel();
+        let mut data = core::mem::take(&mut self.shared.lock().spare);
+        data.clear();
+        data.reserve(stride * count as usize);
+        for r in 0..count {
+            data.extend_from_slice(&rows.row(r)[..stride]);
+        }
+        WriteRows {
+            shared: &self.shared,
+            pending: Some(PendingRows {
+                meta,
+                data,
+                width,
+                rows: count,
+                stride,
+                descriptor,
+            }),
+        }
+    }
+
+    /// Report a metadata event to the driver (one `Step::Metadata`).
+    /// `HeaderReady` with dimensions and descriptor set lets the decoder
+    /// call `sink.begin` early.
+    pub fn announce(
+        &mut self,
+        update: MetadataUpdate,
+    ) -> impl Future<Output = Result<(), CoroutineError>> + '_ {
+        Announce {
+            shared: &self.shared,
+            update: Some(update),
+        }
+    }
+
+    /// Set image metadata (visible through `IncrementalDecode::info`).
+    pub fn set_info(&mut self, info: ImageInfo) {
+        let mut shared = self.shared.lock();
+        shared.info = Some(info);
+        shared.info_generation += 1;
+    }
+
+    /// Set the negotiated output descriptor.
+    pub fn set_output_descriptor(&mut self, descriptor: PixelDescriptor) {
+        self.shared.lock().descriptor = Some(descriptor);
+    }
+
+    /// Whether the driver's sink takes provisional (progressive) rows.
+    /// Known after the first step.
+    pub fn accepts_provisional(&self) -> bool {
+        self.shared.lock().accepts_provisional
+    }
+
+    /// Check the driver's stop token without suspending.
+    pub fn check_stop(&self) -> Result<(), CoroutineError> {
+        match self.shared.lock().cancelled {
+            Some(r) => Err(CoroutineError::Cancelled(r)),
+            None => Ok(()),
+        }
+    }
+}
+
+enum ReqSlot<'a, 'b> {
+    One(u64, &'a mut [u8]),
+    Sequential(u64, &'a mut [u8]),
+    Many(&'a mut [(u64, &'b mut [u8])]),
+}
+
+struct ReadMany<'a, 'b> {
+    shared: &'a SharedCell,
+    reqs: ReqSlot<'a, 'b>,
+    release: bool,
+}
+
+impl Future for ReadMany<'_, '_> {
+    type Output = Result<(), CoroutineError>;
+
+    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+        let mut shared = this.shared.lock();
+        if let Some(r) = shared.cancelled {
+            return Poll::Ready(Err(CoroutineError::Cancelled(r)));
+        }
+        let mut missing: Vec<ByteRange> = Vec::new();
+        let mut satisfied: Vec<(u64, usize)> = Vec::new();
+        let mut check = |shared: &Shared, offset: u64, out: &mut [u8], sequential: bool| {
+            if shared.input.try_read(offset, out) {
+                satisfied.push((offset, out.len()));
+                Ok(())
+            } else if shared.input.beyond_end(offset, out.len()) {
+                Err(CoroutineError::Source(SourceError::UnexpectedEof {
+                    offset,
+                    len: out.len() as u64,
+                    total: shared.input.total(),
+                }))
+            } else {
+                // Name only the gaps, so a driver that fetched part of the
+                // span (a sequential chunk, a coalesced neighbour) is asked
+                // for the rest rather than the same bytes again.
+                let gaps = shared.input.missing(offset, out.len());
+                if sequential {
+                    let first = gaps.first().map(|(o, _)| *o).unwrap_or(offset);
+                    missing.push(ByteRange::from_offset(first));
+                } else {
+                    missing.extend(gaps.into_iter().map(|(o, l)| ByteRange::new(o, l)));
+                }
+                Ok(())
+            }
+        };
+        let result = match &mut this.reqs {
+            ReqSlot::One(offset, out) => check(&shared, *offset, out, false),
+            ReqSlot::Sequential(offset, out) => check(&shared, *offset, out, true),
+            ReqSlot::Many(reqs) => reqs
+                .iter_mut()
+                .try_for_each(|(offset, out)| check(&shared, *offset, out, false)),
+        };
+        if let Err(e) = result {
+            return Poll::Ready(Err(e));
+        }
+        if missing.is_empty() {
+            shared.need.clear();
+            if this.release {
+                for (offset, len) in satisfied {
+                    shared.input.release(offset, len);
+                }
+            }
+            Poll::Ready(Ok(()))
+        } else {
+            shared.need = missing;
+            Poll::Pending
+        }
+    }
+}
+
+struct Len<'a> {
+    shared: &'a SharedCell,
+}
+
+impl Future for Len<'_> {
+    type Output = Result<u64, CoroutineError>;
+
+    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let mut shared = self.shared.lock();
+        if let Some(r) = shared.cancelled {
+            return Poll::Ready(Err(CoroutineError::Cancelled(r)));
+        }
+        match shared.input.total() {
+            Some(t) => {
+                shared.need_len = false;
+                Poll::Ready(Ok(t))
+            }
+            None => {
+                shared.need_len = true;
+                Poll::Pending
+            }
+        }
+    }
+}
+
+struct WriteRows<'a> {
+    shared: &'a SharedCell,
+    pending: Option<PendingRows>,
+}
+
+impl Future for WriteRows<'_> {
+    type Output = Result<(), CoroutineError>;
+
+    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+        let mut shared = this.shared.lock();
+        if let Some(r) = shared.cancelled {
+            return Poll::Ready(Err(CoroutineError::Cancelled(r)));
+        }
+        match this.pending.take() {
+            Some(rows) => {
+                shared.rows = Some(rows);
+                Poll::Pending
+            }
+            // Resumed: the decoder took the rows (or failed; it then never
+            // resumes us).
+            None => Poll::Ready(Ok(())),
+        }
+    }
+}
+
+struct Announce<'a> {
+    shared: &'a SharedCell,
+    update: Option<MetadataUpdate>,
+}
+
+impl Future for Announce<'_> {
+    type Output = Result<(), CoroutineError>;
+
+    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+        let mut shared = this.shared.lock();
+        if let Some(r) = shared.cancelled {
+            return Poll::Ready(Err(CoroutineError::Cancelled(r)));
+        }
+        match this.update.take() {
+            Some(update) => {
+                shared.metadata = Some(update);
+                Poll::Pending
+            }
+            None => Poll::Ready(Ok(())),
+        }
+    }
+}
