@@ -836,18 +836,12 @@ impl enough::Stop for TripAfter {
 /// - a sink that accepts provisional rows still gets every final row once
 ///   through `provide_next_buffer` (never through `provide_pass_buffer`),
 ///   reproducing the one-shot pixels;
-/// - truncated input (cut at a quarter and at half) ends in a codec error,
-///   never a protocol violation;
+/// - truncated input (cut at a quarter and at half) behaves as the one-shot
+///   decoder does on the same bytes: a codec error where it fails (never a
+///   protocol violation), the same pixels where it succeeds;
 /// - no drive exceeds a step budget, so a decoder that spins fails here
 ///   instead of hanging.
 pub fn check_incremental_contract<D: DecoderConfig>(dec: D, data: &[u8]) -> Conformance {
-    const CHECK: &str = "incremental_contract";
-    let reference = dec
-        .clone()
-        .job()
-        .decoder(std::borrow::Cow::Borrowed(data), &[])
-        .and_then(|d| d.decode())
-        .map_err(|e| fail(CHECK, format!("one-shot decode: {e}")))?;
     check_incremental_decoder(
         || {
             dec.clone()
@@ -855,27 +849,31 @@ pub fn check_incremental_contract<D: DecoderConfig>(dec: D, data: &[u8]) -> Conf
                 .dyn_incremental_decoder(&[])
                 .map_err(|e| e.to_string())
         },
+        |bytes| {
+            dec.clone()
+                .job()
+                .decoder(std::borrow::Cow::Borrowed(bytes), &[])
+                .and_then(|d| d.decode())
+                .map_err(|e| e.to_string())
+        },
         data,
-        &reference,
     )
 }
 
-/// [`check_incremental_contract`] for any decoder factory, against the
-/// one-shot `reference` output of `data`: for incremental decoders not
-/// reached through a codec's `DecoderConfig`, such as one built with
-/// `zencodec::helpers::WholeFileIncremental`.
-pub fn check_incremental_decoder<F>(
-    new_decoder: F,
-    data: &[u8],
-    reference: &zencodec::decode::DecodeOutput,
-) -> Conformance
+/// [`check_incremental_contract`] for any decoder factory, against
+/// `one_shot`, the decoder's one-shot decode of any bytes: for incremental
+/// decoders not reached through a codec's `DecoderConfig`, such as one
+/// built with `zencodec::helpers::WholeFileIncremental`.
+pub fn check_incremental_decoder<F, O>(new_decoder: F, one_shot: O, data: &[u8]) -> Conformance
 where
     F: Fn() -> Result<Box<zencodec::decode::DynIncrementalDecoder>, String>,
+    O: Fn(&[u8]) -> Result<zencodec::decode::DecodeOutput, String>,
 {
     use zencodec::decode::{Event, IncrementalDecode, Input, StepError};
     const CHECK: &str = "incremental_contract";
     let new_dec = || new_decoder().map_err(|e| fail(CHECK, format!("new decoder: {e}")));
-    let (w, h, desc, bytes) = pixels_of(reference);
+    let reference = one_shot(data).map_err(|e| fail(CHECK, format!("one-shot decode: {e}")))?;
+    let (w, h, desc, bytes) = pixels_of(&reference);
     let budget = 4 * data.len() as u64 + 4 * h as u64 + 1000;
 
     for window in [1usize, 7, 64, data.len().max(1)] {
@@ -1084,25 +1082,47 @@ where
         }
     }
 
-    // Truncation is a codec error, never a protocol violation or a hang.
+    // Truncated input behaves as the one-shot decoder does on the same
+    // bytes: a codec error where one-shot fails (never a protocol violation
+    // or a hang), the same pixels where one-shot succeeds (the first frame
+    // of an animation whose later frames are cut, a lenient RLE body).
     for cut in [data.len() / 4, data.len() / 2] {
         if cut >= data.len() {
             continue;
         }
+        let part = &data[..cut];
         let mut inc = new_dec()?;
         let mut sink = zencodec_io::CollectSink::new();
-        match zencodec_io::drive_from_slice(&mut *inc, &data[..cut], &mut sink, None, 64) {
-            Ok(_) => {
+        let got = zencodec_io::drive_from_slice(&mut *inc, part, &mut sink, None, 64);
+        match (got, one_shot(part)) {
+            (Err(zencodec_io::DriveError::Step(StepError::Codec(_))), Err(_)) => {}
+            (Ok(_), Ok(want)) => {
+                let (_, _, want_desc, want_bytes) = pixels_of(&want);
+                if sink.descriptor() != Some(want_desc) || sink.bytes() != want_bytes {
+                    return Err(fail(
+                        CHECK,
+                        format!(
+                            "truncated to {cut}: pixels differ from one-shot on the same bytes"
+                        ),
+                    ));
+                }
+            }
+            (Ok(_), Err(e)) => {
                 return Err(fail(
                     CHECK,
                     format!(
-                        "truncated to {cut} of {} bytes decoded without error",
+                        "truncated to {cut} of {} bytes decoded, but one-shot fails: {e}",
                         data.len()
                     ),
                 ));
             }
-            Err(zencodec_io::DriveError::Step(StepError::Codec(_))) => {}
-            Err(e) => {
+            (Err(e), Ok(_)) => {
+                return Err(fail(
+                    CHECK,
+                    format!("truncated to {cut}: one-shot decodes, incremental fails: {e}"),
+                ));
+            }
+            (Err(e), Err(_)) => {
                 return Err(fail(
                     CHECK,
                     format!("truncated to {cut}: expected a codec error, got: {e}"),

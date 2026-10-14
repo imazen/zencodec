@@ -23,8 +23,12 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
   The testkit now depends on `zencodec-io` for its slice driver and collect sink, so
   `zencodec-io` must publish before the testkit can.
 - `check_incremental_decoder`: the incremental contract for any decoder factory
-  against a one-shot reference, for decoders not reached through a
+  against the decoder's one-shot function, for decoders not reached through a
   `DecoderConfig` (such as `helpers::WholeFileIncremental`).
+- The incremental contract's truncation rule is parity with one-shot: on a cut
+  where one-shot fails, the incremental decoder must fail with a codec error;
+  where one-shot succeeds (the first frame of an animation whose later frames
+  are cut, a lenient BMP RLE body), it must succeed with the same pixels.
 - `check_incremental_contract` (the full sans-I/O step contract, run through
   `check_incremental_capability_honesty`) and `check_streaming_output_honesty`
   (run by `check_all`); the reference encoder streams its output after `begin`

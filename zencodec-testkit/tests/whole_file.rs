@@ -143,11 +143,16 @@ impl enough::Stop for Flag {
 #[test]
 fn the_testkit_contract_holds() {
     let data = file();
-    let reference = ReferenceDecoderConfig
-        .job()
-        .decoder(Cow::Borrowed(&data), &[])
-        .unwrap()
-        .decode()
-        .unwrap();
-    zencodec_testkit::check_incremental_decoder(|| Ok(decoder()), &data, &reference).unwrap();
+    zencodec_testkit::check_incremental_decoder(
+        || Ok(decoder()),
+        |bytes| {
+            ReferenceDecoderConfig
+                .job()
+                .decoder(Cow::Borrowed(bytes), &[])
+                .and_then(|d| d.decode())
+                .map_err(|e| e.to_string())
+        },
+        &data,
+    )
+    .unwrap();
 }
