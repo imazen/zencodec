@@ -15,7 +15,7 @@ publish = false
 default = []
 # `std::io::Read` pumps, file sources and the buffered stream adapter.
 std = ["zencodec/std"]
-# Dedicated-thread bridge for async runtimes (`tokio::sync` channels only; no runtime).
+# Async drivers (`tokio_io`): `tokio::sync` and `tokio::io` only; never starts a runtime.
 tokio = ["std", "dep:tokio"]
 
 [dependencies]

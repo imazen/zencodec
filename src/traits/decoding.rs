@@ -505,14 +505,38 @@ pub trait DecodeJob<'a>: Sized {
     /// Codecs that support incremental decoding override this method.
     /// Default implementation returns [`UnsupportedOperation::IncrementalDecode`].
     ///
-    /// # Example
+    /// The returned decoder is built with
+    /// [`erase_incremental`](crate::decode::erase_incremental), so the
+    /// termination rules hold whatever the codec does. Drivers for files,
+    /// streams and async sources are in `zencodec-io`; this loop is the
+    /// whole protocol, over bytes already in memory:
     ///
-    /// ```rust,ignore
-    /// let mut dec = config.job().dyn_incremental_decoder(&[])?;
-    /// while !dec.is_complete() {
-    ///     let outcome = dec.push_chunk(chunk, is_eof, stop)?;
-    ///     while let Some((y, strip)) = dec.pull_batch()? {
-    ///         // process strip
+    /// ```
+    /// use zencodec::decode::{BoxedError, DecodeJob, DecodeRowSink, Event, Input, Request};
+    ///
+    /// fn decode_in_memory<'a, J: DecodeJob<'a>>(
+    ///     job: J,
+    ///     data: &[u8],
+    ///     sink: &mut dyn DecodeRowSink,
+    /// ) -> Result<(), BoxedError> {
+    ///     let mut dec = job.dyn_incremental_decoder(&[])?;
+    ///     let total = data.len() as u64;
+    ///     let mut at = 0usize;
+    ///     loop {
+    ///         let input = Input::new(at as u64, &data[at..]).with_total_len(total);
+    ///         let p = dec.step(input, sink, &zencodec::Unstoppable)?;
+    ///         at += p.consumed;
+    ///         match p.event {
+    ///             // Satisfy any one request; the length is always known here.
+    ///             Event::Need => match dec.requested()[0] {
+    ///                 Request::AtLeast { offset, .. } => at = offset as usize,
+    ///                 Request::Range(r) => at = r.offset as usize,
+    ///                 _ => {}
+    ///             },
+    ///             Event::Done(_) => return Ok(()),
+    ///             _ => {} // rows, metadata, or an event added later
+    ///         }
+    ///         at = at.min(data.len());
     ///     }
     /// }
     /// ```

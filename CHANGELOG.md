@@ -20,7 +20,12 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
   `check_incremental_capability_honesty` (chunk-boundary independence against the
   one-shot pixels, truncation must error); the last two run in `check_all`. The
   reference codec implements both sans-I/O paths; the minimal codec declares neither.
-  The testkit now depends on `zencodec-io` for its slice driver and collect sink.
+  The testkit now depends on `zencodec-io` for its slice driver and collect sink, so
+  `zencodec-io` must publish before the testkit can.
+- `check_incremental_contract` (the full sans-I/O step contract, run through
+  `check_incremental_capability_honesty`) and `check_streaming_output_honesty`
+  (run by `check_all`); the reference encoder streams its output after `begin`
+  (`d8b9e636`, `e54b4175`).
 
 - Explicit structural-prefix and distinct-frame timing oracles require typed refusals and independent expected pixels. Existing compatibility checks remain unchanged.
 
@@ -138,37 +143,59 @@ removes that whole class).
 
 ### Changed (unpublished sans-I/O surface from `d116079`)
 
-- `IncrementalDecode` is now a feed/step machine: `feed(offset, bytes, eof) -> usize`
-  stores bytes and may accept partially; `step(sink, stop) -> Step` does bounded work,
-  writes rows straight into the sink and reports `Need(ranges)`, `NeedLen`,
-  `Rows`, `Metadata` or `Done`. Removed: `push_chunk`, `push_chunk_pulse`,
-  `push_range`, `push_range_pulse`, `requested_ranges`, `pull_batch`,
-  `pull_batch_meta`, `pull_batch_into`, `is_complete`, `PushStatus`, `PushOutcome`.
-  `ByteRange::from_offset` names a sequential request (`length == 0`).
-  `DynIncrementalDecoder`, `IncrementalDecoderShim` and `CodecSet::incremental_decoder`
-  follow. The stream pumps and `coalesce_byte_ranges` moved to `zencodec-io`.
+- `IncrementalDecode` is one call, `step(input, sink, stop) -> Result<Progress, StepError>`
+  (`d8b9e636`). The driver owns every input byte: `Input { offset, bytes, total_len }`
+  is offered, the decoder takes a prefix (`Progress::consumed`) and reports one
+  `Event` (`Need`, `Rows`, `Metadata`, `Done`; non-exhaustive, unknown variants are
+  informational). After `Need`, `requested()` lists `Request::AtLeast { offset,
+  min_len }`, `Request::Range` or `Request::Len`; any one satisfies it. No decoder
+  needs an input buffer. Errors are `StepError::{Codec, Sink, Cancelled, Finished}`
+  and terminal; `Fused` and `erase_incremental` enforce the termination rules for any
+  decoder, and `DynIncrementalDecoder` is `dyn IncrementalDecode<Error = ErasedError>`.
+  Removed from the earlier feed/step draft: `feed`, `feed_and_step`,
+  `wrap_sink_error`, `Step`, `ByteRange::from_offset`, `IncrementalDecoderShim` as a
+  public wrapper. Removed before that: `push_chunk*`, `push_range*`,
+  `requested_ranges`, `pull_batch*`, `is_complete`, `PushStatus`, `PushOutcome`.
+- Sink routing: final rows always arrive once each through `provide_next_buffer` in
+  increasing `y`; `provide_pass_buffer` receives only provisional rows, only for sinks
+  whose `accepts_provisional` (read once, at `begin`) is `true` (`d8b9e636`).
 
 ### Added
 
-- `zencodec::source`: `ReadAt`, object-safe `DynReadAt` (+ `ReadAtShim`, `Box`/`&mut`
-  impls), `SliceReadAt`, `SourceError`, `AccessPattern`.
+- `zencodec::source`: `ReadAt` (with `read_at`, short only at the end, `len_hint` and
+  `as_slice`), object-safe `DynReadAt` (+ `ReadAtShim`, `Box`/`&mut` impls),
+  `SliceReadAt`, `SourceError`, `AccessPattern` (`most_demanding`).
 - `DecodeJob::push_decoder_from_source` / `DynDecodeJob::push_decoder_from_source` /
   `CodecSet::push_decode_from_source`: `push_decoder` with the input bound to a
   `DynReadAt` instead of a slice, for pull-native cores. Default rejects with the new
   `UnsupportedOperation::SeekableDecode` (appended after released variants);
   `DecodeCapabilities::seekable` / `with_seekable` declare it.
-- `IncrementalDecode::access_pattern` and `DynIncrementalDecoder::access_pattern`.
+- `IncrementalDecode::access_pattern`, `DecodeCapabilities::access_pattern` /
+  `with_access_pattern`; `CodecSet`'s incremental decoder reports the most demanding
+  pattern of its codecs and probes without a buffer (`d8b9e636`).
+- `Encoder::begin(width, height, descriptor)`, `Encoder::pending_output` and
+  `Encoder::consume_output`, all provided (`d8b9e636`): an encoder that knows the size
+  up front writes its header at once and streams encoded bytes as rows arrive.
+  `EncodeCapabilities::streaming_output` / `with_streaming_output` declare it.
 - `DecodeRowSink::accepts_provisional` and `provide_pass_buffer` (defaulted): a sink
   opts into progressive passes; final-only sinks are unchanged.
-- Workspace crates (unpublished): `zencodec-io` (slice/`ReadAt`/`Read` drivers, the
-  buffered stream source, `CollectSink`, and the `tokio` dedicated-thread bridge with
-  `ChannelRowSink`) and `zencodec-coroutine` (`async`-authored incremental decoders,
-  `no_std`). Drivers take one `how_far::Pulse` for cancellation and progress (row
-  total on header, advance per strip); the bridge re-checks it inside every blocking
-  wait and races each fetch against the thread exiting; `pull_decode_on_thread` takes
-  the pulse too. Steady state allocates nothing per round in the drive loop and the
-  coroutine's read path; measured allocation and timing overhead is recorded in
-  `zencodec-io/benchmarks/`.
+- Workspace crates (unpublished): `zencodec-io` and `zencodec-coroutine`
+  (`async`-authored incremental decoders, `no_std`). `zencodec-io` drives a decoder
+  from a slice (zero-copy), a `ReadAt` (ranges batched into one `read_many_at`
+  round), a `std::io::Read` stream (with a window limit) or, under `tokio`, an
+  `AsyncSource`: `decode_async`/`transcode_async` keep decoder, sink and window in
+  the task and run decode batches on a `Compute` pool, so no thread is held while
+  bytes are in flight; `pull_decode_on_thread` bridges pull-native codecs. Every
+  driver reports a decoder that spins, asks past a known end or asks for nothing
+  (`ProtocolViolation`) instead of looping. Drivers take one `how_far::Pulse` for
+  cancellation and progress. The input window is zeroed once and compacts only when
+  its tail is full (`34346a05`).
+- `zencodec-testkit`: `check_incremental_contract` (windows of 1/7/64 bytes and the
+  whole file against one-shot, begin once, rows once in order, `Done` repeats,
+  unrequested input ignored, cancellation within one step then `Finished`,
+  provisional sinks still get final rows through `provide_next_buffer`, truncation
+  is a codec error, step budget) and `check_streaming_output_honesty`, both run by
+  `check_all`; the reference codec implements both buffer-free (`e54b4175`).
 
 ### Deprecated
 

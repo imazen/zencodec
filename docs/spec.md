@@ -133,7 +133,11 @@ trait Encoder: Sized {
     ) -> Result<EncodeOutput, Self::Error>;  // default: wraps encode()
 
     // Row-level push (mutually exclusive with encode)
+    fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor)
+        -> Result<(), Self::Error>;                                             // default: Ok(()), ignored
     fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), Self::Error>;  // default: Err
+    fn pending_output(&self) -> &[u8];                                          // default: empty
+    fn consume_output(&mut self, n: usize);                                     // default: no-op
     fn finish(self) -> Result<EncodeOutput, Self::Error>;                       // default: Err
 
     // Pull from source callback
@@ -144,6 +148,13 @@ trait Encoder: Sized {
 ```
 
 Three mutually exclusive paths: `encode()`/`encode_srgba8()`, `push_rows()+finish()`, `encode_from()`.
+
+`begin` is optional before `push_rows`. An encoder that knows the size up
+front writes its header there and, if it declares
+`EncodeCapabilities::streaming_output`, exposes encoded bytes through
+`pending_output` as rows arrive; the caller sends them and calls
+`consume_output`, and `finish` returns only what was not consumed. Pushing
+more or fewer rows than declared is an error.
 
 ### `AnimationFrameEncoder` (animation encode)
 
@@ -285,32 +296,35 @@ Use `Unsupported<E>` as the associated type for codecs without animation support
 ```rust
 trait IncrementalDecode {
     type Error: core::error::Error + Send + Sync + 'static;
-    fn feed(&mut self, offset: u64, bytes: &[u8], eof: bool) -> Result<usize, Self::Error>;
-    fn step(&mut self, sink: &mut dyn DecodeRowSink, stop: Option<&dyn Stop>)
-        -> Result<Step<'_>, Self::Error>;
-    fn wrap_sink_error(err: SinkError) -> Self::Error;
+    fn step(&mut self, input: Input<'_>, sink: &mut dyn DecodeRowSink, stop: &dyn Stop)
+        -> Result<Progress, StepError<Self::Error>>;
+    fn requested(&self) -> &[Request];                         // after Event::Need, never empty
     fn info(&self) -> Option<&ImageInfo>;
     fn output_descriptor(&self) -> Option<PixelDescriptor>;   // default None
     fn access_pattern(&self) -> source::AccessPattern;         // default Sequential
 }
 
-#[non_exhaustive]
-enum Step<'a> {
-    Need(&'a [ByteRange]),                 // length 0 = any amount from offset
-    NeedLen,
-    Rows { meta: BatchMeta, rows: u32 },
-    Metadata(MetadataUpdate),
-    Done(OutputInfo),
-}
+struct Input<'a> { offset: u64, bytes: &'a [u8], total_len: Option<u64> }
+struct Progress { consumed: usize, event: Event }
+#[non_exhaustive] enum Event { Need, Rows { meta: BatchMeta, rows: u32 }, Metadata(MetadataUpdate), Done(OutputInfo) }
+#[non_exhaustive] enum Request { AtLeast { offset: u64, min_len: usize }, Range(ByteRange), Len }
+#[non_exhaustive] enum StepError<E> { Codec(E), Sink(SinkError), Cancelled(StopReason), Finished }
+
+struct Fused<D>;                                   // enforces Done/error/stop termination
+fn erase_incremental<D>(d: D) -> Box<DynIncrementalDecoder>;  // Fused + type erasure
+type DynIncrementalDecoder = dyn IncrementalDecode<Error = ErasedError> + Send;
 ```
 
-`feed` stores bytes (never decodes, never touches the sink) and may accept
-fewer than offered; `step` does bounded work and returns the first event,
-writing rows straight into the sink. Created by
-`DecodeJob::dyn_incremental_decoder` (returns `Box<dyn DynIncrementalDecoder>`,
-same methods over `BoxedError`); declared with `DecodeCapabilities::incremental`.
-Drivers (slice, `ReadAt`, `std::io::Read`, async) are in `zencodec-io`;
-straight-line authoring is in `zencodec-coroutine`. Contract details:
+The driver owns the input: each `step` is offered bytes at an absolute
+offset, takes a prefix (`consumed`) and reports one event. After `Need`, the
+driver satisfies any one of `requested()`. Rows go straight into the sink;
+final rows once each through `provide_next_buffer` in increasing `y`.
+Errors and cancellation are terminal. Created by
+`DecodeJob::dyn_incremental_decoder` (returns `Box<DynIncrementalDecoder>`,
+built with `erase_incremental`); declared with
+`DecodeCapabilities::incremental`. Drivers (slice, `ReadAt`,
+`std::io::Read`, async) are in `zencodec-io`; straight-line authoring is in
+`zencodec-coroutine`. Rules, drivers and measurements:
 [`range-decoding-contract.md`](range-decoding-contract.md).
 
 ### `ReadAt` / `DynReadAt` (random-access source) and `push_decoder_from_source`
@@ -319,9 +333,12 @@ straight-line authoring is in `zencodec-coroutine`. Contract details:
 // zencodec::source
 trait ReadAt {
     type Error: core::error::Error + Send + Sync + 'static;
-    fn len(&mut self) -> Result<u64, Self::Error>;
+    fn len(&mut self) -> Result<u64, Self::Error>;            // may read a stream to its end
+    fn len_hint(&self) -> Option<u64>;                        // default None
     fn read_exact_at(&mut self, offset: u64, out: &mut [u8]) -> Result<(), Self::Error>;
+    fn read_at(&mut self, offset: u64, out: &mut [u8]) -> Result<usize, Self::Error>; // short only at the end
     fn read_many_at(&mut self, reqs: &mut [(u64, &mut [u8])]) -> Result<(), Self::Error>; // default: sequential
+    fn as_slice(&self) -> Option<&[u8]>;                      // default None; in-memory sources
 }
 trait DynReadAt: Send { /* same, over BoxedError */ }
 struct SliceReadAt<'a>;  struct ReadAtShim<S>(pub S);
@@ -349,12 +366,20 @@ trait DecodeRowSink {
     fn provide_next_buffer(&mut self, y: u32, height: u32, width: u32,
         descriptor: PixelDescriptor) -> Result<PixelSliceMut<'_>, SinkError>;
     fn finish(&mut self) -> Result<(), SinkError>;  // default: Ok(())
+    fn accepts_provisional(&self) -> bool;          // default: false
+    fn provide_pass_buffer(&mut self, meta: BatchMeta, height: u32, width: u32,
+        descriptor: PixelDescriptor) -> Result<PixelSliceMut<'_>, SinkError>; // default: Err
 }
 ```
 
 The codec calls `begin()`, then `provide_next_buffer()` per strip, writes
 decoded pixels via `PixelSliceMut::row_mut()`, then calls `finish()`. The sink
 controls stride (can return SIMD-aligned buffers). Object-safe.
+
+Final rows arrive once each through `provide_next_buffer`, in increasing
+`y`, for every sink. A progressive decoder also writes provisional rows
+through `provide_pass_buffer`, only when `accepts_provisional()` (read once,
+at `begin`) is `true`.
 
 `SinkError = Box<dyn core::error::Error + Send + Sync>`
 
@@ -395,7 +420,10 @@ trait DynEncoder {
     fn encode(self: Box<Self>, pixels: PixelSlice<'_>) -> Result<EncodeOutput, BoxedError>;
     fn encode_srgba8(self: Box<Self>, data: &mut [u8], make_opaque: bool,
         width: u32, height: u32, stride_pixels: u32) -> Result<EncodeOutput, BoxedError>;
+    fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor) -> Result<(), BoxedError>;
     fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), BoxedError>;
+    fn pending_output(&self) -> &[u8];
+    fn consume_output(&mut self, n: usize);
     fn finish(self: Box<Self>) -> Result<EncodeOutput, BoxedError>;
     fn encode_from(self: Box<Self>,
         source: &mut dyn FnMut(u32, PixelSliceMut<'_>) -> usize) -> Result<EncodeOutput, BoxedError>;
@@ -469,17 +497,9 @@ trait DynStreamingDecoder {
     fn info(&self) -> &ImageInfo;
 }
 
-trait DynIncrementalDecoder: Send {
-    fn as_any(&self) -> &dyn Any;
-    fn as_any_mut(&mut self) -> &mut dyn Any;
-    fn into_any(self: Box<Self>) -> Box<dyn Any>;
-    fn feed(&mut self, offset: u64, bytes: &[u8], eof: bool) -> Result<usize, BoxedError>;
-    fn step(&mut self, sink: &mut dyn DecodeRowSink, stop: Option<&dyn Stop>)
-        -> Result<Step<'_>, BoxedError>;
-    fn info(&self) -> Option<&ImageInfo>;
-    fn output_descriptor(&self) -> Option<PixelDescriptor>;
-    fn access_pattern(&self) -> AccessPattern;
-}
+// The erased incremental decoder is the trait object itself:
+type DynIncrementalDecoder = dyn IncrementalDecode<Error = ErasedError> + Send;
+// ErasedError wraps BoxedError; its source() is the codec's error.
 ```
 
 ### Downcasting rules
@@ -1013,6 +1033,11 @@ Const-constructible structs with builder pattern. Returned by config `capabiliti
 `cheap_probe`, `decode_into`, `row_level`, `hdr`, `native_gray`, `native_16bit`,
 `native_f32`, `native_alpha`, `enforces_max_pixels`, `enforces_max_memory`,
 `enforces_max_input_bytes`, `threads_supported_range`.
+
+Sans-I/O flags: `streaming_output` (encode: bytes stream from
+`pending_output` after `begin`); `incremental`, `seekable` and
+`access_pattern` (decode: `dyn_incremental_decoder`,
+`push_decoder_from_source`, and how the incremental decoder reads).
 
 Method: `supports(UnsupportedOperation) -> bool`.
 

@@ -159,9 +159,9 @@ impl CoroutineContext {
 
     /// Read exactly `out.len()` bytes at `offset`.
     ///
-    /// Suspends with `Step::Need` until the driver feeds the span. Fails
-    /// with [`SourceError::UnexpectedEof`] once the announced length shows
-    /// the span can never arrive.
+    /// Suspends with `Event::Need` (a `Request::Range`) until the driver
+    /// offers the span. Fails with [`SourceError::UnexpectedEof`] once the
+    /// announced length shows the span can never arrive.
     pub fn read_exact_at<'a>(
         &'a mut self,
         offset: u64,
@@ -174,7 +174,7 @@ impl CoroutineContext {
         }
     }
 
-    /// Read several spans at once. The driver sees one `Step::Need` naming
+    /// Read several spans at once. The driver sees one `Event::Need` naming
     /// every missing span, so a batching source fetches them in one round.
     pub fn read_many_at<'a, 'b: 'a>(
         &'a mut self,
@@ -188,9 +188,9 @@ impl CoroutineContext {
     }
 
     /// Read the next `out.len()` bytes at the sequential cursor and
-    /// advance it. Suspends with a zero-length `Step::Need` at the cursor,
-    /// which stream pumps serve by reading forward. Bytes behind the cursor
-    /// are released.
+    /// advance it. Suspends with one `Request::AtLeast` for the rest of the
+    /// read, which stream pumps serve by reading forward. Bytes behind the
+    /// cursor are released.
     pub async fn read_exact(&mut self, out: &mut [u8]) -> Result<(), CoroutineError> {
         let offset = self.cursor;
         ReadMany {
@@ -215,7 +215,8 @@ impl CoroutineContext {
         self.shared.lock().input.release_before(offset);
     }
 
-    /// Total source length. Suspends with `Step::NeedLen` until announced.
+    /// Total source length. Suspends with `Request::Len` until a driver
+    /// offers an input carrying it.
     pub fn len(&mut self) -> impl Future<Output = Result<u64, CoroutineError>> + '_ {
         Len {
             shared: &self.shared,
@@ -223,7 +224,7 @@ impl CoroutineContext {
     }
 
     /// Hand a strip of rows to the driver. Suspends until the decoder has
-    /// copied it into the sink (one `Step::Rows`).
+    /// copied it into the sink (one `Event::Rows`).
     ///
     /// Provisional rows (`!meta.is_final`) may be written only when
     /// [`accepts_provisional`](Self::accepts_provisional) is `true`.
@@ -255,7 +256,7 @@ impl CoroutineContext {
         }
     }
 
-    /// Report a metadata event to the driver (one `Step::Metadata`).
+    /// Report a metadata event to the driver (one `Event::Metadata`).
     /// `HeaderReady` with dimensions and descriptor set lets the decoder
     /// call `sink.begin` early.
     pub fn announce(

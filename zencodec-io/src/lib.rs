@@ -3,7 +3,7 @@
 //! zencodec defines two decoder shapes that do no I/O of their own:
 //!
 //! - [`IncrementalDecode`](zencodec::decode::IncrementalDecode): resumable,
-//!   driven by whoever holds the bytes (`feed` / `step`).
+//!   driven by whoever holds the bytes (`step` offers them in place).
 //! - [`DecodeJob::push_decoder_from_source`](zencodec::decode::DecodeJob::push_decoder_from_source):
 //!   pull-native, reading a [`DynReadAt`](zencodec::source::DynReadAt).
 //!
@@ -23,10 +23,13 @@
 //! tells it the row total once the header is known and advances it per
 //! strip. A caller with only a `Stop` passes `how_far::StopOnly::borrowed`.
 //!
+//! Every driver checks each `Need` against the input it just offered and
+//! returns [`ProtocolViolation`] for a decoder that would otherwise spin.
+//!
 //! The crate is `no_std + alloc` by default. The `std` feature adds the
-//! stream pump, file source and buffered stream adapter; `tokio` adds the
-//! dedicated-thread bridge (it uses `tokio::sync` channels only and never
-//! starts a runtime).
+//! stream pump, file source and buffered stream adapter; `tokio` adds
+//! [`tokio_io`] (`tokio::sync` and `tokio::io` only; it never starts a
+//! runtime).
 
 #![no_std]
 #![forbid(unsafe_code)]

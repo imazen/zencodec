@@ -20,7 +20,11 @@ let dec = CoroutineDecoder::boxed(|mut ctx| async move {
 });
 ```
 
-Each suspending `.await` is one poll round trip through the driver. Rows are
-copied once into the sink. Input is kept only until read, under a byte cap.
+Each suspending `.await` is one `step` round trip through the driver. The
+coroutine copies the offered bytes its reads need into a store (under a byte
+cap, released once read; gap bytes are never stored) and each strip once more
+into the sink. That suits container walks and headers; bulk pixel paths are
+better hand-written, decoding from the driver's bytes straight into the sink.
+Measured cost: `zencodec-io/benchmarks/driver_overhead_v2_2026-10-14.md`.
 
 License: Apache-2.0 OR MIT.

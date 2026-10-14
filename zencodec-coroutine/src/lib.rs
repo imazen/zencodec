@@ -30,11 +30,16 @@
 //!
 //! # Cost model
 //!
-//! Each `.await` that suspends costs one poll round trip through the
-//! driver (no thread, no allocation). Rows are copied once, from the
-//! codec's strip into the sink; a hand-written decoder can avoid that copy
-//! by writing into the sink directly. Input is retained only until read;
-//! a byte cap bounds it and `feed` accepts partially when full.
+//! Each `.await` that suspends costs one `step` round trip through the
+//! driver (no thread, no allocation). The driver owns the input; the
+//! decoder copies into its store only the offered bytes an outstanding read
+//! needs, under a byte cap, and releases them once read. Gap bytes between
+//! requested ranges are consumed but never stored, and a single read larger
+//! than the cap is an error, not a stall. Rows are copied once more, from
+//! the codec's strip into the sink. A hand-written decoder can avoid both
+//! copies by decoding from the driver's input straight into the sink, which
+//! is why bulk pixel paths are better hand-written and container walks
+//! suit this crate.
 
 #![no_std]
 #![forbid(unsafe_code)]
