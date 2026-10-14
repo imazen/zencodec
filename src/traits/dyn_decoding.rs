@@ -215,6 +215,21 @@ pub trait DynIncrementalDecoder: Send {
         stop: Option<&dyn Stop>,
     ) -> Result<super::decoder::Step<'_>, BoxedError>;
 
+    /// Offer bytes and advance in one call; see
+    /// [`IncrementalDecode::feed_and_step`](super::decoder::IncrementalDecode::feed_and_step).
+    fn feed_and_step(
+        &mut self,
+        offset: u64,
+        bytes: &[u8],
+        eof: bool,
+        sink: &mut dyn crate::DecodeRowSink,
+        stop: Option<&dyn Stop>,
+    ) -> Result<(usize, super::decoder::Step<'_>), BoxedError> {
+        let accepted = self.feed(offset, bytes, eof)?;
+        let step = self.step(sink, stop)?;
+        Ok((accepted, step))
+    }
+
     /// Image metadata, once the header has been parsed.
     fn info(&self) -> Option<&ImageInfo>;
 
@@ -268,6 +283,19 @@ impl<I: super::decoder::IncrementalDecode + Send + 'static> DynIncrementalDecode
             .map_err(|e| Box::new(e) as BoxedError)
     }
 
+    fn feed_and_step(
+        &mut self,
+        offset: u64,
+        bytes: &[u8],
+        eof: bool,
+        sink: &mut dyn crate::DecodeRowSink,
+        stop: Option<&dyn Stop>,
+    ) -> Result<(usize, super::decoder::Step<'_>), BoxedError> {
+        self.0
+            .feed_and_step(offset, bytes, eof, sink, stop)
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
     fn info(&self) -> Option<&ImageInfo> {
         self.0.info()
     }
@@ -304,6 +332,17 @@ impl<D: DynIncrementalDecoder + ?Sized> DynIncrementalDecoder for Box<D> {
         stop: Option<&dyn Stop>,
     ) -> Result<super::decoder::Step<'_>, BoxedError> {
         (**self).step(sink, stop)
+    }
+
+    fn feed_and_step(
+        &mut self,
+        offset: u64,
+        bytes: &[u8],
+        eof: bool,
+        sink: &mut dyn crate::DecodeRowSink,
+        stop: Option<&dyn Stop>,
+    ) -> Result<(usize, super::decoder::Step<'_>), BoxedError> {
+        (**self).feed_and_step(offset, bytes, eof, sink, stop)
     }
 
     fn info(&self) -> Option<&ImageInfo> {

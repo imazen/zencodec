@@ -9,8 +9,6 @@ use zencodec::decode::{ByteRange, DecodeRowSink, OutputInfo, Step};
 
 use crate::drivable::Drivable;
 
-use crate::feeder::Feeder;
-
 /// Failure of [`pump_read_to_sink`].
 #[derive(Debug)]
 #[non_exhaustive]
@@ -61,10 +59,13 @@ impl<E: core::error::Error + 'static> core::error::Error for PumpError<E> {
 
 /// Pump a sequential stream into `decoder`, writing rows into `sink`.
 ///
-/// Reads at most `buffer_size` bytes per round and feeds them at the
-/// stream cursor; the decoder starts producing rows as soon as it has
-/// enough. Only sequential requests (`Step::Need` at the cursor) can be
-/// served; a request elsewhere is [`PumpError::NeedsRandomAccess`].
+/// Reads up to `buffer_size` bytes at a time and offers them with
+/// [`feed_and_step`](crate::Drivable::feed_and_step), so a decoder can
+/// decode straight from the read buffer; only the bytes it did not accept
+/// stay in the buffer and are offered again with the next read. Rows are
+/// emitted as soon as the decoder has enough input. Only sequential
+/// requests can be served; a sized request behind the cursor is
+/// [`PumpError::NeedsRandomAccess`].
 pub fn pump_read_to_sink<R, D>(
     mut reader: R,
     decoder: &mut D,
@@ -79,16 +80,22 @@ where
     let stop = pulse.map(|p| p as &dyn Stop);
     let mut told_total = false;
     let mut buf = vec![0u8; buffer_size.max(512)];
-    let mut cursor = 0u64;
+    // `buf[lo..hi]` is read but not yet accepted; `buf[lo]` is at `base`.
+    let (mut lo, mut hi) = (0usize, 0usize);
+    let mut base = 0u64;
     let mut eof = false;
-    let mut feeder = Feeder::new();
-    let mut refused_at: Option<u64> = None;
+    let mut refused: Option<u64> = None;
     loop {
-        let need = match decoder.step(sink, stop).map_err(PumpError::Codec)? {
+        let (accepted, step) = decoder
+            .feed_and_step(base, &buf[lo..hi], eof, sink, stop)
+            .map_err(PumpError::Codec)?;
+        lo += accepted;
+        base += accepted as u64;
+        let need = match step {
             Step::Need(ranges) => ranges
                 .first()
                 .copied()
-                .unwrap_or(ByteRange::from_offset(cursor)),
+                .unwrap_or(ByteRange::from_offset(base)),
             Step::NeedLen => return Err(PumpError::NeedsLength),
             Step::Rows { rows, .. } => {
                 if let Some(p) = pulse {
@@ -106,49 +113,47 @@ where
             _ => continue,
         };
         tell_total(pulse, decoder.info(), &mut told_total);
-        if feeder.has_carry() {
-            if !feeder.flush(decoder).map_err(PumpError::Codec)? {
-                if refused_at == Some(need.offset) {
-                    // Full and still waiting: a sized request ahead of the
-                    // cursor means the decoder cannot buffer the stream up
-                    // to the bytes it wants.
-                    return Err(if need.is_empty() {
-                        PumpError::Stalled
-                    } else {
-                        PumpError::NeedsRandomAccess(need)
-                    });
-                }
-                refused_at = Some(need.offset);
-                continue;
+        if !need.is_empty() && need.offset < base {
+            return Err(PumpError::NeedsRandomAccess(need));
+        }
+        if accepted == 0 && lo < hi {
+            // The decoder refuses bytes while still asking: its input is
+            // full. A sized request means it cannot buffer the stream up
+            // to the bytes it wants.
+            if refused == Some(need.offset) {
+                return Err(if need.is_empty() {
+                    PumpError::Stalled
+                } else {
+                    PumpError::NeedsRandomAccess(need)
+                });
             }
-            refused_at = None;
+            refused = Some(need.offset);
             continue;
         }
-        // Anything the decoder wants must lie at or beyond the cursor; a
-        // sized request behind it cannot be served, and one ahead of it is
-        // reached by reading forward (the decoder discards what it does
-        // not want).
-        if need.offset < cursor && !need.is_empty() {
-            return Err(PumpError::NeedsRandomAccess(need));
-        }
+        refused = None;
         if eof {
-            decoder.feed(cursor, &[], true).map_err(PumpError::Codec)?;
-            if need.offset >= cursor {
-                // Nothing more will come; let the decoder report truncation.
-                continue;
-            }
-            return Err(PumpError::NeedsRandomAccess(need));
+            // Everything has been offered with `eof`; a decoder that still
+            // asks has been told the length and should have failed.
+            return Err(if need.is_empty() {
+                PumpError::Stalled
+            } else {
+                PumpError::NeedsRandomAccess(need)
+            });
         }
-        let n = reader.read(&mut buf).map_err(PumpError::Io)?;
+        // Keep the unaccepted remainder, then read more after it.
+        if lo > 0 {
+            buf.copy_within(lo..hi, 0);
+            hi -= lo;
+            lo = 0;
+        }
+        if hi == buf.len() {
+            buf.resize(buf.len() * 2, 0);
+        }
+        let n = reader.read(&mut buf[hi..]).map_err(PumpError::Io)?;
         if n == 0 {
             eof = true;
-            decoder.feed(cursor, &[], true).map_err(PumpError::Codec)?;
-            continue;
         }
-        feeder
-            .offer(decoder, cursor, &buf[..n], false)
-            .map_err(PumpError::Codec)?;
-        cursor += n as u64;
+        hi += n;
     }
 }
 

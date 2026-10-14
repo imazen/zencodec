@@ -271,6 +271,28 @@ pub trait IncrementalDecode {
         stop: Option<&dyn Stop>,
     ) -> Result<Step<'_>, Self::Error>;
 
+    /// Offer `bytes` at `offset` and advance in one call, letting the
+    /// decoder read them in place for the duration of this step.
+    ///
+    /// Returns the bytes accepted (decoded in place, or retained) and the
+    /// step event; the driver offers the next call from `offset + accepted`.
+    /// A decoder with nothing buffered can decode straight from the
+    /// caller's buffer here and retain only a tail that straddles the end,
+    /// which removes the copy that `feed` + `step` imply. The default is
+    /// exactly `feed` then `step`.
+    fn feed_and_step(
+        &mut self,
+        offset: u64,
+        bytes: &[u8],
+        eof: bool,
+        sink: &mut dyn crate::DecodeRowSink,
+        stop: Option<&dyn Stop>,
+    ) -> Result<(usize, Step<'_>), Self::Error> {
+        let accepted = self.feed(offset, bytes, eof)?;
+        let step = self.step(sink, stop)?;
+        Ok((accepted, step))
+    }
+
     /// Wrap a [`SinkError`] into this decoder's error type.
     fn wrap_sink_error(err: SinkError) -> Self::Error;
 

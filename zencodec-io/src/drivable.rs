@@ -23,6 +23,15 @@ pub trait Drivable {
         sink: &mut dyn DecodeRowSink,
         stop: Option<&dyn Stop>,
     ) -> Result<Step<'_>, Self::Error>;
+    /// See [`IncrementalDecode::feed_and_step`].
+    fn feed_and_step(
+        &mut self,
+        offset: u64,
+        bytes: &[u8],
+        eof: bool,
+        sink: &mut dyn DecodeRowSink,
+        stop: Option<&dyn Stop>,
+    ) -> Result<(usize, Step<'_>), Self::Error>;
     /// See [`IncrementalDecode::info`].
     fn info(&self) -> Option<&ImageInfo>;
     /// See [`IncrementalDecode::access_pattern`].
@@ -40,6 +49,16 @@ impl<D: IncrementalDecode + ?Sized> Drivable for D {
         stop: Option<&dyn Stop>,
     ) -> Result<Step<'_>, D::Error> {
         IncrementalDecode::step(self, sink, stop)
+    }
+    fn feed_and_step(
+        &mut self,
+        offset: u64,
+        bytes: &[u8],
+        eof: bool,
+        sink: &mut dyn DecodeRowSink,
+        stop: Option<&dyn Stop>,
+    ) -> Result<(usize, Step<'_>), D::Error> {
+        IncrementalDecode::feed_and_step(self, offset, bytes, eof, sink, stop)
     }
     fn info(&self) -> Option<&ImageInfo> {
         IncrementalDecode::info(self)
@@ -80,6 +99,18 @@ impl<B: DerefMut<Target = dyn DynIncrementalDecoder>> Drivable for Dyn<B> {
         stop: Option<&dyn Stop>,
     ) -> Result<Step<'_>, DynCodecError> {
         self.0.step(sink, stop).map_err(DynCodecError)
+    }
+    fn feed_and_step(
+        &mut self,
+        offset: u64,
+        bytes: &[u8],
+        eof: bool,
+        sink: &mut dyn DecodeRowSink,
+        stop: Option<&dyn Stop>,
+    ) -> Result<(usize, Step<'_>), DynCodecError> {
+        self.0
+            .feed_and_step(offset, bytes, eof, sink, stop)
+            .map_err(DynCodecError)
     }
     fn info(&self) -> Option<&ImageInfo> {
         self.0.info()

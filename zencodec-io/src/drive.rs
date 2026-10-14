@@ -8,7 +8,7 @@ use how_far::{Pulse, Total};
 use zencodec::decode::{ByteRange, DecodeRowSink, OutputInfo, Step};
 
 use crate::drivable::Drivable;
-use zencodec::source::{ReadAt, SliceReadAt};
+use zencodec::source::ReadAt;
 
 use crate::feeder::Feeder;
 
@@ -284,9 +284,13 @@ fn tell_total(pulse: Option<&dyn Pulse>, info: Option<&zencodec::ImageInfo>, tol
     }
 }
 
-/// Run `decoder` over an in-memory image, offering it `chunk` bytes per
-/// sequential request (so chunk boundaries are exercised) and serving
-/// range requests directly from the slice.
+/// Run `decoder` over an in-memory image.
+///
+/// The decoder is fed sub-slices of `bytes` directly: no fetch buffer, no
+/// carry. A sequential request gets at most `chunk` bytes from its offset
+/// (so chunk boundaries are exercised when `chunk` is small); a sized range
+/// gets exactly its bytes. A partial accept is simply re-offered from the
+/// slice on the next request. The final bytes are fed with `eof`.
 pub fn drive_from_slice<D>(
     decoder: &mut D,
     bytes: &[u8],
@@ -297,14 +301,126 @@ pub fn drive_from_slice<D>(
 where
     D: Drivable + ?Sized,
 {
-    let mut source = SliceReadAt::new(bytes);
-    drive_from_read_at(
-        decoder,
-        &mut source,
-        sink,
-        pulse,
-        DriveOptions::new(0, chunk.max(1)),
-    )
+    let stop = pulse.map(|p| p as &dyn Stop);
+    let chunk = chunk.max(1);
+    let len = bytes.len() as u64;
+    let mut stats = DriveStats::default();
+    let mut told_total = false;
+    let mut need: Vec<ByteRange> = Vec::new();
+    let mut zero_rounds = 0u32;
+    // Sequential position: the next byte to offer with `feed_and_step`,
+    // set only once the decoder has asked for sequential bytes. Nothing is
+    // offered before it asks, so a random-access decoder sees only the
+    // ranges it requests.
+    let mut pos: Option<u64> = None;
+    loop {
+        stats.steps += 1;
+        let step = match pos {
+            // Offer the next window and step in one call, so a decoder can
+            // read it in place.
+            Some(p) => {
+                let start = p.min(len) as usize;
+                let end = (p.saturating_add(chunk as u64)).min(len) as usize;
+                let window = &bytes[start..end];
+                let eof = end as u64 == len;
+                let (accepted, step) = decoder
+                    .feed_and_step(p, window, eof, sink, stop)
+                    .map_err(DriveError::Codec)?;
+                stats.requests += 1;
+                stats.bytes_fetched += accepted as u64;
+                pos = Some(p + accepted as u64);
+                if accepted > 0 || window.is_empty() {
+                    zero_rounds = 0;
+                }
+                step
+            }
+            None => decoder.step(sink, stop).map_err(DriveError::Codec)?,
+        };
+        match step {
+            Step::Need(ranges) => {
+                need.clear();
+                need.extend_from_slice(ranges);
+            }
+            Step::NeedLen => {
+                decoder.feed(len, &[], true).map_err(DriveError::Codec)?;
+                continue;
+            }
+            Step::Rows { rows, .. } => {
+                stats.rows += rows as u64;
+                if let Some(p) = pulse {
+                    p.advance(rows as u64);
+                }
+                continue;
+            }
+            Step::Metadata(update) => {
+                if update.is_header_ready() {
+                    tell_total(pulse, decoder.info(), &mut told_total);
+                }
+                continue;
+            }
+            Step::Done(info) => return Ok((info, stats)),
+            _ => continue,
+        }
+        if !told_total {
+            tell_total(pulse, decoder.info(), &mut told_total);
+        }
+        if need.is_empty() {
+            return Err(DriveError::EmptyRequest);
+        }
+        stats.rounds += 1;
+        // One sequential request: continue offering windows from there.
+        if need.len() == 1 && need[0].is_empty() {
+            let at = need[0].offset;
+            if pos == Some(at) {
+                zero_rounds += 1;
+                if zero_rounds >= 3 {
+                    return Err(DriveError::Stalled);
+                }
+            }
+            pos = Some(at);
+            continue;
+        }
+        // Sized ranges: feed exactly those bytes from the slice.
+        pos = None;
+        let mut accepted_any = false;
+        for r in &need {
+            if r.offset >= len {
+                decoder.feed(len, &[], true).map_err(DriveError::Codec)?;
+                accepted_any = true;
+                continue;
+            }
+            let start = r.offset as usize;
+            let end = if r.is_empty() {
+                (r.offset.saturating_add(chunk as u64)).min(len)
+            } else if r.end() > len {
+                return Err(DriveError::Source(
+                    zencodec::source::SourceError::UnexpectedEof {
+                        offset: r.offset,
+                        len: r.length,
+                        total: Some(len),
+                    },
+                ));
+            } else {
+                r.end()
+            } as usize;
+            let piece = &bytes[start..end];
+            let eof = end as u64 == len;
+            stats.requests += 1;
+            stats.bytes_fetched += piece.len() as u64;
+            let accepted = decoder
+                .feed(r.offset, piece, eof)
+                .map_err(DriveError::Codec)?;
+            accepted_any |= accepted > 0 || piece.is_empty();
+        }
+        if accepted_any {
+            zero_rounds = 0;
+        } else {
+            zero_rounds += 1;
+            if zero_rounds >= 2 {
+                return Err(DriveError::Stalled);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
