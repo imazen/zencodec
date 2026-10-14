@@ -493,6 +493,35 @@ pub trait DynEncoderConfig: Send + Sync {
         ResourceEstimate::unknown()
     }
 
+    /// Confirm a target without encoding pixels. Direct dyn implementations
+    /// default to unreported support; blanket implementations share the generic
+    /// checked configuration path.
+    fn check_fidelity_target(
+        &self,
+        target: crate::encode::Fidelity,
+    ) -> Result<(), crate::encode::FidelityTargetError> {
+        target.validate_target()?;
+        Err(crate::encode::FidelityTargetError::Unreported)
+    }
+
+    /// Create a job configured for a confirmed target. This does not guarantee
+    /// content-dependent losslessness or a measured perceptual score.
+    fn try_fidelity_job(
+        &self,
+        target: crate::encode::Fidelity,
+    ) -> Result<Box<dyn DynEncodeJob>, crate::encode::FidelityTargetError> {
+        target.validate_target()?;
+        Err(crate::encode::FidelityTargetError::Unreported)
+    }
+
+    /// Return the first confirmed preference and its job; never retries encoding.
+    fn select_fidelity_job(
+        &self,
+        preferences: &[crate::encode::Fidelity],
+    ) -> Result<(usize, Box<dyn DynEncodeJob>), crate::encode::FidelitySelectionError> {
+        crate::fidelity::select_target(preferences, |target| self.try_fidelity_job(target))
+    }
+
     /// Create a dyn-dispatched encode job.
     ///
     /// The job owns its config (cloned). The `'static` bound means
@@ -529,6 +558,22 @@ where
         compute: &ComputeEnvironment,
     ) -> ResourceEstimate {
         EncoderConfig::estimate_encode_resources(self, image, compute)
+    }
+
+    fn check_fidelity_target(
+        &self,
+        target: crate::encode::Fidelity,
+    ) -> Result<(), crate::encode::FidelityTargetError> {
+        EncoderConfig::check_fidelity_target(self, target)
+    }
+
+    fn try_fidelity_job(
+        &self,
+        target: crate::encode::Fidelity,
+    ) -> Result<Box<dyn DynEncodeJob>, crate::encode::FidelityTargetError> {
+        Ok(Box::new(EncodeJobShim(Some(
+            self.clone().try_with_fidelity(target)?.job(),
+        ))))
     }
 
     fn dyn_job(&self) -> Box<dyn DynEncodeJob + 'static> {

@@ -1486,3 +1486,7 @@ which tracks `zenpixels 0.2.7`.
 
 - Drop unnecessary `imgref` feature from zenpixels dependency.
 - Add magic byte detection audit example.
+
+## Checked fidelity target selection (unreleased)
+
+- Add configuration-level `EncoderConfig::{try_with_fidelity,check_fidelity_target,select_fidelity}` and equivalent erased job selection. Ordered preferences report each rejected target, reject non-finite requests, and isolate candidate configurations. These checks confirm target selection only; actual losslessness remains content-dependent and approximate metric targets do not become measured guarantees. No automatic retry of encode failures.

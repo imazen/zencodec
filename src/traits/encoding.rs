@@ -170,6 +170,48 @@ pub trait EncoderConfig: Clone + Send + Sync {
         self.generic_quality().map(Fidelity::codec_quality)
     }
 
+    /// Select a target only if the configuration reports that exact target.
+    ///
+    /// Rejects silent substitution and unreported support. This is a checked
+    /// alternative to the published best-effort setter, not a promise that a
+    /// metric score will be achieved or arbitrary pixels encoded losslessly.
+    /// Content, descriptor, alpha and backend restrictions still apply at encode.
+    /// Approximate metric targets remain approximate; a native quality value
+    /// retains its codec-specific scale. No encode is attempted here.
+    fn try_with_fidelity(
+        self,
+        target: Fidelity,
+    ) -> Result<Self, crate::encode::FidelityTargetError> {
+        target.validate_target()?;
+        let configured = self.with_fidelity(target);
+        match configured.resolved_target_fidelity() {
+            Some(resolved) if resolved == target => Ok(configured),
+            Some(resolved) => Err(crate::encode::FidelityTargetError::Substituted { resolved }),
+            None => Err(crate::encode::FidelityTargetError::Unreported),
+        }
+    }
+
+    /// Query checked target selection without changing this configuration.
+    /// Has the same configuration-only scope as [`Self::try_with_fidelity`].
+    fn check_fidelity_target(
+        &self,
+        target: Fidelity,
+    ) -> Result<(), crate::encode::FidelityTargetError> {
+        self.clone().try_with_fidelity(target).map(|_| ())
+    }
+
+    /// Select the first confirmed target from an explicit ordered preference list.
+    /// Returns its index and a new configuration. Each attempt starts from this
+    /// original configuration; failed candidates cannot alter subsequent ones.
+    /// Every rejection is retained when no candidate succeeds. This does not
+    /// encode pixels and must not be used to retry arbitrary encode failures.
+    fn select_fidelity(
+        &self,
+        preferences: &[Fidelity],
+    ) -> Result<(usize, Self), crate::encode::FidelitySelectionError> {
+        crate::fidelity::select_target(preferences, |target| self.clone().try_with_fidelity(target))
+    }
+
     /// Current alpha quality value, or `None` if unsupported.
     fn alpha_quality(&self) -> Option<f32> {
         None

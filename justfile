@@ -134,3 +134,8 @@ testkit-contract-check:
 # Version 0.2.0 carries the approved implementor-only breaking changes.
 testkit-semver:
     cargo semver-checks check-release -p zencodec-testkit --baseline-version 0.1.0
+
+# Checked target selection and ordered preferences, without encoding retries.
+fidelity-check:
+    cargo test -p zencodec-testkit --test fidelity_selection
+    cargo clippy -p zencodec -p zencodec-testkit --all-targets -- -D warnings
