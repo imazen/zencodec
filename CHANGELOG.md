@@ -6,6 +6,10 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### [Unreleased]
 
+### Added
+
+- Add configuration-level `EncoderConfig::{try_with_fidelity,check_fidelity_target,select_fidelity}` and equivalent erased job selection. Ordered preferences report each rejected target, reject non-finite requests, and isolate candidate configurations. These checks confirm target selection only; actual losslessness remains content-dependent and approximate metric targets do not become measured guarantees. No automatic retry of encode failures. (`815fdfdd`).
+
 #### QUEUED BREAKING CHANGES
 
 - Approved for testkit **0.2.0**: `RefDecodeJob` changed from a publicly constructible unit struct to a private-field stateful struct in the gain-map harness (`857fab1`). Implementor tests should obtain jobs from `ReferenceDecoderConfig::job()` or `ReferenceZcrDecoderConfig::job()`. This is a testkit-only break; zencodec retains its compatibility gate.
@@ -15,6 +19,8 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 - Prepare the independently versioned testkit 0.2.0 release. Its zencodec requirement now starts at 0.1.27, which supplies the new contract APIs. No crate has been published.
 
 #### Added
+
+- Explicit structural-prefix and distinct-frame timing oracles require typed refusals and independent expected pixels. Existing compatibility checks remain unchanged.
 
 - The [contract coverage matrix](docs/testkit-contract-coverage.md) records consumer evidence, independent readbacks, and remaining API/testing gaps.
 
@@ -1486,7 +1492,3 @@ which tracks `zenpixels 0.2.7`.
 
 - Drop unnecessary `imgref` feature from zenpixels dependency.
 - Add magic byte detection audit example.
-
-## Checked fidelity target selection (unreleased)
-
-- Add configuration-level `EncoderConfig::{try_with_fidelity,check_fidelity_target,select_fidelity}` and equivalent erased job selection. Ordered preferences report each rejected target, reject non-finite requests, and isolate candidate configurations. These checks confirm target selection only; actual losslessness remains content-dependent and approximate metric targets do not become measured guarantees. No automatic retry of encode failures.

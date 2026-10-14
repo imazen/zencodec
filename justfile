@@ -139,3 +139,8 @@ testkit-semver:
 fidelity-check:
     cargo test -p zencodec-testkit --test fidelity_selection
     cargo clippy -p zencodec -p zencodec-testkit --all-targets -- -D warnings
+
+# Independent frame/prefix oracles and typed refusal checks.
+adversarial-check:
+    cargo test -p zencodec-testkit --lib adversarial
+    cargo clippy -p zencodec-testkit --all-targets -- -D warnings
