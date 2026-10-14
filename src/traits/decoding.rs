@@ -168,13 +168,39 @@ pub trait DecodeJob<'a>: Sized {
     ///
     /// # Note
     ///
-    /// The default implementation is a no-op that returns `self` unchanged.
-    /// Not all codecs implement policy support. Check the codec's documentation
-    /// or [`DecodeCapabilities`](crate::DecodeCapabilities) to determine whether
-    /// the codec honors policy settings. Calling this on a codec that does not
-    /// implement it will silently have no effect.
+    /// The default implementation is a no-op. This published setter is
+    /// best-effort; static capability flags do not confirm policy enforcement.
+    /// Use [`try_set_policy`](Self::try_set_policy) or
+    /// [`try_with_policy`](Self::try_with_policy) for a required policy.
     fn with_policy(self, _policy: crate::DecodePolicy) -> Self {
         self
+    }
+
+    /// Apply every specified policy field, or reject without changing this job.
+    ///
+    /// The default accepts only [`DecodePolicy::none()`](crate::DecodePolicy::none)
+    /// as a no-op. Codecs override this single primitive once they can enforce
+    /// the requested fields; type-erased jobs delegate to the same primitive.
+    /// Acceptance does not guarantee that content-dependent processing succeeds.
+    fn try_set_policy(
+        &mut self,
+        policy: crate::DecodePolicy,
+    ) -> Result<(), crate::UnsupportedOperation> {
+        if policy != crate::DecodePolicy::none() {
+            return Err(crate::UnsupportedOperation::DecodePolicy);
+        }
+        Ok(())
+    }
+
+    /// Builder form of [`try_set_policy`](Self::try_set_policy).
+    ///
+    /// A rejection consumes this builder. Use the mutable setter to retain it.
+    fn try_with_policy(
+        mut self,
+        policy: crate::DecodePolicy,
+    ) -> Result<Self, crate::UnsupportedOperation> {
+        self.try_set_policy(policy)?;
+        Ok(self)
     }
 
     // --- Probing (needs limits + stop context) ---

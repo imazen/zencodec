@@ -51,6 +51,10 @@ pub enum UnsupportedOperation {
     Inventory,
     /// Exact rational duration is not representable by this animation encoder.
     AnimationTiming,
+    /// A required decode policy cannot be admitted by this job.
+    DecodePolicy,
+    /// A required encode policy cannot be admitted by this job.
+    EncodePolicy,
 }
 
 impl UnsupportedOperation {
@@ -61,6 +65,8 @@ impl UnsupportedOperation {
             Self::PullEncode => "pull_encode",
             Self::AnimationEncode => "animation_encode",
             Self::AnimationTiming => "animation_timing",
+            Self::DecodePolicy => "decode_policy",
+            Self::EncodePolicy => "encode_policy",
             Self::DecodeInto => "decode_into",
             Self::RowLevelDecode => "row_level_decode",
             Self::AnimationDecode => "animation_decode",
@@ -347,6 +353,8 @@ impl EncodeCapabilities {
             UnsupportedOperation::Inventory => false,
             UnsupportedOperation::AnimationTiming => self.animation_timing,
             UnsupportedOperation::DecodeInto
+            | UnsupportedOperation::DecodePolicy
+            | UnsupportedOperation::EncodePolicy
             | UnsupportedOperation::RowLevelDecode
             | UnsupportedOperation::AnimationDecode
             | UnsupportedOperation::MultiImageDecode
@@ -776,6 +784,8 @@ impl DecodeCapabilities {
             UnsupportedOperation::MultiImageDecode => self.multi_image,
             UnsupportedOperation::Inventory => self.inventory,
             UnsupportedOperation::AnimationTiming
+            | UnsupportedOperation::DecodePolicy
+            | UnsupportedOperation::EncodePolicy
             | UnsupportedOperation::RowLevelEncode
             | UnsupportedOperation::PullEncode
             | UnsupportedOperation::AnimationEncode

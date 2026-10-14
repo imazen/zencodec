@@ -280,13 +280,21 @@ impl CodecSet {
         self
     }
 
-    /// Decode security policy stamped onto every decode job this set creates.
+    /// Best-effort decode policy stamped onto every decode job this set creates.
+    ///
+    /// The codec may ignore this legacy policy setter. For a required policy,
+    /// obtain a job with [`decode_job`](Self::decode_job), then call
+    /// [`DynDecodeJob::try_set_policy`](crate::decode::DynDecodeJob::try_set_policy).
     pub fn with_decode_policy(mut self, policy: DecodePolicy) -> Self {
         self.decode_policy = Some(policy);
         self
     }
 
-    /// Encode policy stamped onto every encode job this set creates.
+    /// Best-effort encode policy stamped onto every encode job this set creates.
+    ///
+    /// The codec may ignore this legacy policy setter. For a required policy,
+    /// obtain a job with [`encode_job`](Self::encode_job), then call
+    /// [`DynEncodeJob::try_set_policy`](crate::encode::DynEncodeJob::try_set_policy).
     pub fn with_encode_policy(mut self, policy: EncodePolicy) -> Self {
         self.encode_policy = Some(policy);
         self
