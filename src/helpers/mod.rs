@@ -7,6 +7,8 @@
 //! # Submodules
 //!
 //! - `icc`: ICC profile identification and pixel descriptor derivation.
+//! - [`WholeFileIncremental`]: the sans-I/O decode contract for a codec core
+//!   that needs the complete file.
 
 use alloc::borrow::Cow;
 
@@ -19,6 +21,7 @@ use crate::traits::{AnimationFrameDecoder, Decode, DecodeJob};
 
 mod exif;
 mod icc;
+mod whole_file;
 
 pub use exif::{parse_exif_orientation, set_exif_orientation};
 pub use icc::descriptor_for_decoded_pixels_v2;
@@ -26,6 +29,7 @@ pub use icc::descriptor_for_decoded_pixels_v2;
 pub use icc::{
     IccMatchTolerance, descriptor_for_decoded_pixels, icc_profile_is_srgb, identify_well_known_icc,
 };
+pub use whole_file::WholeFileIncremental;
 
 /// Implement `push_decoder` by doing a full decode and copying rows to the sink.
 ///

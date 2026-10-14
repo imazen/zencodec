@@ -772,6 +772,22 @@ Rules that keep drivers simple and fast:
   `step` can lose its register allocation; measure against your one-shot
   path.
 
+**A core that needs the whole file** can still serve every driver today:
+
+```rust
+fn dyn_incremental_decoder(self, preferred: &[PixelDescriptor])
+    -> Result<Box<DynIncrementalDecoder>, BoxedError>
+{
+    Ok(zencodec::decode::erase_incremental(
+        zencodec::helpers::WholeFileIncremental::new(self, preferred),
+    ))
+}
+```
+
+It reports the header as soon as your `probe` accepts a prefix and decodes
+through your `push_decoder` once the input is complete. Rows only arrive at
+the end, but async drivers hold no thread while the bytes arrive.
+
 Declare `with_incremental(true)` and, if your decoder seeks,
 `with_access_pattern(AccessPattern::RandomAccess)` (or `BoundedBacktrack`).
 Straight-line container walks can be written as `async` code with

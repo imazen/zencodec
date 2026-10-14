@@ -841,21 +841,41 @@ impl enough::Stop for TripAfter {
 /// - no drive exceeds a step budget, so a decoder that spins fails here
 ///   instead of hanging.
 pub fn check_incremental_contract<D: DecoderConfig>(dec: D, data: &[u8]) -> Conformance {
-    use zencodec::decode::{Event, IncrementalDecode, Input, StepError};
     const CHECK: &str = "incremental_contract";
-    let new_dec = || {
-        dec.clone()
-            .job()
-            .dyn_incremental_decoder(&[])
-            .map_err(|e| fail(CHECK, format!("dyn_incremental_decoder: {e}")))
-    };
     let reference = dec
         .clone()
         .job()
         .decoder(std::borrow::Cow::Borrowed(data), &[])
         .and_then(|d| d.decode())
         .map_err(|e| fail(CHECK, format!("one-shot decode: {e}")))?;
-    let (w, h, desc, bytes) = pixels_of(&reference);
+    check_incremental_decoder(
+        || {
+            dec.clone()
+                .job()
+                .dyn_incremental_decoder(&[])
+                .map_err(|e| e.to_string())
+        },
+        data,
+        &reference,
+    )
+}
+
+/// [`check_incremental_contract`] for any decoder factory, against the
+/// one-shot `reference` output of `data`: for incremental decoders not
+/// reached through a codec's `DecoderConfig`, such as one built with
+/// `zencodec::helpers::WholeFileIncremental`.
+pub fn check_incremental_decoder<F>(
+    new_decoder: F,
+    data: &[u8],
+    reference: &zencodec::decode::DecodeOutput,
+) -> Conformance
+where
+    F: Fn() -> Result<Box<zencodec::decode::DynIncrementalDecoder>, String>,
+{
+    use zencodec::decode::{Event, IncrementalDecode, Input, StepError};
+    const CHECK: &str = "incremental_contract";
+    let new_dec = || new_decoder().map_err(|e| fail(CHECK, format!("new decoder: {e}")));
+    let (w, h, desc, bytes) = pixels_of(reference);
     let budget = 4 * data.len() as u64 + 4 * h as u64 + 1000;
 
     for window in [1usize, 7, 64, data.len().max(1)] {

@@ -22,6 +22,9 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
   reference codec implements both sans-I/O paths; the minimal codec declares neither.
   The testkit now depends on `zencodec-io` for its slice driver and collect sink, so
   `zencodec-io` must publish before the testkit can.
+- `check_incremental_decoder`: the incremental contract for any decoder factory
+  against a one-shot reference, for decoders not reached through a
+  `DecoderConfig` (such as `helpers::WholeFileIncremental`).
 - `check_incremental_contract` (the full sans-I/O step contract, run through
   `check_incremental_capability_honesty`) and `check_streaming_output_honesty`
   (run by `check_all`); the reference encoder streams its output after `begin`
@@ -170,6 +173,12 @@ removes that whole class).
   `DynReadAt` instead of a slice, for pull-native cores. Default rejects with the new
   `UnsupportedOperation::SeekableDecode` (appended after released variants);
   `DecodeCapabilities::seekable` / `with_seekable` declare it.
+- `helpers::WholeFileIncremental`: the sans-I/O contract for a codec core that
+  needs the complete file. It reports the header as soon as the job's `probe`
+  accepts a growing prefix and decodes through the job's `push_decoder` once the
+  input is complete, so every codec can serve the zencodec-io drivers (and
+  async sources without holding a thread) before it gains a native incremental
+  decoder.
 - `IncrementalDecode::access_pattern`, `DecodeCapabilities::access_pattern` /
   `with_access_pattern`; `CodecSet`'s incremental decoder reports the most demanding
   pattern of its codecs and probes without a buffer (`d8b9e636`).

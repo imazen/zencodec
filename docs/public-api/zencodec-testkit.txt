@@ -6,14 +6,14 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec-testkit.txt 105 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 1 lines (2 hidden + 0 excluded-feature)
+# files: zencodec-testkit.txt 106 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 1 lines (2 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 2
 #   pub types (struct/enum/trait/alias)        23
 #   pub consts/statics                          2
-#   free functions                             34
+#   free functions                             35
 #   inherent methods                            7
 #   struct fields                               7
 #   enum variants                              14
@@ -22,10 +22,10 @@
 #   auto-trait exceptions                       4
 #
 # per-module pub lines:
-#   (root)                           69
+#   (root)                           70
 #   reference                        20
 
-## items (84 lines)
+## items (85 lines)
 
 pub mod zencodec_testkit
 pub mod reference
@@ -97,6 +97,7 @@ pub fn check_fidelity_honesty<E, D>(E, D, &TestImage) -> Conformance where E: ze
 pub fn check_gain_map_roundtrip<E, D>(E, D) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
 pub fn check_incremental_capability_honesty<D: zencodec::traits::decoding::DecoderConfig>(D, &[u8]) -> Conformance
 pub fn check_incremental_contract<D: zencodec::traits::decoding::DecoderConfig>(D, &[u8]) -> Conformance
+pub fn check_incremental_decoder<F>(F, &[u8], &zencodec::output::DecodeOutput) -> Conformance where F: core::ops::function::Fn() -> core::result::Result<alloc::boxed::Box<zencodec::traits::incremental::DynIncrementalDecoder>, alloc::string::String>
 pub fn check_inventory<D>(D, &[u8]) -> Conformance where D: zencodec::traits::decoding::DecoderConfig
 pub fn check_inventory_dispatch<D: zencodec::traits::decoding::DecoderConfig + 'static>(D, &[u8]) -> Conformance
 pub fn check_inventory_input_limit<D: zencodec::traits::decoding::DecoderConfig + 'static>(D, &[u8]) -> Conformance

@@ -6,22 +6,22 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2029 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 110 lines (110 hidden + 0 excluded-feature)
+# files: zencodec.txt 2035 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 110 lines (110 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                13
-#   pub types (struct/enum/trait/alias)       219
+#   pub types (struct/enum/trait/alias)       220
 #   pub consts/statics                        227
 #   free functions                             64
-#   inherent methods                          859
+#   inherent methods                          860
 #   struct fields                             249
 #   enum variants                             302
 #   re-exports                                 15
 #   trait roster entries (type × trait)       574
-#   conditional trait impls (verbatim)          4
+#   conditional trait impls (verbatim)          7
 #   auto-trait-complete types                  98
-#   auto-trait exceptions                      16
+#   auto-trait exceptions                      17
 #
 # per-module pub lines:
 #   (root)                          850
@@ -31,14 +31,14 @@
 #   estimate                         48
 #   exif                             94
 #   gainmap                         126
-#   helpers                          13
+#   helpers                          15
 #   icc                               1
 #   inventory                       103
 #   metadata_rewrite                 58
 #   prelude                         216
 #   source                           37
 
-## items (1882 lines)
+## items (1884 lines)
 
 pub mod zencodec
 pub use At
@@ -891,6 +891,8 @@ pub helpers::IccMatchTolerance::Approximate = 13
 pub helpers::IccMatchTolerance::Exact = 1
 pub helpers::IccMatchTolerance::Intent = 56
 pub helpers::IccMatchTolerance::Precise = 3
+pub struct helpers::WholeFileIncremental<J>
+pub fn helpers::WholeFileIncremental<J>::new(J, &[zenpixels::descriptor::PixelDescriptor]) -> Self
 pub fn helpers::copy_decode_to_sink<'a, J>(J, alloc::borrow::Cow<'a, [u8]>, &mut dyn decode::DecodeRowSink, &[zenpixels::descriptor::PixelDescriptor], fn(decode::SinkError) -> <J as decode::DecodeJob>::Error) -> core::result::Result<decode::OutputInfo, <J as decode::DecodeJob>::Error> where J: decode::DecodeJob<'a>
 pub fn helpers::copy_frame_to_sink<D: decode::AnimationFrameDecoder>(&mut D, core::option::Option<&dyn enough::Stop>, &mut dyn decode::DecodeRowSink) -> core::result::Result<core::option::Option<decode::OutputInfo>, <D as decode::AnimationFrameDecoder>::Error>
 pub fn helpers::descriptor_for_decoded_pixels(zenpixels::descriptor::PixelFormat, &SourceColor, core::option::Option<&zenpixels::cicp::Cicp>, helpers::IccMatchTolerance) -> zenpixels::descriptor::PixelDescriptor
@@ -2052,9 +2054,12 @@ source::SliceReadAt<'a>: Clone, Debug
 source::SourceError: Clone, Debug, Display, Eq, Error, PartialEq
 whereat::at::At<E>: CategorizedError
 impl<C> decode::DynDecoderConfig for C where C: decode::DecoderConfig + 'static
+impl<J, E> decode::IncrementalDecode for helpers::WholeFileIncremental<J> where J: for<'a> decode::DecodeJob<'a, Error = E> + core::marker::Send + 'static, E: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::Enc: encode::Encoder + core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::AnimationFrameEnc: encode::AnimationFrameEncoder
+impl<J, E> decode::IncrementalDecode for helpers::WholeFileIncremental<J> where J: for<'a> decode::DecodeJob<'a, Error = E> + core::marker::Send + 'static, E: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 impl<C> decode::DynDecoderConfig for C where C: decode::DecoderConfig + 'static
 impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::Enc: encode::Encoder + core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::AnimationFrameEnc: encode::AnimationFrameEncoder
+impl<J, E> decode::IncrementalDecode for helpers::WholeFileIncremental<J> where J: for<'a> decode::DecodeJob<'a, Error = E> + core::marker::Send + 'static, E: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 
 ## auto traits
 
@@ -2073,5 +2078,6 @@ decode::Fused<D>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 decode::IncrementalDecoderShim<D>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 decode::StepError<E>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 encode::EncodeOutput: !RefUnwindSafe !UnwindSafe
+helpers::WholeFileIncremental<J>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 metadata_rewrite::Request<'a>: !RefUnwindSafe !Send !Sync !UnwindSafe
 source::ReadAtShim<S>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
