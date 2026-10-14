@@ -38,6 +38,7 @@ extern crate std;
 
 mod drivable;
 mod drive;
+mod encoder_sink;
 mod feeder;
 mod sinks;
 
@@ -55,6 +56,7 @@ pub use drive::{
     DriveError, DriveOptions, DriveStats, coalesce_byte_ranges, coalesce_into, drive_from_read_at,
     drive_from_slice,
 };
+pub use encoder_sink::{EncoderSink, EncoderSinkError};
 pub use feeder::Feeder;
 pub use sinks::CollectSink;
 
