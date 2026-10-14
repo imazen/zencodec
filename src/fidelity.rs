@@ -193,22 +193,12 @@ pub(crate) fn select_target<T>(
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// DEFERRED — `try_with_fidelity` / `FidelityMatch` (insufficiently settled).
+// DEFERRED — ordering or comparing distinct fidelity targets.
 //
-// A fail-fast counterpart to `with_fidelity` that reports how the codec resolved
-// the request. Deferred: the raised/lowered/translated + content-dependent
-// semantics aren't settled — a *config-time* verdict can't express GIF's
-// content-dependent lossless, nor the HDR/bit-depth "is it really lossless?"
-// question. Design + open questions: imazen/zencodec#104. Full prior impl in git
-// history (commit 44fe22e).
-//
-//   enum FidelityMatch { Exact, RaisedTo(Fidelity), LoweredTo(Fidelity),
-//                        Translated(Fidelity), Unsupported }
-//   //   is_honored() / meets_or_exceeds() / resolved()
-//   EncoderConfig::try_with_fidelity(&mut self, Fidelity) -> FidelityMatch
-//
-// What ships meanwhile: `with_fidelity` (infallible best-effort) +
-// `resolved_target_fidelity` (the simple `Option<Fidelity>` resolved report).
+// `try_with_fidelity` now confirms an unchanged configuration target. It does
+// not classify a substitution as better/worse, nor promise content-dependent
+// pixel fidelity. Those require a separate operation-level requirement model.
+// Prior FidelityMatch design: imazen/zencodec#104, commit 44fe22e.
 // ═════════════════════════════════════════════════════════════════════════════
 
 /// What a lossy encode aims at.

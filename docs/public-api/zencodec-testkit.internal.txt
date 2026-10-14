@@ -7,4 +7,13 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 
-(no hidden or excluded-feature surface)
+## summary
+#
+#   trait roster entries (type × trait)         1
+
+## items (0 lines)
+
+
+## trait impls (1 types)
+
+ExpectedError: TrivialClone

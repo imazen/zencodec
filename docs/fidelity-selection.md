@@ -29,3 +29,13 @@ configuration query cannot certify pixels it has never seen. Native quality is
 codec-specific. Substitution to lossless is still a substitution: list it
 explicitly when acceptable. The next breaking contract should express required
 sample fidelity at encode time, as recorded in the breaking queue.
+
+Use `CodecSet::encoder_for(format)` to obtain the erased configuration and call
+`select_fidelity_job` on it; no second registry or format dispatch is needed.
+
+A codec that translates a calibrated perceptual target but reports only the
+resulting native quality cannot confirm that target through the conservative
+default. It must preserve/report the requested target or implement the checked
+setter with equivalent validation. Do not infer support from a quality number
+that happens to equal the requested score. Target selection is checked; the
+calibration itself is not evaluated by this API.
