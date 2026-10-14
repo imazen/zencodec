@@ -54,7 +54,7 @@ use zencodec::source::{DynReadAt, SourceError};
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSliceMut};
 
 use crate::drive::{DriveOptions, Progressor, coalesce_into};
-use crate::window::{ProtocolViolation, Window, check_need};
+use crate::window::{ProtocolViolation, Window, check_need, read_target};
 
 // ───────────────────────────── sources and compute ─────────────────────────────
 
@@ -218,6 +218,13 @@ pub type Job = Box<dyn FnOnce() + Send + 'static>;
 pub trait Compute: Send + Sync {
     /// Run `job` somewhere; the driver awaits its result.
     fn spawn(&self, job: Job);
+
+    /// Whether `spawn` would run the job right here, on the calling task.
+    /// The drivers then call the batch directly, without boxing it or
+    /// creating a channel for its result. Default `false`.
+    fn runs_inline(&self) -> bool {
+        false
+    }
 }
 
 impl<F: Fn(Job) + Send + Sync> Compute for F {
@@ -236,21 +243,37 @@ impl Compute for Inline {
     fn spawn(&self, job: Job) {
         job()
     }
+
+    fn runs_inline(&self) -> bool {
+        true
+    }
 }
 
 /// Run `f` on `compute` and await its result.
 ///
-/// Spawns before returning, and the returned future holds only the
-/// receiver, so the caller's future stays `Send` whatever `compute` is.
+/// Spawns (or, for an inline compute, runs) before returning, and the
+/// returned future holds only the result or its receiver, so the caller's
+/// future stays `Send` whatever `compute` is.
 fn run_on<C: Compute + ?Sized, T: Send + 'static>(
     compute: &C,
     f: impl FnOnce() -> T + Send + 'static,
 ) -> impl Future<Output = Result<T, AsyncDriveError<core::convert::Infallible>>> + Send + 'static {
-    let (tx, rx) = oneshot::channel();
-    compute.spawn(Box::new(move || {
-        let _ = tx.send(f());
-    }));
-    async move { rx.await.map_err(|_| AsyncDriveError::Disconnected) }
+    let (done, rx) = if compute.runs_inline() {
+        (Some(f()), None)
+    } else {
+        let (tx, rx) = oneshot::channel();
+        compute.spawn(Box::new(move || {
+            let _ = tx.send(f());
+        }));
+        (None, Some(rx))
+    };
+    async move {
+        match (done, rx) {
+            (Some(v), _) => Ok(v),
+            (None, Some(rx)) => rx.await.map_err(|_| AsyncDriveError::Disconnected),
+            (None, None) => Err(AsyncDriveError::Disconnected),
+        }
+    }
 }
 
 // ───────────────────────────── errors ─────────────────────────────
@@ -330,7 +353,8 @@ struct Batch<D: IncrementalDecode, S> {
 }
 
 enum BatchEnd {
-    Need(Vec<Request>),
+    /// The decoder's `requested()` holds what it needs.
+    Need,
     Done(OutputInfo),
 }
 
@@ -367,7 +391,7 @@ where
         }
         window.consume(p.consumed);
         match p.event {
-            Event::Need => break Ok(BatchEnd::Need(decoder.requested().to_vec())),
+            Event::Need => break Ok(BatchEnd::Need),
             Event::Done(info) => break Ok(BatchEnd::Done(info)),
             _ => continue,
         }
@@ -406,10 +430,11 @@ fn fill<'a, Src: AsyncSource + ?Sized, E: 'a>(
                 // Read until the request is met (or the source ends), asking
                 // for up to `read_size` more each time; a network source returns
                 // what has arrived, so the decoder steps as soon as it can.
+                let target = read_target(min_len, opts.read_size);
                 while window.len() < min_len.max(1) && window.total != Some(window.end()) {
                     let end = window.end();
-                    let need = min_len.max(1) - window.len();
-                    let spare = window.spare_up_to(need, opts.read_size.max(need));
+                    let want = target - window.len().min(target);
+                    let spare = window.spare(want);
                     let n = source
                         .read_at(end, spare)
                         .await
@@ -501,6 +526,7 @@ where
             w.total = source.len_hint();
         }
         let mut fetched = Vec::new();
+        let mut requests: Vec<Request> = Vec::new();
         loop {
             if let Some(p) = &pulse
                 && let Err(r) = p.check()
@@ -522,7 +548,11 @@ where
             } = batch;
             match outcome {
                 Ok(BatchEnd::Done(info)) => return Ok((info, sink)),
-                Ok(BatchEnd::Need(requests)) => {
+                Ok(BatchEnd::Need) => {
+                    // Copied into a reused list: the decoder is not `Sync`, so it
+                    // cannot be borrowed across the reads.
+                    requests.clear();
+                    requests.extend_from_slice(decoder.requested());
                     fill(source, &mut window, &mut fetched, &requests, opts).await?;
                 }
                 Err(BatchFail::Step(e)) => return Err(AsyncDriveError::Step(e)),
@@ -570,6 +600,7 @@ where
             w.total = source.len_hint();
         }
         let mut fetched = Vec::new();
+        let mut requests: Vec<Request> = Vec::new();
         loop {
             if let Some(p) = &pulse
                 && let Err(r) = p.check()
@@ -608,7 +639,11 @@ where
                     out.flush().await.map_err(AsyncDriveError::Write)?;
                     return Ok(written + rest.data().len() as u64);
                 }
-                Ok(BatchEnd::Need(requests)) => {
+                Ok(BatchEnd::Need) => {
+                    // Copied into a reused list: the decoder is not `Sync`, so it
+                    // cannot be borrowed across the reads.
+                    requests.clear();
+                    requests.extend_from_slice(decoder.requested());
                     fill(source, &mut window, &mut fetched, &requests, opts).await?;
                 }
                 Err(BatchFail::Step(e)) => return Err(AsyncDriveError::Step(e)),

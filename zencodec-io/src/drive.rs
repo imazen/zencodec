@@ -10,7 +10,7 @@ use zencodec::decode::{
 };
 use zencodec::source::ReadAt;
 
-use crate::window::{ProtocolViolation, Window, check_need};
+use crate::window::{ProtocolViolation, Window, check_need, read_target};
 
 /// Tuning for the drivers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -290,14 +290,14 @@ where
                 } else {
                     window.consume((offset - window.base()) as usize);
                 }
-                // Read until the request is met or the source ends, each read
-                // `read_size` bytes or the room the window has left (a short
-                // read marks the end of the source).
-                while window.len() < min_len.max(1) && window.total != Some(window.end()) {
+                // Read until the window holds a whole number of requests at
+                // least `read_size` long, or the source ends (a short read
+                // marks the end).
+                let target = read_target(min_len, opts.read_size);
+                while window.len() < target && window.total != Some(window.end()) {
                     let end = window.end();
-                    let need = min_len.max(1) - window.len();
-                    let spare = window.spare_up_to(need, opts.read_size.max(need));
-                    let n_want = spare.len();
+                    let n_want = target - window.len();
+                    let spare = window.spare(n_want);
                     let n = source.read_at(end, spare).map_err(DriveError::Source)?;
                     window.commit(n);
                     stats.reads += 1;

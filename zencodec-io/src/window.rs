@@ -80,23 +80,7 @@ impl Window {
         &mut self.buf[self.end..self.end + n]
     }
 
-    /// Room to read into: the whole free tail, up to `max` bytes, when it
-    /// holds at least `min` bytes and half of `max`; otherwise
-    /// [`spare(max)`](Self::spare), which compacts or grows. Reading into
-    /// the tail as it stands moves live bytes only when the tail runs out,
-    /// not on every read.
-    pub(crate) fn spare_up_to(&mut self, min: usize, max: usize) -> &mut [u8] {
-        let max = max.max(min);
-        let room = self.buf.len() - self.end;
-        if room >= min.max(max / 2) {
-            let n = room.min(max);
-            return &mut self.buf[self.end..self.end + n];
-        }
-        self.spare(max)
-    }
-
-    /// Keep `n` of the bytes last handed out by [`spare`](Self::spare) or
-    /// [`spare_up_to`](Self::spare_up_to).
+    /// Keep `n` of the bytes last handed out by [`spare`](Self::spare).
     pub(crate) fn commit(&mut self, n: usize) {
         self.end += n;
     }
@@ -117,6 +101,21 @@ impl Window {
         self.spare(bytes.len()).copy_from_slice(bytes);
         self.commit(bytes.len());
     }
+}
+
+/// How many bytes to hold before stepping a decoder that asked for
+/// `min_len` contiguous bytes: `min_len` rounded up to a whole multiple of
+/// itself no smaller than `read_size`.
+///
+/// A decoder that consumes `min_len` per step (a strip, a row) then leaves
+/// nothing behind, so the window empties and restarts at its front instead
+/// of moving a leftover tail on every read; one stray header in front of
+/// the strips would otherwise misalign every read for the whole image.
+/// Decoders that ask for little (`min_len` of 1) still get `read_size`.
+pub(crate) fn read_target(min_len: usize, read_size: usize) -> usize {
+    let unit = min_len.max(1);
+    let read_size = read_size.max(unit);
+    read_size.div_ceil(unit).saturating_mul(unit)
 }
 
 /// A decoder broke the [`IncrementalDecode`](zencodec::decode::IncrementalDecode)
@@ -206,6 +205,15 @@ mod tests {
         assert_eq!((w.base(), w.len()), (6, 0));
         w.reset_to(100);
         assert_eq!((w.base(), w.end()), (100, 100));
+    }
+
+    #[test]
+    fn read_target_rounds_to_whole_requests() {
+        assert_eq!(read_target(1, 65536), 65536);
+        assert_eq!(read_target(0, 4096), 4096);
+        assert_eq!(read_target(65536, 65536), 65536);
+        assert_eq!(read_target(20_000, 65536), 80_000);
+        assert_eq!(read_target(100_000, 65536), 100_000);
     }
 
     #[test]

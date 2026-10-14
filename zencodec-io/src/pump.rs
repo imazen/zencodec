@@ -6,7 +6,7 @@ use how_far::Pulse;
 use zencodec::decode::{DecodeRowSink, Event, IncrementalDecode, OutputInfo, Request, StepError};
 
 use crate::drive::Progressor;
-use crate::window::{ProtocolViolation, Window, check_need};
+use crate::window::{ProtocolViolation, Window, check_need, read_target};
 
 /// Failure of [`pump_read_to_sink`].
 #[derive(Debug)]
@@ -135,10 +135,11 @@ where
             window.consume((offset - window.base()) as usize);
         }
         // Read until `min_len` bytes from `offset` are held, or the end.
+        let target = read_target(min_len, read_size);
         while window.len() < min_len.max(1) && window.total.is_none() {
             let end = window.end();
-            let need = min_len.max(1) - window.len();
-            let spare = window.spare_up_to(need, read_size.max(need));
+            let want = target - window.len().min(target);
+            let spare = window.spare(want);
             let n = reader.read(spare).map_err(PumpError::Io)?;
             window.commit(n);
             if n == 0 {
