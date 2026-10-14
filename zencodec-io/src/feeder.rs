@@ -10,10 +10,21 @@ use crate::drivable::Drivable;
 /// buffer is bounded. Every driver in this crate goes through a `Feeder`
 /// so the leftover is re-offered before any new bytes are fetched, and a
 /// decoder that refuses bytes it keeps asking for is reported as stalled
-/// instead of looping.
+/// instead of looping. A carried chunk is consumed by advancing a head
+/// index, never by shifting its bytes, so a large remainder costs one copy
+/// when it is carried and nothing per re-offer.
 #[derive(Debug, Default)]
 pub struct Feeder {
-    carry: Vec<(u64, Vec<u8>, bool)>,
+    carry: Vec<Carried>,
+}
+
+#[derive(Debug)]
+struct Carried {
+    offset: u64,
+    bytes: Vec<u8>,
+    /// `bytes[head..]` is still unaccepted.
+    head: usize,
+    eof: bool,
 }
 
 impl Feeder {
@@ -37,13 +48,22 @@ impl Feeder {
         eof: bool,
     ) -> Result<bool, D::Error> {
         if !self.flush(dec)? {
-            self.carry.push((offset, bytes.to_vec(), eof));
+            self.carry.push(Carried {
+                offset,
+                bytes: bytes.to_vec(),
+                head: 0,
+                eof,
+            });
             return Ok(false);
         }
         let accepted = dec.feed(offset, bytes, eof)?;
         if accepted < bytes.len() {
-            self.carry
-                .push((offset + accepted as u64, bytes[accepted..].to_vec(), eof));
+            self.carry.push(Carried {
+                offset: offset + accepted as u64,
+                bytes: bytes[accepted..].to_vec(),
+                head: 0,
+                eof,
+            });
             return Ok(false);
         }
         Ok(true)
@@ -51,16 +71,17 @@ impl Feeder {
 
     /// Re-offer carried bytes. Returns `true` when nothing is left over.
     pub fn flush<D: Drivable + ?Sized>(&mut self, dec: &mut D) -> Result<bool, D::Error> {
-        while let Some((offset, bytes, eof)) = self.carry.first_mut() {
-            let accepted = dec.feed(*offset, bytes, *eof)?;
+        while let Some(c) = self.carry.first_mut() {
+            let live = &c.bytes[c.head..];
+            let accepted = dec.feed(c.offset, live, c.eof)?;
             if accepted == 0 {
                 return Ok(false);
             }
-            if accepted >= bytes.len() {
+            if accepted >= live.len() {
                 self.carry.remove(0);
             } else {
-                bytes.drain(..accepted);
-                *offset += accepted as u64;
+                c.head += accepted;
+                c.offset += accepted as u64;
                 return Ok(false);
             }
         }
