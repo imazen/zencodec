@@ -6,26 +6,26 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec-testkit.txt 97 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 1 lines (2 hidden + 0 excluded-feature)
+# files: zencodec-testkit.txt 103 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 1 lines (2 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 2
-#   pub types (struct/enum/trait/alias)        22
+#   pub types (struct/enum/trait/alias)        23
 #   pub consts/statics                          2
-#   free functions                             29
+#   free functions                             32
 #   inherent methods                            7
 #   struct fields                               7
 #   enum variants                              14
-#   trait roster entries (type × trait)        37
+#   trait roster entries (type × trait)        38
 #   auto-trait-complete types                  14
-#   auto-trait exceptions                       3
+#   auto-trait exceptions                       4
 #
 # per-module pub lines:
-#   (root)                           64
-#   reference                        19
+#   (root)                           67
+#   reference                        20
 
-## items (78 lines)
+## items (82 lines)
 
 pub mod zencodec_testkit
 pub mod reference
@@ -40,6 +40,7 @@ pub struct reference::RefDec<'a>
 pub struct reference::RefDecodeJob
 pub struct reference::RefEnc
 pub struct reference::RefEncodeJob
+pub struct reference::RefIncDec
 pub struct reference::RefStreamDec<'a>
 pub fn reference::ReferenceEncoderConfig::new() -> Self
 pub enum ExpectedError
@@ -94,6 +95,7 @@ pub fn check_decode_truncation_series<D>(D, &[u8]) -> Conformance where D: zenco
 pub fn check_encode_policy_admission<E, D>(E, D, zenpixels::buffer::PixelSlice<'_>, zencodec::metadata::Metadata, zencodec::policy::EncodePolicy, zencodec::policy::EncodePolicy, bool, &zencodec::metadata::Metadata) -> Conformance where E: zencodec::traits::encoding::EncoderConfig + 'static, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error> + core::marker::Send, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
 pub fn check_fidelity_honesty<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
 pub fn check_gain_map_roundtrip<E, D>(E, D) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
+pub fn check_incremental_capability_honesty<D: zencodec::traits::decoding::DecoderConfig>(D, &[u8]) -> Conformance
 pub fn check_inventory<D>(D, &[u8]) -> Conformance where D: zencodec::traits::decoding::DecoderConfig
 pub fn check_inventory_dispatch<D: zencodec::traits::decoding::DecoderConfig + 'static>(D, &[u8]) -> Conformance
 pub fn check_inventory_input_limit<D: zencodec::traits::decoding::DecoderConfig + 'static>(D, &[u8]) -> Conformance
@@ -102,11 +104,13 @@ pub fn check_metadata_rewrite<'a>(zencodec::metadata_rewrite::Request<'a>, impl 
 pub fn check_native_hdr_roundtrip<E, D>(E, D) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
 pub fn check_orientation_roundtrip<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
 pub fn check_pixel_roundtrip<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
+pub fn check_read_at_contract(&mut dyn zencodec::source::DynReadAt, &[u8]) -> Conformance
+pub fn check_seekable_capability_honesty<D: zencodec::traits::decoding::DecoderConfig>(D, &[u8]) -> Conformance
 pub fn check_source_color_authority(zencodec::format::ImageFormat, &zencodec::info::SourceColor) -> Conformance
 pub fn expected_color_authority(zencodec::format::ImageFormat, bool, bool) -> core::option::Option<zenpixels::color::ColorAuthority>
 pub type Conformance = core::result::Result<(), Failure>
 
-## trait impls (15 types)
+## trait impls (16 types)
 
 ExpectedError: Clone, Copy, Debug, Eq, PartialEq
 Failure: Clone, Debug, Display, Error
@@ -118,6 +122,7 @@ reference::RefDecodeJob: zencodec::traits::decoding::DecodeJob<'a>
 reference::RefEnc: zencodec::traits::encoder::Encoder
 reference::RefEncodeJob: zencodec::traits::encoding::EncodeJob
 reference::RefError: Debug, Display, Error, From<enough::reason::StopReason>, From<zencodec::capabilities::UnsupportedOperation>, From<zencodec::limits::LimitExceeded>, zencodec::error::CategorizedError
+reference::RefIncDec: zencodec::traits::decoder::IncrementalDecode
 reference::RefStreamDec<'_>: zencodec::traits::decoder::StreamingDecode
 reference::ReferenceDecoderConfig: Clone, Debug, Default, zencodec::traits::decoding::DecoderConfig
 reference::ReferenceEncoderConfig: Clone, Debug, Default, zencodec::traits::encoding::EncoderConfig
@@ -129,4 +134,5 @@ whereat::at::At<zencodec::error::CodecError>: From<reference::RefError>
 14 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 reference::RefAnimDec: !RefUnwindSafe !UnwindSafe
 reference::RefError: !RefUnwindSafe !UnwindSafe
+reference::RefIncDec: !RefUnwindSafe !UnwindSafe
 reference::RefStreamDec<'a>: !RefUnwindSafe !UnwindSafe

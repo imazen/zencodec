@@ -15,6 +15,15 @@ This repo is a Cargo workspace:
   optional capability false) for the false-direction branches, plus EXIF fixtures.
   Build/test the whole workspace with `cargo test --workspace`; the testkit must
   stay green and is the place to add cross-codec correctness checks.
+- **`zencodec-io/`** (member, unpublished) — drivers that run a decoder over
+  real input: `drive_from_slice` / `drive_from_read_at`, `pump_read_to_sink`,
+  `BufferedReadAt`, `FileReadAt`, `CollectSink`, and (feature `tokio`) the
+  dedicated-thread bridge `thread::{decode_on_thread, pull_decode_on_thread,
+  ChannelRowSink}`. `no_std` by default; `std` and `tokio` features.
+- **`zencodec-coroutine/`** (member, unpublished) — write an `IncrementalDecode`
+  as straight-line `async` code (`CoroutineContext` / `CoroutineDecoder`);
+  `no_std`, no runtime. Interface stays in zencodec; drivers and authoring aids
+  stay out of it. Contract: `docs/range-decoding-contract.md`.
 
 ## API Specification
 
