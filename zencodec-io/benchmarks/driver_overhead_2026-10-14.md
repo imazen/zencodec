@@ -60,8 +60,11 @@ index with amortised compaction. The first bench run caught it.
 
 Throwaway clone at `~/tmp/zencodec-bench` on dev, built with
 `run-heavy` (peak RSS 0.61 GiB). zenbench refused verified placement on
-the 9950X3D's two L3 classes; this run is `--cpu-policy=unrestricted`
-(UNVERIFIED_UNRESTRICTED, exploratory).
+the 9950X3D's two L3 classes; `zenbench exec --cpu-set=0-7,16-23` also
+refused because a verified run on Linux needs a delegated cpuset cgroup,
+which dev does not have. This run is `--cpu-policy=unrestricted`
+(UNVERIFIED_UNRESTRICTED, exploratory). A verified baseline needs that
+cgroup delegation set up first.
 
 Allocation audit: identical counts to the mac run except the tokio
 bridge (32 allocs, 0.50 per strip; 98 and 1.53 with `ChannelRowSink`),
