@@ -525,4 +525,30 @@ pub trait DecodeJob<'a>: Sized {
             crate::capabilities::UnsupportedOperation::IncrementalDecode,
         ))
     }
+
+    /// Decode from a random-access source into a caller-owned sink (pull
+    /// model).
+    ///
+    /// The codec reads exactly the byte ranges it needs from `source`, in
+    /// straight-line code, and writes rows into `sink` exactly as
+    /// [`push_decoder`](DecodeJob::push_decoder) does. Crop and region
+    /// intent stay bound on the job; the sink's coordinate space is the
+    /// output image. Codecs whose core reads a seekable input natively
+    /// (directory and tile formats) override this and set
+    /// [`DecodeCapabilities::with_seekable`](crate::decode::DecodeCapabilities::with_seekable);
+    /// drivers with a sequential or async source manufacture one with the
+    /// adapters in `zencodec-io`.
+    ///
+    /// Default implementation returns [`UnsupportedOperation::SeekableDecode`].
+    fn push_decoder_from_source(
+        self,
+        source: &mut dyn crate::source::DynReadAt,
+        sink: &mut dyn crate::DecodeRowSink,
+        preferred: &[PixelDescriptor],
+    ) -> Result<OutputInfo, BoxedError> {
+        let _ = (source, sink, preferred);
+        Err(Box::new(
+            crate::capabilities::UnsupportedOperation::SeekableDecode,
+        ))
+    }
 }

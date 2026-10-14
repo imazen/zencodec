@@ -128,6 +128,37 @@ pub trait DecodeRowSink {
     fn finish(&mut self) -> Result<(), SinkError> {
         Ok(())
     }
+
+    /// Whether this sink wants provisional rows from progressive passes.
+    ///
+    /// Default `false`: the decoder writes each row once, in its final
+    /// form, through [`provide_next_buffer`](Self::provide_next_buffer).
+    /// A sink that renders refinements (progressive display) returns
+    /// `true` and implements [`provide_pass_buffer`](Self::provide_pass_buffer).
+    fn accepts_provisional(&self) -> bool {
+        false
+    }
+
+    /// Provide a buffer for rows `meta.y .. meta.y + height` of pass
+    /// `meta.pass`. Called only when [`accepts_provisional`](Self::accepts_provisional)
+    /// is `true`; rows may arrive out of order and more than once, and
+    /// `meta.is_final` marks the last write for those rows.
+    ///
+    /// Default: final rows go to `provide_next_buffer`; provisional rows
+    /// are refused.
+    fn provide_pass_buffer(
+        &mut self,
+        meta: crate::traits::BatchMeta,
+        height: u32,
+        width: u32,
+        descriptor: PixelDescriptor,
+    ) -> Result<PixelSliceMut<'_>, SinkError> {
+        if meta.is_final {
+            self.provide_next_buffer(meta.y, height, width, descriptor)
+        } else {
+            Err("sink does not accept provisional rows".into())
+        }
+    }
 }
 
 #[cfg(test)]

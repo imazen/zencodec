@@ -19,8 +19,6 @@ use crate::traits::{AnimationFrameDecoder, Decode, DecodeJob};
 
 mod exif;
 mod icc;
-#[cfg(feature = "std")]
-pub mod sansio;
 
 pub use exif::{parse_exif_orientation, set_exif_orientation};
 pub use icc::descriptor_for_decoded_pixels_v2;
@@ -28,8 +26,6 @@ pub use icc::descriptor_for_decoded_pixels_v2;
 pub use icc::{
     IccMatchTolerance, descriptor_for_decoded_pixels, icc_profile_is_srgb, identify_well_known_icc,
 };
-#[cfg(feature = "std")]
-pub use sansio::{PumpError, pump_dyn_read_to_sink, pump_read_to_sink};
 
 /// Implement `push_decoder` by doing a full decode and copying rows to the sink.
 ///

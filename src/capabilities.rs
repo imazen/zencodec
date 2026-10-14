@@ -57,6 +57,9 @@ pub enum UnsupportedOperation {
     EncodePolicy,
     /// Incremental Sans-I/O decoding ([`IncrementalDecode`](crate::decode::IncrementalDecode)).
     IncrementalDecode,
+    /// Pull-based decoding from a random-access source
+    /// ([`DecodeJob::push_decoder_from_source`](crate::decode::DecodeJob::push_decoder_from_source)).
+    SeekableDecode,
 }
 
 impl UnsupportedOperation {
@@ -77,6 +80,7 @@ impl UnsupportedOperation {
             Self::GainMapEncode => "gain_map_encode",
             Self::Inventory => "inventory",
             Self::IncrementalDecode => "incremental_decode",
+            Self::SeekableDecode => "seekable_decode",
         }
     }
 }
@@ -362,7 +366,8 @@ impl EncodeCapabilities {
             | UnsupportedOperation::AnimationDecode
             | UnsupportedOperation::MultiImageDecode
             | UnsupportedOperation::PixelFormat
-            | UnsupportedOperation::IncrementalDecode => false,
+            | UnsupportedOperation::IncrementalDecode
+            | UnsupportedOperation::SeekableDecode => false,
         }
     }
 
@@ -582,6 +587,7 @@ pub struct DecodeCapabilities {
     decode_into: bool,
     streaming: bool,
     incremental: bool,
+    seekable: bool,
     // Format capabilities
     hdr: bool,
     gain_map: bool,
@@ -623,6 +629,7 @@ impl DecodeCapabilities {
             decode_into: false,
             streaming: false,
             incremental: false,
+            seekable: false,
             hdr: false,
             gain_map: false,
             inventory: false,
@@ -686,6 +693,10 @@ impl DecodeCapabilities {
     /// Whether `IncrementalDecode` / `into_incremental_decoder()` is implemented.
     pub const fn incremental(&self) -> bool {
         self.incremental
+    }
+    /// Whether `push_decoder_from_source()` decodes from a random-access source.
+    pub const fn seekable(&self) -> bool {
+        self.seekable
     }
     /// Whether the codec supports HDR content.
     pub const fn hdr(&self) -> bool {
@@ -791,6 +802,7 @@ impl DecodeCapabilities {
             UnsupportedOperation::DecodeInto => self.decode_into,
             UnsupportedOperation::RowLevelDecode => self.streaming,
             UnsupportedOperation::IncrementalDecode => self.incremental,
+            UnsupportedOperation::SeekableDecode => self.seekable,
             UnsupportedOperation::AnimationDecode => self.animation,
             UnsupportedOperation::MultiImageDecode => self.multi_image,
             UnsupportedOperation::Inventory => self.inventory,
@@ -860,6 +872,11 @@ impl DecodeCapabilities {
     /// Set whether `IncrementalDecode` / `into_incremental_decoder()` is supported.
     pub const fn with_incremental(mut self, v: bool) -> Self {
         self.incremental = v;
+        self
+    }
+    /// Set whether `push_decoder_from_source()` is supported.
+    pub const fn with_seekable(mut self, v: bool) -> Self {
+        self.seekable = v;
         self
     }
     /// Set whether HDR content is supported.

@@ -280,6 +280,66 @@ trait AnimationFrameDecoder: Sized {
 
 Use `Unsupported<E>` as the associated type for codecs without animation support.
 
+### `IncrementalDecode` (resumable sans-I/O decode)
+
+```rust
+trait IncrementalDecode {
+    type Error: core::error::Error + Send + Sync + 'static;
+    fn feed(&mut self, offset: u64, bytes: &[u8], eof: bool) -> Result<usize, Self::Error>;
+    fn step(&mut self, sink: &mut dyn DecodeRowSink, stop: Option<&dyn Stop>)
+        -> Result<Step<'_>, Self::Error>;
+    fn wrap_sink_error(err: SinkError) -> Self::Error;
+    fn info(&self) -> Option<&ImageInfo>;
+    fn output_descriptor(&self) -> Option<PixelDescriptor>;   // default None
+    fn access_pattern(&self) -> source::AccessPattern;         // default Sequential
+}
+
+#[non_exhaustive]
+enum Step<'a> {
+    Need(&'a [ByteRange]),                 // length 0 = any amount from offset
+    NeedLen,
+    Rows { meta: BatchMeta, rows: u32 },
+    Metadata(MetadataUpdate),
+    Done(OutputInfo),
+}
+```
+
+`feed` stores bytes (never decodes, never touches the sink) and may accept
+fewer than offered; `step` does bounded work and returns the first event,
+writing rows straight into the sink. Created by
+`DecodeJob::dyn_incremental_decoder` (returns `Box<dyn DynIncrementalDecoder>`,
+same methods over `BoxedError`); declared with `DecodeCapabilities::incremental`.
+Drivers (slice, `ReadAt`, `std::io::Read`, async) are in `zencodec-io`;
+straight-line authoring is in `zencodec-coroutine`. Contract details:
+[`range-decoding-contract.md`](range-decoding-contract.md).
+
+### `ReadAt` / `DynReadAt` (random-access source) and `push_decoder_from_source`
+
+```rust
+// zencodec::source
+trait ReadAt {
+    type Error: core::error::Error + Send + Sync + 'static;
+    fn len(&mut self) -> Result<u64, Self::Error>;
+    fn read_exact_at(&mut self, offset: u64, out: &mut [u8]) -> Result<(), Self::Error>;
+    fn read_many_at(&mut self, reqs: &mut [(u64, &mut [u8])]) -> Result<(), Self::Error>; // default: sequential
+}
+trait DynReadAt: Send { /* same, over BoxedError */ }
+struct SliceReadAt<'a>;  struct ReadAtShim<S>(pub S);
+enum AccessPattern { Sequential, BoundedBacktrack { window_bytes: u64 }, RandomAccess }
+enum SourceError { BeyondWindow {..}, BeyondLimit {..}, UnexpectedEof {..}, Io {..} }
+
+// DecodeJob<'a> — default Err(UnsupportedOperation::SeekableDecode)
+fn push_decoder_from_source(self, source: &mut dyn DynReadAt,
+    sink: &mut dyn DecodeRowSink, preferred: &[PixelDescriptor])
+    -> Result<OutputInfo, BoxedError>;
+```
+
+`push_decoder` with the data binding changed from a slice to a source: the
+codec reads exactly the ranges it needs in straight-line code and writes
+rows into the sink. Declared with `DecodeCapabilities::seekable`. Also on
+`DynDecodeJob` and as `CodecSet::push_decode_from_source` (probes offset 0,
+then dispatches).
+
 ### `DecodeRowSink` (zero-copy row sink, push-based)
 
 ```rust
@@ -407,6 +467,18 @@ trait DynAnimationFrameDecoder {
 trait DynStreamingDecoder {
     fn next_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, BoxedError>;
     fn info(&self) -> &ImageInfo;
+}
+
+trait DynIncrementalDecoder: Send {
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+    fn into_any(self: Box<Self>) -> Box<dyn Any>;
+    fn feed(&mut self, offset: u64, bytes: &[u8], eof: bool) -> Result<usize, BoxedError>;
+    fn step(&mut self, sink: &mut dyn DecodeRowSink, stop: Option<&dyn Stop>)
+        -> Result<Step<'_>, BoxedError>;
+    fn info(&self) -> Option<&ImageInfo>;
+    fn output_descriptor(&self) -> Option<PixelDescriptor>;
+    fn access_pattern(&self) -> AccessPattern;
 }
 ```
 

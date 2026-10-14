@@ -82,6 +82,7 @@ mod output;
 mod policy;
 mod set;
 mod sink;
+pub mod source;
 mod traits;
 
 // =========================================================================
@@ -225,7 +226,7 @@ pub mod decode {
     // Traits — config, job, execution
     pub use crate::traits::{
         AnimationFrameDecoder, BatchMeta, Decode, DecodeJob, DecoderConfig, IncrementalDecode,
-        MetadataUpdate, PushOutcome, PushStatus, StreamingDecode,
+        MetadataUpdate, Step, StreamingDecode,
     };
 
     // Object-safe dyn dispatch
@@ -241,9 +242,6 @@ pub mod decode {
     pub use crate::policy::DecodePolicy;
     pub use crate::sink::{DecodeRowSink, SinkError};
     pub use crate::traits::ByteRange;
-
-    #[cfg(feature = "std")]
-    pub use crate::helpers::sansio::coalesce_byte_ranges;
 
     pub use crate::negotiate::{is_format_available, negotiate_pixel_format};
 

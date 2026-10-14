@@ -90,16 +90,15 @@ impl<E: core::error::Error + Send + Sync + 'static> super::decoder::IncrementalD
 {
     type Error = E;
 
-    fn push_chunk(
-        &mut self,
-        _chunk: &[u8],
-        _is_eof: bool,
-        _stop: Option<&dyn Stop>,
-    ) -> Result<super::decoder::PushOutcome, E> {
+    fn feed(&mut self, _offset: u64, _bytes: &[u8], _eof: bool) -> Result<usize, E> {
         unreachable!("Unsupported: incremental decode stub should never be constructed")
     }
 
-    fn pull_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, E> {
+    fn step(
+        &mut self,
+        _sink: &mut dyn crate::DecodeRowSink,
+        _stop: Option<&dyn Stop>,
+    ) -> Result<super::decoder::Step<'_>, E> {
         unreachable!("Unsupported: incremental decode stub should never be constructed")
     }
 
@@ -108,10 +107,6 @@ impl<E: core::error::Error + Send + Sync + 'static> super::decoder::IncrementalD
     }
 
     fn info(&self) -> Option<&ImageInfo> {
-        unreachable!("Unsupported: incremental decode stub should never be constructed")
-    }
-
-    fn is_complete(&self) -> bool {
         unreachable!("Unsupported: incremental decode stub should never be constructed")
     }
 }

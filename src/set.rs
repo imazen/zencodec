@@ -463,18 +463,44 @@ impl CodecSet {
             .into_streaming_decoder(Cow::Borrowed(data), preferred)?)
     }
 
-    /// Create an incremental Sans-I/O decoder that detects the format automatically
-    /// from initial pushed chunks and delegates to the appropriate registered decoder.
+    /// Create an incremental (sans-I/O) decoder that detects the format from
+    /// the first bytes fed and delegates to the registered decoder.
     ///
-    /// The returned [`CodecSetIncrementalDecoder`] accepts arbitrary byte chunks via
-    /// [`push_chunk`](CodecSetIncrementalDecoder::push_chunk) or
-    /// [`push_chunk_pulse`](CodecSetIncrementalDecoder::push_chunk_pulse). Format detection
-    /// occurs seamlessly once sufficient probe bytes arrive.
+    /// While probing, the returned decoder asks for the sequential prefix
+    /// (`Step::Need` at its cursor) and buffers at most 16 KiB; the format
+    /// must be recognised within that prefix.
     pub fn incremental_decoder(
         &self,
         preferred: &[PixelDescriptor],
     ) -> Box<dyn DynIncrementalDecoder> {
         Box::new(CodecSetIncrementalDecoder::new(self.clone(), preferred))
+    }
+
+    /// Decode from a random-access source into `sink`, detecting the format
+    /// from the source's first bytes.
+    ///
+    /// Probes offset 0 (at most [`ImageFormat::RECOMMENDED_PROBE_BYTES`]
+    /// plus headroom, or the whole source if shorter), then dispatches to
+    /// the detected codec's
+    /// [`push_decoder_from_source`](DynDecodeJob::push_decoder_from_source).
+    /// A codec without the `seekable` capability reports
+    /// [`UnsupportedOperation::SeekableDecode`](crate::UnsupportedOperation).
+    pub fn push_decode_from_source(
+        &self,
+        source: &mut dyn crate::source::DynReadAt,
+        sink: &mut dyn DecodeRowSink,
+        preferred: &[PixelDescriptor],
+    ) -> Result<OutputInfo, BoxedError> {
+        let total = source.len()?;
+        let want = ((ImageFormat::RECOMMENDED_PROBE_BYTES + 1024) as u64).min(total) as usize;
+        let mut probe = alloc::vec![0u8; want];
+        source.read_exact_at(0, &mut probe)?;
+        let format = self
+            .detect(&probe)
+            .ok_or_else(|| Box::new(CodecSetError::UnrecognizedFormat) as BoxedError)?;
+        self.decode_job(format)
+            .map_err(|e| Box::new(e) as BoxedError)?
+            .push_decoder_from_source(source, sink, preferred)
     }
 
     /// A decode job for `format` with this set's defaults stamped on.
@@ -823,22 +849,32 @@ impl fmt::Debug for CodecSet {
 // CodecSetIncrementalDecoder
 // ===========================================================================
 
-/// Incremental decoder that automatically detects image format from initial pushed chunks
-/// and delegates to the matching registered decoder in a [`CodecSet`].
+/// Largest prefix the set buffers while detecting the format.
+const PROBE_CAP: usize = 16 * 1024;
+
+/// Format-detecting incremental decoder: buffers the stream prefix until a
+/// registered format is recognised, then delegates every call to that
+/// codec's [`DynIncrementalDecoder`].
 pub struct CodecSetIncrementalDecoder {
     set: CodecSet,
     preferred: Vec<PixelDescriptor>,
     state: CodecSetIncState,
+    /// Backing store for the `Step::Need` returned while probing.
+    need: [crate::traits::ByteRange; 1],
 }
 
 enum CodecSetIncState {
     Probing {
         buffer: Vec<u8>,
+        total: Option<u64>,
     },
     Decoding {
         dec: Box<dyn DynIncrementalDecoder>,
+        /// Probe bytes the inner decoder has not accepted yet, with the
+        /// absolute offset of `pending[0]` and whether they end the source.
         pending: Vec<u8>,
-        pending_pos: usize,
+        pending_offset: u64,
+        pending_eof: bool,
     },
     Failed,
 }
@@ -851,17 +887,13 @@ impl CodecSetIncrementalDecoder {
             preferred: preferred.to_vec(),
             state: CodecSetIncState::Probing {
                 buffer: Vec::with_capacity(ImageFormat::RECOMMENDED_PROBE_BYTES),
+                total: None,
             },
+            need: [crate::traits::ByteRange::from_offset(0)],
         }
     }
 
-    /// Push a chunk of compressed bytes.
-    pub fn push_chunk(
-        &mut self,
-        chunk: &[u8],
-        is_eof: bool,
-        stop: Option<&dyn enough::Stop>,
-    ) -> Result<crate::traits::PushOutcome, BoxedError> {
+    fn check_stop(&self, stop: Option<&dyn enough::Stop>) -> Result<(), BoxedError> {
         let stop = stop
             .or_else(|| self.set.pulse.as_ref().map(|p| p as &dyn enough::Stop))
             .or_else(|| self.set.stop.as_ref().map(|s| s as &dyn enough::Stop));
@@ -870,318 +902,24 @@ impl CodecSetIncrementalDecoder {
         {
             return Err(Box::new(CodecSetError::Cancelled));
         }
-
-        match &mut self.state {
-            CodecSetIncState::Probing { buffer } => {
-                if buffer.len() > 16384 {
-                    self.state = CodecSetIncState::Failed;
-                    return Err(Box::new(CodecSetError::UnrecognizedFormat));
-                }
-                let prior_len = buffer.len();
-                buffer.extend_from_slice(chunk);
-
-                let detected = self.set.detect(buffer);
-                let is_conclusive = match detected {
-                    Some(ImageFormat::Tiff) if !is_eof && buffer.len() < 1024 => false,
-                    Some(_) => true,
-                    None => false,
-                };
-
-                if is_conclusive {
-                    let format = detected.unwrap();
-                    let mut dec = self
-                        .set
-                        .decode_job(format)
-                        .map_err(|e| Box::new(e) as BoxedError)?
-                        .into_incremental_decoder(&self.preferred)?;
-                    let outcome = dec.push_chunk(buffer, is_eof, stop)?;
-                    let total_consumed = outcome.bytes_consumed;
-
-                    let (chunk_consumed, pending_data, pending_pos) = if total_consumed <= prior_len
-                    {
-                        (0, buffer[total_consumed..].to_vec(), 0)
-                    } else {
-                        let chunk_used = total_consumed - prior_len;
-                        if total_consumed < buffer.len() {
-                            (chunk_used, buffer[total_consumed..].to_vec(), 0)
-                        } else {
-                            (chunk_used, Vec::new(), 0)
-                        }
-                    };
-
-                    let metadata = match outcome.metadata {
-                        crate::traits::MetadataUpdate::None if dec.info().is_some() => {
-                            crate::traits::MetadataUpdate::HeaderReady
-                        }
-                        other => other,
-                    };
-
-                    self.state = CodecSetIncState::Decoding {
-                        dec,
-                        pending: pending_data,
-                        pending_pos,
-                    };
-                    Ok(
-                        crate::traits::PushOutcome::new(chunk_consumed, outcome.status)
-                            .with_metadata(metadata),
-                    )
-                } else if is_eof || buffer.len() > 16384 {
-                    self.state = CodecSetIncState::Failed;
-                    Err(Box::new(CodecSetError::UnrecognizedFormat))
-                } else {
-                    Ok(crate::traits::PushOutcome::new(
-                        chunk.len(),
-                        crate::traits::PushStatus::NeedMoreInput,
-                    ))
-                }
-            }
-            CodecSetIncState::Decoding {
-                dec,
-                pending,
-                pending_pos,
-            } => {
-                if *pending_pos < pending.len() {
-                    let outcome =
-                        dec.push_chunk(&pending[*pending_pos..], is_eof && chunk.is_empty(), stop)?;
-                    *pending_pos += outcome.bytes_consumed;
-                    if *pending_pos < pending.len() {
-                        return Ok(crate::traits::PushOutcome::new(0, outcome.status)
-                            .with_metadata(outcome.metadata));
-                    }
-                }
-                dec.push_chunk(chunk, is_eof, stop)
-            }
-            CodecSetIncState::Failed => Err(Box::new(CodecSetError::UnrecognizedFormat)),
-        }
+        Ok(())
     }
 
-    /// Push a chunk with an optional `&dyn Pulse`.
-    pub fn push_chunk_pulse(
-        &mut self,
-        chunk: &[u8],
-        is_eof: bool,
-        pulse: Option<&dyn how_far::Pulse>,
-    ) -> Result<crate::traits::PushOutcome, BoxedError> {
-        let effective_pulse = pulse.or_else(|| self.set.pulse.as_ref().map(|p| p.as_pulse()));
-        if let Some(p) = effective_pulse
-            && p.check().is_err()
-        {
-            return Err(Box::new(CodecSetError::Cancelled));
+    /// Re-offer buffered probe bytes to the inner decoder. Returns `true`
+    /// once nothing is pending.
+    fn drain_pending(
+        dec: &mut Box<dyn DynIncrementalDecoder>,
+        pending: &mut Vec<u8>,
+        pending_offset: &mut u64,
+        pending_eof: bool,
+    ) -> Result<bool, BoxedError> {
+        if pending.is_empty() {
+            return Ok(true);
         }
-
-        match &mut self.state {
-            CodecSetIncState::Probing { buffer } => {
-                if buffer.len() > 16384 {
-                    self.state = CodecSetIncState::Failed;
-                    return Err(Box::new(CodecSetError::UnrecognizedFormat));
-                }
-                let prior_len = buffer.len();
-                buffer.extend_from_slice(chunk);
-
-                let detected = self.set.detect(buffer);
-                let is_conclusive = match detected {
-                    Some(ImageFormat::Tiff) if !is_eof && buffer.len() < 1024 => false,
-                    Some(_) => true,
-                    None => false,
-                };
-
-                if is_conclusive {
-                    let format = detected.unwrap();
-                    let mut dec = self
-                        .set
-                        .decode_job(format)
-                        .map_err(|e| Box::new(e) as BoxedError)?
-                        .into_incremental_decoder(&self.preferred)?;
-                    let outcome = dec.push_chunk_pulse(buffer, is_eof, effective_pulse)?;
-                    let total_consumed = outcome.bytes_consumed;
-
-                    let (chunk_consumed, pending_data, pending_pos) = if total_consumed <= prior_len
-                    {
-                        (0, buffer[total_consumed..].to_vec(), 0)
-                    } else {
-                        let chunk_used = total_consumed - prior_len;
-                        if total_consumed < buffer.len() {
-                            (chunk_used, buffer[total_consumed..].to_vec(), 0)
-                        } else {
-                            (chunk_used, Vec::new(), 0)
-                        }
-                    };
-
-                    let metadata = match outcome.metadata {
-                        crate::traits::MetadataUpdate::None if dec.info().is_some() => {
-                            crate::traits::MetadataUpdate::HeaderReady
-                        }
-                        other => other,
-                    };
-
-                    self.state = CodecSetIncState::Decoding {
-                        dec,
-                        pending: pending_data,
-                        pending_pos,
-                    };
-                    Ok(
-                        crate::traits::PushOutcome::new(chunk_consumed, outcome.status)
-                            .with_metadata(metadata),
-                    )
-                } else if is_eof || buffer.len() > 16384 {
-                    self.state = CodecSetIncState::Failed;
-                    Err(Box::new(CodecSetError::UnrecognizedFormat))
-                } else {
-                    Ok(crate::traits::PushOutcome::new(
-                        chunk.len(),
-                        crate::traits::PushStatus::NeedMoreInput,
-                    ))
-                }
-            }
-            CodecSetIncState::Decoding {
-                dec,
-                pending,
-                pending_pos,
-            } => {
-                if *pending_pos < pending.len() {
-                    let outcome = dec.push_chunk_pulse(
-                        &pending[*pending_pos..],
-                        is_eof && chunk.is_empty(),
-                        effective_pulse,
-                    )?;
-                    *pending_pos += outcome.bytes_consumed;
-                    if *pending_pos < pending.len() {
-                        return Ok(crate::traits::PushOutcome::new(0, outcome.status)
-                            .with_metadata(outcome.metadata));
-                    }
-                }
-                dec.push_chunk_pulse(chunk, is_eof, effective_pulse)
-            }
-            CodecSetIncState::Failed => Err(Box::new(CodecSetError::UnrecognizedFormat)),
-        }
-    }
-
-    /// Returns non-contiguous byte ranges requested by the active decoder.
-    pub fn requested_ranges(&self) -> &[crate::traits::ByteRange] {
-        match &self.state {
-            CodecSetIncState::Decoding { dec, .. } => dec.requested_ranges(),
-            _ => &[],
-        }
-    }
-
-    /// Push a chunk of input bytes tagged with an absolute stream byte offset.
-    pub fn push_range(
-        &mut self,
-        offset: u64,
-        chunk: &[u8],
-        is_eof: bool,
-        stop: Option<&dyn enough::Stop>,
-    ) -> Result<crate::traits::PushOutcome, BoxedError> {
-        match &mut self.state {
-            CodecSetIncState::Probing { buffer } => {
-                if offset != buffer.len() as u64 {
-                    self.state = CodecSetIncState::Failed;
-                    return Err(Box::new(CodecSetError::UnrecognizedFormat));
-                }
-            }
-            CodecSetIncState::Decoding { dec, .. } => {
-                let stop = stop
-                    .or_else(|| self.set.pulse.as_ref().map(|p| p as &dyn enough::Stop))
-                    .or_else(|| self.set.stop.as_ref().map(|s| s as &dyn enough::Stop));
-                if let Some(s) = stop
-                    && s.check().is_err()
-                {
-                    return Err(Box::new(CodecSetError::Cancelled));
-                }
-                return dec.push_range(offset, chunk, is_eof, stop);
-            }
-            CodecSetIncState::Failed => return Err(Box::new(CodecSetError::UnrecognizedFormat)),
-        }
-
-        self.push_chunk(chunk, is_eof, stop)
-    }
-
-    /// Push a chunk of input bytes tagged with an absolute stream offset, with an optional [`Pulse`](how_far::Pulse).
-    pub fn push_range_pulse(
-        &mut self,
-        offset: u64,
-        chunk: &[u8],
-        is_eof: bool,
-        pulse: Option<&dyn how_far::Pulse>,
-    ) -> Result<crate::traits::PushOutcome, BoxedError> {
-        match &mut self.state {
-            CodecSetIncState::Probing { buffer } => {
-                if offset != buffer.len() as u64 {
-                    self.state = CodecSetIncState::Failed;
-                    return Err(Box::new(CodecSetError::UnrecognizedFormat));
-                }
-            }
-            CodecSetIncState::Decoding { dec, .. } => {
-                let effective_pulse =
-                    pulse.or_else(|| self.set.pulse.as_ref().map(|p| p.as_pulse()));
-                if let Some(p) = effective_pulse
-                    && p.check().is_err()
-                {
-                    return Err(Box::new(CodecSetError::Cancelled));
-                }
-                return dec.push_range_pulse(offset, chunk, is_eof, effective_pulse);
-            }
-            CodecSetIncState::Failed => return Err(Box::new(CodecSetError::UnrecognizedFormat)),
-        }
-
-        self.push_chunk_pulse(chunk, is_eof, pulse)
-    }
-
-    /// Pull the next batch of decoded scanlines.
-    pub fn pull_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, BoxedError> {
-        match &mut self.state {
-            CodecSetIncState::Decoding { dec, .. } => dec.pull_batch(),
-            _ => Ok(None),
-        }
-    }
-
-    /// Pull the next batch of decoded scanlines with pass and finality metadata.
-    pub fn pull_batch_meta(
-        &mut self,
-    ) -> Result<Option<(crate::traits::BatchMeta, PixelSlice<'_>)>, BoxedError> {
-        match &mut self.state {
-            CodecSetIncState::Decoding { dec, .. } => dec.pull_batch_meta(),
-            _ => Ok(None),
-        }
-    }
-
-    /// Pull decoded scanlines directly into a caller-owned sink.
-    pub fn pull_batch_into(
-        &mut self,
-        sink: &mut dyn DecodeRowSink,
-    ) -> Result<Option<u32>, BoxedError> {
-        match &mut self.state {
-            CodecSetIncState::Decoding { dec, .. } => dec.pull_batch_into(sink),
-            _ => Ok(None),
-        }
-    }
-
-    /// Image metadata, available once format detection and header parsing have completed.
-    pub fn info(&self) -> Option<&ImageInfo> {
-        match &self.state {
-            CodecSetIncState::Decoding { dec, .. } => dec.info(),
-            _ => None,
-        }
-    }
-
-    /// Output pixel descriptor, available once format detection and header parsing have completed.
-    pub fn output_descriptor(&self) -> Option<PixelDescriptor> {
-        match &self.state {
-            CodecSetIncState::Decoding { dec, .. } => dec.output_descriptor(),
-            _ => None,
-        }
-    }
-
-    /// Whether decoding has completely finished.
-    pub fn is_complete(&self) -> bool {
-        match &self.state {
-            CodecSetIncState::Decoding {
-                dec,
-                pending,
-                pending_pos,
-            } => *pending_pos >= pending.len() && dec.is_complete(),
-            _ => false,
-        }
+        let accepted = dec.feed(*pending_offset, pending, pending_eof)?;
+        pending.drain(..accepted);
+        *pending_offset += accepted as u64;
+        Ok(pending.is_empty())
     }
 }
 
@@ -1198,72 +936,107 @@ impl DynIncrementalDecoder for CodecSetIncrementalDecoder {
         self
     }
 
-    fn push_chunk(
+    fn feed(&mut self, offset: u64, bytes: &[u8], eof: bool) -> Result<usize, BoxedError> {
+        match &mut self.state {
+            CodecSetIncState::Probing { buffer, total } => {
+                // Probing accepts only the sequential prefix.
+                if offset != buffer.len() as u64 {
+                    self.state = CodecSetIncState::Failed;
+                    return Err(Box::new(CodecSetError::UnrecognizedFormat));
+                }
+                let room = PROBE_CAP.saturating_sub(buffer.len());
+                let take = bytes.len().min(room);
+                buffer.extend_from_slice(&bytes[..take]);
+                if eof && take == bytes.len() {
+                    *total = Some(offset + bytes.len() as u64);
+                }
+                Ok(take)
+            }
+            CodecSetIncState::Decoding {
+                dec,
+                pending,
+                pending_offset,
+                pending_eof,
+            } => {
+                if !Self::drain_pending(dec, pending, pending_offset, *pending_eof)? {
+                    return Ok(0);
+                }
+                dec.feed(offset, bytes, eof)
+            }
+            CodecSetIncState::Failed => Err(Box::new(CodecSetError::UnrecognizedFormat)),
+        }
+    }
+
+    fn step(
         &mut self,
-        chunk: &[u8],
-        is_eof: bool,
+        sink: &mut dyn DecodeRowSink,
         stop: Option<&dyn enough::Stop>,
-    ) -> Result<crate::traits::PushOutcome, BoxedError> {
-        self.push_chunk(chunk, is_eof, stop)
-    }
-
-    fn push_chunk_pulse(
-        &mut self,
-        chunk: &[u8],
-        is_eof: bool,
-        pulse: Option<&dyn how_far::Pulse>,
-    ) -> Result<crate::traits::PushOutcome, BoxedError> {
-        self.push_chunk_pulse(chunk, is_eof, pulse)
-    }
-
-    fn requested_ranges(&self) -> &[crate::traits::ByteRange] {
-        self.requested_ranges()
-    }
-
-    fn push_range(
-        &mut self,
-        offset: u64,
-        chunk: &[u8],
-        is_eof: bool,
-        stop: Option<&dyn enough::Stop>,
-    ) -> Result<crate::traits::PushOutcome, BoxedError> {
-        self.push_range(offset, chunk, is_eof, stop)
-    }
-
-    fn push_range_pulse(
-        &mut self,
-        offset: u64,
-        chunk: &[u8],
-        is_eof: bool,
-        pulse: Option<&dyn how_far::Pulse>,
-    ) -> Result<crate::traits::PushOutcome, BoxedError> {
-        self.push_range_pulse(offset, chunk, is_eof, pulse)
-    }
-
-    fn pull_batch(&mut self) -> Result<Option<(u32, PixelSlice<'_>)>, BoxedError> {
-        self.pull_batch()
-    }
-
-    fn pull_batch_meta(
-        &mut self,
-    ) -> Result<Option<(crate::traits::BatchMeta, PixelSlice<'_>)>, BoxedError> {
-        self.pull_batch_meta()
-    }
-
-    fn pull_batch_into(&mut self, sink: &mut dyn DecodeRowSink) -> Result<Option<u32>, BoxedError> {
-        self.pull_batch_into(sink)
+    ) -> Result<crate::traits::Step<'_>, BoxedError> {
+        self.check_stop(stop)?;
+        if let CodecSetIncState::Probing { buffer, total } = &mut self.state {
+            let detected = self.set.detect(buffer);
+            let at_end = total.is_some_and(|t| t == buffer.len() as u64);
+            let conclusive = match detected {
+                Some(ImageFormat::Tiff) if !at_end && buffer.len() < 1024 => false,
+                Some(_) => true,
+                None => false,
+            };
+            if !conclusive {
+                if at_end || buffer.len() >= PROBE_CAP {
+                    self.state = CodecSetIncState::Failed;
+                    return Err(Box::new(CodecSetError::UnrecognizedFormat));
+                }
+                self.need = [crate::traits::ByteRange::from_offset(buffer.len() as u64)];
+                return Ok(crate::traits::Step::Need(&self.need));
+            }
+            let format = detected.expect("conclusive implies detected");
+            let dec = self
+                .set
+                .decode_job(format)
+                .map_err(|e| Box::new(e) as BoxedError)?
+                .into_incremental_decoder(&self.preferred)?;
+            let pending = core::mem::take(buffer);
+            self.state = CodecSetIncState::Decoding {
+                dec,
+                pending,
+                pending_offset: 0,
+                pending_eof: at_end,
+            };
+        }
+        match &mut self.state {
+            CodecSetIncState::Decoding {
+                dec,
+                pending,
+                pending_offset,
+                pending_eof,
+            } => {
+                Self::drain_pending(dec, pending, pending_offset, *pending_eof)?;
+                dec.step(sink, stop)
+            }
+            CodecSetIncState::Failed => Err(Box::new(CodecSetError::UnrecognizedFormat)),
+            CodecSetIncState::Probing { .. } => unreachable!("probing resolved above"),
+        }
     }
 
     fn info(&self) -> Option<&ImageInfo> {
-        self.info()
+        match &self.state {
+            CodecSetIncState::Decoding { dec, .. } => dec.info(),
+            _ => None,
+        }
     }
 
     fn output_descriptor(&self) -> Option<PixelDescriptor> {
-        self.output_descriptor()
+        match &self.state {
+            CodecSetIncState::Decoding { dec, .. } => dec.output_descriptor(),
+            _ => None,
+        }
     }
 
-    fn is_complete(&self) -> bool {
-        self.is_complete()
+    fn access_pattern(&self) -> crate::source::AccessPattern {
+        match &self.state {
+            CodecSetIncState::Decoding { dec, .. } => dec.access_pattern(),
+            _ => crate::source::AccessPattern::Sequential,
+        }
     }
 }
 

@@ -16,6 +16,12 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 #### Added
 
+- `check_read_at_contract`, `check_seekable_capability_honesty` and
+  `check_incremental_capability_honesty` (chunk-boundary independence against the
+  one-shot pixels, truncation must error); the last two run in `check_all`. The
+  reference codec implements both sans-I/O paths; the minimal codec declares neither.
+  The testkit now depends on `zencodec-io` for its slice driver and collect sink.
+
 - Explicit structural-prefix and distinct-frame timing oracles require typed refusals and independent expected pixels. Existing compatibility checks remain unchanged.
 
 - The [contract coverage matrix](docs/testkit-contract-coverage.md) records consumer evidence, independent readbacks, and remaining API/testing gaps.
@@ -129,6 +135,35 @@ removes that whole class).
 ## zencodec
 
 ## [Unreleased]
+
+### Changed (unpublished sans-I/O surface from `d116079`)
+
+- `IncrementalDecode` is now a feed/step machine: `feed(offset, bytes, eof) -> usize`
+  stores bytes and may accept partially; `step(sink, stop) -> Step` does bounded work,
+  writes rows straight into the sink and reports `Need(ranges)`, `NeedLen`,
+  `Rows`, `Metadata` or `Done`. Removed: `push_chunk`, `push_chunk_pulse`,
+  `push_range`, `push_range_pulse`, `requested_ranges`, `pull_batch`,
+  `pull_batch_meta`, `pull_batch_into`, `is_complete`, `PushStatus`, `PushOutcome`.
+  `ByteRange::from_offset` names a sequential request (`length == 0`).
+  `DynIncrementalDecoder`, `IncrementalDecoderShim` and `CodecSet::incremental_decoder`
+  follow. The stream pumps and `coalesce_byte_ranges` moved to `zencodec-io`.
+
+### Added
+
+- `zencodec::source`: `ReadAt`, object-safe `DynReadAt` (+ `ReadAtShim`, `Box`/`&mut`
+  impls), `SliceReadAt`, `SourceError`, `AccessPattern`.
+- `DecodeJob::push_decoder_from_source` / `DynDecodeJob::push_decoder_from_source` /
+  `CodecSet::push_decode_from_source`: `push_decoder` with the input bound to a
+  `DynReadAt` instead of a slice, for pull-native cores. Default rejects with the new
+  `UnsupportedOperation::SeekableDecode` (appended after released variants);
+  `DecodeCapabilities::seekable` / `with_seekable` declare it.
+- `IncrementalDecode::access_pattern` and `DynIncrementalDecoder::access_pattern`.
+- `DecodeRowSink::accepts_provisional` and `provide_pass_buffer` (defaulted): a sink
+  opts into progressive passes; final-only sinks are unchanged.
+- Workspace crates (unpublished): `zencodec-io` (slice/`ReadAt`/`Read` drivers, the
+  buffered stream source, `CollectSink`, and the `tokio` dedicated-thread bridge with
+  `ChannelRowSink`) and `zencodec-coroutine` (`async`-authored incremental decoders,
+  `no_std`).
 
 ### Deprecated
 

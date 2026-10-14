@@ -158,42 +158,171 @@ Default recommendation for HTTP: `MAX_COALESCE_GAP = 16 KiB .. 64 KiB`.
 
 ---
 
-## 6. Rust Trait Surface in `zencodec`
+## 6. The contract in `zencodec`
+
+One resumable decoder contract, one source trait, one job-level binding
+for pull-native cores. Drivers and the coroutine live in sibling crates.
 
 ```rust
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-#[non_exhaustive]
-pub struct ByteRange {
-    pub offset: u64,
-    pub length: u64,
-}
-
-pub enum PushStatus {
-    NeedMoreInput,
-    NeedRanges,
-    OutputReady,
-    BlockedOnOutput,
-    Complete,
-}
-
+// zencodec::decode
 pub trait IncrementalDecode {
-    // ... existing sequential methods ...
+    type Error: core::error::Error + Send + Sync + 'static;
 
-    /// Returns non-contiguous byte ranges requested by the decoder.
-    fn requested_ranges(&self) -> &[ByteRange] {
-        &[]
-    }
+    /// Offer bytes at an absolute offset; returns how many were accepted.
+    /// `eof` means `offset + bytes.len()` is the total length.
+    fn feed(&mut self, offset: u64, bytes: &[u8], eof: bool) -> Result<usize, Self::Error>;
 
-    /// Push a chunk tagged with an absolute stream offset.
-    fn push_range(
-        &mut self,
-        offset: u64,
-        chunk: &[u8],
-        is_eof: bool,
-        stop: Option<&dyn enough::Stop>,
-    ) -> Result<PushOutcome, Self::Error> {
-        let _ = offset;
-        self.push_chunk(chunk, is_eof, stop)
-    }
+    /// Advance as far as fed bytes allow, writing rows into `sink`.
+    fn step(&mut self, sink: &mut dyn DecodeRowSink, stop: Option<&dyn Stop>)
+        -> Result<Step<'_>, Self::Error>;
+
+    fn wrap_sink_error(err: SinkError) -> Self::Error;
+    fn info(&self) -> Option<&ImageInfo>;
+    fn output_descriptor(&self) -> Option<PixelDescriptor>;   // default None
+    fn access_pattern(&self) -> AccessPattern;                 // default Sequential
 }
+
+#[non_exhaustive]
+pub enum Step<'a> {
+    Need(&'a [ByteRange]),   // length 0 = "any amount from offset" (sequential)
+    NeedLen,                 // answer with feed(len, &[], true)
+    Rows { meta: BatchMeta, rows: u32 },
+    Metadata(MetadataUpdate),
+    Done(OutputInfo),
+}
+
+// zencodec::source
+pub trait ReadAt {
+    type Error;
+    fn len(&mut self) -> Result<u64, Self::Error>;
+    fn read_exact_at(&mut self, offset: u64, out: &mut [u8]) -> Result<(), Self::Error>;
+    fn read_many_at(&mut self, reqs: &mut [(u64, &mut [u8])]) -> Result<(), Self::Error>;
+}
+pub trait DynReadAt: Send { /* the object-safe form jobs receive */ }
+
+// zencodec::decode::DecodeJob
+fn push_decoder_from_source(self, source: &mut dyn DynReadAt,
+    sink: &mut dyn DecodeRowSink, preferred: &[PixelDescriptor])
+    -> Result<OutputInfo, BoxedError>;   // default: UnsupportedOperation::SeekableDecode
 ```
+
+Rules the contract fixes:
+
+- `feed` stores, `step` works. `feed` never decodes and never touches the
+  sink; a decoder with a bounded input buffer accepts fewer bytes than
+  offered and the driver re-offers the rest after a step. Bytes the
+  decoder did not ask for are accepted and discarded.
+- `step` returns the first event and does a bounded amount of work. It
+  calls `sink.begin` before the first rows and `sink.finish` before
+  `Done`. Backpressure is "do not step until the sink can take the next
+  strip": an event loop simply does not step, a worker thread blocks in
+  its sink.
+- After `Err`, the decoder is finished; further steps error. After `Done`,
+  steps return `Done` again.
+- Provisional rows (progressive passes) are written only when the sink
+  says `accepts_provisional()`, through `provide_pass_buffer`; a
+  final-only sink sees each row once, in final form.
+- The `stop` token is checked at least once per step. `how_far::Pulse:
+  Stop`, so a pulse passes where a stop is expected; no codec names
+  `how_far` types.
+- Crop and region intent stay on the job; the sink's coordinate space is
+  the output image.
+
+### Which shape a codec implements
+
+| codec core | implements | drivers get the other shape via |
+|---|---|---|
+| sequential or hand-written state machine (PNG, WebP, GIF, QOI) | `IncrementalDecode` | `zencodec-io::drive_from_read_at` serves it from any `ReadAt` |
+| straight-line container walk written by us (TIFF, imij bridge, ISOBMFF) | `IncrementalDecode` through `zencodec-coroutine` | same |
+| third-party pull-native library (reads `Read + Seek`) | `push_decoder_from_source` | `zencodec-io::thread::pull_decode_on_thread` for async drivers, or a spool |
+
+Both shapes stay because each has a cell the other cannot serve without
+cost: a pull-native library on a seekable file wants the `ReadAt` handed
+to it directly, and a resumable core is the only thing that runs on an
+async or threadless driver. What is gone is a second trait family: the
+pull shape is one job method with the `push_decoder` signature.
+
+## 7. Drivers (`zencodec-io`)
+
+| input | resumable decoder | pull-native decoder |
+|---|---|---|
+| slice | `drive_from_slice` | `SliceReadAt` |
+| `ReadAt` (file, object store, FFI `read_at` callback) | `drive_from_read_at` | direct |
+| `std::io::Read` stream | `pump_read_to_sink` | `BufferedReadAt` under a `BufferPolicy` |
+| async runtime | `thread::decode_on_thread` | `thread::pull_decode_on_thread` |
+
+- `drive_from_read_at` coalesces each `Need` round (gap `<= max_gap`)
+  and fetches it with one `read_many_at`, so a concurrent source overlaps
+  round trips. It asks for the source length only when a sequential
+  request or `NeedLen` needs it, because a buffered stream answers by
+  consuming to EOF.
+- `pump_read_to_sink` feeds a stream at its cursor and lets the decoder
+  emit rows as soon as it has enough; a sized request behind the cursor
+  is `PumpError::NeedsRandomAccess`, with `BufferedReadAt` as the fix.
+- `BufferedReadAt` manufactures seeks over a stream: `Window` (bounded
+  retention, far-back reads fail with `BeyondWindow`) or `Spool` (retain
+  up to a cap, `BeyondLimit` past it). `BufferPolicy::for_pattern` picks
+  the cheapest policy that cannot fail for the decoder's declared
+  `AccessPattern`. Buffering never silently grows and never returns wrong
+  bytes.
+- Every driver goes through `Feeder`, which re-offers bytes a bounded
+  decoder did not accept and reports a decoder that refuses what it keeps
+  asking for as `Stalled` instead of spinning.
+
+### The async bridge, without async in codecs
+
+`thread::decode_on_thread(decoder, sink, stop, opts, fetch)` runs the
+decoder on a dedicated OS thread (or one the caller's pool supplies via
+`ThreadOptions::with_spawner`). The thread blocks on two bounded
+`tokio::sync` channels; the async side runs one loop that awaits each
+`SourceRequest`, fetches it with the caller's `fetch` future, and sends
+the bytes back. `fetch` is the only async code: it owns the HTTP client,
+the body stream or the object store, and may fan a multi-range request
+out across tasks (`read_many_at` from a pull-native core, or one
+`Step::Need` with several ranges, becomes concurrent requests).
+
+- No `spawn_blocking` per chunk, no decode on runtime workers, no
+  `block_on`: the decode thread and the runtime never share a stack.
+- Rows stream back through `ChannelRowSink`, which ships each finished
+  strip as an owned `PixelBuffer` over a bounded channel with
+  `blocking_send`: a slow consumer throttles the decoder instead of the
+  decoder filling memory. A sink the caller moves onto the thread can
+  instead write straight into its own buffer.
+- Dropping the async future closes the request channel; the thread exits
+  at its next request and drops the sink. A `StopToken` cancels mid-strip.
+- `fetch_from_async_read` serves a sequential decoder from any
+  `AsyncRead` (an HTTP body); `fetch_from_bytes` serves tests and
+  already-buffered input.
+- `pull_decode_on_thread(run, sink, opts, fetch)` gives a pull-native core
+  a `DynReadAt` whose reads block on the same channel, so a codec written
+  against `push_decoder_from_source` streams from an async transport with
+  no buffering beyond each read.
+
+The production proxy topology follows directly: a Tokio task per request
+owns the sockets and calls `decode_on_thread` with a pool spawner sized
+to the machine's cores; the codec, the resizer and the encoder run
+synchronously on that thread, strip by strip, with the bounded channels
+as the only coupling to the runtime. Memory per request is the input
+window plus the strips in flight, for codecs and encoders that stream
+rows; whole-frame encoders (the AV1 backends) still materialise a frame
+and must be budgeted as such.
+
+## 8. Authoring (`zencodec-coroutine`)
+
+A resumable decoder written by hand is a state enum per parser stage.
+`zencodec-coroutine` repurposes `async`/`await` as a compile-time
+coroutine generator: the author writes sequential code against a
+`CoroutineContext` (`read_exact_at`, `read_many_at`, `read_exact`, `len`,
+`write_rows`, `announce`), `rustc` synthesises the state machine, and
+`CoroutineDecoder` polls it behind the ordinary `IncrementalDecode`
+surface. No runtime, no executor, no threads; `no_std + alloc`,
+`forbid(unsafe_code)`.
+
+Cost: each suspending `.await` is one poll round trip through the driver.
+Rows are copied once, from the codec's strip into the sink. Input is
+retained only until read, under a byte cap; bytes the coroutine has not
+asked for are discarded; sequential reads release everything behind the
+cursor. The decoder is terminal after an error, reports `UnexpectedEof`
+once the announced length shows a read can never be served, and names
+only the missing gaps of a partially satisfied read so a driver never
+fetches the same bytes twice.
