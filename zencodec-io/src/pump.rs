@@ -79,7 +79,10 @@ where
 {
     let stop = pulse.map(|p| p as &dyn Stop);
     let mut told_total = false;
-    let mut buf = vec![0u8; buffer_size.max(512)];
+    // Start small and double up to `buffer_size` only while reads fill
+    // the buffer, so a tiny stream does not pay for a large zeroed buffer.
+    let max_buf = buffer_size.max(512);
+    let mut buf = vec![0u8; max_buf.min(8 * 1024)];
     // `buf[lo..hi]` is read but not yet accepted; `buf[lo]` is at `base`.
     let (mut lo, mut hi) = (0usize, 0usize);
     let mut base = 0u64;
@@ -154,6 +157,9 @@ where
             eof = true;
         }
         hi += n;
+        if hi == buf.len() && buf.len() < max_buf {
+            buf.resize((buf.len() * 2).min(max_buf), 0);
+        }
     }
 }
 
