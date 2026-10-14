@@ -51,7 +51,7 @@ use zencodec::decode::{
 };
 use zencodec::encode::{
     AnimationFrameEncoder, EncodeCapabilities, EncodeJob, EncodeOutput, EncodePolicy, Encoder,
-    EncoderConfig,
+    EncoderConfig, OutputTiming,
 };
 use zencodec::gainmap::{
     DecodedGainMap, GainMapInfo, GainMapPresence, GainMapRender, GainMapSource, Iso21496Format,
@@ -1059,7 +1059,12 @@ impl Encoder for RefEnc {
         ))
     }
 
-    fn begin(&mut self, width: u32, height: u32, desc: PixelDescriptor) -> Result<(), RefError> {
+    fn begin(
+        &mut self,
+        width: u32,
+        height: u32,
+        desc: PixelDescriptor,
+    ) -> Result<OutputTiming, RefError> {
         if self.width.is_some() {
             return Err(RefError::Invalid("begin after push_rows".into()));
         }
@@ -1076,7 +1081,8 @@ impl Encoder for RefEnc {
             self.gain_map.as_ref(),
         );
         push_u32(&mut self.accumulated, 0); // duration
-        Ok(())
+        // Each row is appended as it arrives.
+        Ok(OutputTiming::streaming(0))
     }
 
     fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), RefError> {

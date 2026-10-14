@@ -305,16 +305,60 @@ with only a `Stop` passes `how_far::StopOnly::borrowed(&stop)`.
 `Encoder` gains three provided methods, all optional:
 
 ```rust
-fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor) -> Result<(), Self::Error>;
-fn pending_output(&self) -> &[u8];     // encoded bytes ready to send
-fn consume_output(&mut self, n: usize); // mark them sent
+fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor)
+    -> Result<OutputTiming, Self::Error>;   // declare the image; learn when bytes arrive
+fn pending_output(&self) -> &[u8];          // encoded bytes ready to send
+fn consume_output(&mut self, n: usize);     // mark them sent
 ```
 
-An encoder that knows the size up front writes its header at `begin` and,
-if it declares `EncodeCapabilities::streaming_output`, exposes encoded
-bytes as rows arrive; `finish` returns only what was not consumed. Pushing
-more or fewer rows than declared is an error. Without `begin`, encoders
-behave as before and may hold everything until `finish`.
+`begin` is the negotiation point for a row-level encode. The encoder checks
+the declaration against its configuration, limits and metadata and answers
+with an `OutputTiming`:
+
+- `OutputTiming::streaming(lag_rows)`: the header is written now and bytes
+  appear in `pending_output` as rows arrive. Once more than `lag_rows` rows
+  are pushed, every row but the last `lag_rows` is encoded and its bytes
+  are pending, apart from a few bytes of coder state (bits short of a byte,
+  an open run). `finish` returns only what was not consumed.
+- `OutputTiming::AT_FINISH`: `pending_output` stays empty; everything comes
+  from `finish`. This is also the default for encoders that do not
+  override `begin`.
+- An error, before any row moves: the image is out of bounds, or this
+  configuration cannot encode from rows
+  (`UnsupportedOperation::RowLevelEncode`).
+
+Pushing more or fewer rows than declared is an error. Draining changes
+memory, never output: the drained bytes plus `finish`'s remainder equal the
+bytes of the same encode left undrained. Without `begin`, encoders behave
+as before and may hold everything until `finish`.
+
+### Decisions
+
+- **The answer is per encoder, the capability is per codec.**
+  `EncodeCapabilities::streaming_output` is static and says some
+  configuration streams; whether this one does depends on things only the
+  encoder knows. JPEG streams with fixed Huffman tables and a sequential
+  scan, but optimized tables and progressive scans need every block first,
+  and an MPF gain-map index needs the primary image's length. BMP, TGA and
+  PFM store rows bottom-up. IMIJ streams in its row-group mode only. A
+  static flag cannot express any of these; `begin` can, and it answers
+  before the first row, when a driver still has every choice open: an HTTP
+  response picks `Content-Length` or chunked transfer, a pipeline sizes its
+  buffers from `lag_rows`.
+- **Bytes are pulled, not pushed.** The encoder owns its output buffer and
+  the driver drains it, as on the decode side the driver owns the input.
+  The encoder does no I/O, the same encoder serves blocking writers, async
+  writers and in-memory collection, and backpressure is the driver
+  pushing fewer rows. The cost is one copy from the encoder's buffer to the
+  destination, the same copy a `Write` adapter would make.
+- **`OutputTiming` has private fields.** A later field (for example,
+  "streams if the destination can seek back to patch a size") is additive.
+  Encoders that write a size or index after the data and could patch it in
+  place need that; today they report `AT_FINISH`.
+- **Out of scope for now:** streaming from `encode_from` (it returns the
+  whole file; drivers that stream use `push_rows`) and from
+  `AnimationFrameEncoder` (frame-at-a-time output is a natural, additive
+  extension with the same `pending_output` pair).
 
 `EncoderSink` is the bridge: a `DecodeRowSink` that forwards `begin`, hands
 the decoder its own strip buffer and pushes each strip to the encoder when
@@ -426,10 +470,13 @@ Rules learned on the way, each recorded where it was measured:
 - `check_incremental_capability_honesty` and
   `check_seekable_capability_honesty`: the capability flags match what the
   job provides, in both directions.
-- `check_streaming_output_honesty`: a declared streaming encoder has bytes
-  pending before `finish`, draining them leaves the file byte-identical,
-  and the result decodes to the `push_rows` pixels; an undeclared one keeps
-  `pending_output` empty.
+- `check_streaming_output_honesty`: the `OutputTiming` from `begin` is
+  kept. A streaming timing needs the codec's `streaming_output`; once more
+  than `lag_rows` rows are pushed, bytes beyond those available at `begin`
+  are pending; draining leaves the file byte-identical, and the result
+  decodes to the `push_rows` pixels. `AT_FINISH` keeps `pending_output`
+  empty. A `RowLevelEncode` rejection at `begin` passes. Run it with a
+  streaming configuration as well as the default.
 - `check_read_at_contract` for sources.
 
 `check_all` runs every codec check above against an encoder and decoder

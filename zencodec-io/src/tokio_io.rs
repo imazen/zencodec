@@ -568,9 +568,11 @@ where
 /// input window, one batch of strips, and the encoder's pending output.
 ///
 /// The encoder is told the image size through [`Encoder::begin`] when the
-/// decoder reaches its header; encoders with
-/// [`streaming_output`](zencodec::encode::EncodeCapabilities::streaming_output)
-/// then emit bytes as rows arrive. Returns the number of bytes written.
+/// decoder reaches its header; an encoder that answers with a streaming
+/// [`OutputTiming`](zencodec::encode::OutputTiming) then emits bytes as rows
+/// arrive, and one that answers
+/// [`AT_FINISH`](zencodec::encode::OutputTiming::AT_FINISH) writes
+/// everything at the end. Returns the number of bytes written.
 // Written out rather than `async fn` so the `Send` bound is proven here,
 // for every type parameter: with `async fn`, rustc's higher-ranked
 // lifetime check rejects `tokio::spawn` of the caller's future.

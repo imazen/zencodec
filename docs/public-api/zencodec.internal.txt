@@ -9,14 +9,14 @@
 
 ## summary
 #
-#   inherent methods                           46
-#   trait roster entries (type × trait)        64
+#   inherent methods                           47
+#   trait roster entries (type × trait)        65
 #
 # per-module pub lines:
 #   (root)                           18
 #   animation                         1
 #   decode                            9
-#   encode                            1
+#   encode                            2
 #   estimate                          2
 #   exif                              3
 #   gainmap                           2
@@ -24,7 +24,7 @@
 #   metadata_rewrite                  2
 #   source                            2
 
-## items (46 lines)
+## items (47 lines)
 
 pub fn CodecIoKind::assert_fields_are_eq(&self)
 pub fn ColorEmitFields::assert_fields_are_eq(&self)
@@ -55,6 +55,7 @@ pub fn decode::OutputInfo::assert_fields_are_eq(&self)
 pub fn decode::Progress::assert_fields_are_eq(&self)
 pub fn decode::Request::assert_fields_are_eq(&self)
 pub fn encode::EncodePolicy::assert_fields_are_eq(&self)
+pub fn encode::OutputTiming::assert_fields_are_eq(&self)
 pub fn estimate::ComputeEnvironment::assert_fields_are_eq(&self)
 pub fn estimate::ImageCharacteristics::assert_fields_are_eq(&self)
 pub fn exif::EntryRef<'e>::assert_fields_are_eq(&self)
@@ -73,7 +74,7 @@ pub fn metadata_rewrite::Error::assert_fields_are_eq(&self)
 pub fn source::AccessPattern::assert_fields_are_eq(&self)
 pub fn source::SourceError::assert_fields_are_eq(&self)
 
-## trait impls (64 types)
+## trait impls (65 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -115,6 +116,7 @@ encode::Fidelity: TrivialClone
 encode::FidelityRejection: TrivialClone
 encode::FidelityTargetError: TrivialClone
 encode::LossyTarget: TrivialClone
+encode::OutputTiming: TrivialClone
 estimate::ComputeEnvironment: TrivialClone
 estimate::ResourceEstimate: TrivialClone
 estimate::SimdTier: TrivialClone

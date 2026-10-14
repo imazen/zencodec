@@ -185,7 +185,7 @@ if let Some([min, max]) = caps.quality_range() {
 
 // Advanced encode paths
 if caps.push_rows()   { /* push_rows() + finish() is supported */ }
-if caps.streaming_output() { /* begin() + pending_output() stream encoded bytes */ }
+if caps.streaming_output() { /* some configurations stream; begin() says which */ }
 if caps.encode_from() { /* encode_from() callback is supported */ }
 if caps.animation() { /* animation_frame_encoder() works */ }
 ```
@@ -449,10 +449,35 @@ within one step.
 **Transcode with bounded memory.** `tokio_io::transcode_async(decoder, encoder,
 &mut source, &mut writer, compute, opts, pulse)` routes rows into the encoder
 through `EncoderSink` and writes encoded bytes as they become available
-(encoders that declare `streaming_output`), so memory stays at the input
-window, one strip and the encoder's unsent output. Synchronously, drive a
-decoder into `EncoderSink::new(encoder)` and call `write_pending` between
-steps.
+(encoders whose `begin` reports a streaming `OutputTiming`), so memory stays
+at the input window, one strip and the encoder's unsent output.
+`EncoderSink::output_timing()` reports the encoder's answer once the decoder
+has declared the image. Synchronously, drive a decoder into
+`EncoderSink::new(encoder)` and call `write_pending` between steps.
+
+**Stream an encode you feed yourself.** `begin` declares the image and says
+when bytes arrive; send what is pending after each strip:
+
+```rust
+use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
+
+let mut enc = config.job().with_metadata_policy(meta, policy).encoder()?;
+let timing = enc.begin(width, height, descriptor)?;
+if !timing.streams() {
+    // Everything arrives from finish(): buffer, or send a Content-Length.
+}
+for strip in strips {                       // preferred_strip_height() rows each
+    enc.push_rows(strip)?;
+    let n = enc.pending_output().len();
+    out.write_all(enc.pending_output())?;   // nothing to write unless it streams
+    enc.consume_output(n);
+}
+out.write_all(enc.finish()?.data())?;
+```
+
+`timing.lag_rows()` is the most rows the encoder holds before their bytes
+are pending. A configuration that cannot encode from rows fails at `begin`
+with `UnsupportedOperation::RowLevelEncode`.
 
 **Pull-native codecs** (`capabilities().seekable()`) read from a source
 directly: `job.push_decoder_from_source(&mut source, &mut sink, &[])`, or

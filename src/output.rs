@@ -29,6 +29,68 @@ pub struct EncodeOutput {
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(core::mem::size_of::<EncodeOutput>() == 96);
 
+/// When an encoder's bytes become available, as reported by
+/// [`Encoder::begin`](crate::encode::Encoder::begin).
+///
+/// [`EncodeCapabilities::streaming_output`](crate::encode::EncodeCapabilities::streaming_output)
+/// says a codec *can* stream. This says whether *this* encoder, with its
+/// configuration, image and metadata, will. The answer often depends on
+/// all three: a JPEG encoder streams with fixed Huffman tables but must
+/// see every block before it can write optimized ones; a format stored
+/// bottom-up cannot write its first row until it has the last.
+///
+/// Drivers use it to choose a strategy before any row moves: an HTTP
+/// response can send a `Content-Length` when the output comes all at once
+/// and use chunked transfer when it streams; a pipeline can size its
+/// buffers from [`lag_rows`](Self::lag_rows).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct OutputTiming {
+    /// `None`: everything arrives from `finish`.
+    lag_rows: Option<u32>,
+}
+
+impl OutputTiming {
+    /// All encoded bytes arrive from
+    /// [`Encoder::finish`](crate::encode::Encoder::finish);
+    /// [`pending_output`](crate::encode::Encoder::pending_output) stays empty.
+    pub const AT_FINISH: Self = Self { lag_rows: None };
+
+    /// Encoded bytes stream through
+    /// [`pending_output`](crate::encode::Encoder::pending_output) as rows
+    /// are pushed, holding back at most `lag_rows` pushed rows.
+    ///
+    /// Once more than `lag_rows` rows have been pushed, every row but the
+    /// last `lag_rows` has been encoded and its bytes are pending, apart
+    /// from a few bytes' worth of coder state (bits that do not fill a
+    /// byte, a run not yet closed). The lag
+    /// covers whatever the encoder must see before it can commit a row:
+    /// a block row, a lookahead window, an adaptive-quantization delay.
+    /// Report an upper bound; `0` means each row is written as it arrives.
+    pub const fn streaming(lag_rows: u32) -> Self {
+        Self {
+            lag_rows: Some(lag_rows),
+        }
+    }
+
+    /// Whether bytes become available before `finish`.
+    pub const fn streams(&self) -> bool {
+        self.lag_rows.is_some()
+    }
+
+    /// The most pushed rows the encoder holds before their bytes are
+    /// pending; `None` when nothing streams.
+    pub const fn lag_rows(&self) -> Option<u32> {
+        self.lag_rows
+    }
+}
+
+impl Default for OutputTiming {
+    /// [`AT_FINISH`](Self::AT_FINISH): the answer that is always true.
+    fn default() -> Self {
+        Self::AT_FINISH
+    }
+}
+
 impl EncodeOutput {
     /// Create a new encode output.
     ///

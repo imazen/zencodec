@@ -134,7 +134,7 @@ trait Encoder: Sized {
 
     // Row-level push (mutually exclusive with encode)
     fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor)
-        -> Result<(), Self::Error>;                                             // default: Ok(()), ignored
+        -> Result<OutputTiming, Self::Error>;                                   // default: Ok(AT_FINISH)
     fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), Self::Error>;  // default: Err
     fn pending_output(&self) -> &[u8];                                          // default: empty
     fn consume_output(&mut self, n: usize);                                     // default: no-op
@@ -149,12 +149,30 @@ trait Encoder: Sized {
 
 Three mutually exclusive paths: `encode()`/`encode_srgba8()`, `push_rows()+finish()`, `encode_from()`.
 
-`begin` is optional before `push_rows`. An encoder that knows the size up
-front writes its header there and, if it declares
-`EncodeCapabilities::streaming_output`, exposes encoded bytes through
-`pending_output` as rows arrive; the caller sends them and calls
-`consume_output`, and `finish` returns only what was not consumed. Pushing
-more or fewer rows than declared is an error.
+`begin` is optional before `push_rows`. It declares the image and returns
+an `OutputTiming`: when *this* encoder's bytes arrive, given its
+configuration, image and metadata. `EncodeCapabilities::streaming_output`
+says the codec can stream in some configuration; `begin` says whether it
+will. An encoder whose configuration cannot encode from rows rejects
+`begin` with `UnsupportedOperation::RowLevelEncode`, before any row moves.
+
+With `OutputTiming::streaming(lag_rows)` the encoder writes its header at
+`begin` and exposes encoded bytes through `pending_output` as rows arrive,
+holding back at most `lag_rows` pushed rows; the caller sends them and calls
+`consume_output`, and `finish` returns only what was not consumed. With
+`OutputTiming::AT_FINISH` `pending_output` stays empty. Draining never
+changes the bytes. Pushing more or fewer rows than declared is an error.
+
+```rust
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+struct OutputTiming { /* private */ }
+impl OutputTiming {
+    const AT_FINISH: Self;                         // everything from finish (the default)
+    const fn streaming(lag_rows: u32) -> Self;     // bytes stream; at most lag_rows held
+    const fn streams(&self) -> bool;
+    const fn lag_rows(&self) -> Option<u32>;       // None when AT_FINISH
+}
+```
 
 ### `AnimationFrameEncoder` (animation encode)
 
@@ -420,7 +438,7 @@ trait DynEncoder {
     fn encode(self: Box<Self>, pixels: PixelSlice<'_>) -> Result<EncodeOutput, BoxedError>;
     fn encode_srgba8(self: Box<Self>, data: &mut [u8], make_opaque: bool,
         width: u32, height: u32, stride_pixels: u32) -> Result<EncodeOutput, BoxedError>;
-    fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor) -> Result<(), BoxedError>;
+    fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor) -> Result<OutputTiming, BoxedError>;
     fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), BoxedError>;
     fn pending_output(&self) -> &[u8];
     fn consume_output(&mut self, n: usize);
@@ -1040,8 +1058,9 @@ Const-constructible structs with builder pattern. Returned by config `capabiliti
 
 Each has a `with_*` builder.
 
-Sans-I/O flags: `streaming_output` (encode: bytes stream from
-`pending_output` after `begin`); `incremental`, `seekable` and
+Sans-I/O flags: `streaming_output` (encode: some configuration streams
+bytes from `pending_output` after `begin`; the `OutputTiming` that `begin`
+returns says whether a given encoder does); `incremental`, `seekable` and
 `access_pattern` (decode: `dyn_incremental_decoder`,
 `push_decoder_from_source`, and how the incremental decoder reads).
 

@@ -200,7 +200,7 @@ pub mod encode {
         Fidelity, FidelityRejection, FidelitySelectionError, FidelityTargetError, LossyTarget,
     };
     pub use crate::negotiate::best_encode_format;
-    pub use crate::output::EncodeOutput;
+    pub use crate::output::{EncodeOutput, OutputTiming};
     pub use crate::policy::EncodePolicy;
 }
 

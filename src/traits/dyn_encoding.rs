@@ -68,16 +68,16 @@ pub trait DynEncoder: Send {
     /// Push scanline rows incrementally.
     fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), BoxedError>;
 
-    /// Declare the image before the first `push_rows`; see
-    /// [`Encoder::begin`](super::Encoder::begin).
+    /// Declare the image before the first `push_rows` and learn when its
+    /// bytes arrive; see [`Encoder::begin`](super::Encoder::begin).
     fn begin(
         &mut self,
         width: u32,
         height: u32,
         descriptor: PixelDescriptor,
-    ) -> Result<(), BoxedError> {
+    ) -> Result<crate::encode::OutputTiming, BoxedError> {
         let _ = (width, height, descriptor);
-        Ok(())
+        Ok(crate::encode::OutputTiming::AT_FINISH)
     }
 
     /// Encoded bytes ready to send; see
@@ -143,7 +143,7 @@ impl<E: Encoder + Send> DynEncoder for EncoderShim<E> {
         width: u32,
         height: u32,
         descriptor: PixelDescriptor,
-    ) -> Result<(), BoxedError> {
+    ) -> Result<crate::encode::OutputTiming, BoxedError> {
         self.0
             .begin(width, height, descriptor)
             .map_err(|e| Box::new(e) as BoxedError)

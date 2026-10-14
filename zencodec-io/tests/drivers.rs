@@ -1383,9 +1383,14 @@ mod tokio_drivers {
         fn encode(self, _pixels: PixelSlice<'_>) -> Result<zencodec::encode::EncodeOutput, EncErr> {
             Err(EncErr)
         }
-        fn begin(&mut self, w: u32, h: u32, _d: PixelDescriptor) -> Result<(), EncErr> {
+        fn begin(
+            &mut self,
+            w: u32,
+            h: u32,
+            _d: PixelDescriptor,
+        ) -> Result<zencodec::encode::OutputTiming, EncErr> {
             self.out.extend_from_slice(&[w as u8, h as u8, 0, 0]);
-            Ok(())
+            Ok(zencodec::encode::OutputTiming::streaming(0))
         }
         fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), EncErr> {
             for r in 0..rows.rows() {

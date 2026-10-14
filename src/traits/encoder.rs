@@ -102,33 +102,51 @@ pub trait Encoder: Sized {
     }
 
     /// Declare the image before the first [`push_rows`](Self::push_rows):
-    /// its full dimensions and the descriptor rows will arrive in.
+    /// its full dimensions and the descriptor rows will arrive in. Returns
+    /// when this encoder's bytes will become available.
     ///
-    /// An encoder that knows the size up front can write its header at
-    /// once and, if it declares
-    /// [`streaming_output`](crate::encode::EncodeCapabilities::streaming_output),
-    /// make encoded bytes available through
-    /// [`pending_output`](Self::pending_output) as rows arrive. Pushing more
-    /// or fewer rows than declared is then an error at `push_rows` or
-    /// `finish`. Calling `begin` is optional; without it, encoders behave as
-    /// before and may hold all output until `finish`.
+    /// `begin` is where an encoder commits to a row-level encode. It
+    /// validates the declaration against its configuration, limits and
+    /// metadata, and rejects it here, before any row moves, when this
+    /// configuration cannot encode from rows
+    /// ([`UnsupportedOperation::RowLevelEncode`](crate::UnsupportedOperation::RowLevelEncode))
+    /// or the image is out of bounds. An encoder that returns
+    /// [`OutputTiming::streaming`](crate::encode::OutputTiming::streaming)
+    /// writes its header now and exposes encoded bytes through
+    /// [`pending_output`](Self::pending_output) as rows arrive; one that
+    /// returns [`OutputTiming::AT_FINISH`](crate::encode::OutputTiming::AT_FINISH)
+    /// keeps `pending_output` empty and returns everything from
+    /// [`finish`](Self::finish). Only encoders whose codec declares
+    /// [`streaming_output`](crate::encode::EncodeCapabilities::streaming_output)
+    /// may return a streaming timing.
     ///
-    /// Default: accepts and ignores the declaration.
+    /// After `begin`, pushing more or fewer rows than declared, or rows of
+    /// another width or descriptor, is an error at `push_rows` or `finish`.
+    /// The streamed bytes must equal those of the same encode left
+    /// undrained: draining changes memory, never output.
+    ///
+    /// Calling `begin` is optional; without it, encoders behave as before
+    /// and may hold all output until `finish`.
+    ///
+    /// Default: accepts the declaration and reports
+    /// [`OutputTiming::AT_FINISH`](crate::encode::OutputTiming::AT_FINISH).
     fn begin(
         &mut self,
         width: u32,
         height: u32,
         descriptor: zenpixels::PixelDescriptor,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<crate::encode::OutputTiming, Self::Error> {
         let _ = (width, height, descriptor);
-        Ok(())
+        Ok(crate::encode::OutputTiming::AT_FINISH)
     }
 
     /// Encoded bytes ready to send, not yet consumed.
     ///
-    /// Streaming encoders fill this as rows are pushed; a driver writes it
-    /// out and calls [`consume_output`](Self::consume_output), keeping output
-    /// memory bounded. [`finish`](Self::finish) returns only the bytes not
+    /// Encoders whose [`begin`](Self::begin) reported a streaming
+    /// [`OutputTiming`](crate::encode::OutputTiming) fill this as rows are
+    /// pushed; a driver writes it out and calls
+    /// [`consume_output`](Self::consume_output), keeping output memory
+    /// bounded. [`finish`](Self::finish) returns only the bytes not
     /// consumed. Default: empty (all output arrives from `finish`).
     fn pending_output(&self) -> &[u8] {
         &[]

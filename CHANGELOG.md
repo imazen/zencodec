@@ -22,6 +22,12 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
   reference codec implements both sans-I/O paths; the minimal codec declares neither.
   The testkit now depends on `zencodec-io` for its slice driver and collect sink, so
   `zencodec-io` must publish before the testkit can.
+- `check_streaming_output_honesty` checks the `OutputTiming` that `begin` returns:
+  a streaming timing needs `streaming_output`; once more than `lag_rows` rows are
+  pushed, bytes beyond the header must be pending; `AT_FINISH` keeps
+  `pending_output` empty; a `RowLevelEncode` rejection at `begin` passes. Regression
+  tests (`tests/streaming_output.rs`) show it catches rows held behind a zero lag,
+  bytes behind `AT_FINISH`, and streaming without the capability.
 - `check_incremental_decoder`: the incremental contract for any decoder factory
   against the decoder's one-shot function, for decoders not reached through a
   `DecoderConfig` (such as `helpers::WholeFileIncremental`).
@@ -190,6 +196,15 @@ removes that whole class).
   `Encoder::consume_output`, all provided (`d8b9e636`): an encoder that knows the size
   up front writes its header at once and streams encoded bytes as rows arrive.
   `EncodeCapabilities::streaming_output` / `with_streaming_output` declare it.
+- `Encoder::begin` / `DynEncoder::begin` return an `OutputTiming` (new,
+  `zencodec::encode::OutputTiming`): `AT_FINISH`, or `streaming(lag_rows)` with the
+  most rows the encoder holds before their bytes are pending. Whether output streams
+  depends on configuration, image and metadata (JPEG fixed versus optimized tables,
+  bottom-up formats, gain-map indexes), so the static `streaming_output` capability
+  now means "some configuration streams" and `begin` says whether this encoder does.
+  `begin` is also where a configuration that cannot encode from rows rejects with
+  `RowLevelEncode`. The default returns `AT_FINISH`. `zencodec-io`'s `EncoderSink`
+  keeps the answer (`output_timing()`).
 - `DecodeRowSink::accepts_provisional` and `provide_pass_buffer` (defaulted): a sink
   opts into progressive passes; final-only sinks are unchanged.
 - Workspace crates (unpublished): `zencodec-io` and `zencodec-coroutine`

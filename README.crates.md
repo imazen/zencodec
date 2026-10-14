@@ -373,10 +373,13 @@ probes and writes its rows once the input is complete, with pixels identical
 to its push path. zenbitmaps decodes rows as bytes arrive; codecs built on
 `WholeFileIncremental` emit rows only at the end.
 
-Encoders that know the image size up front take `Encoder::begin` and, when
-they declare `EncodeCapabilities::streaming_output`, hand out encoded bytes
-through `pending_output` as rows arrive, so a decode-to-encode transcode holds
-one strip and a bounded window rather than two whole images.
+`Encoder::begin` declares the image size up front and returns an
+`OutputTiming`: whether this encoder, with its configuration, hands out
+encoded bytes through `pending_output` as rows arrive, and how many rows it
+holds back. A streaming decode-to-encode transcode holds one strip and a
+bounded window rather than two whole images. JPEG with fixed Huffman tables,
+PNM, QOI and IMIJ row groups stream; optimized-table JPEG and bottom-up BMP
+answer `AT_FINISH`.
 
 The loops live outside this crate, in the workspace's
 [`zencodec-io`](https://github.com/imazen/zencodec/tree/main/zencodec-io):

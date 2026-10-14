@@ -382,7 +382,9 @@ a reader:
 
 Async stays in the drivers: `zencodec_io::tokio_io` keeps a decoder in the task
 between batches and runs batches on a pool. Encoders gained `begin` /
-`pending_output` so a transcode streams in bounded memory. Decisions, trade-offs
+`pending_output` so a transcode streams in bounded memory; `begin` returns an
+`OutputTiming` because whether an encoder streams depends on its configuration,
+not only its codec. Decisions, trade-offs
 and measurements: [range-decoding-contract.md](range-decoding-contract.md).
 
 ## 16-bit convention

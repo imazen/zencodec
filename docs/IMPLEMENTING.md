@@ -818,18 +818,37 @@ does. Declare `with_seekable(true)`. Async drivers reach it through
 emit bytes before `finish`, also implement:
 
 ```rust
-fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor) -> Result<(), MyError>;
+fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor)
+    -> Result<OutputTiming, MyError>;   // declare the image; say when bytes arrive
 fn pending_output(&self) -> &[u8];      // encoded bytes not yet handed out
 fn consume_output(&mut self, n: usize); // the caller sent the first n
 ```
 
 `begin` comes before the first `push_rows` and declares the final size, so the
-header can be written at once. Return an error if more or fewer rows than
-declared are pushed, if `begin` follows rows, or if the layout changes. Without
-`begin`, behave as before (patching the header at `finish` is fine; expose
-nothing from `pending_output` until then). `finish` returns only the bytes not
-consumed. Declare `with_push_rows(true)` and `with_streaming_output(true)`.
-`zencodec_io::EncoderSink` connects an incremental decoder to your encoder.
+header can be written at once. Decide there, from the configuration, image and
+metadata, whether this encode streams, and say so:
+
+- `Ok(OutputTiming::streaming(lag_rows))`: write the header now and make each
+  row's bytes pending once at most `lag_rows` later rows have arrived. Count
+  everything that delays a row: the block height, a lookahead, an
+  adaptive-quantization delay, the rows you buffer to fill a strip. An upper
+  bound is fine; an understated lag fails the testkit.
+- `Ok(OutputTiming::AT_FINISH)`: this configuration needs the whole image
+  before it can write (optimized entropy tables, bottom-up row order, a size
+  or index written before the data). Keep `pending_output` empty.
+- `Err` with `UnsupportedOperation::RowLevelEncode` when this configuration
+  cannot encode from rows at all, even though the codec declares `push_rows`.
+
+Return an error if more or fewer rows than declared are pushed, if `begin`
+follows rows, or if the layout changes. Never change the configuration to make
+an encode stream: a caller who asked for progressive or optimized tables gets
+them, with `AT_FINISH`. The bytes must not depend on draining: what the caller
+took plus `finish`'s return equals an undrained run. Without `begin`, behave as
+before (patching the header at `finish` is fine; expose nothing from
+`pending_output` until then). `finish` returns only the bytes not consumed.
+Declare `with_push_rows(true)` and, if any configuration streams,
+`with_streaming_output(true)`. `zencodec_io::EncoderSink` connects an
+incremental decoder to your encoder.
 
 ## Conformance
 
@@ -837,7 +856,9 @@ consumed. Declare `with_push_rows(true)` and `with_streaming_output(true)`.
 rest, `check_incremental_contract` (chunked input against one-shot pixels,
 row order, termination, cancellation, truncation) for decoders that declare
 `incremental`, the seekable honesty check for `seekable`, and
-`check_streaming_output_honesty` for encoders, in both directions.
+`check_streaming_output_honesty` for encoders, in both directions. That check
+runs the configuration you pass; call it again with a configuration that
+streams if your default does not.
 
 ## Checklist
 
@@ -857,8 +878,9 @@ Before calling your implementation complete:
 - [ ] `no_std` compatible (no `std` imports, `alloc` only)
 - [ ] Incremental decoders: built with `erase_incremental`, ask with `min_len`,
       never buffer input they could decode in place, pass `check_incremental_contract`
-- [ ] Streaming encoders: `begin` writes the header, `pending_output` streams,
-      `check_streaming_output_honesty` passes
+- [ ] Streaming encoders: `begin` returns the `OutputTiming` this
+      configuration delivers and writes the header when it streams;
+      `check_streaming_output_honesty` passes with a streaming configuration
 
 ## Reference Implementation
 
