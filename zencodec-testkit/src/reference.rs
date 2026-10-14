@@ -45,8 +45,9 @@ use std::sync::Arc;
 use enough::{Stop, StopReason};
 use whereat::At;
 use zencodec::decode::{
-    AnimationFrameDecoder, Decode, DecodeCapabilities, DecodeJob, DecodeOutput, DecodeRowSink,
-    DecoderConfig, OutputInfo, SinkError, SourceColor, StreamingDecode,
+    AnimationFrameDecoder, BatchMeta, ByteRange, Decode, DecodeCapabilities, DecodeJob,
+    DecodeOutput, DecodeRowSink, DecoderConfig, IncrementalDecode, OutputInfo, SinkError,
+    SourceColor, Step, StreamingDecode,
 };
 use zencodec::encode::{
     AnimationFrameEncoder, EncodeCapabilities, EncodeJob, EncodeOutput, EncodePolicy, Encoder,
@@ -56,6 +57,7 @@ use zencodec::gainmap::{
     DecodedGainMap, GainMapInfo, GainMapPresence, GainMapRender, GainMapSource, Iso21496Format,
     parse_iso21496_fmt, serialize_iso21496_fmt,
 };
+use zencodec::source::{AccessPattern, DynReadAt};
 use zencodec::{
     AnimationFrame, CategorizedError, Cicp, CodecError, CodecIoKind, ContentLightLevel,
     ErrorCategory, ImageFormat, ImageFormatDefinition, ImageInfo, ImageSequence, MasteringDisplay,
@@ -827,7 +829,9 @@ static DECODE_CAPS: DecodeCapabilities = DecodeCapabilities::new()
     // NOT reconstruct HDR — zencodec carries no HDR math, so `reconstructs_hdr`
     // stays false and a `ReconstructHdr` request falls back to `Components`.
     .with_gain_map(true)
-    .with_inventory(true);
+    .with_inventory(true)
+    .with_incremental(true)
+    .with_seekable(true);
 
 /// Every layout the reference stores raw: 8- and 16-bit RGB/RGBA, with the
 /// 16-bit HDR-labelled variants listed so a PQ/HLG caller negotiates natively.
@@ -1350,6 +1354,80 @@ impl<'a> DecodeJob<'a> for RefDecodeJob {
         })
     }
 
+    fn dyn_incremental_decoder(
+        self,
+        _preferred: &[PixelDescriptor],
+    ) -> Result<Box<dyn zencodec::decode::DynIncrementalDecoder>, zencodec::decode::BoxedError>
+    {
+        Ok(Box::new(zencodec::decode::IncrementalDecoderShim(
+            RefIncDec::new(self.limits),
+        )))
+    }
+
+    /// Pull-native path: the header is read by growing prefix (the wire
+    /// format is self-delimiting, so a complete header parses and a short
+    /// one does not), then strips are fetched two at a time through
+    /// `read_many_at` so a batching source is exercised.
+    fn push_decoder_from_source(
+        self,
+        source: &mut dyn DynReadAt,
+        sink: &mut dyn DecodeRowSink,
+        _preferred: &[PixelDescriptor],
+    ) -> Result<OutputInfo, zencodec::decode::BoxedError> {
+        let total = source.len()?;
+        self.limits
+            .check_input_size(total)
+            .map_err(RefError::from)?;
+        let mut want = 64u64.min(total);
+        let h = loop {
+            let mut prefix = vec![0u8; want as usize];
+            source.read_exact_at(0, &mut prefix)?;
+            match parse_header(&prefix) {
+                Ok(h) => break h,
+                Err(e) if want >= total => return Err(Box::new(e)),
+                Err(_) => want = (want * 4).min(total),
+            }
+        };
+        let info = build_info(&h);
+        let desc = descriptor_for_header(&h)?;
+        let _ = info;
+        let row_bytes = h.width as usize * h.bpp as usize;
+        let base = frame_pixels_offset(&h, 0) as u64;
+        sink.begin(h.width, h.height, desc)
+            .map_err(RefError::Sink)?;
+        let mut y = 0u32;
+        while y < h.height {
+            // Two strips of up to 4 rows per source round.
+            let mut strips: Vec<(u32, u32, Vec<u8>)> = Vec::new();
+            let mut yy = y;
+            while yy < h.height && strips.len() < 2 {
+                let rows = (h.height - yy).min(4);
+                strips.push((yy, rows, vec![0u8; rows as usize * row_bytes]));
+                yy += rows;
+            }
+            {
+                let mut reqs: Vec<(u64, &mut [u8])> = strips
+                    .iter_mut()
+                    .map(|(sy, _, buf)| (base + *sy as u64 * row_bytes as u64, &mut buf[..]))
+                    .collect();
+                source.read_many_at(&mut reqs)?;
+            }
+            for (sy, rows, buf) in &strips {
+                let mut dst = sink
+                    .provide_next_buffer(*sy, *rows, h.width, desc)
+                    .map_err(RefError::Sink)?;
+                for r in 0..*rows {
+                    let start = r as usize * row_bytes;
+                    dst.row_mut(r)
+                        .copy_from_slice(&buf[start..start + row_bytes]);
+                }
+            }
+            y = yy;
+        }
+        sink.finish().map_err(RefError::Sink)?;
+        Ok(OutputInfo::full_decode(h.width, h.height, desc))
+    }
+
     fn animation_frame_decoder(
         self,
         data: Cow<'a, [u8]>,
@@ -1458,6 +1536,198 @@ impl StreamingDecode for RefStreamDec<'_> {
 
     fn info(&self) -> &ImageInfo {
         &self.info
+    }
+}
+
+/// Reference incremental decoder: the hand-written feed/step template.
+///
+/// Input is buffered sequentially up to a cap; the header is parsed once
+/// the prefix is complete (the wire format is self-delimiting); each strip
+/// of up to four rows is written straight into the sink as soon as its
+/// bytes are present, and consumed bytes are released. Only the first
+/// frame is decoded, like the one-shot path.
+pub struct RefIncDec {
+    limits: ResourceLimits,
+    /// Buffered input; `buf[0]` is at absolute offset `buf_start`.
+    buf: Vec<u8>,
+    buf_start: u64,
+    total: Option<u64>,
+    header: Option<(Header, PixelDescriptor, ImageInfo)>,
+    begun: bool,
+    next_row: u32,
+    done: Option<OutputInfo>,
+    failed: bool,
+    need: [ByteRange; 1],
+}
+
+/// Largest input the reference keeps buffered between steps.
+const REF_INC_BUFFER_CAP: usize = 64 * 1024;
+
+impl RefIncDec {
+    fn new(limits: ResourceLimits) -> Self {
+        Self {
+            limits,
+            buf: Vec::new(),
+            buf_start: 0,
+            total: None,
+            header: None,
+            begun: false,
+            next_row: 0,
+            done: None,
+            failed: false,
+            need: [ByteRange::from_offset(0)],
+        }
+    }
+
+    fn need(&mut self, offset: u64) -> Step<'_> {
+        self.need = [ByteRange::from_offset(offset)];
+        Step::Need(&self.need)
+    }
+
+    fn release_before(&mut self, offset: u64) {
+        if offset > self.buf_start {
+            let drop = ((offset - self.buf_start) as usize).min(self.buf.len());
+            self.buf.drain(..drop);
+            self.buf_start += drop as u64;
+        }
+    }
+}
+
+impl IncrementalDecode for RefIncDec {
+    type Error = RefError;
+
+    fn feed(&mut self, offset: u64, bytes: &[u8], eof: bool) -> Result<usize, RefError> {
+        let cursor = self.buf_start + self.buf.len() as u64;
+        if eof {
+            self.total = Some(offset + bytes.len() as u64);
+            if let Some(total) = self.total {
+                self.limits
+                    .check_input_size(total)
+                    .map_err(RefError::from)?;
+            }
+        }
+        // Bytes behind the cursor were already consumed; bytes ahead of it
+        // cannot be placed in a sequential buffer. Both count as accepted
+        // (the driver must not re-offer them), only the overlap is kept.
+        if offset + (bytes.len() as u64) <= cursor {
+            return Ok(bytes.len());
+        }
+        if offset > cursor {
+            return Ok(bytes.len());
+        }
+        let skip = (cursor - offset) as usize;
+        let room = REF_INC_BUFFER_CAP.saturating_sub(self.buf.len());
+        let take = (bytes.len() - skip).min(room);
+        self.buf.extend_from_slice(&bytes[skip..skip + take]);
+        Ok(skip + take)
+    }
+
+    fn step(
+        &mut self,
+        sink: &mut dyn DecodeRowSink,
+        stop: Option<&dyn Stop>,
+    ) -> Result<Step<'_>, RefError> {
+        if self.failed {
+            return Err(RefError::Invalid("decoder already failed".into()));
+        }
+        if let Some(done) = &self.done {
+            return Ok(Step::Done(done.clone()));
+        }
+        if let Some(s) = stop {
+            s.check()?;
+        }
+        let cursor = self.buf_start + self.buf.len() as u64;
+        let at_end = self.total.is_some_and(|t| cursor >= t);
+
+        if self.header.is_none() {
+            if self.buf_start != 0 {
+                self.failed = true;
+                return Err(RefError::Invalid("header bytes released early".into()));
+            }
+            if self.buf.len() >= MAGIC.len() && !self.buf.starts_with(MAGIC) {
+                self.failed = true;
+                return Err(RefError::Invalid("bad magic".into()));
+            }
+            match parse_header(&self.buf) {
+                Ok(h) => {
+                    let desc = descriptor_for_header(&h).inspect_err(|_| self.failed = true)?;
+                    let info = build_info(&h);
+                    self.header = Some((h, desc, info));
+                    return Ok(Step::Metadata(
+                        zencodec::decode::MetadataUpdate::HeaderReady,
+                    ));
+                }
+                Err(e) if at_end => {
+                    self.failed = true;
+                    return Err(e);
+                }
+                Err(_) => return Ok(self.need(cursor)),
+            }
+        }
+
+        let (width, height, bpp, desc, pixels_start) = {
+            let (h, desc, _) = self.header.as_ref().expect("header parsed");
+            (
+                h.width,
+                h.height,
+                h.bpp,
+                *desc,
+                frame_pixels_offset(h, 0) as u64,
+            )
+        };
+        let row_bytes = width as usize * bpp as usize;
+        if !self.begun {
+            sink.begin(width, height, desc).map_err(RefError::Sink)?;
+            self.begun = true;
+        }
+        if self.next_row >= height {
+            sink.finish().map_err(RefError::Sink)?;
+            let info = OutputInfo::full_decode(width, height, desc);
+            self.done = Some(info.clone());
+            return Ok(Step::Done(info));
+        }
+        let rows = (height - self.next_row).min(4);
+        let strip_start = pixels_start + self.next_row as u64 * row_bytes as u64;
+        let strip_len = rows as usize * row_bytes;
+        let strip_end = strip_start + strip_len as u64;
+        self.release_before(strip_start);
+        if cursor < strip_end {
+            if at_end {
+                self.failed = true;
+                return Err(RefError::Invalid("truncated strip".into()));
+            }
+            return Ok(self.need(cursor));
+        }
+        let start = (strip_start - self.buf_start) as usize;
+        {
+            let mut dst = sink
+                .provide_next_buffer(self.next_row, rows, width, desc)
+                .map_err(RefError::Sink)?;
+            for r in 0..rows {
+                let s = start + r as usize * row_bytes;
+                dst.row_mut(r).copy_from_slice(&self.buf[s..s + row_bytes]);
+            }
+        }
+        let meta = BatchMeta::final_rows(self.next_row);
+        self.next_row += rows;
+        self.release_before(strip_end);
+        Ok(Step::Rows { meta, rows })
+    }
+
+    fn wrap_sink_error(err: SinkError) -> RefError {
+        RefError::Sink(err)
+    }
+
+    fn info(&self) -> Option<&ImageInfo> {
+        self.header.as_ref().map(|(_, _, info)| info)
+    }
+
+    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+        self.header.as_ref().map(|(_, desc, _)| *desc)
+    }
+
+    fn access_pattern(&self) -> AccessPattern {
+        AccessPattern::Sequential
     }
 }
 

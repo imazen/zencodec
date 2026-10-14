@@ -116,8 +116,9 @@ pub(crate) mod minimal;
 pub mod reference;
 pub use contracts::{
     check_animation_durations, check_animation_timing, check_animation_timing_unsupported,
-    check_decode_policy_admission, check_encode_policy_admission, check_inventory_input_limit,
-    check_metadata_rewrite,
+    check_decode_policy_admission, check_encode_policy_admission,
+    check_incremental_capability_honesty, check_inventory_input_limit, check_metadata_rewrite,
+    check_read_at_contract, check_seekable_capability_honesty,
 };
 
 #[cfg(test)]
@@ -3270,6 +3271,8 @@ where
         let bytes = enc_oneshot(&enc, &img, Metadata::none(), MetadataPolicy::PreserveExact)
             .map_err(|e| fail("inventory", format!("encode: {e}")))?;
         check_inventory(dec.clone(), &bytes)?;
+        check_incremental_capability_honesty(dec.clone(), &bytes)?;
+        check_seekable_capability_honesty(dec.clone(), &bytes)?;
     }
     let frames = [
         TestImage::rgba8_gradient_seeded(24, 16, 0),

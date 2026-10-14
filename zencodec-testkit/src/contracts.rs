@@ -558,3 +558,264 @@ where
     check_animation_durations(dec.clone(), a.data(), &expected)?;
     check_animation_durations(dec, b.data(), &expected)
 }
+
+/// Verify a [`DynReadAt`](zencodec::source::DynReadAt) driver source
+/// against the bytes it claims to serve: length, exact reads at the
+/// edges and middle, one batched out-of-order multi-range read, and an
+/// error (never a short or zero-filled read) past the end.
+pub fn check_read_at_contract(
+    source: &mut dyn zencodec::source::DynReadAt,
+    expected: &[u8],
+) -> Conformance {
+    const CHECK: &str = "read_at_contract";
+    let err = |e: &dyn std::fmt::Display| fail(CHECK, e.to_string());
+
+    let total = source.len().map_err(|e| err(&e))?;
+    if total != expected.len() as u64 {
+        return Err(fail(
+            CHECK,
+            format!("len() = {total}, expected {}", expected.len()),
+        ));
+    }
+    if expected.is_empty() {
+        return Ok(());
+    }
+    let mut all = vec![0u8; expected.len()];
+    source.read_exact_at(0, &mut all).map_err(|e| err(&e))?;
+    if all != expected {
+        return Err(fail(CHECK, "full read bytes differ"));
+    }
+    let mid = expected.len() / 2;
+    let take = (expected.len() - mid).min(16);
+    let mut slice = vec![0u8; take];
+    source
+        .read_exact_at(mid as u64, &mut slice)
+        .map_err(|e| err(&e))?;
+    if slice != expected[mid..mid + take] {
+        return Err(fail(CHECK, "middle read bytes differ"));
+    }
+    let mut head = vec![0u8; take];
+    let mut tail = vec![0u8; take];
+    {
+        let mut reqs: Vec<(u64, &mut [u8])> = vec![
+            ((expected.len() - take) as u64, &mut tail[..]),
+            (0, &mut head[..]),
+        ];
+        source.read_many_at(&mut reqs).map_err(|e| err(&e))?;
+    }
+    if head != expected[..take] || tail != expected[expected.len() - take..] {
+        return Err(fail(CHECK, "batched read bytes differ"));
+    }
+    let mut one = [0u8; 1];
+    if source
+        .read_exact_at(expected.len() as u64, &mut one)
+        .is_ok()
+    {
+        return Err(fail(CHECK, "read past end unexpectedly succeeded"));
+    }
+    Ok(())
+}
+
+fn pixels_of(out: &zencodec::decode::DecodeOutput) -> (u32, u32, PixelDescriptor, Vec<u8>) {
+    let ps = out.pixels();
+    let mut bytes = Vec::new();
+    for y in 0..ps.rows() {
+        bytes.extend_from_slice(ps.row(y));
+    }
+    (ps.width(), ps.rows(), ps.descriptor(), bytes)
+}
+
+/// Verify the `seekable` capability flag in both directions. A decoder
+/// declaring it must decode `data` through `push_decoder_from_source`
+/// over a slice source with the same pixels as the one-shot path; one not
+/// declaring it must reject with [`UnsupportedOperation::SeekableDecode`].
+pub fn check_seekable_capability_honesty<D: DecoderConfig>(dec: D, data: &[u8]) -> Conformance {
+    const CHECK: &str = "seekable_capability_honesty";
+    let declared = D::capabilities().seekable();
+    let mut source = zencodec::source::ReadAtShim(zencodec::source::SliceReadAt::new(data));
+    let mut sink = zencodec_io::CollectSink::new();
+    let result = dec
+        .clone()
+        .job()
+        .push_decoder_from_source(&mut source, &mut sink, &[]);
+    match (declared, result) {
+        (true, Ok(info)) => {
+            let reference = dec
+                .job()
+                .decoder(std::borrow::Cow::Borrowed(data), &[])
+                .and_then(|d| d.decode())
+                .map_err(|e| fail(CHECK, format!("one-shot decode: {e}")))?;
+            let (w, h, desc, bytes) = pixels_of(&reference);
+            if (info.width, info.height) != (w, h) || sink.descriptor() != Some(desc) {
+                return Err(fail(
+                    CHECK,
+                    format!(
+                        "source decode {}x{} {:?} differs from one-shot {w}x{h} {desc:?}",
+                        info.width,
+                        info.height,
+                        sink.descriptor()
+                    ),
+                ));
+            }
+            if !sink.finished() {
+                return Err(fail(CHECK, "source decode did not call sink.finish"));
+            }
+            if sink.bytes() != bytes {
+                return Err(fail(CHECK, "source decode pixels differ from one-shot"));
+            }
+            Ok(())
+        }
+        (true, Err(e)) => Err(fail(
+            CHECK,
+            format!("declared seekable but push_decoder_from_source failed: {e}"),
+        )),
+        (false, Ok(_)) => Err(fail(
+            CHECK,
+            "did not declare seekable but push_decoder_from_source succeeded",
+        )),
+        (false, Err(e)) => match e.downcast_ref::<UnsupportedOperation>().copied() {
+            Some(UnsupportedOperation::SeekableDecode) => Ok(()),
+            _ => Err(fail(
+                CHECK,
+                format!("undeclared seekable rejected with wrong error: {e}"),
+            )),
+        },
+    }
+}
+
+/// Verify the `incremental` capability flag in both directions, and that
+/// a declared incremental decoder is chunk-boundary independent: driven
+/// over `data` in 1-byte, 7-byte and whole-file chunks it must produce the
+/// one-shot pixels, call `finish`, and report `Done` with the one-shot
+/// dimensions. Truncated input (at a quarter, half and all-but-one bytes)
+/// must end in an error once the length is announced, never in a request
+/// that can never be served.
+pub fn check_incremental_capability_honesty<D: DecoderConfig>(dec: D, data: &[u8]) -> Conformance {
+    const CHECK: &str = "incremental_capability_honesty";
+    let declared = D::capabilities().incremental();
+    let first = dec.clone().job().dyn_incremental_decoder(&[]);
+    let mut inc = match (declared, first) {
+        (true, Ok(inc)) => inc,
+        (true, Err(e)) => {
+            return Err(fail(
+                CHECK,
+                format!("declared incremental but dyn_incremental_decoder failed: {e}"),
+            ));
+        }
+        (false, Ok(_)) => {
+            return Err(fail(
+                CHECK,
+                "did not declare incremental but dyn_incremental_decoder succeeded",
+            ));
+        }
+        (false, Err(e)) => {
+            return match e.downcast_ref::<UnsupportedOperation>().copied() {
+                Some(UnsupportedOperation::IncrementalDecode) => Ok(()),
+                _ => Err(fail(
+                    CHECK,
+                    format!("undeclared incremental rejected with wrong error: {e}"),
+                )),
+            };
+        }
+    };
+    let reference = dec
+        .clone()
+        .job()
+        .decoder(std::borrow::Cow::Borrowed(data), &[])
+        .and_then(|d| d.decode())
+        .map_err(|e| fail(CHECK, format!("one-shot decode: {e}")))?;
+    let (w, h, desc, bytes) = pixels_of(&reference);
+
+    for chunk in [1usize, 7, data.len().max(1)] {
+        if chunk != 1 {
+            inc = dec
+                .clone()
+                .job()
+                .dyn_incremental_decoder(&[])
+                .map_err(|e| fail(CHECK, format!("dyn_incremental_decoder: {e}")))?;
+        }
+        let mut sink = zencodec_io::CollectSink::new();
+        let (info, _) = zencodec_io::drive_from_slice(
+            &mut zencodec_io::Dyn(&mut *inc),
+            data,
+            &mut sink,
+            None,
+            chunk,
+        )
+        .map_err(|e| fail(CHECK, format!("chunk {chunk}: {e}")))?;
+        if (info.width, info.height) != (w, h) {
+            return Err(fail(
+                CHECK,
+                format!(
+                    "chunk {chunk}: Done reports {}x{}, one-shot is {w}x{h}",
+                    info.width, info.height
+                ),
+            ));
+        }
+        if sink.descriptor() != Some(desc) {
+            return Err(fail(
+                CHECK,
+                format!(
+                    "chunk {chunk}: sink began with {:?}, one-shot is {desc:?}",
+                    sink.descriptor()
+                ),
+            ));
+        }
+        if !sink.finished() {
+            return Err(fail(
+                CHECK,
+                format!("chunk {chunk}: sink.finish not called"),
+            ));
+        }
+        if sink.bytes() != bytes {
+            return Err(fail(
+                CHECK,
+                format!("chunk {chunk}: pixels differ from one-shot"),
+            ));
+        }
+        let announced = inc.info().map(|i| (i.width, i.height));
+        if announced.is_none() {
+            return Err(fail(
+                CHECK,
+                format!("chunk {chunk}: info() is None after Done"),
+            ));
+        }
+    }
+
+    for cut in [data.len() / 4, data.len() / 2, data.len().saturating_sub(1)] {
+        if cut >= data.len() {
+            continue;
+        }
+        let mut inc = dec
+            .clone()
+            .job()
+            .dyn_incremental_decoder(&[])
+            .map_err(|e| fail(CHECK, format!("dyn_incremental_decoder: {e}")))?;
+        let mut sink = zencodec_io::CollectSink::new();
+        match zencodec_io::drive_from_slice(
+            &mut zencodec_io::Dyn(&mut *inc),
+            &data[..cut],
+            &mut sink,
+            None,
+            64,
+        ) {
+            Ok(_) => {
+                return Err(fail(
+                    CHECK,
+                    format!(
+                        "truncated to {cut} of {} bytes decoded without error",
+                        data.len()
+                    ),
+                ));
+            }
+            Err(zencodec_io::DriveError::Codec(_)) | Err(zencodec_io::DriveError::Source(_)) => {}
+            Err(e) => {
+                return Err(fail(
+                    CHECK,
+                    format!("truncated to {cut}: driver fault instead of a decode error: {e}"),
+                ));
+            }
+        }
+    }
+    Ok(())
+}

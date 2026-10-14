@@ -17,6 +17,8 @@ include = ["/src/**", "/README.md", "/LICENSE*"]
 # `ComputeEnvironment::host()`; testkit-only, never affects a no_std consumer.
 zencodec = { path = "..", version = ">=0.1.27, <0.3.0", features = ["std"] }
 zenpixels = { version = ">=0.2.10, <0.4.0", features = ["icc"] }
+# Drives incremental decoders in the conformance checks (slice driver, collect sink).
+zencodec-io = { path = "../zencodec-io", version = "0.1.0", features = ["std"] }
 enough = "0.4.4"
 # The `minimal` codec uses `type Error = At<CodecError>` (the envelope pattern),
 # the way real codecs do — they depend on whereat directly to name `At<…>`.
