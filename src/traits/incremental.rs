@@ -407,7 +407,7 @@ impl<E: core::error::Error + 'static> core::error::Error for StepError<E> {
 }
 
 /// A resumable decoder driven by whoever holds the bytes. See the
-/// [module documentation](self) for the rules.
+/// contract in `docs/range-decoding-contract.md` for the rules.
 ///
 /// The trait is object-safe: [`DynIncrementalDecoder`] is
 /// `dyn IncrementalDecode<Error = ErasedError> + Send`.

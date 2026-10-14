@@ -7,7 +7,7 @@
 //! # Submodules
 //!
 //! - `icc`: ICC profile identification and pixel descriptor derivation.
-//! - [`WholeFileIncremental`]: the sans-I/O decode contract for a codec core
+//! - [`WholeFileIncremental`](crate::helpers::WholeFileIncremental): the sans-I/O decode contract for a codec core
 //!   that needs the complete file.
 
 use alloc::borrow::Cow;
