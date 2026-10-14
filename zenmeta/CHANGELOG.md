@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- Require appended child rewrite plans to borrow the exact parent subrange their
+  reports describe. Equal lengths or equal bytes from another allocation are not
+  sufficient provenance; rejection leaves the parent builder unchanged.
+
 - Reject mixed rewrite inputs by borrowed input identity, validate an entire child
   plan before appending it, and preserve builder state when an append fails
   (`eddbdd51`).
@@ -18,6 +22,10 @@
   writers without duplicating their implementation. Reading needs no zenmeta.
 
 ### Changed
+
+- Return typed shared limit kinds for rewrite budgets. Distinguish individual
+  packet limits from cumulative regenerated metadata using the same configured
+  metadata cap. Rejection still leaves a plan builder usable.
 
 - Rewrite execution checks now live in Context instead of the zencodec request.
   Retaining XMP can copy it byte-for-byte without an editor. PlanBuilder checks

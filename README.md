@@ -11,7 +11,7 @@ types (metadata, limits, format detection, color emission) at the root.
 
 ```toml
 [dependencies]
-zencodec = "0.1.27"
+zencodec = "0.1.26"
 ```
 
 zencodec defines the traits; a concrete codec crate (here `zenjpeg`) supplies the

@@ -9,11 +9,11 @@
 
 ## summary
 #
-#   inherent methods                           61
-#   trait roster entries (type × trait)        55
+#   inherent methods                           62
+#   trait roster entries (type × trait)        56
 #
 # per-module pub lines:
-#   (root)                           28
+#   (root)                           29
 #   animation                         2
 #   decode                            3
 #   encode                            1
@@ -24,7 +24,7 @@
 #   inventory                         8
 #   metadata_rewrite                  4
 
-## items (61 lines)
+## items (62 lines)
 
 pub fn AllocPreference::assert_fields_are_eq(&self)
 pub fn CicpEmission::assert_fields_are_eq(&self)
@@ -52,6 +52,7 @@ pub fn ResourceLimits::assert_fields_are_eq(&self)
 pub fn StreamOffset::assert_fields_are_eq(&self)
 pub fn Supplements::assert_fields_are_eq(&self)
 pub fn ThreadingPolicy::assert_fields_are_eq(&self)
+pub fn TranscodeBarrier::assert_fields_are_eq(&self)
 pub fn UnsupportedImageKind::assert_fields_are_eq(&self)
 pub fn UnsupportedOperation::assert_fields_are_eq(&self)
 pub fn animation::FrameDuration::assert_fields_are_eq(&self)
@@ -88,7 +89,7 @@ pub fn metadata_rewrite::Compression::assert_fields_are_eq(&self)
 pub fn metadata_rewrite::Entry::assert_fields_are_eq(&self)
 pub fn metadata_rewrite::Error::assert_fields_are_eq(&self)
 
-## trait impls (55 types)
+## trait impls (56 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -113,6 +114,7 @@ ResourceError: TrivialClone
 ResourceLimits: TrivialClone
 StreamOffset: TrivialClone
 ThreadingPolicy: TrivialClone
+TranscodeBarrier: TrivialClone
 UnsupportedImageKind: TrivialClone
 UnsupportedOperation: TrivialClone
 animation::FrameDuration: TrivialClone

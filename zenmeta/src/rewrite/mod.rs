@@ -39,7 +39,7 @@ impl<'a> Context<'a> {
             other => Error::Stopped(other),
         })?;
         if self.input().len() > self.max_input() {
-            return Err(Error::Limit("input bytes"));
+            return Err(Error::Limit(zencodec::LimitKind::InputSize));
         }
         Ok(())
     }
@@ -47,7 +47,7 @@ impl<'a> Context<'a> {
     pub fn packet(&self, size: usize) -> Result<(), Error> {
         self.check()?;
         if size > self.max_metadata() {
-            Err(Error::Limit("metadata bytes"))
+            Err(Error::Limit(zencodec::LimitKind::MetadataSize))
         } else {
             Ok(())
         }
@@ -178,14 +178,14 @@ impl<'a> PlanBuilder<'a> {
             return Err(Error::Malformed("mixed rewrite inputs"));
         }
         if self.entries.len() >= req.max_carriers() {
-            return Err(Error::Limit("carrier count"));
+            return Err(Error::Limit(zencodec::LimitKind::MetadataCarriers));
         }
         let added = bytes.as_ref().map_or(0, |b| b.len());
         let size = self
             .size
             .checked_add(added)
             .filter(|n| *n <= req.max_output())
-            .ok_or(Error::Limit("output bytes"))?;
+            .ok_or(Error::Limit(zencodec::LimitKind::OutputSize))?;
         let rewritten = self
             .rewritten
             .checked_add(
@@ -194,8 +194,10 @@ impl<'a> PlanBuilder<'a> {
                     .filter(|b| matches!(b, Cow::Owned(_)))
                     .map_or(0, |b| b.len()),
             )
-            .ok_or(Error::Limit("rewritten metadata"))?;
-        req.packet(rewritten)?;
+            .ok_or(Error::Limit(zencodec::LimitKind::MetadataRewriteSize))?;
+        if rewritten > req.max_metadata() {
+            return Err(Error::Limit(zencodec::LimitKind::MetadataRewriteSize));
+        }
         self.entries.try_reserve(1).map_err(|_| Error::Allocation)?;
         if bytes.is_some() {
             self.parts.try_reserve(1).map_err(|_| Error::Allocation)?;
@@ -298,23 +300,33 @@ impl<'a> PlanBuilder<'a> {
         {
             return Err(Error::Malformed("contained input range"));
         }
+        if let Some(child_input) = other.input {
+            // Range arithmetic was checked above. A matching length alone
+            // cannot prove that translated report offsets describe this input.
+            let expected = &input[offset..offset + child_input.len()];
+            if !core::ptr::eq(child_input, expected) {
+                return Err(Error::Malformed("contained input identity"));
+            }
+        }
         let size = self
             .size
             .checked_add(other.size)
             .filter(|n| *n <= req.max_output())
-            .ok_or(Error::Limit("output bytes"))?;
+            .ok_or(Error::Limit(zencodec::LimitKind::OutputSize))?;
         let rewritten = self
             .rewritten
             .checked_add(other.rewritten)
-            .ok_or(Error::Limit("rewritten metadata"))?;
-        req.packet(rewritten)?;
+            .ok_or(Error::Limit(zencodec::LimitKind::MetadataRewriteSize))?;
+        if rewritten > req.max_metadata() {
+            return Err(Error::Limit(zencodec::LimitKind::MetadataRewriteSize));
+        }
         if self
             .entries
             .len()
             .checked_add(other.entries.len())
             .is_none_or(|n| n > req.max_carriers())
         {
-            return Err(Error::Limit("carrier count"));
+            return Err(Error::Limit(zencodec::LimitKind::MetadataCarriers));
         }
         for entry in &other.entries {
             let range = entry.source_range();

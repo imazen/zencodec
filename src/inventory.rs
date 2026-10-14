@@ -19,7 +19,7 @@
 //!
 //! Decoders produce inventories through
 //! [`DecodeJob::inventory`](crate::decode::DecodeJob::inventory); the default
-//! implementation returns `Ok(None)`, and
+//! implementation returns a typed unsupported-operation error, and
 //! [`DecodeCapabilities::inventory`](crate::decode::DecodeCapabilities::inventory)
 //! says whether a codec implements it.
 //!
@@ -459,6 +459,8 @@ impl Part {
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum InventoryError {
+    /// Storage or validation scratch allocation failed.
+    Allocation,
     /// [`Inventory::push`] was called past the part cap.
     TooManyParts {
         /// The cap that was hit.
@@ -503,6 +505,7 @@ pub enum InventoryError {
 impl fmt::Display for InventoryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Allocation => f.write_str("inventory allocation failed"),
             Self::TooManyParts { max } => write!(f, "inventory exceeds {max} parts"),
             Self::BadParent { part } => {
                 write!(
@@ -548,6 +551,7 @@ impl crate::CategorizedError for InventoryError {
 
     fn category(&self) -> crate::ErrorCategory {
         match self {
+            Self::Allocation => crate::ErrorCategory::Resource(crate::ResourceError::OutOfMemory),
             Self::TooManyParts { .. } => crate::ErrorCategory::Resource(
                 crate::ResourceError::Limits(crate::LimitKind::InventoryParts),
             ),
@@ -606,6 +610,10 @@ impl Inventory {
     }
 
     /// Change the part cap (default [`DEFAULT_MAX_PARTS`]).
+    ///
+    /// This bounds the number of records, not total memory. Caller-owned labels
+    /// and details, vector spare capacity and sorting scratch also take memory.
+    /// Walkers must apply their own byte budget to strings and parser state.
     pub fn with_max_parts(mut self, max_parts: u32) -> Self {
         self.max_parts = max_parts;
         self
@@ -649,10 +657,12 @@ impl Inventory {
                 max: self.max_parts,
             });
         }
+        if parent.is_some_and(|p| p.index() >= self.parts.len()) {
+            return Err(InventoryError::BadParent { part: id });
+        }
+        // Reserve all parallel arrays before changing any sibling link.
+        self.reserve_parts(1)?;
         let next = match parent {
-            Some(p) if p.index() >= self.parts.len() => {
-                return Err(InventoryError::BadParent { part: id });
-            }
             Some(p) => core::mem::replace(&mut self.first_child[p.index()], id.0),
             None => core::mem::replace(&mut self.first_top, id.0),
         };
@@ -661,6 +671,24 @@ impl Inventory {
         self.first_child.push(NONE);
         self.next_sibling.push(next);
         Ok(id)
+    }
+
+    fn reserve_parts(&mut self, additional: usize) -> Result<(), InventoryError> {
+        if additional > (self.max_parts as usize).saturating_sub(self.parts.len()) {
+            return Err(InventoryError::TooManyParts {
+                max: self.max_parts,
+            });
+        }
+        self.parts
+            .try_reserve(additional)
+            .map_err(|_| InventoryError::Allocation)?;
+        self.first_child
+            .try_reserve(additional)
+            .map_err(|_| InventoryError::Allocation)?;
+        self.next_sibling
+            .try_reserve(additional)
+            .map_err(|_| InventoryError::Allocation)?;
+        Ok(())
     }
 
     /// Change a recorded part's disposition, returning the previous one.
@@ -688,28 +716,42 @@ impl Inventory {
     }
 
     /// Children of `parent` (`None` = top level), sorted by start offset.
+    ///
+    /// Panics if allocation fails; use [`try_children`](Self::try_children)
+    /// when propagating resource failures from a codec operation.
     pub fn children(&self, parent: Option<PartId>) -> Vec<PartId> {
-        let mut ids = Vec::new();
-        self.children_into(parent, &mut ids);
-        ids.into_iter().map(|i| PartId(i as u32)).collect()
+        self.try_children(parent)
+            .expect("inventory children allocation failed")
     }
 
-    /// Fill `out` with the indices of `parent`'s children, sorted by start
-    /// offset (ties by recording order).
-    fn children_into(&self, parent: Option<PartId>, out: &mut Vec<usize>) {
+    /// Fallible child collection, with the same ordering as [`children`](Self::children).
+    pub fn try_children(&self, parent: Option<PartId>) -> Result<Vec<PartId>, InventoryError> {
+        let mut ids = Vec::new();
+        self.children_into(parent, &mut ids)?;
+        Ok(ids)
+    }
+
+    /// Sort by offset, breaking ties by recording order without sort scratch.
+    fn children_into(
+        &self,
+        parent: Option<PartId>,
+        out: &mut Vec<PartId>,
+    ) -> Result<(), InventoryError> {
         out.clear();
         let mut next = match parent {
             None => self.first_top,
             Some(p) => match self.first_child.get(p.index()) {
                 Some(&first) => first,
-                None => return,
+                None => return Ok(()),
             },
         };
         while next != NONE {
-            out.push(next as usize);
+            out.try_reserve(1).map_err(|_| InventoryError::Allocation)?;
+            out.push(PartId(next));
             next = self.next_sibling[next as usize];
         }
-        out.sort_by_key(|&i| (self.parts[i].range.start, i));
+        out.sort_unstable_by_key(|&id| (self.parts[id.index()].range.start, id));
+        Ok(())
     }
 
     /// Cover every byte of the top level (`parent` = `None`) or of `parent`'s
@@ -735,16 +777,23 @@ impl Inventory {
         };
         let mut holes = Vec::new();
         let mut cursor = span.start;
-        for id in self.children(parent) {
+        for id in self.try_children(parent)? {
             let r = &self.parts[id.index()].range;
             if r.start > cursor {
+                holes
+                    .try_reserve(1)
+                    .map_err(|_| InventoryError::Allocation)?;
                 holes.push(cursor..r.start.min(span.end));
             }
             cursor = cursor.max(r.end);
         }
         if cursor < span.end {
+            holes
+                .try_reserve(1)
+                .map_err(|_| InventoryError::Allocation)?;
             holes.push(cursor..span.end);
         }
+        self.reserve_parts(holes.iter().filter(|h| h.start < h.end).count())?;
         for hole in holes {
             if hole.start < hole.end {
                 self.push(
@@ -793,14 +842,14 @@ impl Inventory {
             }
         }
         let mut level = Vec::new();
-        self.children_into(None, &mut level);
+        self.children_into(None, &mut level)?;
         self.check_level(None, &level, Some(0..self.len))?;
         for (i, part) in self.parts.iter().enumerate() {
             if self.first_child[i] == NONE && part.body.is_none() {
                 continue;
             }
             let id = PartId(i as u32);
-            self.children_into(Some(id), &mut level);
+            self.children_into(Some(id), &mut level)?;
             self.check_level(Some(id), &level, part.body.clone())?;
         }
         Ok(())
@@ -810,14 +859,14 @@ impl Inventory {
     fn check_level(
         &self,
         parent: Option<PartId>,
-        ids: &[usize],
+        ids: &[PartId],
         span: Option<Range<u64>>,
     ) -> Result<(), InventoryError> {
         for pair in ids.windows(2) {
-            if self.parts[pair[1]].range.start < self.parts[pair[0]].range.end {
+            if self.parts[pair[1].index()].range.start < self.parts[pair[0].index()].range.end {
                 return Err(InventoryError::Overlap {
-                    first: PartId(pair[0] as u32),
-                    second: PartId(pair[1] as u32),
+                    first: pair[0],
+                    second: pair[1],
                 });
             }
         }
@@ -825,12 +874,10 @@ impl Inventory {
             return Ok(());
         };
         let mut cursor = span.start;
-        for &i in ids.iter() {
-            let r = &self.parts[i].range;
+        for &id in ids.iter() {
+            let r = &self.parts[id.index()].range;
             if r.start < span.start || r.end > span.end {
-                return Err(InventoryError::OutsideParent {
-                    part: PartId(i as u32),
-                });
+                return Err(InventoryError::OutsideParent { part: id });
             }
             if r.start > cursor {
                 return Err(InventoryError::Uncovered {
@@ -1274,5 +1321,43 @@ mod tests {
         let mdat_pos = table.find("mdat").unwrap();
         assert!(ftyp < mdat_pos, "{table}");
         assert!(table.contains("    extent"), "{table}");
+    }
+    #[test]
+    fn gap_cap_failure_keeps_topology_unchanged() {
+        let mut inv = Inventory::new(ImageFormat::Png, 30).with_max_parts(2);
+        let middle = inv
+            .push(None, part(PartKind::Chunk, 10..20, Disposition::Unknown))
+            .unwrap();
+        let before = inv.clone();
+        assert_eq!(
+            inv.fill_gaps(None, Disposition::Trailing),
+            Err(InventoryError::TooManyParts { max: 2 })
+        );
+        assert_eq!(inv, before);
+        assert_eq!(inv.try_children(None).unwrap(), [middle]);
+        let mut inv = inv.with_max_parts(3);
+        inv.fill_gaps(None, Disposition::Trailing).unwrap();
+        inv.validate().unwrap();
+        assert_eq!(inv.try_children(None).unwrap(), inv.children(None));
+    }
+
+    #[test]
+    fn allocation_error_survives_the_shared_envelope() {
+        use crate::{CategorizedError, CodecError, CodecErrorExt, ErrorCategory, ResourceError};
+        let error = InventoryError::Allocation;
+        assert_eq!(
+            error.category(),
+            ErrorCategory::Resource(ResourceError::OutOfMemory)
+        );
+        let erased: alloc::boxed::Box<dyn core::error::Error + Send + Sync> =
+            alloc::boxed::Box::new(CodecError::from_parts(
+                None,
+                error.category(),
+                alloc::boxed::Box::new(error),
+            ));
+        assert_eq!(
+            erased.find_cause::<InventoryError>(),
+            Some(&InventoryError::Allocation)
+        );
     }
 }

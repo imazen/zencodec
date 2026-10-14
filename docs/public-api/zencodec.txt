@@ -6,25 +6,25 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 1759 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 116 lines (116 hidden + 0 excluded-feature)
+# files: zencodec.txt 1771 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 118 lines (118 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                12
-#   pub types (struct/enum/trait/alias)       189
+#   pub types (struct/enum/trait/alias)       190
 #   pub consts/statics                        197
 #   free functions                             46
-#   inherent methods                          767
+#   inherent methods                          768
 #   struct fields                             220
-#   enum variants                             260
+#   enum variants                             269
 #   re-exports                                 12
-#   trait roster entries (type × trait)       483
+#   trait roster entries (type × trait)       488
 #   conditional trait impls (verbatim)          4
-#   auto-trait-complete types                  85
+#   auto-trait-complete types                  86
 #   auto-trait exceptions                       9
 #
 # per-module pub lines:
-#   (root)                          779
+#   (root)                          788
 #   animation                         8
 #   decode                          170
 #   encode                          123
@@ -33,11 +33,11 @@
 #   gainmap                         126
 #   helpers                          13
 #   icc                               1
-#   inventory                       101
+#   inventory                       103
 #   metadata_rewrite                 58
 #   prelude                         182
 
-## items (1644 lines)
+## items (1655 lines)
 
 pub mod zencodec
 pub use At
@@ -777,6 +777,7 @@ pub inventory::Disposition::Unreferenced
 pub const fn inventory::Disposition::is_consumed(self) -> bool
 pub const fn inventory::Disposition::name(self) -> &'static str
 #[non_exhaustive] pub enum inventory::InventoryError
+pub inventory::InventoryError::Allocation
 pub inventory::InventoryError::BadParent
 pub inventory::InventoryError::BadParent::part: inventory::PartId
 pub inventory::InventoryError::EmptyPart
@@ -842,6 +843,7 @@ pub fn inventory::Inventory::parts(&self) -> &[inventory::Part]
 pub fn inventory::Inventory::push(&mut self, core::option::Option<inventory::PartId>, inventory::Part) -> core::result::Result<inventory::PartId, inventory::InventoryError>
 pub fn inventory::Inventory::set_detail(&mut self, inventory::PartId, impl core::convert::Into<alloc::string::String>) -> bool
 pub fn inventory::Inventory::set_disposition(&mut self, inventory::PartId, inventory::Disposition) -> core::option::Option<inventory::Disposition>
+pub fn inventory::Inventory::try_children(&self, core::option::Option<inventory::PartId>) -> core::result::Result<alloc::vec::Vec<inventory::PartId>, inventory::InventoryError>
 pub fn inventory::Inventory::unconsumed(&self) -> impl core::iter::traits::iterator::Iterator<Item = (inventory::PartId, &inventory::Part)>
 pub fn inventory::Inventory::validate(&self) -> core::result::Result<(), inventory::InventoryError>
 pub fn inventory::Inventory::with_max_parts(self, u32) -> Self
@@ -883,7 +885,7 @@ pub metadata_rewrite::Compression::Zlib
 #[non_exhaustive] pub enum metadata_rewrite::Error
 pub metadata_rewrite::Error::Allocation
 pub metadata_rewrite::Error::Cancelled
-pub metadata_rewrite::Error::Limit(&'static str)
+pub metadata_rewrite::Error::Limit(LimitKind)
 pub metadata_rewrite::Error::Malformed(&'static str)
 pub metadata_rewrite::Error::Service(&'static str)
 pub metadata_rewrite::Error::Stopped(enough::reason::StopReason)
@@ -1105,6 +1107,7 @@ pub CicpEmission::WhereverSupported
 pub CodecSetError::Codec(encode::BoxedError)
 pub CodecSetError::NoDecoder(ImageFormat)
 pub CodecSetError::NoEncoder(ImageFormat)
+pub CodecSetError::TranscodeRequiresExplicitHandling(TranscodeBarrier)
 pub CodecSetError::UnrecognizedFormat
 #[non_exhaustive] pub enum ColorEmitPolicy
 pub ColorEmitPolicy::Balanced
@@ -1249,6 +1252,10 @@ pub LimitKind::Height
 pub LimitKind::InputSize
 pub LimitKind::InventoryParts
 pub LimitKind::Memory
+pub LimitKind::MetadataCarriers
+pub LimitKind::MetadataEntries
+pub LimitKind::MetadataRewriteSize
+pub LimitKind::MetadataSize
 pub LimitKind::OutputSize
 pub LimitKind::Pixels
 pub LimitKind::Scans
@@ -1300,6 +1307,10 @@ pub ThreadingPolicy::SingleThread
 pub ThreadingPolicy::Unlimited
 pub fn ThreadingPolicy::is_parallel(self) -> bool
 pub fn ThreadingPolicy::resolve_thread_count(self) -> u32
+#[non_exhaustive] pub enum TranscodeBarrier
+pub TranscodeBarrier::AuxiliaryImage
+pub TranscodeBarrier::PixelDescriptor
+pub TranscodeBarrier::Sequence
 #[non_exhaustive] pub enum UnsupportedImageKind
 pub UnsupportedImageKind::Feature
 pub UnsupportedImageKind::Type
@@ -1684,7 +1695,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (101 types)
+## trait impls (102 types)
 
 (): encode::AnimationFrameEncoder
 (dyn core::error::Error + 'static): CodecErrorExt
@@ -1730,6 +1741,7 @@ SourceColor: Clone, Debug, Default, PartialEq
 StreamOffset: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
 Supplements: Clone, Debug, Default, Eq, PartialEq
 ThreadingPolicy: Clone, Copy, Debug, Default, Eq, PartialEq
+TranscodeBarrier: Clone, Copy, Debug, Eq, PartialEq
 Unsupported<E>: decode::AnimationFrameDecoder, decode::StreamingDecode
 UnsupportedImageKind: Clone, Copy, Debug, Eq, Hash, PartialEq
 UnsupportedOperation: CategorizedError, Clone, Copy, Debug, Display, Eq, Error, Hash, PartialEq
@@ -1794,7 +1806,7 @@ impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static,
 
 ## auto traits
 
-85 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+86 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
 CodecSet: !RefUnwindSafe !UnwindSafe
 CodecSetError: !RefUnwindSafe !UnwindSafe

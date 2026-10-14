@@ -148,8 +148,23 @@ pub enum CodecSetError {
     NoDecoder(ImageFormat),
     /// No encoder for the requested format is registered in this set.
     NoEncoder(ImageFormat),
+    /// This convenience path cannot retain all source content or samples.
+    /// Use the codec's explicit sequence, gain-map, or pixel conversion API.
+    TranscodeRequiresExplicitHandling(TranscodeBarrier),
     /// The selected codec failed.
     Codec(BoxedError),
+}
+
+/// Source property that the still-image transcode convenience cannot preserve.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum TranscodeBarrier {
+    /// The source contains an animation or independent images.
+    Sequence,
+    /// The source contains a gain map or another auxiliary image.
+    AuxiliaryImage,
+    /// The target cannot accept the decoder's native pixel descriptor.
+    PixelDescriptor,
 }
 
 impl fmt::Display for CodecSetError {
@@ -160,6 +175,9 @@ impl fmt::Display for CodecSetError {
             }
             Self::NoDecoder(fmt_) => write!(f, "no decoder registered for {fmt_}"),
             Self::NoEncoder(fmt_) => write!(f, "no encoder registered for {fmt_}"),
+            Self::TranscodeRequiresExplicitHandling(barrier) => {
+                write!(f, "transcode requires explicit handling of {barrier:?}")
+            }
             Self::Codec(e) => write!(f, "codec error: {e}"),
         }
     }
@@ -507,37 +525,31 @@ impl CodecSet {
     ///
     /// The headline proxy operation: `decode → carry source metadata → encode`.
     /// The source's ICC / EXIF / XMP / CICP / HDR / orientation are read off the
-    /// decode result and re-embedded, filtered by `metadata`
+    /// decode result and offered to the encoder, filtered by `metadata`
     /// ([`Web`](MetadataPolicy::Web) strips GPS / camera / timestamps / XMP and
     /// keeps orientation + rights + color; [`PreserveExact`](MetadataPolicy::PreserveExact)
-    /// carries everything verbatim). `color` ([`ColorEmitPolicy`]) governs how
+    /// requests all carriers). An encoder may lack a requested carrier; this
+    /// method does not certify byte-exact metadata preservation. `color`
+    /// ([`ColorEmitPolicy`]) governs how
     /// color *signaling* (ICC vs CICP) is emitted — it is **not** a pixel-level
     /// color-space conversion. The color policy merges onto the set-level
     /// [`EncodePolicy`] (overriding only its color field).
     ///
     /// # Scope and failure modes
     ///
-    /// - **Single image** — decodes the first frame only, like
-    ///   [`decode`](Self::decode); for animation use
+    /// - **Single image** — rejects known animation and multi-image sources
+    ///   rather than silently selecting their first image. For animation use
     ///   [`animation_decoder`](Self::animation_decoder) + [`encode_job`](Self::encode_job).
     /// - **No pixel processing** — recompresses at the decoded dimensions and
     ///   pixel format; no resize, crop, or CMS conversion.
-    /// - **Precision-preserving, no adaptation** — it decodes at the source's
-    ///   native descriptor first and, when the `target` encoder accepts that
-    ///   descriptor (per its
-    ///   [`supported_descriptors`](crate::traits::EncoderConfig::supported_descriptors)),
-    ///   encodes it verbatim — so a 16-bit or HDR source is **not** flattened to
-    ///   8-bit when the target can carry it. Only when the native descriptor is
-    ///   unsupported does it re-decode (via
-    ///   [`decode_preferring`](Self::decode_preferring)) asking the decoder to
-    ///   bridge to a descriptor the encoder accepts: a second decode, and a
-    ///   precision drop only where the target genuinely can't hold the source's
-    ///   format (this crate carries no pixel-conversion dependency). It errors —
-    ///   rather than corrupting — only when the decoder and encoder supported
-    ///   sets are disjoint (e.g. a RAW decoder that emits 16-bit / f32-linear
-    ///   only, into an encoder that accepts 8-bit only). Since every common
-    ///   raster codec both decodes to and encodes from sRGB `RGB8` / `RGBA8`,
-    ///   those pairs bridge.
+    /// - **No implicit descriptor downgrade** — if the target cannot accept
+    ///   the decoded descriptor, use an explicit pixel conversion or a
+    ///   codec-specific encode path. The registered decoder is not re-run at a
+    ///   lower precision behind the caller's back.
+    /// - **Fidelity and carrier support are best-effort** — the existing
+    ///   `with_fidelity`, `with_metadata_policy` and `with_policy` contracts do
+    ///   not report whether every request was honored. Inspect the selected
+    ///   codec's capabilities or use its checked API when a property is required.
     ///
     /// Errors with [`NoDecoder`](CodecSetError::NoDecoder) when `input`'s
     /// detected format has no registered decoder, [`NoEncoder`](CodecSetError::NoEncoder)
@@ -555,20 +567,33 @@ impl CodecSet {
             .encoder_for(target)
             .ok_or(CodecSetError::NoEncoder(target))?
             .supported_descriptors();
-        // Decode at the source's native precision first. If the target encoder
-        // accepts that descriptor, encode it verbatim — a 16-bit / HDR source is
-        // not thrown down to 8-bit when the target can hold it. Only when the
-        // native descriptor is unsupported do we re-decode asking the decoder to
-        // bridge to a descriptor the encoder takes (a second decode; loses
-        // precision only where the target can't carry the source's format). The
-        // encoders list 8-bit descriptors first, so preferring that list up
-        // front would otherwise flatten every multi-depth source to 8-bit.
+        // This is a still-image convenience. Reject known source content that
+        // cannot travel through a single PixelSlice before decoding samples.
+        let format = self
+            .detect(input)
+            .ok_or(CodecSetError::UnrecognizedFormat)?;
+        let source = self.decode_job(format)?.probe_full(input)?;
+        if !matches!(source.sequence, crate::ImageSequence::Single) {
+            return Err(CodecSetError::TranscodeRequiresExplicitHandling(
+                TranscodeBarrier::Sequence,
+            ));
+        }
+        if source.gain_map.is_present()
+            || source.supplements.gain_map
+            || source.supplements.depth_map
+            || source.supplements.segmentation_mattes
+            || source.supplements.auxiliary
+        {
+            return Err(CodecSetError::TranscodeRequiresExplicitHandling(
+                TranscodeBarrier::AuxiliaryImage,
+            ));
+        }
         let decoded = self.decode(input)?;
-        let decoded = if target_inputs.contains(&decoded.pixels().descriptor()) {
-            decoded
-        } else {
-            self.decode_preferring(input, target_inputs)?
-        };
+        if !target_inputs.contains(&decoded.pixels().descriptor()) {
+            return Err(CodecSetError::TranscodeRequiresExplicitHandling(
+                TranscodeBarrier::PixelDescriptor,
+            ));
+        }
         let source_metadata = Metadata::from(decoded.info());
         let mut job = self.encode_job_with(target, fidelity)?;
         job.set_metadata_policy(source_metadata, metadata);
