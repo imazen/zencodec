@@ -1278,7 +1278,8 @@ pub enum IccDisposition { KeepSource, SynthesizeFrom(Cicp), Drop }
   is explicit (`ColorEmitFields::new`).
 - **`EncodeCapabilities`** carrier methods: `cicp_is_valid_carrier` (the format has a
   standardized CICP slot — JXL/AVIF/HEIC `nclx`, PNG `cICP`) and `cicp_safe_sole_carrier`
-  (CICP alone is spec-mandated and reader-authoritative — JXL, AVIF, HEIC).
+  (CICP alone reaches every measured reader — JXL only; AVIF/HEIC and PNG keep
+  an ICC alongside, imazen/zencodec#132).
 - **`IccDisposition`** — `KeepSource` re-embeds the source ICC; `Drop` emits none;
   `SynthesizeFrom(cicp)` asks the caller to materialize bytes (this crate carries no
   CMS) via `zenpixels_convert`'s transfer-aware `synthesize_icc_for_cicp` — a bundled

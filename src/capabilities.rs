@@ -230,12 +230,12 @@ impl EncodeCapabilities {
     ///
     /// Stricter than [`cicp_is_valid_carrier`](Self::cicp_is_valid_carrier): a
     /// format can have a valid CICP carrier yet still need an ICC kept for
-    /// real-world tool compatibility. As of 2026 this is true for **JXL, AVIF, and
-    /// HEIC** — their CICP carriers (JXL codestream enum color, AVIF/HEIC `nclx`)
-    /// have been spec-mandated and reader-authoritative since the first
-    /// JXL / MIAF (ISO/IEC 23000-22) / HEIF (ISO/IEC 23008-12) editions, so a
-    /// conforming reader honors them. **PNG** stays `false`: its `cICP` chunk is a
-    /// far newer, optional addition, so keep the ICC alongside.
+    /// real-world tool compatibility. Measured (imazen/zencodec#132, 80 reader
+    /// configurations): true only for **JXL**, whose codestream enum colour every
+    /// JXL reader honours. **AVIF and HEIC** stay `false`: vips and ImageMagick
+    /// act only on an AVIF `prof` and show an `nclx`-only Display P3 file as sRGB.
+    /// **PNG** stays `false`: WIC, WebKit's Linux build and the Linux libraries
+    /// ignore `cICP` alone.
     pub const fn cicp_safe_sole_carrier(&self) -> bool {
         self.cicp_safe_sole_carrier
     }

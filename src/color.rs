@@ -27,7 +27,8 @@ use crate::metadata::IccRetention;
 /// - [`Compatibility`](ColorEmitPolicy::Compatibility) — always embed an ICC; add CICP where reliable.
 /// - [`Balanced`](ColorEmitPolicy::Balanced) (**default**) — emit CICP where the format has a
 ///   standardized CICP carrier, drop a redundant ICC only where CICP is safe as the sole carrier
-///   (JXL/AVIF/HEIC today) or the ICC is plain sRGB.
+///   (JXL only: AVIF/HEIC readers such as vips and ImageMagick act only on the ICC,
+///   imazen/zencodec#132) or the ICC is plain sRGB.
 /// - [`Compact`](ColorEmitPolicy::Compact) — smallest: prefer CICP wherever the format carries it, drop the ICC.
 /// - [`Verbatim`](ColorEmitPolicy::Verbatim) — carry the source's signals unchanged.
 /// - [`Custom`](ColorEmitPolicy::Custom) — explicit [`ColorEmitFields`] for power users.
@@ -80,11 +81,17 @@ pub enum ColorEmitPolicy {
     /// **Default.** Emit CICP where it is the format's authority and drop a
     /// redundant ICC only where CICP is safe as the *sole* carrier
     /// ([`cicp_safe_sole_carrier`](EncodeCapabilities::cicp_safe_sole_carrier) —
-    /// JXL/AVIF/HEIC today) or the ICC is a plain sRGB profile. Otherwise keep the ICC.
+    /// JXL only, as measured in imazen/zencodec#132) or the ICC is a plain sRGB
+    /// profile. Otherwise keep the ICC.
     #[default]
     Balanced,
     /// Smallest color overhead: prefer CICP wherever the format can carry it at
     /// all, and drop the ICC whenever CICP can describe the color.
+    ///
+    /// Measured cost (imazen/zencodec#132): a PNG `cICP` alone is ignored by WIC,
+    /// WebKit's Linux build and the Linux libraries (ImageMagick, vips, Pillow),
+    /// and an AVIF `nclx` alone by vips and ImageMagick; those readers show the
+    /// pixels as sRGB.
     Compact,
     /// Carry the source's color signals through unchanged — derive and strip
     /// nothing. For transcodes that must preserve exactly what was there.
@@ -372,13 +379,14 @@ mod tests {
             .with_cicp_safe_sole_carrier(true)
     }
     fn caps_avif() -> EncodeCapabilities {
-        // AVIF nclx is spec-mandated + reader-authoritative (MIAF/HEIF) → sole-safe,
-        // like JXL. (HEIC has identical caps.) PNG (`caps_png`) stays NOT sole-safe.
+        // AVIF nclx is a valid carrier but NOT sole-safe: vips and ImageMagick
+        // render an nclx-only Display P3 AVIF as sRGB (reader-compatibility
+        // matrix, imazen/zencodec#132). HEIC has identical caps.
         EncodeCapabilities::new()
             .with_icc(true)
             .with_cicp(true)
             .with_cicp_is_valid_carrier(true)
-            .with_cicp_safe_sole_carrier(true)
+            .with_cicp_safe_sole_carrier(false)
     }
     fn caps_jpeg() -> EncodeCapabilities {
         // No CICP carrier at all.
@@ -440,15 +448,14 @@ mod tests {
     }
 
     #[test]
-    fn avif_balanced_drops_redundant_icc_now_sole_safe() {
-        // AVIF nclx is sole-safe (spec-mandated + reader-authoritative): a non-sRGB
-        // ICC whose color the CICP represents is dropped under Balanced, like JXL.
-        // (The not-sole-safe "keep the ICC alongside" path is covered by
-        // `png_emits_cicp_keeps_icc_under_balanced`.)
+    fn avif_balanced_keeps_wide_gamut_icc_next_to_nclx() {
+        // AVIF nclx is not sole-safe (vips and ImageMagick act only on the ICC,
+        // imazen/zencodec#132): a non-sRGB ICC is kept next to the nclx under
+        // Balanced. The sole-safe drop is JXL's (`jxl_balanced_strips_representable_icc`).
         let p3 = src_cicp(Cicp::DISPLAY_P3).with_icc_profile(alloc::vec![0u8; 132]);
         let plan = resolve_color_emit(&p3, &caps_avif(), ColorEmitPolicy::Balanced);
         assert_eq!(plan.cicp, Some(Cicp::DISPLAY_P3));
-        assert_eq!(plan.icc, IccDisposition::Drop);
+        assert_eq!(plan.icc, IccDisposition::KeepSource);
     }
 
     #[test]
@@ -462,7 +469,8 @@ mod tests {
 
     #[test]
     fn compact_strips_icc_on_avif() {
-        // Compact drops the ICC wherever CICP represents the color, even on AVIF.
+        // Compact drops the ICC wherever CICP represents the color, even on AVIF
+        // (where vips and ImageMagick then show sRGB: the documented cost).
         let p3 = src_cicp(Cicp::DISPLAY_P3).with_icc_profile(alloc::vec![0u8; 132]);
         let plan = resolve_color_emit(&p3, &caps_avif(), ColorEmitPolicy::Compact);
         assert_eq!(plan.cicp, Some(Cicp::DISPLAY_P3));
@@ -548,14 +556,14 @@ mod tests {
     }
 
     #[test]
-    fn avif_balanced_cicp_only_needs_no_companion_now_sole_safe() {
-        // AVIF nclx is sole-safe, so a CICP-only source needs no companion ICC —
-        // like JXL. (The not-sole-safe companion-synth path is covered by
-        // `png_balanced_synthesizes_icc_companion_for_cicp_only`.)
+    fn avif_balanced_cicp_only_synthesizes_a_companion_icc() {
+        // AVIF nclx alone is ignored by vips and ImageMagick (imazen/zencodec#132),
+        // so a CICP-only source gets a synthesized ICC next to the nclx, as PNG
+        // does. Only JXL ships CICP alone (`jxl_balanced_cicp_only_needs_no_companion`).
         let p3 = src_cicp(Cicp::DISPLAY_P3);
         let plan = resolve_color_emit(&p3, &caps_avif(), ColorEmitPolicy::Balanced);
         assert_eq!(plan.cicp, Some(Cicp::DISPLAY_P3));
-        assert_eq!(plan.icc, IccDisposition::Drop);
+        assert_eq!(plan.icc, IccDisposition::SynthesizeFrom(Cicp::DISPLAY_P3));
     }
 
     #[test]

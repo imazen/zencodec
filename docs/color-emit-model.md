@@ -2,8 +2,9 @@
 
 Status: **canonical.** This records the *minimal* shared color surface and — just
 as importantly — the designs that were tried, dogfooded, adversarially reviewed,
-and **rejected**, so they don't get rebuilt. Companion analysis:
-[`cross-codec-color-metadata.md`](cross-codec-color-metadata.md).
+and **rejected**, so they don't get rebuilt. The measured reader behaviour that
+sets the defaults (which readers honour ICC, CICP, `nclx`) is in
+imazen/zencodec#132.
 
 ## Thesis
 
