@@ -86,7 +86,7 @@ ICC/EXIF/XMP combinations. Each decode-policy field is also tested independently
 | Inventory topology and typed resource failures | Existing zencodec inventory regression tests, plus consumer feature and mutation suites |
 | CodecSet dispatch and transcode guards | Existing testkit `tests/codec_set.rs`, including checked policy through registry-created jobs |
 | Sans-I/O incremental decode | `check_incremental_contract` through the erased decoder: chunked input against one-shot pixels, row order, termination, cancellation, provisional routing, truncation as a codec error; zenbitmaps QOI and the reference codec pass it |
-| Streaming encode output | `check_streaming_output_honesty`, both directions; zenbitmaps QOI and the reference encoder declare it |
+| Streaming encode output | `check_streaming_output_honesty` against the `OutputTiming` from `begin`: lag, `AT_FINISH`, capability, drain parity; negative regressions in `tests/streaming_output.rs`; the reference encoder, zenbitmaps (PNM, QOI, farbfeld, HDR), zenjpeg (fixed tables) and IMIJ (row groups) stream |
 | Pull-native source binding | `check_seekable_capability_honesty`, `check_read_at_contract` |
 
 Harness regression tests reject wrong timing, missing/extra frames, incorrect

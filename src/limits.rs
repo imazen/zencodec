@@ -757,6 +757,18 @@ pub enum LimitKind {
     MetadataCarriers,
     /// Number of EXIF entries visited while rewriting.
     MetadataEntries,
+    /// Size of one compressed media packet (a container's sample or block).
+    PacketBytes,
+    /// Number of tracks a media container declares.
+    Tracks,
+    /// Bytes of container header read before the first packet (an MP4
+    /// `moov`, WebM segment headers).
+    HeaderBytes,
+    /// Entries in a container's index or sample tables.
+    TableEntries,
+    /// Packets or frames queued between pipeline stages (a muxer's
+    /// interleaving window, an encoder's lookahead).
+    QueueDepth,
 }
 
 impl LimitExceeded {

@@ -251,12 +251,16 @@ impl EncodeCapabilities {
     pub const fn push_rows(&self) -> bool {
         self.push_rows
     }
-    /// Whether encoded bytes become available through
+    /// Whether encoded bytes can become available through
     /// [`Encoder::pending_output`](crate::encode::Encoder::pending_output)
     /// while rows are pushed, after
     /// [`Encoder::begin`](crate::encode::Encoder::begin) declared the image.
-    /// Encoders that must seek back (container sizes, trailing indexes)
-    /// leave it `false` and hold their output until `finish`.
+    ///
+    /// This is the codec-wide answer: some configuration streams. Whether a
+    /// given encoder does is what `begin` returns, as an
+    /// [`OutputTiming`](crate::encode::OutputTiming). Codecs that must
+    /// seek back in every configuration (container sizes, trailing
+    /// indexes) leave it `false` and hold their output until `finish`.
     pub const fn streaming_output(&self) -> bool {
         self.streaming_output
     }

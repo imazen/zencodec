@@ -117,8 +117,9 @@ pub mod reference;
 pub use contracts::{
     check_animation_durations, check_animation_timing, check_animation_timing_unsupported,
     check_decode_policy_admission, check_encode_policy_admission,
-    check_incremental_capability_honesty, check_incremental_contract, check_inventory_input_limit,
-    check_metadata_rewrite, check_read_at_contract, check_seekable_capability_honesty,
+    check_incremental_capability_honesty, check_incremental_contract, check_incremental_decoder,
+    check_inventory_input_limit, check_metadata_rewrite, check_read_at_contract,
+    check_seekable_capability_honesty,
 };
 
 #[cfg(test)]
@@ -186,6 +187,12 @@ impl TestImage {
     /// animation tests) differ in content and a frame-ordering bug is visible.
     pub fn rgba8_gradient_seeded(width: u32, height: u32, seed: u8) -> Self {
         Self::gradient(width, height, PixelDescriptor::RGBA8_SRGB, 4, seed)
+    }
+
+    /// An opaque RGB8 gradient offset by `seed`: distinct frames for codecs
+    /// whose animations carry no partial transparency (GIF).
+    pub fn rgb8_gradient_seeded(width: u32, height: u32, seed: u8) -> Self {
+        Self::gradient(width, height, PixelDescriptor::RGB8_SRGB, 3, seed)
     }
 
     /// A 16-bit RGB gradient carrying `desc`'s colour labelling (a U16 RGB
@@ -528,22 +535,52 @@ where
     Ok(())
 }
 
-/// Verify [`EncodeCapabilities::streaming_output`](zencodec::encode::EncodeCapabilities::streaming_output)
-/// in both directions.
+/// Verify the [`OutputTiming`](zencodec::encode::OutputTiming) an encoder's
+/// [`begin`](Encoder::begin) reports, and
+/// [`EncodeCapabilities::streaming_output`](zencodec::encode::EncodeCapabilities::streaming_output)
+/// behind it.
 ///
-/// Declared: the encoder also declares `push_rows`; after
-/// [`begin`](Encoder::begin), some encoded bytes are available from
-/// [`pending_output`](Encoder::pending_output) before `finish`; draining them
-/// with [`consume_output`](Encoder::consume_output) after every strip yields,
-/// once `finish`'s remainder is appended, exactly the bytes of the same
-/// encode left undrained; and those bytes decode to the pixels of a plain
-/// `push_rows` encode. Not declared: `pending_output` stays empty throughout.
+/// Run it with a configuration that streams as well as the default: a
+/// configuration that reports [`OutputTiming::AT_FINISH`](zencodec::encode::OutputTiming::AT_FINISH)
+/// passes without exercising the streaming path. To verify a lag of `L`
+/// rows the image must be taller than `L + 2 x strip`, where `strip` is the
+/// encoder's [`preferred_strip_height`](Encoder::preferred_strip_height)
+/// (at most a quarter of the image); a shorter image fails the check rather
+/// than passing it unverified. [`check_all`] picks a tall enough image.
+///
+/// - Without `push_rows` the codec must not declare `streaming_output`.
+/// - `begin` may reject the declaration as
+///   [`UnsupportedOperation::RowLevelEncode`] (this configuration cannot
+///   encode from rows); any other error fails the check.
+/// - A streaming timing needs `streaming_output` declared and a lag below
+///   the image height.
+/// - `AT_FINISH`: `pending_output` stays empty until `finish`.
+/// - Streaming with lag `L`: between any two points of the encode `L` or
+///   more rows apart (after `begin` and after each strip but the last),
+///   bytes become pending. That catches an understated lag and an encoder
+///   that stalls after its first strip.
+/// - Draining all pending bytes after every strip, and separately draining
+///   uneven prefixes (one byte, a few, all but one, and once more than is
+///   pending, which clamps), each yield, with `finish`'s remainder, exactly
+///   the bytes of the same encode left undrained. Those bytes decode to the
+///   pixels of the one-shot [`encode`](Encoder::encode). (Not to a plain
+///   `push_rows` encode: an encoder may need the image size before its first
+///   row, through `begin` or `with_canvas_size`.)
+/// - Draining with [`take_output`](Encoder::take_output), into an empty
+///   vector and into a non-empty one, yields the same bytes and leaves
+///   nothing pending.
+/// - After a streaming `begin`, a second `begin` and a one-shot `encode` are
+///   errors.
+/// - `begin` with a zero width or height is accepted exactly when `encode`
+///   of that size succeeds (or declines as `RowLevelEncode`).
+/// - Every run reports the same timing.
 pub fn check_streaming_output_honesty<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
 where
     E: EncoderConfig,
     D: DecoderConfig,
     <E::Job as EncodeJob>::Enc: Encoder<Error = E::Error>,
 {
+    use zencodec::encode::OutputTiming;
     const CHECK: &str = "streaming_output_honesty";
     let caps = E::capabilities();
     if !caps.push_rows() {
@@ -553,19 +590,103 @@ where
         return Ok(());
     }
     let desc = img.strip(0, 1).descriptor();
-    // Encode with begin; drain after every strip when `drain` is set.
-    // Returns the full file and whether anything was pending before finish.
-    let run = |drain: bool| -> Result<(Vec<u8>, bool), String> {
-        let mut e = enc
-            .clone()
+    /// How a run drains `pending_output`.
+    #[derive(Clone, Copy, PartialEq)]
+    enum Drain {
+        /// Never: everything arrives from `finish`.
+        Never,
+        /// All of it after every strip.
+        All,
+        /// Uneven prefixes, cycling through these choices, one of which asks
+        /// for more than is pending.
+        Partial,
+        /// `take_output`, into an empty vector and into one already holding
+        /// a byte, alternately.
+        Take,
+    }
+    struct Run {
+        timing: OutputTiming,
+        file: Vec<u8>,
+        /// Rows pushed and bytes available (drained plus pending) after
+        /// `begin` and after each strip.
+        points: Vec<(u32, usize)>,
+    }
+    let encoder = || {
+        enc.clone()
             .job()
             .with_metadata_policy(Metadata::none(), MetadataPolicy::PreserveExact)
             .encoder()
-            .map_err(|e| e.to_string())?;
-        e.begin(img.width, img.height, desc)
-            .map_err(|e| format!("begin: {e}"))?;
+            .map_err(|e| e.to_string())
+    };
+    // `Ok(None)`: begin declined row-level encode for this configuration.
+    let run = |drain: Drain| -> Result<Option<Run>, String> {
+        let mut e = encoder()?;
+        let timing = match e.begin(img.width, img.height, desc) {
+            Ok(t) => t,
+            Err(err)
+                if err.unsupported_operation() == Some(&UnsupportedOperation::RowLevelEncode) =>
+            {
+                return Ok(None);
+            }
+            Err(err) => return Err(format!("begin: {err}")),
+        };
         let mut out = Vec::new();
-        let mut early = false;
+        let mut cycle = 0usize;
+        let mut take =
+            |e: &mut <E::Job as EncodeJob>::Enc, out: &mut Vec<u8>| -> Result<(), String> {
+                if drain == Drain::Take {
+                    cycle += 1;
+                    let mut chunk = if cycle.is_multiple_of(2) {
+                        Vec::new()
+                    } else {
+                        vec![0xA5]
+                    };
+                    let kept = chunk.len();
+                    let len = e.pending_output().len();
+                    e.take_output(&mut chunk);
+                    if chunk.len() != kept + len || chunk[..kept] != [0xA5][..kept] {
+                        return Err(format!(
+                            "take_output of {len} pending bytes into a vector of {kept} \
+                             left it {} long, or changed what it held",
+                            chunk.len()
+                        ));
+                    }
+                    if !e.pending_output().is_empty() {
+                        return Err("take_output left bytes pending".into());
+                    }
+                    out.extend_from_slice(&chunk[kept..]);
+                    return Ok(());
+                }
+                let pending = e.pending_output();
+                let len = pending.len();
+                let n = match drain {
+                    Drain::Never => return Ok(()),
+                    Drain::Take => unreachable!("handled above"),
+                    Drain::All => len,
+                    Drain::Partial => {
+                        cycle += 1;
+                        match cycle % 5 {
+                            0 => 1.min(len),
+                            1 => 7.min(len),
+                            2 => len.saturating_sub(1),
+                            3 => len + 5, // more than pending: clamps
+                            _ => len / 2,
+                        }
+                    }
+                };
+                out.extend_from_slice(&pending[..n.min(len)]);
+                e.consume_output(n);
+                let left = e.pending_output().len();
+                if left != len - n.min(len) {
+                    return Err(format!(
+                        "consume_output({n}) of {len} pending left {left} (want {})",
+                        len - n.min(len)
+                    ));
+                }
+                Ok(())
+            };
+        let mut points = vec![(0, out.len() + e.pending_output().len())];
+        take(&mut e, &mut out)?;
         let strip = e
             .preferred_strip_height()
             .max(1)
@@ -574,55 +695,198 @@ where
         while y < img.height {
             let h = strip.min(img.height - y);
             e.push_rows(img.strip(y, h)).map_err(|e| e.to_string())?;
-            let pending = e.pending_output();
-            early |= !pending.is_empty();
-            if drain {
-                out.extend_from_slice(pending);
-                let n = pending.len();
-                e.consume_output(n);
-                if !e.pending_output().is_empty() {
-                    return Err("pending_output not empty after consuming all of it".into());
-                }
-            }
             y += h;
+            points.push((y, out.len() + e.pending_output().len()));
+            take(&mut e, &mut out)?;
         }
+        // Whatever is still pending after a partial drain precedes `finish`'s
+        // remainder.
+        out.extend_from_slice(e.pending_output());
+        let n = e.pending_output().len();
+        e.consume_output(n);
         out.extend_from_slice(&e.finish().map_err(|e| e.to_string())?.into_vec());
-        Ok((out, early))
+        Ok(Some(Run {
+            timing,
+            file: out,
+            points,
+        }))
     };
-    let (drained, early) = run(true).map_err(|e| fail(CHECK, format!("drained encode: {e}")))?;
-    if !caps.streaming_output() {
-        if early {
+    let Some(drained) = run(Drain::All).map_err(|e| fail(CHECK, format!("drained encode: {e}")))?
+    else {
+        return Ok(());
+    };
+    let timing = drained.timing;
+    if timing.streams() && !caps.streaming_output() {
+        return Err(fail(
+            CHECK,
+            "begin reported streaming output but streaming_output is not declared",
+        ));
+    }
+    let Some(lag) = timing.lag_rows() else {
+        if drained.points.iter().any(|&(_, n)| n > 0) {
             return Err(fail(
                 CHECK,
-                "pending_output returned bytes but streaming_output is not declared",
+                "pending_output returned bytes but begin reported AT_FINISH",
             ));
         }
         return Ok(());
-    }
-    if !early {
+    };
+    if lag >= img.height {
         return Err(fail(
             CHECK,
-            "declared streaming_output but no bytes were pending before finish",
+            format!(
+                "begin reported streaming with a lag of {lag} rows on a {}-row image: \
+                 an encoder that holds every row reports AT_FINISH",
+                img.height
+            ),
         ));
     }
-    let (whole, _) = run(false).map_err(|e| fail(CHECK, format!("undrained encode: {e}")))?;
-    if drained != whole {
+    let strip = drained.points.get(1).map_or(1, |p| p.0);
+    if img.height <= lag + 2 * strip {
+        return Err(fail(
+            CHECK,
+            format!(
+                "a {}-row image cannot verify a lag of {lag} rows in strips of {strip}: \
+                 use an image taller than {} rows",
+                img.height,
+                lag + 2 * strip
+            ),
+        ));
+    }
+    // Between any two points at least `lag` rows apart, the later one has
+    // more bytes: every row more than `lag` back is encoded by then. The
+    // last strip's bytes may wait for `finish`.
+    let points = &drained.points[..drained.points.len() - 1];
+    for (i, &(rows, bytes)) in points.iter().enumerate() {
+        if let Some(&(later, more)) = points[i + 1..].iter().find(|&&(r, _)| r > rows + lag)
+            && more <= bytes
+        {
+            return Err(fail(
+                CHECK,
+                format!(
+                    "begin reported a lag of {lag} rows, but from {rows} to {later} rows \
+                     pushed no bytes became pending ({bytes} available at both)"
+                ),
+            ));
+        }
+    }
+    let whole = run(Drain::Never)
+        .map_err(|e| fail(CHECK, format!("undrained encode: {e}")))?
+        .ok_or_else(|| fail(CHECK, "begin declined row-level encode on the second run"))?;
+    let partial = run(Drain::Partial)
+        .map_err(|e| fail(CHECK, format!("partially drained encode: {e}")))?
+        .ok_or_else(|| fail(CHECK, "begin declined row-level encode on the third run"))?;
+    let taken = run(Drain::Take)
+        .map_err(|e| fail(CHECK, format!("encode drained with take_output: {e}")))?
+        .ok_or_else(|| fail(CHECK, "begin declined row-level encode on the fourth run"))?;
+    if whole.timing != timing || partial.timing != timing || taken.timing != timing {
+        return Err(fail(
+            CHECK,
+            "begin reported a different timing on another run",
+        ));
+    }
+    if drained.file != whole.file {
         return Err(fail(
             CHECK,
             "draining pending_output changed the encoded bytes",
         ));
     }
-    let plain = enc_push_rows(&enc, img).map_err(|e| fail(CHECK, format!("push_rows: {e}")))?;
-    let (want, _) = dec_oneshot(&dec, &plain).map_err(|e| fail(CHECK, format!("decode: {e}")))?;
-    let (got, _) =
-        dec_oneshot(&dec, &drained).map_err(|e| fail(CHECK, format!("decode streamed: {e}")))?;
+    if partial.file != whole.file {
+        return Err(fail(
+            CHECK,
+            "draining uneven prefixes of pending_output changed the encoded bytes",
+        ));
+    }
+    if taken.file != whole.file {
+        return Err(fail(
+            CHECK,
+            "draining with take_output changed the encoded bytes",
+        ));
+    }
+    // Protocol: one declaration per encode, and no one-shot encode after it.
+    let mut e = encoder().map_err(|e| fail(CHECK, e))?;
+    e.begin(img.width, img.height, desc)
+        .map_err(|e| fail(CHECK, format!("begin: {e}")))?;
+    if e.begin(img.width, img.height, desc).is_ok() {
+        return Err(fail(CHECK, "a second begin was accepted"));
+    }
+    let mut e = encoder().map_err(|e| fail(CHECK, e))?;
+    e.begin(img.width, img.height, desc)
+        .map_err(|e| fail(CHECK, format!("begin: {e}")))?;
+    if e.encode(img.strip(0, img.height)).is_ok() {
+        return Err(fail(CHECK, "encode after a streaming begin was accepted"));
+    }
+    // A zero width or height: `begin` answers as `encode` of that size does.
+    let bpp = desc.bytes_per_pixel();
+    for (w, h) in [(0, img.height), (img.width, 0)] {
+        let empty = vec![0u8; w as usize * bpp * h as usize];
+        let slice = PixelSlice::new(&empty, w, h, w as usize * bpp, desc)
+            .map_err(|e| fail(CHECK, format!("{w}x{h} slice: {e}")))?;
+        let encoded = encoder().map_err(|e| fail(CHECK, e))?.encode(slice).is_ok();
+        let begun = encoder().map_err(|e| fail(CHECK, e))?.begin(w, h, desc);
+        if let Err(err) = &begun
+            && err.unsupported_operation() == Some(&UnsupportedOperation::RowLevelEncode)
+        {
+            continue;
+        }
+        if begun.is_ok() != encoded {
+            return Err(fail(
+                CHECK,
+                format!(
+                    "begin({w}, {h}) {} but encode of a {w}x{h} image {}",
+                    if begun.is_ok() {
+                        "was accepted"
+                    } else {
+                        "was refused"
+                    },
+                    if encoded { "succeeds" } else { "fails" }
+                ),
+            ));
+        }
+    }
+    let one = enc_oneshot(&enc, img, Metadata::none(), MetadataPolicy::PreserveExact)
+        .map_err(|e| fail(CHECK, format!("one-shot encode: {e}")))?;
+    let (want, _) = dec_oneshot(&dec, &one).map_err(|e| fail(CHECK, format!("decode: {e}")))?;
+    let (got, _) = dec_oneshot(&dec, &drained.file)
+        .map_err(|e| fail(CHECK, format!("decode streamed: {e}")))?;
     if got != want {
         return Err(fail(
             CHECK,
-            "streamed encode decodes to different pixels than push_rows",
+            "streamed encode decodes to different pixels than the one-shot encode",
         ));
     }
     Ok(())
+}
+
+/// The image [`check_all`] gives [`check_streaming_output_honesty`]: 40 wide,
+/// and tall enough to verify the lag the default configuration's `begin`
+/// reports (the lag may grow with the height, so ask again).
+fn streaming_check_image<E>(enc: &E) -> TestImage
+where
+    E: EncoderConfig,
+    <E::Job as EncodeJob>::Enc: Encoder<Error = E::Error>,
+{
+    let mut height = 24u32;
+    for _ in 0..4 {
+        let Ok(mut e) = enc.clone().job().encoder() else {
+            break;
+        };
+        let Ok(timing) = e.begin(40, height, PixelDescriptor::RGBA8_SRGB) else {
+            break;
+        };
+        let Some(lag) = timing.lag_rows() else {
+            break;
+        };
+        let strip = e
+            .preferred_strip_height()
+            .max(1)
+            .min(height.div_ceil(4).max(1));
+        if height > lag + 2 * strip {
+            break;
+        }
+        height = lag + 2 * strip.max(e.preferred_strip_height().max(1)) + 8;
+    }
+    TestImage::rgba8_gradient(40, height)
 }
 
 /// Every advertised feeding mode produces identical pixels.
@@ -862,6 +1126,284 @@ where
         }
     }
     Ok(())
+}
+
+/// Verify the [`AnimationOutputTiming`](zencodec::encode::AnimationOutputTiming)
+/// an animation encoder's [`begin`](AnimationFrameEncoder::begin) reports.
+///
+/// Runs `begin` with the frame count declared and without it. For each
+/// declaration that streams:
+///
+/// - With the count declared, the lag is below the frame count.
+/// - Between any two points `lag` or more frames apart (after `begin` and
+///   after each frame but the last), bytes become pending. To verify a lag
+///   of `L` frames, supply more than `L + 1` frames; fewer fails the check.
+/// - Draining everything after each frame, draining with
+///   [`take_output`](AnimationFrameEncoder::take_output), and not draining
+///   all produce the same bytes, which decode to the same frames and
+///   durations as the encode without `begin` (so lossy codecs can run it).
+/// - A second `begin` is an error, and so is finishing after fewer frames
+///   than declared.
+///
+/// Skipped (returns `Ok`) when the encoder does not advertise animation.
+/// `begin` may decline with an [`UnsupportedOperation`]; any other error
+/// fails the check.
+pub fn check_animation_streaming_output_honesty<E, D>(
+    enc: E,
+    dec: D,
+    frames: &[TestImage],
+) -> Conformance
+where
+    E: EncoderConfig,
+    D: DecoderConfig,
+    <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
+{
+    use zencodec::encode::AnimationOutputTiming;
+    const CHECK: &str = "animation_streaming_output_honesty";
+    if !E::capabilities().animation() {
+        return Ok(());
+    }
+    let Some(first) = frames.first() else {
+        return Err(fail(CHECK, "no frames supplied"));
+    };
+    let (width, height) = (first.width, first.height);
+    let desc = first.strip(0, 1).descriptor();
+    let count = frames.len() as u32;
+    let encoder = || {
+        enc.clone()
+            .job()
+            .with_metadata_policy(Metadata::none(), MetadataPolicy::PreserveExact)
+            .with_loop_count(Some(0))
+            .animation_frame_encoder()
+            .map_err(|e| e.to_string())
+    };
+    #[derive(Clone, Copy, PartialEq)]
+    enum Drain {
+        Never,
+        All,
+        Take,
+    }
+    struct Run {
+        timing: AnimationOutputTiming,
+        file: Vec<u8>,
+        points: Vec<(u32, usize)>,
+    }
+    // `Ok(None)`: begin declined.
+    let run = |declare: Option<u32>, drain: Drain| -> Result<Option<Run>, String> {
+        let mut a = encoder()?;
+        let timing = match a.begin(width, height, desc, declare) {
+            Ok(t) => t,
+            Err(err) if err.unsupported_operation().is_some() => return Ok(None),
+            Err(err) => return Err(format!("begin: {err}")),
+        };
+        let mut out = Vec::new();
+        let take = |a: &mut <E::Job as EncodeJob>::AnimationFrameEnc, out: &mut Vec<u8>| match drain
+        {
+            Drain::Never => {}
+            Drain::All => {
+                let n = a.pending_output().len();
+                out.extend_from_slice(a.pending_output());
+                a.consume_output(n);
+            }
+            Drain::Take => {
+                let mut chunk = Vec::new();
+                a.take_output(&mut chunk);
+                out.extend_from_slice(&chunk);
+            }
+        };
+        let mut points = vec![(0, a.pending_output().len())];
+        take(&mut a, &mut out);
+        for (i, f) in frames.iter().enumerate() {
+            a.push_frame(f.as_slice(), 40 + i as u32 * 10, None)
+                .map_err(|e| format!("push_frame {i}: {e}"))?;
+            points.push((i as u32 + 1, out.len() + a.pending_output().len()));
+            take(&mut a, &mut out);
+        }
+        if !a.pending_output().is_empty() && drain != Drain::Never {
+            return Err("bytes pending right after a full drain".into());
+        }
+        // `finish` returns what is still pending along with the rest.
+        out.extend_from_slice(&a.finish(None).map_err(|e| e.to_string())?.into_vec());
+        Ok(Some(Run {
+            timing,
+            file: out,
+            points,
+        }))
+    };
+    // `begin` may change framing, never pixels or timing: the streamed file
+    // must decode exactly as the same encode without `begin` does (not as
+    // the input, which a lossy codec need not reproduce).
+    let plain = encode_animation(&enc, frames, Metadata::none())
+        .map_err(|e| fail(CHECK, format!("encode without begin: {e}")))?;
+    let decode_timed =
+        |bytes: &[u8]| -> Result<Vec<(Pixels, zencodec::animation::FrameDuration)>, String> {
+            let mut d = dec
+                .clone()
+                .job()
+                .animation_frame_decoder(Cow::Borrowed(bytes), &[])
+                .map_err(|e| e.to_string())?;
+            let mut out = Vec::new();
+            while let Some(f) = d.render_next_frame(None).map_err(|e| e.to_string())? {
+                out.push((grab_ref(f.pixels()), f.duration()));
+            }
+            Ok(out)
+        };
+    let want = decode_timed(&plain).map_err(|e| fail(CHECK, format!("decode: {e}")))?;
+    for declare in [Some(count), None] {
+        let label = if declare.is_some() {
+            "with the frame count"
+        } else {
+            "without the frame count"
+        };
+        let Some(drained) =
+            run(declare, Drain::All).map_err(|e| fail(CHECK, format!("{label}: {e}")))?
+        else {
+            continue;
+        };
+        let Some(lag) = drained.timing.lag_frames() else {
+            if drained.points.iter().any(|&(_, n)| n > 0) {
+                return Err(fail(
+                    CHECK,
+                    format!("{label}: pending_output returned bytes but begin reported AT_FINISH"),
+                ));
+            }
+            continue;
+        };
+        if declare.is_some() && lag >= count {
+            return Err(fail(
+                CHECK,
+                format!(
+                    "{label}: begin reported a lag of {lag} frames for {count} frames: \
+                     an encoder that holds every frame reports AT_FINISH"
+                ),
+            ));
+        }
+        if count <= lag + 1 {
+            return Err(fail(
+                CHECK,
+                format!(
+                    "{count} frames cannot verify a lag of {lag} frames: supply more than {}",
+                    lag + 1
+                ),
+            ));
+        }
+        let points = &drained.points[..drained.points.len() - 1];
+        for (i, &(n, bytes)) in points.iter().enumerate() {
+            if let Some(&(later, more)) = points[i + 1..].iter().find(|&&(m, _)| m > n + lag)
+                && more <= bytes
+            {
+                return Err(fail(
+                    CHECK,
+                    format!(
+                        "{label}: begin reported a lag of {lag} frames, but from {n} to \
+                         {later} frames pushed no bytes became pending"
+                    ),
+                ));
+            }
+        }
+        for (name, drain) in [("undrained", Drain::Never), ("take_output", Drain::Take)] {
+            let other = run(declare, drain)
+                .map_err(|e| fail(CHECK, format!("{label}, {name}: {e}")))?
+                .ok_or_else(|| fail(CHECK, format!("{label}: begin declined on another run")))?;
+            if other.timing != drained.timing {
+                return Err(fail(
+                    CHECK,
+                    format!("{label}: begin reported a different timing on another run"),
+                ));
+            }
+            if other.file != drained.file {
+                return Err(fail(
+                    CHECK,
+                    format!("{label}: the {name} encode differs from the drained one"),
+                ));
+            }
+        }
+        let got = decode_timed(&drained.file)
+            .map_err(|e| fail(CHECK, format!("{label}: decode: {e}")))?;
+        if got.len() != want.len() {
+            return Err(fail(
+                CHECK,
+                format!(
+                    "{label}: the streamed animation has {} frames, the encode without \
+                     begin {}",
+                    got.len(),
+                    want.len()
+                ),
+            ));
+        }
+        for (index, ((gp, gd), (wp, wd))) in got.iter().zip(&want).enumerate() {
+            if gp != wp {
+                return Err(fail(
+                    CHECK,
+                    format!(
+                        "{label}: frame {index} of the streamed animation decodes to \
+                         different pixels than the encode without begin"
+                    ),
+                ));
+            }
+            if gd != wd {
+                return Err(fail(
+                    CHECK,
+                    format!("{label}: frame {index} lasts {gd:?} streamed, {wd:?} without begin"),
+                ));
+            }
+        }
+        let mut a = encoder().map_err(|e| fail(CHECK, e))?;
+        a.begin(width, height, desc, declare)
+            .map_err(|e| fail(CHECK, format!("begin: {e}")))?;
+        if a.begin(width, height, desc, declare).is_ok() {
+            return Err(fail(CHECK, format!("{label}: a second begin was accepted")));
+        }
+        if declare.is_some() {
+            let mut a = encoder().map_err(|e| fail(CHECK, e))?;
+            a.begin(width, height, desc, declare)
+                .map_err(|e| fail(CHECK, format!("begin: {e}")))?;
+            for (i, f) in frames[..frames.len() - 1].iter().enumerate() {
+                a.push_frame(f.as_slice(), 40 + i as u32 * 10, None)
+                    .map_err(|e| fail(CHECK, format!("push_frame {i}: {e}")))?;
+            }
+            if a.finish(None).is_ok() {
+                return Err(fail(
+                    CHECK,
+                    format!(
+                        "finish after {} of {count} declared frames was accepted",
+                        count - 1
+                    ),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Frames for [`check_all`]'s [`check_animation_streaming_output_honesty`]:
+/// enough to verify the lag the encoder reports with the count declared.
+fn animation_streaming_frames<E>(enc: &E) -> Vec<TestImage>
+where
+    E: EncoderConfig,
+    <E::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
+{
+    let mut count = 6u32;
+    for _ in 0..3 {
+        let lag = enc
+            .clone()
+            .job()
+            .with_loop_count(Some(0))
+            .animation_frame_encoder()
+            .ok()
+            .and_then(|mut a| {
+                a.begin(24, 16, PixelDescriptor::RGBA8_SRGB, Some(count))
+                    .ok()
+            })
+            .and_then(|t| t.lag_frames());
+        match lag {
+            Some(lag) if count <= lag + 1 => count = (lag + 4).min(200),
+            _ => break,
+        }
+    }
+    (0..count)
+        .map(|i| TestImage::rgba8_gradient_seeded(24, 16, (i * 60 % 256) as u8))
+        .collect()
 }
 
 /// A retention policy never leaks what it discards.
@@ -3359,7 +3901,7 @@ where
     check_orientation_roundtrip(enc.clone(), dec.clone(), &img)?;
     check_metadata_no_leak(enc.clone(), dec.clone(), &img)?;
     check_capability_honesty(enc.clone(), dec.clone(), &img)?;
-    check_streaming_output_honesty(enc.clone(), dec.clone(), &img)?;
+    check_streaming_output_honesty(enc.clone(), dec.clone(), &streaming_check_image(&enc))?;
     check_fidelity_honesty(enc.clone(), dec.clone(), &img)?;
     check_color_context_consistency(enc.clone(), dec.clone(), &img)?;
     check_color_authority_spec(enc.clone(), dec.clone(), &img)?;
@@ -3377,7 +3919,8 @@ where
         TestImage::rgba8_gradient_seeded(24, 16, 60),
         TestImage::rgba8_gradient_seeded(24, 16, 120),
     ];
-    check_animation_cross_path_equivalence(enc, dec, &frames)?;
+    check_animation_cross_path_equivalence(enc.clone(), dec.clone(), &frames)?;
+    check_animation_streaming_output_honesty(enc.clone(), dec, &animation_streaming_frames(&enc))?;
     Ok(())
 }
 

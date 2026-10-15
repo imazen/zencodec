@@ -503,7 +503,7 @@ pub trait DecodeJob<'a>: Sized {
     /// Create a type-erased incremental (Sans-I/O) decoder.
     ///
     /// Codecs that support incremental decoding override this method.
-    /// Default implementation returns [`UnsupportedOperation::IncrementalDecode`].
+    /// Default implementation returns [`UnsupportedOperation::IncrementalDecode`](crate::UnsupportedOperation::IncrementalDecode).
     ///
     /// The returned decoder is built with
     /// [`erase_incremental`](crate::decode::erase_incremental), so the
@@ -563,7 +563,7 @@ pub trait DecodeJob<'a>: Sized {
     /// drivers with a sequential or async source manufacture one with the
     /// adapters in `zencodec-io`.
     ///
-    /// Default implementation returns [`UnsupportedOperation::SeekableDecode`].
+    /// Default implementation returns [`UnsupportedOperation::SeekableDecode`](crate::UnsupportedOperation::SeekableDecode).
     fn push_decoder_from_source(
         self,
         source: &mut dyn crate::source::DynReadAt,

@@ -6,7 +6,7 @@ use alloc::vec::Vec;
 use core::fmt;
 
 use zencodec::decode::{DecodeRowSink, SinkError};
-use zencodec::encode::{EncodeOutput, Encoder};
+use zencodec::encode::{EncodeOutput, Encoder, OutputTiming};
 use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 
 /// Failure of [`EncoderSink::finish`].
@@ -39,9 +39,10 @@ impl<E: core::error::Error + 'static> core::error::Error for EncoderSinkError<E>
 
 /// [`DecodeRowSink`] that feeds an [`Encoder`].
 ///
-/// `begin` declares the image to the encoder ([`Encoder::begin`]), so an
-/// encoder with [`streaming_output`](zencodec::encode::EncodeCapabilities::streaming_output)
-/// writes its header at once and makes bytes available as rows arrive.
+/// `begin` declares the image to the encoder ([`Encoder::begin`]); an
+/// encoder that answers with a streaming [`OutputTiming`] writes its header
+/// at once and makes bytes available as rows arrive.
+/// [`output_timing`](Self::output_timing) reports that answer.
 /// `provide_next_buffer` returns the sink's own strip buffer, so the
 /// decoder writes straight into the bytes the encoder reads; the strip is
 /// pushed on the next `provide_next_buffer` or on `finish`. No pixel is
@@ -57,6 +58,7 @@ pub struct EncoderSink<E> {
     strip: Vec<u8>,
     pending: Option<(u32, u32, PixelDescriptor)>,
     rows_pushed: u64,
+    timing: Option<OutputTiming>,
 }
 
 impl<E: Encoder> EncoderSink<E>
@@ -70,7 +72,19 @@ where
             strip: Vec::new(),
             pending: None,
             rows_pushed: 0,
+            timing: None,
         }
+    }
+
+    /// What the encoder's [`begin`](Encoder::begin) reported: whether its
+    /// bytes stream and how many rows it holds back. `None` until the
+    /// decoder has declared the image.
+    ///
+    /// The sink pushes each strip when the decoder asks for the next one,
+    /// so one strip more than the encoder's
+    /// [`lag_rows`](OutputTiming::lag_rows) can wait here.
+    pub fn output_timing(&self) -> Option<OutputTiming> {
+        self.timing
     }
 
     /// Rows pushed into the encoder so far.
@@ -92,6 +106,14 @@ where
     pub fn consume_output(&mut self, n: usize) {
         if let Some(enc) = self.encoder.as_mut() {
             enc.consume_output(n);
+        }
+    }
+
+    /// Append every pending byte to `into` and consume it; see
+    /// [`Encoder::take_output`].
+    pub fn take_output(&mut self, into: &mut Vec<u8>) {
+        if let Some(enc) = self.encoder.as_mut() {
+            enc.take_output(into);
         }
     }
 
@@ -160,8 +182,11 @@ where
             .encoder
             .as_mut()
             .ok_or_else(|| SinkError::from("EncoderSink: encoder already finished"))?;
-        enc.begin(width, height, descriptor)
-            .map_err(|e| Box::new(e) as SinkError)
+        let timing = enc
+            .begin(width, height, descriptor)
+            .map_err(|e| Box::new(e) as SinkError)?;
+        self.timing = Some(timing);
+        Ok(())
     }
 
     fn provide_next_buffer(

@@ -42,10 +42,13 @@ extern crate std;
 mod drive;
 mod encoder_sink;
 mod sinks;
+mod stepper;
 mod window;
 
 #[cfg(feature = "std")]
 mod buffered;
+#[cfg(feature = "std")]
+mod encode_write;
 #[cfg(feature = "std")]
 mod file;
 #[cfg(feature = "std")]
@@ -59,10 +62,17 @@ pub use drive::{
 };
 pub use encoder_sink::{EncoderSink, EncoderSinkError};
 pub use sinks::CollectSink;
+pub use stepper::{ByteStepper, DriveFailure, ReadAtCursor, SliceCursor, Step, Stepped, Yield};
+#[cfg(feature = "std")]
+pub use stepper::{PumpFailure, ReadCursor};
 pub use window::ProtocolViolation;
 
 #[cfg(feature = "std")]
 pub use buffered::{BufferPolicy, BufferedReadAt};
+#[cfg(feature = "std")]
+pub use encode_write::{
+    EncodeWriteError, EncodeWriteReport, encode_to_writer, write_pending, write_pending_animation,
+};
 #[cfg(feature = "std")]
 pub use file::FileReadAt;
 #[cfg(feature = "std")]

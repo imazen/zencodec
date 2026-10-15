@@ -772,6 +772,22 @@ Rules that keep drivers simple and fast:
   `step` can lose its register allocation; measure against your one-shot
   path.
 
+**A core that needs the whole file** can still serve every driver today:
+
+```rust
+fn dyn_incremental_decoder(self, preferred: &[PixelDescriptor])
+    -> Result<Box<DynIncrementalDecoder>, BoxedError>
+{
+    Ok(zencodec::decode::erase_incremental(
+        zencodec::helpers::WholeFileIncremental::new(self, preferred),
+    ))
+}
+```
+
+It reports the header as soon as your `probe` accepts a prefix and decodes
+through your `push_decoder` once the input is complete. Rows only arrive at
+the end, but async drivers hold no thread while the bytes arrive.
+
 Declare `with_incremental(true)` and, if your decoder seeks,
 `with_access_pattern(AccessPattern::RandomAccess)` (or `BoundedBacktrack`).
 Straight-line container walks can be written as `async` code with
@@ -802,18 +818,74 @@ does. Declare `with_seekable(true)`. Async drivers reach it through
 emit bytes before `finish`, also implement:
 
 ```rust
-fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor) -> Result<(), MyError>;
+fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor)
+    -> Result<OutputTiming, MyError>;   // declare the image; say when bytes arrive
 fn pending_output(&self) -> &[u8];      // encoded bytes not yet handed out
 fn consume_output(&mut self, n: usize); // the caller sent the first n
+fn take_output(&mut self, into: &mut Vec<u8>); // hand them over (default copies)
 ```
 
+Keep the output in a `zencodec::encode::OutputBuffer` and these three are
+one line each (`out.pending()`, `out.consume(n)`, `out.take_into(into)`),
+`finish` returns `out.into_remaining()`, and `out.total()` is the number to
+check against `max_output_bytes`. Writers that need a `Vec<u8>` append
+through `out.vec_mut()`.
+
 `begin` comes before the first `push_rows` and declares the final size, so the
-header can be written at once. Return an error if more or fewer rows than
-declared are pushed, if `begin` follows rows, or if the layout changes. Without
-`begin`, behave as before (patching the header at `finish` is fine; expose
-nothing from `pending_output` until then). `finish` returns only the bytes not
-consumed. Declare `with_push_rows(true)` and `with_streaming_output(true)`.
-`zencodec_io::EncoderSink` connects an incremental decoder to your encoder.
+header can be written at once. Decide there, from the configuration, image and
+metadata, whether this encode streams, and say so:
+
+- `Ok(OutputTiming::streaming(lag_rows))`: write the header now and make each
+  row's bytes pending once at most `lag_rows` later rows have arrived. Count
+  everything that delays a row: the block height, a lookahead, an
+  adaptive-quantization delay, the rows you buffer to fill a strip. An upper
+  bound is fine; an understated lag fails the testkit.
+- `Ok(OutputTiming::AT_FINISH)`: this configuration needs the whole image
+  before it can write (optimized entropy tables, bottom-up row order, a size
+  or index written before the data). Keep `pending_output` empty.
+- `Err` with `UnsupportedOperation::RowLevelEncode` when this configuration
+  cannot encode from rows at all, even though the codec declares `push_rows`.
+
+Return an error if more or fewer rows than declared are pushed, if `begin`
+follows rows or another `begin`, or if the layout changes. Validate the whole
+declaration before storing any of it: a failed `begin` leaves the encoder as it
+was. Refuse `encode`/`encode_from` after `begin`. Keep the lag below the image
+height (report `AT_FINISH` when you would hold every row). Clamp
+`consume_output(n)` to the pending length. Count bytes already handed out
+toward `max_output_bytes`.
+
+Never change the configuration to make an encode stream: a caller who asked
+for progressive or optimized tables gets them, with `AT_FINISH`. You may choose
+framing at `begin` that differs from `encode()` (zenpng writes one IDAT chunk
+per strip instead of one for the image), as long as the pixels are the same;
+a coder without row-aligned output claims a lag by flushing on a row schedule
+fixed at `begin`. The bytes must not depend on draining: what the caller took
+plus `finish`'s return equals an undrained run. If your codec has a
+configuration that streams and one that does not, implement
+`EncoderConfig::with_prefer_streaming` to select the streaming one when the
+caller has not chosen explicitly. Without `begin`, behave as
+before (patching the header at `finish` is fine; expose nothing from
+`pending_output` until then). `finish` returns only the bytes not consumed.
+Declare `with_push_rows(true)` and, if any configuration streams,
+`with_streaming_output(true)`. `zencodec_io::EncoderSink` connects an
+incremental decoder to your encoder.
+
+`begin(0, h)` and `begin(w, 0)` answer as `encode()` of that size does:
+accept both or refuse both.
+
+### Animation
+
+An animation encoder that can write frames as they arrive implements
+`AnimationFrameEncoder::begin(width, height, descriptor, frame_count)` and
+the same `pending_output` / `consume_output` / `take_output`, returning an
+`AnimationOutputTiming` counted in frames. Write the header at `begin` and
+each frame's bytes when you have committed it (GIF writes a frame when it
+arrives; a shared palette holds frames until it is built; frame
+differencing that picks a disposal from the next frame holds one). If your
+format writes the frame count first, stream only when `frame_count` is
+`Some`, and fail `finish` when a different number of frames arrived. A
+format that writes the file size first (RIFF, ISOBMFF without a seekable
+destination) reports `AT_FINISH`.
 
 ## Conformance
 
@@ -821,7 +893,9 @@ consumed. Declare `with_push_rows(true)` and `with_streaming_output(true)`.
 rest, `check_incremental_contract` (chunked input against one-shot pixels,
 row order, termination, cancellation, truncation) for decoders that declare
 `incremental`, the seekable honesty check for `seekable`, and
-`check_streaming_output_honesty` for encoders, in both directions.
+`check_streaming_output_honesty` and `check_animation_streaming_output_honesty`
+for encoders, in both directions. Those checks run the configuration you pass;
+call them again with a configuration that streams if your default does not.
 
 ## Checklist
 
@@ -841,8 +915,11 @@ Before calling your implementation complete:
 - [ ] `no_std` compatible (no `std` imports, `alloc` only)
 - [ ] Incremental decoders: built with `erase_incremental`, ask with `min_len`,
       never buffer input they could decode in place, pass `check_incremental_contract`
-- [ ] Streaming encoders: `begin` writes the header, `pending_output` streams,
-      `check_streaming_output_honesty` passes
+- [ ] Streaming encoders: `begin` returns the `OutputTiming` this
+      configuration delivers and writes the header when it streams;
+      `check_streaming_output_honesty` passes with a streaming configuration
+- [ ] Streaming animation encoders: `check_animation_streaming_output_honesty`
+      passes with and without a declared frame count
 
 ## Reference Implementation
 

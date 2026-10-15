@@ -22,6 +22,40 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
   reference codec implements both sans-I/O paths; the minimal codec declares neither.
   The testkit now depends on `zencodec-io` for its slice driver and collect sink, so
   `zencodec-io` must publish before the testkit can.
+- `TestImage::rgb8_gradient_seeded`: distinct opaque frames, for animation codecs
+  without partial transparency.
+- `check_streaming_output_honesty` also drains with `take_output` (into empty and
+  non-empty vectors) and requires `begin` with a zero width or height to agree with
+  `encode` of that size. `check_animation_streaming_output_honesty` (run by
+  `check_all`, with enough frames for the reported lag) verifies
+  `AnimationOutputTiming`: lag below a declared frame count, bytes pending across
+  every lag window, identical bytes drained, taken and undrained, frames and
+  durations that decode as the same encode without `begin` does (not compared with
+  the input, so lossy animation codecs can run it), a refused second `begin`, and a
+  refused `finish` short of the declared count. The reference animation encoder
+  streams when the frame count is declared. Six misbehaving wrappers in
+  `tests/streaming_output.rs` show each new rule is caught.
+- `check_streaming_output_honesty` now enforces the rules: lag below the height;
+  bytes pending across every lag window (an understated lag or a stall after one
+  strip fails); full, uneven and over-sized drains give identical bytes; a second
+  `begin` and `encode` after a streaming `begin` fail; an image too short to verify
+  the lag fails instead of passing. `check_all` sizes its image from the default
+  configuration's lag. The reference encoder refuses `encode` after `begin`. Found
+  by an adversarial review (each gap reproduced, then covered by a misbehaving
+  wrapper in `tests/streaming_output.rs`).
+- `check_streaming_output_honesty` checks the `OutputTiming` that `begin` returns:
+  a streaming timing needs `streaming_output`; once more than `lag_rows` rows are
+  pushed, bytes beyond the header must be pending; `AT_FINISH` keeps
+  `pending_output` empty; a `RowLevelEncode` rejection at `begin` passes. Regression
+  tests (`tests/streaming_output.rs`) show it catches rows held behind a zero lag,
+  bytes behind `AT_FINISH`, and streaming without the capability.
+- `check_incremental_decoder`: the incremental contract for any decoder factory
+  against the decoder's one-shot function, for decoders not reached through a
+  `DecoderConfig` (such as `helpers::WholeFileIncremental`).
+- The incremental contract's truncation rule is parity with one-shot: on a cut
+  where one-shot fails, the incremental decoder must fail with a codec error;
+  where one-shot succeeds (the first frame of an animation whose later frames
+  are cut, a lenient BMP RLE body), it must succeed with the same pixels.
 - `check_incremental_contract` (the full sans-I/O step contract, run through
   `check_incremental_capability_honesty`) and `check_streaming_output_honesty`
   (run by `check_all`); the reference encoder streams its output after `begin`
@@ -170,6 +204,12 @@ removes that whole class).
   `DynReadAt` instead of a slice, for pull-native cores. Default rejects with the new
   `UnsupportedOperation::SeekableDecode` (appended after released variants);
   `DecodeCapabilities::seekable` / `with_seekable` declare it.
+- `helpers::WholeFileIncremental`: the sans-I/O contract for a codec core that
+  needs the complete file. It reports the header as soon as the job's `probe`
+  accepts a growing prefix and decodes through the job's `push_decoder` once the
+  input is complete, so every codec can serve the zencodec-io drivers (and
+  async sources without holding a thread) before it gains a native incremental
+  decoder.
 - `IncrementalDecode::access_pattern`, `DecodeCapabilities::access_pattern` /
   `with_access_pattern`; `CodecSet`'s incremental decoder reports the most demanding
   pattern of its codecs and probes without a buffer (`d8b9e636`).
@@ -177,6 +217,67 @@ removes that whole class).
   `Encoder::consume_output`, all provided (`d8b9e636`): an encoder that knows the size
   up front writes its header at once and streams encoded bytes as rows arrive.
   `EncodeCapabilities::streaming_output` / `with_streaming_output` declare it.
+- `Encoder::begin` / `DynEncoder::begin` return an `OutputTiming` (new,
+  `zencodec::encode::OutputTiming`): `AT_FINISH`, or `streaming(lag_rows)` with the
+  most rows the encoder holds before their bytes are pending. Whether output streams
+  depends on configuration, image and metadata (JPEG fixed versus optimized tables,
+  bottom-up formats, gain-map indexes), so the static `streaming_output` capability
+  now means "some configuration streams" and `begin` says whether this encoder does.
+  `begin` is also where a configuration that cannot encode from rows rejects with
+  `RowLevelEncode`. The default returns `AT_FINISH`. `zencodec-io`'s `EncoderSink`
+  keeps the answer (`output_timing()`).
+- `EncoderConfig::with_prefer_streaming` / `prefers_streaming` (provided, no-op by
+  default): a codec-agnostic request for a configuration whose output streams;
+  explicit codec settings win and `begin` reports the result.
+- Streaming-output rules written on `Encoder::begin` and in the contract: a second
+  `begin` is an error and a failed one leaves the encoder unchanged; `encode` after
+  `begin` is an error; the lag is below the image height; `begin` may change
+  framing, never pixels; `consume_output` clamps; after a `push_rows`/`finish`
+  error a driver that sent bytes aborts its transport; `max_output_bytes` bounds
+  the whole file.
+- `zencodec::time`: `TimeBase` (reduced seconds per tick), signed `Timestamp` with
+  exact cross-clock `compare`/`same_instant`, `rescale` with an explicit `Rounding`
+  (`Nearest` rounds halves toward +infinity, `TimingQuantizer`'s rule),
+  `checked_add`, exact `duration_until`, and `duration_to_ticks` /
+  `ticks_to_duration`; re-exports `FrameDuration`, `TimingQuantizer`, `TimingError`.
+  `TimingError::Negative` appended. `AnimationFrame` / `OwnedAnimationFrame` gain
+  `pts()` / `with_pts()` (`None` unless the source records a presentation instant).
+  `LimitKind` gains `PacketBytes`, `Tracks`, `HeaderBytes`, `TableEntries` and
+  `QueueDepth` for container limits. Ported from PR 129's `media/src/time.rs` with
+  the tie rule changed to match the quantizer.
+- `Encoder::take_output` / `DynEncoder::take_output` (provided; the default copies
+  pending bytes and consumes them) and `zencodec::encode::OutputBuffer`, the output
+  side of a streaming encoder that codecs had each written separately: consumed
+  prefix, compaction, clamped consume, a handed-out count for `max_output_bytes`,
+  and a `take_into` that swaps allocations when the destination is empty.
+- Animation streaming: `AnimationFrameEncoder::begin(width, height, descriptor,
+  frame_count)` returns an `AnimationOutputTiming` (`AT_FINISH` or
+  `streaming(lag_frames)`), with `pending_output` / `consume_output` /
+  `take_output`, all provided; forwarded by `DynAnimationFrameEncoder`. The rules
+  match `Encoder::begin`, counted in frames; a declared frame count is binding.
+- `zencodec-media` and `zencodec-media-testkit` (new, unpublished workspace members):
+  the media contracts and their conformance checks. Packets, tracks, refcounted frames
+  with planar views and an immutable per-frame interpretation, codec sessions with
+  explicit backpressure (`send` / `receive`, `end_input`, `reset`, `FusedDecoder`,
+  erasure), a sans-I/O `Demuxer` driven by every `zencodec-io` cursor through
+  `DemuxStage`, a pull-output `Muxer` with `MuxTiming` / `MuxHint`, time-based seeking,
+  `MediaLimits` reporting `LimitKind`, and the animation traits over video
+  (`VideoAnimationDecoder`, `AnimationVideoEncoder`, with `RenderFrame` / `CaptureFrame`
+  conversion and a `Gray8` identity). The testkit ships a toy container and codec and
+  six checks (`check_video_decoder_contract`, `check_video_encoder_contract`,
+  `check_demuxer_contract`, `check_demuxer_seek`, `check_muxer_output_honesty`,
+  `check_animation_over_video`), each validated on the toy and shown to catch a
+  wrapper that breaks its rule. Design: `docs/media-design.md`; rules:
+  `docs/media-contract.md`. Supersedes PR 129's `media/` experiment.
+- `zencodec-io` (unpublished): `ByteStepper` and pull cursors (`SliceCursor`,
+  `ReadAtCursor`, `ReadCursor`, `tokio_io::AsyncCursor`) so every driver serves any
+  byte-stepping stage, demuxers included; the image drivers are loops over them with
+  unchanged signatures, and `DriveError` / `PumpError` are aliases of the generic
+  `DriveFailure` / `PumpFailure`.
+- `zencodec-io` (unpublished): `encode_to_writer` (begin, 16-row-or-larger strips,
+  a write after the header and each strip, one-shot fallback when `begin` declines
+  row-level encode), `write_pending`, `write_pending_animation`,
+  `tokio_io::write_pending_async`, and `EncoderSink::take_output`.
 - `DecodeRowSink::accepts_provisional` and `provide_pass_buffer` (defaulted): a sink
   opts into progressive passes; final-only sinks are unchanged.
 - Workspace crates (unpublished): `zencodec-io` and `zencodec-coroutine`

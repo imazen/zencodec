@@ -6,15 +6,15 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec-testkit.txt 105 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 1 lines (2 hidden + 0 excluded-feature)
+# files: zencodec-testkit.txt 108 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 1 lines (2 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 2
 #   pub types (struct/enum/trait/alias)        23
 #   pub consts/statics                          2
-#   free functions                             34
-#   inherent methods                            7
+#   free functions                             36
+#   inherent methods                            8
 #   struct fields                               7
 #   enum variants                              14
 #   trait roster entries (type × trait)        38
@@ -22,10 +22,10 @@
 #   auto-trait exceptions                       4
 #
 # per-module pub lines:
-#   (root)                           69
+#   (root)                           72
 #   reference                        20
 
-## items (84 lines)
+## items (87 lines)
 
 pub mod zencodec_testkit
 pub mod reference
@@ -69,6 +69,7 @@ pub struct ReferenceZcrDecoderConfig [also: reference]
 pub struct TestImage
 pub fn TestImage::as_slice(&self) -> zenpixels::buffer::PixelSlice<'_>
 pub fn TestImage::rgb8_gradient(u32, u32) -> Self
+pub fn TestImage::rgb8_gradient_seeded(u32, u32, u8) -> Self
 pub fn TestImage::rgba8_gradient(u32, u32) -> Self
 pub fn TestImage::rgba8_gradient_seeded(u32, u32, u8) -> Self
 pub struct TimingCase<'a>
@@ -81,6 +82,7 @@ pub fn check_all<E, D>(E, D) -> Conformance where E: zencodec::traits::encoding:
 pub fn check_animation_cases<E, D>(E, D, bool, &[TimingCase<'_>]) -> Conformance where E: zencodec::traits::encoding::EncoderConfig + 'static, D: zencodec::traits::decoding::DecoderConfig + 'static, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder + core::marker::Send, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
 pub fn check_animation_cross_path_equivalence<E, D>(E, D, &[TestImage]) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
 pub fn check_animation_durations<D: zencodec::traits::decoding::DecoderConfig + 'static>(D, &[u8], &[zencodec::animation::FrameDuration]) -> Conformance
+pub fn check_animation_streaming_output_honesty<E, D>(E, D, &[TestImage]) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
 pub fn check_animation_timing<E, D>(E, D, zenpixels::buffer::PixelSlice<'_>, bool, &[(zencodec::animation::FrameDuration, core::option::Option<zencodec::animation::FrameDuration>)]) -> Conformance where E: zencodec::traits::encoding::EncoderConfig + 'static, D: zencodec::traits::decoding::DecoderConfig + 'static, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder + core::marker::Send, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
 pub fn check_animation_timing_unsupported<E, D>(E, D, zenpixels::buffer::PixelSlice<'_>) -> Conformance where E: zencodec::traits::encoding::EncoderConfig + 'static, D: zencodec::traits::decoding::DecoderConfig + 'static, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder + core::marker::Send, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
 pub fn check_capability_honesty<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
@@ -97,6 +99,7 @@ pub fn check_fidelity_honesty<E, D>(E, D, &TestImage) -> Conformance where E: ze
 pub fn check_gain_map_roundtrip<E, D>(E, D) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
 pub fn check_incremental_capability_honesty<D: zencodec::traits::decoding::DecoderConfig>(D, &[u8]) -> Conformance
 pub fn check_incremental_contract<D: zencodec::traits::decoding::DecoderConfig>(D, &[u8]) -> Conformance
+pub fn check_incremental_decoder<F, O>(F, O, &[u8]) -> Conformance where F: core::ops::function::Fn() -> core::result::Result<alloc::boxed::Box<zencodec::traits::incremental::DynIncrementalDecoder>, alloc::string::String>, O: core::ops::function::Fn(&[u8]) -> core::result::Result<zencodec::output::DecodeOutput, alloc::string::String>
 pub fn check_inventory<D>(D, &[u8]) -> Conformance where D: zencodec::traits::decoding::DecoderConfig
 pub fn check_inventory_dispatch<D: zencodec::traits::decoding::DecoderConfig + 'static>(D, &[u8]) -> Conformance
 pub fn check_inventory_input_limit<D: zencodec::traits::decoding::DecoderConfig + 'static>(D, &[u8]) -> Conformance

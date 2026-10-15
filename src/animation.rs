@@ -170,6 +170,9 @@ pub enum TimingError {
     /// The tick count exceeds u64 or the configured maximum, or quantization
     /// exceeds the bounded intermediate phase arithmetic.
     Overflow,
+    /// A duration between two instants would be negative: the later one
+    /// comes first ([`Timestamp::duration_until`](crate::time::Timestamp::duration_until)).
+    Negative,
 }
 impl fmt::Display for TimingError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -179,6 +182,7 @@ impl fmt::Display for TimingError {
                 "animation duration is not exactly representable at the destination clock"
             }
             Self::Overflow => "animation duration exceeds the destination tick range",
+            Self::Negative => "the later timestamp comes before the earlier one",
         })
     }
 }

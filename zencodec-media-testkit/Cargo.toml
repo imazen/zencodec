@@ -1,0 +1,23 @@
+[package]
+name = "zencodec-media-testkit"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "Apache-2.0 OR MIT"
+description = "Conformance checks and reference implementations for zencodec-media sessions and containers"
+categories = ["multimedia::video", "development-tools::testing"]
+keywords = ["video", "codec", "conformance", "testing"]
+repository = "https://github.com/imazen/zencodec"
+include = ["/src/**", "/README.md", "/LICENSE*"]
+publish = false
+
+[dependencies]
+zencodec = { path = "..", version = ">=0.1.27, <0.3.0" }
+zencodec-io = { path = "../zencodec-io", version = "0.1.0", default-features = false }
+zencodec-media = { path = "../zencodec-media", version = "0.1.0" }
+zenpixels = { version = ">=0.2.14, <0.4.0", default-features = false }
+enough = { version = "0.4.4", default-features = false }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"

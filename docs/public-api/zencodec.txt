@@ -6,39 +6,40 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2029 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 110 lines (110 hidden + 0 excluded-feature)
+# files: zencodec.txt 2136 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 120 lines (120 hidden + 0 excluded-feature)
 
 ## summary
 #
-#   pub modules                                13
-#   pub types (struct/enum/trait/alias)       219
-#   pub consts/statics                        227
-#   free functions                             64
-#   inherent methods                          859
+#   pub modules                                14
+#   pub types (struct/enum/trait/alias)       229
+#   pub consts/statics                        250
+#   free functions                             74
+#   inherent methods                          911
 #   struct fields                             249
-#   enum variants                             302
+#   enum variants                             315
 #   re-exports                                 15
-#   trait roster entries (type × trait)       574
-#   conditional trait impls (verbatim)          4
-#   auto-trait-complete types                  98
-#   auto-trait exceptions                      16
+#   trait roster entries (type × trait)       611
+#   conditional trait impls (verbatim)          7
+#   auto-trait-complete types                 104
+#   auto-trait exceptions                      17
 #
 # per-module pub lines:
-#   (root)                          850
-#   animation                         8
+#   (root)                          891
+#   animation                        11
 #   decode                          238
-#   encode                          156
+#   encode                          185
 #   estimate                         48
 #   exif                             94
 #   gainmap                         126
-#   helpers                          13
+#   helpers                          15
 #   icc                               1
 #   inventory                       103
 #   metadata_rewrite                 58
-#   prelude                         216
+#   prelude                         228
 #   source                           37
+#   time                             22
 
-## items (1882 lines)
+## items (1979 lines)
 
 pub mod zencodec
 pub use At
@@ -56,18 +57,16 @@ pub use enough
 pub use how_far
 pub use whereat
 pub mod animation
-#[non_exhaustive] pub enum animation::TimingError
 pub animation::TimingError::Inexact
+pub animation::TimingError::Negative
 pub animation::TimingError::Overflow
 pub animation::TimingError::ZeroDenominator
-pub struct animation::FrameDuration
-pub const fn animation::FrameDuration::denominator(self) -> u32
-pub const fn animation::FrameDuration::from_millis(u32) -> Self
-pub const fn animation::FrameDuration::new(u64, u32) -> core::result::Result<Self, animation::TimingError>
-pub const fn animation::FrameDuration::numerator(self) -> u64
+pub const fn animation::FrameDuration::denominator(self) -> u32 [also: (root)]
+pub const fn animation::FrameDuration::from_millis(u32) -> Self [also: (root)]
+pub const fn animation::FrameDuration::new(u64, u32) -> core::result::Result<Self, animation::TimingError> [also: (root)]
+pub const fn animation::FrameDuration::numerator(self) -> u64 [also: (root)]
 pub fn animation::FrameDuration::ticks_at(self, u32) -> core::result::Result<u64, animation::TimingError>
-pub struct animation::TimingQuantizer
-pub const fn animation::TimingQuantizer::new(u32, u64) -> core::result::Result<Self, animation::TimingError>
+pub const fn animation::TimingQuantizer::new(u32, u64) -> core::result::Result<Self, animation::TimingError> [also: (root)]
 pub fn animation::TimingQuantizer::quantize(&mut self, animation::FrameDuration) -> core::result::Result<animation::FrameDuration, animation::TimingError>
 pub mod decode
 #[non_exhaustive] pub enum decode::Event
@@ -109,8 +108,10 @@ pub fn AnimationFrame<'a>::duration_ms(&self) -> u32
 pub fn AnimationFrame<'a>::frame_index(&self) -> u32
 pub fn AnimationFrame<'a>::new(zenpixels::buffer::PixelSlice<'a>, u32, u32) -> Self
 pub fn AnimationFrame<'a>::pixels(&self) -> &zenpixels::buffer::PixelSlice<'a>
+pub fn AnimationFrame<'a>::pts(&self) -> core::option::Option<time::Timestamp>
 pub fn AnimationFrame<'a>::to_owned_frame(&self) -> OwnedAnimationFrame
 pub fn AnimationFrame<'a>::with_duration(zenpixels::buffer::PixelSlice<'a>, animation::FrameDuration, u32) -> Self
+pub fn AnimationFrame<'a>::with_pts(self, core::option::Option<time::Timestamp>) -> Self
 #[non_exhaustive] pub struct decode::BatchMeta
 pub decode::BatchMeta::is_final: bool
 pub decode::BatchMeta::pass: u16
@@ -278,9 +279,11 @@ pub fn OwnedAnimationFrame::frame_index(&self) -> u32
 pub fn OwnedAnimationFrame::into_buffer(self) -> zenpixels::buffer::PixelBuffer
 pub fn OwnedAnimationFrame::new(zenpixels::buffer::PixelBuffer, u32, u32) -> Self
 pub fn OwnedAnimationFrame::pixels(&self) -> zenpixels::buffer::PixelSlice<'_>
+pub fn OwnedAnimationFrame::pts(&self) -> core::option::Option<time::Timestamp>
 pub fn OwnedAnimationFrame::take_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&mut self) -> core::option::Option<T>
 pub fn OwnedAnimationFrame::with_duration(zenpixels::buffer::PixelBuffer, animation::FrameDuration, u32) -> Self
 pub fn OwnedAnimationFrame::with_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(self, T) -> Self
+pub fn OwnedAnimationFrame::with_pts(self, core::option::Option<time::Timestamp>) -> Self
 #[non_exhaustive] pub struct decode::Progress
 pub decode::Progress::consumed: usize
 pub decode::Progress::event: decode::Event
@@ -459,6 +462,11 @@ pub encode::LossyTarget::ApproxButteraugli(f32)
 pub encode::LossyTarget::ApproxSsim2(f32)
 pub encode::LossyTarget::ApproxZensimB(f32)
 pub encode::LossyTarget::CodecSpecificQuality(f32)
+pub struct encode::AnimationOutputTiming
+pub const encode::AnimationOutputTiming::AT_FINISH: Self
+pub const fn encode::AnimationOutputTiming::lag_frames(&self) -> core::option::Option<u32>
+pub const fn encode::AnimationOutputTiming::streaming(u32) -> Self
+pub const fn encode::AnimationOutputTiming::streams(&self) -> bool
 #[non_exhaustive] pub struct encode::EncodeCapabilities
 pub const encode::EncodeCapabilities::EMPTY: Self
 pub const fn encode::EncodeCapabilities::animation(&self) -> bool
@@ -549,27 +557,58 @@ pub const fn encode::EncodePolicy::with_embed_xmp(self, bool) -> Self
 pub encode::FidelityRejection::index: usize
 pub encode::FidelityRejection::reason: encode::FidelityTargetError
 pub encode::FidelityRejection::target: encode::Fidelity
+pub struct encode::OutputBuffer
+pub fn encode::OutputBuffer::consume(&mut self, usize)
+pub fn encode::OutputBuffer::handed_out(&self) -> u64
+pub fn encode::OutputBuffer::into_remaining(self) -> alloc::vec::Vec<u8>
+pub fn encode::OutputBuffer::is_empty(&self) -> bool
+pub fn encode::OutputBuffer::len(&self) -> usize
+pub const fn encode::OutputBuffer::new() -> Self
+pub fn encode::OutputBuffer::pending(&self) -> &[u8]
+pub fn encode::OutputBuffer::push(&mut self, &[u8])
+pub fn encode::OutputBuffer::take_into(&mut self, &mut alloc::vec::Vec<u8>)
+pub fn encode::OutputBuffer::total(&self) -> u64
+pub fn encode::OutputBuffer::try_reserve(&mut self, usize) -> core::result::Result<(), alloc::collections::TryReserveError>
+pub fn encode::OutputBuffer::vec_mut(&mut self) -> &mut alloc::vec::Vec<u8>
+pub fn encode::OutputBuffer::with_capacity(usize) -> Self
+pub struct encode::OutputTiming
+pub const encode::OutputTiming::AT_FINISH: Self
+pub const fn encode::OutputTiming::lag_rows(&self) -> core::option::Option<u32>
+pub const fn encode::OutputTiming::streaming(u32) -> Self
+pub const fn encode::OutputTiming::streams(&self) -> bool
 pub trait encode::AnimationFrameEncoder: core::marker::Sized [also: prelude]
 pub type encode::AnimationFrameEncoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn encode::AnimationFrameEncoder::begin(&mut self, u32, u32, zenpixels::descriptor::PixelDescriptor, core::option::Option<u32>) -> core::result::Result<encode::AnimationOutputTiming, Self::Error>
+pub fn encode::AnimationFrameEncoder::consume_output(&mut self, usize)
 pub fn encode::AnimationFrameEncoder::finish(self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, Self::Error>
+pub fn encode::AnimationFrameEncoder::pending_output(&self) -> &[u8]
 pub fn encode::AnimationFrameEncoder::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error>
 pub fn encode::AnimationFrameEncoder::push_frame_exact(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error>
 pub fn encode::AnimationFrameEncoder::push_frame_timed(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<animation::FrameDuration, Self::Error>
 pub fn encode::AnimationFrameEncoder::reject(UnsupportedOperation) -> Self::Error
+pub fn encode::AnimationFrameEncoder::take_output(&mut self, &mut alloc::vec::Vec<u8>)
 pub type ()::Error = UnsupportedOperation [also: (root)]
+pub fn ()::begin(&mut self, u32, u32, zenpixels::descriptor::PixelDescriptor, core::option::Option<u32>) -> core::result::Result<encode::AnimationOutputTiming, Self::Error> [also: (root)]
+pub fn ()::consume_output(&mut self, usize) [also: (root)]
 pub fn ()::finish(self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, Self::Error> [also: (root)]
+pub fn ()::pending_output(&self) -> &[u8] [also: (root)]
 pub fn ()::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error> [also: (root)]
 pub fn ()::push_frame_exact(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error> [also: (root)]
 pub fn ()::push_frame_timed(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<animation::FrameDuration, Self::Error> [also: (root)]
 pub fn ()::reject(UnsupportedOperation) -> Self::Error [also: (root)]
+pub fn ()::take_output(&mut self, &mut alloc::vec::Vec<u8>) [also: (root)]
 pub trait encode::DynAnimationFrameEncoder: core::marker::Send [also: prelude]
 pub fn encode::DynAnimationFrameEncoder::as_any(&self) -> &dyn core::any::Any
 pub fn encode::DynAnimationFrameEncoder::as_any_mut(&mut self) -> &mut dyn core::any::Any
+pub fn encode::DynAnimationFrameEncoder::begin(&mut self, u32, u32, zenpixels::descriptor::PixelDescriptor, core::option::Option<u32>) -> core::result::Result<encode::AnimationOutputTiming, encode::BoxedError>
+pub fn encode::DynAnimationFrameEncoder::consume_output(&mut self, usize)
 pub fn encode::DynAnimationFrameEncoder::finish(alloc::boxed::Box<Self>, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
 pub fn encode::DynAnimationFrameEncoder::into_any(alloc::boxed::Box<Self>) -> alloc::boxed::Box<dyn core::any::Any>
+pub fn encode::DynAnimationFrameEncoder::pending_output(&self) -> &[u8]
 pub fn encode::DynAnimationFrameEncoder::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), encode::BoxedError>
 pub fn encode::DynAnimationFrameEncoder::push_frame_exact(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), encode::BoxedError>
 pub fn encode::DynAnimationFrameEncoder::push_frame_timed(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<animation::FrameDuration, encode::BoxedError>
+pub fn encode::DynAnimationFrameEncoder::take_output(&mut self, &mut alloc::vec::Vec<u8>)
 pub trait encode::DynEncodeJob [also: prelude]
 pub fn encode::DynEncodeJob::encode(alloc::boxed::Box<Self>, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
 pub fn encode::DynEncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
@@ -586,7 +625,7 @@ pub fn encode::DynEncodeJob::set_pulse(&mut self, how_far::pulse::SharedPulse)
 pub fn encode::DynEncodeJob::set_stop(&mut self, almost_enough::stop_token::StopToken)
 pub fn encode::DynEncodeJob::try_set_policy(&mut self, encode::EncodePolicy) -> core::result::Result<(), encode::BoxedError>
 pub trait encode::DynEncoder: core::marker::Send [also: prelude]
-pub fn encode::DynEncoder::begin(&mut self, u32, u32, zenpixels::descriptor::PixelDescriptor) -> core::result::Result<(), encode::BoxedError>
+pub fn encode::DynEncoder::begin(&mut self, u32, u32, zenpixels::descriptor::PixelDescriptor) -> core::result::Result<encode::OutputTiming, encode::BoxedError>
 pub fn encode::DynEncoder::consume_output(&mut self, usize)
 pub fn encode::DynEncoder::encode(alloc::boxed::Box<Self>, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
 pub fn encode::DynEncoder::encode_from(alloc::boxed::Box<Self>, &mut dyn core::ops::function::FnMut(u32, zenpixels::buffer::PixelSliceMut<'_>) -> usize) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
@@ -595,6 +634,7 @@ pub fn encode::DynEncoder::finish(alloc::boxed::Box<Self>) -> core::result::Resu
 pub fn encode::DynEncoder::pending_output(&self) -> &[u8]
 pub fn encode::DynEncoder::preferred_strip_height(&self) -> u32
 pub fn encode::DynEncoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), encode::BoxedError>
+pub fn encode::DynEncoder::take_output(&mut self, &mut alloc::vec::Vec<u8>)
 pub trait encode::DynEncoderConfig: core::marker::Send + core::marker::Sync [also: prelude]
 pub fn encode::DynEncoderConfig::as_any(&self) -> &dyn core::any::Any
 pub fn encode::DynEncoderConfig::capabilities(&self) -> &'static encode::EncodeCapabilities
@@ -630,7 +670,7 @@ pub fn encode::EncodeJob::with_pulse(self, how_far::pulse::SharedPulse) -> Self
 pub fn encode::EncodeJob::with_stop(self, almost_enough::stop_token::StopToken) -> Self
 pub trait encode::Encoder: core::marker::Sized [also: prelude]
 pub type encode::Encoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
-pub fn encode::Encoder::begin(&mut self, u32, u32, zenpixels::descriptor::PixelDescriptor) -> core::result::Result<(), Self::Error>
+pub fn encode::Encoder::begin(&mut self, u32, u32, zenpixels::descriptor::PixelDescriptor) -> core::result::Result<encode::OutputTiming, Self::Error>
 pub fn encode::Encoder::consume_output(&mut self, usize)
 pub fn encode::Encoder::encode(self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, Self::Error>
 pub fn encode::Encoder::encode_from(self, &mut dyn core::ops::function::FnMut(u32, zenpixels::buffer::PixelSliceMut<'_>) -> usize) -> core::result::Result<encode::EncodeOutput, Self::Error>
@@ -640,6 +680,7 @@ pub fn encode::Encoder::pending_output(&self) -> &[u8]
 pub fn encode::Encoder::preferred_strip_height(&self) -> u32
 pub fn encode::Encoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), Self::Error>
 pub fn encode::Encoder::reject(UnsupportedOperation) -> Self::Error
+pub fn encode::Encoder::take_output(&mut self, &mut alloc::vec::Vec<u8>)
 pub trait encode::EncoderConfig: core::clone::Clone + core::marker::Send + core::marker::Sync [also: prelude]
 pub type encode::EncoderConfig::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub type encode::EncoderConfig::Job: encode::EncodeJob<Error = Self::Error>
@@ -653,6 +694,7 @@ pub fn encode::EncoderConfig::generic_effort(&self) -> core::option::Option<i32>
 pub fn encode::EncoderConfig::generic_quality(&self) -> core::option::Option<f32>
 pub fn encode::EncoderConfig::is_lossless(&self) -> core::option::Option<bool>
 pub fn encode::EncoderConfig::job(self) -> Self::Job
+pub fn encode::EncoderConfig::prefers_streaming(&self) -> core::option::Option<bool>
 pub fn encode::EncoderConfig::resolved_target_fidelity(&self) -> core::option::Option<encode::Fidelity>
 pub fn encode::EncoderConfig::select_fidelity(&self, &[encode::Fidelity]) -> core::result::Result<(usize, Self), encode::FidelitySelectionError>
 pub fn encode::EncoderConfig::supported_descriptors() -> &'static [zenpixels::descriptor::PixelDescriptor]
@@ -662,6 +704,7 @@ pub fn encode::EncoderConfig::with_fidelity(self, encode::Fidelity) -> Self
 pub fn encode::EncoderConfig::with_generic_effort(self, i32) -> Self
 pub fn encode::EncoderConfig::with_generic_quality(self, f32) -> Self
 pub fn encode::EncoderConfig::with_lossless(self, bool) -> Self
+pub fn encode::EncoderConfig::with_prefer_streaming(self, bool) -> Self
 pub fn encode::best_encode_format(zenpixels::descriptor::PixelDescriptor, &[zenpixels::descriptor::PixelDescriptor]) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub mod estimate
 #[non_exhaustive] pub enum estimate::SimdTier
@@ -891,6 +934,8 @@ pub helpers::IccMatchTolerance::Approximate = 13
 pub helpers::IccMatchTolerance::Exact = 1
 pub helpers::IccMatchTolerance::Intent = 56
 pub helpers::IccMatchTolerance::Precise = 3
+pub struct helpers::WholeFileIncremental<J>
+pub fn helpers::WholeFileIncremental<J>::new(J, &[zenpixels::descriptor::PixelDescriptor]) -> Self
 pub fn helpers::copy_decode_to_sink<'a, J>(J, alloc::borrow::Cow<'a, [u8]>, &mut dyn decode::DecodeRowSink, &[zenpixels::descriptor::PixelDescriptor], fn(decode::SinkError) -> <J as decode::DecodeJob>::Error) -> core::result::Result<decode::OutputInfo, <J as decode::DecodeJob>::Error> where J: decode::DecodeJob<'a>
 pub fn helpers::copy_frame_to_sink<D: decode::AnimationFrameDecoder>(&mut D, core::option::Option<&dyn enough::Stop>, &mut dyn decode::DecodeRowSink) -> core::result::Result<core::option::Option<decode::OutputInfo>, <D as decode::AnimationFrameDecoder>::Error>
 pub fn helpers::descriptor_for_decoded_pixels(zenpixels::descriptor::PixelFormat, &SourceColor, core::option::Option<&zenpixels::cicp::Cicp>, helpers::IccMatchTolerance) -> zenpixels::descriptor::PixelDescriptor
@@ -1079,11 +1124,15 @@ pub fn prelude::AnimationFrameDecoder::render_next_frame_owned(&mut self, core::
 pub fn prelude::AnimationFrameDecoder::render_next_frame_to_sink(&mut self, core::option::Option<&dyn enough::Stop>, &mut dyn decode::DecodeRowSink) -> core::result::Result<core::option::Option<decode::OutputInfo>, Self::Error>
 pub fn prelude::AnimationFrameDecoder::wrap_sink_error(decode::SinkError) -> Self::Error
 pub type prelude::AnimationFrameEncoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn prelude::AnimationFrameEncoder::begin(&mut self, u32, u32, zenpixels::descriptor::PixelDescriptor, core::option::Option<u32>) -> core::result::Result<encode::AnimationOutputTiming, Self::Error>
+pub fn prelude::AnimationFrameEncoder::consume_output(&mut self, usize)
 pub fn prelude::AnimationFrameEncoder::finish(self, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, Self::Error>
+pub fn prelude::AnimationFrameEncoder::pending_output(&self) -> &[u8]
 pub fn prelude::AnimationFrameEncoder::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error>
 pub fn prelude::AnimationFrameEncoder::push_frame_exact(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), Self::Error>
 pub fn prelude::AnimationFrameEncoder::push_frame_timed(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<animation::FrameDuration, Self::Error>
 pub fn prelude::AnimationFrameEncoder::reject(UnsupportedOperation) -> Self::Error
+pub fn prelude::AnimationFrameEncoder::take_output(&mut self, &mut alloc::vec::Vec<u8>)
 pub type prelude::Decode::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn prelude::Decode::decode(self) -> core::result::Result<decode::DecodeOutput, Self::Error>
 pub type prelude::DecodeJob::AnimationFrameDec: decode::AnimationFrameDecoder<Error = Self::Error> + core::marker::Send + 'static
@@ -1135,11 +1184,15 @@ pub fn prelude::DynAnimationFrameDecoder::render_next_frame_owned(&mut self, cor
 pub fn prelude::DynAnimationFrameDecoder::render_next_frame_to_sink(&mut self, core::option::Option<&dyn enough::Stop>, &mut dyn decode::DecodeRowSink) -> core::result::Result<core::option::Option<decode::OutputInfo>, encode::BoxedError>
 pub fn prelude::DynAnimationFrameEncoder::as_any(&self) -> &dyn core::any::Any
 pub fn prelude::DynAnimationFrameEncoder::as_any_mut(&mut self) -> &mut dyn core::any::Any
+pub fn prelude::DynAnimationFrameEncoder::begin(&mut self, u32, u32, zenpixels::descriptor::PixelDescriptor, core::option::Option<u32>) -> core::result::Result<encode::AnimationOutputTiming, encode::BoxedError>
+pub fn prelude::DynAnimationFrameEncoder::consume_output(&mut self, usize)
 pub fn prelude::DynAnimationFrameEncoder::finish(alloc::boxed::Box<Self>, core::option::Option<&dyn enough::Stop>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
 pub fn prelude::DynAnimationFrameEncoder::into_any(alloc::boxed::Box<Self>) -> alloc::boxed::Box<dyn core::any::Any>
+pub fn prelude::DynAnimationFrameEncoder::pending_output(&self) -> &[u8]
 pub fn prelude::DynAnimationFrameEncoder::push_frame(&mut self, zenpixels::buffer::PixelSlice<'_>, u32, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), encode::BoxedError>
 pub fn prelude::DynAnimationFrameEncoder::push_frame_exact(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), encode::BoxedError>
 pub fn prelude::DynAnimationFrameEncoder::push_frame_timed(&mut self, zenpixels::buffer::PixelSlice<'_>, animation::FrameDuration, core::option::Option<&dyn enough::Stop>) -> core::result::Result<animation::FrameDuration, encode::BoxedError>
+pub fn prelude::DynAnimationFrameEncoder::take_output(&mut self, &mut alloc::vec::Vec<u8>)
 pub fn prelude::DynDecodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn prelude::DynDecodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
 pub fn prelude::DynDecodeJob::into_animation_frame_decoder(alloc::boxed::Box<Self>, alloc::borrow::Cow<'a, [u8]>, &[zenpixels::descriptor::PixelDescriptor]) -> core::result::Result<alloc::boxed::Box<dyn decode::DynAnimationFrameDecoder>, encode::BoxedError>
@@ -1183,7 +1236,7 @@ pub fn prelude::DynEncodeJob::set_policy(&mut self, encode::EncodePolicy)
 pub fn prelude::DynEncodeJob::set_pulse(&mut self, how_far::pulse::SharedPulse)
 pub fn prelude::DynEncodeJob::set_stop(&mut self, almost_enough::stop_token::StopToken)
 pub fn prelude::DynEncodeJob::try_set_policy(&mut self, encode::EncodePolicy) -> core::result::Result<(), encode::BoxedError>
-pub fn prelude::DynEncoder::begin(&mut self, u32, u32, zenpixels::descriptor::PixelDescriptor) -> core::result::Result<(), encode::BoxedError>
+pub fn prelude::DynEncoder::begin(&mut self, u32, u32, zenpixels::descriptor::PixelDescriptor) -> core::result::Result<encode::OutputTiming, encode::BoxedError>
 pub fn prelude::DynEncoder::consume_output(&mut self, usize)
 pub fn prelude::DynEncoder::encode(alloc::boxed::Box<Self>, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
 pub fn prelude::DynEncoder::encode_from(alloc::boxed::Box<Self>, &mut dyn core::ops::function::FnMut(u32, zenpixels::buffer::PixelSliceMut<'_>) -> usize) -> core::result::Result<encode::EncodeOutput, encode::BoxedError>
@@ -1192,6 +1245,7 @@ pub fn prelude::DynEncoder::finish(alloc::boxed::Box<Self>) -> core::result::Res
 pub fn prelude::DynEncoder::pending_output(&self) -> &[u8]
 pub fn prelude::DynEncoder::preferred_strip_height(&self) -> u32
 pub fn prelude::DynEncoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), encode::BoxedError>
+pub fn prelude::DynEncoder::take_output(&mut self, &mut alloc::vec::Vec<u8>)
 pub fn prelude::DynEncoderConfig::as_any(&self) -> &dyn core::any::Any
 pub fn prelude::DynEncoderConfig::capabilities(&self) -> &'static encode::EncodeCapabilities
 pub fn prelude::DynEncoderConfig::check_fidelity_target(&self, encode::Fidelity) -> core::result::Result<(), encode::FidelityTargetError>
@@ -1226,7 +1280,7 @@ pub fn prelude::EncodeJob::with_policy(self, encode::EncodePolicy) -> Self
 pub fn prelude::EncodeJob::with_pulse(self, how_far::pulse::SharedPulse) -> Self
 pub fn prelude::EncodeJob::with_stop(self, almost_enough::stop_token::StopToken) -> Self
 pub type prelude::Encoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
-pub fn prelude::Encoder::begin(&mut self, u32, u32, zenpixels::descriptor::PixelDescriptor) -> core::result::Result<(), Self::Error>
+pub fn prelude::Encoder::begin(&mut self, u32, u32, zenpixels::descriptor::PixelDescriptor) -> core::result::Result<encode::OutputTiming, Self::Error>
 pub fn prelude::Encoder::consume_output(&mut self, usize)
 pub fn prelude::Encoder::encode(self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<encode::EncodeOutput, Self::Error>
 pub fn prelude::Encoder::encode_from(self, &mut dyn core::ops::function::FnMut(u32, zenpixels::buffer::PixelSliceMut<'_>) -> usize) -> core::result::Result<encode::EncodeOutput, Self::Error>
@@ -1236,6 +1290,7 @@ pub fn prelude::Encoder::pending_output(&self) -> &[u8]
 pub fn prelude::Encoder::preferred_strip_height(&self) -> u32
 pub fn prelude::Encoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), Self::Error>
 pub fn prelude::Encoder::reject(UnsupportedOperation) -> Self::Error
+pub fn prelude::Encoder::take_output(&mut self, &mut alloc::vec::Vec<u8>)
 pub type prelude::EncoderConfig::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub type prelude::EncoderConfig::Job: encode::EncodeJob<Error = Self::Error>
 pub fn prelude::EncoderConfig::alpha_quality(&self) -> core::option::Option<f32>
@@ -1248,6 +1303,7 @@ pub fn prelude::EncoderConfig::generic_effort(&self) -> core::option::Option<i32
 pub fn prelude::EncoderConfig::generic_quality(&self) -> core::option::Option<f32>
 pub fn prelude::EncoderConfig::is_lossless(&self) -> core::option::Option<bool>
 pub fn prelude::EncoderConfig::job(self) -> Self::Job
+pub fn prelude::EncoderConfig::prefers_streaming(&self) -> core::option::Option<bool>
 pub fn prelude::EncoderConfig::resolved_target_fidelity(&self) -> core::option::Option<encode::Fidelity>
 pub fn prelude::EncoderConfig::select_fidelity(&self, &[encode::Fidelity]) -> core::result::Result<(usize, Self), encode::FidelitySelectionError>
 pub fn prelude::EncoderConfig::supported_descriptors() -> &'static [zenpixels::descriptor::PixelDescriptor]
@@ -1257,6 +1313,7 @@ pub fn prelude::EncoderConfig::with_fidelity(self, encode::Fidelity) -> Self
 pub fn prelude::EncoderConfig::with_generic_effort(self, i32) -> Self
 pub fn prelude::EncoderConfig::with_generic_quality(self, f32) -> Self
 pub fn prelude::EncoderConfig::with_lossless(self, bool) -> Self
+pub fn prelude::EncoderConfig::with_prefer_streaming(self, bool) -> Self
 pub type prelude::IncrementalDecode::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn prelude::IncrementalDecode::access_pattern(&self) -> source::AccessPattern
 pub fn prelude::IncrementalDecode::info(&self) -> core::option::Option<&ImageInfo>
@@ -1313,6 +1370,38 @@ pub fn source::ReadAt::len_hint(&self) -> core::option::Option<u64>
 pub fn source::ReadAt::read_at(&mut self, u64, &mut [u8]) -> core::result::Result<usize, Self::Error>
 pub fn source::ReadAt::read_exact_at(&mut self, u64, &mut [u8]) -> core::result::Result<(), Self::Error>
 pub fn source::ReadAt::read_many_at(&mut self, &mut [(u64, &mut [u8])]) -> core::result::Result<(), Self::Error>
+pub mod time
+#[non_exhaustive] pub enum time::Rounding
+pub time::Rounding::Ceil
+pub time::Rounding::Floor
+pub time::Rounding::Nearest
+#[non_exhaustive] pub enum time::TimingError [also: animation]
+pub time::TimingError::Inexact
+pub time::TimingError::Negative
+pub time::TimingError::Overflow
+pub time::TimingError::ZeroDenominator
+pub struct time::FrameDuration [also: animation]
+pub fn animation::FrameDuration::ticks_at(self, u32) -> core::result::Result<u64, animation::TimingError>
+pub struct time::TimeBase
+pub const time::TimeBase::MILLIS: Self
+pub const time::TimeBase::SECONDS: Self
+pub const fn time::TimeBase::denominator(self) -> u32
+pub const fn time::TimeBase::hz(u32) -> core::result::Result<Self, animation::TimingError>
+pub const fn time::TimeBase::new(u32, u32) -> core::result::Result<Self, animation::TimingError>
+pub const fn time::TimeBase::numerator(self) -> u32
+pub struct time::Timestamp
+pub const fn time::Timestamp::base(self) -> time::TimeBase
+pub fn time::Timestamp::checked_add(self, animation::FrameDuration) -> core::result::Result<Self, animation::TimingError>
+pub fn time::Timestamp::compare(self, Self) -> core::cmp::Ordering
+pub fn time::Timestamp::duration_until(self, Self) -> core::result::Result<animation::FrameDuration, animation::TimingError>
+pub const fn time::Timestamp::new(i64, time::TimeBase) -> Self
+pub fn time::Timestamp::rescale(self, time::TimeBase, time::Rounding) -> core::result::Result<Self, animation::TimingError>
+pub fn time::Timestamp::same_instant(self, Self) -> bool
+pub const fn time::Timestamp::ticks(self) -> i64
+pub struct time::TimingQuantizer [also: animation]
+pub fn animation::TimingQuantizer::quantize(&mut self, animation::FrameDuration) -> core::result::Result<animation::FrameDuration, animation::TimingError>
+pub fn time::duration_to_ticks(animation::FrameDuration, time::TimeBase) -> core::result::Result<u64, animation::TimingError>
+pub fn time::ticks_to_duration(u64, time::TimeBase) -> core::result::Result<animation::FrameDuration, animation::TimingError>
 #[non_exhaustive] pub enum AllocPreference
 pub AllocPreference::CodecDefault
 pub AllocPreference::Fallible
@@ -1467,6 +1556,7 @@ pub fn LimitExceeded::kind(&self) -> LimitKind
 pub LimitKind::DecompressionRatio
 pub LimitKind::Duration
 pub LimitKind::Frames
+pub LimitKind::HeaderBytes
 pub LimitKind::Height
 pub LimitKind::InputSize
 pub LimitKind::InventoryParts
@@ -1476,9 +1566,13 @@ pub LimitKind::MetadataEntries
 pub LimitKind::MetadataRewriteSize
 pub LimitKind::MetadataSize
 pub LimitKind::OutputSize
+pub LimitKind::PacketBytes
 pub LimitKind::Pixels
+pub LimitKind::QueueDepth
 pub LimitKind::Scans
+pub LimitKind::TableEntries
 pub LimitKind::TotalPixels
+pub LimitKind::Tracks
 pub LimitKind::Width
 #[non_exhaustive] pub enum MetadataPolicy
 pub MetadataPolicy::ColorAndRotation
@@ -1556,8 +1650,10 @@ pub fn AnimationFrame<'a>::duration_ms(&self) -> u32
 pub fn AnimationFrame<'a>::frame_index(&self) -> u32
 pub fn AnimationFrame<'a>::new(zenpixels::buffer::PixelSlice<'a>, u32, u32) -> Self
 pub fn AnimationFrame<'a>::pixels(&self) -> &zenpixels::buffer::PixelSlice<'a>
+pub fn AnimationFrame<'a>::pts(&self) -> core::option::Option<time::Timestamp>
 pub fn AnimationFrame<'a>::to_owned_frame(&self) -> OwnedAnimationFrame
 pub fn AnimationFrame<'a>::with_duration(zenpixels::buffer::PixelSlice<'a>, animation::FrameDuration, u32) -> Self
+pub fn AnimationFrame<'a>::with_pts(self, core::option::Option<time::Timestamp>) -> Self
 pub struct CodecError(_)
 pub fn CodecError::category(&self) -> ErrorCategory
 pub fn CodecError::codec(&self) -> core::option::Option<&'static str>
@@ -1817,9 +1913,11 @@ pub fn OwnedAnimationFrame::frame_index(&self) -> u32
 pub fn OwnedAnimationFrame::into_buffer(self) -> zenpixels::buffer::PixelBuffer
 pub fn OwnedAnimationFrame::new(zenpixels::buffer::PixelBuffer, u32, u32) -> Self
 pub fn OwnedAnimationFrame::pixels(&self) -> zenpixels::buffer::PixelSlice<'_>
+pub fn OwnedAnimationFrame::pts(&self) -> core::option::Option<time::Timestamp>
 pub fn OwnedAnimationFrame::take_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&mut self) -> core::option::Option<T>
 pub fn OwnedAnimationFrame::with_duration(zenpixels::buffer::PixelBuffer, animation::FrameDuration, u32) -> Self
 pub fn OwnedAnimationFrame::with_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(self, T) -> Self
+pub fn OwnedAnimationFrame::with_pts(self, core::option::Option<time::Timestamp>) -> Self
 pub struct Resolution
 pub Resolution::unit: ResolutionUnit
 pub Resolution::x: f64
@@ -1923,7 +2021,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (126 types)
+## trait impls (132 types)
 
 &mut D: decode::IncrementalDecode
 &mut S: source::DynReadAt
@@ -1997,6 +2095,7 @@ decode::OutputInfo: Clone, Debug, Eq, PartialEq
 decode::Progress: Clone, Debug, Eq, PartialEq
 decode::Request: Clone, Copy, Debug, Eq, Hash, PartialEq
 decode::StepError<E>: Debug, Display, Error, From<enough::reason::StopReason>
+encode::AnimationOutputTiming: Clone, Copy, Debug, Default, Eq, Hash, PartialEq
 encode::EncodeCapabilities: Clone, Debug, Default, PartialEq
 encode::EncodeOutput: AsRef<[u8]>, Clone, Debug, Eq, PartialEq
 encode::EncodePolicy: Clone, Copy, Debug, Default, Eq, PartialEq
@@ -2005,6 +2104,8 @@ encode::FidelityRejection: Clone, Copy, Debug, PartialEq
 encode::FidelitySelectionError: Clone, Debug, Display, Error, PartialEq
 encode::FidelityTargetError: Clone, Copy, Debug, Display, Error, PartialEq
 encode::LossyTarget: Clone, Copy, Debug, PartialEq
+encode::OutputBuffer: Clone, Debug, Default, Eq, PartialEq
+encode::OutputTiming: Clone, Copy, Debug, Default, Eq, Hash, PartialEq
 enough::reason::StopReason: CategorizedError
 estimate::ComputeEnvironment: Clone, Copy, Debug, Default, Eq, PartialEq
 estimate::ImageCharacteristics: Clone, Debug, Eq, PartialEq
@@ -2050,15 +2151,21 @@ source::ReadAtShim<S>: source::DynReadAt
 source::SliceReadAt<'_>: source::ReadAt
 source::SliceReadAt<'a>: Clone, Debug
 source::SourceError: Clone, Debug, Display, Eq, Error, PartialEq
+time::Rounding: Clone, Copy, Debug, Eq, Hash, PartialEq
+time::TimeBase: Clone, Copy, Debug, Eq, Hash, PartialEq
+time::Timestamp: Clone, Copy, Debug, Eq, Hash, PartialEq
 whereat::at::At<E>: CategorizedError
 impl<C> decode::DynDecoderConfig for C where C: decode::DecoderConfig + 'static
+impl<J, E> decode::IncrementalDecode for helpers::WholeFileIncremental<J> where J: for<'a> decode::DecodeJob<'a, Error = E> + core::marker::Send + 'static, E: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::Enc: encode::Encoder + core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::AnimationFrameEnc: encode::AnimationFrameEncoder
+impl<J, E> decode::IncrementalDecode for helpers::WholeFileIncremental<J> where J: for<'a> decode::DecodeJob<'a, Error = E> + core::marker::Send + 'static, E: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 impl<C> decode::DynDecoderConfig for C where C: decode::DecoderConfig + 'static
 impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::Enc: encode::Encoder + core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::AnimationFrameEnc: encode::AnimationFrameEncoder
+impl<J, E> decode::IncrementalDecode for helpers::WholeFileIncremental<J> where J: for<'a> decode::DecodeJob<'a, Error = E> + core::marker::Send + 'static, E: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 
 ## auto traits
 
-98 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+104 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
 CodecSet: !RefUnwindSafe !UnwindSafe
 CodecSetError: !RefUnwindSafe !UnwindSafe
@@ -2073,5 +2180,6 @@ decode::Fused<D>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 decode::IncrementalDecoderShim<D>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 decode::StepError<E>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 encode::EncodeOutput: !RefUnwindSafe !UnwindSafe
+helpers::WholeFileIncremental<J>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 metadata_rewrite::Request<'a>: !RefUnwindSafe !Send !Sync !UnwindSafe
 source::ReadAtShim<S>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe

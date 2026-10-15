@@ -9,22 +9,23 @@
 
 ## summary
 #
-#   inherent methods                           46
-#   trait roster entries (type × trait)        64
+#   inherent methods                           51
+#   trait roster entries (type × trait)        69
 #
 # per-module pub lines:
 #   (root)                           18
 #   animation                         1
 #   decode                            9
-#   encode                            1
+#   encode                            4
 #   estimate                          2
 #   exif                              3
 #   gainmap                           2
 #   inventory                         6
 #   metadata_rewrite                  2
 #   source                            2
+#   time                              2
 
-## items (46 lines)
+## items (51 lines)
 
 pub fn CodecIoKind::assert_fields_are_eq(&self)
 pub fn ColorEmitFields::assert_fields_are_eq(&self)
@@ -54,7 +55,10 @@ pub fn decode::Input<'a>::assert_fields_are_eq(&self)
 pub fn decode::OutputInfo::assert_fields_are_eq(&self)
 pub fn decode::Progress::assert_fields_are_eq(&self)
 pub fn decode::Request::assert_fields_are_eq(&self)
+pub fn encode::AnimationOutputTiming::assert_fields_are_eq(&self)
 pub fn encode::EncodePolicy::assert_fields_are_eq(&self)
+pub fn encode::OutputBuffer::assert_fields_are_eq(&self)
+pub fn encode::OutputTiming::assert_fields_are_eq(&self)
 pub fn estimate::ComputeEnvironment::assert_fields_are_eq(&self)
 pub fn estimate::ImageCharacteristics::assert_fields_are_eq(&self)
 pub fn exif::EntryRef<'e>::assert_fields_are_eq(&self)
@@ -72,8 +76,10 @@ pub fn metadata_rewrite::Entry::assert_fields_are_eq(&self)
 pub fn metadata_rewrite::Error::assert_fields_are_eq(&self)
 pub fn source::AccessPattern::assert_fields_are_eq(&self)
 pub fn source::SourceError::assert_fields_are_eq(&self)
+pub fn time::TimeBase::assert_fields_are_eq(&self)
+pub fn time::Timestamp::assert_fields_are_eq(&self)
 
-## trait impls (64 types)
+## trait impls (69 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -110,11 +116,13 @@ decode::DecodePolicy: TrivialClone
 decode::Input<'a>: TrivialClone
 decode::MetadataUpdate: TrivialClone
 decode::Request: TrivialClone
+encode::AnimationOutputTiming: TrivialClone
 encode::EncodePolicy: TrivialClone
 encode::Fidelity: TrivialClone
 encode::FidelityRejection: TrivialClone
 encode::FidelityTargetError: TrivialClone
 encode::LossyTarget: TrivialClone
+encode::OutputTiming: TrivialClone
 estimate::ComputeEnvironment: TrivialClone
 estimate::ResourceEstimate: TrivialClone
 estimate::SimdTier: TrivialClone
@@ -139,3 +147,6 @@ inventory::PartKind: TrivialClone
 metadata_rewrite::Action: TrivialClone
 metadata_rewrite::Compression: TrivialClone
 source::AccessPattern: TrivialClone
+time::Rounding: TrivialClone
+time::TimeBase: TrivialClone
+time::Timestamp: TrivialClone

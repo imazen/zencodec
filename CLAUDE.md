@@ -240,7 +240,6 @@ CHANGELOGs. Full design context:
   `docs/zencodec-contract-audit-2026-10-13.md` for scope and remaining gates.
 
 - Open contract gaps verified by `just contract-probes` (2026-10-13):
-  `EncodeCapabilities::supports(AnimationTiming)` cannot report true;
   rewrite `PreserveExact` rejects a request with no XMP editor before inspecting
   whether XMP is present. The color resolver can request ICC synthesis when the
   target cannot carry ICC, so callers still need a realizability check.

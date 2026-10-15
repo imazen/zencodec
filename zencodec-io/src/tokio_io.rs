@@ -496,6 +496,106 @@ fn fill<'a, Src: AsyncSource + ?Sized, E: 'a>(
     }
 }
 
+/// Drives any [`ByteStepper`](crate::ByteStepper) from an [`AsyncSource`]:
+/// the async twin of [`ReadAtCursor`](crate::ReadAtCursor).
+///
+/// Each `next` steps the stage on the calling task and awaits the source
+/// only when the stage needs bytes, so a container demuxer (cheap per step)
+/// streams packets from a socket or an object store without holding a
+/// thread during I/O and without becoming async itself. Range requests are
+/// coalesced and fetched with one [`AsyncSource::read_ranges`] per round.
+/// CPU-heavy stages (image decoders) use [`decode_async`], which moves the
+/// work off the async runtime.
+#[derive(Debug)]
+pub struct AsyncCursor {
+    opts: DriveOptions,
+    window: Window,
+    fetched: Vec<(u64, Vec<u8>)>,
+    started: bool,
+}
+
+impl AsyncCursor {
+    /// A cursor with the given read sizes.
+    pub fn new(opts: DriveOptions) -> Self {
+        Self {
+            opts,
+            window: Window::new(),
+            fetched: Vec::new(),
+            started: false,
+        }
+    }
+
+    /// Step `stage` until it produces an output, awaiting `source` for every
+    /// request. Pass the same source on every call.
+    pub async fn next<S, Src>(
+        &mut self,
+        source: &mut Src,
+        stage: &mut S,
+        stop: &dyn Stop,
+    ) -> Result<crate::Yield<S::Output>, crate::DriveFailure<S::Error, BoxedError>>
+    where
+        S: crate::ByteStepper + ?Sized,
+        Src: AsyncSource + ?Sized,
+    {
+        use crate::{DriveFailure, Step, Yield};
+        if !self.started {
+            self.started = true;
+            self.window.total = source.len_hint();
+        }
+        loop {
+            let input = self.window.input();
+            let p = stage.step(input, stop).map_err(DriveFailure::Step)?;
+            if matches!(p.step, Step::Need) {
+                check_need(stage.requested(), &input, p.consumed)
+                    .map_err(DriveFailure::Protocol)?;
+            }
+            self.window.consume(p.consumed);
+            match p.step {
+                Step::Output(o) => return Ok(Yield::Output(o)),
+                Step::Finished(o) => return Ok(Yield::Finished(o)),
+                Step::Need => {}
+            }
+            fill::<_, core::convert::Infallible>(
+                source,
+                &mut self.window,
+                &mut self.fetched,
+                stage.requested(),
+                self.opts,
+            )
+            .await
+            .map_err(|e| match e {
+                AsyncDriveError::Source(e) => DriveFailure::Source(e),
+                AsyncDriveError::Protocol(p) => DriveFailure::Protocol(p),
+                // `fill` reports only source and protocol failures.
+                _ => DriveFailure::Protocol(ProtocolViolation::EmptyRequest),
+            })?;
+        }
+    }
+}
+
+/// Write every byte `enc` has pending to `w`, then consume it: the async
+/// twin of [`write_pending`](crate::write_pending). Returns how many bytes
+/// were written.
+///
+/// Encoding is CPU work, so where `push_rows` runs is the caller's choice
+/// (a blocking thread, a compute pool); this only moves the bytes. Between
+/// pushes, awaiting it is the backpressure point: no more rows go in until
+/// the transport took the last batch. On an error nothing is consumed and
+/// the transport holds an unknown prefix: abort it.
+pub async fn write_pending_async<E, W>(enc: &mut E, w: &mut W) -> std::io::Result<usize>
+where
+    E: Encoder,
+    W: tokio::io::AsyncWrite + Unpin + ?Sized,
+{
+    use tokio::io::AsyncWriteExt as _;
+    let n = enc.pending_output().len();
+    if n > 0 {
+        w.write_all(enc.pending_output()).await?;
+        enc.consume_output(n);
+    }
+    Ok(n)
+}
+
 /// Decode from an async source with no thread blocked on I/O. See the
 /// [module documentation](self).
 ///
@@ -568,9 +668,11 @@ where
 /// input window, one batch of strips, and the encoder's pending output.
 ///
 /// The encoder is told the image size through [`Encoder::begin`] when the
-/// decoder reaches its header; encoders with
-/// [`streaming_output`](zencodec::encode::EncodeCapabilities::streaming_output)
-/// then emit bytes as rows arrive. Returns the number of bytes written.
+/// decoder reaches its header; an encoder that answers with a streaming
+/// [`OutputTiming`](zencodec::encode::OutputTiming) then emits bytes as rows
+/// arrive, and one that answers
+/// [`AT_FINISH`](zencodec::encode::OutputTiming::AT_FINISH) writes
+/// everything at the end. Returns the number of bytes written.
 // Written out rather than `async fn` so the `Send` bound is proven here,
 // for every type parameter: with `async fn`, rustc's higher-ranked
 // lifetime check rejects `tokio::spawn` of the caller's future.

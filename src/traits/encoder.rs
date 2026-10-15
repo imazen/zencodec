@@ -1,6 +1,7 @@
 //! Type-erased single-image and animation encoder traits.
 
 use crate::EncodeOutput;
+use alloc::vec::Vec;
 use enough::Stop;
 use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 
@@ -11,8 +12,18 @@ use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 ///
 /// Three mutually exclusive usage paths:
 /// - [`encode()`](Encoder::encode) — all at once, consumes self
-/// - [`push_rows()`](Encoder::push_rows) + [`finish()`](Encoder::finish) — caller pushes rows
+/// - [`push_rows()`](Encoder::push_rows) + [`finish()`](Encoder::finish), after an
+///   optional [`begin()`](Encoder::begin) — caller pushes rows, and with `begin`
+///   may send encoded bytes as they arrive ([`pending_output`](Encoder::pending_output))
 /// - [`encode_from()`](Encoder::encode_from) — encoder pulls rows from a callback
+///
+/// Once `begin` or `push_rows` has been called, `encode` and `encode_from`
+/// are errors. After an error from `begin`, `push_rows` or `finish`, the
+/// encode cannot complete: bytes already handed out are a prefix of a file
+/// that will never be finished, so a driver that has sent any must abort its
+/// transport (close the connection, abort the upload) rather than end it
+/// normally. The one exception is a failed `begin`, which leaves the encoder
+/// exactly as it was.
 ///
 /// Codecs that need full-frame data (e.g. AV1) may buffer internally
 /// when rows are pushed or pulled incrementally.
@@ -102,42 +113,97 @@ pub trait Encoder: Sized {
     }
 
     /// Declare the image before the first [`push_rows`](Self::push_rows):
-    /// its full dimensions and the descriptor rows will arrive in.
+    /// its full dimensions and the descriptor rows will arrive in. Returns
+    /// when this encoder's bytes will become available.
     ///
-    /// An encoder that knows the size up front can write its header at
-    /// once and, if it declares
-    /// [`streaming_output`](crate::encode::EncodeCapabilities::streaming_output),
-    /// make encoded bytes available through
-    /// [`pending_output`](Self::pending_output) as rows arrive. Pushing more
-    /// or fewer rows than declared is then an error at `push_rows` or
-    /// `finish`. Calling `begin` is optional; without it, encoders behave as
-    /// before and may hold all output until `finish`.
+    /// `begin` is where an encoder commits to a row-level encode. It
+    /// validates the declaration against its configuration, limits and
+    /// metadata, and rejects it here, before any row moves, when this
+    /// configuration cannot encode from rows
+    /// ([`UnsupportedOperation::RowLevelEncode`](crate::UnsupportedOperation::RowLevelEncode))
+    /// or the image is out of bounds. An encoder that returns
+    /// [`OutputTiming::streaming`](crate::encode::OutputTiming::streaming)
+    /// writes its header now and exposes encoded bytes through
+    /// [`pending_output`](Self::pending_output) as rows arrive; one that
+    /// returns [`OutputTiming::AT_FINISH`](crate::encode::OutputTiming::AT_FINISH)
+    /// keeps `pending_output` empty and returns everything from
+    /// [`finish`](Self::finish). Only encoders whose codec declares
+    /// [`streaming_output`](crate::encode::EncodeCapabilities::streaming_output)
+    /// may return a streaming timing.
     ///
-    /// Default: accepts and ignores the declaration.
+    /// Rules every implementation follows:
+    ///
+    /// - **Declaration.** `begin` answers as [`encode`](Self::encode) of a
+    ///   `width` x `height` image would (a size `encode` refuses, `begin`
+    ///   refuses). A second `begin` is an error. A failed `begin` leaves the
+    ///   encoder unchanged.
+    /// - **Rows.** After `begin`, pushing more or fewer rows than declared,
+    ///   or rows of another width or descriptor, is an error at `push_rows`
+    ///   or `finish`. Colour comes from the job (metadata, policy); rows whose
+    ///   pixel colour context disagrees with it may be refused.
+    /// - **Lag.** A streaming lag is below `height` (an encoder that would
+    ///   hold every row reports `AT_FINISH`), counts pushed rows whatever
+    ///   the push size, and counts a row as done once its bytes are in
+    ///   `pending_output`. A coder without row-aligned output (deflate, rANS
+    ///   blocks) claims a lag by flushing on a row schedule fixed at `begin`.
+    /// - **Bytes.** Draining changes memory, never output: what was taken
+    ///   plus `finish`'s return equals the same encode left undrained. `begin`
+    ///   may choose a framing or flush schedule that makes the file differ
+    ///   from `encode()`'s (one IDAT chunk per strip instead of one), never
+    ///   different pixels, and never a different quality or format
+    ///   configuration.
+    /// - **Limits.** `max_output_bytes` bounds the whole file, bytes already
+    ///   handed out included. A streaming encode nobody drains holds its
+    ///   output like an `AT_FINISH` one, and the memory limit may refuse it.
+    ///
+    /// Calling `begin` is optional; without it, encoders behave as before
+    /// and may hold all output until `finish`.
+    ///
+    /// Default: accepts the declaration and reports
+    /// [`OutputTiming::AT_FINISH`](crate::encode::OutputTiming::AT_FINISH).
     fn begin(
         &mut self,
         width: u32,
         height: u32,
         descriptor: zenpixels::PixelDescriptor,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<crate::encode::OutputTiming, Self::Error> {
         let _ = (width, height, descriptor);
-        Ok(())
+        Ok(crate::encode::OutputTiming::AT_FINISH)
     }
 
     /// Encoded bytes ready to send, not yet consumed.
     ///
-    /// Streaming encoders fill this as rows are pushed; a driver writes it
-    /// out and calls [`consume_output`](Self::consume_output), keeping output
-    /// memory bounded. [`finish`](Self::finish) returns only the bytes not
+    /// Encoders whose [`begin`](Self::begin) reported a streaming
+    /// [`OutputTiming`](crate::encode::OutputTiming) fill this as rows are
+    /// pushed; a driver writes it out and calls
+    /// [`consume_output`](Self::consume_output), keeping output memory
+    /// bounded. [`finish`](Self::finish) returns only the bytes not
     /// consumed. Default: empty (all output arrives from `finish`).
     fn pending_output(&self) -> &[u8] {
         &[]
     }
 
     /// Mark the first `n` bytes of [`pending_output`](Self::pending_output)
-    /// as sent. `n` must not exceed its length. Default: no-op.
+    /// as sent. An `n` larger than the pending length marks all of it.
+    /// Default: no-op.
     fn consume_output(&mut self, n: usize) {
         let _ = n;
+    }
+
+    /// Append every pending byte to `into` and consume it: the same as
+    /// copying [`pending_output`](Self::pending_output) and calling
+    /// [`consume_output`](Self::consume_output) with its length.
+    ///
+    /// An encoder that keeps its output in an
+    /// [`OutputBuffer`](crate::encode::OutputBuffer) overrides this with
+    /// [`OutputBuffer::take_into`](crate::encode::OutputBuffer::take_into),
+    /// so a driver that passes an empty vector receives the encoder's
+    /// allocation without a copy. Default: copies.
+    fn take_output(&mut self, into: &mut Vec<u8>) {
+        let pending = self.pending_output();
+        let n = pending.len();
+        into.extend_from_slice(pending);
+        self.consume_output(n);
     }
 
     /// Push scanline rows incrementally.
@@ -204,6 +270,66 @@ pub trait AnimationFrameEncoder: Sized {
     /// encoder's error type. Used by default method implementations.
     fn reject(op: crate::UnsupportedOperation) -> Self::Error;
 
+    /// Declare the animation before the first frame: its canvas, the
+    /// descriptor frames will arrive in, and how many frames will follow
+    /// when the caller knows. Returns when this encoder's bytes will become
+    /// available.
+    ///
+    /// The animation counterpart of [`Encoder::begin`], with the same rules
+    /// counted in frames:
+    ///
+    /// - **Declaration.** A canvas the encoder would refuse, `begin`
+    ///   refuses, before any frame moves. A second `begin` is an error, and a
+    ///   failed `begin` leaves the encoder unchanged. With `frame_count`
+    ///   given, finishing after a different number of frames is an error.
+    ///   Some formats write the frame count first (APNG's `acTL`) and can
+    ///   stream only when it is given.
+    /// - **Lag.** A streaming lag counts pushed frames, and a frame is done
+    ///   once its bytes are in [`pending_output`](Self::pending_output).
+    ///   With `frame_count` given, the lag is below it.
+    /// - **Bytes.** Draining changes memory, never output. `begin` may change
+    ///   framing (where chunks break), never pixels, timing, or quality
+    ///   configuration.
+    /// - **Errors.** After an error from `begin`, a push or `finish`, the
+    ///   animation cannot complete; a driver that has sent bytes aborts its
+    ///   transport.
+    ///
+    /// Calling `begin` is optional; without it, encoders behave as before.
+    ///
+    /// Default: accepts the declaration and reports
+    /// [`AnimationOutputTiming::AT_FINISH`](crate::encode::AnimationOutputTiming::AT_FINISH).
+    fn begin(
+        &mut self,
+        width: u32,
+        height: u32,
+        descriptor: PixelDescriptor,
+        frame_count: Option<u32>,
+    ) -> Result<crate::encode::AnimationOutputTiming, Self::Error> {
+        let _ = (width, height, descriptor, frame_count);
+        Ok(crate::encode::AnimationOutputTiming::AT_FINISH)
+    }
+
+    /// Encoded bytes ready to send, not yet consumed; see
+    /// [`Encoder::pending_output`]. Default: empty.
+    fn pending_output(&self) -> &[u8] {
+        &[]
+    }
+
+    /// Mark the first `n` bytes of [`pending_output`](Self::pending_output)
+    /// as sent, clamped to its length. Default: no-op.
+    fn consume_output(&mut self, n: usize) {
+        let _ = n;
+    }
+
+    /// Append every pending byte to `into` and consume it; see
+    /// [`Encoder::take_output`]. Default: copies.
+    fn take_output(&mut self, into: &mut Vec<u8>) {
+        let pending = self.pending_output();
+        let n = pending.len();
+        into.extend_from_slice(pending);
+        self.consume_output(n);
+    }
+
     /// Push a complete full-canvas frame.
     ///
     /// Pass `None` if cancellation is not needed.
@@ -250,7 +376,8 @@ pub trait AnimationFrameEncoder: Sized {
         Err(Self::reject(crate::UnsupportedOperation::AnimationTiming))
     }
 
-    /// Finalize animation. Returns encoded output.
+    /// Finalize animation. Returns the encoded bytes not already consumed
+    /// through [`pending_output`](Self::pending_output).
     ///
     /// Pass `None` if cancellation is not needed.
     fn finish(self, stop: Option<&dyn Stop>) -> Result<EncodeOutput, Self::Error>;

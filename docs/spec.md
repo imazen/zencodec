@@ -66,10 +66,12 @@ trait EncoderConfig: Clone + Send + Sync {
     fn with_generic_effort(self, effort: i32) -> Self;    // default: self
     fn with_lossless(self, lossless: bool) -> Self;       // default: self
     fn with_alpha_quality(self, quality: f32) -> Self;    // default: self
+    fn with_prefer_streaming(self, prefer: bool) -> Self; // default: self
     fn generic_quality(&self) -> Option<f32>;   // default: None
     fn generic_effort(&self) -> Option<i32>;    // default: None
     fn is_lossless(&self) -> Option<bool>;      // default: None
     fn alpha_quality(&self) -> Option<f32>;     // default: None
+    fn prefers_streaming(&self) -> Option<bool>; // default: None
 
     fn job(self) -> Self::Job;
 
@@ -134,10 +136,11 @@ trait Encoder: Sized {
 
     // Row-level push (mutually exclusive with encode)
     fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor)
-        -> Result<(), Self::Error>;                                             // default: Ok(()), ignored
+        -> Result<OutputTiming, Self::Error>;                                   // default: Ok(AT_FINISH)
     fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), Self::Error>;  // default: Err
     fn pending_output(&self) -> &[u8];                                          // default: empty
     fn consume_output(&mut self, n: usize);                                     // default: no-op
+    fn take_output(&mut self, into: &mut Vec<u8>);                              // default: copy + consume
     fn finish(self) -> Result<EncodeOutput, Self::Error>;                       // default: Err
 
     // Pull from source callback
@@ -149,12 +152,61 @@ trait Encoder: Sized {
 
 Three mutually exclusive paths: `encode()`/`encode_srgba8()`, `push_rows()+finish()`, `encode_from()`.
 
-`begin` is optional before `push_rows`. An encoder that knows the size up
-front writes its header there and, if it declares
-`EncodeCapabilities::streaming_output`, exposes encoded bytes through
-`pending_output` as rows arrive; the caller sends them and calls
-`consume_output`, and `finish` returns only what was not consumed. Pushing
-more or fewer rows than declared is an error.
+`begin` is optional before `push_rows`. It declares the image and returns
+an `OutputTiming`: when *this* encoder's bytes arrive, given its
+configuration, image and metadata. `EncodeCapabilities::streaming_output`
+says the codec can stream in some configuration; `begin` says whether it
+will. An encoder whose configuration cannot encode from rows rejects
+`begin` with `UnsupportedOperation::RowLevelEncode`, before any row moves.
+
+With `OutputTiming::streaming(lag_rows)` the encoder writes its header at
+`begin` and exposes encoded bytes through `pending_output` as rows arrive,
+holding back at most `lag_rows` pushed rows; the caller sends them and calls
+`consume_output`, and `finish` returns only what was not consumed. With
+`OutputTiming::AT_FINISH` `pending_output` stays empty. Draining never
+changes the bytes. Pushing more or fewer rows than declared is an error.
+
+Rules (spelled out on `Encoder::begin`):
+
+- `begin` answers as `encode()` of that size would. A second `begin` is an
+  error, and a failed `begin` leaves the encoder unchanged.
+- `encode()`/`encode_from()` after `begin` or `push_rows` is an error.
+- The lag is below the image height and counts pushed rows whose bytes
+  are not yet pending. A coder without row-aligned output flushes on a row
+  schedule fixed at `begin`.
+- `begin` may choose framing (flush points, chunking) that makes the file
+  differ from `encode()`'s; it may never change the pixels.
+- `consume_output(n)` with `n` above the pending length consumes all of it.
+  `take_output(into)` appends the pending bytes to `into` and consumes
+  them; an encoder holding its output in `OutputBuffer` swaps allocations
+  when `into` is empty, so nothing is copied.
+- After an error from `push_rows` or `finish` the encode cannot complete;
+  a driver that has sent bytes aborts its transport.
+- `max_output_bytes` bounds the whole file, including bytes already handed
+  out.
+
+`EncoderConfig::with_prefer_streaming(true)` asks, codec-agnostically, for
+a configuration that streams (JPEG: fixed tables, sequential; PNG: no
+whole-image reductions). Explicit codec settings win; `begin` reports what
+the encoder will do.
+
+```rust
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct OutputTiming { /* private */ }               // Default = AT_FINISH
+impl OutputTiming {
+    const AT_FINISH: Self;                         // everything from finish (the default)
+    const fn streaming(lag_rows: u32) -> Self;     // bytes stream; at most lag_rows held
+    const fn streams(&self) -> bool;
+    const fn lag_rows(&self) -> Option<u32>;       // None when AT_FINISH
+}
+```
+
+`OutputBuffer` is the output side of a streaming encoder, shared so codecs
+do not each write it: `push`, `vec_mut` (append-only access for writers
+that need a `Vec<u8>`), `pending`, `consume` (clamps; drops the sent prefix
+once it is at least 64 KiB and half the buffer), `take_into` (swaps when the
+destination is empty), `handed_out`, `total` (what `max_output_bytes`
+bounds), `try_reserve`, and `into_remaining` (what `finish` returns).
 
 ### `AnimationFrameEncoder` (animation encode)
 
@@ -163,12 +215,40 @@ trait AnimationFrameEncoder: Sized {
     type Error: core::error::Error + Send + Sync + 'static;
 
     fn reject(op: UnsupportedOperation) -> Self::Error;
+    fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor,
+        frame_count: Option<u32>) -> Result<AnimationOutputTiming, Self::Error>; // default: Ok(AT_FINISH)
+    fn pending_output(&self) -> &[u8];                     // default: empty
+    fn consume_output(&mut self, n: usize);                // default: no-op
+    fn take_output(&mut self, into: &mut Vec<u8>);         // default: copy + consume
     fn push_frame(
         &mut self, pixels: PixelSlice<'_>, duration_ms: u32, stop: Option<&dyn Stop>,
     ) -> Result<(), Self::Error>;
+    fn push_frame_timed(&mut self, pixels: PixelSlice<'_>, duration: FrameDuration,
+        stop: Option<&dyn Stop>) -> Result<FrameDuration, Self::Error>;   // default: exact
+    fn push_frame_exact(&mut self, pixels: PixelSlice<'_>, duration: FrameDuration,
+        stop: Option<&dyn Stop>) -> Result<(), Self::Error>;              // default: Err
     fn finish(self, stop: Option<&dyn Stop>) -> Result<EncodeOutput, Self::Error>;
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct AnimationOutputTiming { /* private */ }      // Default = AT_FINISH
+impl AnimationOutputTiming {
+    const AT_FINISH: Self;
+    const fn streaming(lag_frames: u32) -> Self;
+    const fn streams(&self) -> bool;
+    const fn lag_frames(&self) -> Option<u32>;
+}
 ```
+
+`begin` is the animation counterpart of `Encoder::begin`, counted in
+frames: it declares the canvas, the frame descriptor and, when known, the
+frame count, before the first frame. A streaming encoder writes its header
+then and each frame's bytes as frames are pushed, holding back at most
+`lag_frames` frames; `finish` returns what was not consumed. A format that
+writes the frame count first (APNG) streams only when it is given;
+finishing after a different number of declared frames is an error. A
+second `begin` is an error and a failed one changes nothing. Draining never
+changes the bytes, and `begin` may change framing, never pixels or timing.
 
 Full-canvas frames only. Animation encoder is `'static` — it owns its data.
 Codecs without animation set `type AnimationFrameEnc = ()` (unit implements
@@ -420,10 +500,11 @@ trait DynEncoder {
     fn encode(self: Box<Self>, pixels: PixelSlice<'_>) -> Result<EncodeOutput, BoxedError>;
     fn encode_srgba8(self: Box<Self>, data: &mut [u8], make_opaque: bool,
         width: u32, height: u32, stride_pixels: u32) -> Result<EncodeOutput, BoxedError>;
-    fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor) -> Result<(), BoxedError>;
+    fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor) -> Result<OutputTiming, BoxedError>;
     fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), BoxedError>;
     fn pending_output(&self) -> &[u8];
     fn consume_output(&mut self, n: usize);
+    fn take_output(&mut self, into: &mut Vec<u8>);
     fn finish(self: Box<Self>) -> Result<EncodeOutput, BoxedError>;
     fn encode_from(self: Box<Self>,
         source: &mut dyn FnMut(u32, PixelSliceMut<'_>) -> usize) -> Result<EncodeOutput, BoxedError>;
@@ -433,7 +514,16 @@ trait DynAnimationFrameEncoder {
     fn as_any(&self) -> &dyn Any;       // downcast to concrete encoder
     fn as_any_mut(&mut self) -> &mut dyn Any;
     fn into_any(self: Box<Self>) -> Box<dyn Any>;
+    fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor,
+        frame_count: Option<u32>) -> Result<AnimationOutputTiming, BoxedError>;
+    fn pending_output(&self) -> &[u8];
+    fn consume_output(&mut self, n: usize);
+    fn take_output(&mut self, into: &mut Vec<u8>);
     fn push_frame(&mut self, pixels: PixelSlice<'_>, duration_ms: u32,
+        stop: Option<&dyn Stop>) -> Result<(), BoxedError>;
+    fn push_frame_timed(&mut self, pixels: PixelSlice<'_>, duration: FrameDuration,
+        stop: Option<&dyn Stop>) -> Result<FrameDuration, BoxedError>;
+    fn push_frame_exact(&mut self, pixels: PixelSlice<'_>, duration: FrameDuration,
         stop: Option<&dyn Stop>) -> Result<(), BoxedError>;
     fn finish(self: Box<Self>, stop: Option<&dyn Stop>) -> Result<EncodeOutput, BoxedError>;
 }
@@ -529,8 +619,10 @@ Key types: `PixelSlice<'a>`, `PixelSliceMut<'a>`, `PixelBuffer`, `PixelDescripto
 
 Image metadata from probing or decoding. `#[non_exhaustive]`, `Clone + Debug + PartialEq`.
 
-Fields: `width`, `height`, `format: ImageFormat`, `has_alpha`, `has_animation`,
-`frame_count: Option<u32>`, `orientation: Orientation`,
+Fields: `width`, `height`, `format: ImageFormat`, `has_alpha`,
+`sequence: ImageSequence` (`Single`, `Animation { frame_count, loop_count,
+random_access }`, `Multi { image_count, random_access }`; `is_animation()` and
+`frame_count()` read it), `orientation: Orientation`,
 `source_color: SourceColor`, `embedded_metadata: EmbeddedMetadata`,
 `has_gain_map`,
 `source_encoding: Option<Arc<dyn SourceEncodingDetails>>`,
@@ -775,16 +867,53 @@ Methods: `pixels()`, `into_buffer()`, `info()`, `width()`, `height()`,
 
 ### `AnimationFrame<'a>`
 
-Borrowed animation frame. Fields: `pixels: PixelSlice<'a>`, `duration_ms: u32`,
-`frame_index: u32`. Method: `to_owned_frame()`.
+Borrowed animation frame. Fields: `pixels: PixelSlice<'a>`,
+`duration: FrameDuration` (exact rational seconds), `frame_index: u32`,
+`pts: Option<Timestamp>` (the presentation instant when the source records
+one; animation formats that store only durations leave it `None`). Methods:
+`duration()`, `pts()`, `with_pts()`, `frame_index()`, `to_owned_frame()`;
+`duration_ms()` is deprecated (it truncates).
 
 ### `OwnedAnimationFrame`
 
-Owned animation frame. Fields: `pixels: PixelBuffer`, `duration_ms: u32`,
-`frame_index: u32`, `extensions: Extensions` (type-map).
+Owned animation frame. Fields: `pixels: PixelBuffer`,
+`duration: FrameDuration`, `frame_index: u32`, `pts: Option<Timestamp>`,
+`extensions: Extensions` (type-map).
 
 Methods: `pixels()`, `into_buffer()`, `as_animation_frame()`,
 `with_extras<T>()`, `extras<T>()`, `take_extras<T>()`.
+
+### `time`: `TimeBase`, `Timestamp`, `Rounding`
+
+Instants next to durations. `FrameDuration` (in `animation`, re-exported
+from `time`) is a nonnegative rational length; `Timestamp { ticks: i64, base:
+TimeBase }` is a signed instant on a reduced `TimeBase` (seconds per tick,
+`u32 / u32`).
+
+```rust
+impl TimeBase {
+    const MILLIS: Self; const SECONDS: Self;
+    const fn new(numerator: u32, denominator: u32) -> Result<Self, TimingError>;
+    const fn hz(ticks_per_second: u32) -> Result<Self, TimingError>;
+}
+impl Timestamp {
+    const fn new(ticks: i64, base: TimeBase) -> Self;
+    fn compare(self, other: Self) -> Ordering;                   // exact across bases
+    fn same_instant(self, other: Self) -> bool;
+    fn rescale(self, target: TimeBase, rounding: Rounding) -> Result<Self, TimingError>;
+    fn checked_add(self, duration: FrameDuration) -> Result<Self, TimingError>;
+    fn duration_until(self, later: Self) -> Result<FrameDuration, TimingError>;
+}
+enum Rounding { Floor, Ceil, Nearest }                           // Nearest: ties toward +inf
+fn duration_to_ticks(FrameDuration, TimeBase) -> Result<u64, TimingError>;  // exact or Inexact
+fn ticks_to_duration(u64, TimeBase) -> Result<FrameDuration, TimingError>;
+```
+
+One rounding rule everywhere: `Rounding::Nearest` rounds exact halves toward
++infinity, as `TimingQuantizer` does, so quantizing a run of durations and
+rescaling the instants between them give the same endpoints. Missing
+timestamps are `Option<Timestamp>`, never sentinels; nothing derives a
+timestamp from a nominal frame rate.
 
 ### Extensions type-map
 
@@ -1040,8 +1169,9 @@ Const-constructible structs with builder pattern. Returned by config `capabiliti
 
 Each has a `with_*` builder.
 
-Sans-I/O flags: `streaming_output` (encode: bytes stream from
-`pending_output` after `begin`); `incremental`, `seekable` and
+Sans-I/O flags: `streaming_output` (encode: some configuration streams
+bytes from `pending_output` after `begin`; the `OutputTiming` that `begin`
+returns says whether a given encoder does); `incremental`, `seekable` and
 `access_pattern` (decode: `dyn_incremental_decoder`,
 `push_decoder_from_source`, and how the incremental decoder reads).
 

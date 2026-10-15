@@ -29,6 +29,119 @@ pub struct EncodeOutput {
 #[cfg(target_pointer_width = "64")]
 const _: () = assert!(core::mem::size_of::<EncodeOutput>() == 96);
 
+/// When an encoder's bytes become available, as reported by
+/// [`Encoder::begin`](crate::encode::Encoder::begin).
+///
+/// [`EncodeCapabilities::streaming_output`](crate::encode::EncodeCapabilities::streaming_output)
+/// says a codec *can* stream. This says whether *this* encoder, with its
+/// configuration, image and metadata, will. The answer often depends on
+/// all three: a JPEG encoder streams with fixed Huffman tables but must
+/// see every block before it can write optimized ones; a format stored
+/// bottom-up cannot write its first row until it has the last.
+///
+/// Drivers use it to choose a strategy before any row moves: an HTTP
+/// response can send a `Content-Length` when the output comes all at once
+/// and use chunked transfer when it streams; a pipeline can size its
+/// buffers from [`lag_rows`](Self::lag_rows).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct OutputTiming {
+    /// `None`: everything arrives from `finish`.
+    lag_rows: Option<u32>,
+}
+
+impl OutputTiming {
+    /// All encoded bytes arrive from
+    /// [`Encoder::finish`](crate::encode::Encoder::finish);
+    /// [`pending_output`](crate::encode::Encoder::pending_output) stays empty.
+    pub const AT_FINISH: Self = Self { lag_rows: None };
+
+    /// Encoded bytes stream through
+    /// [`pending_output`](crate::encode::Encoder::pending_output) as rows
+    /// are pushed, holding back at most `lag_rows` pushed rows.
+    ///
+    /// Once more than `lag_rows` rows have been pushed, every row but the
+    /// last `lag_rows` has been encoded and its bytes are pending, apart
+    /// from a few bytes' worth of coder state (bits that do not fill a
+    /// byte, a run not yet closed). The lag
+    /// covers whatever the encoder must see before it can commit a row:
+    /// a block row, a lookahead window, an adaptive-quantization delay.
+    /// Report an upper bound, below the image height; `0` means each row is
+    /// written as it arrives. See [`Encoder::begin`](crate::encode::Encoder::begin)
+    /// for how the lag is counted.
+    pub const fn streaming(lag_rows: u32) -> Self {
+        Self {
+            lag_rows: Some(lag_rows),
+        }
+    }
+
+    /// Whether bytes become available before `finish`.
+    pub const fn streams(&self) -> bool {
+        self.lag_rows.is_some()
+    }
+
+    /// The most pushed rows the encoder holds before their bytes are
+    /// pending; `None` when nothing streams.
+    pub const fn lag_rows(&self) -> Option<u32> {
+        self.lag_rows
+    }
+}
+
+impl Default for OutputTiming {
+    /// [`AT_FINISH`](Self::AT_FINISH): the answer that is always true.
+    fn default() -> Self {
+        Self::AT_FINISH
+    }
+}
+
+/// When an animation encoder's bytes become available, as reported by
+/// [`AnimationFrameEncoder::begin`](crate::encode::AnimationFrameEncoder::begin).
+///
+/// The animation counterpart of [`OutputTiming`], counted in frames: GIF
+/// writes each frame as it arrives, a shared palette holds frames until it
+/// is built, and a container that writes its size first holds everything.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct AnimationOutputTiming {
+    /// `None`: everything arrives from `finish`.
+    lag_frames: Option<u32>,
+}
+
+impl AnimationOutputTiming {
+    /// All encoded bytes arrive from
+    /// [`AnimationFrameEncoder::finish`](crate::encode::AnimationFrameEncoder::finish).
+    pub const AT_FINISH: Self = Self { lag_frames: None };
+
+    /// Encoded bytes stream through
+    /// [`pending_output`](crate::encode::AnimationFrameEncoder::pending_output)
+    /// as frames are pushed, holding back at most `lag_frames` pushed frames.
+    ///
+    /// Once more than `lag_frames` frames have been pushed, every frame but
+    /// the last `lag_frames` has its bytes pending, apart from a few bytes of
+    /// coder state. `0` means each frame is written as it is pushed.
+    pub const fn streaming(lag_frames: u32) -> Self {
+        Self {
+            lag_frames: Some(lag_frames),
+        }
+    }
+
+    /// Whether bytes become available before `finish`.
+    pub const fn streams(&self) -> bool {
+        self.lag_frames.is_some()
+    }
+
+    /// The most pushed frames the encoder holds before their bytes are
+    /// pending; `None` when nothing streams.
+    pub const fn lag_frames(&self) -> Option<u32> {
+        self.lag_frames
+    }
+}
+
+impl Default for AnimationOutputTiming {
+    /// [`AT_FINISH`](Self::AT_FINISH): the answer that is always true.
+    fn default() -> Self {
+        Self::AT_FINISH
+    }
+}
+
 impl EncodeOutput {
     /// Create a new encode output.
     ///
@@ -342,6 +455,7 @@ pub struct AnimationFrame<'a> {
     pixels: PixelSlice<'a>,
     duration: crate::animation::FrameDuration,
     frame_index: u32,
+    pts: Option<crate::time::Timestamp>,
 }
 
 impl<'a> AnimationFrame<'a> {
@@ -351,6 +465,7 @@ impl<'a> AnimationFrame<'a> {
             pixels,
             duration: crate::animation::FrameDuration::from_millis(duration_ms),
             frame_index,
+            pts: None,
         }
     }
 
@@ -364,7 +479,22 @@ impl<'a> AnimationFrame<'a> {
             pixels,
             duration,
             frame_index,
+            pts: None,
         }
+    }
+
+    /// Attach the presentation timestamp the source recorded for this
+    /// frame, when it has one (a video container or a timed animation).
+    pub fn with_pts(mut self, pts: Option<crate::time::Timestamp>) -> Self {
+        self.pts = pts;
+        self
+    }
+
+    /// The presentation timestamp the source recorded, if any. Animation
+    /// formats that store only durations leave it `None`; nothing invents
+    /// one from the durations.
+    pub fn pts(&self) -> Option<crate::time::Timestamp> {
+        self.pts
     }
 
     /// Exact encoded source duration, without playback clamps or rounding.
@@ -427,6 +557,7 @@ impl<'a> AnimationFrame<'a> {
             pixels,
             duration: self.duration,
             frame_index: self.frame_index,
+            pts: self.pts,
             extensions: Extensions::new(),
         }
     }
@@ -439,6 +570,7 @@ impl core::fmt::Debug for AnimationFrame<'_> {
             .field("duration_ms", &self.duration.legacy_millis())
             .field("duration", &self.duration)
             .field("frame_index", &self.frame_index)
+            .field("pts", &self.pts)
             .finish()
     }
 }
@@ -452,6 +584,7 @@ pub struct OwnedAnimationFrame {
     pixels: PixelBuffer,
     duration: crate::animation::FrameDuration,
     frame_index: u32,
+    pts: Option<crate::time::Timestamp>,
     extensions: Extensions,
 }
 
@@ -466,8 +599,21 @@ impl OwnedAnimationFrame {
             pixels,
             duration,
             frame_index,
+            pts: None,
             extensions: Extensions::new(),
         }
+    }
+
+    /// Attach the presentation timestamp the source recorded; see
+    /// [`AnimationFrame::pts`].
+    pub fn with_pts(mut self, pts: Option<crate::time::Timestamp>) -> Self {
+        self.pts = pts;
+        self
+    }
+
+    /// The presentation timestamp the source recorded, if any.
+    pub fn pts(&self) -> Option<crate::time::Timestamp> {
+        self.pts
     }
 
     /// Exact encoded source duration, without playback clamps or rounding.
@@ -481,6 +627,7 @@ impl OwnedAnimationFrame {
             pixels,
             duration: crate::animation::FrameDuration::from_millis(duration_ms),
             frame_index,
+            pts: None,
             extensions: Extensions::new(),
         }
     }
@@ -512,6 +659,7 @@ impl OwnedAnimationFrame {
     /// Borrow as a [`AnimationFrame`].
     pub fn as_animation_frame(&self) -> AnimationFrame<'_> {
         AnimationFrame::with_duration(self.pixels.as_slice(), self.duration, self.frame_index)
+            .with_pts(self.pts)
     }
 
     /// Attach a typed extension value (e.g., per-frame codec metadata).
@@ -553,6 +701,7 @@ impl core::fmt::Debug for OwnedAnimationFrame {
             .field("duration_ms", &self.duration.legacy_millis())
             .field("duration", &self.duration)
             .field("frame_index", &self.frame_index)
+            .field("pts", &self.pts)
             .field("extensions", &self.extensions)
             .finish()
     }
@@ -696,6 +845,19 @@ mod tests {
             crate::animation::FrameDuration::from_millis(100)
         );
         assert_eq!(borrowed.frame_index(), 5);
+    }
+
+    #[test]
+    fn pts_survives_owning_and_borrowing() {
+        use crate::time::{TimeBase, Timestamp};
+        let buf = make_rgb8_buffer(2, 2);
+        let pts = Timestamp::new(-3, TimeBase::new(1001, 30000).unwrap());
+        let frame = AnimationFrame::new(buf.as_slice(), 40, 0);
+        assert_eq!(frame.pts(), None);
+        let frame = frame.with_pts(Some(pts));
+        let owned = frame.to_owned_frame();
+        assert_eq!(owned.pts(), Some(pts));
+        assert_eq!(owned.as_animation_frame().pts(), Some(pts));
     }
 
     #[test]

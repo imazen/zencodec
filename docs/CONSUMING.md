@@ -185,7 +185,7 @@ if let Some([min, max]) = caps.quality_range() {
 
 // Advanced encode paths
 if caps.push_rows()   { /* push_rows() + finish() is supported */ }
-if caps.streaming_output() { /* begin() + pending_output() stream encoded bytes */ }
+if caps.streaming_output() { /* some configurations stream; begin() says which */ }
 if caps.encode_from() { /* encode_from() callback is supported */ }
 if caps.animation() { /* animation_frame_encoder() works */ }
 ```
@@ -449,10 +449,66 @@ within one step.
 **Transcode with bounded memory.** `tokio_io::transcode_async(decoder, encoder,
 &mut source, &mut writer, compute, opts, pulse)` routes rows into the encoder
 through `EncoderSink` and writes encoded bytes as they become available
-(encoders that declare `streaming_output`), so memory stays at the input
-window, one strip and the encoder's unsent output. Synchronously, drive a
-decoder into `EncoderSink::new(encoder)` and call `write_pending` between
-steps.
+(encoders whose `begin` reports a streaming `OutputTiming`), so memory stays
+at the input window, one strip and the encoder's unsent output.
+`EncoderSink::output_timing()` reports the encoder's answer once the decoder
+has declared the image. Synchronously, drive a decoder into
+`EncoderSink::new(encoder)` and call `write_pending` between steps.
+
+**Stream an encode you feed yourself.** For an image already in memory,
+`zencodec_io::encode_to_writer` does the whole loop and falls back to a
+one-shot encode when the configuration can't encode from rows:
+
+```rust
+let config = config.with_prefer_streaming(true);  // codec-agnostic ask
+let enc = config.job().with_metadata_policy(meta, policy).encoder()?;
+let report = zencodec_io::encode_to_writer(enc, pixels, &mut out)?;
+```
+
+Feeding rows as they are produced, `begin` declares the image and says when
+bytes arrive; send what is pending after `begin` (the header) and after each
+strip. `write_pending` writes and consumes together, so the same bytes are
+never sent twice:
+
+```rust
+use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
+use zencodec_io::write_pending;
+
+let mut enc = config.job().with_metadata_policy(meta, policy).encoder()?;
+let timing = enc.begin(width, height, descriptor)?;
+if !timing.streams() {
+    // Everything arrives from finish(): buffer, or send a Content-Length.
+}
+write_pending(&mut enc, &mut out)?;         // the header, right after begin
+for strip in strips {                       // preferred_strip_height() rows each
+    enc.push_rows(strip)?;
+    write_pending(&mut enc, &mut out)?;
+}
+out.write_all(enc.finish()?.data())?;
+```
+
+Under async, `zencodec_io::tokio_io::write_pending_async` is the same step;
+awaiting it before the next `push_rows` is the backpressure. To hand bytes
+onward as owned buffers (a `Bytes` body chunk, an upload part), call
+`enc.take_output(&mut Vec::new())` instead: encoders built on
+`OutputBuffer` give you their allocation without a copy.
+
+Animation encoders stream the same way, counted in frames:
+`AnimationFrameEncoder::begin(width, height, descriptor, frame_count)`
+returns an `AnimationOutputTiming`, and `write_pending_animation` drains
+after each `push_frame`. Give the frame count when you know it; formats
+that write it first (APNG) can stream only then.
+
+`timing.lag_rows()` is the most rows the encoder holds before their bytes
+are pending. A configuration that cannot encode from rows fails at `begin`
+with `UnsupportedOperation::RowLevelEncode`. If `push_rows` or `finish` fails
+after bytes went out, the file can't be completed: abort the transport
+(close the connection, abort the upload) instead of ending it normally.
+
+Measured end to end over HTTP (zqi `benchmarks/stream_http_2026-10-14`), a
+streaming encoder's first byte leaves within 0.25 ms instead of after the
+whole encode, and server memory under concurrent 12 MP requests drops from
+hundreds of MB to tens.
 
 **Pull-native codecs** (`capabilities().seekable()`) read from a source
 directly: `job.push_decoder_from_source(&mut source, &mut sink, &[])`, or
