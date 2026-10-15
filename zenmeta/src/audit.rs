@@ -20,6 +20,14 @@ pub struct Entry {
     value: String,
 }
 impl Entry {
+    #[cfg(feature = "c2pa")]
+    pub(crate) fn new(path: String, kind: String, value: String) -> Self {
+        Self { path, kind, value }
+    }
+    #[cfg(feature = "c2pa")]
+    pub(crate) fn set_path(&mut self, path: String) {
+        self.path = path;
+    }
     /// Directory/namespace path, including occurrence index for duplicate tags.
     pub fn path(&self) -> &str {
         &self.path
@@ -48,6 +56,14 @@ pub enum Finding {
     Limit,
     /// XMP XML is invalid or exceeds its parsing budget.
     InvalidXmp(String),
+    /// A JUMBF box or C2PA manifest-store structure could not be parsed; the text
+    /// names the path and the reason. Content below it was not inspected.
+    InvalidJumbf(String),
+    /// A CBOR item (C2PA claim, assertion or COSE structure) could not be parsed.
+    InvalidCbor { path: String, error: String },
+    /// Content kept but not interpreted: embedded files and thumbnails, unknown
+    /// boxes, long byte strings, unparsed certificates or timestamp tokens.
+    Opaque { path: String, bytes: usize },
 }
 /// Read-only metadata snapshot with explicit coverage findings.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -56,6 +72,19 @@ pub struct Report {
     findings: Vec<Finding>,
 }
 impl Report {
+    #[cfg(feature = "c2pa")]
+    pub(crate) fn from_parts(entries: Vec<Entry>, findings: Vec<Finding>) -> Self {
+        Self { entries, findings }
+    }
+    /// Inspect a C2PA manifest store (one JUMBF `c2pa` superbox, up to 16 MiB): every
+    /// manifest's claim and assertions, and the claim signature's COSE headers with
+    /// their certificates' names, serials, validity and alternative names and their
+    /// timestamp tokens' times. Nothing is verified. Container framing (PNG `caBX`,
+    /// reassembling JPEG APP11 packets) stays with the codec.
+    #[cfg(feature = "c2pa")]
+    pub fn c2pa(jumbf: &[u8]) -> Self {
+        crate::c2pa::inspect(jumbf)
+    }
     /// Inspect EXIF/TIFF up to 16 MiB. Preserve unknown tags and duplicate entries.
     pub fn exif(bytes: &[u8]) -> Self {
         let mut out = Self::default();

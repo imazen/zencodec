@@ -32,6 +32,7 @@ metadata-check:
     cargo check -p zenmeta --no-default-features --features audit
     cargo check -p zenmeta --no-default-features --features apple
     cargo check -p zenmeta --no-default-features --features inventory
+    cargo check -p zenmeta --no-default-features --features c2pa
     cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 # Compare the actual published contract, not an unpublished metadata branch.
