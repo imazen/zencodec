@@ -6,14 +6,14 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec-testkit.txt 106 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 1 lines (2 hidden + 0 excluded-feature)
+# files: zencodec-testkit.txt 107 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 1 lines (2 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                 2
 #   pub types (struct/enum/trait/alias)        23
 #   pub consts/statics                          2
-#   free functions                             35
+#   free functions                             36
 #   inherent methods                            7
 #   struct fields                               7
 #   enum variants                              14
@@ -22,10 +22,10 @@
 #   auto-trait exceptions                       4
 #
 # per-module pub lines:
-#   (root)                           70
+#   (root)                           71
 #   reference                        20
 
-## items (85 lines)
+## items (86 lines)
 
 pub mod zencodec_testkit
 pub mod reference
@@ -81,6 +81,7 @@ pub fn check_all<E, D>(E, D) -> Conformance where E: zencodec::traits::encoding:
 pub fn check_animation_cases<E, D>(E, D, bool, &[TimingCase<'_>]) -> Conformance where E: zencodec::traits::encoding::EncoderConfig + 'static, D: zencodec::traits::decoding::DecoderConfig + 'static, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder + core::marker::Send, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
 pub fn check_animation_cross_path_equivalence<E, D>(E, D, &[TestImage]) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
 pub fn check_animation_durations<D: zencodec::traits::decoding::DecoderConfig + 'static>(D, &[u8], &[zencodec::animation::FrameDuration]) -> Conformance
+pub fn check_animation_streaming_output_honesty<E, D>(E, D, &[TestImage]) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
 pub fn check_animation_timing<E, D>(E, D, zenpixels::buffer::PixelSlice<'_>, bool, &[(zencodec::animation::FrameDuration, core::option::Option<zencodec::animation::FrameDuration>)]) -> Conformance where E: zencodec::traits::encoding::EncoderConfig + 'static, D: zencodec::traits::decoding::DecoderConfig + 'static, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder + core::marker::Send, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
 pub fn check_animation_timing_unsupported<E, D>(E, D, zenpixels::buffer::PixelSlice<'_>) -> Conformance where E: zencodec::traits::encoding::EncoderConfig + 'static, D: zencodec::traits::decoding::DecoderConfig + 'static, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder + core::marker::Send, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder
 pub fn check_capability_honesty<E, D>(E, D, &TestImage) -> Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::AnimationFrameEnc: zencodec::traits::encoder::AnimationFrameEncoder

@@ -92,6 +92,15 @@ pub trait DynEncoder: Send {
         let _ = n;
     }
 
+    /// Append pending bytes to `into` and consume them; see
+    /// [`Encoder::take_output`](super::Encoder::take_output).
+    fn take_output(&mut self, into: &mut alloc::vec::Vec<u8>) {
+        let pending = self.pending_output();
+        let n = pending.len();
+        into.extend_from_slice(pending);
+        self.consume_output(n);
+    }
+
     /// Finalize after push_rows. Returns encoded output.
     fn finish(self: Box<Self>) -> Result<EncodeOutput, BoxedError>;
 
@@ -157,6 +166,10 @@ impl<E: Encoder + Send> DynEncoder for EncoderShim<E> {
         self.0.consume_output(n)
     }
 
+    fn take_output(&mut self, into: &mut alloc::vec::Vec<u8>) {
+        self.0.take_output(into)
+    }
+
     fn finish(self: Box<Self>) -> Result<EncodeOutput, BoxedError> {
         self.0.finish().map_err(|e| Box::new(e) as BoxedError)
     }
@@ -193,6 +206,40 @@ pub trait DynAnimationFrameEncoder: Send {
 
     /// Consume and downcast to the concrete frame encoder type.
     fn into_any(self: Box<Self>) -> Box<dyn Any>;
+
+    /// Declare the animation and learn when its bytes arrive; see
+    /// [`AnimationFrameEncoder::begin`].
+    fn begin(
+        &mut self,
+        width: u32,
+        height: u32,
+        descriptor: PixelDescriptor,
+        frame_count: Option<u32>,
+    ) -> Result<crate::encode::AnimationOutputTiming, BoxedError> {
+        let _ = (width, height, descriptor, frame_count);
+        Ok(crate::encode::AnimationOutputTiming::AT_FINISH)
+    }
+
+    /// Encoded bytes ready to send; see
+    /// [`AnimationFrameEncoder::pending_output`].
+    fn pending_output(&self) -> &[u8] {
+        &[]
+    }
+
+    /// Mark pending bytes as sent; see
+    /// [`AnimationFrameEncoder::consume_output`].
+    fn consume_output(&mut self, n: usize) {
+        let _ = n;
+    }
+
+    /// Append pending bytes to `into` and consume them; see
+    /// [`AnimationFrameEncoder::take_output`].
+    fn take_output(&mut self, into: &mut alloc::vec::Vec<u8>) {
+        let pending = self.pending_output();
+        let n = pending.len();
+        into.extend_from_slice(pending);
+        self.consume_output(n);
+    }
 
     /// Push a complete full-canvas frame.
     fn push_frame(
@@ -251,6 +298,30 @@ impl<F: AnimationFrameEncoder + Send + 'static> DynAnimationFrameEncoder
 
     fn into_any(self: Box<Self>) -> Box<dyn Any> {
         Box::new(self.0)
+    }
+
+    fn begin(
+        &mut self,
+        width: u32,
+        height: u32,
+        descriptor: PixelDescriptor,
+        frame_count: Option<u32>,
+    ) -> Result<crate::encode::AnimationOutputTiming, BoxedError> {
+        self.0
+            .begin(width, height, descriptor, frame_count)
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
+    fn pending_output(&self) -> &[u8] {
+        self.0.pending_output()
+    }
+
+    fn consume_output(&mut self, n: usize) {
+        self.0.consume_output(n)
+    }
+
+    fn take_output(&mut self, into: &mut alloc::vec::Vec<u8>) {
+        self.0.take_output(into)
     }
 
     fn push_frame(

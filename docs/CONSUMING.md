@@ -455,31 +455,49 @@ at the input window, one strip and the encoder's unsent output.
 has declared the image. Synchronously, drive a decoder into
 `EncoderSink::new(encoder)` and call `write_pending` between steps.
 
-**Stream an encode you feed yourself.** `begin` declares the image and says
-when bytes arrive; send what is pending after each strip:
+**Stream an encode you feed yourself.** For an image already in memory,
+`zencodec_io::encode_to_writer` does the whole loop and falls back to a
+one-shot encode when the configuration can't encode from rows:
+
+```rust
+let config = config.with_prefer_streaming(true);  // codec-agnostic ask
+let enc = config.job().with_metadata_policy(meta, policy).encoder()?;
+let report = zencodec_io::encode_to_writer(enc, pixels, &mut out)?;
+```
+
+Feeding rows as they are produced, `begin` declares the image and says when
+bytes arrive; send what is pending after `begin` (the header) and after each
+strip. `write_pending` writes and consumes together, so the same bytes are
+never sent twice:
 
 ```rust
 use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
+use zencodec_io::write_pending;
 
-let config = config.with_prefer_streaming(true);  // codec-agnostic ask
 let mut enc = config.job().with_metadata_policy(meta, policy).encoder()?;
 let timing = enc.begin(width, height, descriptor)?;
 if !timing.streams() {
     // Everything arrives from finish(): buffer, or send a Content-Length.
 }
-let mut send = |enc: &mut _, out: &mut _| -> std::io::Result<()> {
-    let n = enc.pending_output().len();
-    out.write_all(enc.pending_output())?;   // nothing to write unless it streams
-    enc.consume_output(n);                  // forget this and bytes repeat
-    Ok(())
-};
-send(&mut enc, &mut out)?;                  // the header, right after begin
+write_pending(&mut enc, &mut out)?;         // the header, right after begin
 for strip in strips {                       // preferred_strip_height() rows each
     enc.push_rows(strip)?;
-    send(&mut enc, &mut out)?;
+    write_pending(&mut enc, &mut out)?;
 }
 out.write_all(enc.finish()?.data())?;
 ```
+
+Under async, `zencodec_io::tokio_io::write_pending_async` is the same step;
+awaiting it before the next `push_rows` is the backpressure. To hand bytes
+onward as owned buffers (a `Bytes` body chunk, an upload part), call
+`enc.take_output(&mut Vec::new())` instead: encoders built on
+`OutputBuffer` give you their allocation without a copy.
+
+Animation encoders stream the same way, counted in frames:
+`AnimationFrameEncoder::begin(width, height, descriptor, frame_count)`
+returns an `AnimationOutputTiming`, and `write_pending_animation` drains
+after each `push_frame`. Give the frame count when you know it; formats
+that write it first (APNG) can stream only then.
 
 `timing.lag_rows()` is the most rows the encoder holds before their bytes
 are pending. A configuration that cannot encode from rows fails at `begin`

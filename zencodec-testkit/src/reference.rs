@@ -50,8 +50,8 @@ use zencodec::decode::{
     Progress, Request, SinkError, SourceColor, StepError, StreamingDecode,
 };
 use zencodec::encode::{
-    AnimationFrameEncoder, EncodeCapabilities, EncodeJob, EncodeOutput, EncodePolicy, Encoder,
-    EncoderConfig, OutputTiming,
+    AnimationFrameEncoder, AnimationOutputTiming, EncodeCapabilities, EncodeJob, EncodeOutput,
+    EncodePolicy, Encoder, EncoderConfig, OutputBuffer, OutputTiming,
 };
 use zencodec::gainmap::{
     DecodedGainMap, GainMapInfo, GainMapPresence, GainMapRender, GainMapSource, Iso21496Format,
@@ -1001,11 +1001,11 @@ impl EncodeJob for RefEncodeJob {
             metadata,
             gain_map: self.gain_map,
             accumulated: Vec::new(),
+            out: OutputBuffer::new(),
             width: None,
             rows: 0,
             desc: None,
             declared_height: None,
-            drained: 0,
         })
     }
 
@@ -1016,6 +1016,7 @@ impl EncodeJob for RefEncodeJob {
             gain_map: self.gain_map,
             frames: Vec::new(),
             timing: zencodec::animation::TimingQuantizer::new(1000, u32::MAX.into()).unwrap(),
+            streaming: None,
         })
     }
 }
@@ -1031,14 +1032,14 @@ impl EncodeJob for RefEncodeJob {
 pub struct RefEnc {
     metadata: Metadata,
     gain_map: Option<GainMapWire>,
-    /// Without `begin`: raw rows. With `begin`: the encoded file so far,
-    /// of which `accumulated[..drained]` was handed out.
+    /// Without `begin`: raw rows.
     accumulated: Vec<u8>,
+    /// With `begin`: the encoded file not yet handed out.
+    out: OutputBuffer,
     width: Option<u32>,
     rows: u32,
     desc: Option<PixelDescriptor>,
     declared_height: Option<u32>,
-    drained: usize,
 }
 
 impl Encoder for RefEnc {
@@ -1079,8 +1080,9 @@ impl Encoder for RefEnc {
         self.width = Some(width);
         self.desc = Some(desc);
         self.declared_height = Some(height);
+        let file = self.out.vec_mut();
         write_header(
-            &mut self.accumulated,
+            file,
             width,
             height,
             1,
@@ -1088,7 +1090,7 @@ impl Encoder for RefEnc {
             &self.metadata,
             self.gain_map.as_ref(),
         );
-        push_u32(&mut self.accumulated, 0); // duration
+        push_u32(file, 0); // duration
         // Each row is appended as it arrives.
         Ok(OutputTiming::streaming(0))
     }
@@ -1110,32 +1112,30 @@ impl Encoder for RefEnc {
                 "push_rows: more than the {h} rows declared at begin"
             )));
         }
+        let dest = match self.declared_height {
+            Some(_) => self.out.vec_mut(),
+            None => &mut self.accumulated,
+        };
         for y in 0..rows.rows() {
-            self.accumulated.extend_from_slice(rows.row(y));
+            dest.extend_from_slice(rows.row(y));
             self.rows += 1;
         }
         Ok(())
     }
 
     fn pending_output(&self) -> &[u8] {
-        match self.declared_height {
-            Some(_) => &self.accumulated[self.drained..],
-            None => &[],
-        }
+        self.out.pending()
     }
 
     fn consume_output(&mut self, n: usize) {
-        if self.declared_height.is_none() {
-            return;
-        }
-        self.drained = (self.drained + n).min(self.accumulated.len());
-        if self.drained == self.accumulated.len() {
-            self.accumulated.clear();
-            self.drained = 0;
-        }
+        self.out.consume(n);
     }
 
-    fn finish(mut self) -> Result<EncodeOutput, RefError> {
+    fn take_output(&mut self, into: &mut Vec<u8>) {
+        self.out.take_into(into);
+    }
+
+    fn finish(self) -> Result<EncodeOutput, RefError> {
         if let Some(h) = self.declared_height {
             if self.rows != h {
                 return Err(RefError::Invalid(format!(
@@ -1143,8 +1143,10 @@ impl Encoder for RefEnc {
                     self.rows
                 )));
             }
-            self.accumulated.drain(..self.drained);
-            return Ok(EncodeOutput::new(self.accumulated, ImageFormat::Pnm));
+            return Ok(EncodeOutput::new(
+                self.out.into_remaining(),
+                ImageFormat::Pnm,
+            ));
         }
         let w = self
             .width
@@ -1160,11 +1162,27 @@ impl Encoder for RefEnc {
 }
 
 /// Reference animation encoder.
+///
+/// The file starts with the frame count, so like APNG it streams only when
+/// [`begin`](AnimationFrameEncoder::begin) declares one: then the header is
+/// written at once and each frame as it is pushed. Otherwise frames
+/// accumulate and the file is built at `finish`.
 pub struct RefAnimEnc {
     timing: zencodec::animation::TimingQuantizer,
     metadata: Metadata,
     gain_map: Option<GainMapWire>,
     frames: Vec<(Vec<u8>, u32, u32, u32, PixelDescriptor)>, // bytes, w, h, dur, desc
+    streaming: Option<RefAnimStream>,
+}
+
+/// A streaming animation: what `begin` declared, and the file so far.
+struct RefAnimStream {
+    width: u32,
+    height: u32,
+    desc: PixelDescriptor,
+    frame_count: u32,
+    pushed: u32,
+    out: OutputBuffer,
 }
 
 impl AnimationFrameEncoder for RefAnimEnc {
@@ -1184,12 +1202,90 @@ impl AnimationFrameEncoder for RefAnimEnc {
             s.check()?;
         }
         let (w, h, desc) = (pixels.width(), pixels.rows(), pixels.descriptor());
+        if let Some(st) = &mut self.streaming {
+            if (w, h, desc) != (st.width, st.height, st.desc) {
+                return Err(RefError::Invalid(
+                    "push_frame: frame differs from the canvas declared at begin".into(),
+                ));
+            }
+            if st.pushed == st.frame_count {
+                return Err(RefError::Invalid(format!(
+                    "push_frame: more than the {} frames declared at begin",
+                    st.frame_count
+                )));
+            }
+            let file = st.out.vec_mut();
+            push_u32(file, duration_ms);
+            for y in 0..h {
+                file.extend_from_slice(pixels.row(y));
+            }
+            st.pushed += 1;
+            return Ok(());
+        }
         let mut bytes = Vec::with_capacity(w as usize * h as usize * desc.bytes_per_pixel());
         for y in 0..h {
             bytes.extend_from_slice(pixels.row(y));
         }
         self.frames.push((bytes, w, h, duration_ms, desc));
         Ok(())
+    }
+
+    fn begin(
+        &mut self,
+        width: u32,
+        height: u32,
+        desc: PixelDescriptor,
+        frame_count: Option<u32>,
+    ) -> Result<AnimationOutputTiming, RefError> {
+        if self.streaming.is_some() {
+            return Err(RefError::Invalid("begin called twice".into()));
+        }
+        if !self.frames.is_empty() {
+            return Err(RefError::Invalid("begin after push_frame".into()));
+        }
+        // The header carries the frame count: without one, nothing can be
+        // written before `finish`.
+        let Some(frame_count) = frame_count else {
+            return Ok(AnimationOutputTiming::AT_FINISH);
+        };
+        if frame_count == 0 {
+            return Err(RefError::Invalid("no frames".into()));
+        }
+        let mut out = OutputBuffer::new();
+        write_header(
+            out.vec_mut(),
+            width,
+            height,
+            frame_count,
+            desc.bytes_per_pixel() as u8,
+            &self.metadata,
+            self.gain_map.as_ref(),
+        );
+        self.streaming = Some(RefAnimStream {
+            width,
+            height,
+            desc,
+            frame_count,
+            pushed: 0,
+            out,
+        });
+        Ok(AnimationOutputTiming::streaming(0))
+    }
+
+    fn pending_output(&self) -> &[u8] {
+        self.streaming.as_ref().map_or(&[], |st| st.out.pending())
+    }
+
+    fn consume_output(&mut self, n: usize) {
+        if let Some(st) = &mut self.streaming {
+            st.out.consume(n);
+        }
+    }
+
+    fn take_output(&mut self, into: &mut Vec<u8>) {
+        if let Some(st) = &mut self.streaming {
+            st.out.take_into(into);
+        }
     }
 
     fn push_frame_exact(
@@ -1224,6 +1320,15 @@ impl AnimationFrameEncoder for RefAnimEnc {
     fn finish(self, stop: Option<&dyn Stop>) -> Result<EncodeOutput, RefError> {
         if let Some(s) = stop {
             s.check()?;
+        }
+        if let Some(st) = self.streaming {
+            if st.pushed != st.frame_count {
+                return Err(RefError::Invalid(format!(
+                    "finish: {} frames pushed, {} declared at begin",
+                    st.pushed, st.frame_count
+                )));
+            }
+            return Ok(EncodeOutput::new(st.out.into_remaining(), ImageFormat::Pnm));
         }
         let (first_bytes, w, h, _, desc) = self
             .frames

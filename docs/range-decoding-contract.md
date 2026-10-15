@@ -302,13 +302,14 @@ with only a `Stop` passes `how_far::StopOnly::borrowed(&stop)`.
 
 ## 7. Streaming encode and transcode
 
-`Encoder` gains three provided methods, all optional:
+`Encoder` gains four provided methods, all optional:
 
 ```rust
 fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor)
     -> Result<OutputTiming, Self::Error>;   // declare the image; learn when bytes arrive
 fn pending_output(&self) -> &[u8];          // encoded bytes ready to send
 fn consume_output(&mut self, n: usize);     // mark them sent
+fn take_output(&mut self, into: &mut Vec<u8>); // append them to `into` and mark them sent
 ```
 
 `begin` is the negotiation point for a row-level encode. The encoder checks
@@ -347,9 +348,12 @@ Written on `Encoder::begin`, enforced where marked by
   understated lag and a stall after the first strip). A coder without
   row-aligned output claims a lag by flushing on a row schedule fixed at
   `begin`.
-- **Bytes.** Draining never changes the file: draining all, uneven prefixes
-  and more than is pending (which clamps) all give the undrained bytes
-  (checked). `begin` may choose framing that makes the file differ from
+- **Declaring a zero size.** `begin(0, h)` or `begin(w, 0)` is accepted
+  exactly when `encode()` of that size succeeds (checked for streaming
+  encoders).
+- **Bytes.** Draining never changes the file: draining all, uneven prefixes,
+  more than is pending (which clamps) and `take_output` all give the
+  undrained bytes (checked). `begin` may choose framing that makes the file differ from
   `encode()`'s, never the pixels (checked: same decoded pixels).
 - **Errors.** After an error from `push_rows` or `finish` the encode cannot
   complete. Bytes already handed out are a prefix of a file that will never
@@ -393,23 +397,47 @@ its image from the timing the default configuration reports.
   "streams if the destination can seek back to patch a size") is additive.
   Encoders that write a size or index after the data and could patch it in
   place need that; today they report `AT_FINISH`.
-- **No owned-buffer handoff yet.** A driver copies `pending_output` once
-  (into a socket write, a `Bytes`, a `PipeWriter` segment). Measured on
-  the end-to-end HTTP bench, that copy is a small part of even raw formats'
-  cost. A provided `take_output(&mut self, into: &mut Vec<u8>)`, which an
-  encoder could satisfy by swapping its buffer, and a shared output-buffer
-  helper for implementers are additive later.
+- **An owned handoff on top of the pull.** `take_output(&mut self, into:
+  &mut Vec<u8>)` appends the pending bytes to `into` and consumes them. Its
+  default copies. An encoder that keeps its output in `OutputBuffer` swaps
+  allocations when `into` is empty, so a driver that hands each batch on
+  as an owned buffer (a hyper `Bytes` chunk, an upload part) never copies.
+  A writer-provided buffer (`IBufferWriter`'s `GetMemory`/`Advance`) was
+  not adopted: an encoder cannot size its output per row, so it would have
+  to negotiate buffer sizes in every codec.
+- **One output buffer for every codec.** `OutputBuffer` holds what each
+  streaming codec had written separately: the consumed-prefix cursor, the
+  compaction (drop the sent prefix once it is at least 64 KiB and half the
+  buffer), the clamp on an over-large consume, the count of bytes handed
+  out for `max_output_bytes`, and the swapping `take_into`. A codec that
+  writes through a `Vec<u8>` uses `vec_mut()`.
+- **Animation streams the same way, counted in frames.**
+  `AnimationFrameEncoder::begin(width, height, descriptor, frame_count)`
+  returns an `AnimationOutputTiming` (`AT_FINISH` or
+  `streaming(lag_frames)`), with the same `pending_output` /
+  `consume_output` / `take_output` and the same rules counted in frames.
+  `frame_count` is optional because most callers know it (a transcode
+  from a probed file) but a live source does not; formats that write the
+  count first (APNG's `acTL`, the reference format) stream only when it is
+  given, and finishing after a different number of frames is an error.
+  `check_animation_streaming_output_honesty` enforces the rules.
 - **Out of scope for now:** streaming from `encode_from` (it returns the
-  whole file; drivers that stream use `push_rows`) and from
-  `AnimationFrameEncoder` (frame-at-a-time output is a natural, additive
-  extension with the same `pending_output` pair; GIF, APNG and animated
-  WebP will want it first).
+  whole file; drivers that stream use `push_rows`).
 
 `EncoderSink` is the bridge: a `DecodeRowSink` that forwards `begin`, hands
 the decoder its own strip buffer and pushes each strip to the encoder when
 the next one is requested (no pixel is copied between them), and exposes
-`pending_output`/`write_pending`. A decode-to-encode transcode then holds
-the input window, one strip, and the encoder's undrained output.
+`pending_output`/`take_output`/`write_pending`. A decode-to-encode
+transcode then holds the input window, one strip, and the encoder's
+undrained output.
+
+For an image already in memory, `zencodec_io::encode_to_writer(encoder,
+pixels, &mut writer)` runs the whole loop: `begin`, strips of at least 16
+rows, a write after the header and after each strip, `finish`. It falls
+back to one-shot `encode` when `begin` declines row-level encode.
+`write_pending` / `write_pending_animation` (and `tokio_io::write_pending_async`)
+are the single drain step, which writes and consumes together so the same
+bytes are never sent twice.
 
 ---
 

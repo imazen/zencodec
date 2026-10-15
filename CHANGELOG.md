@@ -22,6 +22,16 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
   reference codec implements both sans-I/O paths; the minimal codec declares neither.
   The testkit now depends on `zencodec-io` for its slice driver and collect sink, so
   `zencodec-io` must publish before the testkit can.
+- `check_streaming_output_honesty` also drains with `take_output` (into empty and
+  non-empty vectors) and requires `begin` with a zero width or height to agree with
+  `encode` of that size. `check_animation_streaming_output_honesty` (run by
+  `check_all`, with enough frames for the reported lag) verifies
+  `AnimationOutputTiming`: lag below a declared frame count, bytes pending across
+  every lag window, identical bytes drained, taken and undrained, the decoded frames
+  and their durations, a refused second `begin`, and a refused `finish` short of the
+  declared count. The reference animation encoder streams when the frame count is
+  declared. Five misbehaving wrappers in `tests/streaming_output.rs` show each new
+  rule is caught.
 - `check_streaming_output_honesty` now enforces the rules: lag below the height;
   bytes pending across every lag window (an understated lag or a stall after one
   strip fails); full, uneven and over-sized drains give identical bytes; a second
@@ -222,6 +232,20 @@ removes that whole class).
   framing, never pixels; `consume_output` clamps; after a `push_rows`/`finish`
   error a driver that sent bytes aborts its transport; `max_output_bytes` bounds
   the whole file.
+- `Encoder::take_output` / `DynEncoder::take_output` (provided; the default copies
+  pending bytes and consumes them) and `zencodec::encode::OutputBuffer`, the output
+  side of a streaming encoder that codecs had each written separately: consumed
+  prefix, compaction, clamped consume, a handed-out count for `max_output_bytes`,
+  and a `take_into` that swaps allocations when the destination is empty.
+- Animation streaming: `AnimationFrameEncoder::begin(width, height, descriptor,
+  frame_count)` returns an `AnimationOutputTiming` (`AT_FINISH` or
+  `streaming(lag_frames)`), with `pending_output` / `consume_output` /
+  `take_output`, all provided; forwarded by `DynAnimationFrameEncoder`. The rules
+  match `Encoder::begin`, counted in frames; a declared frame count is binding.
+- `zencodec-io` (unpublished): `encode_to_writer` (begin, 16-row-or-larger strips,
+  a write after the header and each strip, one-shot fallback when `begin` declines
+  row-level encode), `write_pending`, `write_pending_animation`,
+  `tokio_io::write_pending_async`, and `EncoderSink::take_output`.
 - `DecodeRowSink::accepts_provisional` and `provide_pass_buffer` (defaulted): a sink
   opts into progressive passes; final-only sinks are unchanged.
 - Workspace crates (unpublished): `zencodec-io` and `zencodec-coroutine`

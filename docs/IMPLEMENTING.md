@@ -822,7 +822,14 @@ fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor)
     -> Result<OutputTiming, MyError>;   // declare the image; say when bytes arrive
 fn pending_output(&self) -> &[u8];      // encoded bytes not yet handed out
 fn consume_output(&mut self, n: usize); // the caller sent the first n
+fn take_output(&mut self, into: &mut Vec<u8>); // hand them over (default copies)
 ```
+
+Keep the output in a `zencodec::encode::OutputBuffer` and these three are
+one line each (`out.pending()`, `out.consume(n)`, `out.take_into(into)`),
+`finish` returns `out.into_remaining()`, and `out.total()` is the number to
+check against `max_output_bytes`. Writers that need a `Vec<u8>` append
+through `out.vec_mut()`.
 
 `begin` comes before the first `push_rows` and declares the final size, so the
 header can be written at once. Decide there, from the configuration, image and
@@ -863,15 +870,32 @@ Declare `with_push_rows(true)` and, if any configuration streams,
 `with_streaming_output(true)`. `zencodec_io::EncoderSink` connects an
 incremental decoder to your encoder.
 
+`begin(0, h)` and `begin(w, 0)` answer as `encode()` of that size does:
+accept both or refuse both.
+
+### Animation
+
+An animation encoder that can write frames as they arrive implements
+`AnimationFrameEncoder::begin(width, height, descriptor, frame_count)` and
+the same `pending_output` / `consume_output` / `take_output`, returning an
+`AnimationOutputTiming` counted in frames. Write the header at `begin` and
+each frame's bytes when you have committed it (GIF writes a frame when it
+arrives; a shared palette holds frames until it is built; frame
+differencing that picks a disposal from the next frame holds one). If your
+format writes the frame count first, stream only when `frame_count` is
+`Some`, and fail `finish` when a different number of frames arrived. A
+format that writes the file size first (RIFF, ISOBMFF without a seekable
+destination) reports `AT_FINISH`.
+
 ## Conformance
 
 `zencodec_testkit::check_all(encoder_config, decoder_config)` runs, among the
 rest, `check_incremental_contract` (chunked input against one-shot pixels,
 row order, termination, cancellation, truncation) for decoders that declare
 `incremental`, the seekable honesty check for `seekable`, and
-`check_streaming_output_honesty` for encoders, in both directions. That check
-runs the configuration you pass; call it again with a configuration that
-streams if your default does not.
+`check_streaming_output_honesty` and `check_animation_streaming_output_honesty`
+for encoders, in both directions. Those checks run the configuration you pass;
+call them again with a configuration that streams if your default does not.
 
 ## Checklist
 
@@ -894,6 +918,8 @@ Before calling your implementation complete:
 - [ ] Streaming encoders: `begin` returns the `OutputTiming` this
       configuration delivers and writes the header when it streams;
       `check_streaming_output_honesty` passes with a streaming configuration
+- [ ] Streaming animation encoders: `check_animation_streaming_output_honesty`
+      passes with and without a declared frame count
 
 ## Reference Implementation
 

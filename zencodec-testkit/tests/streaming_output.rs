@@ -1,17 +1,21 @@
-//! `check_streaming_output_honesty` against the reference encoder (honest)
-//! and against wrappers that misreport their `OutputTiming` (each must be
+//! `check_streaming_output_honesty` and
+//! `check_animation_streaming_output_honesty` against the reference encoder
+//! (honest) and against wrappers that misreport their timing (each must be
 //! caught).
 
 #![allow(deprecated)] // with_metadata delegates to the wrapped job
 
 use zencodec::encode::{
-    EncodeCapabilities, EncodeJob, EncodeOutput, EncodePolicy, Encoder, EncoderConfig, OutputTiming,
+    AnimationFrameEncoder, AnimationOutputTiming, EncodeCapabilities, EncodeJob, EncodeOutput,
+    EncodePolicy, Encoder, EncoderConfig, OutputTiming,
 };
 use zencodec::{ImageFormat, Metadata, ResourceLimits, StopToken, UnsupportedOperation};
 use zencodec_testkit::reference::{
-    RefEnc, RefEncodeJob, RefError, ReferenceDecoderConfig, ReferenceEncoderConfig,
+    RefAnimEnc, RefEnc, RefEncodeJob, RefError, ReferenceDecoderConfig, ReferenceEncoderConfig,
 };
-use zencodec_testkit::{TestImage, check_streaming_output_honesty};
+use zencodec_testkit::{
+    TestImage, check_animation_streaming_output_honesty, check_streaming_output_honesty,
+};
 use zenpixels::{PixelDescriptor, PixelSlice};
 
 /// How a [`Liar`] misbehaves.
@@ -23,6 +27,8 @@ const HONEST_LAG: u8 = 4; // holds rows back and says so
 const HUGE_LAG: u8 = 5; // reports streaming(1_000_000) and holds every row
 const STALL: u8 = 6; // reports lag 0, shows the first strip, then holds the rest
 const BAD_CONSUME: u8 = 7; // a partial consume_output drops one byte too many
+const BAD_TAKE: u8 = 8; // take_output drops the last pending byte
+const ZERO_REFUSE: u8 = 9; // begin refuses a zero size that encode accepts
 
 static STREAMING: EncodeCapabilities = EncodeCapabilities::new()
     .with_lossless(true)
@@ -139,6 +145,9 @@ impl<const F: u8> Encoder for LiarEnc<F> {
         if F == DECLINE {
             return Err(RefError::Unsupported(UnsupportedOperation::RowLevelEncode));
         }
+        if F == ZERO_REFUSE && (width == 0 || height == 0) {
+            return Err(RefError::Invalid("zero size".into()));
+        }
         let real = self.inner.begin(width, height, desc)?;
         assert_eq!(real, OutputTiming::streaming(0));
         self.take(true); // the header
@@ -180,6 +189,16 @@ impl<const F: u8> Encoder for LiarEnc<F> {
             n
         };
         self.drained = (self.drained + n).min(self.shown.len());
+    }
+    fn take_output(&mut self, into: &mut Vec<u8>) {
+        let pending = &self.shown[self.drained..];
+        let keep = if F == BAD_TAKE {
+            pending.len().saturating_sub(1)
+        } else {
+            pending.len()
+        };
+        into.extend_from_slice(&pending[..keep]);
+        self.drained = self.shown.len();
     }
     fn finish(mut self) -> Result<EncodeOutput, RefError> {
         let mut rest = self.shown.split_off(self.drained);
@@ -306,4 +325,252 @@ fn check_all_picks_an_image_tall_enough_for_the_lag() {
     // The reference streams with lag 0; check_all must still run the whole
     // streaming check (it would fail on a 24-row image only for a larger lag).
     zencodec_testkit::check_all(ReferenceEncoderConfig::new(), ReferenceDecoderConfig).unwrap();
+}
+
+#[test]
+fn a_take_output_that_drops_a_byte_is_caught() {
+    let e =
+        check_streaming_output_honesty(Liar::<BAD_TAKE>::default(), ReferenceDecoderConfig, &img())
+            .unwrap_err();
+    assert!(e.to_string().contains("take_output"), "{e}");
+}
+
+#[test]
+fn a_begin_stricter_than_encode_about_zero_sizes_is_caught() {
+    let e = check_streaming_output_honesty(
+        Liar::<ZERO_REFUSE>::default(),
+        ReferenceDecoderConfig,
+        &img(),
+    )
+    .unwrap_err();
+    assert!(e.to_string().contains("begin(0, 32) was refused"), "{e}");
+}
+
+// ===========================================================================
+// Animation
+// ===========================================================================
+
+const A_HONEST: u8 = 0; // the reference, passed through
+const A_HOLD: u8 = 1; // reports lag 0, holds every frame until finish
+const A_LEAK: u8 = 2; // reports AT_FINISH, exposes bytes anyway
+const A_HUGE: u8 = 3; // reports a lag as long as the animation
+const A_LOOSE_COUNT: u8 = 4; // finishes after fewer frames than declared
+
+#[derive(Clone, Debug, Default)]
+struct AnimLiar<const F: u8>(ReferenceEncoderConfig);
+
+struct AnimLiarJob<const F: u8>(RefEncodeJob);
+
+struct AnimLiarEnc<const F: u8> {
+    inner: RefAnimEnc,
+    shown: Vec<u8>,
+    held: Vec<u8>,
+    declared: Option<u32>,
+    pushed: u32,
+}
+
+impl<const F: u8> EncoderConfig for AnimLiar<F> {
+    type Error = RefError;
+    type Job = AnimLiarJob<F>;
+    fn format() -> ImageFormat {
+        ReferenceEncoderConfig::format()
+    }
+    fn supported_descriptors() -> &'static [PixelDescriptor] {
+        ReferenceEncoderConfig::supported_descriptors()
+    }
+    fn capabilities() -> &'static EncodeCapabilities {
+        ReferenceEncoderConfig::capabilities()
+    }
+    fn job(self) -> AnimLiarJob<F> {
+        AnimLiarJob(self.0.job())
+    }
+}
+
+impl<const F: u8> EncodeJob for AnimLiarJob<F> {
+    type Error = RefError;
+    type Enc = RefEnc;
+    type AnimationFrameEnc = AnimLiarEnc<F>;
+    fn with_stop(self, stop: StopToken) -> Self {
+        Self(self.0.with_stop(stop))
+    }
+    fn with_limits(self, limits: ResourceLimits) -> Self {
+        Self(self.0.with_limits(limits))
+    }
+    fn with_policy(self, policy: EncodePolicy) -> Self {
+        Self(self.0.with_policy(policy))
+    }
+    fn with_metadata(self, meta: Metadata) -> Self {
+        Self(self.0.with_metadata(meta))
+    }
+    fn with_loop_count(self, count: Option<u32>) -> Self {
+        Self(self.0.with_loop_count(count))
+    }
+    fn encoder(self) -> Result<RefEnc, RefError> {
+        self.0.encoder()
+    }
+    fn animation_frame_encoder(self) -> Result<AnimLiarEnc<F>, RefError> {
+        Ok(AnimLiarEnc {
+            inner: self.0.animation_frame_encoder()?,
+            shown: Vec::new(),
+            held: Vec::new(),
+            declared: None,
+            pushed: 0,
+        })
+    }
+}
+
+impl<const F: u8> AnimLiarEnc<F> {
+    fn take(&mut self) {
+        let mut bytes = Vec::new();
+        self.inner.take_output(&mut bytes);
+        if F == A_HOLD {
+            self.held.extend_from_slice(&bytes);
+        } else {
+            self.shown.extend_from_slice(&bytes);
+        }
+    }
+}
+
+impl<const F: u8> AnimationFrameEncoder for AnimLiarEnc<F> {
+    type Error = RefError;
+    fn reject(op: UnsupportedOperation) -> RefError {
+        RefError::Unsupported(op)
+    }
+    fn begin(
+        &mut self,
+        width: u32,
+        height: u32,
+        desc: PixelDescriptor,
+        frame_count: Option<u32>,
+    ) -> Result<AnimationOutputTiming, RefError> {
+        let real = self.inner.begin(width, height, desc, frame_count)?;
+        self.declared = frame_count;
+        // The header stays out of sight for A_HOLD.
+        self.take();
+        Ok(match (F, frame_count) {
+            (A_LEAK, _) => AnimationOutputTiming::AT_FINISH,
+            (A_HUGE, Some(n)) => AnimationOutputTiming::streaming(n),
+            _ => real,
+        })
+    }
+    fn push_frame(
+        &mut self,
+        pixels: PixelSlice<'_>,
+        duration_ms: u32,
+        stop: Option<&dyn zencodec::enough::Stop>,
+    ) -> Result<(), RefError> {
+        self.inner.push_frame(pixels, duration_ms, stop)?;
+        self.pushed += 1;
+        self.take();
+        Ok(())
+    }
+    fn pending_output(&self) -> &[u8] {
+        &self.shown
+    }
+    fn consume_output(&mut self, n: usize) {
+        let n = n.min(self.shown.len());
+        self.shown.drain(..n);
+    }
+    fn finish(self, stop: Option<&dyn zencodec::enough::Stop>) -> Result<EncodeOutput, RefError> {
+        if F == A_LOOSE_COUNT && self.declared.is_some_and(|n| n != self.pushed) {
+            // Pretend all is well: hand back what was produced.
+            let mut rest = self.shown;
+            rest.extend_from_slice(&self.held);
+            return Ok(EncodeOutput::new(rest, ReferenceEncoderConfig::format()));
+        }
+        let mut rest = self.shown;
+        rest.extend_from_slice(&self.held);
+        rest.extend_from_slice(self.inner.finish(stop)?.data());
+        Ok(EncodeOutput::new(rest, ReferenceEncoderConfig::format()))
+    }
+}
+
+fn frames(n: u8) -> Vec<TestImage> {
+    (0..n)
+        .map(|i| TestImage::rgba8_gradient_seeded(12, 8, i.wrapping_mul(40)))
+        .collect()
+}
+
+#[test]
+fn the_reference_animation_streams_only_with_a_frame_count() {
+    let job = || {
+        ReferenceEncoderConfig::new()
+            .job()
+            .with_loop_count(Some(0))
+            .animation_frame_encoder()
+            .unwrap()
+    };
+    let mut a = job();
+    let t = a
+        .begin(12, 8, PixelDescriptor::RGBA8_SRGB, Some(3))
+        .unwrap();
+    assert_eq!(t, AnimationOutputTiming::streaming(0));
+    assert!(!a.pending_output().is_empty(), "header at begin");
+    let mut a = job();
+    let t = a.begin(12, 8, PixelDescriptor::RGBA8_SRGB, None).unwrap();
+    assert_eq!(t, AnimationOutputTiming::AT_FINISH);
+    assert!(a.pending_output().is_empty());
+    check_animation_streaming_output_honesty(
+        AnimLiar::<A_HONEST>::default(),
+        ReferenceDecoderConfig,
+        &frames(4),
+    )
+    .unwrap();
+}
+
+#[test]
+fn animation_frames_held_behind_a_zero_lag_are_caught() {
+    let e = check_animation_streaming_output_honesty(
+        AnimLiar::<A_HOLD>::default(),
+        ReferenceDecoderConfig,
+        &frames(4),
+    )
+    .unwrap_err();
+    assert!(e.to_string().contains("lag of 0 frames"), "{e}");
+}
+
+#[test]
+fn animation_bytes_behind_at_finish_are_caught() {
+    let e = check_animation_streaming_output_honesty(
+        AnimLiar::<A_LEAK>::default(),
+        ReferenceDecoderConfig,
+        &frames(4),
+    )
+    .unwrap_err();
+    assert!(e.to_string().contains("AT_FINISH"), "{e}");
+}
+
+#[test]
+fn an_animation_lag_as_long_as_the_animation_is_caught() {
+    let e = check_animation_streaming_output_honesty(
+        AnimLiar::<A_HUGE>::default(),
+        ReferenceDecoderConfig,
+        &frames(4),
+    )
+    .unwrap_err();
+    assert!(e.to_string().contains("holds every frame"), "{e}");
+}
+
+#[test]
+fn finishing_short_of_the_declared_frames_is_caught() {
+    let e = check_animation_streaming_output_honesty(
+        AnimLiar::<A_LOOSE_COUNT>::default(),
+        ReferenceDecoderConfig,
+        &frames(4),
+    )
+    .unwrap_err();
+    assert!(
+        e.to_string().contains("declared frames was accepted"),
+        "{e}"
+    );
+}
+
+#[test]
+fn animation_output_timing_accessors() {
+    assert!(!AnimationOutputTiming::AT_FINISH.streams());
+    assert_eq!(
+        AnimationOutputTiming::default(),
+        AnimationOutputTiming::AT_FINISH
+    );
+    assert_eq!(AnimationOutputTiming::streaming(2).lag_frames(), Some(2));
 }

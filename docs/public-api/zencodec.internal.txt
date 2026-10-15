@@ -9,14 +9,14 @@
 
 ## summary
 #
-#   inherent methods                           47
-#   trait roster entries (type × trait)        65
+#   inherent methods                           49
+#   trait roster entries (type × trait)        66
 #
 # per-module pub lines:
 #   (root)                           18
 #   animation                         1
 #   decode                            9
-#   encode                            2
+#   encode                            4
 #   estimate                          2
 #   exif                              3
 #   gainmap                           2
@@ -24,7 +24,7 @@
 #   metadata_rewrite                  2
 #   source                            2
 
-## items (47 lines)
+## items (49 lines)
 
 pub fn CodecIoKind::assert_fields_are_eq(&self)
 pub fn ColorEmitFields::assert_fields_are_eq(&self)
@@ -54,7 +54,9 @@ pub fn decode::Input<'a>::assert_fields_are_eq(&self)
 pub fn decode::OutputInfo::assert_fields_are_eq(&self)
 pub fn decode::Progress::assert_fields_are_eq(&self)
 pub fn decode::Request::assert_fields_are_eq(&self)
+pub fn encode::AnimationOutputTiming::assert_fields_are_eq(&self)
 pub fn encode::EncodePolicy::assert_fields_are_eq(&self)
+pub fn encode::OutputBuffer::assert_fields_are_eq(&self)
 pub fn encode::OutputTiming::assert_fields_are_eq(&self)
 pub fn estimate::ComputeEnvironment::assert_fields_are_eq(&self)
 pub fn estimate::ImageCharacteristics::assert_fields_are_eq(&self)
@@ -74,7 +76,7 @@ pub fn metadata_rewrite::Error::assert_fields_are_eq(&self)
 pub fn source::AccessPattern::assert_fields_are_eq(&self)
 pub fn source::SourceError::assert_fields_are_eq(&self)
 
-## trait impls (65 types)
+## trait impls (66 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -111,6 +113,7 @@ decode::DecodePolicy: TrivialClone
 decode::Input<'a>: TrivialClone
 decode::MetadataUpdate: TrivialClone
 decode::Request: TrivialClone
+encode::AnimationOutputTiming: TrivialClone
 encode::EncodePolicy: TrivialClone
 encode::Fidelity: TrivialClone
 encode::FidelityRejection: TrivialClone

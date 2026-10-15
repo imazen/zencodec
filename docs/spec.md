@@ -140,6 +140,7 @@ trait Encoder: Sized {
     fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), Self::Error>;  // default: Err
     fn pending_output(&self) -> &[u8];                                          // default: empty
     fn consume_output(&mut self, n: usize);                                     // default: no-op
+    fn take_output(&mut self, into: &mut Vec<u8>);                              // default: copy + consume
     fn finish(self) -> Result<EncodeOutput, Self::Error>;                       // default: Err
 
     // Pull from source callback
@@ -176,6 +177,9 @@ Rules (spelled out on `Encoder::begin`):
 - `begin` may choose framing (flush points, chunking) that makes the file
   differ from `encode()`'s; it may never change the pixels.
 - `consume_output(n)` with `n` above the pending length consumes all of it.
+  `take_output(into)` appends the pending bytes to `into` and consumes
+  them; an encoder holding its output in `OutputBuffer` swaps allocations
+  when `into` is empty, so nothing is copied.
 - After an error from `push_rows` or `finish` the encode cannot complete;
   a driver that has sent bytes aborts its transport.
 - `max_output_bytes` bounds the whole file, including bytes already handed
@@ -197,6 +201,13 @@ impl OutputTiming {
 }
 ```
 
+`OutputBuffer` is the output side of a streaming encoder, shared so codecs
+do not each write it: `push`, `vec_mut` (append-only access for writers
+that need a `Vec<u8>`), `pending`, `consume` (clamps; drops the sent prefix
+once it is at least 64 KiB and half the buffer), `take_into` (swaps when the
+destination is empty), `handed_out`, `total` (what `max_output_bytes`
+bounds), `try_reserve`, and `into_remaining` (what `finish` returns).
+
 ### `AnimationFrameEncoder` (animation encode)
 
 ```rust
@@ -204,12 +215,40 @@ trait AnimationFrameEncoder: Sized {
     type Error: core::error::Error + Send + Sync + 'static;
 
     fn reject(op: UnsupportedOperation) -> Self::Error;
+    fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor,
+        frame_count: Option<u32>) -> Result<AnimationOutputTiming, Self::Error>; // default: Ok(AT_FINISH)
+    fn pending_output(&self) -> &[u8];                     // default: empty
+    fn consume_output(&mut self, n: usize);                // default: no-op
+    fn take_output(&mut self, into: &mut Vec<u8>);         // default: copy + consume
     fn push_frame(
         &mut self, pixels: PixelSlice<'_>, duration_ms: u32, stop: Option<&dyn Stop>,
     ) -> Result<(), Self::Error>;
+    fn push_frame_timed(&mut self, pixels: PixelSlice<'_>, duration: FrameDuration,
+        stop: Option<&dyn Stop>) -> Result<FrameDuration, Self::Error>;   // default: exact
+    fn push_frame_exact(&mut self, pixels: PixelSlice<'_>, duration: FrameDuration,
+        stop: Option<&dyn Stop>) -> Result<(), Self::Error>;              // default: Err
     fn finish(self, stop: Option<&dyn Stop>) -> Result<EncodeOutput, Self::Error>;
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct AnimationOutputTiming { /* private */ }      // Default = AT_FINISH
+impl AnimationOutputTiming {
+    const AT_FINISH: Self;
+    const fn streaming(lag_frames: u32) -> Self;
+    const fn streams(&self) -> bool;
+    const fn lag_frames(&self) -> Option<u32>;
+}
 ```
+
+`begin` is the animation counterpart of `Encoder::begin`, counted in
+frames: it declares the canvas, the frame descriptor and, when known, the
+frame count, before the first frame. A streaming encoder writes its header
+then and each frame's bytes as frames are pushed, holding back at most
+`lag_frames` frames; `finish` returns what was not consumed. A format that
+writes the frame count first (APNG) streams only when it is given;
+finishing after a different number of declared frames is an error. A
+second `begin` is an error and a failed one changes nothing. Draining never
+changes the bytes, and `begin` may change framing, never pixels or timing.
 
 Full-canvas frames only. Animation encoder is `'static` — it owns its data.
 Codecs without animation set `type AnimationFrameEnc = ()` (unit implements
@@ -465,6 +504,7 @@ trait DynEncoder {
     fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), BoxedError>;
     fn pending_output(&self) -> &[u8];
     fn consume_output(&mut self, n: usize);
+    fn take_output(&mut self, into: &mut Vec<u8>);
     fn finish(self: Box<Self>) -> Result<EncodeOutput, BoxedError>;
     fn encode_from(self: Box<Self>,
         source: &mut dyn FnMut(u32, PixelSliceMut<'_>) -> usize) -> Result<EncodeOutput, BoxedError>;
@@ -474,7 +514,16 @@ trait DynAnimationFrameEncoder {
     fn as_any(&self) -> &dyn Any;       // downcast to concrete encoder
     fn as_any_mut(&mut self) -> &mut dyn Any;
     fn into_any(self: Box<Self>) -> Box<dyn Any>;
+    fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor,
+        frame_count: Option<u32>) -> Result<AnimationOutputTiming, BoxedError>;
+    fn pending_output(&self) -> &[u8];
+    fn consume_output(&mut self, n: usize);
+    fn take_output(&mut self, into: &mut Vec<u8>);
     fn push_frame(&mut self, pixels: PixelSlice<'_>, duration_ms: u32,
+        stop: Option<&dyn Stop>) -> Result<(), BoxedError>;
+    fn push_frame_timed(&mut self, pixels: PixelSlice<'_>, duration: FrameDuration,
+        stop: Option<&dyn Stop>) -> Result<FrameDuration, BoxedError>;
+    fn push_frame_exact(&mut self, pixels: PixelSlice<'_>, duration: FrameDuration,
         stop: Option<&dyn Stop>) -> Result<(), BoxedError>;
     fn finish(self: Box<Self>, stop: Option<&dyn Stop>) -> Result<EncodeOutput, BoxedError>;
 }

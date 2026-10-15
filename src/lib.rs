@@ -79,6 +79,7 @@ pub mod metadata_rewrite;
 mod negotiate;
 mod orientation;
 mod output;
+mod output_buffer;
 mod policy;
 mod set;
 mod sink;
@@ -200,7 +201,8 @@ pub mod encode {
         Fidelity, FidelityRejection, FidelitySelectionError, FidelityTargetError, LossyTarget,
     };
     pub use crate::negotiate::best_encode_format;
-    pub use crate::output::{EncodeOutput, OutputTiming};
+    pub use crate::output::{AnimationOutputTiming, EncodeOutput, OutputTiming};
+    pub use crate::output_buffer::OutputBuffer;
     pub use crate::policy::EncodePolicy;
 }
 

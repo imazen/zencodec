@@ -93,6 +93,55 @@ impl Default for OutputTiming {
     }
 }
 
+/// When an animation encoder's bytes become available, as reported by
+/// [`AnimationFrameEncoder::begin`](crate::encode::AnimationFrameEncoder::begin).
+///
+/// The animation counterpart of [`OutputTiming`], counted in frames: GIF
+/// writes each frame as it arrives, a shared palette holds frames until it
+/// is built, and a container that writes its size first holds everything.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct AnimationOutputTiming {
+    /// `None`: everything arrives from `finish`.
+    lag_frames: Option<u32>,
+}
+
+impl AnimationOutputTiming {
+    /// All encoded bytes arrive from
+    /// [`AnimationFrameEncoder::finish`](crate::encode::AnimationFrameEncoder::finish).
+    pub const AT_FINISH: Self = Self { lag_frames: None };
+
+    /// Encoded bytes stream through
+    /// [`pending_output`](crate::encode::AnimationFrameEncoder::pending_output)
+    /// as frames are pushed, holding back at most `lag_frames` pushed frames.
+    ///
+    /// Once more than `lag_frames` frames have been pushed, every frame but
+    /// the last `lag_frames` has its bytes pending, apart from a few bytes of
+    /// coder state. `0` means each frame is written as it is pushed.
+    pub const fn streaming(lag_frames: u32) -> Self {
+        Self {
+            lag_frames: Some(lag_frames),
+        }
+    }
+
+    /// Whether bytes become available before `finish`.
+    pub const fn streams(&self) -> bool {
+        self.lag_frames.is_some()
+    }
+
+    /// The most pushed frames the encoder holds before their bytes are
+    /// pending; `None` when nothing streams.
+    pub const fn lag_frames(&self) -> Option<u32> {
+        self.lag_frames
+    }
+}
+
+impl Default for AnimationOutputTiming {
+    /// [`AT_FINISH`](Self::AT_FINISH): the answer that is always true.
+    fn default() -> Self {
+        Self::AT_FINISH
+    }
+}
+
 impl EncodeOutput {
     /// Create a new encode output.
     ///
