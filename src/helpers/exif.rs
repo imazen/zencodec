@@ -231,7 +231,11 @@ mod color_space_tests {
         let srgb = tiff_with_color_space(1);
         let wide = set_exif_color_space(&srgb, false).expect("tag present");
         assert_eq!(wide.len(), srgb.len());
-        assert_eq!(wide, tiff_with_color_space(0xFFFF), "only the value changes");
+        assert_eq!(
+            wide,
+            tiff_with_color_space(0xFFFF),
+            "only the value changes"
+        );
         assert_eq!(set_exif_color_space(&wide, true).unwrap(), srgb);
 
         let mut app1 = b"Exif\0\0".to_vec();
