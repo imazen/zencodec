@@ -1134,8 +1134,8 @@ where
 ///   of `L` frames, supply more than `L + 1` frames; fewer fails the check.
 /// - Draining everything after each frame, draining with
 ///   [`take_output`](AnimationFrameEncoder::take_output), and not draining
-///   all produce the same bytes, which decode to the input frames with
-///   their durations.
+///   all produce the same bytes, which decode to the same frames and
+///   durations as the encode without `begin` (so lossy codecs can run it).
 /// - A second `begin` is an error, and so is finishing after fewer frames
 ///   than declared.
 ///
@@ -1224,7 +1224,25 @@ where
             points,
         }))
     };
-    let want: Vec<Pixels> = frames.iter().map(|f| f.pixels()).collect();
+    // `begin` may change framing, never pixels or timing: the streamed file
+    // must decode exactly as the same encode without `begin` does (not as
+    // the input, which a lossy codec need not reproduce).
+    let plain = encode_animation(&enc, frames, Metadata::none())
+        .map_err(|e| fail(CHECK, format!("encode without begin: {e}")))?;
+    let decode_timed =
+        |bytes: &[u8]| -> Result<Vec<(Pixels, zencodec::animation::FrameDuration)>, String> {
+            let mut d = dec
+                .clone()
+                .job()
+                .animation_frame_decoder(Cow::Borrowed(bytes), &[])
+                .map_err(|e| e.to_string())?;
+            let mut out = Vec::new();
+            while let Some(f) = d.render_next_frame(None).map_err(|e| e.to_string())? {
+                out.push((grab_ref(f.pixels()), f.duration()));
+            }
+            Ok(out)
+        };
+    let want = decode_timed(&plain).map_err(|e| fail(CHECK, format!("decode: {e}")))?;
     for declare in [Some(count), None] {
         let label = if declare.is_some() {
             "with the frame count"
@@ -1294,29 +1312,33 @@ where
                 ));
             }
         }
-        let got = decode_anim_owned(&dec, &drained.file)
+        let got = decode_timed(&drained.file)
             .map_err(|e| fail(CHECK, format!("{label}: decode: {e}")))?;
-        if got != want {
+        if got.len() != want.len() {
             return Err(fail(
                 CHECK,
-                format!("{label}: the streamed animation decodes to different frames"),
+                format!(
+                    "{label}: the streamed animation has {} frames, the encode without \
+                     begin {}",
+                    got.len(),
+                    want.len()
+                ),
             ));
         }
-        let mut d = dec
-            .clone()
-            .job()
-            .animation_frame_decoder(Cow::Borrowed(&drained.file), &[])
-            .map_err(|e| fail(CHECK, e.to_string()))?;
-        for index in 0..count {
-            let expected = zencodec::animation::FrameDuration::from_millis(40 + index * 10);
-            let f = d
-                .render_next_frame(None)
-                .map_err(|e| fail(CHECK, e.to_string()))?
-                .ok_or_else(|| fail(CHECK, "missing frame"))?;
-            if f.duration() != expected {
+        for (index, ((gp, gd), (wp, wd))) in got.iter().zip(&want).enumerate() {
+            if gp != wp {
                 return Err(fail(
                     CHECK,
-                    format!("{label}: frame {index} lost its timing in the streamed file"),
+                    format!(
+                        "{label}: frame {index} of the streamed animation decodes to \
+                         different pixels than the encode without begin"
+                    ),
+                ));
+            }
+            if gd != wd {
+                return Err(fail(
+                    CHECK,
+                    format!("{label}: frame {index} lasts {gd:?} streamed, {wd:?} without begin"),
                 ));
             }
         }

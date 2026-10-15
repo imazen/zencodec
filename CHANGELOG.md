@@ -27,11 +27,12 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
   `encode` of that size. `check_animation_streaming_output_honesty` (run by
   `check_all`, with enough frames for the reported lag) verifies
   `AnimationOutputTiming`: lag below a declared frame count, bytes pending across
-  every lag window, identical bytes drained, taken and undrained, the decoded frames
-  and their durations, a refused second `begin`, and a refused `finish` short of the
-  declared count. The reference animation encoder streams when the frame count is
-  declared. Five misbehaving wrappers in `tests/streaming_output.rs` show each new
-  rule is caught.
+  every lag window, identical bytes drained, taken and undrained, frames and
+  durations that decode as the same encode without `begin` does (not compared with
+  the input, so lossy animation codecs can run it), a refused second `begin`, and a
+  refused `finish` short of the declared count. The reference animation encoder
+  streams when the frame count is declared. Six misbehaving wrappers in
+  `tests/streaming_output.rs` show each new rule is caught.
 - `check_streaming_output_honesty` now enforces the rules: lag below the height;
   bytes pending across every lag window (an understated lag or a stall after one
   strip fails); full, uneven and over-sized drains give identical bytes; a second

@@ -355,6 +355,7 @@ const A_HOLD: u8 = 1; // reports lag 0, holds every frame until finish
 const A_LEAK: u8 = 2; // reports AT_FINISH, exposes bytes anyway
 const A_HUGE: u8 = 3; // reports a lag as long as the animation
 const A_LOOSE_COUNT: u8 = 4; // finishes after fewer frames than declared
+const A_PIXELS: u8 = 5; // streams, but changes a pixel byte of every frame
 
 #[derive(Clone, Debug, Default)]
 struct AnimLiar<const F: u8>(ReferenceEncoderConfig);
@@ -423,6 +424,12 @@ impl<const F: u8> AnimLiarEnc<F> {
     fn take(&mut self) {
         let mut bytes = Vec::new();
         self.inner.take_output(&mut bytes);
+        if F == A_PIXELS
+            && self.pushed > 0
+            && let Some(last) = bytes.last_mut()
+        {
+            *last ^= 1;
+        }
         if F == A_HOLD {
             self.held.extend_from_slice(&bytes);
         } else {
@@ -573,4 +580,19 @@ fn animation_output_timing_accessors() {
         AnimationOutputTiming::AT_FINISH
     );
     assert_eq!(AnimationOutputTiming::streaming(2).lag_frames(), Some(2));
+}
+
+#[test]
+fn a_streamed_animation_with_other_pixels_is_caught() {
+    let e = check_animation_streaming_output_honesty(
+        AnimLiar::<A_PIXELS>::default(),
+        ReferenceDecoderConfig,
+        &frames(4),
+    )
+    .unwrap_err();
+    assert!(
+        e.to_string()
+            .contains("different pixels than the encode without begin"),
+        "{e}"
+    );
 }
