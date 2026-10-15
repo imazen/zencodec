@@ -6,26 +6,26 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2090 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 115 lines (115 hidden + 0 excluded-feature)
+# files: zencodec.txt 2136 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 120 lines (120 hidden + 0 excluded-feature)
 
 ## summary
 #
-#   pub modules                                13
-#   pub types (struct/enum/trait/alias)       223
-#   pub consts/statics                        236
-#   free functions                             72
-#   inherent methods                          896
+#   pub modules                                14
+#   pub types (struct/enum/trait/alias)       229
+#   pub consts/statics                        250
+#   free functions                             74
+#   inherent methods                          911
 #   struct fields                             249
-#   enum variants                             302
+#   enum variants                             315
 #   re-exports                                 15
-#   trait roster entries (type × trait)       593
+#   trait roster entries (type × trait)       611
 #   conditional trait impls (verbatim)          7
-#   auto-trait-complete types                 101
+#   auto-trait-complete types                 104
 #   auto-trait exceptions                      17
 #
 # per-module pub lines:
-#   (root)                          865
-#   animation                         8
+#   (root)                          891
+#   animation                        11
 #   decode                          238
 #   encode                          185
 #   estimate                         48
@@ -37,8 +37,9 @@
 #   metadata_rewrite                 58
 #   prelude                         228
 #   source                           37
+#   time                             22
 
-## items (1936 lines)
+## items (1979 lines)
 
 pub mod zencodec
 pub use At
@@ -56,18 +57,16 @@ pub use enough
 pub use how_far
 pub use whereat
 pub mod animation
-#[non_exhaustive] pub enum animation::TimingError
 pub animation::TimingError::Inexact
+pub animation::TimingError::Negative
 pub animation::TimingError::Overflow
 pub animation::TimingError::ZeroDenominator
-pub struct animation::FrameDuration
-pub const fn animation::FrameDuration::denominator(self) -> u32
-pub const fn animation::FrameDuration::from_millis(u32) -> Self
-pub const fn animation::FrameDuration::new(u64, u32) -> core::result::Result<Self, animation::TimingError>
-pub const fn animation::FrameDuration::numerator(self) -> u64
+pub const fn animation::FrameDuration::denominator(self) -> u32 [also: (root)]
+pub const fn animation::FrameDuration::from_millis(u32) -> Self [also: (root)]
+pub const fn animation::FrameDuration::new(u64, u32) -> core::result::Result<Self, animation::TimingError> [also: (root)]
+pub const fn animation::FrameDuration::numerator(self) -> u64 [also: (root)]
 pub fn animation::FrameDuration::ticks_at(self, u32) -> core::result::Result<u64, animation::TimingError>
-pub struct animation::TimingQuantizer
-pub const fn animation::TimingQuantizer::new(u32, u64) -> core::result::Result<Self, animation::TimingError>
+pub const fn animation::TimingQuantizer::new(u32, u64) -> core::result::Result<Self, animation::TimingError> [also: (root)]
 pub fn animation::TimingQuantizer::quantize(&mut self, animation::FrameDuration) -> core::result::Result<animation::FrameDuration, animation::TimingError>
 pub mod decode
 #[non_exhaustive] pub enum decode::Event
@@ -109,8 +108,10 @@ pub fn AnimationFrame<'a>::duration_ms(&self) -> u32
 pub fn AnimationFrame<'a>::frame_index(&self) -> u32
 pub fn AnimationFrame<'a>::new(zenpixels::buffer::PixelSlice<'a>, u32, u32) -> Self
 pub fn AnimationFrame<'a>::pixels(&self) -> &zenpixels::buffer::PixelSlice<'a>
+pub fn AnimationFrame<'a>::pts(&self) -> core::option::Option<time::Timestamp>
 pub fn AnimationFrame<'a>::to_owned_frame(&self) -> OwnedAnimationFrame
 pub fn AnimationFrame<'a>::with_duration(zenpixels::buffer::PixelSlice<'a>, animation::FrameDuration, u32) -> Self
+pub fn AnimationFrame<'a>::with_pts(self, core::option::Option<time::Timestamp>) -> Self
 #[non_exhaustive] pub struct decode::BatchMeta
 pub decode::BatchMeta::is_final: bool
 pub decode::BatchMeta::pass: u16
@@ -278,9 +279,11 @@ pub fn OwnedAnimationFrame::frame_index(&self) -> u32
 pub fn OwnedAnimationFrame::into_buffer(self) -> zenpixels::buffer::PixelBuffer
 pub fn OwnedAnimationFrame::new(zenpixels::buffer::PixelBuffer, u32, u32) -> Self
 pub fn OwnedAnimationFrame::pixels(&self) -> zenpixels::buffer::PixelSlice<'_>
+pub fn OwnedAnimationFrame::pts(&self) -> core::option::Option<time::Timestamp>
 pub fn OwnedAnimationFrame::take_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&mut self) -> core::option::Option<T>
 pub fn OwnedAnimationFrame::with_duration(zenpixels::buffer::PixelBuffer, animation::FrameDuration, u32) -> Self
 pub fn OwnedAnimationFrame::with_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(self, T) -> Self
+pub fn OwnedAnimationFrame::with_pts(self, core::option::Option<time::Timestamp>) -> Self
 #[non_exhaustive] pub struct decode::Progress
 pub decode::Progress::consumed: usize
 pub decode::Progress::event: decode::Event
@@ -1367,6 +1370,38 @@ pub fn source::ReadAt::len_hint(&self) -> core::option::Option<u64>
 pub fn source::ReadAt::read_at(&mut self, u64, &mut [u8]) -> core::result::Result<usize, Self::Error>
 pub fn source::ReadAt::read_exact_at(&mut self, u64, &mut [u8]) -> core::result::Result<(), Self::Error>
 pub fn source::ReadAt::read_many_at(&mut self, &mut [(u64, &mut [u8])]) -> core::result::Result<(), Self::Error>
+pub mod time
+#[non_exhaustive] pub enum time::Rounding
+pub time::Rounding::Ceil
+pub time::Rounding::Floor
+pub time::Rounding::Nearest
+#[non_exhaustive] pub enum time::TimingError [also: animation]
+pub time::TimingError::Inexact
+pub time::TimingError::Negative
+pub time::TimingError::Overflow
+pub time::TimingError::ZeroDenominator
+pub struct time::FrameDuration [also: animation]
+pub fn animation::FrameDuration::ticks_at(self, u32) -> core::result::Result<u64, animation::TimingError>
+pub struct time::TimeBase
+pub const time::TimeBase::MILLIS: Self
+pub const time::TimeBase::SECONDS: Self
+pub const fn time::TimeBase::denominator(self) -> u32
+pub const fn time::TimeBase::hz(u32) -> core::result::Result<Self, animation::TimingError>
+pub const fn time::TimeBase::new(u32, u32) -> core::result::Result<Self, animation::TimingError>
+pub const fn time::TimeBase::numerator(self) -> u32
+pub struct time::Timestamp
+pub const fn time::Timestamp::base(self) -> time::TimeBase
+pub fn time::Timestamp::checked_add(self, animation::FrameDuration) -> core::result::Result<Self, animation::TimingError>
+pub fn time::Timestamp::compare(self, Self) -> core::cmp::Ordering
+pub fn time::Timestamp::duration_until(self, Self) -> core::result::Result<animation::FrameDuration, animation::TimingError>
+pub const fn time::Timestamp::new(i64, time::TimeBase) -> Self
+pub fn time::Timestamp::rescale(self, time::TimeBase, time::Rounding) -> core::result::Result<Self, animation::TimingError>
+pub fn time::Timestamp::same_instant(self, Self) -> bool
+pub const fn time::Timestamp::ticks(self) -> i64
+pub struct time::TimingQuantizer [also: animation]
+pub fn animation::TimingQuantizer::quantize(&mut self, animation::FrameDuration) -> core::result::Result<animation::FrameDuration, animation::TimingError>
+pub fn time::duration_to_ticks(animation::FrameDuration, time::TimeBase) -> core::result::Result<u64, animation::TimingError>
+pub fn time::ticks_to_duration(u64, time::TimeBase) -> core::result::Result<animation::FrameDuration, animation::TimingError>
 #[non_exhaustive] pub enum AllocPreference
 pub AllocPreference::CodecDefault
 pub AllocPreference::Fallible
@@ -1521,6 +1556,7 @@ pub fn LimitExceeded::kind(&self) -> LimitKind
 pub LimitKind::DecompressionRatio
 pub LimitKind::Duration
 pub LimitKind::Frames
+pub LimitKind::HeaderBytes
 pub LimitKind::Height
 pub LimitKind::InputSize
 pub LimitKind::InventoryParts
@@ -1530,9 +1566,13 @@ pub LimitKind::MetadataEntries
 pub LimitKind::MetadataRewriteSize
 pub LimitKind::MetadataSize
 pub LimitKind::OutputSize
+pub LimitKind::PacketBytes
 pub LimitKind::Pixels
+pub LimitKind::QueueDepth
 pub LimitKind::Scans
+pub LimitKind::TableEntries
 pub LimitKind::TotalPixels
+pub LimitKind::Tracks
 pub LimitKind::Width
 #[non_exhaustive] pub enum MetadataPolicy
 pub MetadataPolicy::ColorAndRotation
@@ -1610,8 +1650,10 @@ pub fn AnimationFrame<'a>::duration_ms(&self) -> u32
 pub fn AnimationFrame<'a>::frame_index(&self) -> u32
 pub fn AnimationFrame<'a>::new(zenpixels::buffer::PixelSlice<'a>, u32, u32) -> Self
 pub fn AnimationFrame<'a>::pixels(&self) -> &zenpixels::buffer::PixelSlice<'a>
+pub fn AnimationFrame<'a>::pts(&self) -> core::option::Option<time::Timestamp>
 pub fn AnimationFrame<'a>::to_owned_frame(&self) -> OwnedAnimationFrame
 pub fn AnimationFrame<'a>::with_duration(zenpixels::buffer::PixelSlice<'a>, animation::FrameDuration, u32) -> Self
+pub fn AnimationFrame<'a>::with_pts(self, core::option::Option<time::Timestamp>) -> Self
 pub struct CodecError(_)
 pub fn CodecError::category(&self) -> ErrorCategory
 pub fn CodecError::codec(&self) -> core::option::Option<&'static str>
@@ -1871,9 +1913,11 @@ pub fn OwnedAnimationFrame::frame_index(&self) -> u32
 pub fn OwnedAnimationFrame::into_buffer(self) -> zenpixels::buffer::PixelBuffer
 pub fn OwnedAnimationFrame::new(zenpixels::buffer::PixelBuffer, u32, u32) -> Self
 pub fn OwnedAnimationFrame::pixels(&self) -> zenpixels::buffer::PixelSlice<'_>
+pub fn OwnedAnimationFrame::pts(&self) -> core::option::Option<time::Timestamp>
 pub fn OwnedAnimationFrame::take_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(&mut self) -> core::option::Option<T>
 pub fn OwnedAnimationFrame::with_duration(zenpixels::buffer::PixelBuffer, animation::FrameDuration, u32) -> Self
 pub fn OwnedAnimationFrame::with_extras<T: core::any::Any + core::marker::Send + core::marker::Sync + 'static>(self, T) -> Self
+pub fn OwnedAnimationFrame::with_pts(self, core::option::Option<time::Timestamp>) -> Self
 pub struct Resolution
 pub Resolution::unit: ResolutionUnit
 pub Resolution::x: f64
@@ -1977,7 +2021,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (129 types)
+## trait impls (132 types)
 
 &mut D: decode::IncrementalDecode
 &mut S: source::DynReadAt
@@ -2107,6 +2151,9 @@ source::ReadAtShim<S>: source::DynReadAt
 source::SliceReadAt<'_>: source::ReadAt
 source::SliceReadAt<'a>: Clone, Debug
 source::SourceError: Clone, Debug, Display, Eq, Error, PartialEq
+time::Rounding: Clone, Copy, Debug, Eq, Hash, PartialEq
+time::TimeBase: Clone, Copy, Debug, Eq, Hash, PartialEq
+time::Timestamp: Clone, Copy, Debug, Eq, Hash, PartialEq
 whereat::at::At<E>: CategorizedError
 impl<C> decode::DynDecoderConfig for C where C: decode::DecoderConfig + 'static
 impl<J, E> decode::IncrementalDecode for helpers::WholeFileIncremental<J> where J: for<'a> decode::DecodeJob<'a, Error = E> + core::marker::Send + 'static, E: core::error::Error + core::marker::Send + core::marker::Sync + 'static
@@ -2118,7 +2165,7 @@ impl<J, E> decode::IncrementalDecode for helpers::WholeFileIncremental<J> where 
 
 ## auto traits
 
-101 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+104 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
 CodecSet: !RefUnwindSafe !UnwindSafe
 CodecSetError: !RefUnwindSafe !UnwindSafe

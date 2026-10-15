@@ -39,6 +39,23 @@ promise that a later frame will be representable. The shared quantizer bounds
 its exact rational phase to u128 and rejects arithmetic overflow without mutation.
 Video transport, DTS/PTS and playback scheduling remain outside these contracts.
 
+## Timestamps
+
+`zencodec::time` adds instants next to durations: `Timestamp { ticks: i64,
+base: TimeBase }`, signed, on a reduced seconds-per-tick clock. Comparison is
+exact across clocks. Every lossy conversion names its `Rounding`;
+`Rounding::Nearest` rounds exact halves toward +infinity, the quantizer's rule,
+so the endpoints a `TimingQuantizer` produces for a run of durations equal the
+`rescale(.., Nearest)` of the instants between them (tested over 300 NTSC
+frames quantized to milliseconds). `duration_to_ticks` is exact or `Inexact`;
+`Timestamp::duration_until` is exact.
+
+Animation frames gain `pts()`: the presentation instant when the source records
+one (a video container behind an animation adapter). Animation formats that
+store only durations leave it `None`, and nothing derives a timestamp from a
+nominal frame rate. The media contracts (packets, sessions, containers) build on
+these types; see `zencodec-media`.
+
 ## Main integration validation
 
 The timing API is combined with current metadata retention and inventory support

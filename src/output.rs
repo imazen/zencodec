@@ -455,6 +455,7 @@ pub struct AnimationFrame<'a> {
     pixels: PixelSlice<'a>,
     duration: crate::animation::FrameDuration,
     frame_index: u32,
+    pts: Option<crate::time::Timestamp>,
 }
 
 impl<'a> AnimationFrame<'a> {
@@ -464,6 +465,7 @@ impl<'a> AnimationFrame<'a> {
             pixels,
             duration: crate::animation::FrameDuration::from_millis(duration_ms),
             frame_index,
+            pts: None,
         }
     }
 
@@ -477,7 +479,22 @@ impl<'a> AnimationFrame<'a> {
             pixels,
             duration,
             frame_index,
+            pts: None,
         }
+    }
+
+    /// Attach the presentation timestamp the source recorded for this
+    /// frame, when it has one (a video container or a timed animation).
+    pub fn with_pts(mut self, pts: Option<crate::time::Timestamp>) -> Self {
+        self.pts = pts;
+        self
+    }
+
+    /// The presentation timestamp the source recorded, if any. Animation
+    /// formats that store only durations leave it `None`; nothing invents
+    /// one from the durations.
+    pub fn pts(&self) -> Option<crate::time::Timestamp> {
+        self.pts
     }
 
     /// Exact encoded source duration, without playback clamps or rounding.
@@ -540,6 +557,7 @@ impl<'a> AnimationFrame<'a> {
             pixels,
             duration: self.duration,
             frame_index: self.frame_index,
+            pts: self.pts,
             extensions: Extensions::new(),
         }
     }
@@ -552,6 +570,7 @@ impl core::fmt::Debug for AnimationFrame<'_> {
             .field("duration_ms", &self.duration.legacy_millis())
             .field("duration", &self.duration)
             .field("frame_index", &self.frame_index)
+            .field("pts", &self.pts)
             .finish()
     }
 }
@@ -565,6 +584,7 @@ pub struct OwnedAnimationFrame {
     pixels: PixelBuffer,
     duration: crate::animation::FrameDuration,
     frame_index: u32,
+    pts: Option<crate::time::Timestamp>,
     extensions: Extensions,
 }
 
@@ -579,8 +599,21 @@ impl OwnedAnimationFrame {
             pixels,
             duration,
             frame_index,
+            pts: None,
             extensions: Extensions::new(),
         }
+    }
+
+    /// Attach the presentation timestamp the source recorded; see
+    /// [`AnimationFrame::pts`].
+    pub fn with_pts(mut self, pts: Option<crate::time::Timestamp>) -> Self {
+        self.pts = pts;
+        self
+    }
+
+    /// The presentation timestamp the source recorded, if any.
+    pub fn pts(&self) -> Option<crate::time::Timestamp> {
+        self.pts
     }
 
     /// Exact encoded source duration, without playback clamps or rounding.
@@ -594,6 +627,7 @@ impl OwnedAnimationFrame {
             pixels,
             duration: crate::animation::FrameDuration::from_millis(duration_ms),
             frame_index,
+            pts: None,
             extensions: Extensions::new(),
         }
     }
@@ -625,6 +659,7 @@ impl OwnedAnimationFrame {
     /// Borrow as a [`AnimationFrame`].
     pub fn as_animation_frame(&self) -> AnimationFrame<'_> {
         AnimationFrame::with_duration(self.pixels.as_slice(), self.duration, self.frame_index)
+            .with_pts(self.pts)
     }
 
     /// Attach a typed extension value (e.g., per-frame codec metadata).
@@ -666,6 +701,7 @@ impl core::fmt::Debug for OwnedAnimationFrame {
             .field("duration_ms", &self.duration.legacy_millis())
             .field("duration", &self.duration)
             .field("frame_index", &self.frame_index)
+            .field("pts", &self.pts)
             .field("extensions", &self.extensions)
             .finish()
     }
@@ -809,6 +845,19 @@ mod tests {
             crate::animation::FrameDuration::from_millis(100)
         );
         assert_eq!(borrowed.frame_index(), 5);
+    }
+
+    #[test]
+    fn pts_survives_owning_and_borrowing() {
+        use crate::time::{TimeBase, Timestamp};
+        let buf = make_rgb8_buffer(2, 2);
+        let pts = Timestamp::new(-3, TimeBase::new(1001, 30000).unwrap());
+        let frame = AnimationFrame::new(buf.as_slice(), 40, 0);
+        assert_eq!(frame.pts(), None);
+        let frame = frame.with_pts(Some(pts));
+        let owned = frame.to_owned_frame();
+        assert_eq!(owned.pts(), Some(pts));
+        assert_eq!(owned.as_animation_frame().pts(), Some(pts));
     }
 
     #[test]

@@ -235,6 +235,16 @@ removes that whole class).
   framing, never pixels; `consume_output` clamps; after a `push_rows`/`finish`
   error a driver that sent bytes aborts its transport; `max_output_bytes` bounds
   the whole file.
+- `zencodec::time`: `TimeBase` (reduced seconds per tick), signed `Timestamp` with
+  exact cross-clock `compare`/`same_instant`, `rescale` with an explicit `Rounding`
+  (`Nearest` rounds halves toward +infinity, `TimingQuantizer`'s rule),
+  `checked_add`, exact `duration_until`, and `duration_to_ticks` /
+  `ticks_to_duration`; re-exports `FrameDuration`, `TimingQuantizer`, `TimingError`.
+  `TimingError::Negative` appended. `AnimationFrame` / `OwnedAnimationFrame` gain
+  `pts()` / `with_pts()` (`None` unless the source records a presentation instant).
+  `LimitKind` gains `PacketBytes`, `Tracks`, `HeaderBytes`, `TableEntries` and
+  `QueueDepth` for container limits. Ported from PR 129's `media/src/time.rs` with
+  the tie rule changed to match the quantizer.
 - `Encoder::take_output` / `DynEncoder::take_output` (provided; the default copies
   pending bytes and consumes them) and `zencodec::encode::OutputBuffer`, the output
   side of a streaming encoder that codecs had each written separately: consumed

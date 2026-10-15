@@ -619,8 +619,10 @@ Key types: `PixelSlice<'a>`, `PixelSliceMut<'a>`, `PixelBuffer`, `PixelDescripto
 
 Image metadata from probing or decoding. `#[non_exhaustive]`, `Clone + Debug + PartialEq`.
 
-Fields: `width`, `height`, `format: ImageFormat`, `has_alpha`, `has_animation`,
-`frame_count: Option<u32>`, `orientation: Orientation`,
+Fields: `width`, `height`, `format: ImageFormat`, `has_alpha`,
+`sequence: ImageSequence` (`Single`, `Animation { frame_count, loop_count,
+random_access }`, `Multi { image_count, random_access }`; `is_animation()` and
+`frame_count()` read it), `orientation: Orientation`,
 `source_color: SourceColor`, `embedded_metadata: EmbeddedMetadata`,
 `has_gain_map`,
 `source_encoding: Option<Arc<dyn SourceEncodingDetails>>`,
@@ -865,16 +867,53 @@ Methods: `pixels()`, `into_buffer()`, `info()`, `width()`, `height()`,
 
 ### `AnimationFrame<'a>`
 
-Borrowed animation frame. Fields: `pixels: PixelSlice<'a>`, `duration_ms: u32`,
-`frame_index: u32`. Method: `to_owned_frame()`.
+Borrowed animation frame. Fields: `pixels: PixelSlice<'a>`,
+`duration: FrameDuration` (exact rational seconds), `frame_index: u32`,
+`pts: Option<Timestamp>` (the presentation instant when the source records
+one; animation formats that store only durations leave it `None`). Methods:
+`duration()`, `pts()`, `with_pts()`, `frame_index()`, `to_owned_frame()`;
+`duration_ms()` is deprecated (it truncates).
 
 ### `OwnedAnimationFrame`
 
-Owned animation frame. Fields: `pixels: PixelBuffer`, `duration_ms: u32`,
-`frame_index: u32`, `extensions: Extensions` (type-map).
+Owned animation frame. Fields: `pixels: PixelBuffer`,
+`duration: FrameDuration`, `frame_index: u32`, `pts: Option<Timestamp>`,
+`extensions: Extensions` (type-map).
 
 Methods: `pixels()`, `into_buffer()`, `as_animation_frame()`,
 `with_extras<T>()`, `extras<T>()`, `take_extras<T>()`.
+
+### `time`: `TimeBase`, `Timestamp`, `Rounding`
+
+Instants next to durations. `FrameDuration` (in `animation`, re-exported
+from `time`) is a nonnegative rational length; `Timestamp { ticks: i64, base:
+TimeBase }` is a signed instant on a reduced `TimeBase` (seconds per tick,
+`u32 / u32`).
+
+```rust
+impl TimeBase {
+    const MILLIS: Self; const SECONDS: Self;
+    const fn new(numerator: u32, denominator: u32) -> Result<Self, TimingError>;
+    const fn hz(ticks_per_second: u32) -> Result<Self, TimingError>;
+}
+impl Timestamp {
+    const fn new(ticks: i64, base: TimeBase) -> Self;
+    fn compare(self, other: Self) -> Ordering;                   // exact across bases
+    fn same_instant(self, other: Self) -> bool;
+    fn rescale(self, target: TimeBase, rounding: Rounding) -> Result<Self, TimingError>;
+    fn checked_add(self, duration: FrameDuration) -> Result<Self, TimingError>;
+    fn duration_until(self, later: Self) -> Result<FrameDuration, TimingError>;
+}
+enum Rounding { Floor, Ceil, Nearest }                           // Nearest: ties toward +inf
+fn duration_to_ticks(FrameDuration, TimeBase) -> Result<u64, TimingError>;  // exact or Inexact
+fn ticks_to_duration(u64, TimeBase) -> Result<FrameDuration, TimingError>;
+```
+
+One rounding rule everywhere: `Rounding::Nearest` rounds exact halves toward
++infinity, as `TimingQuantizer` does, so quantizing a run of durations and
+rescaling the instants between them give the same endpoints. Missing
+timestamps are `Option<Timestamp>`, never sentinels; nothing derives a
+timestamp from a nominal frame rate.
 
 ### Extensions type-map
 

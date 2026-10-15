@@ -84,6 +84,7 @@ mod policy;
 mod set;
 mod sink;
 pub mod source;
+pub mod time;
 mod traits;
 
 // =========================================================================
