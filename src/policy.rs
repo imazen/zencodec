@@ -272,6 +272,15 @@ pub struct EncodePolicy {
     pub embed_exif: Option<bool>,
     /// Embed XMP metadata in the output.
     pub embed_xmp: Option<bool>,
+    /// Refuse instead of degrading: when `Some(true)`, an encode the caller
+    /// asked for exactly, but which the target can only approximate, fails
+    /// rather than being approximated. The encode-side twin of
+    /// [`DecodePolicy::strict`]. Today that covers a colour description the
+    /// target format cannot carry: by default the pipeline converts the pixels
+    /// to the closest colour the format describes (sRGB) and drops the
+    /// description; strict refuses. Lossless fits (dropping a redundant sRGB
+    /// description) are not refusals. `None` is lenient.
+    pub strict: Option<bool>,
 }
 
 // No longer a 3-byte gate: EncodePolicy now bundles the color + metadata
@@ -287,6 +296,7 @@ impl EncodePolicy {
             embed_icc: None,
             embed_exif: None,
             embed_xmp: None,
+            strict: None,
         }
     }
 
@@ -300,6 +310,7 @@ impl EncodePolicy {
             embed_icc: Some(false),
             embed_exif: Some(false),
             embed_xmp: Some(false),
+            strict: None,
         }
     }
 
@@ -311,6 +322,7 @@ impl EncodePolicy {
             embed_icc: Some(true),
             embed_exif: Some(true),
             embed_xmp: Some(true),
+            strict: None,
         }
     }
 
@@ -372,6 +384,20 @@ impl EncodePolicy {
             None => default,
         }
     }
+
+    /// Refuse instead of degrading (see [`strict`](Self::strict)).
+    pub const fn with_strict(mut self, v: bool) -> Self {
+        self.strict = Some(v);
+        self
+    }
+
+    /// Resolve the strict flag.
+    pub const fn resolve_strict(&self, default: bool) -> bool {
+        match self.strict {
+            Some(v) => v,
+            None => default,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -388,6 +414,15 @@ mod tests {
         assert_eq!(p.allow_animation, None);
         assert_eq!(p.allow_truncated, None);
         assert_eq!(p.strict, None);
+    }
+
+    #[test]
+    fn encode_strict_is_opt_in() {
+        assert!(!EncodePolicy::none().resolve_strict(false));
+        assert!(!EncodePolicy::preserve_all().resolve_strict(false));
+        assert!(EncodePolicy::none().with_strict(true).resolve_strict(false));
+        assert!(!EncodePolicy::none().with_strict(false).resolve_strict(true));
+        assert_eq!(EncodePolicy::strip_all().strict, None);
     }
 
     #[test]

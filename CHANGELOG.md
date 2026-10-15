@@ -175,6 +175,15 @@ removes that whole class).
 
 ## [Unreleased]
 
+### Added
+
+- `EncodePolicy::strict` (`with_strict`, `resolve_strict`), the encode-side
+  twin of `DecodePolicy::strict`: when set, an encode the target can only
+  approximate fails instead of being approximated. zencodecs uses it for a
+  colour description the target format cannot carry, which by default it
+  converts to sRGB. `None` is lenient; additive (`EncodePolicy` is
+  `#[non_exhaustive]`).
+
 ### Changed (unpublished sans-I/O surface from `d116079`)
 
 - `IncrementalDecode` is one call, `step(input, sink, stop) -> Result<Progress, StepError>`
