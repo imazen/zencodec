@@ -332,6 +332,44 @@ memory, never output: the drained bytes plus `finish`'s remainder equal the
 bytes of the same encode left undrained. Without `begin`, encoders behave
 as before and may hold everything until `finish`.
 
+### Rules
+
+Written on `Encoder::begin`, enforced where marked by
+`check_streaming_output_honesty`:
+
+- **Declaration.** `begin` answers as `encode()` of that size would; a
+  second `begin` is an error (checked); a failed `begin` leaves the encoder
+  unchanged. `encode()`/`encode_from()` after `begin` is an error (checked
+  for streaming encoders).
+- **Lag.** Below the image height (checked). It counts pushed rows whose
+  bytes are not yet pending, regardless of push size. Between any two
+  points `lag` rows apart, bytes become pending (checked, which catches an
+  understated lag and a stall after the first strip). A coder without
+  row-aligned output claims a lag by flushing on a row schedule fixed at
+  `begin`.
+- **Bytes.** Draining never changes the file: draining all, uneven prefixes
+  and more than is pending (which clamps) all give the undrained bytes
+  (checked). `begin` may choose framing that makes the file differ from
+  `encode()`'s, never the pixels (checked: same decoded pixels).
+- **Errors.** After an error from `push_rows` or `finish` the encode cannot
+  complete. Bytes already handed out are a prefix of a file that will never
+  be finished, so a driver that sent any aborts its transport: an HTTP
+  server closes the connection, an uploader aborts the multipart upload.
+- **Limits.** `max_output_bytes` bounds the whole file, counting bytes
+  already handed out. An undrained streaming encode holds its output like
+  an `AT_FINISH` one; the memory limit may refuse it.
+- **Colour.** The job's metadata and policy are authoritative; rows whose
+  pixel colour context disagrees may be refused.
+
+`EncoderConfig::with_prefer_streaming(true)` lets a codec-agnostic caller ask
+for a streaming configuration: fixed tables and a sequential scan for JPEG;
+no whole-image reductions for PNG. Explicit codec settings win, and `begin`
+still reports the truth.
+
+The check needs an image taller than `lag + 2 x strip` to verify a lag. It
+fails on a shorter one rather than pass it unverified; `check_all` sizes
+its image from the timing the default configuration reports.
+
 ### Decisions
 
 - **The answer is per encoder, the capability is per codec.**
@@ -355,10 +393,17 @@ as before and may hold everything until `finish`.
   "streams if the destination can seek back to patch a size") is additive.
   Encoders that write a size or index after the data and could patch it in
   place need that; today they report `AT_FINISH`.
+- **No owned-buffer handoff yet.** A driver copies `pending_output` once
+  (into a socket write, a `Bytes`, a `PipeWriter` segment). Measured on
+  the end-to-end HTTP bench, that copy is a small part of even raw formats'
+  cost. A provided `take_output(&mut self, into: &mut Vec<u8>)`, which an
+  encoder could satisfy by swapping its buffer, and a shared output-buffer
+  helper for implementers are additive later.
 - **Out of scope for now:** streaming from `encode_from` (it returns the
   whole file; drivers that stream use `push_rows`) and from
   `AnimationFrameEncoder` (frame-at-a-time output is a natural, additive
-  extension with the same `pending_output` pair).
+  extension with the same `pending_output` pair; GIF, APNG and animated
+  WebP will want it first).
 
 `EncoderSink` is the bridge: a `DecodeRowSink` that forwards `begin`, hands
 the decoder its own strip buffer and pushes each strip to the encoder when
@@ -470,13 +515,13 @@ Rules learned on the way, each recorded where it was measured:
 - `check_incremental_capability_honesty` and
   `check_seekable_capability_honesty`: the capability flags match what the
   job provides, in both directions.
-- `check_streaming_output_honesty`: the `OutputTiming` from `begin` is
-  kept. A streaming timing needs the codec's `streaming_output`; once more
-  than `lag_rows` rows are pushed, bytes beyond those available at `begin`
-  are pending; draining leaves the file byte-identical, and the result
-  decodes to the one-shot pixels. `AT_FINISH` keeps `pending_output`
-  empty. A `RowLevelEncode` rejection at `begin` passes. Run it with a
-  streaming configuration as well as the default.
+- `check_streaming_output_honesty`: the rules above. A streaming timing
+  needs the codec's `streaming_output` and a lag below the height; bytes
+  become pending across every lag window; full, uneven and over-sized
+  drains leave the file byte-identical; a second `begin` and `encode` after
+  `begin` fail; the result decodes to the one-shot pixels. `AT_FINISH`
+  keeps `pending_output` empty. A `RowLevelEncode` rejection at `begin`
+  passes. Run it with a streaming configuration as well as the default.
 - `check_read_at_contract` for sources.
 
 `check_all` runs every codec check above against an encoder and decoder

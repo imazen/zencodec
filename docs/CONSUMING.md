@@ -461,23 +461,36 @@ when bytes arrive; send what is pending after each strip:
 ```rust
 use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
 
+let config = config.with_prefer_streaming(true);  // codec-agnostic ask
 let mut enc = config.job().with_metadata_policy(meta, policy).encoder()?;
 let timing = enc.begin(width, height, descriptor)?;
 if !timing.streams() {
     // Everything arrives from finish(): buffer, or send a Content-Length.
 }
-for strip in strips {                       // preferred_strip_height() rows each
-    enc.push_rows(strip)?;
+let mut send = |enc: &mut _, out: &mut _| -> std::io::Result<()> {
     let n = enc.pending_output().len();
     out.write_all(enc.pending_output())?;   // nothing to write unless it streams
-    enc.consume_output(n);
+    enc.consume_output(n);                  // forget this and bytes repeat
+    Ok(())
+};
+send(&mut enc, &mut out)?;                  // the header, right after begin
+for strip in strips {                       // preferred_strip_height() rows each
+    enc.push_rows(strip)?;
+    send(&mut enc, &mut out)?;
 }
 out.write_all(enc.finish()?.data())?;
 ```
 
 `timing.lag_rows()` is the most rows the encoder holds before their bytes
 are pending. A configuration that cannot encode from rows fails at `begin`
-with `UnsupportedOperation::RowLevelEncode`.
+with `UnsupportedOperation::RowLevelEncode`. If `push_rows` or `finish` fails
+after bytes went out, the file can't be completed: abort the transport
+(close the connection, abort the upload) instead of ending it normally.
+
+Measured end to end over HTTP (zqi `benchmarks/stream_http_2026-10-14`), a
+streaming encoder's first byte leaves within 0.25 ms instead of after the
+whole encode, and server memory under concurrent 12 MP requests drops from
+hundreds of MB to tens.
 
 **Pull-native codecs** (`capabilities().seekable()`) read from a source
 directly: `job.push_decoder_from_source(&mut source, &mut sink, &[])`, or

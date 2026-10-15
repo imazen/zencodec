@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2041 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 112 lines (112 hidden + 0 excluded-feature)
+# files: zencodec.txt 2045 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 112 lines (112 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -14,7 +14,7 @@
 #   pub types (struct/enum/trait/alias)       221
 #   pub consts/statics                        231
 #   free functions                             64
-#   inherent methods                          860
+#   inherent methods                          864
 #   struct fields                             249
 #   enum variants                             302
 #   re-exports                                 15
@@ -27,7 +27,7 @@
 #   (root)                          853
 #   animation                         8
 #   decode                          238
-#   encode                          158
+#   encode                          160
 #   estimate                         48
 #   exif                             94
 #   gainmap                         126
@@ -35,10 +35,10 @@
 #   icc                               1
 #   inventory                       103
 #   metadata_rewrite                 58
-#   prelude                         216
+#   prelude                         218
 #   source                           37
 
-## items (1889 lines)
+## items (1893 lines)
 
 pub mod zencodec
 pub use At
@@ -658,6 +658,7 @@ pub fn encode::EncoderConfig::generic_effort(&self) -> core::option::Option<i32>
 pub fn encode::EncoderConfig::generic_quality(&self) -> core::option::Option<f32>
 pub fn encode::EncoderConfig::is_lossless(&self) -> core::option::Option<bool>
 pub fn encode::EncoderConfig::job(self) -> Self::Job
+pub fn encode::EncoderConfig::prefers_streaming(&self) -> core::option::Option<bool>
 pub fn encode::EncoderConfig::resolved_target_fidelity(&self) -> core::option::Option<encode::Fidelity>
 pub fn encode::EncoderConfig::select_fidelity(&self, &[encode::Fidelity]) -> core::result::Result<(usize, Self), encode::FidelitySelectionError>
 pub fn encode::EncoderConfig::supported_descriptors() -> &'static [zenpixels::descriptor::PixelDescriptor]
@@ -667,6 +668,7 @@ pub fn encode::EncoderConfig::with_fidelity(self, encode::Fidelity) -> Self
 pub fn encode::EncoderConfig::with_generic_effort(self, i32) -> Self
 pub fn encode::EncoderConfig::with_generic_quality(self, f32) -> Self
 pub fn encode::EncoderConfig::with_lossless(self, bool) -> Self
+pub fn encode::EncoderConfig::with_prefer_streaming(self, bool) -> Self
 pub fn encode::best_encode_format(zenpixels::descriptor::PixelDescriptor, &[zenpixels::descriptor::PixelDescriptor]) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
 pub mod estimate
 #[non_exhaustive] pub enum estimate::SimdTier
@@ -1255,6 +1257,7 @@ pub fn prelude::EncoderConfig::generic_effort(&self) -> core::option::Option<i32
 pub fn prelude::EncoderConfig::generic_quality(&self) -> core::option::Option<f32>
 pub fn prelude::EncoderConfig::is_lossless(&self) -> core::option::Option<bool>
 pub fn prelude::EncoderConfig::job(self) -> Self::Job
+pub fn prelude::EncoderConfig::prefers_streaming(&self) -> core::option::Option<bool>
 pub fn prelude::EncoderConfig::resolved_target_fidelity(&self) -> core::option::Option<encode::Fidelity>
 pub fn prelude::EncoderConfig::select_fidelity(&self, &[encode::Fidelity]) -> core::result::Result<(usize, Self), encode::FidelitySelectionError>
 pub fn prelude::EncoderConfig::supported_descriptors() -> &'static [zenpixels::descriptor::PixelDescriptor]
@@ -1264,6 +1267,7 @@ pub fn prelude::EncoderConfig::with_fidelity(self, encode::Fidelity) -> Self
 pub fn prelude::EncoderConfig::with_generic_effort(self, i32) -> Self
 pub fn prelude::EncoderConfig::with_generic_quality(self, f32) -> Self
 pub fn prelude::EncoderConfig::with_lossless(self, bool) -> Self
+pub fn prelude::EncoderConfig::with_prefer_streaming(self, bool) -> Self
 pub type prelude::IncrementalDecode::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn prelude::IncrementalDecode::access_pattern(&self) -> source::AccessPattern
 pub fn prelude::IncrementalDecode::info(&self) -> core::option::Option<&ImageInfo>

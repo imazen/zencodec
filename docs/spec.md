@@ -66,10 +66,12 @@ trait EncoderConfig: Clone + Send + Sync {
     fn with_generic_effort(self, effort: i32) -> Self;    // default: self
     fn with_lossless(self, lossless: bool) -> Self;       // default: self
     fn with_alpha_quality(self, quality: f32) -> Self;    // default: self
+    fn with_prefer_streaming(self, prefer: bool) -> Self; // default: self
     fn generic_quality(&self) -> Option<f32>;   // default: None
     fn generic_effort(&self) -> Option<i32>;    // default: None
     fn is_lossless(&self) -> Option<bool>;      // default: None
     fn alpha_quality(&self) -> Option<f32>;     // default: None
+    fn prefers_streaming(&self) -> Option<bool>; // default: None
 
     fn job(self) -> Self::Job;
 
@@ -163,9 +165,30 @@ holding back at most `lag_rows` pushed rows; the caller sends them and calls
 `OutputTiming::AT_FINISH` `pending_output` stays empty. Draining never
 changes the bytes. Pushing more or fewer rows than declared is an error.
 
+Rules (spelled out on `Encoder::begin`):
+
+- `begin` answers as `encode()` of that size would. A second `begin` is an
+  error, and a failed `begin` leaves the encoder unchanged.
+- `encode()`/`encode_from()` after `begin` or `push_rows` is an error.
+- The lag is below the image height and counts pushed rows whose bytes
+  are not yet pending. A coder without row-aligned output flushes on a row
+  schedule fixed at `begin`.
+- `begin` may choose framing (flush points, chunking) that makes the file
+  differ from `encode()`'s; it may never change the pixels.
+- `consume_output(n)` with `n` above the pending length consumes all of it.
+- After an error from `push_rows` or `finish` the encode cannot complete;
+  a driver that has sent bytes aborts its transport.
+- `max_output_bytes` bounds the whole file, including bytes already handed
+  out.
+
+`EncoderConfig::with_prefer_streaming(true)` asks, codec-agnostically, for
+a configuration that streams (JPEG: fixed tables, sequential; PNG: no
+whole-image reductions). Explicit codec settings win; `begin` reports what
+the encoder will do.
+
 ```rust
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
-struct OutputTiming { /* private */ }
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct OutputTiming { /* private */ }               // Default = AT_FINISH
 impl OutputTiming {
     const AT_FINISH: Self;                         // everything from finish (the default)
     const fn streaming(lag_rows: u32) -> Self;     // bytes stream; at most lag_rows held

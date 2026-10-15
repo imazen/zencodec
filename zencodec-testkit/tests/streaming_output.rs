@@ -20,6 +20,9 @@ const LEAK: u8 = 1; // reports AT_FINISH, exposes bytes anyway
 const UNDECLARED: u8 = 2; // honest bytes, but the codec omits streaming_output
 const DECLINE: u8 = 3; // this configuration cannot push rows: begin rejects
 const HONEST_LAG: u8 = 4; // holds rows back and says so
+const HUGE_LAG: u8 = 5; // reports streaming(1_000_000) and holds every row
+const STALL: u8 = 6; // reports lag 0, shows the first strip, then holds the rest
+const BAD_CONSUME: u8 = 7; // a partial consume_output drops one byte too many
 
 static STREAMING: EncodeCapabilities = EncodeCapabilities::new()
     .with_lossless(true)
@@ -142,6 +145,7 @@ impl<const F: u8> Encoder for LiarEnc<F> {
         Ok(match F {
             LEAK => OutputTiming::AT_FINISH,
             HONEST_LAG => OutputTiming::streaming(self.lag),
+            HUGE_LAG => OutputTiming::streaming(1_000_000),
             _ => real,
         })
     }
@@ -152,8 +156,10 @@ impl<const F: u8> Encoder for LiarEnc<F> {
         // HONEST_LAG holds back everything until `lag` rows have arrived,
         // then shows it all: never more than `lag` rows unwritten.
         let show = match F {
-            HOLD_ROWS => false,
+            HOLD_ROWS | HUGE_LAG => false,
             HONEST_LAG => self.rows >= self.lag,
+            // The first push's bytes, then nothing.
+            STALL => self.rows == n,
             _ => true,
         };
         if show && !self.held.is_empty() {
@@ -167,7 +173,13 @@ impl<const F: u8> Encoder for LiarEnc<F> {
         &self.shown[self.drained..]
     }
     fn consume_output(&mut self, n: usize) {
-        self.drained += n;
+        let pending = self.shown.len() - self.drained;
+        let n = if F == BAD_CONSUME && n > 0 && n < pending {
+            n + 1
+        } else {
+            n
+        };
+        self.drained = (self.drained + n).min(self.shown.len());
     }
     fn finish(mut self) -> Result<EncodeOutput, RefError> {
         let mut rest = self.shown.split_off(self.drained);
@@ -247,4 +259,51 @@ fn output_timing_accessors() {
     assert_eq!(OutputTiming::AT_FINISH.lag_rows(), None);
     assert_eq!(OutputTiming::default(), OutputTiming::AT_FINISH);
     assert_eq!(OutputTiming::streaming(16).lag_rows(), Some(16));
+}
+
+#[test]
+fn a_lag_beyond_the_image_is_caught() {
+    let e =
+        check_streaming_output_honesty(Liar::<HUGE_LAG>::default(), ReferenceDecoderConfig, &img())
+            .unwrap_err();
+    assert!(e.to_string().contains("reports AT_FINISH"), "{e}");
+}
+
+#[test]
+fn stalling_after_the_first_strip_is_caught() {
+    let e =
+        check_streaming_output_honesty(Liar::<STALL>::default(), ReferenceDecoderConfig, &img())
+            .unwrap_err();
+    assert!(e.to_string().contains("no bytes became pending"), "{e}");
+}
+
+#[test]
+fn a_partial_consume_that_drops_a_byte_is_caught() {
+    let e = check_streaming_output_honesty(
+        Liar::<BAD_CONSUME>::default(),
+        ReferenceDecoderConfig,
+        &img(),
+    )
+    .unwrap_err();
+    assert!(e.to_string().contains("consume_output"), "{e}");
+}
+
+#[test]
+fn an_image_too_short_for_the_lag_is_refused() {
+    // HONEST_LAG holds 8 rows; with strips of 4 that needs more than 16 rows.
+    let short = TestImage::rgba8_gradient(16, 16);
+    let e = check_streaming_output_honesty(
+        Liar::<HONEST_LAG>::default(),
+        ReferenceDecoderConfig,
+        &short,
+    )
+    .unwrap_err();
+    assert!(e.to_string().contains("cannot verify a lag"), "{e}");
+}
+
+#[test]
+fn check_all_picks_an_image_tall_enough_for_the_lag() {
+    // The reference streams with lag 0; check_all must still run the whole
+    // streaming check (it would fail on a 24-row image only for a larger lag).
+    zencodec_testkit::check_all(ReferenceEncoderConfig::new(), ReferenceDecoderConfig).unwrap();
 }

@@ -65,7 +65,9 @@ impl OutputTiming {
     /// byte, a run not yet closed). The lag
     /// covers whatever the encoder must see before it can commit a row:
     /// a block row, a lookahead window, an adaptive-quantization delay.
-    /// Report an upper bound; `0` means each row is written as it arrives.
+    /// Report an upper bound, below the image height; `0` means each row is
+    /// written as it arrives. See [`Encoder::begin`](crate::encode::Encoder::begin)
+    /// for how the lag is counted.
     pub const fn streaming(lag_rows: u32) -> Self {
         Self {
             lag_rows: Some(lag_rows),

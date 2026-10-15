@@ -11,8 +11,18 @@ use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 ///
 /// Three mutually exclusive usage paths:
 /// - [`encode()`](Encoder::encode) — all at once, consumes self
-/// - [`push_rows()`](Encoder::push_rows) + [`finish()`](Encoder::finish) — caller pushes rows
+/// - [`push_rows()`](Encoder::push_rows) + [`finish()`](Encoder::finish), after an
+///   optional [`begin()`](Encoder::begin) — caller pushes rows, and with `begin`
+///   may send encoded bytes as they arrive ([`pending_output`](Encoder::pending_output))
 /// - [`encode_from()`](Encoder::encode_from) — encoder pulls rows from a callback
+///
+/// Once `begin` or `push_rows` has been called, `encode` and `encode_from`
+/// are errors. After an error from `begin`, `push_rows` or `finish`, the
+/// encode cannot complete: bytes already handed out are a prefix of a file
+/// that will never be finished, so a driver that has sent any must abort its
+/// transport (close the connection, abort the upload) rather than end it
+/// normally. The one exception is a failed `begin`, which leaves the encoder
+/// exactly as it was.
 ///
 /// Codecs that need full-frame data (e.g. AV1) may buffer internally
 /// when rows are pushed or pulled incrementally.
@@ -120,10 +130,30 @@ pub trait Encoder: Sized {
     /// [`streaming_output`](crate::encode::EncodeCapabilities::streaming_output)
     /// may return a streaming timing.
     ///
-    /// After `begin`, pushing more or fewer rows than declared, or rows of
-    /// another width or descriptor, is an error at `push_rows` or `finish`.
-    /// The streamed bytes must equal those of the same encode left
-    /// undrained: draining changes memory, never output.
+    /// Rules every implementation follows:
+    ///
+    /// - **Declaration.** `begin` answers as [`encode`](Self::encode) of a
+    ///   `width` x `height` image would (a size `encode` refuses, `begin`
+    ///   refuses). A second `begin` is an error. A failed `begin` leaves the
+    ///   encoder unchanged.
+    /// - **Rows.** After `begin`, pushing more or fewer rows than declared,
+    ///   or rows of another width or descriptor, is an error at `push_rows`
+    ///   or `finish`. Colour comes from the job (metadata, policy); rows whose
+    ///   pixel colour context disagrees with it may be refused.
+    /// - **Lag.** A streaming lag is below `height` (an encoder that would
+    ///   hold every row reports `AT_FINISH`), counts pushed rows whatever
+    ///   the push size, and counts a row as done once its bytes are in
+    ///   `pending_output`. A coder without row-aligned output (deflate, rANS
+    ///   blocks) claims a lag by flushing on a row schedule fixed at `begin`.
+    /// - **Bytes.** Draining changes memory, never output: what was taken
+    ///   plus `finish`'s return equals the same encode left undrained. `begin`
+    ///   may choose a framing or flush schedule that makes the file differ
+    ///   from `encode()`'s (one IDAT chunk per strip instead of one), never
+    ///   different pixels, and never a different quality or format
+    ///   configuration.
+    /// - **Limits.** `max_output_bytes` bounds the whole file, bytes already
+    ///   handed out included. A streaming encode nobody drains holds its
+    ///   output like an `AT_FINISH` one, and the memory limit may refuse it.
     ///
     /// Calling `begin` is optional; without it, encoders behave as before
     /// and may hold all output until `finish`.
@@ -153,7 +183,8 @@ pub trait Encoder: Sized {
     }
 
     /// Mark the first `n` bytes of [`pending_output`](Self::pending_output)
-    /// as sent. `n` must not exceed its length. Default: no-op.
+    /// as sent. An `n` larger than the pending length marks all of it.
+    /// Default: no-op.
     fn consume_output(&mut self, n: usize) {
         let _ = n;
     }

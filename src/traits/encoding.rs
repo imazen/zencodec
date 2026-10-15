@@ -110,6 +110,35 @@ pub trait EncoderConfig: Clone + Send + Sync {
         self
     }
 
+    /// Prefer (or not) a configuration whose output streams: one for which
+    /// [`Encoder::begin`](crate::encode::Encoder::begin) reports
+    /// [`OutputTiming::streaming`](crate::encode::OutputTiming::streaming),
+    /// trading size or speed where the format needs it (fixed entropy tables
+    /// and a sequential scan for JPEG; no whole-image reductions for PNG).
+    ///
+    /// A codec-agnostic caller (a server choosing chunked transfer, a pipeline
+    /// with a memory budget) asks with this; the codec decides what it means.
+    /// Settings made explicitly through the codec's own API still win, and
+    /// `begin` reports what the encoder will actually do, so a caller never
+    /// needs to know which knob produced it.
+    ///
+    /// # Note
+    ///
+    /// The default implementation is a no-op: codecs whose output streams in
+    /// every configuration, or in none, have no choice to make. Use
+    /// [`prefers_streaming()`](EncoderConfig::prefers_streaming) to see
+    /// whether the codec took the preference.
+    fn with_prefer_streaming(self, _prefer: bool) -> Self {
+        self
+    }
+
+    /// The streaming preference set with
+    /// [`with_prefer_streaming`](EncoderConfig::with_prefer_streaming), or
+    /// `None` if the codec has no such choice.
+    fn prefers_streaming(&self) -> Option<bool> {
+        None
+    }
+
     /// Current generic quality value, or `None` if the codec has no quality tuning.
     fn generic_quality(&self) -> Option<f32> {
         None

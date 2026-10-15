@@ -1053,6 +1053,11 @@ impl Encoder for RefEnc {
     }
 
     fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, RefError> {
+        // The usage paths are exclusive: no one-shot encode after `begin` or
+        // `push_rows`.
+        if self.width.is_some() {
+            return Err(RefError::Invalid("encode after begin or push_rows".into()));
+        }
         Ok(EncodeOutput::new(
             encode_single(pixels, &self.metadata, self.gain_map.as_ref()),
             ImageFormat::Pnm,
@@ -1065,6 +1070,9 @@ impl Encoder for RefEnc {
         height: u32,
         desc: PixelDescriptor,
     ) -> Result<OutputTiming, RefError> {
+        if self.declared_height.is_some() {
+            return Err(RefError::Invalid("begin called twice".into()));
+        }
         if self.width.is_some() {
             return Err(RefError::Invalid("begin after push_rows".into()));
         }

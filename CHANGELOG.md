@@ -22,6 +22,14 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
   reference codec implements both sans-I/O paths; the minimal codec declares neither.
   The testkit now depends on `zencodec-io` for its slice driver and collect sink, so
   `zencodec-io` must publish before the testkit can.
+- `check_streaming_output_honesty` now enforces the rules: lag below the height;
+  bytes pending across every lag window (an understated lag or a stall after one
+  strip fails); full, uneven and over-sized drains give identical bytes; a second
+  `begin` and `encode` after a streaming `begin` fail; an image too short to verify
+  the lag fails instead of passing. `check_all` sizes its image from the default
+  configuration's lag. The reference encoder refuses `encode` after `begin`. Found
+  by an adversarial review (each gap reproduced, then covered by a misbehaving
+  wrapper in `tests/streaming_output.rs`).
 - `check_streaming_output_honesty` checks the `OutputTiming` that `begin` returns:
   a streaming timing needs `streaming_output`; once more than `lag_rows` rows are
   pushed, bytes beyond the header must be pending; `AT_FINISH` keeps
@@ -205,6 +213,15 @@ removes that whole class).
   `begin` is also where a configuration that cannot encode from rows rejects with
   `RowLevelEncode`. The default returns `AT_FINISH`. `zencodec-io`'s `EncoderSink`
   keeps the answer (`output_timing()`).
+- `EncoderConfig::with_prefer_streaming` / `prefers_streaming` (provided, no-op by
+  default): a codec-agnostic request for a configuration whose output streams;
+  explicit codec settings win and `begin` reports the result.
+- Streaming-output rules written on `Encoder::begin` and in the contract: a second
+  `begin` is an error and a failed one leaves the encoder unchanged; `encode` after
+  `begin` is an error; the lag is below the image height; `begin` may change
+  framing, never pixels; `consume_output` clamps; after a `push_rows`/`finish`
+  error a driver that sent bytes aborts its transport; `max_output_bytes` bounds
+  the whole file.
 - `DecodeRowSink::accepts_provisional` and `provide_pass_buffer` (defaulted): a sink
   opts into progressive passes; final-only sinks are unchanged.
 - Workspace crates (unpublished): `zencodec-io` and `zencodec-coroutine`

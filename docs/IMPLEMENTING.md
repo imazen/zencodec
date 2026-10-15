@@ -840,10 +840,23 @@ metadata, whether this encode streams, and say so:
   cannot encode from rows at all, even though the codec declares `push_rows`.
 
 Return an error if more or fewer rows than declared are pushed, if `begin`
-follows rows, or if the layout changes. Never change the configuration to make
-an encode stream: a caller who asked for progressive or optimized tables gets
-them, with `AT_FINISH`. The bytes must not depend on draining: what the caller
-took plus `finish`'s return equals an undrained run. Without `begin`, behave as
+follows rows or another `begin`, or if the layout changes. Validate the whole
+declaration before storing any of it: a failed `begin` leaves the encoder as it
+was. Refuse `encode`/`encode_from` after `begin`. Keep the lag below the image
+height (report `AT_FINISH` when you would hold every row). Clamp
+`consume_output(n)` to the pending length. Count bytes already handed out
+toward `max_output_bytes`.
+
+Never change the configuration to make an encode stream: a caller who asked
+for progressive or optimized tables gets them, with `AT_FINISH`. You may choose
+framing at `begin` that differs from `encode()` (zenpng writes one IDAT chunk
+per strip instead of one for the image), as long as the pixels are the same;
+a coder without row-aligned output claims a lag by flushing on a row schedule
+fixed at `begin`. The bytes must not depend on draining: what the caller took
+plus `finish`'s return equals an undrained run. If your codec has a
+configuration that streams and one that does not, implement
+`EncoderConfig::with_prefer_streaming` to select the streaming one when the
+caller has not chosen explicitly. Without `begin`, behave as
 before (patching the header at `finish` is fine; expose nothing from
 `pending_output` until then). `finish` returns only the bytes not consumed.
 Declare `with_push_rows(true)` and, if any configuration streams,
