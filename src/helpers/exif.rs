@@ -57,6 +57,20 @@ pub fn set_exif_orientation(data: &[u8], value: Orientation) -> Option<alloc::ve
     crate::exif::set_orientation(data, value)
 }
 
+/// Rewrite the EXIF ColorSpace tag (0xA001) to match the colour the image is
+/// encoded with: `1` (sRGB) when `srgb`, else `0xFFFF` (uncalibrated, "see
+/// the ICC profile"). Readers that consult ColorSpace treat `1` as sRGB
+/// whatever profile is embedded, so a wide-gamut encode that kept a source's
+/// `1` would be shown as sRGB (imazen/zencodec#132).
+///
+/// Like [`set_exif_orientation`], a reconciliation primitive: the value is
+/// overwritten in place (the rest of the blob is byte-identical), the tag is
+/// never added, and `None` means the blob is malformed, has no ColorSpace
+/// tag, or stores it in a form this can't patch — leave the blob unchanged.
+pub fn set_exif_color_space(data: &[u8], srgb: bool) -> Option<alloc::vec::Vec<u8>> {
+    crate::exif::set_color_space(data, if srgb { 1 } else { 0xFFFF })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -186,5 +200,55 @@ mod tests {
             None
         );
         assert_eq!(set_exif_orientation(&[], Orientation::Identity), None);
+    }
+}
+
+#[cfg(test)]
+mod color_space_tests {
+    use super::set_exif_color_space;
+
+    /// II TIFF: IFD0 {ExifIFD ->} ; Exif IFD {ColorSpace = `cs`}.
+    fn tiff_with_color_space(cs: u16) -> alloc::vec::Vec<u8> {
+        let mut t = alloc::vec::Vec::new();
+        t.extend_from_slice(b"II*\0");
+        t.extend_from_slice(&8u32.to_le_bytes());
+        // IFD0: one entry, ExifIFD pointer (LONG) -> 26
+        t.extend_from_slice(&1u16.to_le_bytes());
+        t.extend_from_slice(&[0x69, 0x87, 4, 0, 1, 0, 0, 0]);
+        t.extend_from_slice(&26u32.to_le_bytes());
+        t.extend_from_slice(&0u32.to_le_bytes());
+        // Exif IFD at 26: ColorSpace (SHORT)
+        t.extend_from_slice(&1u16.to_le_bytes());
+        t.extend_from_slice(&[0x01, 0xA0, 3, 0, 1, 0, 0, 0]);
+        t.extend_from_slice(&cs.to_le_bytes());
+        t.extend_from_slice(&[0, 0]);
+        t.extend_from_slice(&0u32.to_le_bytes());
+        t
+    }
+
+    #[test]
+    fn rewrites_the_tag_in_place_both_ways() {
+        let srgb = tiff_with_color_space(1);
+        let wide = set_exif_color_space(&srgb, false).expect("tag present");
+        assert_eq!(wide.len(), srgb.len());
+        assert_eq!(wide, tiff_with_color_space(0xFFFF), "only the value changes");
+        assert_eq!(set_exif_color_space(&wide, true).unwrap(), srgb);
+
+        let mut app1 = b"Exif\0\0".to_vec();
+        app1.extend_from_slice(&srgb);
+        let mut want = b"Exif\0\0".to_vec();
+        want.extend_from_slice(&tiff_with_color_space(0xFFFF));
+        assert_eq!(set_exif_color_space(&app1, false).unwrap(), want);
+    }
+
+    #[test]
+    fn never_adds_the_tag() {
+        let mut no_exif_ifd = alloc::vec::Vec::new();
+        no_exif_ifd.extend_from_slice(b"II*\0");
+        no_exif_ifd.extend_from_slice(&8u32.to_le_bytes());
+        no_exif_ifd.extend_from_slice(&0u16.to_le_bytes());
+        no_exif_ifd.extend_from_slice(&0u32.to_le_bytes());
+        assert_eq!(set_exif_color_space(&no_exif_ifd, false), None);
+        assert_eq!(set_exif_color_space(b"not exif", true), None);
     }
 }

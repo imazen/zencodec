@@ -1312,6 +1312,25 @@ pub(crate) fn set_orientation(data: &[u8], value: Orientation) -> Option<Vec<u8>
 /// is byte-identical.
 fn set_orientation_with(data: &[u8], exif: &Exif<'_>, value: Orientation) -> Option<Vec<u8>> {
     let entry = exif.ifd0.iter().find(|e| e.tag == TAG_ORIENTATION)?;
+    patch_inline_int(data, exif, entry, u32::from(value as u8))
+}
+
+/// Rewrite the EXIF ColorSpace tag (0xA001) to `value` in place: in the Exif
+/// sub-IFD, or IFD0 where a TIFF stores it. `None` when the tag is absent or
+/// not an inline integer. Offset-preserving like [`set_orientation`].
+pub(crate) fn set_color_space(data: &[u8], value: u16) -> Option<Vec<u8>> {
+    let exif = Exif::parse(data)?;
+    let entry = exif
+        .exif_ifd
+        .iter()
+        .flatten()
+        .chain(exif.ifd0.iter())
+        .find(|e| e.tag == TAG_COLOR_SPACE)?;
+    patch_inline_int(data, &exif, entry, u32::from(value))
+}
+
+/// Overwrite an inline SHORT/LONG entry's value in a copy of `data`.
+fn patch_inline_int(data: &[u8], exif: &Exif<'_>, entry: &Entry<'_>, v: u32) -> Option<Vec<u8>> {
     let size = match entry.kind {
         TIFF_SHORT => 2usize,
         TIFF_LONG => 4,
@@ -1347,7 +1366,6 @@ fn set_orientation_with(data: &[u8], exif: &Exif<'_>, value: Orientation) -> Opt
         0
     };
     let off = base.checked_add(entry.value_offset)?;
-    let v = u32::from(value as u8);
     let mut out = data.to_vec();
     let dst = out.get_mut(off..off.checked_add(size)?)?;
     match exif.order {

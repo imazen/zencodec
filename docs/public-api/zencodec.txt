@@ -6,14 +6,14 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2136 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 120 lines (120 hidden + 0 excluded-feature)
+# files: zencodec.txt 2137 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 120 lines (120 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                14
 #   pub types (struct/enum/trait/alias)       229
 #   pub consts/statics                        250
-#   free functions                             74
+#   free functions                             75
 #   inherent methods                          911
 #   struct fields                             249
 #   enum variants                             315
@@ -31,7 +31,7 @@
 #   estimate                         48
 #   exif                             94
 #   gainmap                         126
-#   helpers                          15
+#   helpers                          16
 #   icc                               1
 #   inventory                       103
 #   metadata_rewrite                 58
@@ -39,7 +39,7 @@
 #   source                           37
 #   time                             22
 
-## items (1979 lines)
+## items (1980 lines)
 
 pub mod zencodec
 pub use At
@@ -943,6 +943,7 @@ pub fn helpers::descriptor_for_decoded_pixels_v2(zenpixels::descriptor::PixelFor
 pub fn helpers::icc_profile_is_srgb(&[u8]) -> bool
 pub fn helpers::identify_well_known_icc(&[u8], helpers::IccMatchTolerance) -> core::option::Option<(zenpixels::descriptor::ColorPrimaries, zenpixels::descriptor::TransferFunction)>
 pub fn helpers::parse_exif_orientation(&[u8]) -> core::option::Option<zenpixels::orientation::Orientation>
+pub fn helpers::set_exif_color_space(&[u8], bool) -> core::option::Option<alloc::vec::Vec<u8>>
 pub fn helpers::set_exif_orientation(&[u8], zenpixels::orientation::Orientation) -> core::option::Option<alloc::vec::Vec<u8>>
 pub mod icc
 pub mod inventory
