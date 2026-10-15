@@ -1,0 +1,388 @@
+#![cfg(feature = "c2pa")]
+//! A manifest store built here byte by byte: JUMBF superboxes, CBOR claim and
+//! assertions, a COSE_Sign1 signature with one X.509 certificate, and a thumbnail.
+use zenmeta::audit::{Finding, Report};
+
+// ── CBOR ──────────────────────────────────────────────────────────────────────────
+fn head(major: u8, n: u64) -> Vec<u8> {
+    let m = major << 5;
+    match n {
+        0..=23 => vec![m | n as u8],
+        24..=0xff => vec![m | 24, n as u8],
+        0x100..=0xffff => [vec![m | 25], (n as u16).to_be_bytes().to_vec()].concat(),
+        0x1_0000..=0xffff_ffff => [vec![m | 26], (n as u32).to_be_bytes().to_vec()].concat(),
+        _ => [vec![m | 27], n.to_be_bytes().to_vec()].concat(),
+    }
+}
+fn uint(n: u64) -> Vec<u8> {
+    head(0, n)
+}
+fn nint(n: i64) -> Vec<u8> {
+    head(1, (-1 - n) as u64)
+}
+fn text(s: &str) -> Vec<u8> {
+    [head(3, s.len() as u64), s.as_bytes().to_vec()].concat()
+}
+fn bytes(b: &[u8]) -> Vec<u8> {
+    [head(2, b.len() as u64), b.to_vec()].concat()
+}
+fn array(items: &[Vec<u8>]) -> Vec<u8> {
+    [head(4, items.len() as u64), items.concat()].concat()
+}
+fn map(pairs: &[(Vec<u8>, Vec<u8>)]) -> Vec<u8> {
+    let mut out = head(5, pairs.len() as u64);
+    for (k, v) in pairs {
+        out.extend_from_slice(k);
+        out.extend_from_slice(v);
+    }
+    out
+}
+fn tag(t: u64, v: Vec<u8>) -> Vec<u8> {
+    [head(6, t), v].concat()
+}
+
+// ── JUMBF ─────────────────────────────────────────────────────────────────────────
+fn bx(ty: &[u8; 4], payload: &[u8]) -> Vec<u8> {
+    [
+        ((payload.len() + 8) as u32).to_be_bytes().to_vec(),
+        ty.to_vec(),
+        payload.to_vec(),
+    ]
+    .concat()
+}
+fn c2pa_uuid(t: &[u8; 4]) -> Vec<u8> {
+    [
+        t.to_vec(),
+        vec![
+            0x00, 0x11, 0x00, 0x10, 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71,
+        ],
+    ]
+    .concat()
+}
+fn superbox(uuid: Vec<u8>, label: &str, content: &[Vec<u8>]) -> Vec<u8> {
+    let jumd = [uuid, vec![0x03], label.as_bytes().to_vec(), vec![0]].concat();
+    bx(b"jumb", &[bx(b"jumd", &jumd), content.concat()].concat())
+}
+
+// ── DER ───────────────────────────────────────────────────────────────────────────
+fn der(id: u8, v: &[u8]) -> Vec<u8> {
+    let mut out = vec![id];
+    if v.len() < 0x80 {
+        out.push(v.len() as u8);
+    } else {
+        out.extend_from_slice(&[0x82, (v.len() >> 8) as u8, v.len() as u8]);
+    }
+    out.extend_from_slice(v);
+    out
+}
+fn name(attrs: &[(&[u8], &str)]) -> Vec<u8> {
+    let rdns: Vec<u8> = attrs
+        .iter()
+        .flat_map(|(oid, val)| {
+            der(
+                0x31,
+                &der(0x30, &[der(0x06, oid), der(0x0c, val.as_bytes())].concat()),
+            )
+        })
+        .collect();
+    der(0x30, &rdns)
+}
+const CN: &[u8] = &[0x55, 0x04, 0x03];
+const O: &[u8] = &[0x55, 0x04, 0x0a];
+const EMAIL: &[u8] = &[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x09, 0x01];
+const ECDSA_SHA256: &[u8] = &[0x2a, 0x86, 0x48, 0xce, 0x3d, 0x04, 0x03, 0x02];
+fn certificate() -> Vec<u8> {
+    let alg = der(0x30, &der(0x06, ECDSA_SHA256));
+    let san = der(0x30, &der(0x81, b"signer@example.test"));
+    let ext = der(
+        0x30,
+        &[der(0x06, &[0x55, 0x1d, 0x11]), der(0x04, &san)].concat(),
+    );
+    let tbs = der(
+        0x30,
+        &[
+            der(0xa0, &der(0x02, &[2])),
+            der(0x02, &[0x1f, 0x2e]),
+            alg.clone(),
+            name(&[(CN, "Example CA"), (O, "Example Org")]),
+            der(
+                0x30,
+                &[der(0x17, b"250101000000Z"), der(0x17, b"270101000000Z")].concat(),
+            ),
+            name(&[(CN, "Example Signer"), (EMAIL, "signer@example.test")]),
+            der(
+                0x30,
+                &[
+                    der(
+                        0x30,
+                        &[der(0x06, &[0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01])].concat(),
+                    ),
+                    der(0x03, &[0, 4, 1]),
+                ]
+                .concat(),
+            ),
+            der(0xa3, &der(0x30, &ext)),
+        ]
+        .concat(),
+    );
+    der(0x30, &[tbs, alg, der(0x03, &[0, 1, 2])].concat())
+}
+
+fn store() -> Vec<u8> {
+    let actions = map(&[(
+        text("actions"),
+        array(&[map(&[
+            (text("action"), text("c2pa.created")),
+            (text("softwareAgent"), text("Example Generator 1.0")),
+        ])]),
+    )]);
+    let hash = map(&[
+        (text("alg"), text("sha256")),
+        (text("hash"), bytes(&[0xab; 32])),
+        (text("pad"), bytes(&[0; 300])),
+    ]);
+    let thumb = superbox(
+        [
+            0x40, 0xcb, 0x0c, 0x32, 0xbb, 0x8a, 0x48, 0x9d, 0xa7, 0x0b, 0x2a, 0xd6, 0xf4, 0x7f,
+            0x43, 0x69,
+        ]
+        .to_vec(),
+        "c2pa.thumbnail.claim.jpeg",
+        &[
+            bx(b"bfdb", b"\x00image/jpeg\x00"),
+            bx(b"bidb", &[0xff, 0xd8, 0xff, 0xd9]),
+        ],
+    );
+    let assertions = superbox(
+        c2pa_uuid(b"c2as"),
+        "c2pa.assertions",
+        &[
+            superbox(
+                c2pa_uuid(b"cbor"),
+                "c2pa.actions.v2",
+                &[bx(b"cbor", &actions)],
+            ),
+            superbox(c2pa_uuid(b"cbor"), "c2pa.hash.data", &[bx(b"cbor", &hash)]),
+            thumb,
+        ],
+    );
+    let claim = map(&[
+        (text("instanceID"), text("xmp:iid:0000")),
+        (
+            text("claim_generator_info"),
+            array(&[map(&[(text("name"), text("Example Generator"))])]),
+        ),
+        (
+            text("created_assertions"),
+            array(&[map(&[(
+                text("url"),
+                text("self#jumbf=c2pa.assertions/c2pa.actions.v2"),
+            )])]),
+        ),
+    ]);
+    let protected = map(&[(uint(1), nint(-7)), (uint(33), bytes(&certificate()))]);
+    let cose = tag(
+        18,
+        array(&[
+            bytes(&protected),
+            map(&[(text("pad"), bytes(&[0; 8]))]),
+            vec![0xf6],
+            bytes(&[7; 64]),
+        ]),
+    );
+    let manifest = superbox(
+        c2pa_uuid(b"c2ma"),
+        "urn:uuid:00000000-0000-4000-8000-000000000001",
+        &[
+            assertions,
+            superbox(c2pa_uuid(b"c2cl"), "c2pa.claim.v2", &[bx(b"cbor", &claim)]),
+            superbox(c2pa_uuid(b"c2cs"), "c2pa.signature", &[bx(b"cbor", &cose)]),
+        ],
+    );
+    superbox(c2pa_uuid(b"c2pa"), "c2pa", &[manifest])
+}
+
+fn value<'a>(r: &'a Report, path: &str) -> &'a str {
+    r.entries()
+        .iter()
+        .find(|e| e.path() == path)
+        .unwrap_or_else(|| {
+            panic!(
+                "no entry {path}; have {:#?}",
+                r.entries().iter().map(|e| e.path()).collect::<Vec<_>>()
+            )
+        })
+        .value()
+}
+
+const M: &str = "c2pa/urn:uuid:00000000-0000-4000-8000-000000000001";
+
+#[test]
+fn claims_assertions_and_signer_identity_are_reported() {
+    let r = Report::c2pa(&store());
+    assert_eq!(value(&r, "c2pa/@type"), "c2pa");
+    assert_eq!(value(&r, &format!("{M}/@type")), "c2ma");
+    assert_eq!(
+        value(
+            &r,
+            &format!("{M}/c2pa.assertions/c2pa.actions.v2/cbor/actions[0]/action")
+        ),
+        "\"c2pa.created\""
+    );
+    assert_eq!(
+        value(
+            &r,
+            &format!("{M}/c2pa.assertions/c2pa.actions.v2/cbor/actions[0]/softwareAgent")
+        ),
+        "\"Example Generator 1.0\""
+    );
+    assert_eq!(
+        value(&r, &format!("{M}/c2pa.assertions/c2pa.hash.data/cbor/pad")),
+        "bytes(len=300, all zero)"
+    );
+    assert_eq!(
+        value(
+            &r,
+            &format!("{M}/c2pa.claim.v2/cbor/claim_generator_info[0]/name")
+        ),
+        "\"Example Generator\""
+    );
+    let sig = format!("{M}/c2pa.signature/cose");
+    assert_eq!(value(&r, &format!("{sig}/protected/alg")), "-7 (ES256)");
+    assert_eq!(
+        value(&r, &format!("{sig}/protected/x5chain[0]/subject/0/CN")),
+        "\"Example Signer\""
+    );
+    assert_eq!(
+        value(
+            &r,
+            &format!("{sig}/protected/x5chain[0]/subject/1/emailAddress")
+        ),
+        "\"signer@example.test\""
+    );
+    assert_eq!(
+        value(&r, &format!("{sig}/protected/x5chain[0]/issuer/1/O")),
+        "\"Example Org\""
+    );
+    assert_eq!(
+        value(&r, &format!("{sig}/protected/x5chain[0]/validity/notAfter")),
+        "\"270101000000Z\""
+    );
+    assert_eq!(
+        value(
+            &r,
+            &format!("{sig}/protected/x5chain[0]/extension[0]/subjectAltName[0]/rfc822Name")
+        ),
+        "\"signer@example.test\""
+    );
+    assert_eq!(value(&r, &format!("{sig}/payload")), "detached");
+    assert_eq!(value(&r, &format!("{sig}/signature")), "bytes(len=64)");
+    // The thumbnail is kept but not interpreted: the only finding.
+    assert_eq!(
+        r.findings(),
+        &[Finding::Opaque {
+            path: format!("{M}/c2pa.assertions/c2pa.thumbnail.claim.jpeg/bidb"),
+            bytes: 4
+        }]
+    );
+    // Paths are unique, so diffs pair entries one to one.
+    let mut paths: Vec<_> = r.entries().iter().map(|e| e.path()).collect();
+    paths.dedup();
+    assert_eq!(paths.len(), r.entries().len());
+}
+
+#[test]
+fn a_changed_signer_shows_in_the_diff() {
+    let a = store();
+    let b = {
+        let s = String::from_utf8_lossy(&a).into_owned();
+        assert!(s.contains("Example Signer"));
+        let mut b = a.clone();
+        let at = a.windows(14).position(|w| w == b"Example Signer").unwrap();
+        b[at..at + 14].copy_from_slice(b"Another Signer");
+        b
+    };
+    let (ra, rb) = (Report::c2pa(&a), Report::c2pa(&b));
+    let changes = ra.diff(&rb);
+    assert_eq!(changes.len(), 1, "{changes:#?}");
+}
+
+#[test]
+fn malformed_and_hostile_stores_are_findings_not_panics() {
+    // Not a manifest store.
+    let other = superbox(c2pa_uuid(b"c2ma"), "x", &[]);
+    assert!(matches!(
+        Report::c2pa(&other).findings(),
+        [Finding::InvalidJumbf(_)]
+    ));
+    // Truncated.
+    let s = store();
+    assert!(matches!(
+        Report::c2pa(&s[..s.len() - 1]).findings(),
+        [Finding::InvalidJumbf(_)]
+    ));
+    // Superboxes nested past the limit.
+    let mut deep = superbox(c2pa_uuid(b"cbor"), "leaf", &[]);
+    for _ in 0..40 {
+        deep = superbox(c2pa_uuid(b"c2as"), "n", &[deep]);
+    }
+    let deep = superbox(c2pa_uuid(b"c2pa"), "c2pa", &[deep]);
+    assert!(
+        Report::c2pa(&deep)
+            .findings()
+            .iter()
+            .any(|f| matches!(f, Finding::InvalidJumbf(m) if m.contains("deeply")))
+    );
+    // Embedded CBOR (tag 24) nested 10,000 times in an assertion: bounded, no stack overflow.
+    let mut nested = uint(1);
+    for _ in 0..10_000 {
+        nested = tag(24, bytes(&nested));
+    }
+    let a = superbox(c2pa_uuid(b"cbor"), "x", &[bx(b"cbor", &nested)]);
+    let s = superbox(
+        c2pa_uuid(b"c2pa"),
+        "c2pa",
+        &[superbox(c2pa_uuid(b"c2ma"), "m", &[a])],
+    );
+    assert!(
+        Report::c2pa(&s)
+            .findings()
+            .iter()
+            .any(|f| matches!(f, Finding::InvalidCbor { .. }))
+    );
+    // Garbage certificates are opaque, not errors.
+    let cose = tag(
+        18,
+        array(&[
+            bytes(&map(&[(uint(33), bytes(&[0x30, 0x03, 1, 2, 3]))])),
+            map(&[]),
+            vec![0xf6],
+            bytes(&[1]),
+        ]),
+    );
+    let s = superbox(
+        c2pa_uuid(b"c2pa"),
+        "c2pa",
+        &[superbox(
+            c2pa_uuid(b"c2ma"),
+            "m",
+            &[superbox(
+                c2pa_uuid(b"c2cs"),
+                "c2pa.signature",
+                &[bx(b"cbor", &cose)],
+            )],
+        )],
+    );
+    assert!(
+        Report::c2pa(&s)
+            .findings()
+            .iter()
+            .any(|f| matches!(f, Finding::Opaque { path, .. } if path.ends_with("x5chain[0]")))
+    );
+    assert_eq!(
+        Report::c2pa(&[]).findings(),
+        &[Finding::InvalidJumbf(
+            "c2pa: a manifest store is exactly one jumb superbox".into()
+        )]
+    );
+}

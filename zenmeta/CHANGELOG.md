@@ -26,6 +26,13 @@
 
 ### Added
 
+- `c2pa` feature: `audit::Report::c2pa` inspects a C2PA manifest store (JUMBF, CBOR claims
+  and assertions, COSE_Sign1 headers, X.509 certificates, RFC 3161 timestamp tokens) and
+  reports opaque content as findings; `audit::Finding` gains `InvalidJumbf`, `InvalidCbor`
+  and `Opaque`. Readers are bounded (16 MiB input, nesting depth, item counts) and recurse
+  only below checked depths. On the 115 C2PA stores of the imazen-26 corpus (OpenAI and
+  Google generators) every store parses, and actions, instance IDs, generator, title,
+  software agent and source type agree with exiftool's reading of the same files.
 - Metadata/EXIF processing entry points bridge retained zencodec compatibility
   writers without duplicating their implementation. Reading needs no zenmeta.
 

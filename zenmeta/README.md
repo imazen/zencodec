@@ -23,7 +23,15 @@ assert_eq!(retained, metadata);
 ```
 
 An audit reports its coverage limits and opaque content. It does not certify
-privacy. Container framing, packet reassembly and rewriting belong to codecs;
+privacy.
+
+`c2pa` (which enables `audit`) adds `audit::Report::c2pa` for a C2PA manifest store:
+every manifest's claim and assertions as entries, and the claim signature's COSE
+headers with each certificate's names, serial, validity and alternative names and
+each timestamp token's time and authority. Embedded files, thumbnails, OCSP responses
+and other content it doesn't interpret are `Finding::Opaque`. Nothing is verified. The
+caller supplies the store: a PNG `caBX` chunk's data, or JPEG APP11 packets reassembled
+by the codec. Container framing, packet reassembly and rewriting belong to codecs;
 an inventory is not a safe generic deletion recipe.
 
 See [source provenance](PROVENANCE.md) and the workspace

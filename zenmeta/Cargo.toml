@@ -13,6 +13,7 @@ include = ["/src/**", "/tests/**", "/examples/**", "/README.md", "/CHANGELOG.md"
 default = []
 std = ["zencodec/std"]
 audit = []
+c2pa = ["audit"]
 apple = []
 inventory = []
 rewrite = []
@@ -30,6 +31,14 @@ required-features = ["audit", "xmp"]
 [[example]]
 name = "audit_metadata"
 required-features = ["audit", "xmp"]
+
+[[example]]
+name = "audit_c2pa"
+required-features = ["c2pa", "std"]
+
+[[test]]
+name = "c2pa_inspection"
+required-features = ["c2pa"]
 
 [dev-dependencies]
 proptest = "1.11.0"
