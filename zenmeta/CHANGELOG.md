@@ -4,6 +4,14 @@
 
 ### Fixed
 
+- `xmp::Packet::parse` (and every XMP reader built on it: `xmp::gainmap::parse_xmp`,
+  `parse_xmp_full`, `xmp::container::Directory::parse`) rejects a packet nesting
+  more than 64 elements before roxmltree parses it. roxmltree's parser recurses
+  once per open element, so the existing check after parsing came too late: a
+  packet nesting 8,848 elements (closed or not) overflowed a 2 MiB thread stack
+  and aborted the process. A linear scan that skips comments, CDATA, processing
+  instructions, declarations and quoted attribute values counts the depth first.
+
 - Require appended child rewrite plans to borrow the exact parent subrange their
   reports describe. Equal lengths or equal bytes from another allocation are not
   sufficient provenance; rejection leaves the parent builder unchanged.

@@ -17,6 +17,75 @@ use roxmltree::{Document, Node, ParsingOptions};
 
 pub(crate) const RDF: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
 
+/// Element nesting a packet may use; [`Packet::parse`] rejects deeper ones.
+const MAX_NESTING: usize = 64;
+
+/// Whether `xml` nests elements deeper than `limit`, found by a linear scan
+/// that uses no stack per level. It skips comments, CDATA sections,
+/// processing instructions, declarations and quoted attribute values, so it
+/// counts a well-formed document's element depth exactly; malformed input it
+/// cannot follow is left for the XML parser to reject.
+fn nests_deeper_than(xml: &str, limit: usize) -> bool {
+    fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+        haystack.windows(needle.len()).position(|w| w == needle)
+    }
+    let b = xml.as_bytes();
+    let mut i = 0;
+    let mut depth = 0usize;
+    while let Some(lt) = b[i..].iter().position(|&c| c == b'<') {
+        i += lt;
+        let rest = &b[i..];
+        let skip = if rest.starts_with(b"<!--") {
+            find(rest, b"-->").map(|e| e + 3)
+        } else if rest.starts_with(b"<![CDATA[") {
+            find(rest, b"]]>").map(|e| e + 3)
+        } else if rest.starts_with(b"<?") {
+            find(rest, b"?>").map(|e| e + 2)
+        } else if rest.starts_with(b"<!") {
+            find(rest, b">").map(|e| e + 1)
+        } else {
+            None
+        };
+        if rest.starts_with(b"<!") || rest.starts_with(b"<?") {
+            match skip {
+                Some(n) => {
+                    i += n;
+                    continue;
+                }
+                None => return false,
+            }
+        }
+        // A start or end tag: find its `>` outside quoted attribute values.
+        let mut quote = None;
+        let mut end = None;
+        for (j, &c) in rest.iter().enumerate().skip(1) {
+            match quote {
+                Some(q) if c == q => quote = None,
+                Some(_) => {}
+                None if c == b'"' || c == b'\'' => quote = Some(c),
+                None if c == b'>' => {
+                    end = Some(j);
+                    break;
+                }
+                None => {}
+            }
+        }
+        let Some(end) = end else {
+            return false;
+        };
+        if rest.get(1) == Some(&b'/') {
+            depth = depth.saturating_sub(1);
+        } else if rest[end - 1] != b'/' {
+            depth += 1;
+            if depth > limit {
+                return true;
+            }
+        }
+        i += end + 1;
+    }
+    false
+}
+
 /// Invalid, ambiguous, unsupported or over-budget metadata.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -95,6 +164,13 @@ impl<'a> Packet<'a> {
     /// Unknown XML is inspectable, but selected property access is strict.
     pub fn parse(xml: &'a str) -> Result<Self, Error> {
         if xml.len() > 16 * 1024 * 1024 {
+            return Err(Error::Limit);
+        }
+        // roxmltree's parser recurses once per open element, so the nesting
+        // check after parsing comes too late: a packet nesting thousands of
+        // elements (closed or not) exhausts the thread's stack first, and the
+        // process aborts. Check the depth before handing it the XML.
+        if nests_deeper_than(xml, MAX_NESTING) {
             return Err(Error::Limit);
         }
         let doc = Document::parse_with_options(
@@ -407,4 +483,55 @@ fn empty_subject(n: Node<'_, '_>) -> Result<(), Error> {
         return Err(Error::Structure("RDF subject/qualifier".into()));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod nesting_tests {
+    extern crate std;
+    use super::*;
+
+    /// Parse `xml` on a thread with a small stack; `None` if it overflowed.
+    fn parse_on_small_stack(xml: String) -> Result<(), Error> {
+        std::thread::Builder::new()
+            .stack_size(256 * 1024)
+            .spawn(move || Packet::parse(&xml).map(|_| ()))
+            .unwrap()
+            .join()
+            .expect("parse overflowed a 256 KiB stack")
+    }
+
+    #[test]
+    fn deep_nesting_is_rejected_without_exhausting_the_stack() {
+        // roxmltree 0.21 overflowed a 2 MiB stack at 8,848 levels, closed or
+        // not: a crafted 1 MB XMP packet aborted the process.
+        for depth in [100usize, 8_848, 200_000] {
+            let open = "<a>".repeat(depth);
+            let closed = format!("<x>{open}{}</x>", "</a>".repeat(depth));
+            assert_eq!(parse_on_small_stack(closed), Err(Error::Limit), "{depth}");
+            assert_eq!(
+                parse_on_small_stack(format!("<x>{open}")),
+                Err(Error::Limit),
+                "{depth}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_scan_counts_elements_not_markup_that_looks_like_them() {
+        // Self-closing tags, end tags, comments, CDATA, processing
+        // instructions and `>` or `/>` inside attribute values do not nest.
+        let inner = r#"<b c='x > y' d="a/>b"/><!-- <c><c> --><![CDATA[<d><d>]]><?pi <e>?>"#;
+        let mut xml = String::from("<a>");
+        for _ in 0..62 {
+            xml.push_str("<n>");
+        }
+        xml.push_str(inner);
+        for _ in 0..62 {
+            xml.push_str("</n>");
+        }
+        xml.push_str("</a>");
+        assert!(!nests_deeper_than(&xml, MAX_NESTING));
+        assert!(nests_deeper_than(&xml, 62));
+        assert!(Packet::parse(&xml).is_ok());
+    }
 }
