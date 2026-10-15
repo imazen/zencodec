@@ -496,6 +496,29 @@ fn fill<'a, Src: AsyncSource + ?Sized, E: 'a>(
     }
 }
 
+/// Write every byte `enc` has pending to `w`, then consume it: the async
+/// twin of [`write_pending`](crate::write_pending). Returns how many bytes
+/// were written.
+///
+/// Encoding is CPU work, so where `push_rows` runs is the caller's choice
+/// (a blocking thread, a compute pool); this only moves the bytes. Between
+/// pushes, awaiting it is the backpressure point: no more rows go in until
+/// the transport took the last batch. On an error nothing is consumed and
+/// the transport holds an unknown prefix: abort it.
+pub async fn write_pending_async<E, W>(enc: &mut E, w: &mut W) -> std::io::Result<usize>
+where
+    E: Encoder,
+    W: tokio::io::AsyncWrite + Unpin + ?Sized,
+{
+    use tokio::io::AsyncWriteExt as _;
+    let n = enc.pending_output().len();
+    if n > 0 {
+        w.write_all(enc.pending_output()).await?;
+        enc.consume_output(n);
+    }
+    Ok(n)
+}
+
 /// Decode from an async source with no thread blocked on I/O. See the
 /// [module documentation](self).
 ///

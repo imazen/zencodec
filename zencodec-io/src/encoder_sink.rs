@@ -109,6 +109,14 @@ where
         }
     }
 
+    /// Append every pending byte to `into` and consume it; see
+    /// [`Encoder::take_output`].
+    pub fn take_output(&mut self, into: &mut Vec<u8>) {
+        if let Some(enc) = self.encoder.as_mut() {
+            enc.take_output(into);
+        }
+    }
+
     /// Write every pending byte to `w`. Returns how many were written.
     #[cfg(feature = "std")]
     pub fn write_pending(&mut self, w: &mut impl std::io::Write) -> std::io::Result<usize> {

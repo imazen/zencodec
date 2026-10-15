@@ -47,6 +47,8 @@ mod window;
 #[cfg(feature = "std")]
 mod buffered;
 #[cfg(feature = "std")]
+mod encode_write;
+#[cfg(feature = "std")]
 mod file;
 #[cfg(feature = "std")]
 mod pump;
@@ -63,6 +65,10 @@ pub use window::ProtocolViolation;
 
 #[cfg(feature = "std")]
 pub use buffered::{BufferPolicy, BufferedReadAt};
+#[cfg(feature = "std")]
+pub use encode_write::{
+    EncodeWriteError, EncodeWriteReport, encode_to_writer, write_pending, write_pending_animation,
+};
 #[cfg(feature = "std")]
 pub use file::FileReadAt;
 #[cfg(feature = "std")]

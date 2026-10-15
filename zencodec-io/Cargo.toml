@@ -37,6 +37,10 @@ zenbench = "0.1.11"
 name = "drivers"
 required-features = ["std"]
 
+[[test]]
+name = "encode_write"
+required-features = ["std"]
+
 [[bench]]
 name = "drivers"
 harness = false
