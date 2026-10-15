@@ -324,14 +324,19 @@ pub fn resolve_color_emit(
         _ => drop_by_rule,
     };
 
-    // The sRGB/BT.709 default has no ICC to synthesize: the lowering
+    // The sRGB default has no ICC to synthesize: the lowering
     // (`zenpixels_convert::icc_profiles::synthesize_icc_for_cicp`) returns
-    // `NotNeeded` for *any* CICP with primaries ∈ {BT.709(1), unspecified(2)} and
-    // transfer ∈ {BT.709(1), unspecified(2), sRGB(13)} — not just the exact
-    // `Cicp::SRGB`. Mirror that predicate here so we never emit a `SynthesizeFrom`
-    // directive that would silently lower to nothing.
+    // `NotNeeded` for primaries ∈ {BT.709(1), unspecified(2)} with transfer ∈
+    // {unspecified(2), sRGB(13)}, and for unspecified primaries with the BT.709
+    // transfer (nothing to state about the gamut). Mirror that predicate here so
+    // we never emit a `SynthesizeFrom` directive that would lower to nothing.
+    // BT.709 primaries with the BT.709 transfer (1, 1) is not the sRGB default:
+    // the BT.709 OETF and the sRGB curve differ across the whole range (encoded
+    // 0.5 is linear 0.2140 under sRGB, 0.2597 under BT.709), so an untagged
+    // (1, 1) image is read with the wrong curve (imazen/zenpixels#88).
     let is_assumed_default = |c: &Cicp| {
-        matches!(c.color_primaries, 1 | 2) && matches!(c.transfer_characteristics, 1 | 2 | 13)
+        (matches!(c.color_primaries, 1 | 2) && matches!(c.transfer_characteristics, 2 | 13))
+            || (c.color_primaries == 2 && c.transfer_characteristics == 1)
     };
     let synth_worthwhile = repr_cicp.is_some_and(|c| !is_assumed_default(&c));
 
@@ -530,6 +535,27 @@ mod tests {
         let plan = resolve_color_emit(&src, &caps_jpeg(), ColorEmitPolicy::Balanced);
         assert_eq!(plan.cicp, None);
         assert_eq!(plan.icc, IccDisposition::Drop);
+    }
+
+    #[test]
+    fn bt709_transfer_is_not_the_srgb_default() {
+        // (1, 1): BT.709 primaries with the BT.709 transfer is a different curve
+        // from sRGB, so a target with no CICP carrier needs a profile for it.
+        // (1, 13) and (2, 1) stay the assumed default.
+        let bt709 = src_cicp(Cicp::new(1, 1, 0, true));
+        let plan = resolve_color_emit(&bt709, &caps_jpeg(), ColorEmitPolicy::Balanced);
+        assert_eq!(
+            plan.icc,
+            IccDisposition::SynthesizeFrom(Cicp::new(1, 1, 0, true))
+        );
+        for c in [
+            Cicp::new(1, 13, 0, true),
+            Cicp::new(2, 1, 0, true),
+            Cicp::new(2, 2, 0, true),
+        ] {
+            let plan = resolve_color_emit(&src_cicp(c), &caps_jpeg(), ColorEmitPolicy::Balanced);
+            assert_eq!(plan.icc, IccDisposition::Drop, "{c:?}");
+        }
     }
 
     #[test]
