@@ -46,6 +46,56 @@ opaque RGBA8 for GIF). Raw logs: `streaming_regress_2026-10-14.pointer.md`.
   effort 0 rows 13% to 32% faster, effort 5 rows 19% faster at 1024x768,
   effort 1 rows +7% at 64x64; PNM rows 1% to 8% faster; JPEG within 2%.
 
+## zencodec-io drivers: main vs PR 152 (same day)
+
+PR 152 rebuilt the image drivers on the `ByteStepper` cursors. The
+`zencodec-io` drivers bench (unchanged between the revisions) was run on
+main `08e8f195` and on PR 152, alternating three times per side, pinned to
+cores 2-7. Medians in microseconds; the before-fix column is `ca9a4a72`,
+the after-fix column `a8b35aa0`, each against its own main runs.
+
+| group | driver | before fix: main → PR | after fix: main → PR |
+|---|---|---|---|
+| 1024x1024/16-row strips | direct sink writes | 87.0 → 91.0 (+4.6%) | 87.4 → 89.1 (+1.9%) |
+| 1024x1024/16-row strips | hand-written via drive_fr | 91.4 → 93.1 (+1.9%) | 88.9 → 90.3 (+1.6%) |
+| 1024x1024/16-row strips | hand-written via pump_rea | 138.4 → 139.8 (+1.0%) | 133.9 → 135.0 (+0.8%) |
+| 1024x1024/16-row strips | coroutine sequential via  | 294.7 → 297.3 (+0.9%) | 296.0 → 292.9 (-1.0%) |
+| 1024x1024/16-row strips | coroutine ranges via driv | 225.9 → 226.8 (+0.4%) | 229.0 → 231.4 (+1.0%) |
+| 1024x1024/16-row strips | hand-written via tokio de | 352.7 → 353.6 (+0.3%) | 351.3 → 344.9 (-1.8%) |
+| 1024x1024/1-row strips | direct sink writes | 116.3 → 111.7 (-4.0%) | 115.6 → 116.7 (+1.0%) |
+| 1024x1024/1-row strips | hand-written via drive_fr | 122.6 → 127.8 (+4.2%) | 122.2 → 121.7 (-0.4%) |
+| 1024x1024/1-row strips | hand-written via pump_rea | 163.4 → 169.8 (+3.9%) | 165.5 → 165.1 (-0.2%) |
+| 1024x1024/1-row strips | coroutine sequential via  | 359.7 → 389.3 (+8.2%) | 360.4 → 371.6 (+3.1%) |
+| 1024x1024/1-row strips | coroutine ranges via driv | 302.0 → 343.0 (+13.6%) | 310.6 → 312.6 (+0.6%) |
+| 1024x1024/1-row strips | hand-written via tokio de | 389.6 → 400.0 (+2.7%) | 417.3 → 412.6 (-1.1%) |
+| 256x256/4-row strips | direct sink writes | 4.9 → 5.0 (+2.0%) | 4.9 → 4.8 (-2.0%) |
+| 256x256/4-row strips | hand-written via drive_fr | 5.3 → 5.9 (+11.3%) | 5.3 → 5.2 (-1.9%) |
+| 256x256/4-row strips | hand-written via pump_rea | 7.3 → 8.0 (+9.6%) | 7.6 → 7.3 (-3.9%) |
+| 256x256/4-row strips | coroutine sequential via  | 18.3 → 20.8 (+13.7%) | 18.9 → 20.1 (+6.3%) |
+| 256x256/4-row strips | coroutine ranges via driv | 18.4 → 21.3 (+15.8%) | 19.3 → 19.8 (+2.6%) |
+| 256x256/4-row strips | hand-written via tokio de | 28.3 → 29.0 (+2.5%) | 29.1 → 27.8 (-4.5%) |
+
+Instructions per decode, 256x256 in 4-row strips (`perf stat` over 20,000
+and 60,000 iterations of a probe that runs only that drive, difference
+divided by 40,000):
+
+| | main | PR before fix | PR after fix |
+|---|---|---|---|
+| direct sink writes | 48,398 | 48,405 | 48,409 |
+| `drive_from_slice` | 57,859 | 61,597 | 58,733 |
+| driver overhead | 9,461 | 13,192 | 10,324 |
+| coroutine via `drive_from_slice` | 751,255 | | 747,350 |
+
+The cursor's `next` was not inlined into `drive_from_slice`, so each
+step's event went through `Progress`, `Stepped`, `Yield` and `Result` in
+memory where the old loop matched it in place. `#[inline]` on the cursors'
+`next`, `DecodeStepper::step`, `Yield` and the progress hook (PR 152,
+`a8b35aa0`) removed most of it: +868 instructions per decode (+1.5% of the
+whole decode) remain. The commit message's 10,352 came from a scratch
+build of the same change; the pushed revision measures 10,324. The
+coroutine sequential driver still times +6.3% at 256x256 while executing
+0.5% fewer instructions than main: code placement, inside the floor above.
+
 ## Run table
 
 | group | run 1 pr vs main | run 2 pr vs main | run 3 pr vs main | last run main → pr | last run pr+begin vs main |
