@@ -105,6 +105,7 @@ impl<'a> Progressor<'a> {
         }
     }
 
+    #[inline]
     pub(crate) fn observe<D: IncrementalDecode + ?Sized>(&mut self, dec: &D, event: &Event) {
         let Some(p) = self.pulse else { return };
         if !self.told_total
@@ -159,6 +160,7 @@ where
 }
 
 /// Count rows; the `Done` event's info ends the drive.
+#[inline]
 fn finish_event(y: Yield<Event>, rows: &mut u64) -> Option<OutputInfo> {
     match y.into_inner() {
         Event::Done(info) => Some(info),

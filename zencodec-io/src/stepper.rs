@@ -75,6 +75,7 @@ pub enum Yield<O> {
 
 impl<O> Yield<O> {
     /// The output, either way.
+    #[inline]
     pub fn into_inner(self) -> O {
         match self {
             Self::Output(o) | Self::Finished(o) => o,
@@ -82,6 +83,7 @@ impl<O> Yield<O> {
     }
 
     /// Whether this was the last output.
+    #[inline]
     pub fn is_finished(&self) -> bool {
         matches!(self, Self::Finished(_))
     }
@@ -149,6 +151,7 @@ impl<D: IncrementalDecode + ?Sized> ByteStepper for DecodeStepper<'_, '_, D> {
     type Output = Event;
     type Error = StepError<D::Error>;
 
+    #[inline]
     fn step(&mut self, input: Input<'_>, stop: &dyn Stop) -> Result<Stepped<Event>, Self::Error> {
         let p = self.decoder.step(input, self.sink, stop)?;
         self.progress.observe(self.decoder, &p.event);
@@ -200,6 +203,7 @@ impl SliceCursor {
 
     /// Step `stage` over `bytes` until it produces an output. Pass the same
     /// `bytes` on every call.
+    #[inline]
     pub fn next<S: ByteStepper + ?Sized>(
         &mut self,
         bytes: &[u8],
@@ -295,6 +299,7 @@ impl ReadAtCursor {
 
     /// Step `stage` over `source` until it produces an output. Pass the same
     /// source on every call.
+    #[inline]
     pub fn next<S, Src>(
         &mut self,
         source: &mut Src,
@@ -518,6 +523,7 @@ mod read {
 
         /// Step `stage` over `reader` until it produces an output. Pass the
         /// same reader on every call.
+        #[inline]
         pub fn next<S, R>(
             &mut self,
             reader: &mut R,
