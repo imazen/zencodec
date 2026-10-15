@@ -189,6 +189,12 @@ impl TestImage {
         Self::gradient(width, height, PixelDescriptor::RGBA8_SRGB, 4, seed)
     }
 
+    /// An opaque RGB8 gradient offset by `seed`: distinct frames for codecs
+    /// whose animations carry no partial transparency (GIF).
+    pub fn rgb8_gradient_seeded(width: u32, height: u32, seed: u8) -> Self {
+        Self::gradient(width, height, PixelDescriptor::RGB8_SRGB, 3, seed)
+    }
+
     /// A 16-bit RGB gradient carrying `desc`'s colour labelling (a U16 RGB
     /// descriptor such as `RGB16_BT2100_PQ`). Samples span the full 16-bit range
     /// with distinct high and low bytes, so a byte-order bug or an 8-bit

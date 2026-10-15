@@ -22,6 +22,8 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
   reference codec implements both sans-I/O paths; the minimal codec declares neither.
   The testkit now depends on `zencodec-io` for its slice driver and collect sink, so
   `zencodec-io` must publish before the testkit can.
+- `TestImage::rgb8_gradient_seeded`: distinct opaque frames, for animation codecs
+  without partial transparency.
 - `check_streaming_output_honesty` also drains with `take_output` (into empty and
   non-empty vectors) and requires `begin` with a zero width or height to agree with
   `encode` of that size. `check_animation_streaming_output_honesty` (run by

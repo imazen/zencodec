@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec-testkit.txt 107 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 1 lines (2 hidden + 0 excluded-feature)
+# files: zencodec-testkit.txt 108 lines (supported surface) | zencodec-testkit.features.txt 0 added (features: none) | zencodec-testkit.internal.txt 1 lines (2 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -14,7 +14,7 @@
 #   pub types (struct/enum/trait/alias)        23
 #   pub consts/statics                          2
 #   free functions                             36
-#   inherent methods                            7
+#   inherent methods                            8
 #   struct fields                               7
 #   enum variants                              14
 #   trait roster entries (type × trait)        38
@@ -22,10 +22,10 @@
 #   auto-trait exceptions                       4
 #
 # per-module pub lines:
-#   (root)                           71
+#   (root)                           72
 #   reference                        20
 
-## items (86 lines)
+## items (87 lines)
 
 pub mod zencodec_testkit
 pub mod reference
@@ -69,6 +69,7 @@ pub struct ReferenceZcrDecoderConfig [also: reference]
 pub struct TestImage
 pub fn TestImage::as_slice(&self) -> zenpixels::buffer::PixelSlice<'_>
 pub fn TestImage::rgb8_gradient(u32, u32) -> Self
+pub fn TestImage::rgb8_gradient_seeded(u32, u32, u8) -> Self
 pub fn TestImage::rgba8_gradient(u32, u32) -> Self
 pub fn TestImage::rgba8_gradient_seeded(u32, u32, u8) -> Self
 pub struct TimingCase<'a>
