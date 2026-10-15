@@ -21,7 +21,7 @@ use zencodec_media::container::{
     DemuxEvent, DemuxStage, Demuxer, MuxHint, Muxer, SeekStatus, SeekTarget, apply_finish,
 };
 use zencodec_media::frame::{Frame, PlaneSamples};
-use zencodec_media::packet::{Packet, RandomAccess};
+use zencodec_media::packet::{Discard, Packet, RandomAccess};
 use zencodec_media::session::{
     CodecConfig, ProtocolViolation, Receive, SendStatus, SessionError, UnsupportedMedia,
     VideoDecoder, VideoEncoder, erase_video_decoder,
@@ -441,6 +441,8 @@ struct Demuxed {
     bytes: Vec<u8>,
     pts: Option<Timestamp>,
     dts: Option<Timestamp>,
+    duration_ticks: Option<u64>,
+    discard: Option<Discard>,
     random_access: RandomAccess,
     epoch: u32,
 }
@@ -460,6 +462,8 @@ fn seen(ev: DemuxEvent, tracks: usize) -> Option<Seen> {
             bytes: p.bytes().to_vec(),
             pts: p.pts(),
             dts: p.dts(),
+            duration_ticks: p.duration_ticks(),
+            discard: p.discard(),
             random_access: p.random_access(),
             epoch: p.config_epoch(),
         })),

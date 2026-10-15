@@ -110,9 +110,11 @@ rules marked (checked); run those checks against your implementation.
 - Instants are `zencodec::time::Timestamp` on the track's `TimeBase`; lengths
   are `FrameDuration`. Conversions are exact or name their `Rounding`;
   `Nearest` rounds halves toward +infinity, like `TimingQuantizer`.
-- Codec delay, seek pre-roll, edit-list offsets and discard padding are
-  carried untouched by demuxers, muxers and stream copies, and applied once,
-  by the decoder adapter configured from the track.
+- Codec delay, seek pre-roll, edit-list offsets (on `TrackInfo`) and
+  discard padding (`Packet::discard`) are carried untouched by demuxers,
+  muxers and stream copies, and applied once, by the decoder adapter
+  configured from the track. A container that cannot record one refuses the
+  packet or track instead of dropping it.
 
 ## Animation over video
 

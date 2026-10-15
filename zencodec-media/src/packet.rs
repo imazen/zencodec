@@ -15,7 +15,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::fmt;
 
-use zencodec::time::Timestamp;
+use zencodec::time::{FrameDuration, Timestamp};
 
 /// Where a packet's bytes live.
 #[derive(Clone, Debug)]
@@ -106,6 +106,47 @@ impl PacketAddition {
     }
 }
 
+/// Decoded media to drop from one packet's output: padding the encoder added
+/// (WebM `DiscardPadding`, the end of an Opus or AAC stream).
+///
+/// Carried untouched by demuxers, muxers and stream copies, and applied
+/// once, by the decoder adapter configured from the track. A container that
+/// can record only one side (WebM: a positive `DiscardPadding` trims the
+/// end, a negative one the start) refuses a packet that needs both rather
+/// than dropping one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Discard {
+    /// Media to drop from the start of the packet's output.
+    pub start: Option<FrameDuration>,
+    /// Media to drop from the end of the packet's output.
+    pub end: Option<FrameDuration>,
+}
+
+impl Discard {
+    /// Drop `d` from the start of the packet's output.
+    pub const fn start(d: FrameDuration) -> Self {
+        Self {
+            start: Some(d),
+            end: None,
+        }
+    }
+
+    /// Drop `d` from the end of the packet's output.
+    pub const fn end(d: FrameDuration) -> Self {
+        Self {
+            start: None,
+            end: Some(d),
+        }
+    }
+
+    /// Also drop `d` from the end.
+    pub const fn with_end(mut self, d: FrameDuration) -> Self {
+        self.end = Some(d);
+        self
+    }
+}
+
 /// A compressed access unit and what the container recorded about it.
 ///
 /// Every timing field is optional, and a missing value stays missing:
@@ -122,6 +163,7 @@ pub struct Packet {
     config_epoch: u32,
     ordinal: Option<u64>,
     input_offset: Option<u64>,
+    discard: Option<Discard>,
     additions: Vec<PacketAddition>,
 }
 
@@ -158,6 +200,7 @@ impl Packet {
             config_epoch: 0,
             ordinal: None,
             input_offset: None,
+            discard: None,
             additions: Vec::new(),
         }
     }
@@ -246,6 +289,12 @@ impl Packet {
         self
     }
 
+    /// Media the decoder adapter drops from this packet's output.
+    pub fn with_discard(mut self, discard: Discard) -> Self {
+        self.discard = Some(discard);
+        self
+    }
+
     /// Attach side data.
     pub fn with_addition(mut self, addition: PacketAddition) -> Self {
         self.additions.push(addition);
@@ -321,6 +370,11 @@ impl Packet {
     /// Where the payload starts in the container file.
     pub fn input_offset(&self) -> Option<u64> {
         self.input_offset
+    }
+
+    /// Media to drop from this packet's output, as the container recorded it.
+    pub fn discard(&self) -> Option<Discard> {
+        self.discard
     }
 
     /// Side data carried with the packet.
