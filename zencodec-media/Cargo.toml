@@ -1,0 +1,24 @@
+[package]
+name = "zencodec-media"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "Apache-2.0 OR MIT"
+description = "Media contracts for zen codecs: packets, tracks, frames, codec sessions, sans-I/O containers, and animation over video"
+categories = ["multimedia::video", "multimedia::images"]
+keywords = ["video", "codec", "container", "sans-io", "media"]
+repository = "https://github.com/imazen/zencodec"
+include = ["/src/**", "/README.md", "/LICENSE*"]
+# Unpublished until a real codec and container exercise it (see
+# docs/media-design.md).
+publish = false
+
+[dependencies]
+zencodec = { path = "..", version = ">=0.1.27, <0.3.0" }
+zencodec-io = { path = "../zencodec-io", version = "0.1.0", default-features = false }
+zenpixels = { version = ">=0.2.14, <0.4.0", default-features = false }
+enough = { version = "0.4.4", default-features = false }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
