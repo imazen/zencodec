@@ -42,6 +42,7 @@ extern crate std;
 mod drive;
 mod encoder_sink;
 mod sinks;
+mod stepper;
 mod window;
 
 #[cfg(feature = "std")]
@@ -61,6 +62,9 @@ pub use drive::{
 };
 pub use encoder_sink::{EncoderSink, EncoderSinkError};
 pub use sinks::CollectSink;
+pub use stepper::{ByteStepper, DriveFailure, ReadAtCursor, SliceCursor, Step, Stepped, Yield};
+#[cfg(feature = "std")]
+pub use stepper::{PumpFailure, ReadCursor};
 pub use window::ProtocolViolation;
 
 #[cfg(feature = "std")]
