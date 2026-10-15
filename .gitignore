@@ -63,3 +63,4 @@ fuzz-*.log
 .cargo/
 apidoc/target/
 .jj/
+!perf/streaming-regress/Cargo.lock

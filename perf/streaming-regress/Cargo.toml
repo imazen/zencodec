@@ -1,0 +1,54 @@
+[package]
+name = "streaming-regress"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Interleaved main-vs-PR benchmarks for the streaming-output rollout (zencodec PR 149 and the codec PRs that implement it)"
+
+# Standalone: never built by zencodec's workspace or CI. Run ./setup.sh first.
+[workspace]
+exclude = ["vendor"]
+
+# Each codec twice: `*_old` is its main branch, `*_new` its PR head. Both
+# compile against one zencodec (5ed2dade, PR 149) through the patches below,
+# so the comparison isolates the codec change. Update the revs, run
+# `cargo run --release`, and commit the output under benchmarks/.
+[dependencies]
+zencodec = { version = "0.1.27", default-features = false, features = ["std"] }
+zenpixels = { version = "0.2.16", default-features = false }
+zenbench = "0.1.9"
+
+zenjpeg_old = { package = "zenjpeg", git = "https://github.com/imazen/zenjpeg", rev = "48f83c407160a56487780709034096c9af3a00b5", default-features = false, features = ["zencodec"] }
+zenjpeg_new = { package = "zenjpeg", git = "https://github.com/imazen/zenjpeg", rev = "cb449477391f1dfbe332c72bbc8d91ca088a4037", default-features = false, features = ["zencodec"] }
+zenpng_old = { package = "zenpng", git = "https://github.com/imazen/zenpng", rev = "52acca5aac297e3781845a57396e581c4f44a6b0", default-features = false }
+zenpng_new = { package = "zenpng", git = "https://github.com/imazen/zenpng", rev = "c8f24a2637f5dbc596252ad0efa4b4f101a8ba3e", default-features = false }
+# zenbitmaps and IMIJ main (7617e352, zqi 57af1aa9) come from setup.sh with
+# return-type shims; see shim.py.
+zenbitmaps_old = { package = "zenbitmaps", path = "vendor/zenbitmaps-main", default-features = false, features = ["std", "zencodec", "qoi"] }
+zenbitmaps_new = { package = "zenbitmaps", git = "https://github.com/imazen/zenbitmaps", rev = "0aac3a5ae613857394d9403ea7136c3741e4fee4", default-features = false, features = ["std", "zencodec", "qoi"] }
+zengif_old = { package = "zengif", git = "https://github.com/imazen/zengif", rev = "6e1bb21876b26ecd38f04a8098bdf7ec24a0f004" }
+zengif_new = { package = "zengif", git = "https://github.com/imazen/zengif", rev = "174484bc20bf3f7e80b4581a43495755e8b90811" }
+imij_old = { package = "imij", path = "vendor/imij-main" }
+imij_new = { package = "imij", git = "https://github.com/imazen/zqi", rev = "09e44f1a3e23a010b6f614a29e97573a807ce9a1" }
+
+[profile.release]
+debug = 1
+codegen-units = 1
+lto = "thin"
+
+# zencodec 5ed2dade, snapshotted by ./setup.sh: both patch tables point at
+# the same path so main branches that pin zencodec by git rev unify with PR
+# heads that take it from crates.io.
+[patch.crates-io]
+zencodec = { path = "vendor/zencodec" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "789d69dbc314e748676b7f2f19542c17473ba40b" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "789d69dbc314e748676b7f2f19542c17473ba40b" }
+# zenpng's StripCompressor (zenflate::png) is unpublished.
+zenflate = { git = "https://github.com/imazen/zenflate", rev = "a0ea03637a2cc9a193e343018ae2cfb1a6c31edd" }
+# zenjpeg needs unpublished zenanalyze 0.2.
+zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "e6c72f99390c190c102275c3b0e4d41fe0a734a4" }
+how-far = { git = "https://github.com/imazen/how-far", rev = "571bf1a2fc92e5b99c3777f8ff81bafab7666a75" }
+
+[patch."https://github.com/imazen/zencodec"]
+zencodec = { path = "vendor/zencodec" }
+zenmeta = { path = "vendor/zencodec/zenmeta" }
