@@ -33,6 +33,25 @@ codec:
 | Colour conversion: YUV reconstruction, display interpretation, RGB to YUV | zenpixels-convert |
 | Wiring: the session pump with per-track routing, HTTP sources, the registry, the `Video::open` facade, CLI | zenpipe (zencodecs) |
 
+### Backends beyond AV1
+
+Status on 2026-10-15:
+- **AV1** sessions are in zenavif PR 69. Decode uses rav1d-safe. Encode uses
+  zenrav1e, or zenav1-svt all-intra while its inter frames are corrupt
+  (imazen/zenav1-svt issue 26).
+- **MP4** demux and mux are in zenavif's `zenmp4` (PR 70).
+- **WebM** and **IVF** are in zenextras: `zenwebm`, `zenivf`.
+
+Other codecs are being qualified on zenextras branch
+`research/media-codec-qualification`, in `research/media-codecs/README.md`.
+Packet adapters wait for that qualification:
+- H.264: rusty_h264, Hibernia, rust_h264, oxideav-h264 and wedeo against
+  FFmpeg. Not one is qualified yet; rust_h264 is exact on four of nine
+  probe cases.
+- Audio: Symphonia, ruopus, opus-rs, Rusopus, oxideav-aac, flacenc and
+  Rubato.
+- VP8: `zenvp8`, a safe-Rust decoder that is byte-exact against libvpx.
+
 ## The five calls that matter
 
 ```rust
