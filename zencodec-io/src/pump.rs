@@ -1,65 +1,14 @@
 //! Sequential stream pump: `std::io::Read` into a resumable decoder.
 
-use core::fmt;
-
 use how_far::Pulse;
-use zencodec::decode::{DecodeRowSink, Event, IncrementalDecode, OutputInfo, Request, StepError};
+use zencodec::decode::{DecodeRowSink, Event, IncrementalDecode, OutputInfo, StepError};
 
 use crate::drive::Progressor;
-use crate::window::{ProtocolViolation, Window, check_need, read_target};
+use crate::stepper::{DecodeStepper, PumpFailure, ReadCursor};
 
-/// Failure of [`pump_read_to_sink`].
-#[derive(Debug)]
-#[non_exhaustive]
-pub enum PumpError<E> {
-    /// The decoder failed, the sink failed, or the stop tripped.
-    Step(StepError<E>),
-    /// Reading the stream failed.
-    Io(std::io::Error),
-    /// The decoder asked for bytes behind the stream position, or for the
-    /// total length before the stream ended. A stream cannot serve either;
-    /// wrap it in [`BufferedReadAt`](crate::BufferedReadAt) and use
-    /// [`drive_from_read_at`](crate::drive_from_read_at).
-    NeedsRandomAccess(Request),
-    /// The decoder needs more contiguous bytes than `max_window` allows.
-    WindowLimit {
-        /// Bytes the decoder asked for in one input.
-        needed: usize,
-        /// The configured limit.
-        limit: usize,
-    },
-    /// The decoder broke the protocol.
-    Protocol(ProtocolViolation),
-}
-
-impl<E: fmt::Display> fmt::Display for PumpError<E> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Step(e) => write!(f, "{e}"),
-            Self::Io(e) => write!(f, "reading the stream: {e}"),
-            Self::NeedsRandomAccess(r) => write!(
-                f,
-                "decoder needs random access ({r:?}); a sequential stream cannot serve it"
-            ),
-            Self::WindowLimit { needed, limit } => write!(
-                f,
-                "decoder needs {needed} contiguous bytes, over the {limit}-byte window limit"
-            ),
-            Self::Protocol(e) => write!(f, "protocol: {e}"),
-        }
-    }
-}
-
-impl<E: core::error::Error + 'static> core::error::Error for PumpError<E> {
-    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
-        match self {
-            Self::Step(e) => Some(e),
-            Self::Io(e) => Some(e),
-            Self::Protocol(e) => Some(e),
-            _ => None,
-        }
-    }
-}
+/// Failure of [`pump_read_to_sink`]: a [`PumpFailure`] whose stage error is
+/// the decoder's [`StepError`].
+pub type PumpError<E> = PumpFailure<StepError<E>>;
 
 /// Pump a sequential stream into `decoder`, writing rows into `sink`.
 ///
@@ -81,70 +30,17 @@ where
     R: std::io::Read,
     D: IncrementalDecode + ?Sized,
 {
-    let mut progress = Progressor::new(pulse);
+    let progress = Progressor::new(pulse);
     let stop = progress.stop();
-    let read_size = read_size.max(512);
-    let mut window = Window::new();
+    let mut stage = DecodeStepper {
+        decoder,
+        sink,
+        progress,
+    };
+    let mut cursor = ReadCursor::new(read_size, max_window);
     loop {
-        let input = window.input();
-        let p = decoder.step(input, sink, stop).map_err(PumpError::Step)?;
-        progress.observe(decoder, &p.event);
-        if p.event == Event::Need {
-            check_need(decoder.requested(), &input, p.consumed).map_err(PumpError::Protocol)?;
-        }
-        window.consume(p.consumed);
-        match p.event {
-            Event::Done(info) => return Ok(info),
-            Event::Need => {}
-            _ => continue,
-        }
-        let requests = decoder.requested();
-        // Prefer a request the stream can serve: at or ahead of the window.
-        let request = requests
-            .iter()
-            .copied()
-            .find(|r| r.offset().is_some_and(|o| o >= window.base()))
-            .unwrap_or(requests[0]);
-        let (offset, min_len) = match request {
-            Request::AtLeast { offset, min_len } => (offset, min_len),
-            Request::Range(r) => (r.offset, r.length as usize),
-            _ => return Err(PumpError::NeedsRandomAccess(request)),
-        };
-        if offset < window.base() {
-            return Err(PumpError::NeedsRandomAccess(request));
-        }
-        if min_len > max_window {
-            return Err(PumpError::WindowLimit {
-                needed: min_len,
-                limit: max_window,
-            });
-        }
-        // Skip forward to `offset`, reading and discarding.
-        while offset > window.end() && window.total.is_none() {
-            let end = window.end();
-            window.reset_to(end);
-            let want = ((offset - end) as usize).min(read_size);
-            let spare = window.spare(want);
-            let n = reader.read(spare).map_err(PumpError::Io)?;
-            window.commit(n);
-            if n == 0 {
-                window.total = Some(end);
-            }
-        }
-        if offset <= window.end() {
-            window.consume((offset - window.base()) as usize);
-        }
-        // Read until `min_len` bytes from `offset` are held, or the end.
-        let target = read_target(min_len, read_size);
-        while window.len() < min_len.max(1) && window.total.is_none() {
-            let end = window.end();
-            let want = target - window.len().min(target);
-            let spare = window.spare(want);
-            let n = reader.read(spare).map_err(PumpError::Io)?;
-            window.commit(n);
-            if n == 0 {
-                window.total = Some(end);
-            }
+        if let Event::Done(info) = cursor.next(&mut reader, &mut stage, stop)?.into_inner() {
+            return Ok(info);
         }
     }
 }

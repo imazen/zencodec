@@ -41,6 +41,10 @@ required-features = ["std"]
 name = "encode_write"
 required-features = ["std"]
 
+[[test]]
+name = "stepper"
+required-features = ["std"]
+
 [[bench]]
 name = "drivers"
 harness = false

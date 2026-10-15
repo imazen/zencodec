@@ -255,6 +255,25 @@ removes that whole class).
   `streaming(lag_frames)`), with `pending_output` / `consume_output` /
   `take_output`, all provided; forwarded by `DynAnimationFrameEncoder`. The rules
   match `Encoder::begin`, counted in frames; a declared frame count is binding.
+- `zencodec-media` and `zencodec-media-testkit` (new, unpublished workspace members):
+  the media contracts and their conformance checks. Packets, tracks, refcounted frames
+  with planar views and an immutable per-frame interpretation, codec sessions with
+  explicit backpressure (`send` / `receive`, `end_input`, `reset`, `FusedDecoder`,
+  erasure), a sans-I/O `Demuxer` driven by every `zencodec-io` cursor through
+  `DemuxStage`, a pull-output `Muxer` with `MuxTiming` / `MuxHint`, time-based seeking,
+  `MediaLimits` reporting `LimitKind`, and the animation traits over video
+  (`VideoAnimationDecoder`, `AnimationVideoEncoder`, with `RenderFrame` / `CaptureFrame`
+  conversion and a `Gray8` identity). The testkit ships a toy container and codec and
+  six checks (`check_video_decoder_contract`, `check_video_encoder_contract`,
+  `check_demuxer_contract`, `check_demuxer_seek`, `check_muxer_output_honesty`,
+  `check_animation_over_video`), each validated on the toy and shown to catch a
+  wrapper that breaks its rule. Design: `docs/media-design.md`; rules:
+  `docs/media-contract.md`. Supersedes PR 129's `media/` experiment.
+- `zencodec-io` (unpublished): `ByteStepper` and pull cursors (`SliceCursor`,
+  `ReadAtCursor`, `ReadCursor`, `tokio_io::AsyncCursor`) so every driver serves any
+  byte-stepping stage, demuxers included; the image drivers are loops over them with
+  unchanged signatures, and `DriveError` / `PumpError` are aliases of the generic
+  `DriveFailure` / `PumpFailure`.
 - `zencodec-io` (unpublished): `encode_to_writer` (begin, 16-row-or-larger strips,
   a write after the header and each strip, one-shot fallback when `begin` declines
   row-level encode), `write_pending`, `write_pending_animation`,
