@@ -17,12 +17,10 @@ use core::convert::Infallible;
 use core::fmt;
 
 use enough::Stop;
-use zencodec::decode::{
-    ByteRange, DecodeRowSink, Event, IncrementalDecode, Input, Request, StepError,
-};
+use zencodec::decode::{ByteRange, Input, Request};
 use zencodec::source::ReadAt;
 
-use crate::drive::{DriveOptions, DriveStats, Progressor, coalesce_into};
+use crate::drive::{DriveOptions, DriveStats, coalesce_into};
 use crate::window::{ProtocolViolation, Window, check_need, read_target};
 
 /// A stage that consumes bytes through the sans-I/O dialogue.
@@ -140,34 +138,26 @@ impl<E> DriveFailure<E, Infallible> {
 type Next<S, SE> =
     Result<Yield<<S as ByteStepper>::Output>, DriveFailure<<S as ByteStepper>::Error, SE>>;
 
-/// An image decoder and its sink as a [`ByteStepper`], reporting progress.
-pub(crate) struct DecodeStepper<'a, 'p, D: ?Sized> {
-    pub(crate) decoder: &'a mut D,
-    pub(crate) sink: &'a mut dyn DecodeRowSink,
-    pub(crate) progress: Progressor<'p>,
-}
-
-impl<D: IncrementalDecode + ?Sized> ByteStepper for DecodeStepper<'_, '_, D> {
-    type Output = Event;
-    type Error = StepError<D::Error>;
-
-    #[inline]
-    fn step(&mut self, input: Input<'_>, stop: &dyn Stop) -> Result<Stepped<Event>, Self::Error> {
-        let p = self.decoder.step(input, self.sink, stop)?;
-        self.progress.observe(self.decoder, &p.event);
-        let step = match p.event {
-            Event::Need => Step::Need,
-            done @ Event::Done(_) => Step::Finished(done),
-            other => Step::Output(other),
-        };
-        Ok(Stepped {
-            consumed: p.consumed,
-            step,
-        })
-    }
-
-    fn requested(&self) -> &[Request] {
-        self.decoder.requested()
+/// The `start..end` a slice drive offers next, for `requests` (post
+/// [`check_need`], so `requests` is never empty) over `total` bytes; a
+/// sequential request gets at least its minimum and up to `window` more, a
+/// range exactly its span.
+pub(crate) fn slice_span(
+    start: usize,
+    end: usize,
+    window: usize,
+    total: usize,
+    requests: &[Request],
+) -> (usize, usize) {
+    match requests[0] {
+        Request::AtLeast { offset, min_len } => {
+            let s = offset as usize;
+            (s, s.saturating_add(min_len.max(window)).min(total))
+        }
+        Request::Range(r) => (r.offset as usize, r.end() as usize),
+        // Every input carries the total; `check_need` reports a stage that
+        // keeps asking.
+        _ => (start, end),
     }
 }
 
@@ -201,6 +191,34 @@ impl SliceCursor {
         self.stats
     }
 
+    /// The input to offer the stage next: `bytes[start..end]` clamped to
+    /// `bytes` (the clamps also keep a stage's over-consumption or a past
+    /// range from slicing out of bounds).
+    #[inline]
+    pub(crate) fn offer<'b>(&mut self, bytes: &'b [u8]) -> Input<'b> {
+        self.end = self.end.min(bytes.len());
+        self.start = self.start.min(self.end);
+        Input::new(self.start as u64, &bytes[self.start..self.end])
+            .with_total_len(bytes.len() as u64)
+    }
+
+    /// Record a step and drop `consumed` bytes from the offered front.
+    #[inline]
+    pub(crate) fn take(&mut self, consumed: usize) {
+        self.stats.steps += 1;
+        self.start += consumed.min(self.end - self.start);
+    }
+
+    /// Point the next offer at the first of `requests` (post
+    /// [`check_need`], so `requests` is never empty).
+    pub(crate) fn serve(&mut self, bytes: &[u8], requests: &[Request]) {
+        let (s, e) = slice_span(self.start, self.end, self.window, bytes.len(), requests);
+        self.start = s;
+        self.end = e;
+        self.stats.reads += 1;
+        self.stats.bytes_read += (e - s) as u64;
+    }
+
     /// Step `stage` over `bytes` until it produces an output. Pass the same
     /// `bytes` on every call.
     #[inline]
@@ -210,39 +228,19 @@ impl SliceCursor {
         stage: &mut S,
         stop: &dyn Stop,
     ) -> Next<S, Infallible> {
-        let total = bytes.len() as u64;
         loop {
-            self.end = self.end.min(bytes.len());
-            self.start = self.start.min(self.end);
-            let input =
-                Input::new(self.start as u64, &bytes[self.start..self.end]).with_total_len(total);
+            let input = self.offer(bytes);
             let p = stage.step(input, stop).map_err(DriveFailure::Step)?;
-            self.stats.steps += 1;
-            self.start += p.consumed.min(self.end - self.start);
+            self.take(p.consumed);
+            if matches!(p.step, Step::Need) {
+                check_need(stage.requested(), &input, p.consumed)
+                    .map_err(DriveFailure::Protocol)?;
+            }
             match p.step {
                 Step::Output(o) => return Ok(Yield::Output(o)),
                 Step::Finished(o) => return Ok(Yield::Finished(o)),
-                Step::Need => {}
+                Step::Need => self.serve(bytes, stage.requested()),
             }
-            let requests = stage.requested();
-            check_need(requests, &input, p.consumed).map_err(DriveFailure::Protocol)?;
-            let (s, e) = match requests[0] {
-                Request::AtLeast { offset, min_len } => {
-                    let s = offset as usize;
-                    (
-                        s,
-                        s.saturating_add(min_len.max(self.window)).min(bytes.len()),
-                    )
-                }
-                Request::Range(r) => (r.offset as usize, r.end() as usize),
-                // Every input carries the total; `check_need` reports a
-                // stage that keeps asking.
-                _ => (self.start, self.end),
-            };
-            self.start = s;
-            self.end = e;
-            self.stats.reads += 1;
-            self.stats.bytes_read += (e - s) as u64;
         }
     }
 }
@@ -297,6 +295,44 @@ impl ReadAtCursor {
         }
     }
 
+    /// The input to offer the stage next: the fetched buffer in play, or
+    /// the window. The first call detects an in-memory source and starts
+    /// the length hint.
+    pub(crate) fn offer<'a, Src: ReadAt + ?Sized>(&'a mut self, source: &'a Src) -> Input<'a> {
+        if !self.started {
+            self.started = true;
+            if source.as_slice().is_some() {
+                self.slice = Some(SliceCursor::new(self.opts.read_size));
+            } else {
+                self.window.total = source.len_hint();
+            }
+        }
+        if let Some(cursor) = &mut self.slice {
+            let bytes = source.as_slice().expect("the source stays in memory");
+            return cursor.offer(bytes);
+        }
+        match self.from_fetched {
+            Some((i, at)) => {
+                let (off, buf) = &self.fetched[i];
+                Input::new(off + at as u64, &buf[at..]).with_total_len_opt(self.window.total)
+            }
+            None => self.window.input(),
+        }
+    }
+
+    /// Record a step and drop `consumed` bytes from the offered front.
+    #[inline]
+    pub(crate) fn take(&mut self, consumed: usize) {
+        if let Some(cursor) = &mut self.slice {
+            return cursor.take(consumed);
+        }
+        self.stats.steps += 1;
+        match &mut self.from_fetched {
+            Some((_, at)) => *at += consumed,
+            None => self.window.consume(consumed),
+        }
+    }
+
     /// Step `stage` over `source` until it produces an output. Pass the same
     /// source on every call.
     #[inline]
@@ -310,47 +346,32 @@ impl ReadAtCursor {
         S: ByteStepper + ?Sized,
         Src: ReadAt + ?Sized,
     {
-        if !self.started {
+        if !self.started && source.as_slice().is_some() {
             self.started = true;
-            if source.as_slice().is_some() {
-                self.slice = Some(SliceCursor::new(self.opts.read_size));
-            } else {
-                self.window.total = source.len_hint();
-            }
+            self.slice = Some(SliceCursor::new(self.opts.read_size));
         }
         if let Some(cursor) = &mut self.slice {
             let bytes = source.as_slice().expect("the source stays in memory");
             return cursor.next(bytes, stage, stop).map_err(DriveFailure::widen);
         }
         loop {
-            let input = match self.from_fetched {
-                Some((i, at)) => {
-                    let (off, buf) = &self.fetched[i];
-                    Input::new(off + at as u64, &buf[at..]).with_total_len_opt(self.window.total)
-                }
-                None => self.window.input(),
-            };
+            let input = self.offer(source);
             let p = stage.step(input, stop).map_err(DriveFailure::Step)?;
-            self.stats.steps += 1;
             if matches!(p.step, Step::Need) {
                 check_need(stage.requested(), &input, p.consumed)
                     .map_err(DriveFailure::Protocol)?;
             }
-            match &mut self.from_fetched {
-                Some((_, at)) => *at += p.consumed,
-                None => self.window.consume(p.consumed),
-            }
+            self.take(p.consumed);
             match p.step {
                 Step::Output(o) => return Ok(Yield::Output(o)),
                 Step::Finished(o) => return Ok(Yield::Finished(o)),
-                Step::Need => {}
+                Step::Need => self.serve(stage.requested(), source)?,
             }
-            self.serve(stage.requested(), source)?;
         }
     }
 
     /// Make the input for the first of `requests` available.
-    fn serve<E, Src: ReadAt + ?Sized>(
+    pub(crate) fn serve<E, Src: ReadAt + ?Sized>(
         &mut self,
         requests: &[Request],
         source: &mut Src,
@@ -521,6 +542,81 @@ mod read {
             }
         }
 
+        /// The input to offer the stage next: the whole window.
+        #[inline]
+        pub(crate) fn offer(&self) -> Input<'_> {
+            self.window.input()
+        }
+
+        /// Drop `consumed` bytes from the offered front.
+        #[inline]
+        pub(crate) fn take(&mut self, consumed: usize) {
+            self.window.consume(consumed);
+        }
+
+        /// Read from `reader` until the first of `requests` the stream can
+        /// serve is met (post [`check_need`], so `requests` is never empty).
+        pub(crate) fn serve<R, E>(
+            &mut self,
+            reader: &mut R,
+            requests: &[Request],
+        ) -> Result<(), PumpFailure<E>>
+        where
+            R: std::io::Read + ?Sized,
+        {
+            let window = &mut self.window;
+            // Prefer a request the stream can serve: at or ahead of the
+            // window.
+            let request = requests
+                .iter()
+                .copied()
+                .find(|r| r.offset().is_some_and(|o| o >= window.base()))
+                .unwrap_or(requests[0]);
+            let (offset, min_len) = match request {
+                Request::AtLeast { offset, min_len } => (offset, min_len),
+                Request::Range(r) => (r.offset, r.length as usize),
+                _ => return Err(PumpFailure::NeedsRandomAccess(request)),
+            };
+            if offset < window.base() {
+                return Err(PumpFailure::NeedsRandomAccess(request));
+            }
+            if min_len > self.max_window {
+                return Err(PumpFailure::WindowLimit {
+                    needed: min_len,
+                    limit: self.max_window,
+                });
+            }
+            // Skip forward to `offset`, reading and discarding.
+            while offset > window.end() && window.total.is_none() {
+                let end = window.end();
+                window.reset_to(end);
+                let want = ((offset - end) as usize).min(self.read_size);
+                let spare = window.spare(want);
+                let n = reader.read(spare).map_err(PumpFailure::Io)?;
+                window.commit(n);
+                if n == 0 {
+                    window.total = Some(end);
+                }
+            }
+            if offset <= window.end() {
+                window.consume((offset - window.base()) as usize);
+            }
+            // Read until `min_len` bytes from `offset` are held, or the
+            // end.
+            let target = read_target(min_len, self.read_size);
+            while window.len() < min_len.max(1) && window.total.is_none() {
+                let end = window.end();
+                let want = target - window.len().min(target);
+                let spare = window.spare(want);
+                let n = reader.read(spare).map_err(PumpFailure::Io)?;
+                window.commit(n);
+                if n == 0 {
+                    window.total = Some(end);
+                }
+            }
+            Ok(())
+        }
+
         /// Step `stage` over `reader` until it produces an output. Pass the
         /// same reader on every call.
         #[inline]
@@ -534,69 +630,18 @@ mod read {
             S: ByteStepper + ?Sized,
             R: std::io::Read + ?Sized,
         {
-            let window = &mut self.window;
             loop {
-                let input = window.input();
+                let input = self.offer();
                 let p = stage.step(input, stop).map_err(PumpFailure::Step)?;
                 if matches!(p.step, Step::Need) {
                     check_need(stage.requested(), &input, p.consumed)
                         .map_err(PumpFailure::Protocol)?;
                 }
-                window.consume(p.consumed);
+                self.take(p.consumed);
                 match p.step {
                     Step::Output(o) => return Ok(Yield::Output(o)),
                     Step::Finished(o) => return Ok(Yield::Finished(o)),
-                    Step::Need => {}
-                }
-                let requests = stage.requested();
-                // Prefer a request the stream can serve: at or ahead of the
-                // window.
-                let request = requests
-                    .iter()
-                    .copied()
-                    .find(|r| r.offset().is_some_and(|o| o >= window.base()))
-                    .unwrap_or(requests[0]);
-                let (offset, min_len) = match request {
-                    Request::AtLeast { offset, min_len } => (offset, min_len),
-                    Request::Range(r) => (r.offset, r.length as usize),
-                    _ => return Err(PumpFailure::NeedsRandomAccess(request)),
-                };
-                if offset < window.base() {
-                    return Err(PumpFailure::NeedsRandomAccess(request));
-                }
-                if min_len > self.max_window {
-                    return Err(PumpFailure::WindowLimit {
-                        needed: min_len,
-                        limit: self.max_window,
-                    });
-                }
-                // Skip forward to `offset`, reading and discarding.
-                while offset > window.end() && window.total.is_none() {
-                    let end = window.end();
-                    window.reset_to(end);
-                    let want = ((offset - end) as usize).min(self.read_size);
-                    let spare = window.spare(want);
-                    let n = reader.read(spare).map_err(PumpFailure::Io)?;
-                    window.commit(n);
-                    if n == 0 {
-                        window.total = Some(end);
-                    }
-                }
-                if offset <= window.end() {
-                    window.consume((offset - window.base()) as usize);
-                }
-                // Read until `min_len` bytes from `offset` are held, or the
-                // end.
-                let target = read_target(min_len, self.read_size);
-                while window.len() < min_len.max(1) && window.total.is_none() {
-                    let end = window.end();
-                    let want = target - window.len().min(target);
-                    let spare = window.spare(want);
-                    let n = reader.read(spare).map_err(PumpFailure::Io)?;
-                    window.commit(n);
-                    if n == 0 {
-                        window.total = Some(end);
-                    }
+                    Step::Need => self.serve(reader, stage.requested())?,
                 }
             }
         }

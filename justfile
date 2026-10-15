@@ -144,3 +144,17 @@ fidelity-check:
 adversarial-check:
     cargo test -p zencodec-testkit --lib adversarial
     cargo clippy -p zencodec-testkit --all-targets -- -D warnings
+
+# Instructions per decode for each io-driver shape (perf stat, two N points).
+# Build once: cargo build --release -p zencodec-io --features tokio --example drvprobe
+io-instr-probe cpu="4" lo="20000" hi="60000":
+    #!/usr/bin/env bash
+    set -e
+    for m in direct slice pump at coro tokio; do
+      for n in {{lo}} {{hi}}; do
+        c=$(taskset -c {{cpu}} perf stat -x, -e instructions \
+            ./target/release/examples/drvprobe "$m" "$n" 2>&1 \
+            | awk -F, '/instructions/ {print $1}')
+        echo "$m $n $c"
+      done
+    done

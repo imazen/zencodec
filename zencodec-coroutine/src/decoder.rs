@@ -47,6 +47,9 @@ pub struct CoroutineDecoder<F, E> {
     future: Pin<Box<F>>,
     state: State,
     begun: bool,
+    /// The sink's `accepts_provisional`, mirrored here when `begin` ran so
+    /// the `Rows` arm does not take the shared lock just to read it.
+    accepts_provisional: bool,
     access: AccessPattern,
     need: Vec<Request>,
     cached_info: Option<ImageInfo>,
@@ -79,6 +82,7 @@ where
             future,
             state: State::Running,
             begun: false,
+            accepts_provisional: false,
             access,
             need: Vec::new(),
             cached_info: None,
@@ -90,14 +94,6 @@ where
     /// Unread input currently retained, in bytes.
     pub fn retained_input(&self) -> usize {
         self.shared.lock().input.retained()
-    }
-
-    fn refresh_info(&mut self) {
-        let shared = self.shared.lock();
-        if shared.info_generation != self.cached_info_generation {
-            self.cached_info = shared.info.clone();
-            self.cached_info_generation = shared.info_generation;
-        }
     }
 }
 
@@ -135,8 +131,7 @@ where
     /// Copy into the store the bytes of `input[from..]` that the
     /// outstanding reads need, and report how far into `input` that took
     /// (a prefix: needed bytes plus any unneeded bytes before them).
-    fn absorb(&mut self, input: &Input<'_>, from: usize) -> usize {
-        let mut shared = self.shared.lock();
+    fn absorb(shared: &mut Shared, input: &Input<'_>, from: usize) -> usize {
         if let Some(t) = input.total_len {
             shared.input.set_total(t);
         }
@@ -186,7 +181,9 @@ where
         };
         if let (Some((w, h)), Some(desc)) = (dims, desc) {
             sink.begin(w, h, desc).map_err(StepError::Sink)?;
-            self.shared.lock().accepts_provisional = sink.accepts_provisional();
+            let accepts = sink.accepts_provisional();
+            self.shared.lock().accepts_provisional = accepts;
+            self.accepts_provisional = accepts;
             self.begun = true;
         }
         Ok(())
@@ -216,12 +213,27 @@ where
             self.state = State::Failed;
             return Err(StepError::Cancelled(reason));
         }
-        let mut consumed = self.absorb(&input, 0);
+        let mut consumed = Self::absorb(&mut self.shared.lock(), &input, 0);
+        let waker = Waker::noop();
+        let mut cx = Context::from_waker(waker);
         loop {
-            let waker = Waker::noop();
-            let mut cx = Context::from_waker(waker);
             let polled = self.future.as_mut().poll(&mut cx);
-            self.refresh_info();
+            let event = {
+                let mut shared = self.shared.lock();
+                if shared.info_generation != self.cached_info_generation {
+                    self.cached_info = shared.info.clone();
+                    self.cached_info_generation = shared.info_generation;
+                }
+                if let Some(rows) = shared.rows.take() {
+                    Pending::Rows(rows)
+                } else if let Some(update) = shared.metadata.take() {
+                    Pending::Metadata(update)
+                } else if !shared.need.is_empty() {
+                    Pending::Need
+                } else {
+                    Pending::Stalled
+                }
+            };
             match polled {
                 Poll::Ready(Ok(info)) => {
                     if let Err(e) = self.begin_if_ready(sink) {
@@ -245,18 +257,6 @@ where
                 }
                 Poll::Pending => {}
             }
-            let event = {
-                let mut shared = self.shared.lock();
-                if let Some(rows) = shared.rows.take() {
-                    Pending::Rows(rows)
-                } else if let Some(update) = shared.metadata.take() {
-                    Pending::Metadata(update)
-                } else if !shared.need.is_empty() {
-                    Pending::Need
-                } else {
-                    Pending::Stalled
-                }
-            };
             match event {
                 Pending::Rows(rows) => {
                     if let Err(e) = self.begin_if_ready(sink) {
@@ -267,8 +267,7 @@ where
                         self.state = State::Failed;
                         return Err(StepError::Codec(E::from(CoroutineError::RowsBeforeHeader)));
                     }
-                    let accepts = self.shared.lock().accepts_provisional;
-                    let copied = copy_rows(sink, &rows, accepts);
+                    let copied = copy_rows(sink, &rows, self.accepts_provisional);
                     self.shared.lock().spare = rows.data;
                     return match copied {
                         Ok(()) => Ok(Progress::new(
@@ -297,12 +296,12 @@ where
                     // The same input may hold what the coroutine now asks
                     // for: take it and poll again rather than send the
                     // driver back for bytes it already offered.
-                    let more = self.absorb(&input, consumed);
+                    let mut shared = self.shared.lock();
+                    let more = Self::absorb(&mut shared, &input, consumed);
                     if more > consumed {
                         consumed = more;
                         continue;
                     }
-                    let shared = self.shared.lock();
                     self.need.clear();
                     self.need.extend_from_slice(&shared.need);
                     return Ok(Progress::need(consumed));

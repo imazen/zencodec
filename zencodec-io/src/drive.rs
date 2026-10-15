@@ -4,10 +4,13 @@ use alloc::vec::Vec;
 
 use enough::{Stop, Unstoppable};
 use how_far::{Pulse, Total};
-use zencodec::decode::{ByteRange, DecodeRowSink, Event, IncrementalDecode, OutputInfo, StepError};
+use zencodec::decode::{
+    ByteRange, DecodeRowSink, Event, IncrementalDecode, Input, OutputInfo, StepError,
+};
 use zencodec::source::ReadAt;
 
-use crate::stepper::{DecodeStepper, DriveFailure, ReadAtCursor, SliceCursor, Yield};
+use crate::stepper::{DriveFailure, ReadAtCursor};
+use crate::window::check_need;
 
 /// Tuning for the drivers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -140,35 +143,37 @@ pub fn drive_from_slice<D>(
 where
     D: IncrementalDecode + ?Sized,
 {
-    let progress = Progressor::new(pulse);
+    let mut progress = Progressor::new(pulse);
     let stop = progress.stop();
-    let mut stage = DecodeStepper {
-        decoder,
-        sink,
-        progress,
-    };
-    let mut cursor = SliceCursor::new(window);
-    let mut rows = 0u64;
+    let total = bytes.len() as u64;
+    let window = window.max(1);
+    let mut stats = DriveStats::default();
+    // The current input: `bytes[start..end]`. `start <= end <= len` holds:
+    // consumption never exceeds the offer and `check_need` keeps every served
+    // request inside `total`.
+    let (mut start, mut end) = (0usize, 0usize);
     loop {
-        let y = cursor.next(bytes, &mut stage, stop)?;
-        if let Some(info) = finish_event(y, &mut rows) {
-            let mut stats = cursor.stats();
-            stats.rows = rows;
-            return Ok((info, stats));
+        let input = Input::new(start as u64, &bytes[start..end]).with_total_len(total);
+        let p = decoder
+            .step(input, sink, stop)
+            .map_err(DriveFailure::Step)?;
+        stats.steps += 1;
+        start += p.consumed.min(end - start);
+        progress.observe(decoder, &p.event);
+        match p.event {
+            Event::Done(info) => return Ok((info, stats)),
+            Event::Need => {}
+            Event::Rows { rows, .. } => {
+                stats.rows += rows as u64;
+                continue;
+            }
+            _ => continue,
         }
-    }
-}
-
-/// Count rows; the `Done` event's info ends the drive.
-#[inline]
-fn finish_event(y: Yield<Event>, rows: &mut u64) -> Option<OutputInfo> {
-    match y.into_inner() {
-        Event::Done(info) => Some(info),
-        Event::Rows { rows: n, .. } => {
-            *rows += n as u64;
-            None
-        }
-        _ => None,
+        let requests = decoder.requested();
+        check_need(requests, &input, p.consumed).map_err(DriveFailure::Protocol)?;
+        (start, end) = crate::stepper::slice_span(start, end, window, bytes.len(), requests);
+        stats.reads += 1;
+        stats.bytes_read += (end - start) as u64;
     }
 }
 
@@ -194,21 +199,35 @@ where
     D: IncrementalDecode + ?Sized,
     S: ReadAt + ?Sized,
 {
-    let progress = Progressor::new(pulse);
+    // A source already in memory is driven without copying, by the slice
+    // driver.
+    if let Some(bytes) = source.as_slice() {
+        return drive_from_slice(decoder, bytes, sink, pulse, opts.read_size)
+            .map_err(DriveFailure::widen);
+    }
+    let mut progress = Progressor::new(pulse);
     let stop = progress.stop();
-    let mut stage = DecodeStepper {
-        decoder,
-        sink,
-        progress,
-    };
     let mut cursor = ReadAtCursor::new(opts);
     let mut rows = 0u64;
     loop {
-        let y = cursor.next(source, &mut stage, stop)?;
-        if let Some(info) = finish_event(y, &mut rows) {
-            let mut stats = cursor.stats();
-            stats.rows = rows;
-            return Ok((info, stats));
+        let input = cursor.offer(source);
+        let p = decoder
+            .step(input, sink, stop)
+            .map_err(DriveFailure::Step)?;
+        if p.event == Event::Need {
+            check_need(decoder.requested(), &input, p.consumed).map_err(DriveFailure::Protocol)?;
+        }
+        cursor.take(p.consumed);
+        progress.observe(decoder, &p.event);
+        match p.event {
+            Event::Done(info) => {
+                let mut stats = cursor.stats();
+                stats.rows = rows;
+                return Ok((info, stats));
+            }
+            Event::Need => cursor.serve(decoder.requested(), source)?,
+            Event::Rows { rows: n, .. } => rows += n as u64,
+            _ => {}
         }
     }
 }

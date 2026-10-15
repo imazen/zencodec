@@ -4,7 +4,8 @@ use how_far::Pulse;
 use zencodec::decode::{DecodeRowSink, Event, IncrementalDecode, OutputInfo, StepError};
 
 use crate::drive::Progressor;
-use crate::stepper::{DecodeStepper, PumpFailure, ReadCursor};
+use crate::stepper::{PumpFailure, ReadCursor};
+use crate::window::check_need;
 
 /// Failure of [`pump_read_to_sink`]: a [`PumpFailure`] whose stage error is
 /// the decoder's [`StepError`].
@@ -30,17 +31,21 @@ where
     R: std::io::Read,
     D: IncrementalDecode + ?Sized,
 {
-    let progress = Progressor::new(pulse);
+    let mut progress = Progressor::new(pulse);
     let stop = progress.stop();
-    let mut stage = DecodeStepper {
-        decoder,
-        sink,
-        progress,
-    };
     let mut cursor = ReadCursor::new(read_size, max_window);
     loop {
-        if let Event::Done(info) = cursor.next(&mut reader, &mut stage, stop)?.into_inner() {
-            return Ok(info);
+        let input = cursor.offer();
+        let p = decoder.step(input, sink, stop).map_err(PumpError::Step)?;
+        if p.event == Event::Need {
+            check_need(decoder.requested(), &input, p.consumed).map_err(PumpError::Protocol)?;
+        }
+        cursor.take(p.consumed);
+        progress.observe(decoder, &p.event);
+        match p.event {
+            Event::Done(info) => return Ok(info),
+            Event::Need => cursor.serve(&mut reader, decoder.requested())?,
+            _ => {}
         }
     }
 }
