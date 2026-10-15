@@ -328,7 +328,13 @@ impl ReadAtCursor {
         }
         self.stats.steps += 1;
         match &mut self.from_fetched {
-            Some((_, at)) => *at += consumed,
+            // Clamped like the window and slice paths: a decoder that
+            // claims more than it was offered must not move the offset past
+            // the fetched buffer.
+            Some((i, at)) => {
+                let len = self.fetched.get(*i).map_or(0, |(_, b)| b.len());
+                *at = at.saturating_add(consumed).min(len);
+            }
             None => self.window.consume(consumed),
         }
     }

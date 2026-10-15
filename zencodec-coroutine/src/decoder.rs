@@ -32,6 +32,10 @@ pub type BoxedCoroutineDecoder<E> = CoroutineDecoder<BoxFuture<E>, E>;
 
 enum State {
     Running,
+    /// The future returned while rows or metadata it deposited were still
+    /// undelivered (it polled `write_rows` by hand and did not await it):
+    /// they go out first, then `Done`.
+    Finishing(OutputInfo),
     Done(OutputInfo),
     Failed,
 }
@@ -206,6 +210,10 @@ where
         match &self.state {
             State::Done(info) => return Ok(Progress::new(0, Event::Done(info.clone()))),
             State::Failed => return Err(StepError::Finished),
+            State::Finishing(info) => {
+                let info = info.clone();
+                return self.finish(sink, info, 0);
+            }
             State::Running => {}
         }
         if let Err(reason) = stop.check() {
@@ -236,19 +244,14 @@ where
             };
             match polled {
                 Poll::Ready(Ok(info)) => {
-                    if let Err(e) = self.begin_if_ready(sink) {
-                        self.state = State::Failed;
-                        return Err(e);
+                    if matches!(event, Pending::Rows(_) | Pending::Metadata(_)) {
+                        // Deliver what was deposited before finishing; the
+                        // future is complete and must not be polled again.
+                        self.state = State::Finishing(info);
+                        self.need.clear();
+                    } else {
+                        return self.finish(sink, info, consumed);
                     }
-                    if self.begun
-                        && let Err(e) = sink.finish()
-                    {
-                        self.state = State::Failed;
-                        return Err(StepError::Sink(e));
-                    }
-                    self.state = State::Done(info.clone());
-                    self.need.clear();
-                    return Ok(Progress::new(consumed, Event::Done(info)));
                 }
                 Poll::Ready(Err(e)) => {
                     self.state = State::Failed;
@@ -365,4 +368,33 @@ fn copy_rows(
             .copy_from_slice(&rows.data[start..start + rows.stride]);
     }
     Ok(())
+}
+
+impl<F, E> CoroutineDecoder<F, E>
+where
+    F: Future<Output = Result<OutputInfo, E>> + Send + 'static,
+    E: core::error::Error + Send + Sync + From<CoroutineError> + 'static,
+{
+    /// The future completed with `info`: begin if the header never was,
+    /// finish the sink, and report `Done`.
+    fn finish(
+        &mut self,
+        sink: &mut dyn DecodeRowSink,
+        info: OutputInfo,
+        consumed: usize,
+    ) -> Result<Progress, StepError<E>> {
+        if let Err(e) = self.begin_if_ready(sink) {
+            self.state = State::Failed;
+            return Err(e);
+        }
+        if self.begun
+            && let Err(e) = sink.finish()
+        {
+            self.state = State::Failed;
+            return Err(StepError::Sink(e));
+        }
+        self.state = State::Done(info.clone());
+        self.need.clear();
+        Ok(Progress::new(consumed, Event::Done(info)))
+    }
 }

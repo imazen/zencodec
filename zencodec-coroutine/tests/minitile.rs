@@ -619,3 +619,35 @@ fn stalled_coroutine_is_an_error() {
         Err(StepError::Codec(CoroutineError::Stalled))
     ));
 }
+
+/// A coroutine that polls `write_rows` once by hand (as a `select` or a
+/// timeout would) and returns in the same poll: the row it deposited must
+/// still reach the sink, before `Done`.
+#[test]
+fn rows_deposited_in_the_final_poll_are_delivered() {
+    use core::future::Future as _;
+    let mut dec: Dec =
+        CoroutineDecoder::boxed_with_options(64, AccessPattern::Sequential, |mut ctx| async move {
+            ctx.set_info(ImageInfo::new(2, 1, ImageFormat::Png));
+            ctx.set_output_descriptor(RGBA);
+            ctx.announce(MetadataUpdate::HeaderReady).await?;
+            let row = [1u8, 2, 3, 4, 5, 6, 7, 8];
+            let s = PixelSlice::new(&row, 2, 1, 8, RGBA).unwrap();
+            {
+                let fut = ctx.write_rows(BatchMeta::final_rows(0), &s);
+                let mut fut = core::pin::pin!(fut);
+                core::future::poll_fn(|cx| {
+                    let _ = fut.as_mut().poll(cx);
+                    core::task::Poll::Ready(())
+                })
+                .await;
+            }
+            Ok(OutputInfo::full_decode(2, 1, RGBA))
+        });
+    let mut sink = CollectSink::new();
+    let (info, stats) = drive_from_slice(&mut dec, &[], &mut sink, None, 64).unwrap();
+    assert_eq!((info.width, info.height), (2, 1));
+    assert_eq!(stats.rows, 1);
+    assert_eq!(sink.rows_written(), 1);
+    assert_eq!(sink.bytes(), &[1, 2, 3, 4, 5, 6, 7, 8]);
+}

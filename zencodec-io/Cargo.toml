@@ -45,6 +45,10 @@ required-features = ["std"]
 name = "stepper"
 required-features = ["std"]
 
+[[example]]
+name = "drvprobe"
+required-features = ["std"]
+
 [[bench]]
 name = "drivers"
 harness = false

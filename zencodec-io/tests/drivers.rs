@@ -1624,3 +1624,62 @@ mod tokio_drivers {
         drop(rx);
     }
 }
+
+/// Asks for a range, then claims far more bytes than it was offered.
+struct Greedy {
+    step: u32,
+    req: Vec<Request>,
+}
+
+impl IncrementalDecode for Greedy {
+    type Error = Never;
+    fn step(
+        &mut self,
+        input: Input<'_>,
+        _sink: &mut dyn DecodeRowSink,
+        _stop: &dyn enough::Stop,
+    ) -> Result<Progress, StepError<Never>> {
+        self.step += 1;
+        match self.step {
+            1 => {
+                self.req = vec![Request::range(4, 8)];
+                Ok(Progress::need(0))
+            }
+            2 => Ok(Progress::new(
+                input.bytes.len() + 100,
+                Event::Metadata(MetadataUpdate::HeaderReady),
+            )),
+            _ => Ok(Progress::new(
+                0,
+                Event::Done(OutputInfo::full_decode(1, 1, RGBA)),
+            )),
+        }
+    }
+    fn requested(&self) -> &[Request] {
+        &self.req
+    }
+    fn info(&self) -> Option<&ImageInfo> {
+        None
+    }
+    fn output_descriptor(&self) -> Option<PixelDescriptor> {
+        None
+    }
+    fn access_pattern(&self) -> AccessPattern {
+        AccessPattern::RandomAccess
+    }
+}
+
+#[test]
+fn a_decoder_that_overclaims_a_fetched_range_does_not_panic_the_driver() {
+    let data = [7u8; 64];
+    let mut src = Opaque(SliceReadAt::new(&data));
+    let mut sink = CollectSink::new();
+    let mut dec = Greedy {
+        step: 0,
+        req: Vec::new(),
+    };
+    // The fetched-buffer offset is clamped like the window's: the drive
+    // ends (here at Done) instead of indexing past the fetched bytes.
+    let r = drive_from_read_at(&mut dec, &mut src, &mut sink, None, DriveOptions::default());
+    assert!(r.is_ok(), "{r:?}");
+}
