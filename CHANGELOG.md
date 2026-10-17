@@ -177,6 +177,12 @@ removes that whole class).
 
 ### Added
 
+- `EncodePolicy::strict` (`with_strict`, `resolve_strict`), the encode-side
+  twin of `DecodePolicy::strict`: when set, an encode the target can only
+  approximate fails instead of being approximated. zencodecs uses it for a
+  colour description the target format cannot carry, which by default it
+  converts to sRGB. `None` is lenient; additive (`EncodePolicy` is
+  `#[non_exhaustive]`).
 - `helpers::set_exif_color_space(data, srgb)`: rewrites the EXIF ColorSpace tag (0xA001) in place to `1` for sRGB or `0xFFFF` otherwise, never adding it, so an encode can keep the tag in step with the colour it writes (imazen/zencodec#132). Shares the in-place integer patcher with `set_exif_orientation`.
 
 ### Changed (unpublished sans-I/O surface from `d116079`)

@@ -6,16 +6,16 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2137 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 120 lines (120 hidden + 0 excluded-feature)
+# files: zencodec.txt 2140 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 120 lines (120 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                14
 #   pub types (struct/enum/trait/alias)       229
-#   pub consts/statics                        250
+#   pub consts/statics                        252
 #   free functions                             75
 #   inherent methods                          911
-#   struct fields                             249
+#   struct fields                             250
 #   enum variants                             315
 #   re-exports                                 15
 #   trait roster entries (type × trait)       611
@@ -24,10 +24,10 @@
 #   auto-trait exceptions                      17
 #
 # per-module pub lines:
-#   (root)                          891
+#   (root)                          893
 #   animation                        11
 #   decode                          238
-#   encode                          185
+#   encode                          186
 #   estimate                         48
 #   exif                             94
 #   gainmap                         126
@@ -39,7 +39,7 @@
 #   source                           37
 #   time                             22
 
-## items (1980 lines)
+## items (1983 lines)
 
 pub mod zencodec
 pub use At
@@ -542,17 +542,20 @@ pub encode::EncodePolicy::color: core::option::Option<ColorEmitPolicy>
 pub encode::EncodePolicy::embed_exif: core::option::Option<bool>
 pub encode::EncodePolicy::embed_icc: core::option::Option<bool>
 pub encode::EncodePolicy::embed_xmp: core::option::Option<bool>
+pub encode::EncodePolicy::strict: core::option::Option<bool>
 pub const fn encode::EncodePolicy::none() -> Self
 pub const fn encode::EncodePolicy::preserve_all() -> Self
 pub const fn encode::EncodePolicy::resolve_color(&self, ColorEmitPolicy) -> ColorEmitPolicy
 pub const fn encode::EncodePolicy::resolve_exif(&self, bool) -> bool
 pub const fn encode::EncodePolicy::resolve_icc(&self, bool) -> bool
+pub const fn encode::EncodePolicy::resolve_strict(&self, bool) -> bool
 pub const fn encode::EncodePolicy::resolve_xmp(&self, bool) -> bool
 pub const fn encode::EncodePolicy::strip_all() -> Self
 pub const fn encode::EncodePolicy::with_color(self, ColorEmitPolicy) -> Self
 pub const fn encode::EncodePolicy::with_embed_exif(self, bool) -> Self
 pub const fn encode::EncodePolicy::with_embed_icc(self, bool) -> Self
 pub const fn encode::EncodePolicy::with_embed_xmp(self, bool) -> Self
+pub const fn encode::EncodePolicy::with_strict(self, bool) -> Self
 #[non_exhaustive] pub struct encode::FidelityRejection
 pub encode::FidelityRejection::index: usize
 pub encode::FidelityRejection::reason: encode::FidelityTargetError
