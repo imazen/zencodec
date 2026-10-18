@@ -28,6 +28,19 @@ doc-default:
     RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
     RUSTDOCFLAGS="-D warnings" cargo doc -p zencodec-io --no-deps --locked
 
+# Check the published regression test with packaged seeds and an isolated build.
+packaged-fuzz-regression:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo package --list -p zencodec --locked
+    cargo package -p zencodec --locked
+    package_metadata="$(cargo metadata --no-deps --format-version 1)"
+    package_target="$(jq -r '.target_directory' <<< "$package_metadata")"
+    package_version="$(jq -r '.packages[] | select(.name == "zencodec") | .version' <<< "$package_metadata")"
+    CARGO_TARGET_DIR="$package_target/packaged-fuzz-tests" RUSTC_WRAPPER= \
+        cargo test --manifest-path "$package_target/package/zencodec-$package_version/Cargo.toml" \
+        --test fuzz_regression --locked
+
 # Metadata extraction matrix; callers apply their host's build resource limits.
 metadata-check:
     cargo fmt -p zencodec -p zencodec-testkit -p zenmeta --check

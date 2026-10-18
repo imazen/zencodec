@@ -18,7 +18,7 @@ use zencodec::exif::{Exif, ExifPolicy, Retention, TextEncoding};
 use zencodec::{IccRetention, Metadata, MetadataFields, MetadataPolicy, Orientation};
 
 fn regression_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fuzz/regression")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fuzz-regression-seeds")
 }
 
 fn ret(bit: bool) -> Retention {
@@ -206,9 +206,8 @@ fn run_metadata_filtered(data: &[u8]) {
 ///
 /// This list is what stops the suite from passing vacuously. Without it, a
 /// renamed, moved, or emptied `fuzz/regression/` turns the whole test into a
-/// no-op that still reports green — the failure mode the gate exists to catch
-/// (the directory is not in the published `include` list, so it is easy to
-/// lose in a packaging or path refactor and never notice).
+/// no-op that still reports green — the failure mode the gate exists to catch.
+/// The seed directory must travel with this test in the published package.
 ///
 /// Adding a seed does NOT require touching this list; removing or renaming one
 /// does, deliberately. Each entry names a bug that was found by fuzzing and
