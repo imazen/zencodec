@@ -55,7 +55,7 @@ fn dyn_encoder_streams_what_the_typed_encoder_does() {
             "the header is pending after begin"
         );
         let mut out = Vec::new();
-        let mut drain = |enc: &mut Box<dyn zencodec::encode::DynEncoder>, out: &mut Vec<u8>| {
+        let drain = |enc: &mut Box<dyn zencodec::encode::DynEncoder>, out: &mut Vec<u8>| {
             if take {
                 enc.take_output(out);
             } else {
