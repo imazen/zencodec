@@ -31,6 +31,12 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
   declaration (zenjpeg's behaviour before `cd8ac18b`) passed. Two new misbehaving
   wrappers in `tests/streaming_output.rs` are caught, and fail again when the new
   checks are disabled.
+- `tests/dyn_streaming.rs`: the reference encoder, still and animated, streamed
+  through `DynEncoder` and `DynAnimationFrameEncoder` must report the typed timing,
+  have bytes pending before `finish`, and produce the typed encoder's exact bytes
+  through both `consume_output` and `take_output`. Nothing exercised the dyn shims'
+  forwarding; one that dropped `pending_output` would still have produced a correct
+  file from `finish`.
 - `check_read_at_contract`, `check_seekable_capability_honesty` and
   `check_incremental_capability_honesty` (chunk-boundary independence against the
   one-shot pixels, truncation must error); the last two run in `check_all`. The
