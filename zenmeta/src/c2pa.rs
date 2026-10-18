@@ -1,377 +1,422 @@
-//! C2PA manifest-store inspection, reported through [`crate::audit::Report::c2pa`].
+//! Bounded structural inspection of an opaque C2PA manifest store.
 //!
-//! The input is a complete manifest store: one JUMBF superbox of type `c2pa`, as a PNG
-//! `caBX` chunk carries it or as reassembled from JPEG APP11 packets (reassembly and
-//! other container framing stay with the codecs). Every manifest's claim and
-//! assertions are flattened from CBOR into entries; the claim signature's COSE
-//! headers are decoded, including each X.509 certificate's names, serial, validity
-//! and subject-alternative names, and each RFC 3161 timestamp token's time, policy
-//! and certificates. Nothing is verified: hashes, signatures and certificate chains
-//! are reported, not checked.
-//!
-//! Content kept but not interpreted is a [`Finding::Opaque`]: embedded files and
-//! thumbnails, unknown boxes, byte strings over 256 bytes that are not all zero, and
-//! any certificate or token this reader cannot parse.
+//! Container framing belongs to codecs. This module does not validate bindings,
+//! signatures, credentials or trust; semantic verification belongs to c2pa-rs.
+mod budget;
 mod cbor;
 mod der;
 mod jumbf;
 
-use alloc::{
-    collections::BTreeMap,
-    format,
-    string::{String, ToString},
-    vec::Vec,
-};
+use alloc::{string::String, vec::Vec};
+use core::fmt;
 
 use crate::audit::{Entry, Finding, Report};
+use budget::{Budget, LIMIT, Limit};
 use cbor::Value;
 
-/// Largest manifest store inspected, and the most text the report may hold.
-const LIMIT: usize = 16 * 1024 * 1024;
-/// Byte strings up to this length are printed; longer ones are summarized.
 const SHOWN_BYTES: usize = 256;
-
-/// Deepest CBOR flattening, across embedded-CBOR (tag 24) re-parses: each re-parse
-/// starts a fresh parser budget, so the walk keeps its own.
 const MAX_FLATTEN_DEPTH: usize = 64;
+// '#' plus every decimal digit of usize, on every supported target.
+const OCCURRENCE_ROOM: usize = 1 + usize::BITS as usize;
 
 struct Walk {
     entries: Vec<Entry>,
+    order: Vec<usize>,
     findings: Vec<Finding>,
-    budget: usize,
-    over: bool,
+    budget: Budget,
     depth: usize,
 }
 
 pub(crate) fn inspect(data: &[u8]) -> Report {
-    let mut w = Walk {
+    let mut walk = Walk {
         entries: Vec::new(),
-        findings: Vec::new(),
-        budget: 0,
-        over: false,
+        order: Vec::new(),
+        // A fixed emergency slot, independent of untrusted input. Every finding
+        // insertion keeps a spare slot so exhaustion can always be reported once.
+        findings: Vec::with_capacity(1),
+        budget: Budget::new(),
         depth: 0,
     };
-    if data.len() > LIMIT {
-        w.findings.push(Finding::Limit);
-        return Report::from_parts(w.entries, w.findings);
+    let result = if data.len() > LIMIT {
+        Err(Limit)
+    } else {
+        walk.store(data)
+    };
+    if result.is_err() {
+        walk.findings.push(Finding::Limit);
     }
-    match jumbf::boxes(data) {
-        Ok(top) => {
-            if top.len() != 1 || &top[0].ty != b"jumb" {
-                w.invalid("c2pa", "a manifest store is exactly one jumb superbox");
-            } else {
-                w.superbox("c2pa", top[0].payload, 0, Some(*b"c2pa"));
+    walk.finish()
+}
+
+/// User text cannot impersonate generated array/tag/occurrence/description paths.
+struct Segment<'a>(&'a str);
+impl fmt::Display for Segment<'_> {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for c in self.0.chars() {
+            match c {
+                '%' | '/' | '#' | '[' | ']' | '@' | '(' | ')' => write!(out, "%{:02X}", c as u32)?,
+                _ => write!(out, "{c}")?,
             }
         }
-        Err(e) => w.invalid("c2pa", e),
+        Ok(())
     }
-    let mut seen = BTreeMap::<String, usize>::new();
-    for e in &mut w.entries {
-        let n = seen.entry(e.path().to_string()).or_default();
-        *n += 1;
-        if *n > 1 {
-            e.set_path(format!("{}#{}", e.path(), n));
+}
+
+struct Fourcc([u8; 4]);
+impl fmt::Display for Fourcc {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match core::str::from_utf8(&self.0) {
+            Ok(s) if s.chars().all(|c| c.is_ascii_graphic() || c == ' ') => out.write_str(s),
+            _ => write!(out, "{:02x?}", self.0),
         }
     }
-    w.entries.sort_by(|a, b| a.path().cmp(b.path()));
-    Report::from_parts(w.entries, w.findings)
 }
 
-/// A path segment: labels and keys are free text, so `/` is escaped.
-fn seg(s: &str) -> String {
-    s.replace('%', "%25").replace('/', "%2F")
-}
-
-fn fourcc(t: &[u8; 4]) -> String {
-    match core::str::from_utf8(t) {
-        Ok(s) if s.chars().all(|c| c.is_ascii_graphic() || c == ' ') => s.to_string(),
-        _ => format!("{t:02x?}"),
-    }
-}
+type Result<T = ()> = core::result::Result<T, Limit>;
 
 impl Walk {
-    fn push(&mut self, path: String, kind: &str, value: String) {
-        if self.over {
-            return;
-        }
-        self.budget = self
-            .budget
-            .saturating_add(path.len() + kind.len() + value.len() + 64);
-        if self.budget > LIMIT {
-            self.over = true;
-            self.findings.push(Finding::Limit);
-            return;
-        }
-        self.entries.push(Entry::new(path, kind.to_string(), value));
+    fn text(&mut self, args: fmt::Arguments<'_>) -> Result<String> {
+        self.budget.text(args)
     }
 
-    fn invalid(&mut self, path: &str, why: &str) {
-        self.findings
-            .push(Finding::InvalidJumbf(format!("{path}: {why}")));
+    fn entry(&mut self, path: &str, kind: &str, value: fmt::Arguments<'_>) -> Result {
+        let mut path = self.text(format_args!("{path}"))?;
+        // Final path disambiguation must work even after the budget is exhausted.
+        self.budget.charge(OCCURRENCE_ROOM)?;
+        path.try_reserve_exact(OCCURRENCE_ROOM).map_err(|_| Limit)?;
+        let kind = self.text(format_args!("{kind}"))?;
+        let value = self.text(value)?;
+        self.budget.reserve(&mut self.entries, 1)?;
+        self.budget.reserve(&mut self.order, 1)?;
+        self.order.push(self.entries.len());
+        self.entries.push(Entry::new(path, kind, value));
+        Ok(())
     }
 
-    fn opaque(&mut self, path: &str, bytes: usize) {
-        self.findings.push(Finding::Opaque {
-            path: path.to_string(),
-            bytes,
+    fn finding(&mut self, finding: Finding) -> Result {
+        self.budget.reserve(&mut self.findings, 2)?;
+        self.findings.push(finding);
+        Ok(())
+    }
+
+    fn invalid(&mut self, path: &str, why: &str) -> Result {
+        let message = self.text(format_args!("{path}: {why}"))?;
+        self.finding(Finding::InvalidJumbf(message))
+    }
+
+    fn invalid_cbor(&mut self, path: &str, error: fmt::Arguments<'_>) -> Result {
+        let path = self.text(format_args!("{path}"))?;
+        let error = self.text(error)?;
+        self.finding(Finding::InvalidCbor { path, error })
+    }
+
+    fn opaque(&mut self, path: &str, bytes: usize) -> Result {
+        let path = self.text(format_args!("{path}"))?;
+        self.finding(Finding::Opaque { path, bytes })
+    }
+
+    fn finish(mut self) -> Report {
+        // Sort indices first, retaining source occurrence order for equal paths.
+        // Both the indices and suffix capacity were admitted with each entry.
+        self.order.sort_unstable_by(|&a, &b| {
+            self.entries[a]
+                .path()
+                .cmp(self.entries[b].path())
+                .then(a.cmp(&b))
         });
+        let mut start = 0;
+        while start < self.order.len() {
+            let first = self.order[start];
+            let mut end = start + 1;
+            while end < self.order.len()
+                && self.entries[self.order[end]].path() == self.entries[first].path()
+            {
+                end += 1;
+            }
+            for n in start + 1..end {
+                self.entries[self.order[n]].append_occurrence(n - start + 1);
+            }
+            start = end;
+        }
+        self.entries.sort_unstable_by(|a, b| a.path().cmp(b.path()));
+        Report::from_parts(self.entries, self.findings)
     }
 
-    /// A superbox: its description, then its content boxes. `expect` is the type the
-    /// parent requires (only the store's type is enforced).
-    fn superbox(&mut self, path: &str, payload: &[u8], depth: usize, expect: Option<[u8; 4]>) {
-        if depth > jumbf::MAX_DEPTH {
-            self.invalid(path, "superboxes nest too deeply");
-            return;
+    fn store(&mut self, data: &[u8]) -> Result {
+        let mut boxes = jumbf::Boxes::new(data);
+        match boxes.next() {
+            Some(Ok(root)) if root.ty == *b"jumb" && boxes.next().is_none() => {
+                self.superbox("c2pa", root.payload, 0, Some(*b"c2pa"))
+            }
+            Some(Err(error)) => self.invalid("c2pa", error),
+            _ => self.invalid("c2pa", "a manifest store is exactly one jumb superbox"),
         }
-        let parts = match jumbf::boxes(payload) {
-            Ok(p) => p,
-            Err(e) => return self.invalid(path, e),
+    }
+
+    fn superbox(
+        &mut self,
+        path: &str,
+        payload: &[u8],
+        depth: usize,
+        expect: Option<[u8; 4]>,
+    ) -> Result {
+        self.budget.item()?;
+        if depth > jumbf::MAX_DEPTH {
+            return self.invalid(path, "superboxes nest too deeply");
+        }
+        let mut boxes = jumbf::Boxes::new(payload);
+        let description = match boxes.next() {
+            Some(Ok(first)) if first.ty == *b"jumd" => match jumbf::description(first.payload) {
+                Ok(d) => d,
+                Err(error) => return self.invalid(path, error),
+            },
+            Some(Err(error)) => return self.invalid(path, error),
+            _ => return self.invalid(path, "superbox does not start with a description box"),
         };
-        let Some((first, content)) = parts.split_first().filter(|(f, _)| &f.ty == b"jumd") else {
-            return self.invalid(path, "superbox does not start with a description box");
-        };
-        let d = match jumbf::description(first.payload) {
-            Ok(d) => d,
-            Err(e) => return self.invalid(path, e),
-        };
-        let ty = jumbf::c2pa_type(&d.uuid);
+        let ty = jumbf::c2pa_type(&description.uuid);
         if expect.is_some() && ty != expect {
             return self.invalid(path, "not a C2PA manifest store");
         }
-        let type_name = match ty {
-            Some(t) => fourcc(&t),
-            None if d.uuid == jumbf::EMBEDDED_FILE => "embedded file".to_string(),
-            None => format!("uuid {:02x?}", d.uuid),
-        };
-        self.push(format!("{path}/@type"), "JUMBF description", type_name);
-        if let Some(l) = &d.label {
-            self.push(
-                format!("{path}/@label"),
+        let p = self.text(format_args!("{path}/@type"))?;
+        match ty {
+            Some(t) => self.entry(&p, "JUMBF description", format_args!("{}", Fourcc(t)))?,
+            None if description.uuid == jumbf::EMBEDDED_FILE => {
+                self.entry(&p, "JUMBF description", format_args!("embedded file"))?;
+            }
+            None => self.entry(
+                &p,
                 "JUMBF description",
-                format!("{l:?}"),
-            );
+                format_args!("uuid {:02x?}", description.uuid),
+            )?,
         }
-        if let Some(id) = d.id {
-            self.push(format!("{path}/@id"), "JUMBF description", id.to_string());
+        if let Some(label) = description.label {
+            let p = self.text(format_args!("{path}/@label"))?;
+            self.entry(&p, "JUMBF description", format_args!("{label:?}"))?;
         }
-        if let Some(h) = d.hash {
-            self.push(
-                format!("{path}/@hash"),
+        if let Some(id) = description.id {
+            let p = self.text(format_args!("{path}/@id"))?;
+            self.entry(&p, "JUMBF description", format_args!("{id}"))?;
+        }
+        if let Some(hash) = description.hash {
+            let p = self.text(format_args!("{path}/@hash"))?;
+            self.entry(&p, "JUMBF description", format_args!("{hash:02x?}"))?;
+        }
+        if let Some((t, len)) = description.private {
+            let p = self.text(format_args!("{path}/@private"))?;
+            self.entry(
+                &p,
                 "JUMBF description",
-                format!("{h:02x?}"),
-            );
+                format_args!("{} box, {len} bytes", Fourcc(t)),
+            )?;
         }
-        if let Some((t, len)) = d.private {
-            self.push(
-                format!("{path}/@private"),
-                "JUMBF description",
-                format!("{} box, {len} bytes", fourcc(&t)),
-            );
-        }
-        let mut children = BTreeMap::<String, usize>::new();
-        for b in content {
-            match &b.ty {
+        for child in boxes {
+            self.budget.item()?;
+            let child = match child {
+                Ok(child) => child,
+                Err(error) => return self.invalid(path, error),
+            };
+            match &child.ty {
                 b"jumb" => {
-                    let label = jumbf::boxes(b.payload)
-                        .ok()
-                        .and_then(|p| {
-                            p.first()
-                                .filter(|f| &f.ty == b"jumd")
-                                .and_then(|f| jumbf::description(f.payload).ok())
-                        })
-                        .and_then(|d| d.label);
-                    let name = seg(label.as_deref().unwrap_or("jumb"));
-                    let n = children.entry(name.clone()).or_default();
-                    let child = if *n == 0 {
-                        format!("{path}/{name}")
-                    } else {
-                        format!("{path}/{name}[{n}]")
-                    };
-                    *n += 1;
-                    self.superbox(&child, b.payload, depth + 1, None);
+                    let label = jumbf::Boxes::new(child.payload)
+                        .next()
+                        .and_then(core::result::Result::ok)
+                        .filter(|first| first.ty == *b"jumd")
+                        .and_then(|first| jumbf::description(first.payload).ok())
+                        .and_then(|d| d.label)
+                        .unwrap_or("jumb");
+                    let p = self.text(format_args!("{path}/{}", Segment(label)))?;
+                    self.superbox(&p, child.payload, depth + 1, None)?;
                 }
-                b"cbor" => match cbor::parse(b.payload) {
-                    Ok(v) if ty == Some(*b"c2cs") => self.cose(&format!("{path}/cose"), &v),
-                    Ok(v) => self.cbor(&format!("{path}/cbor"), &v),
-                    Err(e) => self.findings.push(Finding::InvalidCbor {
-                        path: format!("{path}/cbor"),
-                        error: format!("{e:?}"),
-                    }),
-                },
-                b"json" => match core::str::from_utf8(b.payload) {
-                    Ok(s) => self.push(format!("{path}/json"), "JSON text", format!("{s:?}")),
-                    Err(_) => self.opaque(&format!("{path}/json"), b.payload.len()),
-                },
-                b"bfdb" => self.file_description(&format!("{path}/bfdb"), b.payload),
-                b"bidb" => {
-                    self.push(
-                        format!("{path}/bidb"),
-                        "JUMBF binary data",
-                        format!("bytes(len={})", b.payload.len()),
-                    );
-                    self.opaque(&format!("{path}/bidb"), b.payload.len());
+                b"cbor" => {
+                    let p = self.text(format_args!(
+                        "{path}/{}",
+                        if ty == Some(*b"c2cs") { "cose" } else { "cbor" }
+                    ))?;
+                    match cbor::parse_with_budget(child.payload, &mut self.budget) {
+                        Ok(v) if ty == Some(*b"c2cs") => self.cose(&p, &v)?,
+                        Ok(v) => self.cbor(&p, &v)?,
+                        Err(cbor::Error::Budget) => return Err(Limit),
+                        Err(error) => self.invalid_cbor(&p, format_args!("{error:?}"))?,
+                    }
+                }
+                b"json" => {
+                    let p = self.text(format_args!("{path}/json"))?;
+                    match core::str::from_utf8(child.payload) {
+                        Ok(s) => self.entry(&p, "JSON text", format_args!("{s:?}"))?,
+                        Err(_) => self.opaque(&p, child.payload.len())?,
+                    }
+                }
+                b"bfdb" => {
+                    let p = self.text(format_args!("{path}/bfdb"))?;
+                    self.file_description(&p, child.payload)?;
                 }
                 other => {
-                    let p = format!("{path}/{}", seg(&fourcc(other)));
-                    self.push(
-                        p.clone(),
-                        "JUMBF box",
-                        format!("bytes(len={})", b.payload.len()),
-                    );
-                    self.opaque(&p, b.payload.len());
+                    let name = self.text(format_args!("{}", Fourcc(*other)))?;
+                    let p = self.text(format_args!("{path}/{}", Segment(&name)))?;
+                    let kind = if other == b"bidb" {
+                        "JUMBF binary data"
+                    } else {
+                        "JUMBF box"
+                    };
+                    self.entry(&p, kind, format_args!("bytes(len={})", child.payload.len()))?;
+                    self.opaque(&p, child.payload.len())?;
                 }
             }
         }
+        Ok(())
     }
 
-    /// Embedded-file description: toggles, NUL-terminated media type, optional name.
-    fn file_description(&mut self, path: &str, p: &[u8]) {
-        let Some((&toggles, rest)) = p.split_first() else {
+    fn file_description(&mut self, path: &str, payload: &[u8]) -> Result {
+        let Some((&toggles, rest)) = payload.split_first() else {
             return self.invalid(path, "empty embedded-file description");
         };
         let mut fields = rest.split(|&b| b == 0);
-        let media = fields.next().unwrap_or_default();
-        self.push(
-            format!("{path}/media_type"),
-            "JUMBF embedded file",
-            format!("{:?}", String::from_utf8_lossy(media)),
-        );
-        if toggles & 0x01 != 0 {
-            let name = fields.next().unwrap_or_default();
-            self.push(
-                format!("{path}/file_name"),
-                "JUMBF embedded file",
-                format!("{:?}", String::from_utf8_lossy(name)),
-            );
+        for field in ["media_type", "file_name"]
+            .iter()
+            .take(if toggles & 1 != 0 { 2 } else { 1 })
+        {
+            let bytes = fields.next().unwrap_or_default();
+            let p = self.text(format_args!("{path}/{field}"))?;
+            match core::str::from_utf8(bytes) {
+                Ok(s) => self.entry(&p, "JUMBF embedded file", format_args!("{s:?}"))?,
+                Err(_) => self.opaque(&p, bytes.len())?,
+            }
         }
+        Ok(())
     }
 
-    fn cbor(&mut self, path: &str, v: &Value) {
+    fn cbor(&mut self, path: &str, value: &Value) -> Result {
+        self.budget.item()?;
         if self.depth >= MAX_FLATTEN_DEPTH {
-            return self.findings.push(Finding::InvalidCbor {
-                path: path.to_string(),
-                error: "nested too deeply".into(),
-            });
+            return self.invalid_cbor(path, format_args!("nested too deeply"));
         }
         self.depth += 1;
-        self.cbor_value(path, v);
+        let result = self.cbor_value(path, value);
         self.depth -= 1;
+        result
     }
 
-    fn cbor_value(&mut self, path: &str, v: &Value) {
-        match v {
+    fn map_item(&mut self, path: &str, index: usize, key: &Value, value: &Value) -> Result {
+        let p = match key {
+            Value::Text(text) => self.text(format_args!("{path}/{}", Segment(text)))?,
+            Value::Uint(n) => self.text(format_args!("{path}/@uint({n})"))?,
+            Value::Nint(n) => self.text(format_args!("{path}/@nint({n})"))?,
+            other => {
+                let p = self.text(format_args!("{path}/@key({index})/key"))?;
+                self.cbor(&p, other)?;
+                self.text(format_args!("{path}/@key({index})/value"))?
+            }
+        };
+        self.cbor(&p, value)
+    }
+
+    fn cbor_value(&mut self, path: &str, value: &Value) -> Result {
+        match value {
             Value::Map(pairs) => {
                 if pairs.is_empty() {
-                    self.push(path.to_string(), "CBOR map", "{}".into());
+                    self.entry(path, "CBOR map", format_args!("{{}}"))?;
                 }
-                for (k, v) in pairs {
-                    let key = match k {
-                        Value::Text(t) => seg(t),
-                        Value::Uint(_) | Value::Nint(_) => {
-                            k.as_i64().map_or_else(|| "int".into(), |n| n.to_string())
-                        }
-                        other => format!("{other:?}"),
-                    };
-                    self.cbor(&format!("{path}/{key}"), v);
+                for (i, (k, v)) in pairs.iter().enumerate() {
+                    self.map_item(path, i, k, v)?;
                 }
             }
             Value::Array(items) => {
                 if items.is_empty() {
-                    self.push(path.to_string(), "CBOR array", "[]".into());
+                    self.entry(path, "CBOR array", format_args!("[]"))?;
                 }
                 for (i, v) in items.iter().enumerate() {
-                    self.cbor(&format!("{path}[{i}]"), v);
+                    let p = self.text(format_args!("{path}[{i}]"))?;
+                    self.cbor(&p, v)?;
                 }
             }
-            Value::Tag(24, inner) => match inner.as_bytes().map(cbor::parse) {
-                Some(Ok(nested)) => self.cbor(&format!("{path}/tag(24)"), &nested),
-                _ => self.cbor(&format!("{path}/tag(24)"), inner),
-            },
-            Value::Tag(t, inner) => self.cbor(&format!("{path}/tag({t})"), inner),
-            Value::Bytes(b) => self.bytes(path, "CBOR bytes", b),
-            Value::Text(t) => self.push(path.to_string(), "CBOR text", format!("{t:?}")),
-            Value::Uint(_) | Value::Nint(_) => {
-                let s = match v {
-                    Value::Uint(n) => n.to_string(),
-                    Value::Nint(n) => format!("-{}", u128::from(*n) + 1),
-                    _ => unreachable!(),
-                };
-                self.push(path.to_string(), "CBOR int", s)
+            Value::Tag(t, inner) => {
+                let p = self.text(format_args!("{path}/tag({t})"))?;
+                let inner = &inner[0];
+                if *t == 24
+                    && let Some(bytes) = inner.as_bytes()
+                {
+                    match cbor::parse_with_budget(bytes, &mut self.budget) {
+                        Ok(v) => return self.cbor(&p, &v),
+                        Err(cbor::Error::Budget) => return Err(Limit),
+                        Err(_) => {}
+                    }
+                }
+                self.cbor(&p, inner)?;
             }
-            Value::Float(f) => self.push(path.to_string(), "CBOR float", format!("{f:?}")),
-            Value::Bool(b) => self.push(path.to_string(), "CBOR simple", b.to_string()),
-            Value::Null => self.push(path.to_string(), "CBOR simple", "null".into()),
-            Value::Undefined => self.push(path.to_string(), "CBOR simple", "undefined".into()),
-            Value::Simple(n) => self.push(path.to_string(), "CBOR simple", format!("simple({n})")),
+            Value::Bytes(bytes) => self.bytes(path, "CBOR bytes", bytes)?,
+            Value::Text(text) => self.entry(path, "CBOR text", format_args!("{text:?}"))?,
+            Value::Uint(n) => self.entry(path, "CBOR int", format_args!("{n}"))?,
+            Value::Nint(n) => {
+                self.entry(path, "CBOR int", format_args!("-{}", u128::from(*n) + 1))?
+            }
+            Value::Float(f) => self.entry(path, "CBOR float", format_args!("{f:?}"))?,
+            Value::Bool(b) => self.entry(path, "CBOR simple", format_args!("{b}"))?,
+            Value::Null => self.entry(path, "CBOR simple", format_args!("null"))?,
+            Value::Undefined => self.entry(path, "CBOR simple", format_args!("undefined"))?,
+            Value::Simple(n) => self.entry(path, "CBOR simple", format_args!("simple({n})"))?,
         }
+        Ok(())
     }
 
-    fn bytes(&mut self, path: &str, kind: &str, b: &[u8]) {
-        if b.iter().all(|&x| x == 0) && b.len() > SHOWN_BYTES {
-            self.push(
-                path.to_string(),
+    fn bytes(&mut self, path: &str, kind: &str, bytes: &[u8]) -> Result {
+        if bytes.len() > SHOWN_BYTES && bytes.iter().all(|&b| b == 0) {
+            self.entry(
+                path,
                 kind,
-                format!("bytes(len={}, all zero)", b.len()),
-            );
-        } else if b.len() <= SHOWN_BYTES {
-            self.push(path.to_string(), kind, format!("{b:02x?}"));
+                format_args!("bytes(len={}, all zero)", bytes.len()),
+            )
+        } else if bytes.len() <= SHOWN_BYTES {
+            self.entry(path, kind, format_args!("{bytes:02x?}"))
         } else {
-            self.push(path.to_string(), kind, format!("bytes(len={})", b.len()));
-            self.opaque(path, b.len());
+            self.entry(path, kind, format_args!("bytes(len={})", bytes.len()))?;
+            self.opaque(path, bytes.len())
         }
     }
 
-    /// COSE_Sign1 (RFC 9052): protected and unprotected headers, payload, signature.
-    fn cose(&mut self, path: &str, v: &Value) {
-        let body = match v {
-            Value::Tag(18, inner) => inner.as_ref(),
+    fn cose(&mut self, path: &str, value: &Value) -> Result {
+        let body = match value {
+            Value::Tag(18, inner) => &inner[0],
             other => other,
         };
         let Value::Array(parts) = body else {
-            return self.findings.push(Finding::InvalidCbor {
-                path: path.to_string(),
-                error: "not a COSE_Sign1 array".into(),
-            });
+            return self.invalid_cbor(path, format_args!("not a COSE_Sign1 array"));
         };
         let [protected, unprotected, payload, signature] = parts.as_slice() else {
-            return self.findings.push(Finding::InvalidCbor {
-                path: path.to_string(),
-                error: "COSE_Sign1 needs four parts".into(),
-            });
+            return self.invalid_cbor(path, format_args!("COSE_Sign1 needs four parts"));
         };
-        match protected.as_bytes().map(cbor::parse) {
-            Some(Ok(h)) => self.headers(&format!("{path}/protected"), &h),
-            Some(Err(e)) => self.findings.push(Finding::InvalidCbor {
-                path: format!("{path}/protected"),
-                error: format!("{e:?}"),
-            }),
-            None => self.cbor(&format!("{path}/protected"), protected),
+        let p = self.text(format_args!("{path}/protected"))?;
+        match protected.as_bytes() {
+            Some(bytes) => match cbor::parse_with_budget(bytes, &mut self.budget) {
+                Ok(h) => self.headers(&p, &h)?,
+                Err(cbor::Error::Budget) => return Err(Limit),
+                Err(error) => self.invalid_cbor(&p, format_args!("{error:?}"))?,
+            },
+            None => self.cbor(&p, protected)?,
         }
-        self.headers(&format!("{path}/unprotected"), unprotected);
+        let p = self.text(format_args!("{path}/unprotected"))?;
+        self.headers(&p, unprotected)?;
+        let p = self.text(format_args!("{path}/payload"))?;
         match payload {
-            Value::Null => self.push(format!("{path}/payload"), "COSE", "detached".into()),
-            other => self.cbor(&format!("{path}/payload"), other),
+            Value::Null => self.entry(&p, "COSE", format_args!("detached"))?,
+            other => self.cbor(&p, other)?,
         }
+        let p = self.text(format_args!("{path}/signature"))?;
         match signature.as_bytes() {
-            Some(s) => self.push(
-                format!("{path}/signature"),
-                "COSE",
-                format!("bytes(len={})", s.len()),
-            ),
-            None => self.cbor(&format!("{path}/signature"), signature),
+            Some(bytes) => self.entry(&p, "COSE", format_args!("bytes(len={})", bytes.len())),
+            None => self.cbor(&p, signature),
         }
     }
 
-    fn headers(&mut self, path: &str, h: &Value) {
-        let Value::Map(pairs) = h else {
-            return self.cbor(path, h);
+    fn headers(&mut self, path: &str, headers: &Value) -> Result {
+        let Value::Map(pairs) = headers else {
+            return self.cbor(path, headers);
         };
-        for (k, v) in pairs {
+        for (i, (k, v)) in pairs.iter().enumerate() {
+            self.budget.item()?;
             match (k.as_i64(), k.as_text()) {
                 (Some(1), _) => {
-                    let alg = v.as_i64();
-                    let name = match alg {
+                    let p = self.text(format_args!("{path}/alg"))?;
+                    let name = match v.as_i64() {
                         Some(-7) => " (ES256)",
                         Some(-35) => " (ES384)",
                         Some(-36) => " (ES512)",
@@ -381,64 +426,95 @@ impl Walk {
                         Some(-8) => " (EdDSA)",
                         _ => "",
                     };
-                    self.push(
-                        format!("{path}/alg"),
-                        "COSE header",
-                        format!("{}{name}", alg.map_or("?".into(), |a| a.to_string())),
-                    );
+                    match v.as_i64() {
+                        Some(alg) => self.entry(&p, "COSE header", format_args!("{alg}{name}"))?,
+                        None => self.cbor(&p, v)?,
+                    }
                 }
-                (Some(33), _) | (_, Some("x5chain")) => self.chain(&format!("{path}/x5chain"), v),
-                (_, Some(t @ ("sigTst" | "sigTst2"))) => self.timestamps(&format!("{path}/{t}"), v),
-                (Some(n), _) => self.cbor(&format!("{path}/{n}"), v),
-                (_, Some(t)) => self.cbor(&format!("{path}/{}", seg(t)), v),
-                _ => self.cbor(&format!("{path}/{k:?}"), v),
+                (Some(33), _) => {
+                    let p = self.text(format_args!("{path}/x5chain"))?;
+                    self.chain(&p, v)?;
+                }
+                (_, Some("x5chain")) => {
+                    let p = self.text(format_args!("{path}/@text/x5chain"))?;
+                    self.chain(&p, v)?;
+                }
+                (_, Some(t @ ("sigTst" | "sigTst2"))) => {
+                    let p = self.text(format_args!("{path}/{t}"))?;
+                    self.timestamps(&p, v)?;
+                }
+                (_, Some(text)) => {
+                    let p = self.text(format_args!("{path}/@text/{}", Segment(text)))?;
+                    self.cbor(&p, v)?;
+                }
+                _ => self.map_item(path, i, k, v)?,
+            }
+        }
+        Ok(())
+    }
+
+    fn chain(&mut self, path: &str, value: &Value) -> Result {
+        match value {
+            Value::Bytes(bytes) => {
+                let p = self.text(format_args!("{path}[0]"))?;
+                self.certificate(&p, bytes)
+            }
+            Value::Array(items) => {
+                for (i, item) in items.iter().enumerate() {
+                    self.budget.item()?;
+                    let p = self.text(format_args!("{path}[{i}]"))?;
+                    match item.as_bytes() {
+                        Some(bytes) => self.certificate(&p, bytes)?,
+                        None => self.cbor(&p, item)?,
+                    }
+                }
+                Ok(())
+            }
+            other => self.cbor(path, other),
+        }
+    }
+
+    fn certificate(&mut self, path: &str, bytes: &[u8]) -> Result {
+        let mut out = der::Out::new();
+        match der::certificate(path, bytes, &mut out) {
+            Some(()) => {
+                for (p, k, v) in out {
+                    self.entry(&p, k, format_args!("{v}"))?;
+                }
+                Ok(())
+            }
+            None => {
+                self.entry(path, "X.509", format_args!("bytes(len={})", bytes.len()))?;
+                self.opaque(path, bytes.len())
             }
         }
     }
 
-    fn chain(&mut self, path: &str, v: &Value) {
-        let certs: Vec<&[u8]> = match v {
-            Value::Bytes(b) => alloc::vec![b.as_slice()],
-            Value::Array(items) => items.iter().filter_map(Value::as_bytes).collect(),
-            other => return self.cbor(path, other),
+    fn timestamps(&mut self, path: &str, value: &Value) -> Result {
+        let Some(Value::Array(tokens)) = value.get_text("tstTokens") else {
+            return self.cbor(path, value);
         };
-        for (i, c) in certs.iter().enumerate() {
-            let p = format!("{path}[{i}]");
-            let mut out = der::Out::new();
-            match der::certificate(&p, c, &mut out) {
-                Some(()) => out.into_iter().for_each(|(p, k, v)| self.push(p, k, v)),
-                None => {
-                    self.push(p.clone(), "X.509", format!("bytes(len={})", c.len()));
-                    self.opaque(&p, c.len());
-                }
-            }
-        }
-    }
-
-    /// `sigTst`: `{"tstTokens": [{"val": TimeStampToken}, ...]}`.
-    fn timestamps(&mut self, path: &str, v: &Value) {
-        let Some(Value::Array(tokens)) = v.get_text("tstTokens") else {
-            return self.cbor(path, v);
-        };
-        for (i, t) in tokens.iter().enumerate() {
-            let p = format!("{path}/tstTokens[{i}]");
-            match t.get_text("val").and_then(Value::as_bytes) {
-                Some(der_bytes) => {
+        for (i, token) in tokens.iter().enumerate() {
+            self.budget.item()?;
+            let p = self.text(format_args!("{path}/tstTokens[{i}]"))?;
+            match token.get_text("val").and_then(Value::as_bytes) {
+                Some(bytes) => {
                     let mut out = der::Out::new();
-                    match der::timestamp_token(&p, der_bytes, &mut out) {
-                        Some(()) => out.into_iter().for_each(|(p, k, v)| self.push(p, k, v)),
+                    match der::timestamp_token(&p, bytes, &mut out) {
+                        Some(()) => {
+                            for (p, k, v) in out {
+                                self.entry(&p, k, format_args!("{v}"))?;
+                            }
+                        }
                         None => {
-                            self.push(
-                                p.clone(),
-                                "RFC 3161",
-                                format!("bytes(len={})", der_bytes.len()),
-                            );
-                            self.opaque(&p, der_bytes.len());
+                            self.entry(&p, "RFC 3161", format_args!("bytes(len={})", bytes.len()))?;
+                            self.opaque(&p, bytes.len())?;
                         }
                     }
                 }
-                None => self.cbor(&p, t),
+                None => self.cbor(&p, token)?,
             }
         }
+        Ok(())
     }
 }

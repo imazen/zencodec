@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- C2PA audit CBOR reparses, JUMBF traversal and report formatting share a
+  cumulative allocation/item budget. Opaque findings stop at one terminal limit.
+  Escaped, typed paths and source occurrence suffixes keep duplicate fields
+  distinct in structural diffs. DER inspection is not covered by this change.
+
 - `xmp::Packet::parse` (and every XMP reader built on it: `xmp::gainmap::parse_xmp`,
   `parse_xmp_full`, `xmp::container::Directory::parse`) rejects a packet nesting
   more than 64 elements before roxmltree parses it. roxmltree's parser recurses

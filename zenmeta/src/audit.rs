@@ -25,8 +25,10 @@ impl Entry {
         Self { path, kind, value }
     }
     #[cfg(feature = "c2pa")]
-    pub(crate) fn set_path(&mut self, path: String) {
-        self.path = path;
+    pub(crate) fn append_occurrence(&mut self, occurrence: usize) {
+        use core::fmt::Write;
+        // The C2PA walker reserves suffix capacity before admitting each entry.
+        write!(&mut self.path, "#{occurrence}").expect("writing to a String cannot fail");
     }
     /// Directory/namespace path, including occurrence index for duplicate tags.
     pub fn path(&self) -> &str {

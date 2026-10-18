@@ -1,6 +1,7 @@
 //! JUMBF (ISO/IEC 19566-5) boxes: superboxes (`jumb`) with their description box
 //! (`jumd`) and content boxes.
-use alloc::{string::String, vec::Vec};
+#[cfg(test)]
+use alloc::vec::Vec;
 
 /// Deepest superbox nesting followed. A C2PA store nests store → manifest →
 /// assertion store → assertion, so four levels plus ingredients' own stores.
@@ -14,17 +15,24 @@ pub(crate) struct Box<'a> {
 
 /// The boxes laid end to end in `data`. `LBox` 1 takes a 64-bit `XLBox`; 0 runs to
 /// the end. An error names the first box that does not fit.
-pub(crate) fn boxes(data: &[u8]) -> Result<Vec<Box<'_>>, &'static str> {
-    let mut out = Vec::new();
-    let mut pos = 0usize;
-    while pos < data.len() {
-        let head = data.get(pos..pos + 8).ok_or("truncated box header")?;
+pub(crate) struct Boxes<'a> {
+    rest: &'a [u8],
+}
+
+impl<'a> Boxes<'a> {
+    pub(crate) fn new(data: &'a [u8]) -> Self {
+        Self { rest: data }
+    }
+
+    fn read(&mut self) -> Result<Box<'a>, &'static str> {
+        let data = self.rest;
+        let head = data.get(..8).ok_or("truncated box header")?;
         let lbox = u32::from_be_bytes([head[0], head[1], head[2], head[3]]) as u64;
         let ty = [head[4], head[5], head[6], head[7]];
         let (header, len) = match lbox {
-            0 => (8usize, (data.len() - pos) as u64),
+            0 => (8usize, data.len() as u64),
             1 => {
-                let x = data.get(pos + 8..pos + 16).ok_or("truncated XLBox")?;
+                let x = data.get(8..16).ok_or("truncated XLBox")?;
                 (16, u64::from_be_bytes(x.try_into().unwrap()))
             }
             2..=7 => return Err("box length below its header"),
@@ -35,30 +43,48 @@ pub(crate) fn boxes(data: &[u8]) -> Result<Vec<Box<'_>>, &'static str> {
         }
         let end = usize::try_from(len)
             .ok()
-            .and_then(|l| pos.checked_add(l))
             .filter(|&e| e <= data.len())
             .ok_or("box runs past its parent")?;
-        out.push(Box {
+        self.rest = &data[end..];
+        Ok(Box {
             ty,
-            payload: &data[pos + header..end],
-        });
-        pos = end;
+            payload: &data[header..end],
+        })
     }
-    Ok(out)
+}
+
+impl<'a> Iterator for Boxes<'a> {
+    type Item = Result<Box<'a>, &'static str>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.rest.is_empty() {
+            return None;
+        }
+        let result = self.read();
+        if result.is_err() {
+            self.rest = &[];
+        }
+        Some(result)
+    }
+}
+
+#[cfg(test)]
+fn boxes(data: &[u8]) -> Result<Vec<Box<'_>>, &'static str> {
+    Boxes::new(data).collect()
 }
 
 /// A superbox's description box.
 #[derive(Clone, Debug, Default)]
-pub(crate) struct Description {
+pub(crate) struct Description<'a> {
     pub uuid: [u8; 16],
-    pub label: Option<String>,
+    pub label: Option<&'a str>,
     pub id: Option<u32>,
     pub hash: Option<[u8; 32]>,
     /// The private box's type and payload length (C2PA puts a salt here).
     pub private: Option<([u8; 4], usize)>,
 }
 
-pub(crate) fn description(payload: &[u8]) -> Result<Description, &'static str> {
+pub(crate) fn description(payload: &[u8]) -> Result<Description<'_>, &'static str> {
     let uuid: [u8; 16] = payload
         .get(..16)
         .ok_or("short description box")?
@@ -75,7 +101,7 @@ pub(crate) fn description(payload: &[u8]) -> Result<Description, &'static str> {
             .iter()
             .position(|&b| b == 0)
             .ok_or("unterminated label")?;
-        d.label = Some(String::from_utf8(rest[..end].to_vec()).map_err(|_| "label is not UTF-8")?);
+        d.label = Some(core::str::from_utf8(&rest[..end]).map_err(|_| "label is not UTF-8")?);
         rest = &rest[end + 1..];
     }
     if toggles & 0x04 != 0 {
@@ -93,9 +119,13 @@ pub(crate) fn description(payload: &[u8]) -> Result<Description, &'static str> {
         rest = &rest[32..];
     }
     if toggles & 0x10 != 0 {
-        let b = boxes(rest)?;
-        let first = b.first().ok_or("missing private box")?;
+        let mut boxes = Boxes::new(rest);
+        let first = boxes.next().ok_or("missing private box")??;
         d.private = Some((first.ty, first.payload.len()));
+        // The private field is one box, not an unbounded list of children.
+        if boxes.next().is_some() {
+            return Err("extra private box data");
+        }
     }
     Ok(d)
 }
@@ -140,7 +170,7 @@ mod tests {
         p.extend_from_slice(&7u32.to_be_bytes());
         let d = description(&p).unwrap();
         assert_eq!(
-            (d.label.as_deref(), d.id, c2pa_type(&d.uuid)),
+            (d.label, d.id, c2pa_type(&d.uuid)),
             (Some("c2pa"), Some(7), Some(*b"c2pa"))
         );
         assert!(description(&p[..20]).is_err());

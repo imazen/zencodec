@@ -231,6 +231,12 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- C2PA PR157 review (2026-10-17): `just c2pa-regressions` reproduces and fixes
+  tag-24 reparses restarting allocation budgets, opaque findings continuing
+  after the report limit, and colliding field paths losing diff entries. The
+  shared CBOR/report budget does not yet cover DER's intermediate formatter;
+  DER formatting admission and large/truncated OIDs remain review findings.
+
 - PR138 audit update (2026-10-13): the historical contract gaps below are fixed
   on the PR for timing capability, editor-free XMP preservation and report bounds.
   Adversarial review also fixed partial child-plan mutation, mixed-input plans,

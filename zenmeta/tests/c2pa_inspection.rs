@@ -386,3 +386,99 @@ fn malformed_and_hostile_stores_are_findings_not_panics() {
         )]
     );
 }
+
+fn assertion_store(value: &[u8]) -> Vec<u8> {
+    superbox(c2pa_uuid(b"c2pa"), "c2pa", &[bx(b"cbor", value)])
+}
+
+#[test]
+fn duplicate_and_typed_keys_remain_distinct_in_diffs() {
+    let fields = |duplicate| {
+        map(&[
+            (text("foo"), uint(1)),
+            (text("foo"), uint(duplicate)),
+            (text("foo#2"), uint(3)),
+            (text("1"), uint(4)),
+            (uint(1), uint(5)),
+            (text("a[0]"), uint(6)),
+            (text("a"), array(&[uint(7)])),
+            (text("@uint(1)"), uint(8)),
+            (uint(u64::MAX), uint(9)),
+            (uint(u64::MAX - 1), uint(10)),
+            (text("Null"), uint(11)),
+            (vec![0xf6], uint(12)),
+            (array(&[uint(1)]), uint(13)),
+        ])
+    };
+    let before = Report::c2pa(&assertion_store(&fields(2)));
+    let after = Report::c2pa(&assertion_store(&fields(22)));
+    assert!(before.findings().is_empty(), "{:?}", before.findings());
+    let paths: Vec<_> = before.entries().iter().map(|entry| entry.path()).collect();
+    let mut distinct = paths.clone();
+    distinct.sort_unstable();
+    distinct.dedup();
+    assert_eq!(distinct.len(), paths.len(), "{paths:#?}");
+    assert_eq!(before.diff(&after).len(), 1);
+}
+
+#[test]
+fn opaque_findings_stop_at_one_terminal_limit() {
+    let children = bx(b"xxxx", &[]).repeat(200_000);
+    let input = superbox(c2pa_uuid(b"c2pa"), "c2pa", &[children]);
+    let report = Report::c2pa(&input);
+    assert_eq!(report.findings().last(), Some(&Finding::Limit));
+    assert_eq!(
+        report
+            .findings()
+            .iter()
+            .filter(|f| **f == Finding::Limit)
+            .count(),
+        1
+    );
+    assert!(report.findings().len() < 200_000);
+    let mut paths: Vec<_> = report.entries().iter().map(|entry| entry.path()).collect();
+    let count = paths.len();
+    paths.sort_unstable();
+    paths.dedup();
+    assert_eq!(paths.len(), count, "partial reports also need unique paths");
+}
+
+#[test]
+fn tag24_reparses_share_the_allocation_budget() {
+    let mut nested = bytes(&vec![0xab; 1024 * 1024]);
+    for _ in 0..24 {
+        nested = tag(24, bytes(&nested));
+    }
+    let report = Report::c2pa(&assertion_store(&nested));
+    assert_eq!(report.findings().last(), Some(&Finding::Limit));
+    assert_eq!(
+        report
+            .findings()
+            .iter()
+            .filter(|f| **f == Finding::Limit)
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn sibling_labels_cannot_impersonate_occurrence_suffixes() {
+    let child = |label: &str, n| superbox(c2pa_uuid(b"cbor"), label, &[bx(b"cbor", &uint(n))]);
+    let input = superbox(
+        c2pa_uuid(b"c2pa"),
+        "c2pa",
+        &[
+            child("same", 1),
+            child("same", 2),
+            child("same[1]", 3),
+            child("same#2", 4),
+        ],
+    );
+    let report = Report::c2pa(&input);
+    assert!(report.findings().is_empty());
+    let mut paths: Vec<_> = report.entries().iter().map(|entry| entry.path()).collect();
+    let count = paths.len();
+    paths.sort_unstable();
+    paths.dedup();
+    assert_eq!(paths.len(), count);
+}

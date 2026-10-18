@@ -35,6 +35,22 @@ metadata-check:
     cargo check -p zenmeta --no-default-features --features c2pa
     cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+# C2PA audit regressions and the isolated no_std feature; apply host resource limits.
+c2pa-check:
+    cargo fmt -p zenmeta --check
+    just c2pa-test
+    just c2pa-lint
+
+c2pa-lint:
+    cargo check -p zenmeta --no-default-features --features c2pa
+    cargo clippy -p zenmeta --all-targets --all-features -- -D warnings
+
+c2pa-test:
+    cargo test -p zenmeta --all-features
+
+c2pa-regressions:
+    cargo test -p zenmeta --all-features --test c2pa_inspection
+
 # Compare the actual published contract, not an unpublished metadata branch.
 metadata-semver:
     cargo semver-checks check-release -p zencodec --baseline-version 0.1.26 --all-features

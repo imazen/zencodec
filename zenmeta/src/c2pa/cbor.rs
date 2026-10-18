@@ -3,12 +3,11 @@
 //! Depth and item budgets are checked before descending, so hostile nesting fails
 //! with an error instead of exhausting the stack. Indefinite-length strings are
 //! concatenated; text must be valid UTF-8.
-use alloc::{boxed::Box, string::String, vec::Vec};
+use super::budget::Budget;
+use alloc::{string::String, vec::Vec};
 
 /// Deepest nesting accepted (arrays, maps and tags count one level each).
 pub(crate) const MAX_DEPTH: usize = 32;
-/// Most data items in one document.
-pub(crate) const MAX_ITEMS: usize = 1 << 20;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Value {
@@ -19,7 +18,8 @@ pub(crate) enum Value {
     Text(String),
     Array(Vec<Value>),
     Map(Vec<(Value, Value)>),
-    Tag(u64, Box<Value>),
+    // Exactly one child; Vec permits fallible allocation on stable Rust.
+    Tag(u64, Vec<Value>),
     Bool(bool),
     Null,
     Undefined,
@@ -67,18 +67,23 @@ pub(crate) enum Error {
     Trailing(usize),
 }
 
-struct Reader<'a> {
+struct Reader<'a, 'b> {
     data: &'a [u8],
     pos: usize,
-    items: usize,
+    budget: &'b mut Budget,
 }
 
 /// Parse exactly one CBOR data item spanning all of `data`.
+#[cfg(test)]
 pub(crate) fn parse(data: &[u8]) -> Result<Value, Error> {
+    parse_with_budget(data, &mut Budget::new())
+}
+
+pub(super) fn parse_with_budget(data: &[u8], budget: &mut Budget) -> Result<Value, Error> {
     let mut r = Reader {
         data,
         pos: 0,
-        items: 0,
+        budget,
     };
     let v = r.item(0)?;
     if r.pos != data.len() {
@@ -92,13 +97,13 @@ enum Head {
     Indefinite,
 }
 
-impl Reader<'_> {
+impl<'a> Reader<'a, '_> {
     fn byte(&mut self) -> Result<u8, Error> {
         let b = *self.data.get(self.pos).ok_or(Error::Truncated)?;
         self.pos += 1;
         Ok(b)
     }
-    fn take(&mut self, n: u64) -> Result<&[u8], Error> {
+    fn take(&mut self, n: u64) -> Result<&'a [u8], Error> {
         let n = usize::try_from(n).map_err(|_| Error::Truncated)?;
         let end = self.pos.checked_add(n).ok_or(Error::Truncated)?;
         let s = self.data.get(self.pos..end).ok_or(Error::Truncated)?;
@@ -118,11 +123,7 @@ impl Reader<'_> {
         Ok(Head::Value(n))
     }
     fn count(&mut self) -> Result<(), Error> {
-        self.items += 1;
-        if self.items > MAX_ITEMS {
-            return Err(Error::Budget);
-        }
-        Ok(())
+        self.budget.item().map_err(|_| Error::Budget)
     }
     /// Length-prefixed counts can claim far more items than the input holds; every
     /// item takes at least one byte, so a count above the remaining bytes is false.
@@ -135,7 +136,10 @@ impl Reader<'_> {
     }
     fn string(&mut self, major: u8, info: u8) -> Result<Vec<u8>, Error> {
         match self.uint(info)? {
-            Head::Value(n) => Ok(self.take(n)?.to_vec()),
+            Head::Value(n) => {
+                let bytes = self.take(n)?;
+                self.budget.copy(bytes).map_err(|_| Error::Budget)
+            }
             Head::Indefinite => {
                 let mut out = Vec::new();
                 loop {
@@ -148,7 +152,17 @@ impl Reader<'_> {
                     }
                     self.count()?;
                     match self.uint(b & 0x1f)? {
-                        Head::Value(n) => out.extend_from_slice(self.take(n)?),
+                        Head::Value(n) => {
+                            let bytes = self.take(n)?;
+                            if major == 3 {
+                                core::str::from_utf8(bytes)
+                                    .map_err(|_| Error::Malformed("text is not UTF-8"))?;
+                            }
+                            self.budget
+                                .reserve(&mut out, bytes.len())
+                                .map_err(|_| Error::Budget)?;
+                            out.extend_from_slice(bytes);
+                        }
                         Head::Indefinite => unreachable!(),
                     }
                 }
@@ -178,7 +192,10 @@ impl Reader<'_> {
                 match self.uint(info)? {
                     Head::Value(n) => {
                         for _ in 0..self.check_len(n)? {
-                            items.push(self.item(depth + 1)?);
+                            let item = self.item(depth + 1)?;
+                            self.budget
+                                .push(&mut items, item)
+                                .map_err(|_| Error::Budget)?;
                         }
                     }
                     Head::Indefinite => loop {
@@ -186,7 +203,10 @@ impl Reader<'_> {
                             self.pos += 1;
                             break;
                         }
-                        items.push(self.item(depth + 1)?);
+                        let item = self.item(depth + 1)?;
+                        self.budget
+                            .push(&mut items, item)
+                            .map_err(|_| Error::Budget)?;
                     },
                 }
                 Value::Array(items)
@@ -198,7 +218,10 @@ impl Reader<'_> {
                         let n = self.check_len(n)?;
                         for _ in 0..n {
                             let k = self.item(depth + 1)?;
-                            pairs.push((k, self.item(depth + 1)?));
+                            let v = self.item(depth + 1)?;
+                            self.budget
+                                .push(&mut pairs, (k, v))
+                                .map_err(|_| Error::Budget)?;
                         }
                     }
                     Head::Indefinite => loop {
@@ -207,13 +230,23 @@ impl Reader<'_> {
                             break;
                         }
                         let k = self.item(depth + 1)?;
-                        pairs.push((k, self.item(depth + 1)?));
+                        let v = self.item(depth + 1)?;
+                        self.budget
+                            .push(&mut pairs, (k, v))
+                            .map_err(|_| Error::Budget)?;
                     },
                 }
                 Value::Map(pairs)
             }
             6 => match self.uint(info)? {
-                Head::Value(tag) => Value::Tag(tag, Box::new(self.item(depth + 1)?)),
+                Head::Value(tag) => {
+                    let item = self.item(depth + 1)?;
+                    let mut child = Vec::new();
+                    self.budget
+                        .push(&mut child, item)
+                        .map_err(|_| Error::Budget)?;
+                    Value::Tag(tag, child)
+                }
                 Head::Indefinite => return Err(Error::Malformed("indefinite tag")),
             },
             _ => match info {
@@ -293,7 +326,7 @@ mod tests {
             ),
             (
                 &[0xc1, 0x1a, 0x51, 0x4b, 0x67, 0xb0],
-                Value::Tag(1, Box::new(Value::Uint(1_363_896_240))),
+                Value::Tag(1, vec![Value::Uint(1_363_896_240)]),
             ),
         ];
         for (bytes, want) in cases {
