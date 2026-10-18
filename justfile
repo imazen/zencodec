@@ -23,6 +23,11 @@ clippy:
 test:
     cargo test --workspace
 
+# Warning-free docs with the default workspace and standalone driver features.
+doc-default:
+    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
+    RUSTDOCFLAGS="-D warnings" cargo doc -p zencodec-io --no-deps --locked
+
 # Metadata extraction matrix; callers apply their host's build resource limits.
 metadata-check:
     cargo fmt -p zencodec -p zencodec-testkit -p zenmeta --check

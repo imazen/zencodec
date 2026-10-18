@@ -15,8 +15,8 @@
 //! |---|---|---|
 //! | slice | [`drive_from_slice`] | [`SliceReadAt`](zencodec::source::SliceReadAt) |
 //! | `ReadAt` (file, object store, FFI callback) | [`drive_from_read_at`] | direct |
-//! | `std::io::Read` stream | [`pump_read_to_sink`] | [`BufferedReadAt`] |
-//! | async runtime | [`tokio_io::decode_async`] | [`tokio_io::pull_decode_on_thread`] |
+//! | `std::io::Read` stream (feature `std`) | `pump_read_to_sink` | `BufferedReadAt` |
+//! | async runtime (feature `tokio`) | `tokio_io::decode_async` | `tokio_io::pull_decode_on_thread` |
 //!
 //! Cancellation and progress share one handle: every driver takes an
 //! `Option<&dyn how_far::Pulse>` (`Pulse: Stop`), checks it each step,
@@ -28,7 +28,7 @@
 //!
 //! The crate is `no_std + alloc` by default. The `std` feature adds the
 //! stream pump, file source and buffered stream adapter; `tokio` adds
-//! [`tokio_io`] (`tokio::sync` and `tokio::io` only; it never starts a
+//! `tokio_io` (`tokio::sync` and `tokio::io` only; it never starts a
 //! runtime).
 
 #![no_std]

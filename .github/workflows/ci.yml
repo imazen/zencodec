@@ -135,6 +135,13 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+      - name: Default-feature documentation
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        run: |
+          cargo doc --workspace --no-deps --locked
+          cargo doc -p zencodec-io --no-deps --locked
+
 
   # ==========================================================================
   # Format check
