@@ -20,13 +20,14 @@ plain stop passes as `how_far::StopOnly::borrowed`).
 The async drivers keep the decoder in the task between batches and run each
 batch on a `Compute` (`spawn_blocking`, a rayon pool, or `Inline`), so no
 thread is held while bytes are in flight and codecs stay synchronous.
-`transcode_async` streams rows into an encoder and its output to an
-`AsyncWrite`, keeping memory bounded end to end. Measured overhead per driver
-shape: `benchmarks/`.
+When both codec paths stream, `transcode_async` streams rows into an encoder
+and its output to an `AsyncWrite`. A whole-file decoder or an `AT_FINISH`
+encoder can retain a complete input or output. Driver measurements:
+[benchmarks](https://github.com/imazen/zencodec/tree/main/zencodec-io/benchmarks).
 
 `no_std + alloc` by default. `std` adds the stream pump, `FileReadAt` and
 `BufferedReadAt`; `tokio` adds `tokio_io` (it uses `tokio::sync` and
 `tokio::io` only and never starts a runtime). Design:
-`docs/range-decoding-contract.md` in the zencodec repo.
+[range-decoding contract](https://github.com/imazen/zencodec/blob/main/docs/range-decoding-contract.md).
 
 License: Apache-2.0 OR MIT.

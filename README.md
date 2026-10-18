@@ -11,7 +11,7 @@ types (metadata, limits, format detection, color emission) at the root.
 
 ```toml
 [dependencies]
-zencodec = "0.1.26"
+zencodec = "0.1.27"
 ```
 
 zencodec defines the traits; a concrete codec crate (here `zenjpeg`) supplies the
@@ -299,7 +299,7 @@ let http = match config.job().with_stop(token).decoder(Cow::Borrowed(bytes), &[]
 ```
 
 `ErrorCategory` is the coarse routing axis (it's `Copy`, and
-`LimitsExceeded(LimitKind)` even tells you *which* cap). When you need more
+`ResourceError::Limits(LimitKind)` even tells you *which* cap). When you need more
 detail than the category, the typed extractors on `CodecErrorExt` recover the
 cause from the `source()` chain — `e.limit_exceeded()` for the exact limit values,
 `e.unsupported_operation()` for which operation, or `e.find_cause::<T>()` for a
@@ -331,6 +331,7 @@ use std::borrow::Cow;
 use rayon::ThreadPoolBuilder;
 use zencodec::decode::{DecodeOutput, DynDecoderConfig};
 
+# fn decode_in_pool(config: &dyn DynDecoderConfig, bytes: &[u8]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 let pool = ThreadPoolBuilder::new().num_threads(2).build()?;
 let out: DecodeOutput = pool.install(|| {
     config.dyn_job()
@@ -338,6 +339,8 @@ let out: DecodeOutput = pool.install(|| {
         .decode()                                     // -> DecodeOutput (Send), consumes the decoder
 })?;
 // the non-Send decoder lived and died on a pool worker; only owned pixels came back
+# Ok(())
+# }
 ```
 
 Run **many** decodes under one capped pool the same way:
@@ -400,12 +403,14 @@ the rest.
 ```rust
 use zencodec::encode::{EncoderConfig, Fidelity};
 
+# fn choose_fidelity(my_encoder_config: impl EncoderConfig) {
 let cfg = my_encoder_config
     .with_fidelity(Fidelity::Lossless);              // mathematically exact
 //  .with_fidelity(Fidelity::ssim2(90.0))            // aim at SSIMULACRA2 ~= 90
 //  .with_fidelity(Fidelity::butteraugli(1.0))       // aim at butteraugli max-norm ~= 1.0
 //  .with_fidelity(Fidelity::zensim_b(90.0))         // aim at zensim (ZensimProfile::B) ~= 90
 //  .with_fidelity(Fidelity::codec_quality(85.0));   // the codec's own native dial
+# }
 ```
 
 `Fidelity` is either `Lossless` or `Lossy(LossyTarget)`, where a `LossyTarget` is:
@@ -422,9 +427,11 @@ setters. Read back what the codec resolved to with
 `resolved_target_fidelity() -> Option<Fidelity>`.
 
 > A `LosslessMode` container variant (lossless coding within a loss budget — the
-> screen-content path) and a fail-fast `try_with_fidelity` verdict are designed but
-> deferred while their semantics settle; see the reserved blocks in
+> screen-content path) remains designed but deferred; see the reserved blocks in
 > `src/fidelity.rs` and [imazen/zencodec#104](https://github.com/imazen/zencodec/issues/104).
+>
+> `EncoderConfig::try_with_fidelity` is available for checked configuration target
+> selection. It does not guarantee a measured metric score or pixel losslessness.
 
 ## Key Design Decisions
 
@@ -459,7 +466,7 @@ let policy = MetadataPolicy::Custom(
 let no_thumb = decoded_meta.filtered(&policy);
 ```
 
-`MetadataFields` encapsulates EXIF in an `ExifPolicy` with seven keep/discard categories — `orientation`, `rights`, `thumbnail`, `gps`, `datetimes`, `camera`, `other` — and three-way ICC handling (`IccRetention::{Drop, KeepNonSrgb, Keep}`). EXIF passes through byte-unchanged (zero-copy) when no category is dropped, and is rewritten — offsets recomputed — only when pruning. CICP/HDR are color *signaling* (dropping them changes displayed pixels), so the presets keep them; a `Custom` policy can drop them. The structured parser/editor is public as [`zencodec::exif::Exif`](https://docs.rs/zencodec) (`parse` → `filtered`/edit → `to_bytes`) for direct EXIF work — including setting Copyright/Artist (`set_copyright` / `set_artist`, with a `TextEncoding` choice of Exif 2.x ASCII or Exif 3.0 UTF-8) and Orientation (`set_orientation`, insert-or-replace).
+`MetadataFields` encapsulates EXIF in an `ExifPolicy` with twelve keep/discard categories — `orientation`, `rights`, `thumbnail`, `gps`, `datetimes`, `time_offsets`, `camera`, `device_ids`, `camera_owner`, `image_unique_id`, `color`, `other` — and ICC retention through `IccRetention`. EXIF passes through byte-unchanged when no category is dropped and its orientation agrees with `Metadata::orientation`; filtering may otherwise rewrite it, including reconciling orientation. CICP/HDR are color *signaling* (dropping them changes displayed pixels), so the presets keep them; a `Custom` policy can drop them. The structured parser/editor is public as [`zencodec::exif::Exif`](https://docs.rs/zencodec) (`parse` → `filtered`/edit → `to_bytes`) for direct EXIF work — including setting Copyright/Artist (`set_copyright` / `set_artist`, with a `TextEncoding` choice of Exif 2.x ASCII or Exif 3.0 UTF-8) and Orientation (`set_orientation`, insert-or-replace).
 
 **Privacy is an explicit choice — enforced at compile time.** Retention is a *transient* decision made when you hand metadata to the encoder, not a field stored on `Metadata`. The blessed path is `job.with_metadata_policy(meta, MetadataPolicy::Web)` (privacy-safe: strips camera/GPS, keeps orientation + rights) or `PreserveExact` (verbatim). The old unguarded `with_metadata(meta)` still works but is `#[deprecated]` — the compiler **warns** at every call site that picks no policy, so you can't propagate metadata without choosing retention by accident. It's a compile-time nudge, not a semver break: existing code keeps compiling, but the warning points you at the safe call. The filter runs *before* the codec sees the record, so a codec only ever receives exactly what the policy kept. The carried bytes stay untouched until then, so you can still pull `metadata.exif` out, edit it with any EXIF library, and put it back via `with_exif`.
 
@@ -479,7 +486,7 @@ let plan = resolve_color_emit(&source_color, &target_caps, ColorEmitPolicy::Bala
 // plan.icc:  IccDisposition — KeepSource | SynthesizeFrom(Cicp) | Drop
 ```
 
-`ColorEmitPolicy` picks the tradeoff: `Compatibility` (widest reader support), `Balanced` (default — CICP where it's a spec-mandated *safe sole carrier*, an ICC companion otherwise), `Compact` (smallest — prefer CICP, drop the ICC), `Verbatim` (carry the source's signals unchanged), or `Custom(ColorEmitFields)`. A target advertises its carriers via `EncodeCapabilities::{cicp_is_valid_carrier, cicp_safe_sole_carrier}`. The plan never emits a redundant `SynthesizeFrom(sRGB)`; a codec lowers a `SynthesizeFrom` through `zenpixels-convert`'s transfer-aware `synthesize_icc_for_cicp` (a bundled `const` profile, or — with its `cms-moxcms` feature — a generated one) so an HDR transfer is never mis-tagged with an SDR profile and color is never silently dropped. The names carry the emit direction so they can't be confused with the decode-side `SourceColor`. Design + rejected alternatives: [docs/color-emit-model.md](https://github.com/imazen/zencodec/blob/main/docs/color-emit-model.md).
+`ColorEmitPolicy` picks the tradeoff: `Compatibility` (widest reader support), `Balanced` (default — CICP where it's a spec-mandated *safe sole carrier*, an ICC companion otherwise), `Compact` (smallest — prefer CICP, drop the ICC), `Verbatim` (carry the source's signals unchanged), or `Custom(ColorEmitFields)`. A target advertises its carriers via `EncodeCapabilities::{cicp_is_valid_carrier, cicp_safe_sole_carrier}`. The plan never emits a redundant `SynthesizeFrom(sRGB)`; a codec lowers a `SynthesizeFrom` through `zenpixels-convert`'s transfer-aware `synthesize_icc_for_cicp` (a bundled `const` profile, or — with its `cms-moxcms` feature — a generated one) so an HDR transfer is not mis-tagged with an SDR profile. ICC synthesis is best-effort: callers must handle unavailable synthesis or container carriers rather than assume every plan preserves the color description. The names carry the emit direction so they can't be confused with the decode-side `SourceColor`. Design + rejected alternatives: [docs/color-emit-model.md](https://github.com/imazen/zencodec/blob/main/docs/color-emit-model.md).
 
 ## What's in this crate
 
@@ -498,16 +505,17 @@ let plan = resolve_color_emit(&source_color, &target_caps, ColorEmitPolicy::Bala
 The full API is always available. The only feature, `std`, lets
 `ErrorCategory::Io` carry a `std::io::ErrorKind`.
 
-Workspace crates (unpublished): `zencodec-io` (drivers for slices, `ReadAt`
+Workspace helpers include `zencodec-io` (drivers for slices, `ReadAt`
 sources, `std::io::Read` streams and tokio), `zencodec-coroutine` (`async`-authored
 incremental decoders) and `zencodec-testkit` (conformance checks for codec
-crates).
+crates). I/O and coroutine are unpublished; testkit has a published 0.1.0 and
+prepares an independently versioned 0.2.0.
 
 ## Limitations
 
 - Contains no codec logic — traits, types, and format detection only.
 - `ImageFormat` enum is not extensible at runtime (the `Custom` variant requires a `&'static` definition).
-- Always `no_std` + `alloc` (no `std` feature gate).
+- `no_std` + `alloc` by default; the optional `std` feature carries I/O error kinds.
 
 ## MSRV
 

@@ -26,8 +26,8 @@ An audit reports its coverage limits and opaque content. It does not certify
 privacy. Container framing, packet reassembly and rewriting belong to codecs;
 an inventory is not a safe generic deletion recipe.
 
-See [source provenance](PROVENANCE.md) and the workspace
-[design](../docs/zenmeta-design.md).
+See [source provenance](https://github.com/imazen/zencodec/blob/main/zenmeta/PROVENANCE.md) and the workspace
+[design](https://github.com/imazen/zencodec/blob/main/docs/zenmeta-design.md).
 
 The `xmp` feature also provides gain-map XMP parsing/generation and Google
 container-directory inspection under `zenmeta::xmp::{gainmap, container}`.

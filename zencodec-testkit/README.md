@@ -3,7 +3,7 @@
 The testkit versions independently from zencodec and may make breaking changes
 to implementor tests. The upcoming 0.2.0 requires zencodec 0.1.27; construct
 reference decode jobs through the config's `job()` method instead of the former
-`RefDecodeJob` unit value. See the [changelog](../CHANGELOG.md#zencodec-testkit).
+`RefDecodeJob` unit value. See the [changelog](https://github.com/imazen/zencodec/blob/main/CHANGELOG.md#zencodec-testkit).
 
 Conformance test harness for [`zencodec`](https://crates.io/crates/zencodec) codec
 implementations. A codec crate (`zenjpeg`, `zenpng`, `zenwebp`, …) adds this as a
@@ -68,7 +68,8 @@ expensive to ship wrong:
   final rows once each in order, `Done` repeating, unrequested input ignored,
   cancellation within one step and then `Finished`, final rows through
   `provide_next_buffer` even for a sink that accepts provisional rows, and a
-  codec error (never a protocol violation or a hang) on truncated input.
+  result matching one-shot on truncated input: identical pixels where one-shot
+  succeeds, a codec error (never a protocol violation or a hang) where it fails.
   `check_seekable_capability_honesty` covers `push_decoder_from_source`, and
   `check_read_at_contract` checks a `ReadAt` source.
 - **Streaming encode output.** `check_streaming_output_honesty`: an encoder
@@ -84,7 +85,8 @@ expensive to ship wrong:
   name survive dyn-dispatch type erasure (both opt-in, not part of `check_all`).
 
 The crate ships `reference`, a faithful in-memory codec that round-trips pixels
-*and* metadata and declares/honors every capability — the harness is validated
+*and* metadata and declares its supported capabilities while declining unsupported
+paths — the harness is validated
 against it in this crate's own tests, and it doubles as a worked example of
 implementing the traits. (An internal `minimal` codec — one-shot only, every
 optional capability declared false — exercises the false-direction branches.)
@@ -127,4 +129,4 @@ independent decoder/parser as well as the codec under test.
 
 Animation sink results currently carry no duration or frame index; the testkit
 cannot verify information the API does not expose. Coverage is tracked in
-[the contract matrix](../docs/testkit-contract-coverage.md).
+[the contract matrix](https://github.com/imazen/zencodec/blob/main/docs/testkit-contract-coverage.md).
