@@ -171,6 +171,60 @@ removes that whole class).
 - README: badge row, orientation + error-classification check descriptions,
   `minimal` reframed as internal; LICENSE files included in the package.
 
+## zencodec-io
+
+### [Unreleased]
+
+#### QUEUED BREAKING CHANGES
+
+- None.
+
+#### Fixed
+
+- Clamp overclaimed consumption of fetched ranges instead of panicking on the next offer, and require `std` for the driver-probe example (`7cc3d3ec`).
+- Default-feature rustdoc renders gated driver names with their required features instead of unresolved links (`7e3c8666`).
+
+#### Added
+
+- `zencodec-io` (unpublished): `ByteStepper` and pull cursors (`SliceCursor`,
+  `ReadAtCursor`, `ReadCursor`, `tokio_io::AsyncCursor`) so every driver serves any
+  byte-stepping stage, demuxers included; the image drivers are loops over them with
+  unchanged signatures, and `DriveError` / `PumpError` are aliases of the generic
+  `DriveFailure` / `PumpFailure`.
+
+- `zencodec-io` (unpublished): `encode_to_writer` (begin, 16-row-or-larger strips,
+  a write after the header and each strip, one-shot fallback when `begin` declines
+  row-level encode), `write_pending`, `write_pending_animation`,
+  `tokio_io::write_pending_async`, and `EncoderSink::take_output`.
+
+- Workspace crates (unpublished): `zencodec-io` and `zencodec-coroutine`
+  (`async`-authored incremental decoders, `no_std`). `zencodec-io` drives a decoder
+  from a slice (zero-copy), a `ReadAt` (ranges batched into one `read_many_at`
+  round), a `std::io::Read` stream (with a window limit) or, under `tokio`, an
+  `AsyncSource`: `decode_async`/`transcode_async` keep decoder, sink and window in
+  the task and run decode batches on a `Compute` pool, so no thread is held while
+  bytes are in flight; `pull_decode_on_thread` bridges pull-native codecs. Every
+  driver reports a decoder that spins, asks past a known end or asks for nothing
+  (`ProtocolViolation`) instead of looping. Drivers take one `how_far::Pulse` for
+  cancellation and progress. The input window is zeroed once and compacts only when
+  its tail is full (`34346a05`).
+
+## Workspace
+
+### [Unreleased]
+
+#### QUEUED BREAKING CHANGES
+
+- None.
+
+#### Added
+
+- CI and `just doc-default` check workspace and standalone I/O documentation with default features and warnings denied (`7e3c8666`).
+
+#### Fixed
+
+- `zencodec-coroutine` delivers rows or metadata deposited during the future's final poll before reporting completion (`7cc3d3ec`).
+
 ## zencodec
 
 ## [Unreleased]
@@ -279,28 +333,8 @@ removes that whole class).
   `check_animation_over_video`), each validated on the toy and shown to catch a
   wrapper that breaks its rule. Design: `docs/media-design.md`; rules:
   `docs/media-contract.md`. Supersedes PR 129's `media/` experiment.
-- `zencodec-io` (unpublished): `ByteStepper` and pull cursors (`SliceCursor`,
-  `ReadAtCursor`, `ReadCursor`, `tokio_io::AsyncCursor`) so every driver serves any
-  byte-stepping stage, demuxers included; the image drivers are loops over them with
-  unchanged signatures, and `DriveError` / `PumpError` are aliases of the generic
-  `DriveFailure` / `PumpFailure`.
-- `zencodec-io` (unpublished): `encode_to_writer` (begin, 16-row-or-larger strips,
-  a write after the header and each strip, one-shot fallback when `begin` declines
-  row-level encode), `write_pending`, `write_pending_animation`,
-  `tokio_io::write_pending_async`, and `EncoderSink::take_output`.
 - `DecodeRowSink::accepts_provisional` and `provide_pass_buffer` (defaulted): a sink
   opts into progressive passes; final-only sinks are unchanged.
-- Workspace crates (unpublished): `zencodec-io` and `zencodec-coroutine`
-  (`async`-authored incremental decoders, `no_std`). `zencodec-io` drives a decoder
-  from a slice (zero-copy), a `ReadAt` (ranges batched into one `read_many_at`
-  round), a `std::io::Read` stream (with a window limit) or, under `tokio`, an
-  `AsyncSource`: `decode_async`/`transcode_async` keep decoder, sink and window in
-  the task and run decode batches on a `Compute` pool, so no thread is held while
-  bytes are in flight; `pull_decode_on_thread` bridges pull-native codecs. Every
-  driver reports a decoder that spins, asks past a known end or asks for nothing
-  (`ProtocolViolation`) instead of looping. Drivers take one `how_far::Pulse` for
-  cancellation and progress. The input window is zeroed once and compacts only when
-  its tail is full (`34346a05`).
 - `zencodec-testkit`: `check_incremental_contract` (windows of 1/7/64 bytes and the
   whole file against one-shot, begin once, rows once in order, `Done` repeats,
   unrequested input ignored, cancellation within one step then `Finished`,
@@ -320,6 +354,9 @@ removes that whole class).
   a breaking release can relocate it; basic metadata reading stays available.
 
 ### Fixed
+
+- Treat BT.709 primaries with the BT.709 transfer as distinct from the sRGB default when planning an ICC for a target without a CICP carrier (`0e5b941d`).
+- Check TIFF IFD offsets and entry arithmetic when detecting DNG/RAW, preventing out-of-bounds access or arithmetic overflow on crafted 32-bit input (`5b253be5`).
 
 - Format sniffing no longer mistakes an ordinary truecolor TGA header for an ICO/CUR directory containing zero images.
 
