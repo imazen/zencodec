@@ -541,12 +541,12 @@ No video transport or universal metadata tree is part of this release.
 
 - **Dependency requirements now span the published minor and the next one.**
   `zenpixels` is `>=0.2.14, <0.4.0` (was `0.2.14`, i.e. `^0.2.14` =
-  `>=0.2.14, <0.3.0`); `zencodec-testkit` requires `zencodec >=0.1.26, <0.3.0`
+  `>=0.2.14, <0.3.0`); `zencodec-testkit` requires `zencodec >=0.1.27, <0.3.0`
   and `zenpixels >=0.2.10, <0.4.0`. For a `0.x` crate Cargo treats the minor as
   the major, so a plain `"0.2.14"` makes a `0.3.0` release invisible until every
   manifest is hand-edited — which is exactly what the `zencodec 0.1.26` rollout
-  cost across every consumer repo. Floors are unchanged; only the ceilings move,
-  and nothing newer is published, so today's resolution is byte-identical.
+  cost across every consumer repo. The zenpixels floor is unchanged; testkit's
+  floor is raised to 0.1.27 for the new contract APIs.
   The standing rule (current-plus-next, re-derived at each release) and the
   two-copies trap it prevents are documented in `CLAUDE.md`.
 
@@ -566,7 +566,7 @@ No video transport or universal metadata tree is part of this release.
 ### Added
 
 - **`inventory` module, `DecodeJob::inventory` / `DynDecodeJob::inventory`** (default
-  `Ok(None)`) and `DecodeCapabilities::with_inventory`: a byte-exact map of a file's parts, each
+  typed `UnsupportedOperation::Inventory` error) and `DecodeCapabilities::with_inventory`: a byte-exact map of a file's parts, each
   with a `Disposition` saying what the decoder does with it; `validate()` checks the parts tile
   the input, `unconsumed()` lists what no decoder reads. `Part` is read through getters (`range()`, `disposition()`, `label()`, `detail()`, ...) so its storage can change in minor releases. Additive. Guide: `docs/inventory.md`.
 - `CodecSet` / `CodecSetError` — multi-codec registry: register decoder /
@@ -586,12 +586,11 @@ No video transport or universal metadata tree is part of this release.
   re-embeds under the `MetadataPolicy` (`Web` strips privacy / `PreserveExact`
   keeps all), and applies a `ColorEmitPolicy` for color signaling. Single-image,
   no pixel processing. Precision-preserving: decodes at the source's native
-  descriptor and encodes it verbatim when the target accepts it (a 16-bit / HDR
-  source is not flattened to 8-bit when the target can carry it), re-decoding to
-  bridge only when the native descriptor is unsupported. A pair errors (rather
-  than corrupting) only when the decoder and encoder supported descriptor sets
-  are disjoint (this crate carries no pixel-conversion dep — the common raster
-  codecs bridge on sRGB RGB8/RGBA8).
+  descriptor and encodes it verbatim when the target accepts it. Known animation,
+  multi-image or auxiliary-image sources, and a descriptor the target cannot
+  accept, require explicit handling and return `TranscodeRequiresExplicitHandling`.
+  There is no implicit lower-precision re-decode or pixel conversion. Fidelity
+  and metadata-carrier delivery remain best-effort under the published traits.
 - `CodecSet::estimate_encode` / `estimate_decode` — by-format resource
   estimate (peak memory / wall-time / core-scaling) forwarding to the
   registered codec's `estimate_{encode,decode}_resources`, so a `CodecSet`
