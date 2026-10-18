@@ -245,3 +245,12 @@ they are the shapes of bug that recur across codecs.
 If you add a codec to the zen family, wire up the testkit before wiring up the
 pipeline. The checks are cheap to run and the bugs they catch are expensive to
 ship.
+
+## Native color in metadata retention checks
+
+A native color description and a synthesized ICC profile can be reported even
+when no optional metadata was supplied. The testkit compares each retention
+policy with a clean encode of the same pixels and policy. A discarded ICC or
+CICP value is accepted only when it exactly matches that clean result. Different
+color values, EXIF, XMP and other discarded metadata still fail the leak check.
+This does not require a decoder to hide the color interpretation of its pixels.

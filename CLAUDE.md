@@ -252,3 +252,10 @@ CHANGELOGs. Full design context:
   changing numeric casts of six released variants. Append new variants after
   the released ones. `just metadata-semver` compares crates.io 0.1.26 and catches
   this even though the enum is non-exhaustive.
+
+## Metadata conformance regression (2026-10-18)
+
+The testkit compares color metadata against a clean same-policy encode before
+reporting a leak: formats can require native color, and decoders can synthesize
+an equivalent ICC profile. The exception requires exact ICC bytes/CICP equality;
+unexpected color and discarded descriptive metadata remain failures.

@@ -6,6 +6,11 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### [Unreleased]
 
+### Fixed
+
+- Compare discarded ICC/CICP against a clean same-policy encode in the testkit, distinguishing native/default color from retained optional metadata; unexpected color values and discarded descriptive metadata still fail.
+
+
 #### QUEUED BREAKING CHANGES
 
 - Approved for testkit **0.2.0**: `RefDecodeJob` changed from a publicly constructible unit struct to a private-field stateful struct in the gain-map harness (`857fab1`). Implementor tests should obtain jobs from `ReferenceDecoderConfig::job()` or `ReferenceZcrDecoderConfig::job()`. This is a testkit-only break; zencodec retains its compatibility gate.

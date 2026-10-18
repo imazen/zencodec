@@ -1464,7 +1464,14 @@ where
             .map_err(|e| fail(CHECK, format!("[{name}] encode: {e}")))?;
         let (_, decoded) =
             dec_oneshot(&dec, &bytes).map_err(|e| fail(CHECK, format!("[{name}] decode: {e}")))?;
-        assert_no_leak(CHECK, name, &decoded, &expected)?;
+        // Native/default color may be reported even when no optional metadata
+        // was supplied. Compare the same pixels and policy against that clean
+        // encode; only an exact intrinsic color match is exempt from leakage.
+        let clean = enc_oneshot(&enc, img, Metadata::none(), policy)
+            .map_err(|e| fail(CHECK, format!("[{name}] clean encode: {e}")))?;
+        let (_, intrinsic) = dec_oneshot(&dec, &clean)
+            .map_err(|e| fail(CHECK, format!("[{name}] clean decode: {e}")))?;
+        assert_no_leak(CHECK, name, &decoded, &expected, &intrinsic)?;
     }
     Ok(())
 }
@@ -1474,8 +1481,12 @@ fn assert_no_leak(
     policy: &str,
     decoded: &Metadata,
     expected: &Metadata,
+    intrinsic: &Metadata,
 ) -> Conformance {
-    if decoded.icc_profile.is_some() && expected.icc_profile.is_none() {
+    if decoded.icc_profile.is_some()
+        && expected.icc_profile.is_none()
+        && decoded.icc_profile != intrinsic.icc_profile
+    {
         return Err(fail(
             check,
             format!("[{policy}] ICC profile in output but the policy dropped it"),
@@ -1487,7 +1498,7 @@ fn assert_no_leak(
             format!("[{policy}] XMP in output but the policy dropped it"),
         ));
     }
-    if decoded.cicp.is_some() && expected.cicp.is_none() {
+    if decoded.cicp.is_some() && expected.cicp.is_none() && decoded.cicp != intrinsic.cicp {
         return Err(fail(
             check,
             format!("[{policy}] CICP color signaling in output but the policy dropped it"),
@@ -3962,7 +3973,50 @@ mod tests {
             base.with_time_offsets(Retention::Keep),
         ] {
             let actual = rich.filtered(&policy(leaky));
-            assert!(assert_no_leak("mutation", "camera without IDs", &actual, &expected).is_err());
+            assert!(
+                assert_no_leak(
+                    "mutation",
+                    "camera without IDs",
+                    &actual,
+                    &expected,
+                    &Metadata::none()
+                )
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn metadata_check_accepts_only_exact_intrinsic_color() {
+        let expected = Metadata::none();
+        let intrinsic = Metadata::none().with_cicp(Cicp::SRGB).with_icc([1, 2, 3]);
+        assert_no_leak("intrinsic", "discard", &intrinsic, &expected, &intrinsic).unwrap();
+        for unexpected in [
+            Metadata::none().with_cicp(Cicp::new(9, 16, 0, true)),
+            Metadata::none().with_icc([1, 2, 4]),
+        ] {
+            assert!(
+                assert_no_leak("intrinsic", "discard", &unexpected, &expected, &intrinsic).is_err()
+            );
+            assert!(
+                assert_no_leak(
+                    "intrinsic",
+                    "discard",
+                    &unexpected,
+                    &expected,
+                    &Metadata::none()
+                )
+                .is_err()
+            );
+        }
+        // Intrinsic color never excuses retained descriptive metadata.
+        for unexpected in [
+            intrinsic.clone().with_exif(fixtures::rich_exif_le()),
+            intrinsic.clone().with_xmp(fixtures::sample_xmp()),
+        ] {
+            assert!(
+                assert_no_leak("intrinsic", "discard", &unexpected, &expected, &intrinsic).is_err()
+            );
         }
     }
 
