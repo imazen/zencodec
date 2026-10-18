@@ -809,6 +809,8 @@ static ENCODE_CAPS: EncodeCapabilities = EncodeCapabilities::new()
     .with_native_alpha(true)
     .with_native_16bit(true)
     .with_hdr(true) // PQ/HLG CICP + CLLI/MDCV round-trip (check_native_hdr_roundtrip)
+    .with_content_light_level(true)
+    .with_mastering_display(true)
     .with_gain_map(true) // with_gain_map_pixels / _encoded (check_gain_map_roundtrip)
     .with_animation(true)
     .with_push_rows(true)
@@ -830,6 +832,8 @@ static DECODE_CAPS: DecodeCapabilities = DecodeCapabilities::new()
     .with_native_alpha(true)
     .with_native_16bit(true)
     .with_hdr(true)
+    .with_content_light_level(true)
+    .with_mastering_display(true)
     // Extracts / surfaces the gain map (`GainMapRender::Components`) but does
     // NOT reconstruct HDR — zencodec carries no HDR math, so `reconstructs_hdr`
     // stays false and a `ReconstructHdr` request falls back to `Components`.

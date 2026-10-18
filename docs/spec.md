@@ -1154,6 +1154,7 @@ with one `use`. Types are not included.
 Const-constructible structs with builder pattern. Returned by config `capabilities()`.
 
 **`EncodeCapabilities` accessors:** `icc`, `exif`, `xmp`, `cicp`,
+`content_light_level`, `mastering_display`,
 `cicp_is_valid_carrier`, `cicp_safe_sole_carrier`, `stop`, `animation`,
 `animation_timing`, `push_rows`, `streaming_output`, `encode_from`, `lossy`,
 `lossless`, `hdr`, `gain_map`, `native_gray`, `native_16bit`, `native_f32`,
@@ -1161,6 +1162,7 @@ Const-constructible structs with builder pattern. Returned by config `capabiliti
 `quality_range`, `threads_supported_range`.
 
 **`DecodeCapabilities` accessors:** `icc`, `exif`, `xmp`, `cicp`, `stop`,
+`content_light_level`, `mastering_display`,
 `animation`, `multi_image`, `cheap_probe`, `decode_into`, `streaming`,
 `incremental`, `seekable`, `access_pattern`, `hdr`, `gain_map`, `inventory`,
 `reconstructs_hdr`, `native_gray`, `native_16bit`, `native_f32`,
@@ -1168,6 +1170,11 @@ Const-constructible structs with builder pattern. Returned by config `capabiliti
 `enforces_max_input_bytes`, `threads_supported_range`.
 
 Each has a `with_*` builder.
+
+`hdr` describes native HDR pixels and color signaling. The independent
+`content_light_level` and `mastering_display` flags describe full optional
+metadata retention/extraction; both default to false. A partial native peak
+does not imply complete MaxCLL/MaxFALL support.
 
 Sans-I/O flags: `streaming_output` (encode: some configuration streams
 bytes from `pending_output` after `begin`; the `OutputTiming` that `begin`
