@@ -73,7 +73,7 @@ contract-audit-check:
     just contract-semver-minimal
 
 metadata-target-check:
-    cargo check -p zenmeta --target wasm32-wasip1 --no-default-features --features apple,audit,inventory,xmp
+    cargo check -p zenmeta --target wasm32-wasip1 --no-default-features --features apple,audit,inventory,xmp,c2pa
     cargo +1.88.0 check -p zencodec -p zenmeta --all-features
 
 metadata-i686-check runner="env":

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### QUEUED BREAKING CHANGES
+
+None.
+
 ### Fixed
 
 - C2PA audit CBOR reparses, JUMBF traversal and report formatting share a
@@ -43,6 +47,11 @@
   writers without duplicating their implementation. Reading needs no zenmeta.
 
 ### Changed
+
+- Narrow the unreleased C2PA audit to structural inspection: remove handwritten
+  DER interpretation, retain certificate/timestamp bytes as opaque findings and
+  limit the example to raw stores. Signing and verification use the proposed
+  separate c2pa-rs adapter (`5aaab6f2`).
 
 - Return typed shared limit kinds for rewrite budgets. Distinguish individual
   packet limits from cumulative regenerated metadata using the same configured

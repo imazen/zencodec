@@ -106,7 +106,7 @@ jobs:
 
 
       - name: Check zenmeta WASM feature set
-        run: cargo check -p zenmeta --target wasm32-wasip1 --no-default-features --features apple,audit,inventory,xmp
+        run: cargo check -p zenmeta --target wasm32-wasip1 --no-default-features --features apple,audit,inventory,xmp,c2pa
 
       - name: Check WASM (no_std)
         run: cargo check --target wasm32-wasip1 --no-default-features
@@ -252,7 +252,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        feature: [std, audit, xmp, apple, inventory]
+        feature: [std, audit, xmp, apple, inventory, c2pa]
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
