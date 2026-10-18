@@ -1412,8 +1412,9 @@ where
 /// XMP + ICC + CICP) under several policies, decodes, and asserts the output
 /// metadata is a *subset* of what the policy keeps. A subset (not equality)
 /// check, so a codec that supports fewer channels still passes — it can drop
-/// more, never add back. Anything the policy dropped reappearing in the output
-/// is a leak.
+/// more, never add back. Discarded ICC/CICP may match a clean encode of the
+/// same pixels and policy exactly: that is native/default color rather than
+/// retained source metadata. Other discarded fields reappearing are a leak.
 ///
 /// What's directly asserted on the decoded output: ICC, XMP, CICP, HDR
 /// (content-light-level / mastering-display), and the EXIF sub-categories the
@@ -3176,9 +3177,12 @@ fn run_animation_decode<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<(), D
 /// [`UnsupportedOperation`] — a codec can't claim a
 /// feature it lacks *or* hide one it has. The metadata channels
 /// (`icc`/`exif`/`xmp`/`cicp`) are checked bidirectionally **where the decoder can
-/// observe them**: a declared channel must survive a `PreserveExact` round trip, and
+/// observe them**: each channel is supplied separately, and a declared channel
+/// must survive a `PreserveExact` round trip, and
 /// an undeclared one must *not* (a hidden write capability); the
 /// encoder-writes-but-decoder-doesn't-read quadrant isn't observable through decode.
+/// Separate probes allow formats with mutually exclusive ICC/native-color carriers;
+/// mixed-carrier precedence remains covered by [`check_color_authority_spec`].
 /// `native_alpha` is forward-only — a declared RGBA8 round trip must preserve alpha;
 /// the no-alpha direction isn't cleanly assertable (a codec may legitimately reject
 /// or flatten RGBA input).
@@ -3271,39 +3275,16 @@ where
     //     hide a write capability it claims not to have). The "encoder writes,
     //     decoder doesn't read" quadrant isn't observable through decode, so it's
     //     left to the codec's own tests. ---
-    let rich = Metadata::none()
-        .with_icc(fixtures::sample_icc())
-        .with_exif(fixtures::rich_exif_le())
-        .with_xmp(fixtures::sample_xmp())
-        .with_cicp(Cicp::SRGB);
-    match enc_oneshot(&enc, img, rich, MetadataPolicy::PreserveExact)
-        .and_then(|b| dec_oneshot(&dec, &b))
-    {
-        Err(e) => v.push(format!("metadata-channel round trip failed: {e}")),
-        Ok((_, meta)) => {
-            // (channel name, encoder declares write, decoder declares read, survived)
-            let channels = [
-                ("icc", ec.icc(), dc.icc(), meta.icc_profile.is_some()),
-                ("exif", ec.exif(), dc.exif(), meta.exif.is_some()),
-                ("xmp", ec.xmp(), dc.xmp(), meta.xmp.is_some()),
-                ("cicp", ec.cicp(), dc.cicp(), meta.cicp.is_some()),
-            ];
-            for (name, enc_writes, dec_reads, survived) in channels {
-                if !dec_reads {
-                    continue; // not observable through this decoder
-                }
-                if enc_writes && !survived {
-                    v.push(format!(
-                        "{name}: declared by encoder+decoder, but did not survive a PreserveExact round trip"
-                    ));
-                } else if !enc_writes && survived {
-                    v.push(format!(
-                        "{name}: encoder declared it does NOT support this channel, yet it survived a round trip (hidden capability)"
-                    ));
-                }
-            }
-        }
-    }
+    check_metadata_channel_honesty(
+        ec,
+        dc,
+        |metadata| {
+            enc_oneshot(&enc, img, metadata, MetadataPolicy::PreserveExact)
+                .and_then(|bytes| dec_oneshot(&dec, &bytes))
+                .map(|(_, metadata)| metadata)
+        },
+        &mut v,
+    );
 
     // --- native_alpha honesty: RGBA8 alpha survives when both ends claim it ---
     if ec.native_alpha() && dc.native_alpha() {
@@ -3326,6 +3307,59 @@ where
         Ok(())
     } else {
         Err(fail(CHECK, v.join("; ")))
+    }
+}
+
+fn check_metadata_channel_honesty(
+    ec: &zencodec::encode::EncodeCapabilities,
+    dc: &zencodec::decode::DecodeCapabilities,
+    mut roundtrip: impl FnMut(Metadata) -> Result<Metadata, String>,
+    violations: &mut Vec<String>,
+) {
+    let channels = [
+        (
+            "icc",
+            ec.icc(),
+            dc.icc(),
+            Metadata::none().with_icc(fixtures::sample_icc()),
+            (|m: &Metadata| m.icc_profile.is_some()) as fn(&Metadata) -> bool,
+        ),
+        (
+            "exif",
+            ec.exif(),
+            dc.exif(),
+            Metadata::none().with_exif(fixtures::rich_exif_le()),
+            |m: &Metadata| m.exif.is_some(),
+        ),
+        (
+            "xmp",
+            ec.xmp(),
+            dc.xmp(),
+            Metadata::none().with_xmp(fixtures::sample_xmp()),
+            |m: &Metadata| m.xmp.is_some(),
+        ),
+        (
+            "cicp",
+            ec.cicp(),
+            dc.cicp(),
+            Metadata::none().with_cicp(Cicp::SRGB),
+            |m: &Metadata| m.cicp.is_some(),
+        ),
+    ];
+    for (name, enc_writes, dec_reads, metadata, present) in channels {
+        if !dec_reads {
+            continue; // not observable through this decoder
+        }
+        match roundtrip(metadata) {
+            Err(e) => violations.push(format!("{name}: metadata-channel round trip failed: {e}")),
+            Ok(actual) if enc_writes && !present(&actual) => violations.push(format!(
+                "{name}: declared by encoder+decoder, but did not survive a PreserveExact round trip"
+            )),
+            Ok(actual) if !enc_writes && present(&actual) => violations.push(format!(
+                "{name}: encoder declared it does NOT support this channel, yet it survived a round trip (hidden capability)"
+            )),
+            Ok(_) => {}
+        }
     }
 }
 
@@ -4050,6 +4084,71 @@ mod tests {
     fn reference_capability_honesty() {
         let (e, d) = ref_codecs();
         check_capability_honesty(e, d, &TestImage::rgba8_gradient(12, 9)).unwrap();
+    }
+
+    #[test]
+    fn metadata_capabilities_allow_exclusive_color_carriers() {
+        let mut violations = Vec::new();
+        let mut seen = Vec::new();
+        check_metadata_channel_honesty(
+            ReferenceEncoderConfig::capabilities(),
+            <ReferenceDecoderConfig as DecoderConfig>::capabilities(),
+            |mut metadata| {
+                // Model a format whose native color header stores ICC or CICP.
+                if metadata.icc_profile.is_some() {
+                    metadata.cicp = None;
+                }
+                seen.push((
+                    metadata.icc_profile.is_some(),
+                    metadata.exif.is_some(),
+                    metadata.xmp.is_some(),
+                    metadata.cicp.is_some(),
+                ));
+                Ok(metadata)
+            },
+            &mut violations,
+        );
+        assert!(violations.is_empty(), "{violations:?}");
+        assert_eq!(
+            seen,
+            [
+                (true, false, false, false),
+                (false, true, false, false),
+                (false, false, true, false),
+                (false, false, false, true),
+            ]
+        );
+    }
+
+    #[test]
+    fn metadata_capabilities_still_reject_dropped_and_hidden_channels() {
+        let decoder = <ReferenceDecoderConfig as DecoderConfig>::capabilities();
+        let mut dropped = Vec::new();
+        check_metadata_channel_honesty(
+            ReferenceEncoderConfig::capabilities(),
+            decoder,
+            |_| Ok(Metadata::none()),
+            &mut dropped,
+        );
+        let mut hidden = Vec::new();
+        check_metadata_channel_honesty(
+            MinimalEncoderConfig::capabilities(),
+            decoder,
+            Ok,
+            &mut hidden,
+        );
+        for name in ["icc", "exif", "xmp", "cicp"] {
+            assert!(
+                dropped
+                    .iter()
+                    .any(|v| v.starts_with(&format!("{name}:")) && v.contains("did not survive"))
+            );
+            assert!(
+                hidden
+                    .iter()
+                    .any(|v| v.starts_with(&format!("{name}:")) && v.contains("hidden capability"))
+            );
+        }
     }
 
     /// The reference declares `gain_map` on both ends and honours the whole

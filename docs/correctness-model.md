@@ -201,7 +201,10 @@ codec crate adds it as a `dev-dependency` and runs the checks against its own
   decline with `UnsupportedOperation` rather than panicking or silently succeeding.
   Both directions are checked for the structural paths and (where the decoder can
   observe them) the metadata channels — so a codec can't claim a feature it lacks
-  *or* hide one it has; `native_alpha` is forward-only (a no-alpha codec may
+  *or* hide one it has. Metadata capabilities are probed one channel at a time:
+  formats may store ICC or native CICP in mutually exclusive color carriers.
+  Mixed-carrier precedence is still tested by `check_color_authority_spec`.
+  `native_alpha` is forward-only (a no-alpha codec may
   legitimately reject or flatten RGBA, so that direction isn't asserted). All
   violations are collected and reported together. Out of scope: cancellation
   (timing isn't reliably testable on bounded inputs), the lossy flag (not observable

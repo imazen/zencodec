@@ -9,6 +9,8 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 ### Fixed
 
 - Compare discarded ICC/CICP against a clean same-policy encode in the testkit, distinguishing native/default color from retained optional metadata; unexpected color values and discarded descriptive metadata still fail.
+- Probe metadata capability flags with separate ICC, EXIF, XMP and CICP inputs, allowing mutually exclusive color carriers while retaining the mixed-carrier authority checks. Regressions still reject dropped declared channels and hidden write capabilities.
+- Declare the reference decoder's existing ICC, EXIF, XMP and CICP readers so its conformance tests actually exercise metadata capability honesty.
 
 
 #### QUEUED BREAKING CHANGES

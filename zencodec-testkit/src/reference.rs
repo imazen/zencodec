@@ -820,6 +820,10 @@ static ENCODE_CAPS: EncodeCapabilities = EncodeCapabilities::new()
     .with_cicp(true);
 
 static DECODE_CAPS: DecodeCapabilities = DecodeCapabilities::new()
+    .with_icc(true)
+    .with_exif(true)
+    .with_xmp(true)
+    .with_cicp(true)
     .with_cheap_probe(true)
     .with_animation(true)
     .with_streaming(true)
