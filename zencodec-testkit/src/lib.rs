@@ -3205,6 +3205,8 @@ fn run_animation_decode<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<(), D
 /// encoder-writes-but-decoder-doesn't-read quadrant isn't observable through decode.
 /// Separate probes allow formats with mutually exclusive ICC/native-color carriers;
 /// mixed-carrier precedence remains covered by [`check_color_authority_spec`].
+/// Optional `content_light_level` and `mastering_display` channels are checked
+/// independently on SDR inputs when both ends declare them, regardless of `hdr`.
 /// `native_alpha` is forward-only — a declared RGBA8 round trip must preserve alpha;
 /// the no-alpha direction isn't cleanly assertable (a codec may legitimately reject
 /// or flatten RGBA input).
@@ -3307,6 +3309,16 @@ where
         },
         &mut v,
     );
+    check_optional_hdr_metadata_honesty(
+        ec,
+        dc,
+        |metadata| {
+            enc_oneshot(&enc, img, metadata, MetadataPolicy::PreserveExact)
+                .and_then(|bytes| dec_oneshot(&dec, &bytes))
+                .map(|(_, metadata)| metadata)
+        },
+        &mut v,
+    );
 
     // --- native_alpha honesty: RGBA8 alpha survives when both ends claim it ---
     if ec.native_alpha() && dc.native_alpha() {
@@ -3379,6 +3391,48 @@ fn check_metadata_channel_honesty(
             )),
             Ok(actual) if !enc_writes && present(&actual) => violations.push(format!(
                 "{name}: encoder declared it does NOT support this channel, yet it survived a round trip (hidden capability)"
+            )),
+            Ok(_) => {}
+        }
+    }
+}
+
+// Optional mastering metadata can be supported on an SDR-only codec. Probe
+// each declared channel independently of native HDR pixel/color support.
+fn check_optional_hdr_metadata_honesty(
+    ec: &zencodec::encode::EncodeCapabilities,
+    dc: &zencodec::decode::DecodeCapabilities,
+    mut roundtrip: impl FnMut(Metadata) -> Result<Metadata, String>,
+    violations: &mut Vec<String>,
+) {
+    let (cll, md) = hdr_envelope();
+    let channels = [
+        (
+            "content_light_level",
+            ec.content_light_level() && dc.content_light_level(),
+            Metadata::none().with_content_light_level(cll),
+            (|got: &Metadata, want: &Metadata| got.content_light_level == want.content_light_level)
+                as fn(&Metadata, &Metadata) -> bool,
+        ),
+        (
+            "mastering_display",
+            ec.mastering_display() && dc.mastering_display(),
+            Metadata::none().with_mastering_display(md),
+            |got: &Metadata, want: &Metadata| {
+                got.mastering_display
+                    .zip(want.mastering_display)
+                    .is_some_and(|(got, want)| mastering_display_matches(&got, &want))
+            },
+        ),
+    ];
+    for (name, declared, metadata, matches) in channels {
+        if !declared {
+            continue;
+        }
+        match roundtrip(metadata.clone()) {
+            Err(e) => violations.push(format!("{name}: declared metadata round trip failed: {e}")),
+            Ok(actual) if !matches(&actual, &metadata) => violations.push(format!(
+                "{name}: declared by encoder+decoder, but the complete value did not survive PreserveExact within container precision"
             )),
             Ok(_) => {}
         }
@@ -4846,6 +4900,61 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn optional_hdr_metadata_is_checked_without_native_hdr_pixels() {
+        use zencodec::decode::DecodeCapabilities;
+        use zencodec::encode::EncodeCapabilities;
+        let encoder = EncodeCapabilities::new()
+            .with_content_light_level(true)
+            .with_mastering_display(true);
+        let decoder = DecodeCapabilities::new()
+            .with_content_light_level(true)
+            .with_mastering_display(true);
+        assert!(!encoder.hdr() && !decoder.hdr());
+        let mut seen = Vec::new();
+        let mut violations = Vec::new();
+        check_optional_hdr_metadata_honesty(
+            &encoder,
+            &decoder,
+            |metadata| {
+                seen.push((
+                    metadata.content_light_level.is_some(),
+                    metadata.mastering_display.is_some(),
+                ));
+                Ok(metadata)
+            },
+            &mut violations,
+        );
+        assert_eq!(seen, [(true, false), (false, true)]);
+        assert!(violations.is_empty(), "{violations:?}");
+
+        check_optional_hdr_metadata_honesty(
+            &encoder,
+            &decoder,
+            |_| Ok(Metadata::none()),
+            &mut violations,
+        );
+        assert_eq!(violations.len(), 2);
+        assert!(violations[0].starts_with("content_light_level:"));
+        assert!(violations[1].starts_with("mastering_display:"));
+        violations.clear();
+        check_optional_hdr_metadata_honesty(
+            &encoder,
+            &decoder,
+            |mut metadata| {
+                if let Some(cll) = metadata.content_light_level.as_mut() {
+                    cll.max_frame_average_light_level = 0;
+                }
+                if let Some(md) = metadata.mastering_display.as_mut() {
+                    md.min_luminance = 0.0;
+                }
+                Ok(metadata)
+            },
+            &mut violations,
+        );
+        assert_eq!(violations.len(), 2);
     }
 
     /// An SDR-only codec (no `hdr`) is out of scope, not a failure.

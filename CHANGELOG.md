@@ -12,6 +12,7 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 - Probe metadata capability flags with separate ICC, EXIF, XMP and CICP inputs, allowing mutually exclusive color carriers while retaining the mixed-carrier authority checks. Regressions still reject dropped declared channels and hidden write capabilities.
 - Declare the reference decoder's existing ICC, EXIF, XMP and CICP readers so its conformance tests actually exercise metadata capability honesty.
 - Use identity-matrix CICP for RGB PQ/HLG fixtures. Native HDR still requires exact pixels, depth, primaries and transfer; complete CLLI and MDCV retention is required through its independently declared capability. Regressions reject dropped or changed declared channels.
+- Probe declared CLLI/MDCV retention with independent SDR inputs too, so optional metadata support is checked even without native HDR pixel support.
 
 
 #### QUEUED BREAKING CHANGES

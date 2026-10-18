@@ -287,11 +287,13 @@ impl EncodeCapabilities {
     }
     /// Whether encoding preserves the complete content-light-level value
     /// (MaxCLL and MaxFALL). Partial native representations do not imply support.
+    /// Independent of native HDR pixel support.
     pub const fn content_light_level(&self) -> bool {
         self.content_light_level
     }
     /// Whether encoding preserves mastering-display metadata, within the
     /// container's fixed-point precision.
+    /// Independent of native HDR pixel support.
     pub const fn mastering_display(&self) -> bool {
         self.mastering_display
     }
@@ -765,10 +767,12 @@ impl DecodeCapabilities {
     }
     /// Whether decoding extracts the complete content-light-level value
     /// (MaxCLL and MaxFALL). A native peak with unknown MaxFALL is partial.
+    /// Independent of native HDR pixel support.
     pub const fn content_light_level(&self) -> bool {
         self.content_light_level
     }
     /// Whether decoding extracts mastering-display metadata.
+    /// Independent of native HDR pixel support.
     pub const fn mastering_display(&self) -> bool {
         self.mastering_display
     }

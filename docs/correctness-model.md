@@ -129,6 +129,8 @@ capabilities. `hdr` promises HDR pixels with correct transfer and primaries;
 `mastering_display` promises the mastering values within container precision.
 Callers requiring a complete envelope must select those capabilities at both
 ends. A partial native peak does not declare complete CLLI support.
+Capability honesty probes each optional channel with SDR input as well, so
+metadata retention is checked independently of native HDR pixels.
 
 ## Colour on the decoded buffer: attached, class-gated, identical on every path
 
