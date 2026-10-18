@@ -573,6 +573,9 @@ where
 ///   errors.
 /// - `begin` with a zero width or height is accepted exactly when `encode`
 ///   of that size succeeds (or declines as `RowLevelEncode`).
+/// - A refused `begin` leaves the encoder unchanged: after the first such
+///   zero-size refusal, `begin` with the real size on the same encoder
+///   reports the same timing and streams the same file.
 /// - Every run reports the same timing.
 pub fn check_streaming_output_honesty<E, D>(enc: E, dec: D, img: &TestImage) -> Conformance
 where
@@ -618,9 +621,10 @@ where
             .encoder()
             .map_err(|e| e.to_string())
     };
-    // `Ok(None)`: begin declined row-level encode for this configuration.
-    let run = |drain: Drain| -> Result<Option<Run>, String> {
-        let mut e = encoder()?;
+    // Declare the image on `e`, push every strip draining as `drain` says,
+    // and finish. `Ok(None)`: begin declined row-level encode for this
+    // configuration.
+    let run_on = |mut e: <E::Job as EncodeJob>::Enc, drain: Drain| -> Result<Option<Run>, String> {
         let timing = match e.begin(img.width, img.height, desc) {
             Ok(t) => t,
             Err(err)
@@ -711,6 +715,7 @@ where
             points,
         }))
     };
+    let run = |drain: Drain| -> Result<Option<Run>, String> { run_on(encoder()?, drain) };
     let Some(drained) = run(Drain::All).map_err(|e| fail(CHECK, format!("drained encode: {e}")))?
     else {
         return Ok(());
@@ -817,13 +822,17 @@ where
         return Err(fail(CHECK, "encode after a streaming begin was accepted"));
     }
     // A zero width or height: `begin` answers as `encode` of that size does.
+    // A refused `begin` leaves the encoder unchanged, so the real declaration
+    // that follows on the same encoder streams the same file.
     let bpp = desc.bytes_per_pixel();
+    let mut refusal_checked = false;
     for (w, h) in [(0, img.height), (img.width, 0)] {
         let empty = vec![0u8; w as usize * bpp * h as usize];
         let slice = PixelSlice::new(&empty, w, h, w as usize * bpp, desc)
             .map_err(|e| fail(CHECK, format!("{w}x{h} slice: {e}")))?;
         let encoded = encoder().map_err(|e| fail(CHECK, e))?.encode(slice).is_ok();
-        let begun = encoder().map_err(|e| fail(CHECK, e))?.begin(w, h, desc);
+        let mut e = encoder().map_err(|e| fail(CHECK, e))?;
+        let begun = e.begin(w, h, desc);
         if let Err(err) = &begun
             && err.unsupported_operation() == Some(&UnsupportedOperation::RowLevelEncode)
         {
@@ -842,6 +851,35 @@ where
                     if encoded { "succeeds" } else { "fails" }
                 ),
             ));
+        }
+        if begun.is_err() && !refusal_checked {
+            refusal_checked = true;
+            let after = run_on(e, Drain::All)
+                .map_err(|m| {
+                    fail(
+                        CHECK,
+                        format!(
+                            "after a refused begin({w}, {h}), the encode of the real \
+                             {}x{} image on the same encoder failed: {m}",
+                            img.width, img.height
+                        ),
+                    )
+                })?
+                .ok_or_else(|| {
+                    fail(
+                        CHECK,
+                        format!("after a refused begin({w}, {h}), begin declined row-level encode"),
+                    )
+                })?;
+            if after.timing != timing || after.file != whole.file {
+                return Err(fail(
+                    CHECK,
+                    format!(
+                        "a refused begin({w}, {h}) changed the encode that followed on \
+                         the same encoder"
+                    ),
+                ));
+            }
         }
     }
     let one = enc_oneshot(&enc, img, Metadata::none(), MetadataPolicy::PreserveExact)
@@ -1144,6 +1182,9 @@ where
 ///   durations as the encode without `begin` (so lossy codecs can run it).
 /// - A second `begin` is an error, and so is finishing after fewer frames
 ///   than declared.
+/// - A refused `begin` leaves the encoder unchanged: when `begin` refuses a
+///   zero-width canvas, `begin` with the real canvas on the same encoder
+///   reports the same timing and streams the same file.
 ///
 /// Skipped (returns `Ok`) when the encoder does not advertise animation.
 /// `begin` may decline with an [`UnsupportedOperation`]; any other error
@@ -1188,9 +1229,12 @@ where
         file: Vec<u8>,
         points: Vec<(u32, usize)>,
     }
-    // `Ok(None)`: begin declined.
-    let run = |declare: Option<u32>, drain: Drain| -> Result<Option<Run>, String> {
-        let mut a = encoder()?;
+    // Declare the animation on `a`, push every frame draining as `drain`
+    // says, and finish. `Ok(None)`: begin declined.
+    let run_on = |mut a: <E::Job as EncodeJob>::AnimationFrameEnc,
+                  declare: Option<u32>,
+                  drain: Drain|
+     -> Result<Option<Run>, String> {
         let timing = match a.begin(width, height, desc, declare) {
             Ok(t) => t,
             Err(err) if err.unsupported_operation().is_some() => return Ok(None),
@@ -1229,6 +1273,9 @@ where
             file: out,
             points,
         }))
+    };
+    let run = |declare: Option<u32>, drain: Drain| -> Result<Option<Run>, String> {
+        run_on(encoder()?, declare, drain)
     };
     // `begin` may change framing, never pixels or timing: the streamed file
     // must decode exactly as the same encode without `begin` does (not as
@@ -1353,6 +1400,37 @@ where
             .map_err(|e| fail(CHECK, format!("begin: {e}")))?;
         if a.begin(width, height, desc, declare).is_ok() {
             return Err(fail(CHECK, format!("{label}: a second begin was accepted")));
+        }
+        // A refused `begin` leaves the encoder unchanged.
+        let mut a = encoder().map_err(|e| fail(CHECK, e))?;
+        if let Err(err) = a.begin(0, height, desc, declare)
+            && err.unsupported_operation().is_none()
+        {
+            let after = run_on(a, declare, Drain::All)
+                .map_err(|e| {
+                    fail(
+                        CHECK,
+                        format!(
+                            "{label}: after a refused begin(0, {height}), the encode on the \
+                             same encoder failed: {e}"
+                        ),
+                    )
+                })?
+                .ok_or_else(|| {
+                    fail(
+                        CHECK,
+                        format!("{label}: after a refused begin(0, {height}), begin declined"),
+                    )
+                })?;
+            if after.timing != drained.timing || after.file != drained.file {
+                return Err(fail(
+                    CHECK,
+                    format!(
+                        "{label}: a refused begin(0, {height}) changed the encode that \
+                         followed on the same encoder"
+                    ),
+                ));
+            }
         }
         if declare.is_some() {
             let mut a = encoder().map_err(|e| fail(CHECK, e))?;

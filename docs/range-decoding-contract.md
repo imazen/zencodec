@@ -340,8 +340,9 @@ Written on `Encoder::begin`, enforced where marked by
 
 - **Declaration.** `begin` answers as `encode()` of that size would; a
   second `begin` is an error (checked); a failed `begin` leaves the encoder
-  unchanged. `encode()`/`encode_from()` after `begin` is an error (checked
-  for streaming encoders).
+  unchanged (checked after a zero-size refusal: the real `begin` on the
+  same encoder streams the same file). `encode()`/`encode_from()` after
+  `begin` is an error (checked for streaming encoders).
 - **Lag.** Below the image height (checked). It counts pushed rows whose
   bytes are not yet pending, regardless of push size. Between any two
   points `lag` rows apart, bytes become pending (checked, which catches an
@@ -420,7 +421,8 @@ its image from the timing the default configuration reports.
   from a probed file) but a live source does not; formats that write the
   count first (APNG's `acTL`, the reference format) stream only when it is
   given, and finishing after a different number of frames is an error.
-  `check_animation_streaming_output_honesty` enforces the rules.
+  `check_animation_streaming_output_honesty` enforces the rules, including
+  a refused zero-width `begin` leaving the encoder unchanged.
 - **Out of scope for now:** streaming from `encode_from` (it returns the
   whole file; drivers that stream use `push_rows`).
 
@@ -547,7 +549,8 @@ Rules learned on the way, each recorded where it was measured:
   needs the codec's `streaming_output` and a lag below the height; bytes
   become pending across every lag window; full, uneven and over-sized
   drains leave the file byte-identical; a second `begin` and `encode` after
-  `begin` fail; the result decodes to the one-shot pixels. `AT_FINISH`
+  `begin` fail; a refused zero-size `begin` leaves the encoder unchanged;
+  the result decodes to the one-shot pixels. `AT_FINISH`
   keeps `pending_output` empty. A `RowLevelEncode` rejection at `begin`
   passes. Run it with a streaming configuration as well as the default.
 - `check_read_at_contract` for sources.

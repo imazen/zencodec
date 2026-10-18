@@ -23,6 +23,14 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 #### Added
 
+- `check_streaming_output_honesty` and `check_animation_streaming_output_honesty`
+  check that a refused `begin` leaves the encoder unchanged: after the first
+  zero-size (zero-width canvas, for animations) refusal, `begin` with the real size
+  on the same encoder must report the same timing and stream the same file. Both
+  checks stated the rule without testing it; a wrapper that stores the refused
+  declaration (zenjpeg's behaviour before `cd8ac18b`) passed. Two new misbehaving
+  wrappers in `tests/streaming_output.rs` are caught, and fail again when the new
+  checks are disabled.
 - `check_read_at_contract`, `check_seekable_capability_honesty` and
   `check_incremental_capability_honesty` (chunk-boundary independence against the
   one-shot pixels, truncation must error); the last two run in `check_all`. The

@@ -29,6 +29,7 @@ const STALL: u8 = 6; // reports lag 0, shows the first strip, then holds the res
 const BAD_CONSUME: u8 = 7; // a partial consume_output drops one byte too many
 const BAD_TAKE: u8 = 8; // take_output drops the last pending byte
 const ZERO_REFUSE: u8 = 9; // begin refuses a zero size that encode accepts
+const STALE_BEGIN: u8 = 10; // a refused zero-size begin keeps its size; the real begin fails
 
 static STREAMING: EncodeCapabilities = EncodeCapabilities::new()
     .with_lossless(true)
@@ -57,6 +58,8 @@ struct LiarEnc<const F: u8> {
     /// Rows still to hold back (HONEST_LAG).
     lag: u32,
     rows: u32,
+    /// STALE_BEGIN: the size a refused `begin` stored before refusing.
+    stale: Option<(u32, u32)>,
 }
 
 impl<const F: u8> EncoderConfig for Liar<F> {
@@ -104,6 +107,7 @@ impl<const F: u8> EncodeJob for LiarJob<F> {
             held: Vec::new(),
             lag: 8,
             rows: 0,
+            stale: None,
         })
     }
     fn animation_frame_encoder(self) -> Result<(), RefError> {
@@ -134,6 +138,11 @@ impl<const F: u8> Encoder for LiarEnc<F> {
         self.inner.preferred_strip_height()
     }
     fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, RefError> {
+        // STALE_BEGIN refuses zero sizes in both paths, so it passes the
+        // zero-size agreement and reaches the refused-begin check.
+        if F == STALE_BEGIN && (pixels.width() == 0 || pixels.rows() == 0) {
+            return Err(RefError::Invalid("zero size".into()));
+        }
         self.inner.encode(pixels)
     }
     fn begin(
@@ -147,6 +156,18 @@ impl<const F: u8> Encoder for LiarEnc<F> {
         }
         if F == ZERO_REFUSE && (width == 0 || height == 0) {
             return Err(RefError::Invalid("zero size".into()));
+        }
+        if F == STALE_BEGIN {
+            if self.stale.is_some_and(|s| s != (width, height)) {
+                return Err(RefError::Invalid(
+                    "size differs from an earlier begin".into(),
+                ));
+            }
+            if width == 0 || height == 0 {
+                // The bug: the declaration is stored before it is refused.
+                self.stale = Some((width, height));
+                return Err(RefError::Invalid("zero size".into()));
+            }
         }
         let real = self.inner.begin(width, height, desc)?;
         assert_eq!(real, OutputTiming::streaming(0));
@@ -346,6 +367,20 @@ fn a_begin_stricter_than_encode_about_zero_sizes_is_caught() {
     assert!(e.to_string().contains("begin(0, 32) was refused"), "{e}");
 }
 
+#[test]
+fn a_refused_begin_that_keeps_its_declaration_is_caught() {
+    let e = check_streaming_output_honesty(
+        Liar::<STALE_BEGIN>::default(),
+        ReferenceDecoderConfig,
+        &img(),
+    )
+    .unwrap_err();
+    assert!(
+        e.to_string().contains("after a refused begin(0, 32)"),
+        "{e}"
+    );
+}
+
 // ===========================================================================
 // Animation
 // ===========================================================================
@@ -356,6 +391,7 @@ const A_LEAK: u8 = 2; // reports AT_FINISH, exposes bytes anyway
 const A_HUGE: u8 = 3; // reports a lag as long as the animation
 const A_LOOSE_COUNT: u8 = 4; // finishes after fewer frames than declared
 const A_PIXELS: u8 = 5; // streams, but changes a pixel byte of every frame
+const A_STALE: u8 = 6; // a refused zero-width begin keeps its canvas; the real begin fails
 
 #[derive(Clone, Debug, Default)]
 struct AnimLiar<const F: u8>(ReferenceEncoderConfig);
@@ -368,6 +404,8 @@ struct AnimLiarEnc<const F: u8> {
     held: Vec<u8>,
     declared: Option<u32>,
     pushed: u32,
+    /// A_STALE: the canvas a refused `begin` stored before refusing.
+    stale: Option<(u32, u32)>,
 }
 
 impl<const F: u8> EncoderConfig for AnimLiar<F> {
@@ -416,6 +454,7 @@ impl<const F: u8> EncodeJob for AnimLiarJob<F> {
             held: Vec::new(),
             declared: None,
             pushed: 0,
+            stale: None,
         })
     }
 }
@@ -450,6 +489,18 @@ impl<const F: u8> AnimationFrameEncoder for AnimLiarEnc<F> {
         desc: PixelDescriptor,
         frame_count: Option<u32>,
     ) -> Result<AnimationOutputTiming, RefError> {
+        if F == A_STALE {
+            if self.stale.is_some_and(|s| s != (width, height)) {
+                return Err(RefError::Invalid(
+                    "canvas differs from an earlier begin".into(),
+                ));
+            }
+            if width == 0 {
+                // The bug: the declaration is stored before it is refused.
+                self.stale = Some((width, height));
+                return Err(RefError::Invalid("zero canvas".into()));
+            }
+        }
         let real = self.inner.begin(width, height, desc, frame_count)?;
         self.declared = frame_count;
         // The header stays out of sight for A_HOLD.
@@ -556,6 +607,17 @@ fn an_animation_lag_as_long_as_the_animation_is_caught() {
     )
     .unwrap_err();
     assert!(e.to_string().contains("holds every frame"), "{e}");
+}
+
+#[test]
+fn a_refused_animation_begin_that_keeps_its_canvas_is_caught() {
+    let e = check_animation_streaming_output_honesty(
+        AnimLiar::<A_STALE>::default(),
+        ReferenceDecoderConfig,
+        &frames(4),
+    )
+    .unwrap_err();
+    assert!(e.to_string().contains("after a refused begin(0, "), "{e}");
 }
 
 #[test]
