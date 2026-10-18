@@ -32,7 +32,24 @@ metadata-check:
     cargo check -p zenmeta --no-default-features --features audit
     cargo check -p zenmeta --no-default-features --features apple
     cargo check -p zenmeta --no-default-features --features inventory
+    cargo check -p zenmeta --no-default-features --features c2pa
     cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+# C2PA audit regressions and the isolated no_std feature; apply host resource limits.
+c2pa-check:
+    cargo fmt -p zenmeta --check
+    just c2pa-test
+    just c2pa-lint
+
+c2pa-lint:
+    cargo check -p zenmeta --no-default-features --features c2pa
+    cargo clippy -p zenmeta --all-targets --all-features -- -D warnings
+
+c2pa-test:
+    cargo test -p zenmeta --all-features
+
+c2pa-regressions:
+    cargo test -p zenmeta --all-features --test c2pa_inspection
 
 # Compare the actual published contract, not an unpublished metadata branch.
 metadata-semver:
@@ -56,7 +73,7 @@ contract-audit-check:
     just contract-semver-minimal
 
 metadata-target-check:
-    cargo check -p zenmeta --target wasm32-wasip1 --no-default-features --features apple,audit,inventory,xmp
+    cargo check -p zenmeta --target wasm32-wasip1 --no-default-features --features apple,audit,inventory,xmp,c2pa
     cargo +1.88.0 check -p zencodec -p zenmeta --all-features
 
 metadata-i686-check runner="env":

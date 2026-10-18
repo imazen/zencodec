@@ -231,6 +231,14 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- C2PA PR157 review (2026-10-17): `just c2pa-regressions` covers tag-24
+  reparses restarting allocation budgets, findings continuing after the report
+  limit, and colliding field paths losing diff entries (fixed in `4fa4561b`).
+  Handwritten DER interpretation was removed in `5aaab6f2`: certificate and timestamp content
+  stays opaque, eliminating its pre-budget formatting and overflowing OID path.
+  Equal reports cannot establish equality of opaque bytes. See
+  [C2PA integration](docs/c2pa-integration.md) for the c2pa-rs ownership boundary.
+
 - PR138 audit update (2026-10-13): the historical contract gaps below are fixed
   on the PR for timing capability, editor-free XMP preservation and report bounds.
   Adversarial review also fixed partial child-plan mutation, mixed-input plans,

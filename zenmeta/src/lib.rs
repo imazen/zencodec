@@ -10,6 +10,8 @@ pub mod apple;
 pub mod audit;
 #[cfg(feature = "apple")]
 pub mod bplist;
+#[cfg(feature = "c2pa")]
+mod c2pa;
 pub mod display;
 pub mod exif;
 #[cfg(feature = "inventory")]

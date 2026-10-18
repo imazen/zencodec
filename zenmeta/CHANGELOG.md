@@ -2,7 +2,16 @@
 
 ## [Unreleased]
 
+### QUEUED BREAKING CHANGES
+
+None.
+
 ### Fixed
+
+- C2PA audit CBOR reparses, JUMBF traversal and report formatting share a
+  cumulative allocation/item budget. Opaque findings stop at one terminal limit.
+  Escaped, typed paths and source occurrence suffixes keep duplicate fields
+  distinct in structural diffs (`4fa4561b`).
 
 - `xmp::Packet::parse` (and every XMP reader built on it: `xmp::gainmap::parse_xmp`,
   `parse_xmp_full`, `xmp::container::Directory::parse`) rejects a packet nesting
@@ -26,10 +35,23 @@
 
 ### Added
 
+- `c2pa` feature: `audit::Report::c2pa` structurally inspects a complete C2PA
+  Manifest Store (JUMBF, CBOR claims/assertions and COSE headers). Certificates,
+  RFC 3161 timestamp tokens and other uninterpreted data remain opaque.
+  `audit::Finding` gains `InvalidJumbf`, `InvalidCbor` and `Opaque`. Input,
+  cumulative requested allocation capacity, nesting and item limits bound the
+  inspection; no signatures, hard bindings or credential semantics are verified.
+  The example accepts raw stores; codecs own container framing. See the
+  [c2pa-rs integration design](../docs/c2pa-integration.md) for signing and validation.
 - Metadata/EXIF processing entry points bridge retained zencodec compatibility
   writers without duplicating their implementation. Reading needs no zenmeta.
 
 ### Changed
+
+- Narrow the unreleased C2PA audit to structural inspection: remove handwritten
+  DER interpretation, retain certificate/timestamp bytes as opaque findings and
+  limit the example to raw stores. Signing and verification use the proposed
+  separate c2pa-rs adapter (`5aaab6f2`).
 
 - Return typed shared limit kinds for rewrite budgets. Distinguish individual
   packet limits from cumulative regenerated metadata using the same configured

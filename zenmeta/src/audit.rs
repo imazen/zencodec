@@ -20,6 +20,16 @@ pub struct Entry {
     value: String,
 }
 impl Entry {
+    #[cfg(feature = "c2pa")]
+    pub(crate) fn new(path: String, kind: String, value: String) -> Self {
+        Self { path, kind, value }
+    }
+    #[cfg(feature = "c2pa")]
+    pub(crate) fn append_occurrence(&mut self, occurrence: usize) {
+        use core::fmt::Write;
+        // The C2PA walker reserves suffix capacity before admitting each entry.
+        write!(&mut self.path, "#{occurrence}").expect("writing to a String cannot fail");
+    }
     /// Directory/namespace path, including occurrence index for duplicate tags.
     pub fn path(&self) -> &str {
         &self.path
@@ -48,6 +58,14 @@ pub enum Finding {
     Limit,
     /// XMP XML is invalid or exceeds its parsing budget.
     InvalidXmp(String),
+    /// A JUMBF box or C2PA manifest-store structure could not be parsed; the text
+    /// names the path and the reason. Content below it was not inspected.
+    InvalidJumbf(String),
+    /// A CBOR item (C2PA claim, assertion or COSE structure) could not be parsed.
+    InvalidCbor { path: String, error: String },
+    /// Content kept but not interpreted: embedded files and thumbnails, unknown
+    /// boxes, long byte strings, unparsed certificates or timestamp tokens.
+    Opaque { path: String, bytes: usize },
 }
 /// Read-only metadata snapshot with explicit coverage findings.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -56,6 +74,24 @@ pub struct Report {
     findings: Vec<Finding>,
 }
 impl Report {
+    #[cfg(feature = "c2pa")]
+    pub(crate) fn from_parts(entries: Vec<Entry>, findings: Vec<Finding>) -> Self {
+        Self { entries, findings }
+    }
+    /// Structurally inspect a C2PA manifest store (one root JUMBF `c2pa` box).
+    /// Reports claims, assertions and COSE headers without validating semantics,
+    /// signatures, credentials or bindings. Certificates and timestamp tokens are
+    /// always [`Finding::Opaque`]; equal reports do not imply equal opaque bytes.
+    /// Keep original bytes for forensic comparisons. Container framing and JPEG
+    /// APP11 reassembly stay with codecs; verification/signing belongs to c2pa-rs.
+    ///
+    /// Input and cumulative requested allocation capacity are each capped at
+    /// 16 MiB, with shared item/depth limits. A terminal [`Finding::Limit`] means
+    /// the report is partial. This is not a process-memory or privacy guarantee.
+    #[cfg(feature = "c2pa")]
+    pub fn c2pa(jumbf: &[u8]) -> Self {
+        crate::c2pa::inspect(jumbf)
+    }
     /// Inspect EXIF/TIFF up to 16 MiB. Preserve unknown tags and duplicate entries.
     pub fn exif(bytes: &[u8]) -> Self {
         let mut out = Self::default();

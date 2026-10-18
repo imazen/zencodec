@@ -23,8 +23,24 @@ assert_eq!(retained, metadata);
 ```
 
 An audit reports its coverage limits and opaque content. It does not certify
-privacy. Container framing, packet reassembly and rewriting belong to codecs;
-an inventory is not a safe generic deletion recipe.
+privacy.
+
+`c2pa` (which enables `audit`) adds `audit::Report::c2pa` for structural inspection
+of a complete C2PA Manifest Store: claims, assertions and COSE headers.
+Certificates, timestamp tokens, embedded files and uninterpreted content remain
+`Finding::Opaque`. Nothing is verified, and equal reports do not imply equal
+opaque bytes; retain the original store for forensic comparison.
+
+Input and cumulative requested allocation capacity are each limited to 16 MiB.
+Nested CBOR reparses share the budget, and traversal stops at a terminal
+`Finding::Limit`. These are parser limits, not a process-memory guarantee.
+The caller supplies one complete root JUMBF box; container framing, packet
+reassembly and rewriting belong to codecs. The `audit_c2pa` example accepts only
+raw stores. An inventory is not a safe generic deletion recipe.
+
+The [C2PA integration design](../docs/c2pa-integration.md) uses c2pa-rs for
+reading, building, signing and validation in a separate adapter. This audit
+feature adds no SDK dependency or preservation/signing behavior to codecs.
 
 See [source provenance](PROVENANCE.md) and the workspace
 [design](../docs/zenmeta-design.md).
