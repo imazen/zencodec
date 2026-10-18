@@ -7,7 +7,7 @@
 - C2PA audit CBOR reparses, JUMBF traversal and report formatting share a
   cumulative allocation/item budget. Opaque findings stop at one terminal limit.
   Escaped, typed paths and source occurrence suffixes keep duplicate fields
-  distinct in structural diffs. DER inspection is not covered by this change.
+  distinct in structural diffs (`4fa4561b`).
 
 - `xmp::Packet::parse` (and every XMP reader built on it: `xmp::gainmap::parse_xmp`,
   `parse_xmp_full`, `xmp::container::Directory::parse`) rejects a packet nesting
@@ -31,13 +31,14 @@
 
 ### Added
 
-- `c2pa` feature: `audit::Report::c2pa` inspects a C2PA manifest store (JUMBF, CBOR claims
-  and assertions, COSE_Sign1 headers, X.509 certificates, RFC 3161 timestamp tokens) and
-  reports opaque content as findings; `audit::Finding` gains `InvalidJumbf`, `InvalidCbor`
-  and `Opaque`. Readers are bounded (16 MiB input, nesting depth, item counts) and recurse
-  only below checked depths. On the 115 C2PA stores of the imazen-26 corpus (OpenAI and
-  Google generators) every store parses, and actions, instance IDs, generator, title,
-  software agent and source type agree with exiftool's reading of the same files.
+- `c2pa` feature: `audit::Report::c2pa` structurally inspects a complete C2PA
+  Manifest Store (JUMBF, CBOR claims/assertions and COSE headers). Certificates,
+  RFC 3161 timestamp tokens and other uninterpreted data remain opaque.
+  `audit::Finding` gains `InvalidJumbf`, `InvalidCbor` and `Opaque`. Input,
+  cumulative requested allocation capacity, nesting and item limits bound the
+  inspection; no signatures, hard bindings or credential semantics are verified.
+  The example accepts raw stores; codecs own container framing. See the
+  [c2pa-rs integration design](../docs/c2pa-integration.md) for signing and validation.
 - Metadata/EXIF processing entry points bridge retained zencodec compatibility
   writers without duplicating their implementation. Reading needs no zenmeta.
 

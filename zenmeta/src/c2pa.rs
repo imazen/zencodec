@@ -4,7 +4,6 @@
 //! signatures, credentials or trust; semantic verification belongs to c2pa-rs.
 mod budget;
 mod cbor;
-mod der;
 mod jumbf;
 
 use alloc::{string::String, vec::Vec};
@@ -475,44 +474,52 @@ impl Walk {
     }
 
     fn certificate(&mut self, path: &str, bytes: &[u8]) -> Result {
-        let mut out = der::Out::new();
-        match der::certificate(path, bytes, &mut out) {
-            Some(()) => {
-                for (p, k, v) in out {
-                    self.entry(&p, k, format_args!("{v}"))?;
-                }
-                Ok(())
-            }
-            None => {
-                self.entry(path, "X.509", format_args!("bytes(len={})", bytes.len()))?;
-                self.opaque(path, bytes.len())
-            }
-        }
+        self.entry(path, "X.509", format_args!("bytes(len={})", bytes.len()))?;
+        self.opaque(path, bytes.len())
     }
 
     fn timestamps(&mut self, path: &str, value: &Value) -> Result {
-        let Some(Value::Array(tokens)) = value.get_text("tstTokens") else {
+        let Value::Map(pairs) = value else {
             return self.cbor(path, value);
         };
-        for (i, token) in tokens.iter().enumerate() {
+        if pairs.is_empty() {
+            return self.cbor(path, value);
+        }
+        for (i, (key, value)) in pairs.iter().enumerate() {
             self.budget.item()?;
-            let p = self.text(format_args!("{path}/tstTokens[{i}]"))?;
-            match token.get_text("val").and_then(Value::as_bytes) {
-                Some(bytes) => {
-                    let mut out = der::Out::new();
-                    match der::timestamp_token(&p, bytes, &mut out) {
-                        Some(()) => {
-                            for (p, k, v) in out {
-                                self.entry(&p, k, format_args!("{v}"))?;
-                            }
-                        }
-                        None => {
-                            self.entry(&p, "RFC 3161", format_args!("bytes(len={})", bytes.len()))?;
-                            self.opaque(&p, bytes.len())?;
-                        }
-                    }
+            if key.as_text() == Some("tstTokens")
+                && let Value::Array(tokens) = value
+                && !tokens.is_empty()
+            {
+                for (j, token) in tokens.iter().enumerate() {
+                    self.budget.item()?;
+                    let p = self.text(format_args!("{path}/tstTokens[{j}]"))?;
+                    self.timestamp_token(&p, token)?;
                 }
-                None => self.cbor(&p, token)?,
+            } else {
+                self.map_item(path, i, key, value)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn timestamp_token(&mut self, path: &str, token: &Value) -> Result {
+        let Value::Map(pairs) = token else {
+            return self.cbor(path, token);
+        };
+        if pairs.is_empty() {
+            return self.cbor(path, token);
+        }
+        for (i, (key, value)) in pairs.iter().enumerate() {
+            self.budget.item()?;
+            if key.as_text() == Some("val")
+                && let Some(bytes) = value.as_bytes()
+            {
+                let p = self.text(format_args!("{path}/val"))?;
+                self.entry(&p, "RFC 3161", format_args!("bytes(len={})", bytes.len()))?;
+                self.opaque(&p, bytes.len())?;
+            } else {
+                self.map_item(path, i, key, value)?;
             }
         }
         Ok(())

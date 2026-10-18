@@ -40,14 +40,6 @@ impl Value {
             _ => None,
         }
     }
-    /// A map's value under a text key.
-    pub(crate) fn get_text(&self, key: &str) -> Option<&Value> {
-        let Value::Map(pairs) = self else { return None };
-        pairs
-            .iter()
-            .find(|(k, _)| k.as_text() == Some(key))
-            .map(|(_, v)| v)
-    }
     pub(crate) fn as_i64(&self) -> Option<i64> {
         match *self {
             Value::Uint(n) => i64::try_from(n).ok(),
@@ -333,6 +325,20 @@ mod tests {
             assert_eq!(&parse(bytes).unwrap(), want, "{bytes:02x?}");
         }
         assert!(matches!(parse(&[0xf9, 0x7c, 0x00]).unwrap(), Value::Float(f) if f.is_infinite()));
+    }
+
+    #[test]
+    fn indefinite_text_chunks_are_individually_utf8() {
+        // Each text chunk must be valid on its own, even when concatenation
+        // would turn a split UTF-8 sequence into valid text (RFC 8949 section 3.2.3).
+        assert_eq!(
+            parse(&[0x7f, 0x61, 0xc3, 0x61, 0xa9, 0xff]),
+            Err(Error::Malformed("text is not UTF-8"))
+        );
+        assert_eq!(
+            parse(&[0x7f, 0x62, 0xc3, 0xa9, 0x61, b'!', 0xff]),
+            Ok(Value::Text("é!".into()))
+        );
     }
 
     #[test]

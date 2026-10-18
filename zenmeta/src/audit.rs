@@ -78,11 +78,16 @@ impl Report {
     pub(crate) fn from_parts(entries: Vec<Entry>, findings: Vec<Finding>) -> Self {
         Self { entries, findings }
     }
-    /// Inspect a C2PA manifest store (one JUMBF `c2pa` superbox, up to 16 MiB): every
-    /// manifest's claim and assertions, and the claim signature's COSE headers with
-    /// their certificates' names, serials, validity and alternative names and their
-    /// timestamp tokens' times. Nothing is verified. Container framing (PNG `caBX`,
-    /// reassembling JPEG APP11 packets) stays with the codec.
+    /// Structurally inspect a C2PA manifest store (one root JUMBF `c2pa` box).
+    /// Reports claims, assertions and COSE headers without validating semantics,
+    /// signatures, credentials or bindings. Certificates and timestamp tokens are
+    /// always [`Finding::Opaque`]; equal reports do not imply equal opaque bytes.
+    /// Keep original bytes for forensic comparisons. Container framing and JPEG
+    /// APP11 reassembly stay with codecs; verification/signing belongs to c2pa-rs.
+    ///
+    /// Input and cumulative requested allocation capacity are each capped at
+    /// 16 MiB, with shared item/depth limits. A terminal [`Finding::Limit`] means
+    /// the report is partial. This is not a process-memory or privacy guarantee.
     #[cfg(feature = "c2pa")]
     pub fn c2pa(jumbf: &[u8]) -> Self {
         crate::c2pa::inspect(jumbf)

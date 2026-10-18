@@ -218,7 +218,7 @@ fn value<'a>(r: &'a Report, path: &str) -> &'a str {
 const M: &str = "c2pa/urn:uuid:00000000-0000-4000-8000-000000000001";
 
 #[test]
-fn claims_assertions_and_signer_identity_are_reported() {
+fn claims_and_assertions_are_reported_with_opaque_certificates() {
     let r = Report::c2pa(&store());
     assert_eq!(value(&r, "c2pa/@type"), "c2pa");
     assert_eq!(value(&r, &format!("{M}/@type")), "c2ma");
@@ -250,40 +250,29 @@ fn claims_assertions_and_signer_identity_are_reported() {
     let sig = format!("{M}/c2pa.signature/cose");
     assert_eq!(value(&r, &format!("{sig}/protected/alg")), "-7 (ES256)");
     assert_eq!(
-        value(&r, &format!("{sig}/protected/x5chain[0]/subject/0/CN")),
-        "\"Example Signer\""
+        value(&r, &format!("{sig}/protected/x5chain[0]")),
+        format!("bytes(len={})", certificate().len())
     );
-    assert_eq!(
-        value(
-            &r,
-            &format!("{sig}/protected/x5chain[0]/subject/1/emailAddress")
-        ),
-        "\"signer@example.test\""
-    );
-    assert_eq!(
-        value(&r, &format!("{sig}/protected/x5chain[0]/issuer/1/O")),
-        "\"Example Org\""
-    );
-    assert_eq!(
-        value(&r, &format!("{sig}/protected/x5chain[0]/validity/notAfter")),
-        "\"270101000000Z\""
-    );
-    assert_eq!(
-        value(
-            &r,
-            &format!("{sig}/protected/x5chain[0]/extension[0]/subjectAltName[0]/rfc822Name")
-        ),
-        "\"signer@example.test\""
+    assert!(
+        !r.entries()
+            .iter()
+            .any(|e| e.value().contains("Example Signer"))
     );
     assert_eq!(value(&r, &format!("{sig}/payload")), "detached");
     assert_eq!(value(&r, &format!("{sig}/signature")), "bytes(len=64)");
-    // The thumbnail is kept but not interpreted: the only finding.
+    // Both the thumbnail and certificate have explicit coverage findings.
     assert_eq!(
         r.findings(),
-        &[Finding::Opaque {
-            path: format!("{M}/c2pa.assertions/c2pa.thumbnail.claim.jpeg/bidb"),
-            bytes: 4
-        }]
+        &[
+            Finding::Opaque {
+                path: format!("{M}/c2pa.assertions/c2pa.thumbnail.claim.jpeg/bidb"),
+                bytes: 4
+            },
+            Finding::Opaque {
+                path: format!("{sig}/protected/x5chain[0]"),
+                bytes: certificate().len()
+            }
+        ]
     );
     // Paths are unique, so diffs pair entries one to one.
     let mut paths: Vec<_> = r.entries().iter().map(|e| e.path()).collect();
@@ -292,7 +281,7 @@ fn claims_assertions_and_signer_identity_are_reported() {
 }
 
 #[test]
-fn a_changed_signer_shows_in_the_diff() {
+fn opaque_certificate_contents_require_original_bytes_for_comparison() {
     let a = store();
     let b = {
         let s = String::from_utf8_lossy(&a).into_owned();
@@ -304,7 +293,15 @@ fn a_changed_signer_shows_in_the_diff() {
     };
     let (ra, rb) = (Report::c2pa(&a), Report::c2pa(&b));
     let changes = ra.diff(&rb);
-    assert_eq!(changes.len(), 1, "{changes:#?}");
+    assert_ne!(a, b);
+    assert!(
+        changes.is_empty(),
+        "opaque content is deliberately not interpreted"
+    );
+    assert!(ra.findings().iter().any(|f| matches!(f,
+        Finding::Opaque { path, bytes } if path.ends_with("/x5chain[0]") && *bytes == certificate().len()
+    )));
+    assert_eq!(ra.findings(), rb.findings());
 }
 
 #[test]
@@ -481,4 +478,65 @@ fn sibling_labels_cannot_impersonate_occurrence_suffixes() {
     paths.sort_unstable();
     paths.dedup();
     assert_eq!(paths.len(), count);
+}
+
+#[test]
+fn certificates_and_timestamp_der_are_always_opaque() {
+    // A truncated OID and a base-128 arc larger than u64: neither is decoded here.
+    for der_bytes in [
+        &[0x06, 1, 0x80][..],
+        &[
+            0x06, 12, 0x2a, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f,
+        ][..],
+    ] {
+        let protected = map(&[(uint(33), array(&[bytes(der_bytes)]))]);
+        let token = map(&[
+            (text("val"), bytes(der_bytes)),
+            (text("extra"), text("retained")),
+        ]);
+        let timestamp = map(&[
+            (text("tstTokens"), array(&[token])),
+            (text("other"), uint(7)),
+        ]);
+        let cose = array(&[
+            bytes(&protected),
+            map(&[(text("sigTst2"), timestamp)]),
+            vec![0xf6],
+            bytes(&[1]),
+        ]);
+        let input = superbox(
+            c2pa_uuid(b"c2pa"),
+            "c2pa",
+            &[superbox(
+                c2pa_uuid(b"c2cs"),
+                "signature",
+                &[bx(b"cbor", &cose)],
+            )],
+        );
+        let report = Report::c2pa(&input);
+        assert_eq!(
+            report.findings(),
+            &[
+                Finding::Opaque {
+                    path: "c2pa/signature/cose/protected/x5chain[0]".into(),
+                    bytes: der_bytes.len()
+                },
+                Finding::Opaque {
+                    path: "c2pa/signature/cose/unprotected/sigTst2/tstTokens[0]/val".into(),
+                    bytes: der_bytes.len()
+                }
+            ]
+        );
+        assert_eq!(
+            value(
+                &report,
+                "c2pa/signature/cose/unprotected/sigTst2/tstTokens[0]/extra"
+            ),
+            "\"retained\""
+        );
+        assert_eq!(
+            value(&report, "c2pa/signature/cose/unprotected/sigTst2/other"),
+            "7"
+        );
+    }
 }
