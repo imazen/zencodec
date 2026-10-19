@@ -1802,14 +1802,14 @@ fn mastering_display_matches(got: &MasteringDisplay, want: &MasteringDisplay) ->
 }
 
 /// Native HDR survives a round trip: for BT.2100 **PQ** and **HLG**, the CICP,
-/// the HDR envelope (content light level + mastering display), the pixels, and
+/// the declared optional HDR metadata channels, the pixels, and
 /// the decoded buffer's HDR *labelling* all come back from a `PreserveExact`
 /// encode → decode.
 ///
 /// Skipped (`Ok`) unless **both** ends declare
 /// [`hdr`](zencodec::encode::EncodeCapabilities::hdr). For each transfer:
 ///
-/// - encodes `Cicp::BT2100_PQ` / `Cicp::BT2100_HLG` with `ContentLightLevel(1000, 400)`
+/// - encodes BT.2020 PQ / HLG with RGB identity matrix 0, `ContentLightLevel(1000, 400)`
 ///   and `MasteringDisplay::HDR10_REFERENCE`, using a 16-bit RGB gradient when both
 ///   ends declare `native_16bit` (the 8-bit RGB gradient otherwise — the
 ///   signaling path is exercised either way);
@@ -1819,15 +1819,13 @@ fn mastering_display_matches(got: &MasteringDisplay, want: &MasteringDisplay) ->
 ///   prevent — and on the 16-bit path must equal `RGB16_BT2100_PQ` / `_HLG`;
 /// - when both ends declare the `cicp` channel, `Metadata.cicp` must equal the
 ///   input;
-/// - `content_light_level` must survive exactly and `mastering_display` within
+/// - each optional HDR metadata channel must survive when both ends declare
+///   that channel: `content_light_level` exactly and `mastering_display` within
 ///   container fixed-point precision (2e-5 on xy, 1e-5 relative on luminance).
-///   `hdr` on both ends means the envelope reaches the encoder and comes back —
-///   silently dropping it is the "gain-map → native-HDR transcode loses the
-///   envelope" hazard in `docs/correctness-model.md`.
+///   Native HDR support alone does not guarantee those optional carriers.
 ///
 /// This is Phase 0 of the gain-map / HDR delivery scope
-/// (`docs/gainmap-pipeline-scope-2026-06-08.md`): prove native HDR works with
-/// zero new API before any gain-map encode surface is added. Part of
+/// (`docs/gainmap-pipeline-scope-2026-06-08.md`). Part of
 /// [`check_all`].
 pub fn check_native_hdr_roundtrip<E, D>(enc: E, dec: D) -> Conformance
 where
@@ -1845,13 +1843,13 @@ where
     let cases = [
         (
             "PQ",
-            Cicp::BT2100_PQ,
+            Cicp::new(9, 16, 0, true),
             PixelDescriptor::RGB16_BT2100_PQ,
             TransferFunction::Pq,
         ),
         (
             "HLG",
-            Cicp::BT2100_HLG,
+            Cicp::new(9, 18, 0, true),
             PixelDescriptor::RGB16_BT2100_HLG,
             TransferFunction::Hlg,
         ),
@@ -1895,6 +1893,15 @@ where
                 ),
             ));
         }
+        if desc.primaries != desc16.primaries {
+            return Err(fail(
+                CHECK,
+                format!(
+                    "[{name}] decoded primaries are {:?}, expected {:?}",
+                    desc.primaries, desc16.primaries
+                ),
+            ));
+        }
         if sixteen && desc != desc16 {
             return Err(fail(
                 CHECK,
@@ -1912,6 +1919,20 @@ where
                 ),
             ));
         }
+        check_hdr_metadata(name, &got, (cll, md), ec, dc)?;
+    }
+    Ok(())
+}
+
+fn check_hdr_metadata(
+    name: &str,
+    got: &Metadata,
+    (cll, md): (ContentLightLevel, MasteringDisplay),
+    ec: &zencodec::encode::EncodeCapabilities,
+    dc: &zencodec::decode::DecodeCapabilities,
+) -> Conformance {
+    const CHECK: &str = "native_hdr_roundtrip";
+    if ec.content_light_level() && dc.content_light_level() {
         match got.content_light_level {
             Some(c) if c == cll => {}
             other => {
@@ -1919,12 +1940,13 @@ where
                     CHECK,
                     format!(
                         "[{name}] content_light_level {cll:?} did not survive PreserveExact \
-                         (decoded {other:?}) — hdr is declared on both ends, so the HDR envelope \
-                         must reach the encoder and come back"
+                         (decoded {other:?}) — complete content-light-level retention is declared on both ends"
                     ),
                 ));
             }
         }
+    }
+    if ec.mastering_display() && dc.mastering_display() {
         match got.mastering_display {
             Some(m) if mastering_display_matches(&m, &md) => {}
             other => {
@@ -3261,6 +3283,8 @@ fn run_animation_decode<D: DecoderConfig>(cfg: &D, bytes: &[u8]) -> Result<(), D
 /// encoder-writes-but-decoder-doesn't-read quadrant isn't observable through decode.
 /// Separate probes allow formats with mutually exclusive ICC/native-color carriers;
 /// mixed-carrier precedence remains covered by [`check_color_authority_spec`].
+/// Optional `content_light_level` and `mastering_display` channels are checked
+/// independently on SDR inputs when both ends declare them, regardless of `hdr`.
 /// `native_alpha` is forward-only — a declared RGBA8 round trip must preserve alpha;
 /// the no-alpha direction isn't cleanly assertable (a codec may legitimately reject
 /// or flatten RGBA input).
@@ -3363,6 +3387,16 @@ where
         },
         &mut v,
     );
+    check_optional_hdr_metadata_honesty(
+        ec,
+        dc,
+        |metadata| {
+            enc_oneshot(&enc, img, metadata, MetadataPolicy::PreserveExact)
+                .and_then(|bytes| dec_oneshot(&dec, &bytes))
+                .map(|(_, metadata)| metadata)
+        },
+        &mut v,
+    );
 
     // --- native_alpha honesty: RGBA8 alpha survives when both ends claim it ---
     if ec.native_alpha() && dc.native_alpha() {
@@ -3435,6 +3469,48 @@ fn check_metadata_channel_honesty(
             )),
             Ok(actual) if !enc_writes && present(&actual) => violations.push(format!(
                 "{name}: encoder declared it does NOT support this channel, yet it survived a round trip (hidden capability)"
+            )),
+            Ok(_) => {}
+        }
+    }
+}
+
+// Optional mastering metadata can be supported on an SDR-only codec. Probe
+// each declared channel independently of native HDR pixel/color support.
+fn check_optional_hdr_metadata_honesty(
+    ec: &zencodec::encode::EncodeCapabilities,
+    dc: &zencodec::decode::DecodeCapabilities,
+    mut roundtrip: impl FnMut(Metadata) -> Result<Metadata, String>,
+    violations: &mut Vec<String>,
+) {
+    let (cll, md) = hdr_envelope();
+    let channels = [
+        (
+            "content_light_level",
+            ec.content_light_level() && dc.content_light_level(),
+            Metadata::none().with_content_light_level(cll),
+            (|got: &Metadata, want: &Metadata| got.content_light_level == want.content_light_level)
+                as fn(&Metadata, &Metadata) -> bool,
+        ),
+        (
+            "mastering_display",
+            ec.mastering_display() && dc.mastering_display(),
+            Metadata::none().with_mastering_display(md),
+            |got: &Metadata, want: &Metadata| {
+                got.mastering_display
+                    .zip(want.mastering_display)
+                    .is_some_and(|(got, want)| mastering_display_matches(&got, &want))
+            },
+        ),
+    ];
+    for (name, declared, metadata, matches) in channels {
+        if !declared {
+            continue;
+        }
+        match roundtrip(metadata.clone()) {
+            Err(e) => violations.push(format!("{name}: declared metadata round trip failed: {e}")),
+            Ok(actual) if !matches(&actual, &metadata) => violations.push(format!(
+                "{name}: declared by encoder+decoder, but the complete value did not survive PreserveExact within container precision"
             )),
             Ok(_) => {}
         }
@@ -4825,6 +4901,138 @@ mod tests {
     fn reference_native_hdr_roundtrip() {
         let (e, d) = ref_codecs();
         check_native_hdr_roundtrip(e, d).unwrap();
+    }
+
+    #[test]
+    fn hdr_metadata_retention_requires_each_declared_channel() {
+        use zencodec::decode::DecodeCapabilities;
+        use zencodec::encode::EncodeCapabilities;
+        let expected = hdr_envelope();
+        let native_encoder = EncodeCapabilities::new().with_hdr(true);
+        let native_decoder = DecodeCapabilities::new().with_hdr(true);
+        let partial = Metadata::none().with_content_light_level(ContentLightLevel::new(1000, 0));
+        check_hdr_metadata(
+            "native peak",
+            &partial,
+            expected,
+            &native_encoder,
+            &native_decoder,
+        )
+        .unwrap();
+
+        let cll_encoder = native_encoder.clone().with_content_light_level(true);
+        let cll_decoder = native_decoder.clone().with_content_light_level(true);
+        for missing_or_changed in [Metadata::none(), partial] {
+            assert!(
+                check_hdr_metadata(
+                    "declared CLLI",
+                    &missing_or_changed,
+                    expected,
+                    &cll_encoder,
+                    &cll_decoder,
+                )
+                .is_err()
+            );
+        }
+        let cll_only = Metadata::none().with_content_light_level(expected.0);
+        check_hdr_metadata("CLLI only", &cll_only, expected, &cll_encoder, &cll_decoder).unwrap();
+        check_hdr_metadata(
+            "MDCV only",
+            &Metadata::none().with_mastering_display(expected.1),
+            expected,
+            &native_encoder.with_mastering_display(true),
+            &native_decoder.with_mastering_display(true),
+        )
+        .unwrap();
+
+        let both_encoder = cll_encoder.with_mastering_display(true);
+        let both_decoder = cll_decoder.with_mastering_display(true);
+        assert!(
+            check_hdr_metadata(
+                "dropped MDCV",
+                &cll_only,
+                expected,
+                &both_encoder,
+                &both_decoder,
+            )
+            .is_err()
+        );
+        let complete = cll_only.with_mastering_display(expected.1);
+        check_hdr_metadata(
+            "both channels",
+            &complete,
+            expected,
+            &both_encoder,
+            &both_decoder,
+        )
+        .unwrap();
+        let mut changed = complete;
+        changed.mastering_display.as_mut().unwrap().min_luminance = 0.0;
+        assert!(
+            check_hdr_metadata(
+                "changed MDCV",
+                &changed,
+                expected,
+                &both_encoder,
+                &both_decoder,
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn optional_hdr_metadata_is_checked_without_native_hdr_pixels() {
+        use zencodec::decode::DecodeCapabilities;
+        use zencodec::encode::EncodeCapabilities;
+        let encoder = EncodeCapabilities::new()
+            .with_content_light_level(true)
+            .with_mastering_display(true);
+        let decoder = DecodeCapabilities::new()
+            .with_content_light_level(true)
+            .with_mastering_display(true);
+        assert!(!encoder.hdr() && !decoder.hdr());
+        let mut seen = Vec::new();
+        let mut violations = Vec::new();
+        check_optional_hdr_metadata_honesty(
+            &encoder,
+            &decoder,
+            |metadata| {
+                seen.push((
+                    metadata.content_light_level.is_some(),
+                    metadata.mastering_display.is_some(),
+                ));
+                Ok(metadata)
+            },
+            &mut violations,
+        );
+        assert_eq!(seen, [(true, false), (false, true)]);
+        assert!(violations.is_empty(), "{violations:?}");
+
+        check_optional_hdr_metadata_honesty(
+            &encoder,
+            &decoder,
+            |_| Ok(Metadata::none()),
+            &mut violations,
+        );
+        assert_eq!(violations.len(), 2);
+        assert!(violations[0].starts_with("content_light_level:"));
+        assert!(violations[1].starts_with("mastering_display:"));
+        violations.clear();
+        check_optional_hdr_metadata_honesty(
+            &encoder,
+            &decoder,
+            |mut metadata| {
+                if let Some(cll) = metadata.content_light_level.as_mut() {
+                    cll.max_frame_average_light_level = 0;
+                }
+                if let Some(md) = metadata.mastering_display.as_mut() {
+                    md.min_luminance = 0.0;
+                }
+                Ok(metadata)
+            },
+            &mut violations,
+        );
+        assert_eq!(violations.len(), 2);
     }
 
     /// An SDR-only codec (no `hdr`) is out of scope, not a failure.

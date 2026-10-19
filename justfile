@@ -148,6 +148,17 @@ testkit-contract-check:
     cargo test -p zencodec-testkit
     cargo clippy -p zencodec-testkit --all-targets -- -D warnings
 
+# Optional HDR metadata API, strict retention regressions and compatibility.
+hdr-capability-check:
+    cargo fmt -p zencodec -p zencodec-testkit
+    cargo test --locked --workspace --all-features
+    cargo check --locked -p zencodec --no-default-features
+    cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+    cargo fmt -p zencodec -p zencodec-testkit -- --check
+    RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --all-features --no-deps
+    just metadata-semver
+    just api-doc
+
 # Check the independently versioned testkit against its published baseline.
 # Version 0.2.0 carries the approved implementor-only breaking changes.
 testkit-semver:

@@ -10,8 +10,10 @@ What landed vs the phasing below — read this before the design sections, which
 still describe the *proposed* shapes:
 
 - **Phase 0 — native HDR: checkable.** `zencodec-testkit::check_native_hdr_roundtrip`
-  (in `check_all`) proves PQ/HLG CICP + CLLI/MDCV + 16-bit pixels survive
-  `PreserveExact` and that the decoded buffer is labelled PQ/HLG. Validated
+  (in `check_all`) proves RGB PQ/HLG CICP and exact pixels survive
+  `PreserveExact`, with 16-bit samples when declared, and that the decoded
+  buffer has the correct transfer and primaries. CLLI/MDCV retention is
+  required through their separate capability flags. Validated
   against the testkit's reference codec. **Not yet run against zenavif / zenjxl /
   zenpng** — wiring it into each codec's conformance test is the remaining
   Phase 0 work, in those repos.
@@ -91,7 +93,9 @@ let policy/target decide.
 `16→Pq, 18→Hlg` + `intensity_target`), AVIF `nclx`, PNG `cICP`. The remaining
 native-HDR need is just letting high-bit-depth/float pixels through the encoder
 (the type-erased `PixelSlice` already allows it; the codec must accept the format)
-and carrying `Metadata.content_light_level` / `mastering_display`.
+and carrying `Metadata.content_light_level` / `mastering_display` where their
+separate capabilities are declared. Native HDR signal support alone does not
+promise those optional carriers.
 
 **Gain-map HDR is the real gap.** `Encoder::encode(PixelSlice)` takes *one* image;
 a gain-map file is a *composite* (base + gain map + ISO 21496-1 metadata). zencodec
@@ -193,9 +197,10 @@ can round-trip a gain map (decode → `DecodedGainMap` → `GainMapEncodeSource`
   no double-encode quality loss vs accepting pre-encoded for AVIF specifically.
 - **Where does `HdrEmitPolicy` live** — its own enum (like `ColorEmitPolicy`) or a
   field on `EncodePolicy`? Leaning standalone, parallel to color.
-- **`intensity_target` / CLLI/MDCV plumbing** for native HDR — confirm
-  `Metadata.content_light_level` reaches each native encoder (JXL does; verify
-  AVIF/PNG).
+- **`intensity_target` / CLLI/MDCV plumbing** for native HDR — confirm each
+  declared optional metadata channel reaches its native encoder. JXL's
+  intensity target carries a peak but does not preserve complete MaxCLL/MaxFALL
+  or mastering-display metadata; those capabilities must remain false there.
 - **Gain-map math ownership** — lift from `zenjpeg::ultrahdr` into a shared crate
   (ultrahdr-core is the natural home) so JPEG/AVIF/JXL share it; avoid forking.
 - **Effort:** Phase 1 ~S (additive types + one provided method + a test), Phase 2

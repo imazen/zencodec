@@ -126,6 +126,8 @@ pub struct EncodeCapabilities {
     exif: bool,
     xmp: bool,
     cicp: bool,
+    content_light_level: bool,
+    mastering_display: bool,
     // CICP carrier quality (distinct from `cicp` = "has a CICP carrier slot")
     cicp_is_valid_carrier: bool,
     cicp_safe_sole_carrier: bool,
@@ -172,6 +174,8 @@ impl EncodeCapabilities {
             exif: false,
             xmp: false,
             cicp: false,
+            content_light_level: false,
+            mastering_display: false,
             cicp_is_valid_carrier: false,
             cicp_safe_sole_carrier: false,
             stop: false,
@@ -276,9 +280,22 @@ impl EncodeCapabilities {
     pub const fn lossless(&self) -> bool {
         self.lossless
     }
-    /// Whether the codec supports HDR content.
+    /// Whether the codec supports HDR pixels and their native color signal.
+    /// Optional HDR metadata has separate capability flags.
     pub const fn hdr(&self) -> bool {
         self.hdr
+    }
+    /// Whether encoding preserves the complete content-light-level value
+    /// (MaxCLL and MaxFALL). Partial native representations do not imply support.
+    /// Independent of native HDR pixel support.
+    pub const fn content_light_level(&self) -> bool {
+        self.content_light_level
+    }
+    /// Whether encoding preserves mastering-display metadata, within the
+    /// container's fixed-point precision.
+    /// Independent of native HDR pixel support.
+    pub const fn mastering_display(&self) -> bool {
+        self.mastering_display
     }
     /// Whether the codec supports gain map (HDR/SDR) embedding.
     ///
@@ -473,6 +490,16 @@ impl EncodeCapabilities {
         self.hdr = v;
         self
     }
+    /// Set whether complete content-light-level metadata is preserved.
+    pub const fn with_content_light_level(mut self, v: bool) -> Self {
+        self.content_light_level = v;
+        self
+    }
+    /// Set whether mastering-display metadata is preserved.
+    pub const fn with_mastering_display(mut self, v: bool) -> Self {
+        self.mastering_display = v;
+        self
+    }
     /// Set whether gain map (HDR/SDR) embedding is supported.
     pub const fn with_gain_map(mut self, v: bool) -> Self {
         self.gain_map = v;
@@ -539,6 +566,8 @@ impl fmt::Debug for EncodeCapabilities {
             .field("exif", &self.exif)
             .field("xmp", &self.xmp)
             .field("cicp", &self.cicp)
+            .field("content_light_level", &self.content_light_level)
+            .field("mastering_display", &self.mastering_display)
             .field("cicp_is_valid_carrier", &self.cicp_is_valid_carrier)
             .field("cicp_safe_sole_carrier", &self.cicp_safe_sole_carrier)
             .field("stop", &self.stop)
@@ -599,6 +628,8 @@ pub struct DecodeCapabilities {
     exif: bool,
     xmp: bool,
     cicp: bool,
+    content_light_level: bool,
+    mastering_display: bool,
     // Operation support
     stop: bool,
     animation: bool,
@@ -643,6 +674,8 @@ impl DecodeCapabilities {
             exif: false,
             xmp: false,
             cicp: false,
+            content_light_level: false,
+            mastering_display: false,
             stop: false,
             animation: false,
             multi_image: false,
@@ -727,9 +760,21 @@ impl DecodeCapabilities {
     pub const fn access_pattern(&self) -> crate::source::AccessPattern {
         self.access_pattern
     }
-    /// Whether the codec supports HDR content.
+    /// Whether the codec supports HDR pixels and their native color signal.
+    /// Optional HDR metadata has separate capability flags.
     pub const fn hdr(&self) -> bool {
         self.hdr
+    }
+    /// Whether decoding extracts the complete content-light-level value
+    /// (MaxCLL and MaxFALL). A native peak with unknown MaxFALL is partial.
+    /// Independent of native HDR pixel support.
+    pub const fn content_light_level(&self) -> bool {
+        self.content_light_level
+    }
+    /// Whether decoding extracts mastering-display metadata.
+    /// Independent of native HDR pixel support.
+    pub const fn mastering_display(&self) -> bool {
+        self.mastering_display
     }
     /// Whether the codec supports gain map (HDR/SDR) extraction.
     ///
@@ -918,6 +963,16 @@ impl DecodeCapabilities {
         self.hdr = v;
         self
     }
+    /// Set whether complete content-light-level metadata is extracted.
+    pub const fn with_content_light_level(mut self, v: bool) -> Self {
+        self.content_light_level = v;
+        self
+    }
+    /// Set whether mastering-display metadata is extracted.
+    pub const fn with_mastering_display(mut self, v: bool) -> Self {
+        self.mastering_display = v;
+        self
+    }
     /// Set whether gain map (HDR/SDR) extraction is supported.
     pub const fn with_gain_map(mut self, v: bool) -> Self {
         self.gain_map = v;
@@ -987,6 +1042,8 @@ impl fmt::Debug for DecodeCapabilities {
             .field("exif", &self.exif)
             .field("xmp", &self.xmp)
             .field("cicp", &self.cicp)
+            .field("content_light_level", &self.content_light_level)
+            .field("mastering_display", &self.mastering_display)
             .field("stop", &self.stop)
             .field("animation", &self.animation)
             .field("multi_image", &self.multi_image)
@@ -1016,6 +1073,8 @@ mod tests {
     #[test]
     fn encode_default_all_false() {
         let caps = EncodeCapabilities::new();
+        assert!(!caps.content_light_level());
+        assert!(!caps.mastering_display());
         assert!(!caps.icc());
         assert!(!caps.exif());
         assert!(!caps.xmp());
@@ -1041,6 +1100,8 @@ mod tests {
     #[test]
     fn decode_default_all_false() {
         let caps = DecodeCapabilities::new();
+        assert!(!caps.content_light_level());
+        assert!(!caps.mastering_display());
         assert!(!caps.icc());
         assert!(!caps.exif());
         assert!(!caps.xmp());
