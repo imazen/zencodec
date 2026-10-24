@@ -134,5 +134,14 @@ pub fn encode_to_writer<E: Encoder>(
 
 fn is_row_level_refusal<E: core::error::Error + 'static>(e: &E) -> bool {
     use zencodec::CodecErrorExt as _;
-    e.unsupported_operation() == Some(&UnsupportedOperation::RowLevelEncode)
+    match e.error_category() {
+        // An envelope is authoritative even when native detail has no cause chain.
+        Some(category) => {
+            category
+                == zencodec::ErrorCategory::Request(zencodec::RequestError::Unsupported(
+                    UnsupportedOperation::RowLevelEncode,
+                ))
+        }
+        None => e.unsupported_operation() == Some(&UnsupportedOperation::RowLevelEncode),
+    }
 }

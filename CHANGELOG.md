@@ -202,6 +202,8 @@ removes that whole class).
 
 #### Fixed
 
+- `encode_to_writer` recognizes a row-level refusal in the shared error category
+  as well as legacy typed causes, including one-shot BMP encoders.
 - Clamp overclaimed consumption of fetched ranges instead of panicking on the next offer, and require `std` for the driver-probe example (`7cc3d3ec`).
 - Default-feature rustdoc renders gated driver names with their required features instead of unresolved links (`7e3c8666`).
 
@@ -257,6 +259,12 @@ removes that whole class).
 ## zencodec
 
 ## [Unreleased]
+
+### Fixed
+
+- The default `Encoder::begin` refuses unsupported row encoding before any output,
+  allowing `encode_to_writer` to use one-shot encoders that inherit the optional
+  row methods. A strided multi-strip regression checks exact output.
 
 ### Added
 

@@ -159,8 +159,9 @@ pub trait Encoder: Sized {
     /// Calling `begin` is optional; without it, encoders behave as before
     /// and may hold all output until `finish`.
     ///
-    /// Default: accepts the declaration and reports
-    /// [`OutputTiming::AT_FINISH`](crate::encode::OutputTiming::AT_FINISH).
+    /// Default: rejects row-level encoding with
+    /// [`UnsupportedOperation::RowLevelEncode`](crate::UnsupportedOperation::RowLevelEncode),
+    /// so drivers can use [`encode`](Self::encode) for one-shot-only encoders.
     fn begin(
         &mut self,
         width: u32,
@@ -168,7 +169,7 @@ pub trait Encoder: Sized {
         descriptor: zenpixels::PixelDescriptor,
     ) -> Result<crate::encode::OutputTiming, Self::Error> {
         let _ = (width, height, descriptor);
-        Ok(crate::encode::OutputTiming::AT_FINISH)
+        Err(Self::reject(crate::UnsupportedOperation::RowLevelEncode))
     }
 
     /// Encoded bytes ready to send, not yet consumed.

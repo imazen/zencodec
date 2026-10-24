@@ -231,6 +231,13 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed during IO contract qualification (2026-10-24): default `Encoder::begin`
+  accepted row encoding although the default `push_rows` rejects it. It now
+  refuses at `begin`, allowing the writer driver to use one-shot encoding.
+  `tests/encode_write.rs` in zencodec-io covers inherited defaults with strided input.
+  The writer also recognizes the shared error category: actual BMP exposed a
+  second refusal path whose native detail has no typed source chain.
+
 - I/O validation (2026-10-24): `just io-contract-probes` reproduces output
   batching tied to input starvation (#160), spool rejection after consumption
   and unsatisfied lookback admission (#161), and the default-begin one-shot

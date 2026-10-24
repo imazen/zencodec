@@ -156,6 +156,83 @@ fn a_declined_begin_falls_back_to_one_shot() {
     );
 }
 
+/// A one-shot codec inherits every optional row/output method, including begin.
+struct OneShot;
+
+impl Encoder for OneShot {
+    type Error = EncErr;
+
+    fn reject(op: UnsupportedOperation) -> EncErr {
+        EncErr::Unsupported(op)
+    }
+
+    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, EncErr> {
+        Raw::new(false).encode(pixels)
+    }
+}
+
+#[test]
+fn inherited_begin_preserves_the_one_shot_writer_fallback() {
+    let (width, height, stride) = (3, 19, 16);
+    let data: Vec<u8> = (0..stride * height).map(|i| (i * 17 % 251) as u8).collect();
+    let pixels = PixelSlice::new(
+        &data,
+        width,
+        height as u32,
+        stride,
+        PixelDescriptor::RGBA8_SRGB,
+    )
+    .unwrap();
+    let expected = OneShot.encode(pixels.clone()).unwrap();
+    let mut writer = Recorder::default();
+    let report = encode_to_writer(OneShot, pixels, &mut writer).unwrap();
+    assert_eq!(report.timing, OutputTiming::AT_FINISH);
+    assert_eq!(report.bytes, expected.len() as u64);
+    assert_eq!(writer.data, expected.data());
+    assert_eq!(writer.writes, [expected.len()]);
+}
+
+/// The shared envelope need not expose UnsupportedOperation as a typed cause.
+struct CategorizedOneShot(UnsupportedOperation);
+impl Encoder for CategorizedOneShot {
+    type Error = zencodec::CodecError;
+    fn reject(op: UnsupportedOperation) -> Self::Error {
+        zencodec::CodecError::new(
+            Some("one-shot-test"),
+            zencodec::ErrorCategory::Request(zencodec::RequestError::Unsupported(op)),
+        )
+    }
+    fn begin(&mut self, _: u32, _: u32, _: PixelDescriptor) -> Result<OutputTiming, Self::Error> {
+        Err(Self::reject(self.0))
+    }
+    fn encode(self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error> {
+        assert_eq!(self.0, UnsupportedOperation::RowLevelEncode);
+        Ok(OneShot.encode(pixels).unwrap())
+    }
+}
+
+#[test]
+fn categorized_refusal_falls_back_only_for_row_encoding() {
+    let data = image(3, 19);
+    for op in [
+        UnsupportedOperation::RowLevelEncode,
+        UnsupportedOperation::PixelFormat,
+    ] {
+        let pixels = slice(&data, 3, 19);
+        let expected = OneShot.encode(pixels.clone()).unwrap();
+        let mut writer = Recorder::default();
+        let result = encode_to_writer(CategorizedOneShot(op), pixels, &mut writer);
+        if op == UnsupportedOperation::RowLevelEncode {
+            let report = result.unwrap();
+            assert_eq!(report.bytes, expected.len() as u64);
+            assert_eq!(writer.data, expected.data());
+        } else {
+            assert!(matches!(result, Err(EncodeWriteError::Encoder(_))));
+            assert!(writer.data.is_empty());
+        }
+    }
+}
+
 /// Fails after accepting `left` bytes.
 struct Failing {
     left: usize,

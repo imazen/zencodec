@@ -202,3 +202,8 @@ io-instr-probe cpu="4" lo="20000" hi="60000":
         echo "$m $n $c"
       done
     done
+
+# Complete shared IO contract regression gate, including downstream testkit uses.
+io-contract-check:
+    cargo test --workspace --all-features --locked
+    cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
