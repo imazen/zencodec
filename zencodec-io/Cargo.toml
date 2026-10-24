@@ -49,7 +49,16 @@ required-features = ["std"]
 name = "drvprobe"
 required-features = ["std"]
 
+[[example]]
+name = "io_contract_probes"
+required-features = ["tokio"]
+
 [[bench]]
 name = "drivers"
 harness = false
 required-features = ["std"]
+
+[[bench]]
+name = "transcode"
+harness = false
+required-features = ["tokio"]

@@ -64,6 +64,10 @@ contract-diff published_dir output revision="origin/main":
 contract-probes:
     cargo run -p zencodec --example contract_audit_probes
 
+# Observational I/O defect probes plus exact output and stalled-writer checks.
+io-contract-probes:
+    cargo run -p zencodec-io --features tokio --example io_contract_probes
+
 contract-semver-minimal:
     cargo semver-checks check-release -p zencodec --baseline-version 0.1.26 --only-explicit-features
 

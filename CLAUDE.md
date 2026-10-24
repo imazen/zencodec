@@ -231,6 +231,13 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- I/O validation (2026-10-24): `just io-contract-probes` reproduces output
+  batching tied to input starvation (#160), spool rejection after consumption
+  and unsatisfied lookback admission (#161), and the default-begin one-shot
+  writer failure (#162). Async range requests also fail to reuse prefetched
+  window bytes (#163), making fast-start MP4 fail on a forward source at the
+  default read size. Evidence: `benchmarks/io_validation_2026-10-24.md`.
+
 - PR138 audit update (2026-10-13): the historical contract gaps below are fixed
   on the PR for timing capability, editor-free XMP preservation and report bounds.
   Adversarial review also fixed partial child-plan mutation, mixed-input plans,

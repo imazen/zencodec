@@ -207,6 +207,11 @@ removes that whole class).
 
 #### Added
 
+- Observational I/O contract probes and a high-expansion transcode benchmark
+  for output backpressure, spool admission, and one-shot encoder fallback.
+  Results are in `benchmarks/io_validation_2026-10-24.md`; library behavior
+  is unchanged.
+
 - `zencodec-io` (unpublished): `ByteStepper` and pull cursors (`SliceCursor`,
   `ReadAtCursor`, `ReadCursor`, `tokio_io::AsyncCursor`) so every driver serves any
   byte-stepping stage, demuxers included; the image drivers are loops over them with
