@@ -1,0 +1,42 @@
+[package]
+name = "io-validation"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+members = ["vendor/zenmp4", "vendor/zenivf", "vendor/zenwebm"]
+exclude = ["vendor/zenbitmaps"]
+resolver = "3"
+
+[dependencies]
+zencodec = { path = "../..", version = ">=0.1.27, <0.3.0", features = ["std"] }
+zencodec-io = { path = "../../zencodec-io", features = ["tokio"] }
+zencodec-media = { path = "../../zencodec-media" }
+zencodec-media-testkit = { path = "../../zencodec-media-testkit" }
+zenpixels = ">=0.2.16, <0.4.0"
+enough = "0.4.4"
+tokio = { version = "1.53.3", features = ["rt-multi-thread", "time", "macros", "io-util", "sync"] }
+zenbench = "0.1.11"
+zenmp4 = { path = "vendor/zenmp4" }
+zenwebm = { path = "vendor/zenwebm" }
+zenivf = { path = "vendor/zenivf" }
+zenbitmaps = { path = "vendor/zenbitmaps", features = ["std", "zencodec", "inventory", "qoi", "bmp"] }
+
+[patch.crates-io]
+zencodec = { path = "../.." }
+
+[patch."https://github.com/imazen/zencodec"]
+zencodec = { path = "../.." }
+zencodec-io = { path = "../../zencodec-io" }
+zencodec-media = { path = "../../zencodec-media" }
+zencodec-media-testkit = { path = "../../zencodec-media-testkit" }
+
+[profile.release]
+debug = 1
+lto = "thin"
+
+[[bench]]
+name = "disk"
+harness = false
+

@@ -50,3 +50,56 @@ contract probes: rc=0 0s | peak-RSS 0.18GiB | min-avail 16125MiB | peak-load 0.5
 The probe wrapper includes Cargo/build work. It does not isolate decoder
 heap usage. It establishes neither a memory bound for a codec nor a
 network latency bound.
+
+## Positional file reads
+
+`perf/io-validation/benches/disk.rs` compares the current `FileReadAt`
+(seek then read) with a private adapter using safe Unix `FileExt::read_exact_at`.
+Both use the existing `ReadAt` trait, the same boxed dispatch, checked lengths,
+and reusable output buffers. The test checks every returned byte against an
+authored formula before timing. No new codec trait is needed for this adapter.
+
+These are **warm page-cache** measurements on r7900x, Rust 1.99.1,
+zenbench 0.1.11, CPUs 2,3 via `taskset`, without `target-cpu=native`.
+A deterministic 64 MiB file supplies 128 sequential or dispersed reads per
+iteration. Opening, initial generation and correctness checks are outside
+the timed loop. Each row below is the median of three interleaved passes;
+units are microseconds per 128 reads, not per read.
+
+| Read pattern | Current seek/read | Positional read |
+|---|---:|---:|
+| Sequential, 256 bytes | 102.95 | 65.34 |
+| Dispersed, 256 bytes | 102.96 | 65.29 |
+| Sequential, 4096 bytes | 109.11 | 71.33 |
+| Dispersed, 4096 bytes | 109.58 | 71.42 |
+| Sequential, 65536 bytes | 280.98 | 242.40 |
+| Dispersed, 65536 bytes | 317.96 | 280.23 |
+
+The command was `IO_DISK_FILE=<fixture> taskset -c 2,3 cargo bench -p
+io-validation --bench disk -- --cpu-policy=unrestricted --median-of-passes=3`
+from the standalone harness. Its checked dependency graph is preserved in
+`perf/io-validation/locks/harness.lock`; the root probe graph is in
+`perf/io-validation/locks/workspace.lock`. Restore them in an export outside
+workspace path patches. `setup.py` supplies the pinned external source trees.
+
+A separate `strace -c -e read,pread64,lseek` run used 128 verification reads
+and 100 repetitions of 128 timed-shape reads (12928 data reads):
+
+| Adapter | read | lseek | pread64 |
+|---|---:|---:|---:|
+| Current | 12933 | 12931 | 2 |
+| Positional | 5 | 2 | 12930 |
+
+Counts include process startup. This confirms removal of one seek per data
+read; strace time is not substituted for the zenbench timing. The tested
+prototype is Unix-specific. Cold storage, queue depth, concurrent file reads,
+Windows offset semantics and macOS performance are not measured here.
+
+```text
+disk comparison: rc=0 35s | peak-RSS 0.29GiB | min-avail 15910MiB | peak-load 1.58
+seek syscall probe: rc=0 0s | peak-RSS 0.00GiB | min-avail 16141MiB | peak-load 0.39
+positional syscall probe: rc=0 0s | peak-RSS 0.00GiB | min-avail 16137MiB | peak-load 0.36
+```
+
+The wrapper rounds the small syscall-probe RSS to 0.00 GiB; that does not
+mean zero memory use. The disk comparison wrapper includes build work.
