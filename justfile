@@ -68,6 +68,28 @@ contract-probes:
 io-contract-probes:
     cargo run -p zencodec-io --features tokio --example io_contract_probes
 
+# Pinned external codecs and containers; use an export outside workspace patches.
+io-validation-setup:
+    python3 perf/io-validation/setup.py
+
+io-validation-test:
+    cargo test --manifest-path perf/io-validation/Cargo.toml --workspace --locked
+
+io-validation-clippy:
+    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --all-targets --locked -- -D warnings
+
+io-validation-batching output cpus="2,3" suite="synthetic":
+    bash perf/io-validation/run-batching.sh "{{output}}" "{{cpus}}" "{{suite}}"
+
+io-validation-disk file cpus="2,3":
+    IO_DISK_FILE="{{file}}" taskset -c "{{cpus}}" cargo bench --manifest-path perf/io-validation/Cargo.toml -p io-validation --bench disk --locked -- --cpu-policy=unrestricted --median-of-passes=3
+
+io-validation-transport mp4 webm output:
+    bash perf/io-validation/run-transport.sh "{{mp4}}" "{{webm}}" "{{output}}"
+
+io-validation-oracle mp4 webm output:
+    python3 perf/io-validation/strict-oracle.py "{{mp4}}" "{{webm}}" "{{output}}"
+
 contract-semver-minimal:
     cargo semver-checks check-release -p zencodec --baseline-version 0.1.26 --only-explicit-features
 

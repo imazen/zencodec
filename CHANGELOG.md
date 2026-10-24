@@ -209,6 +209,9 @@ removes that whole class).
 
 - Observational I/O contract probes and a high-expansion transcode benchmark
   for output backpressure, spool admission, and one-shot encoder fallback.
+  A pinned standalone harness adds positional-file comparisons, native QOI
+  batching and boundary tests, and MP4/WebM/IVF transport checks with a strict
+  FFmpeg decode oracle. Private prototypes run only in exported source trees.
   Results are in `benchmarks/io_validation_2026-10-24.md`; library behavior
   is unchanged.
 

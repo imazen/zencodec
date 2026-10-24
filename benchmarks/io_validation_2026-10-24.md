@@ -202,3 +202,158 @@ synthetic batching: rc=0 34s | peak-RSS 0.21GiB | min-avail 15941MiB | peak-load
 QOI batching: rc=0 46s | peak-RSS 0.29GiB | min-avail 15607MiB | peak-load 2.01
 bounded driver tests: rc=0 1s | peak-RSS 0.28GiB | min-avail 16123MiB | peak-load 0.36
 ```
+
+## Video, audio and container transport
+
+Source pins are zenmp4 from zenavif
+[`a7638f6e0655914fb15fe4633ac26425533756c8`](https://github.com/imazen/zenavif/commit/a7638f6e0655914fb15fe4633ac26425533756c8),
+and zenivf/zenwebm from zenextras
+[`ae920c1e2ac0fe0e6e2fcb709d99934ba36ea49c`](https://github.com/imazen/zenextras/commit/ae920c1e2ac0fe0e6e2fcb709d99934ba36ea49c).
+Their zencodec dependencies are patched to the baseline export with one
+shared zencodec type graph. The container contract suites pass, including
+timing, malformed-input refusal, limits, seek results, forward-only mux
+admission and output patch honesty.
+
+The pinned FFmpeg oracles ran with FFmpeg 8.0.1-3ubuntu2. They generated
+AV1/Opus, VP9/Opus, VP9 alpha, H.264/AAC, MPEG-4 Part 2/AAC and FLAC cases,
+including faststart, tail-indexed, fragmented and live layouts:
+
+- MP4: nine originals and eighteen progressive/fragmented copies; packet
+  comparisons, eighteen decoded-content comparisons and 162 seek checks pass.
+- WebM/Matroska: five originals and five copies; packet and decoded-content
+  comparisons and thirty seek checks pass.
+- `strict-oracle.py` independently requires successful FFmpeg exits with
+  `-xerror -err_detect explode`, maps all streams, and compares ordered
+  decoded size/hash pairs per stream. All 23 copies match their originals,
+  with 37 complete successful decodes. This closes the partial-output risk
+  in the MP4 script's `|| true` pipeline. Packet oracles separately check
+  timing; this stricter content comparison deliberately ignores timestamps.
+- The AV1/Opus and VP9/Opus WebM originals and copies emit an Opus-header
+  diagnostic even though FFmpeg exits successfully and their full decoded
+  outputs match. These four files are not claimed to have diagnostic-free
+  FFmpeg runs. No native zenavif video encode/decode qualification is implied.
+
+`media_transport` then drives all 27 MP4 files, ten WebM/Matroska files and
+two IVF extractions through slice input, short async random reads and a
+forward async body. It compares complete track/packet/event representations,
+including payload bytes, timing and side data. The async sources suspend
+between reads. Chunk sizes are 1, 7, 1024 and 65536 bytes.
+
+| Container | Random source, equal to slice | Forward source, equal to slice | Forward refusals |
+|---|---:|---:|---:|
+| MP4 | 108 / 108 | 3 / 108 | 105 / 108 |
+| WebM/Matroska | 40 / 40 | 40 / 40 | 0 / 40 |
+| IVF | 8 / 8 | 8 / 8 | 0 / 8 |
+
+The [per-file CSV](io_transport_2026-10-24.csv) preserves every cell's outcome
+and the 65536-byte random-source transfer counts. Refusals are observations,
+not desirable behavior asserted by the test. No real HTTP server, request
+latency or network-throughput measurement is involved.
+
+### Two independent obstacles to forward MP4
+
+1. **Discarded prefetch, [zencodec #163](https://github.com/imazen/zencodec/issues/163).**
+   The 26435-byte faststart AV1/Opus file works at chunks 1, 7 and 1024,
+   but the default 65536-byte chunk fails with `BeyondWindow` after the
+   driver replaces prefetched bytes when switching from `AtLeast` to `Range`.
+   Its random-source equivalent performs 122 reads and transfers 50666 bytes.
+   The private active-window reuse prototype makes the forward case pass at
+   all four sizes; the large-chunk random case uses one read and transfers
+   exactly 26435 bytes, with all 123 events unchanged. The prototype only
+   handles wholly contained ranges. Partial overlap, suffix retention,
+   synchronous drivers and adversarial bounds still need a production fix.
+2. **Demuxer backtracking, [zenavif #72](https://github.com/imazen/zenavif/issues/72).**
+   Fragmented MP4 still refuses forward input with the window prototype,
+   including one-byte reads. After a fragment's packets, the demuxer returns
+   to the earlier `mdat` header because its scan position remains at the end
+   of `moof`. This is independent of read-ahead. Its current `RandomAccess`
+   declaration is honest; enabling supported monotone layouts requires a
+   demuxer change. Tail-indexed progressive MP4 still intrinsically needs
+   ranges or an explicit spool/replay policy.
+
+### Relevant review queue, checked 2026-10-24
+
+- [zencodec PR152](https://github.com/imazen/zencodec/pull/152),
+  [zenavif PR69](https://github.com/imazen/zenavif/pull/69),
+  [PR70](https://github.com/imazen/zenavif/pull/70),
+  [PR71](https://github.com/imazen/zenavif/pull/71), and
+  [zenextras PR50](https://github.com/imazen/zenextras/pull/50) are merged:
+  media sessions, native AV1 sessions/cancellation and these containers are
+  current code, not merely pending proposals.
+- [zenrav1e PR44](https://github.com/imazen/zenrav1e/pull/44) remains open at
+  `9057c4bacf1d8a23974e32de09fd4446a1cc525a` (small frames and lossless inter
+  samples). The inspected zenavif `media-encode` dependency already pins
+  that exact head. An open PR can therefore be in the active dependency
+  graph. Its native sequence corpus and performance claims were **not
+  rerun** by this I/O investigation.
+- [zenpipe PR86](https://github.com/imazen/zenpipe/pull/86) remains a draft at
+  `330eea4bee0b17567c80730edbea3feef742f860`, stacked on PR85, for media pins
+  and explicit SDR conversion. This experiment does not qualify that
+  pipeline's color conversion or timing contracts.
+- [zenjxl-decoder PR60](https://github.com/imazen/zenjxl-decoder/pull/60) and
+  [zenjxl PR20](https://github.com/imazen/zenjxl/pull/20) concern movable native
+  decoder state and frame-at-a-time animation; that is distinct from feeding
+  network bytes incrementally. [WebP PR105](https://github.com/imazen/zenwebp/pull/105)
+  has newer cancellation work than its recorded benchmark head. None of
+  those PRs is performance-qualified by the QOI or container results here.
+
+```text
+MP4 oracle: rc=0 14s | peak-RSS 0.25GiB | min-avail 15879MiB | peak-load 0.63
+WebM oracle: rc=0 5s | peak-RSS 0.20GiB | min-avail 15881MiB | peak-load 0.38
+strict decode oracle: rc=0 2s | peak-RSS 0.07GiB | min-avail 16167MiB | peak-load 0.22
+full async container matrix: rc=0 2s | peak-RSS 0.21GiB | min-avail 16026MiB | peak-load 0.45
+final harness/container tests: rc=0 1s | peak-RSS 0.19GiB | min-avail 15806MiB | peak-load 12.72
+final harness clippy: rc=0 0s | peak-RSS 0.16GiB | min-avail 15611MiB | peak-load 12.72
+```
+
+The final correctness/Clippy runs occurred under higher host load; no timing
+comparison is drawn from them. These are wrapper RSS measurements, not
+isolated codec working-set bounds.
+
+## Scope justified by these experiments
+
+Implement the range-window repair, checked input/output budgets and bounded
+transcode scheduling in drivers; add a positional file adapter under the
+existing `ReadAt` contract. Select batching policy using actual codecs and
+natural strip sizes. A row count is only a diagnostic threshold here; video
+needs packet/frame-aware work limits and byte limits across all tracks.
+
+Retain the media API's existing `MuxTiming`, `MuxHint::forward_only` and
+`MuxFinish::patches`. A socket requires forward emission; a file may apply
+absolute patches; replayable input pixels are a separate requirement for a
+multi-pass encoder. Patchability cannot eliminate reference frames, reorder
+queues or whole-frame processing inside a video codec.
+
+No experiment here calls for a new universal seek abstraction or a core
+[nostdio](https://docs.rs/nostdio/0.2.0/nostdio/) dependency. Its synchronous
+Read/Write/Seek compatibility can be adapted when a concrete parser needs
+it. The measured blockers are already expressible by the existing sans-I/O,
+positional-read and media-output contracts.
+
+Before selecting production defaults, the remaining qualification gates are:
+
+1. Real HTTP range and streaming-body fixtures: unknown length, ignored or
+   malformed ranges, changing object identity, cancellation/timeouts,
+   out-of-order responses, bounded in-flight requests and overfetch. Measure
+   first usable output, throughput, request count and bytes at controlled RTTs.
+2. Cold and warm local files, concurrent readers and multiple platforms.
+   Measure allocations/copies and queue occupancy, and use heap profiling or
+   process peak RSS for actual working-memory claims. Do not derive a codec
+   memory bound from the logical queues measured here.
+3. Native JPEG/PNG/WebP/JXL and AV1 session/PR heads: natural strip/frame
+   geometry, strided pixels, high expansion, 8/10/12-bit content, B-frame
+   reordering, drain/reset/seek and all-track backpressure. Compare pixels,
+   metadata and timestamps with independent decoders. Keep native streaming
+   distinct from whole-file compatibility adapters.
+4. Fault injection at budget and arithmetic boundaries, short/zero writes,
+   interrupted offset reads, cancellation during blocking work and partial
+   finalization. Admit patch/replay/spool needs before emitting output.
+
+Reproduction commands and prototype limitations are in the
+[harness README](../perf/io-validation/README.md). Follow-up implementation
+is tracked in [#159](https://github.com/imazen/zencodec/issues/159),
+[#160](https://github.com/imazen/zencodec/issues/160),
+[#161](https://github.com/imazen/zencodec/issues/161),
+[#162](https://github.com/imazen/zencodec/issues/162),
+[#163](https://github.com/imazen/zencodec/issues/163) and
+[zenavif #72](https://github.com/imazen/zenavif/issues/72).
