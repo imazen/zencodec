@@ -103,3 +103,102 @@ positional syscall probe: rc=0 0s | peak-RSS 0.00GiB | min-avail 16137MiB | peak
 
 The wrapper rounds the small syscall-probe RSS to 0.00 GiB; that does not
 mean zero memory use. The disk comparison wrapper includes build work.
+
+## Output batching: correctness versus scheduling cost
+
+`perf/io-validation/prototype.py` applies private variants to an exported
+source tree and restores the original afterward. It changes only transcode
+batching, leaving `decode_async`'s policy alone. The variants are:
+
+- Baseline: continue until input starvation or completion.
+- Rows: yield after each step that reports rows.
+- Bounded: yield after at least 64 produced rows or 65536 pending bytes.
+
+The last policy is a trial threshold, **not a hard allocation bound**. A
+decoder step cannot be interrupted at an arbitrary row; a whole-file step
+still produces the whole frame. Encoders can also retain work internally.
+
+For the 256 × 1024 fixture, both read sizes and both compute placements
+preserve every output byte and stop production during a pending write.
+Observed first-write and queue behavior:
+
+| Variant | Rows/step | Rows produced before first write | Peak pending encoded bytes | Pool jobs |
+|---|---:|---:|---:|---:|
+| Baseline | 1 / 16 / 1024 | 1024 | 1048576 | 2 |
+| Rows | 1 | 2 | 1024 | 1026 |
+| Rows | 16 | 32 | 16384 | 66 |
+| Rows | 1024 | 1024 | 1048576 | 3 |
+| Bounded | 1 / 16 | 64 | 65536 | 18 |
+| Bounded | 1024 | 1024 | 1048576 | 3 |
+
+`EncoderSink` hands the previous strip to the encoder when asked for the
+next buffer. That accounts for the first write occurring after two strips
+in the per-step variant. Queue counters are logical bytes, not heap/RSS.
+
+`run-batching.sh` builds and hashes each binary, then runs baseline/rows/
+bounded and the reverse order. Inline and pool arms are interleaved inside
+each binary. Values below are the means reported for the two separate
+passes, in microseconds per image. They are exploratory comparisons across
+binaries; no cross-binary confidence interval is claimed.
+
+| Variant | Rows/step | Inline, pass 1 / 2 | Pool, pass 1 / 2 |
+|---|---:|---:|---:|
+| Baseline | 1 | 92.7 / 92.1 | 108.7 / 110.1 |
+| Rows | 1 | 183.6 / 173.5 | 6966.2 / 6177.7 |
+| Bounded | 1 | 109.4 / 108.5 | 268.7 / 260.9 |
+| Baseline | 16 | 55.0 / 49.9 | 65.1 / 64.6 |
+| Rows | 16 | 51.4 / 51.0 | 507.7 / 443.0 |
+| Bounded | 16 | 59.8 / 55.2 | 207.4 / 192.4 |
+| Baseline | 1024 | 53.3 / 55.3 | 79.0 / 74.3 |
+| Rows | 1024 | 50.9 / 64.1 | 85.0 / 87.6 |
+| Bounded | 1024 | 54.4 / 50.4 | 85.9 / 83.4 |
+
+This rejects one worker-pool handoff per row as a general policy. Batching
+materially reduces those handoffs while getting output to the writer earlier.
+It does not make the added scheduling cost disappear.
+
+### Actual QOI codec
+
+The harness uses zenbitmaps
+[`11fbd887985e59769d2aeb48295767b7d04209b9`](https://github.com/imazen/zenbitmaps/commit/11fbd887985e59769d2aeb48295767b7d04209b9).
+The correctness fixture is authored 37 × 29 RGBA with a pixel-aligned
+strided layout. Direct encode and drained encode have identical bytes;
+one-shot, slice, stream-pump and async decode produce the authored pixels.
+Slice/pump read sizes are 1, 2, 3, 7, 31, 64, 4096 and 65536 bytes; async
+sizes are 1, 7, 64 and 65536. All 5387 truncated prefixes agree with the
+one-shot decoder's acceptance and pixels. Both paths accept the final eight
+prefixes missing some/all trailer bytes. This tests transport parity, not
+an independent claim about strict QOI validity.
+
+The timing fixture transcodes 512 × 512 RGBA QOI to QOI and checks exact
+encoded bytes on every iteration. Solid pixels encode to 4255 input bytes;
+changing pixels encode to 1048595. Codec/source/output setup and the byte
+comparison are included equally in all timed arms; runtime construction is
+outside the iteration. Read placement is in-memory, so these are scheduling
+and codec measurements, not network results.
+
+| Variant | Solid inline, µs | Solid pool, µs | Changing inline, ms | Changing pool, ms |
+|---|---:|---:|---:|---:|
+| Baseline | 285.8 / 286.5 | 312.4 / 305.9 | 1.2 / 1.2 | 1.4 / 1.5 |
+| Rows | 287.6 / 285.9 | 368.3 / 359.6 | 1.3 / 1.3 | 1.8 / 1.8 |
+| Bounded | 286.3 / 286.5 | 364.3 / 357.0 | 1.2 / 1.3 | 1.6 / 1.5 |
+
+The printed millisecond values are rounded by zenbench; no finer precision
+or significance is inferred. These two synthetic images do not select
+production thresholds for other codecs. The existing driver tests also
+pass with the bounded prototype, including cancellation, short reads,
+write errors and stuck consumers.
+
+The observational BMP probe confirms [#162](https://github.com/imazen/zencodec/issues/162)
+with an actual codec: a 2 × 2 direct encode emits 70 bytes, while the writer
+helper reports `RowLevelEncode` and emits none. A four-range coalescing
+probe requests 32 bytes at offsets 0, 64, 8192 and 16384. Gaps of 0, 32,
+4096 and 8192 yield respectively (4 requests, 128 bytes), (3, 160),
+(3, 160) and (1, 16416). Thus a gap setting alone is neither an overfetch
+budget nor a transport-independent optimization.
+
+```text
+synthetic batching: rc=0 34s | peak-RSS 0.21GiB | min-avail 15941MiB | peak-load 0.99
+QOI batching: rc=0 46s | peak-RSS 0.29GiB | min-avail 15607MiB | peak-load 2.01
+bounded driver tests: rc=0 1s | peak-RSS 0.28GiB | min-avail 16123MiB | peak-load 0.36
+```
