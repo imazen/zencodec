@@ -202,6 +202,8 @@ removes that whole class).
 
 #### Fixed
 
+- `FileReadAt` uses safe positional file reads on Unix/Windows, with seek/read
+  retained for other targets. Construction reads metadata without moving the cursor.
 - Synchronous and async cursors reuse prefetched ranges, read only a missing
   overlapping tail, and reuse batched ranges for sequential requests. Already
   satisfied sequential requests no longer trigger a prefetch refill.

@@ -66,3 +66,45 @@ run-heavy: done rc=0 4s | peak-RSS 0.21GiB | min-avail 15860MiB | peak-load 0.57
 Reproduce with the baseline report's export and lock setup, the current source,
 `just io-contract-check`, `just io-validation-test`, and
 `just io-validation-media <mp4-dir> <webm-dir> <ivf-dir>`.
+
+## Positional files
+
+`FileReadAt` now uses safe standard-library positional operations on Unix and
+Windows, with the old seek/read fallback on other platforms. Length comes from
+metadata instead of a seek to end. Windows `seek_read` is allowed to update the
+shared file position; Unix `read_exact_at` does not. Short reads and Interrupted
+are handled by the standard Unix helper / explicit Windows loop.
+
+Tests cover reversed reads, short EOF, overflow, truncation after opening, and
+(on Unix) a sparse read above 4 GiB and two concurrent sources sharing a file
+handle. Every returned byte is compared with authored values. The Unix test
+also verifies construction and reads preserve an independent shared cursor.
+The benchmark retains a frozen seek/read control from the baseline so its label
+cannot accidentally start measuring the improved implementation.
+
+Warm page-cache results, 128 reads per sample, 64 MiB authored file, median of
+three zenbench passes on r7900x (microseconds):
+
+| Pattern | Bytes/read | Frozen seek/read | Current FileReadAt |
+|---|---:|---:|---:|
+| Sequential | 256 | 101.80 | 64.53 |
+| Dispersed | 256 | 102.75 | 65.28 |
+| Sequential | 4096 | 108.93 | 71.45 |
+| Dispersed | 4096 | 109.44 | 71.65 |
+| Sequential | 65536 | 284.04 | 246.13 |
+| Dispersed | 65536 | 326.18 | 287.54 |
+
+Syscall probe: 12928 verified data reads with current FileReadAt produce 12930
+pread64, five read and two lseek calls including process startup. The baseline
+had 12931 lseek calls for the same workload. Disk cache misses and Windows/macOS
+performance are not measured by this table. Zenbench marks the CPU placement
+unverified under the explicitly unrestricted policy; these are exploratory
+within-process comparisons on a shared host.
+
+```
+file tests/build/syscalls: rc=0 7s | peak-RSS 0.30GiB | min-avail 15727MiB | peak-load 0.34
+warm file comparison: rc=0 42s | peak-RSS 0.23GiB | min-avail 15682MiB | peak-load 1.15
+```
+
+Commands: `just io-validation-disk <file> 2,3`, then
+`strace -c -e read,pread64,lseek target/release/disk_probe file 100 <file>`.

@@ -6,12 +6,17 @@ use disk_support::*;
 use zencodec::source::{ReadAt, SourceError};
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    assert_eq!(args.len(), 4, "disk_probe seek|positional repetitions file");
+    assert_eq!(
+        args.len(),
+        4,
+        "disk_probe seek|positional|file repetitions file"
+    );
     let repetitions: usize = args[2].parse().unwrap();
     let path = std::path::Path::new(&args[3]);
     fixture(path);
     let mut source: Box<dyn ReadAt<Error = SourceError>> = match args[1].as_str() {
-        "seek" => Box::new(zencodec_io::FileReadAt::open(path).unwrap()),
+        "seek" => Box::new(SeekRead::open(path).unwrap()),
+        "file" => Box::new(zencodec_io::FileReadAt::open(path).unwrap()),
         "positional" => Box::new(Positional::new(std::fs::File::open(path).unwrap()).unwrap()),
         _ => panic!("unknown mode"),
     };

@@ -20,14 +20,14 @@ fn disk(suite: &mut Suite) {
                 for positional in [false, true] {
                     let mut source: Box<dyn ReadAt<Error = zencodec::source::SourceError> + Send> =
                         if positional {
-                            Box::new(Positional::new(std::fs::File::open(&path).unwrap()).unwrap())
-                        } else {
                             Box::new(zencodec_io::FileReadAt::open(&path).unwrap())
+                        } else {
+                            Box::new(SeekRead::open(&path).unwrap())
                         };
                     let offsets = offsets(size, random);
                     verify(&mut *source, size, &offsets);
                     let label = if positional {
-                        "positional"
+                        "file-positional"
                     } else {
                         "seek-read"
                     };
