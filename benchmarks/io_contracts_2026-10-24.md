@@ -108,3 +108,73 @@ warm file comparison: rc=0 42s | peak-RSS 0.23GiB | min-avail 15682MiB | peak-lo
 
 Commands: `just io-validation-disk <file> 2,3`, then
 `strace -c -e read,pread64,lseek target/release/disk_probe file 100 <file>`.
+
+## Native AV1 sessions and pending PR support
+
+The current zenavif main is still `a7638f6e`, with media encoding pinned to the
+still-open [zenrav1e PR 44](https://github.com/imazen/zenrav1e/pull/44) head
+`9057c4bacf1d8a23974e32de09fd4446a1cc525a`. With export-only patches to current
+zencodec `c3a5ddd1`, `cargo test --no-default-features --features media-encode
+--test media_session` passes 14/14 tests, with no skips. [Test output](io_av1_sessions_2026-10-24.log).
+
+The sample-exact matrix is seven frames in each of these six geometries:
+8-bit 420 33x17, 8-bit mono 16x16, 10-bit 422 40x9, 10-bit 444 7x13,
+12-bit 420 24x24, 12-bit 444 18x30. Other tests exercise queues 1/3/64,
+the default-speed short queue, owned backend cancellation, av1C/sequence-header
+agreement, reset with previously returned frames still valid, and a 30-frame
+10-bit 420 lossy sequence whose output is in presentation order. No SVT feature
+or full media corpus was enabled. These are native session correctness results,
+not AV1 speed, HDR conversion or integrated network playback measurements.
+The zenpipe media draft remains open at `330eea4b`; its full pipeline was not run.
+
+```
+run-heavy: done rc=0 104s | peak-RSS 0.87GiB | min-avail 14475MiB | peak-load 2.91
+```
+
+## Executable admission and ownership candidate
+
+`perf/io-validation/src/admission.rs` is private experiment code, with tests in
+`tests/admission.rs`. It does not add a zencodec library type. It implements:
+
+- Checked all-dependency plans: overflow/extent/descriptor admission; union
+  overlaps; merge gaps only within the byte allowance; split large spans before
+  allocating payload storage. This is explicitly not the existing any-request
+  `requested()` contract.
+- Shared payload-byte and allocation-count reservations. A transfer allocates
+  after reservation; a published lease retains the allocation charge through
+  cache/decoder clones until its final owner drops. Partial, oversized and
+  wrong-identity responses do not publish.
+- A bounded ordered completion queue, distinct from transport completion order;
+  stale seek generations and duplicate ordinals are refused. To prevent a full
+  queue behind a missing head, callers must admit the head before later work.
+
+Tests cover arithmetic/split limits, concurrent admission, cancellation release,
+clone ownership, stale results and actual strided QOI decoded from fragmented
+leased input through the current driver. Limits account payload capacity and
+object count, not total RSS, codec heap, network-library buffers or arbitrary
+caller allocations. HTTP validation must establish the opaque identity token;
+the token itself is not an HTTP implementation. A scheduler, waiter fairness,
+cache eviction and fallible metadata-node allocation are not implemented here.
+The ordered queue establishes decode ordinal order; presentation reordering
+remains the video session's job.
+
+[Raw zenbench output](io_admission_2026-10-24.log), median of three passes:
+
+| Input bytes | Vec allocation/copy + Arc | Reservation/transfer/copy + lease |
+|---:|---:|---:|
+| 1024 | 17.8 ns | 53.4 ns |
+| 65536 | 805 ns | 1220 ns |
+
+The 1024-byte lease cell has 25% CV; do not use it as a stable overhead ratio.
+Both arms allocate/copy and clone/drop one shared owner; the candidate also zeros
+transfer storage and checks identity/completion. This measures that whole path,
+not mutex cost alone. It does not measure a contended HTTP scheduler. Preserve
+borrowed resident-slice paths; ownership is for bytes that must outlive an I/O
+call or cross a task boundary. The correctness tests and standalone all-target
+clippy pass.
+
+```
+run-heavy: done rc=0 18s | peak-RSS 0.27GiB | min-avail 15778MiB | peak-load 0.85
+```
+
+Reproduce with `just io-admission-check` and `just io-admission-bench 2,3`.

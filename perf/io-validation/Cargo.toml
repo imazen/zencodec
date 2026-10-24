@@ -44,3 +44,7 @@ harness = false
 name = "qoi"
 harness = false
 
+
+[[bench]]
+name = "admission"
+harness = false

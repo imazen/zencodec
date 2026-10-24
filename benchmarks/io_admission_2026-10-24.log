@@ -1,0 +1,81 @@
+Candidate source and harness in this commit; library baseline c3a5ddd132cd4fd407e4cb43e013fed9cf75958b.
+run-heavy: mem-cap=12G (cgroup, hard) jobs=4/24 avail=16080MiB :: bash -c cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test admission --locked && cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --all-targets --locked -- -D warnings && taskset -c 2,3 cargo bench --manifest-path perf/io-validation/Cargo.toml -p io-validation --bench admission --locked -- --cpu-policy=unrestricted --median-of-passes=3
+   Compiling io-validation v0.0.0 (/home/lilith/tmp/zencodec-io-experiments-2026-10-24/source/perf/io-validation)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.27s
+     Running tests/admission.rs (target/debug/deps/admission-25316020e6f6591c)
+
+running 7 tests
+test checked_plans_bound_coalescing_splitting_and_adversarial_arithmetic ... ok
+test storage_charge_survives_transfer_cache_decode_and_shared_clones ... ok
+test cancellation_releases_inflight_storage_without_retiring_other_readers ... ok
+test incomplete_wrong_identity_and_oversized_responses_never_publish ... ok
+test video_completion_order_is_separate_from_decode_order_and_seek_generation ... ok
+test reserved_fragmented_qoi_bytes_decode_exactly_through_the_real_driver ... ok
+test concurrent_consumers_cannot_over_admit_or_release_twice ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+    Checking zencodec v0.1.27 (/home/lilith/tmp/zencodec-io-experiments-2026-10-24/source)
+    Checking zencodec-io v0.1.0 (/home/lilith/tmp/zencodec-io-experiments-2026-10-24/source/zencodec-io)
+    Checking zenbitmaps v0.2.0 (/home/lilith/tmp/zencodec-io-experiments-2026-10-24/source/perf/io-validation/vendor/zenbitmaps)
+    Checking zencodec-media v0.1.0 (/home/lilith/tmp/zencodec-io-experiments-2026-10-24/source/zencodec-media)
+    Checking zenmp4 v0.1.0 (/home/lilith/tmp/zencodec-io-experiments-2026-10-24/source/perf/io-validation/vendor/zenmp4)
+    Checking zenivf v0.1.0 (/home/lilith/tmp/zencodec-io-experiments-2026-10-24/source/perf/io-validation/vendor/zenivf)
+    Checking zenwebm v0.1.0 (/home/lilith/tmp/zencodec-io-experiments-2026-10-24/source/perf/io-validation/vendor/zenwebm)
+    Checking zencodec-media-testkit v0.1.0 (/home/lilith/tmp/zencodec-io-experiments-2026-10-24/source/zencodec-media-testkit)
+    Checking io-validation v0.0.0 (/home/lilith/tmp/zencodec-io-experiments-2026-10-24/source/perf/io-validation)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.18s
+   Compiling io-validation v0.0.0 (/home/lilith/tmp/zencodec-io-experiments-2026-10-24/source/perf/io-validation)
+    Finished `bench` profile [optimized + debuginfo] target(s) in 6.11s
+     Running benches/admission.rs (target/release/deps/admission-8864e575702aa4db)
+[zenbench] Guides: zenbench guide | zenbench guide --topic simd | benchmark options: --help
+[zenbench] pass 1/3
+[zenbench] mode=iterate inference=exploratory workload=None
+[zenbench] cpu_policy=unrestricted cpu_placement=UNVERIFIED_UNRESTRICTED cpu_class=null cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=null cpu_class_uniform=false pool_thread_count=unknown cpu_frequency_verified=false
+[zenbench] calibration: int=0.18ns/iter mem_bw=116.6GiB/s mem_lat=9.3ns
+[zenbench] timer resolution: 10ns, loop overhead: 0.36ns/iter, TSC: 4.691 ticks/ns (invariant)
+[zenbench] results → .zenbench/data/attempts/18e19cc3594f132a-1d12d7-fb520a2037473349.json.gz
+[zenbench] evidence → .zenbench/data/runs/18e19cc416ea6118-1d12d7-4d03ca5159ee9c30.json
+[zenbench] pass 2/3
+[zenbench] mode=iterate inference=exploratory workload=None
+[zenbench] cpu_policy=unrestricted cpu_placement=UNVERIFIED_UNRESTRICTED cpu_class=null cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=null cpu_class_uniform=false pool_thread_count=unknown cpu_frequency_verified=false
+[zenbench] calibration: int=0.18ns/iter mem_bw=121.5GiB/s mem_lat=9.3ns
+[zenbench] timer resolution: 10ns, loop overhead: 0.35ns/iter, TSC: 4.691 ticks/ns (invariant)
+[zenbench] results → .zenbench/data/attempts/18e19cc41dd9016d-1d12d7-e9d3444aee6655e2.json.gz
+[zenbench] evidence → .zenbench/data/runs/18e19cc4d34d6568-1d12d7-6a52321789fcfd66.json
+[zenbench] pass 3/3
+[zenbench] mode=iterate inference=exploratory workload=None
+[zenbench] cpu_policy=unrestricted cpu_placement=UNVERIFIED_UNRESTRICTED cpu_class=null cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=null cpu_class_uniform=false pool_thread_count=unknown cpu_frequency_verified=false
+[zenbench] calibration: int=0.18ns/iter mem_bw=119.3GiB/s mem_lat=9.3ns
+[zenbench] timer resolution: 10ns, loop overhead: 0.36ns/iter, TSC: 4.690 ticks/ns (invariant)
+[zenbench] results → .zenbench/data/attempts/18e19cc4dc7ccb17-1d12d7-0a90a6755d76c4d6.json.gz
+[zenbench] evidence → .zenbench/data/runs/18e19cc597d011af-1d12d7-fed81ddf18d65950.json
+
+═══════════════════════════════════════════════════════════════
+  zenbench  18e19cc59b668a63-1d12d7-4a832f306536717a
+═══════════════════════════════════════════════════════════════
+[zenbench] median of 3 passes (mad = inter-pass spread)
+[zenbench] cpu_policy=unrestricted cpu_placement=UNVERIFIED_UNRESTRICTED cpu_class=null cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=[2,3] cpu_class_uniform=false pool_thread_count=unknown cpu_frequency_verified=false
+
+  allocation-and-owner/1024  60 rounds
+                     mean ±mad ns  95% CI vs base
+  ├─ vec-arc          17.8 ±2.9ns  
+  ╰─ reserved-lease   53.4 ±2.6ns   [1]
+
+  vec-arc         ██████████████████ 17.8ns
+  reserved-lease  ███████████████████████████████████████████████████████ 53.4ns
+  [1] CV=25%
+[zenbench] cpu_policy=unrestricted cpu_placement=UNVERIFIED_UNRESTRICTED cpu_class=null cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=[2,3] cpu_class_uniform=false pool_thread_count=unknown cpu_frequency_verified=false
+
+  allocation-and-owner/65536  60 rounds
+                     mean ±mad ns  95% CI vs base
+  ├─ vec-arc            805 ±3ns  
+  ╰─ reserved-lease   1220 ±11ns  
+
+  vec-arc         ████████████████████████████████████ 805.0ns
+  reserved-lease  ██████████████████████████████████████████████████████ 1.22µs
+
+  total: 8.5s
+═══════════════════════════════════════════════════════════════
+  filter: cargo bench -- --group=NAME  format: --format=llm|csv|md|json
+run-heavy: done rc=0 18s | peak-RSS 0.27GiB | min-avail 15778MiB | peak-load 0.85

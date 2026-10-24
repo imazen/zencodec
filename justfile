@@ -211,3 +211,11 @@ io-contract-check:
 # Rerun the exact existing fixture set without regenerating containers.
 io-validation-media mp4 webm ivf:
     cargo run --locked --manifest-path perf/io-validation/Cargo.toml --bin media_transport -- "{{mp4}}"/*.mp4 "{{webm}}"/*.webm "{{webm}}"/*.mkv "{{ivf}}"/*.ivf
+
+# Private executable proposal: bounded range plans, storage leases, ordered delivery.
+io-admission-check:
+    cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test admission --locked
+    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --all-targets --locked -- -D warnings
+
+io-admission-bench cpus="2,3":
+    taskset -c "{{cpus}}" cargo bench --manifest-path perf/io-validation/Cargo.toml -p io-validation --bench admission --locked -- --cpu-policy=unrestricted --median-of-passes=3

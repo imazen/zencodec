@@ -1,0 +1,24 @@
+zenavif a7638f6e0655914fb15fe4633ac26425533756c8; zenrav1e PR44 9057c4bacf1d8a23974e32de09fd4446a1cc525a
+zencodec c3a5ddd132cd4fd407e4cb43e013fed9cf75958b via export-only path patches.
+Command: cargo test --no-default-features --features media-encode --test media_session
+TMPDIR=$HOME/tmp CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0
+
+running 14 tests
+test frames_that_would_need_conversion_are_refused ... ok
+test impossible_settings_are_refused ... ok
+test mismatched_input_is_refused ... ok
+test an_owned_decoder_stop_cancels_with_an_unstoppable_call_token ... ok
+test owned_stops_are_polled_inside_the_encoder_backend ... ok
+test av1c_matches_the_sequence_header ... ok
+test reset_decodes_the_same_frames_again_and_old_frames_stay_valid ... ok
+test av1c_config_obus_restore_stripped_sequence_headers ... ok
+test the_decoder_meets_its_contract_on_encoded_streams ... ok
+test the_session_meets_the_encoder_contract ... ok
+test lossless_frames_decode_sample_exact ... ok
+test the_clock_does_not_change_the_bitstream ... ok
+test the_default_speed_meets_the_contract_with_a_short_queue ... ok
+test lossy_stream_decodes_in_presentation_order ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.98s
+
+run-heavy: done rc=0 104s | peak-RSS 0.87GiB | min-avail 14475MiB | peak-load 2.91
