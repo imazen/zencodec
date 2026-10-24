@@ -207,3 +207,7 @@ io-instr-probe cpu="4" lo="20000" hi="60000":
 io-contract-check:
     cargo test --workspace --all-features --locked
     cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+# Rerun the exact existing fixture set without regenerating containers.
+io-validation-media mp4 webm ivf:
+    cargo run --locked --manifest-path perf/io-validation/Cargo.toml --bin media_transport -- "{{mp4}}"/*.mp4 "{{webm}}"/*.webm "{{webm}}"/*.mkv "{{ivf}}"/*.ivf

@@ -202,6 +202,9 @@ removes that whole class).
 
 #### Fixed
 
+- Synchronous and async cursors reuse prefetched ranges, read only a missing
+  overlapping tail, and reuse batched ranges for sequential requests. Already
+  satisfied sequential requests no longer trigger a prefetch refill.
 - `encode_to_writer` recognizes a row-level refusal in the shared error category
   as well as legacy typed causes, including one-shot BMP encoders.
 - Clamp overclaimed consumption of fetched ranges instead of panicking on the next offer, and require `std` for the driver-probe example (`7cc3d3ec`).

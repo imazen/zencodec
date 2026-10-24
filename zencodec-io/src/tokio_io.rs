@@ -422,11 +422,7 @@ fn fill<'a, Src: AsyncSource + ?Sized, E: 'a>(
         let request = requests[0];
         match request {
             Request::AtLeast { offset, min_len } => {
-                if offset < window.base() || offset > window.end() {
-                    window.reset_to(offset);
-                } else {
-                    window.consume((offset - window.base()) as usize);
-                }
+                window.position(offset, fetched);
                 // Read until the request is met (or the source ends), asking
                 // for up to `read_size` more each time; a network source returns
                 // what has arrived, so the decoder steps as soon as it can.
@@ -446,6 +442,10 @@ fn fill<'a, Src: AsyncSource + ?Sized, E: 'a>(
                 }
             }
             Request::Range(r) => {
+                if r.offset >= window.base() && r.end() <= window.end() {
+                    window.consume((r.offset - window.base()) as usize);
+                    return Ok(());
+                }
                 if let Some(i) = fetched
                     .iter()
                     .position(|(off, buf)| r.offset >= *off && r.end() <= off + buf.len() as u64)
@@ -453,6 +453,15 @@ fn fill<'a, Src: AsyncSource + ?Sized, E: 'a>(
                     let (off, buf) = fetched.swap_remove(i);
                     window.adopt(off, buf);
                     window.consume((r.offset - off) as usize);
+                    return Ok(());
+                }
+                if window.position(r.offset, fetched) {
+                    let missing = (r.end() - window.end()) as usize;
+                    let offset = window.end();
+                    read_full(source, offset, window.spare(missing))
+                        .await
+                        .map_err(AsyncDriveError::Source)?;
+                    window.commit(missing);
                     return Ok(());
                 }
                 let ranges: Vec<ByteRange> = requests

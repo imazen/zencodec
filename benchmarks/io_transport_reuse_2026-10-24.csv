@@ -1,0 +1,313 @@
+fixture,source,chunk,result,reads,bytes,events,error
+av1_opus.mp4,random,1,pass,26427,26427,123,
+av1_opus.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 48, oldest_retained: 26435 })"
+av1_opus.mp4,random,7,pass,3810,26427,123,
+av1_opus.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 48, oldest_retained: 26435 })"
+av1_opus.mp4,random,1024,pass,125,27411,123,
+av1_opus.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 48, oldest_retained: 26435 })"
+av1_opus.mp4,random,65536,pass,122,50666,123,
+av1_opus.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 48, oldest_retained: 26435 })"
+av1_opus.zen-fragmented.mp4,random,1,pass,27655,27654,123,
+av1_opus.zen-fragmented.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 1319, oldest_retained: 1634 })"
+av1_opus.zen-fragmented.mp4,random,7,pass,3993,27654,123,
+av1_opus.zen-fragmented.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 1319, oldest_retained: 1634 })"
+av1_opus.zen-fragmented.mp4,random,1024,pass,132,32658,123,
+av1_opus.zen-fragmented.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 1319, oldest_retained: 2243 })"
+av1_opus.zen-fragmented.mp4,random,65536,pass,7,117522,123,
+av1_opus.zen-fragmented.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 1319, oldest_retained: 27638 })"
+av1_opus.zen-progressive.mp4,random,1,pass,26270,26270,123,
+av1_opus.zen-progressive.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 48, oldest_retained: 26286 })"
+av1_opus.zen-progressive.mp4,random,7,pass,3787,26270,123,
+av1_opus.zen-progressive.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 48, oldest_retained: 26286 })"
+av1_opus.zen-progressive.mp4,random,1024,pass,124,27262,123,
+av1_opus.zen-progressive.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 48, oldest_retained: 26286 })"
+av1_opus.zen-progressive.mp4,random,65536,pass,122,50517,123,
+av1_opus.zen-progressive.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 48, oldest_retained: 26286 })"
+av1_opus_faststart.mp4,random,1,pass,26403,26403,123,
+av1_opus_faststart.mp4,forward,1,pass,,,,
+av1_opus_faststart.mp4,random,7,pass,3805,26403,123,
+av1_opus_faststart.mp4,forward,7,pass,,,,
+av1_opus_faststart.mp4,random,1024,pass,124,26419,123,
+av1_opus_faststart.mp4,forward,1024,pass,,,,
+av1_opus_faststart.mp4,random,65536,pass,1,26435,123,
+av1_opus_faststart.mp4,forward,65536,pass,,,,
+av1_opus_faststart.zen-fragmented.mp4,random,1,pass,27655,27654,123,
+av1_opus_faststart.zen-fragmented.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 1319, oldest_retained: 1634 })"
+av1_opus_faststart.zen-fragmented.mp4,random,7,pass,3993,27654,123,
+av1_opus_faststart.zen-fragmented.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 1319, oldest_retained: 1634 })"
+av1_opus_faststart.zen-fragmented.mp4,random,1024,pass,132,32658,123,
+av1_opus_faststart.zen-fragmented.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 1319, oldest_retained: 2243 })"
+av1_opus_faststart.zen-fragmented.mp4,random,65536,pass,7,117522,123,
+av1_opus_faststart.zen-fragmented.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 1319, oldest_retained: 27638 })"
+av1_opus_faststart.zen-progressive.mp4,random,1,pass,26270,26270,123,
+av1_opus_faststart.zen-progressive.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 48, oldest_retained: 26286 })"
+av1_opus_faststart.zen-progressive.mp4,random,7,pass,3787,26270,123,
+av1_opus_faststart.zen-progressive.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 48, oldest_retained: 26286 })"
+av1_opus_faststart.zen-progressive.mp4,random,1024,pass,124,27262,123,
+av1_opus_faststart.zen-progressive.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 48, oldest_retained: 26286 })"
+av1_opus_faststart.zen-progressive.mp4,random,65536,pass,122,50517,123,
+av1_opus_faststart.zen-progressive.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 48, oldest_retained: 26286 })"
+av1_opus_frag.mp4,random,1,pass,26810,26809,123,
+av1_opus_frag.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 1534, oldest_retained: 7694 })"
+av1_opus_frag.mp4,random,7,pass,3872,26809,123,
+av1_opus_frag.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 1534, oldest_retained: 7694 })"
+av1_opus_frag.mp4,random,1024,pass,131,31097,123,
+av1_opus_frag.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 1534, oldest_retained: 7694 })"
+av1_opus_frag.mp4,random,65536,pass,6,90737,123,
+av1_opus_frag.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 1534, oldest_retained: 27001 })"
+av1_opus_frag.zen-fragmented.mp4,random,1,pass,27463,27462,123,
+av1_opus_frag.zen-fragmented.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 1655, oldest_retained: 7815 })"
+av1_opus_frag.zen-fragmented.mp4,random,7,pass,3964,27462,123,
+av1_opus_frag.zen-fragmented.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 1655, oldest_retained: 7815 })"
+av1_opus_frag.zen-fragmented.mp4,random,1024,pass,132,31550,123,
+av1_opus_frag.zen-fragmented.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 1655, oldest_retained: 7815 })"
+av1_opus_frag.zen-fragmented.mp4,random,65536,pass,6,91326,123,
+av1_opus_frag.zen-fragmented.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 1655, oldest_retained: 27454 })"
+av1_opus_frag.zen-progressive.mp4,random,1,pass,25898,25898,123,
+av1_opus_frag.zen-progressive.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 48, oldest_retained: 25914 })"
+av1_opus_frag.zen-progressive.mp4,random,7,pass,3734,25898,123,
+av1_opus_frag.zen-progressive.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 48, oldest_retained: 25914 })"
+av1_opus_frag.zen-progressive.mp4,random,1024,pass,124,26890,123,
+av1_opus_frag.zen-progressive.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 48, oldest_retained: 25914 })"
+av1_opus_frag.zen-progressive.mp4,random,65536,pass,122,50145,123,
+av1_opus_frag.zen-progressive.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 48, oldest_retained: 25914 })"
+flac.mp4,random,1,pass,7448,7448,8,
+flac.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 7452 })"
+flac.mp4,random,7,pass,1070,7448,8,
+flac.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 7452 })"
+flac.mp4,random,1024,pass,13,8432,8,
+flac.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 7452 })"
+flac.mp4,random,65536,pass,7,14112,8,
+flac.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 7452 })"
+flac.zen-fragmented.mp4,random,1,pass,7512,7511,8,
+flac.zen-fragmented.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 855, oldest_retained: 7523 })"
+flac.zen-fragmented.mp4,random,7,pass,1080,7511,8,
+flac.zen-fragmented.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 855, oldest_retained: 7523 })"
+flac.zen-fragmented.mp4,random,1024,pass,14,8547,8,
+flac.zen-fragmented.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 855, oldest_retained: 7523 })"
+flac.zen-fragmented.mp4,random,65536,pass,3,14191,8,
+flac.zen-fragmented.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 855, oldest_retained: 7523 })"
+flac.zen-progressive.mp4,random,1,pass,7367,7367,8,
+flac.zen-progressive.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 7379 })"
+flac.zen-progressive.mp4,random,7,pass,1058,7367,8,
+flac.zen-progressive.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 7379 })"
+flac.zen-progressive.mp4,random,1024,pass,13,8359,8,
+flac.zen-progressive.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 7379 })"
+flac.zen-progressive.mp4,random,65536,pass,7,14039,8,
+flac.zen-progressive.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 7379 })"
+h264_aac.mp4,random,1,pass,17373,17373,84,
+h264_aac.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 48, oldest_retained: 17381 })"
+h264_aac.mp4,random,7,pass,2515,17373,84,
+h264_aac.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 48, oldest_retained: 17381 })"
+h264_aac.mp4,random,1024,pass,88,18357,84,
+h264_aac.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 48, oldest_retained: 17381 })"
+h264_aac.mp4,random,65536,pass,83,32436,84,
+h264_aac.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 48, oldest_retained: 17381 })"
+h264_aac.zen-fragmented.mp4,random,1,pass,17919,17918,84,
+h264_aac.zen-fragmented.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 1851, oldest_retained: 7696 })"
+h264_aac.zen-fragmented.mp4,random,7,pass,2598,17918,84,
+h264_aac.zen-fragmented.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 1851, oldest_retained: 7696 })"
+h264_aac.zen-fragmented.mp4,random,1024,pass,92,20986,84,
+h264_aac.zen-fragmented.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 1851, oldest_retained: 7696 })"
+h264_aac.zen-fragmented.mp4,random,65536,pass,5,47084,84,
+h264_aac.zen-fragmented.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 1851, oldest_retained: 17914 })"
+h264_aac.zen-progressive.mp4,random,1,pass,17234,17234,84,
+h264_aac.zen-progressive.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 17246 })"
+h264_aac.zen-progressive.mp4,random,7,pass,2494,17234,84,
+h264_aac.zen-progressive.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 17246 })"
+h264_aac.zen-progressive.mp4,random,1024,pass,88,18226,84,
+h264_aac.zen-progressive.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 17246 })"
+h264_aac.zen-progressive.mp4,random,65536,pass,83,32301,84,
+h264_aac.zen-progressive.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 17246 })"
+h264_frag.mp4,random,1,pass,4468,4467,26,
+h264_frag.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 993, oldest_retained: 2890 })"
+h264_frag.mp4,random,7,pass,653,4467,26,
+h264_frag.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 993, oldest_retained: 2890 })"
+h264_frag.mp4,random,1024,pass,31,6589,26,
+h264_frag.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 993, oldest_retained: 2890 })"
+h264_frag.mp4,random,65536,pass,4,9532,26,
+h264_frag.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 993, oldest_retained: 4541 })"
+h264_frag.zen-fragmented.mp4,random,1,pass,4519,4518,26,
+h264_frag.zen-fragmented.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 988, oldest_retained: 2885 })"
+h264_frag.zen-fragmented.mp4,random,7,pass,659,4518,26,
+h264_frag.zen-fragmented.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 988, oldest_retained: 2885 })"
+h264_frag.zen-fragmented.mp4,random,1024,pass,30,6570,26,
+h264_frag.zen-fragmented.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 988, oldest_retained: 2885 })"
+h264_frag.zen-fragmented.mp4,random,65536,pass,4,9413,26,
+h264_frag.zen-fragmented.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 988, oldest_retained: 4522 })"
+h264_frag.zen-progressive.mp4,random,1,pass,4206,4206,26,
+h264_frag.zen-progressive.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 4218 })"
+h264_frag.zen-progressive.mp4,random,7,pass,611,4206,26,
+h264_frag.zen-progressive.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 4218 })"
+h264_frag.zen-progressive.mp4,random,1024,pass,28,5198,26,
+h264_frag.zen-progressive.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 4218 })"
+h264_frag.zen-progressive.mp4,random,65536,pass,25,7456,26,
+h264_frag.zen-progressive.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 4218 })"
+mpeg4_aac.mp4,random,1,pass,20905,20905,84,
+mpeg4_aac.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 20909 })"
+mpeg4_aac.mp4,random,7,pass,3021,20905,84,
+mpeg4_aac.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 20909 })"
+mpeg4_aac.mp4,random,1024,pass,92,21889,84,
+mpeg4_aac.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 20909 })"
+mpeg4_aac.mp4,random,65536,pass,83,39472,84,
+mpeg4_aac.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 20909 })"
+mpeg4_aac.zen-fragmented.mp4,random,1,pass,21471,21470,84,
+mpeg4_aac.zen-fragmented.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 1851, oldest_retained: 8116 })"
+mpeg4_aac.zen-fragmented.mp4,random,7,pass,3107,21470,84,
+mpeg4_aac.zen-fragmented.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 1851, oldest_retained: 8116 })"
+mpeg4_aac.zen-fragmented.mp4,random,1024,pass,94,24538,84,
+mpeg4_aac.zen-fragmented.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 1851, oldest_retained: 8116 })"
+mpeg4_aac.zen-fragmented.mp4,random,65536,pass,5,59153,84,
+mpeg4_aac.zen-fragmented.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 1851, oldest_retained: 21466 })"
+mpeg4_aac.zen-progressive.mp4,random,1,pass,20766,20766,84,
+mpeg4_aac.zen-progressive.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 20778 })"
+mpeg4_aac.zen-progressive.mp4,random,7,pass,3000,20766,84,
+mpeg4_aac.zen-progressive.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 20778 })"
+mpeg4_aac.zen-progressive.mp4,random,1024,pass,92,21758,84,
+mpeg4_aac.zen-progressive.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 20778 })"
+mpeg4_aac.zen-progressive.mp4,random,65536,pass,83,39341,84,
+mpeg4_aac.zen-progressive.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 20778 })"
+mpeg4_aac_frag.mp4,random,1,pass,21048,21047,84,
+mpeg4_aac_frag.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 1724, oldest_retained: 7989 })"
+mpeg4_aac_frag.mp4,random,7,pass,3048,21047,84,
+mpeg4_aac_frag.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 1724, oldest_retained: 7989 })"
+mpeg4_aac_frag.mp4,random,1024,pass,95,24277,84,
+mpeg4_aac_frag.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 1724, oldest_retained: 7989 })"
+mpeg4_aac_frag.mp4,random,65536,pass,5,59046,84,
+mpeg4_aac_frag.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 1724, oldest_retained: 21205 })"
+mpeg4_aac_frag.zen-fragmented.mp4,random,1,pass,21383,21382,84,
+mpeg4_aac_frag.zen-fragmented.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 1763, oldest_retained: 8028 })"
+mpeg4_aac_frag.zen-fragmented.mp4,random,7,pass,3094,21382,84,
+mpeg4_aac_frag.zen-fragmented.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 1763, oldest_retained: 8028 })"
+mpeg4_aac_frag.zen-fragmented.mp4,random,1024,pass,94,24450,84,
+mpeg4_aac_frag.zen-fragmented.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 1763, oldest_retained: 8028 })"
+mpeg4_aac_frag.zen-fragmented.mp4,random,65536,pass,5,59065,84,
+mpeg4_aac_frag.zen-fragmented.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 1763, oldest_retained: 21378 })"
+mpeg4_aac_frag.zen-progressive.mp4,random,1,pass,20382,20382,84,
+mpeg4_aac_frag.zen-progressive.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 20394 })"
+mpeg4_aac_frag.zen-progressive.mp4,random,7,pass,2945,20382,84,
+mpeg4_aac_frag.zen-progressive.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 20394 })"
+mpeg4_aac_frag.zen-progressive.mp4,random,1024,pass,91,21374,84,
+mpeg4_aac_frag.zen-progressive.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 20394 })"
+mpeg4_aac_frag.zen-progressive.mp4,random,65536,pass,83,38957,84,
+mpeg4_aac_frag.zen-progressive.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 20394 })"
+vp9.mp4,random,1,pass,5047,5047,32,
+vp9.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 5051 })"
+vp9.mp4,random,7,pass,746,5047,32,
+vp9.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 5051 })"
+vp9.mp4,random,1024,pass,35,6031,32,
+vp9.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 5051 })"
+vp9.mp4,random,65536,pass,31,9144,32,
+vp9.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 5051 })"
+vp9.zen-fragmented.mp4,random,1,pass,5465,5464,32,
+vp9.zen-fragmented.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 927, oldest_retained: 2323 })"
+vp9.zen-fragmented.mp4,random,7,pass,811,5464,32,
+vp9.zen-fragmented.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 927, oldest_retained: 2323 })"
+vp9.zen-fragmented.mp4,random,1024,pass,38,8532,32,
+vp9.zen-fragmented.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 927, oldest_retained: 2323 })"
+vp9.zen-fragmented.mp4,random,65536,pass,5,14320,32,
+vp9.zen-fragmented.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 927, oldest_retained: 5460 })"
+vp9.zen-progressive.mp4,random,1,pass,4940,4940,32,
+vp9.zen-progressive.mp4,forward,1,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 4952 })"
+vp9.zen-progressive.mp4,random,7,pass,730,4940,32,
+vp9.zen-progressive.mp4,forward,7,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 4952 })"
+vp9.zen-progressive.mp4,random,1024,pass,35,5932,32,
+vp9.zen-progressive.mp4,forward,1024,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 4952 })"
+vp9.zen-progressive.mp4,random,65536,pass,31,9045,32,
+vp9.zen-progressive.mp4,forward,65536,refused,,,,"refused=Source(BeyondWindow { offset: 44, oldest_retained: 4952 })"
+alpha_vp9.webm,random,1,pass,3626,3625,32,
+alpha_vp9.webm,forward,1,pass,,,,
+alpha_vp9.webm,random,7,pass,545,3625,32,
+alpha_vp9.webm,forward,7,pass,,,,
+alpha_vp9.webm,random,1024,pass,5,3893,32,
+alpha_vp9.webm,forward,1024,pass,,,,
+alpha_vp9.webm,random,65536,pass,2,3893,32,
+alpha_vp9.webm,forward,65536,pass,,,,
+alpha_vp9.zen.webm,random,1,pass,3530,3529,32,
+alpha_vp9.zen.webm,forward,1,pass,,,,
+alpha_vp9.zen.webm,random,7,pass,530,3529,32,
+alpha_vp9.zen.webm,forward,7,pass,,,,
+alpha_vp9.zen.webm,random,1024,pass,5,3529,32,
+alpha_vp9.zen.webm,forward,1024,pass,,,,
+alpha_vp9.zen.webm,random,65536,pass,2,3529,32,
+alpha_vp9.zen.webm,forward,65536,pass,,,,
+av1_opus.webm,random,1,pass,21554,21553,116,
+av1_opus.webm,forward,1,pass,,,,
+av1_opus.webm,random,7,pass,3135,21553,116,
+av1_opus.webm,forward,7,pass,,,,
+av1_opus.webm,random,1024,pass,26,21825,116,
+av1_opus.webm,forward,1024,pass,,,,
+av1_opus.webm,random,65536,pass,2,21966,116,
+av1_opus.webm,forward,65536,pass,,,,
+av1_opus.zen.webm,random,1,pass,20964,20963,116,
+av1_opus.zen.webm,forward,1,pass,,,,
+av1_opus.zen.webm,random,7,pass,3050,20963,116,
+av1_opus.zen.webm,forward,7,pass,,,,
+av1_opus.zen.webm,random,1024,pass,25,20963,116,
+av1_opus.zen.webm,forward,1024,pass,,,,
+av1_opus.zen.webm,random,65536,pass,2,20963,116,
+av1_opus.zen.webm,forward,65536,pass,,,,
+live_vp9.webm,random,1,pass,6164,6163,32,
+live_vp9.webm,forward,1,pass,,,,
+live_vp9.webm,random,7,pass,907,6163,32,
+live_vp9.webm,forward,7,pass,,,,
+live_vp9.webm,random,1024,pass,8,6384,32,
+live_vp9.webm,forward,1024,pass,,,,
+live_vp9.webm,random,65536,pass,2,6384,32,
+live_vp9.webm,forward,65536,pass,,,,
+live_vp9.zen.webm,random,1,pass,6111,6110,32,
+live_vp9.zen.webm,forward,1,pass,,,,
+live_vp9.zen.webm,random,7,pass,899,6110,32,
+live_vp9.zen.webm,forward,7,pass,,,,
+live_vp9.zen.webm,random,1024,pass,8,6110,32,
+live_vp9.zen.webm,forward,1024,pass,,,,
+live_vp9.zen.webm,random,65536,pass,2,6110,32,
+live_vp9.zen.webm,forward,65536,pass,,,,
+vp9_opus.webm,random,1,pass,31055,31054,163,
+vp9_opus.webm,forward,1,pass,,,,
+vp9_opus.webm,random,7,pass,4585,31054,163,
+vp9_opus.webm,forward,7,pass,,,,
+vp9_opus.webm,random,1024,pass,35,31467,163,
+vp9_opus.webm,forward,1024,pass,,,,
+vp9_opus.webm,random,65536,pass,2,31467,163,
+vp9_opus.webm,forward,65536,pass,,,,
+vp9_opus.zen.webm,random,1,pass,30939,30938,163,
+vp9_opus.zen.webm,forward,1,pass,,,,
+vp9_opus.zen.webm,random,7,pass,4568,30938,163,
+vp9_opus.zen.webm,forward,7,pass,,,,
+vp9_opus.zen.webm,random,1024,pass,34,30938,163,
+vp9_opus.zen.webm,forward,1024,pass,,,,
+vp9_opus.zen.webm,random,65536,pass,2,30938,163,
+vp9_opus.zen.webm,forward,65536,pass,,,,
+h264_aac.mkv,random,1,pass,12203,12202,71,
+h264_aac.mkv,forward,1,pass,,,,
+h264_aac.mkv,random,7,pass,1796,12202,71,
+h264_aac.mkv,forward,7,pass,,,,
+h264_aac.mkv,random,1024,pass,15,12565,71,
+h264_aac.mkv,forward,1024,pass,,,,
+h264_aac.mkv,random,65536,pass,2,12565,71,
+h264_aac.mkv,forward,65536,pass,,,,
+h264_aac.zen.mkv,random,1,pass,12027,12026,71,
+h264_aac.zen.mkv,forward,1,pass,,,,
+h264_aac.zen.mkv,random,7,pass,1769,12026,71,
+h264_aac.zen.mkv,forward,7,pass,,,,
+h264_aac.zen.mkv,random,1024,pass,14,12026,71,
+h264_aac.zen.mkv,forward,1024,pass,,,,
+h264_aac.zen.mkv,random,65536,pass,2,12026,71,
+h264_aac.zen.mkv,forward,65536,pass,,,,
+av1.ivf,random,1,pass,9346,9345,42,
+av1.ivf,forward,1,pass,,,,
+av1.ivf,random,7,pass,1362,9345,42,
+av1.ivf,forward,7,pass,,,,
+av1.ivf,random,1024,pass,11,9345,42,
+av1.ivf,forward,1024,pass,,,,
+av1.ivf,random,65536,pass,2,9345,42,
+av1.ivf,forward,65536,pass,,,,
+vp9.ivf,random,1,pass,11103,11102,62,
+vp9.ivf,forward,1,pass,,,,
+vp9.ivf,random,7,pass,1630,11102,62,
+vp9.ivf,forward,7,pass,,,,
+vp9.ivf,random,1024,pass,14,11102,62,
+vp9.ivf,forward,1024,pass,,,,
+vp9.ivf,random,65536,pass,2,11102,62,
+vp9.ivf,forward,65536,pass,,,,

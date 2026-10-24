@@ -231,6 +231,12 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed during IO contract qualification (2026-10-24): cursors refetched ranges
+  already held in their active window and discarded batched ranges on sequential
+  requests. Forward-only regressions cover full/partial overlap and suffix reuse;
+  the real container matrix retains exact event parity. Genuine fragmented MP4
+  backtracking remains tracked in zenavif issue 72.
+
 - Fixed during IO contract qualification (2026-10-24): default `Encoder::begin`
   accepted row encoding although the default `push_rows` rejects it. It now
   refuses at `begin`, allowing the writer driver to use one-shot encoding.

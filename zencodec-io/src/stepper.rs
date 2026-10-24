@@ -386,10 +386,11 @@ impl ReadAtCursor {
         match requests[0] {
             Request::AtLeast { offset, min_len } => {
                 self.from_fetched = None;
-                if offset < window.base() || offset > window.end() {
-                    window.reset_to(offset);
-                } else {
-                    window.consume((offset - window.base()) as usize);
+                window.position(offset, &mut self.fetched);
+                // Held bytes already satisfy the request; do not turn a cache
+                // hit into another read merely to refill the prefetch target.
+                if window.len() >= min_len.max(1) {
+                    return Ok(());
                 }
                 // Read until the window holds a whole number of requests at
                 // least `read_size` long, or the source ends (a short read
@@ -409,12 +410,31 @@ impl ReadAtCursor {
                 }
             }
             Request::Range(first) => {
+                if first.offset >= window.base() && first.end() <= window.end() {
+                    self.from_fetched = None;
+                    window.consume((first.offset - window.base()) as usize);
+                    return Ok(());
+                }
                 let holds = |(off, buf): &(u64, Vec<u8>)| {
                     first.offset >= *off && first.end() <= off + buf.len() as u64
                 };
                 // Serve from the last round's buffers if one holds it.
                 if let Some(i) = self.fetched.iter().position(holds) {
                     self.from_fetched = Some((i, (first.offset - self.fetched[i].0) as usize));
+                    return Ok(());
+                }
+                self.from_fetched = None;
+                if window.position(first.offset, &mut self.fetched) {
+                    // A prefix was prefetched. Read only its missing tail:
+                    // refetching the prefix would break a forward-only source.
+                    let missing = (first.end() - window.end()) as usize;
+                    let offset = window.end();
+                    source
+                        .read_exact_at(offset, window.spare(missing))
+                        .map_err(DriveFailure::Source)?;
+                    window.commit(missing);
+                    self.stats.reads += 1;
+                    self.stats.bytes_read += missing as u64;
                     return Ok(());
                 }
                 // New round: every range request, coalesced, one batch.

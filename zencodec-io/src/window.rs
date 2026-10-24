@@ -46,6 +46,35 @@ impl Window {
         Input::new(self.base, self.bytes()).with_total_len_opt(self.total)
     }
 
+    /// Position at `offset`, keeping the longest held prefix there. A fetched
+    /// range can become the sequential window without copying its allocation.
+    /// Returns whether any bytes were retained; it never fills a hole.
+    pub(crate) fn position(&mut self, offset: u64, fetched: &mut Vec<(u64, Vec<u8>)>) -> bool {
+        let active = offset >= self.base && offset < self.end();
+        let active_end = if active { self.end() } else { offset };
+        if let Some((i, _)) = fetched
+            .iter()
+            .enumerate()
+            .filter(|(_, (start, bytes))| {
+                offset >= *start && offset < start.saturating_add(bytes.len() as u64)
+            })
+            .max_by_key(|(_, (start, bytes))| start.saturating_add(bytes.len() as u64))
+            .filter(|(_, (start, bytes))| start.saturating_add(bytes.len() as u64) > active_end)
+        {
+            let (start, bytes) = fetched.swap_remove(i);
+            self.adopt(start, bytes);
+            self.consume((offset - start) as usize);
+            return true;
+        }
+        if active {
+            self.consume((offset - self.base) as usize);
+            true
+        } else {
+            self.reset_to(offset);
+            false
+        }
+    }
+
     /// Drop `n` bytes from the front (the decoder took them).
     pub(crate) fn consume(&mut self, n: usize) {
         let n = n.min(self.len());
