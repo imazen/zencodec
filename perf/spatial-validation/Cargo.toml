@@ -1,0 +1,16 @@
+[package]
+name = "spatial-validation"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+zencodec = { path = "../..", features = ["std"] }
+zencodec-io = { path = "../../zencodec-io", features = ["std"] }
+tiff = { version = "0.11.3", git = "https://github.com/lilith/image-tiff", rev = "0219e7099c658422d47bd986ff279b686202b2e0", default-features = false, features = ["lzw", "deflate"] }
+
+[profile.release]
+debug = 1
+lto = "thin"

@@ -274,6 +274,30 @@ av1-policy-guide-check:
     cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked guide_default_and_midstream_preview_rule -- --nocapture
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
 
+# Native TIFF spatial candidates and the positional-to-seek bridge.
+spatial-validation-sync export:
+    test ! -e "{{export}}/.git"
+    test ! -e "{{export}}/.jj"
+    mkdir -p "{{export}}/perf/spatial-validation/src"
+    cp perf/spatial-validation/Cargo.toml "{{export}}/perf/spatial-validation/"
+    cp perf/spatial-validation/oracle.py "{{export}}/perf/spatial-validation/"
+    cp perf/spatial-validation/src/*.rs "{{export}}/perf/spatial-validation/src/"
+    cp src/error.rs "{{export}}/src/error.rs"
+    cp justfile "{{export}}/justfile"
+
+spatial-validation-resolve:
+    cargo metadata --manifest-path perf/spatial-validation/Cargo.toml --format-version 1 > /dev/null
+
+spatial-validation-setup:
+    cp perf/spatial-validation/dependencies.lock perf/spatial-validation/Cargo.lock
+
+spatial-oracle-install python:
+    uv pip install --python "{{python}}" --only-binary :all: Pillow==13.0.0
+
+spatial-validation-check artifacts python:
+    SPATIAL_ARTIFACTS="{{artifacts}}" SPATIAL_ORACLE_PYTHON="{{python}}" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
+
 operation-policy-check:
     cargo test -p zencodec-testkit --test operation_policy --test operation_requests --locked
     cargo test -p zencodec --lib operation:: --locked
