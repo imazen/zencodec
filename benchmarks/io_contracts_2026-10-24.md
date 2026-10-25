@@ -8,6 +8,9 @@ on r7900x. No `target-cpu=native`. Builds run serially through the resource
 wrapper with 12 GiB / four jobs. Wrapper RSS includes compiler processes;
 logical buffer counters are not heap measurements.
 
+[Complete raw evidence](io_evidence_2026-10-24.md) includes the per-run zenbench
+records, profiler traces, full logs, fixtures and preserved prototype binaries.
+
 ## One-shot writer fallback
 
 Implemented in `648dee88a71756b0e8e03bd89f9642f78e726236`.

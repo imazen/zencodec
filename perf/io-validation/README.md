@@ -125,3 +125,9 @@ cache. Keep these results separate from the warm benchmark.
 256 and 1280128 reads, including initial verification, with the same reusable
 4096-byte output. Preserve the complete output directory outside git; the
 qualification report links the compact counters and heap summary.
+
+The [complete evidence pointer](../../benchmarks/io_evidence_2026-10-24.md)
+records the archived logs, fixtures, binaries, counters and traces with a
+manifest and verified archive hash. `just io-validation-pack-evidence <dir>
+<archive>` packages an explicitly selected evidence tree and verifies every
+decompressed file. Keep large results and binaries outside git.

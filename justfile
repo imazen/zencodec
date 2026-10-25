@@ -92,6 +92,10 @@ io-validation-disk-profile output file cpus="2,3":
     cargo build --manifest-path perf/io-validation/Cargo.toml -p io-validation --bin disk_probe --release --locked
     bash perf/io-validation/profile-disk.sh "{{output}}" "{{file}}" "{{cpus}}"
 
+# Archive an explicitly collected evidence tree; never include Cargo caches.
+io-validation-pack-evidence input output:
+    python3 perf/io-validation/pack-evidence.py "{{input}}" "{{output}}"
+
 io-validation-transport mp4 webm output:
     bash perf/io-validation/run-transport.sh "{{mp4}}" "{{webm}}" "{{output}}"
 
