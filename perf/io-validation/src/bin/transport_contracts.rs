@@ -110,3 +110,79 @@ mod tests {
         assert_eq!(run("batch", 160.0, 131072, 8).2, 65536);
     }
 }
+
+#[cfg(test)]
+mod native_codec {
+    use super::*;
+    use zenbitmaps::{QoiDecoderConfig, QoiEncoderConfig};
+    use zencodec::decode::DecoderConfig;
+    use zencodec::encode::EncoderConfig;
+    use zencodec_io::{CollectSink, DriveOptions, drive_from_read_at};
+    use zenpixels::{PixelDescriptor, PixelSlice};
+
+    #[test]
+    fn real_codec_requests_run_through_the_reused_transport() {
+        let (w, h, stride) = (37u32, 29u32, 37 * 4 + 16);
+        let mut raw = vec![0xa5; stride * h as usize];
+        for y in 0..h as usize {
+            for x in 0..w as usize {
+                raw[y * stride + x * 4..y * stride + x * 4 + 4].copy_from_slice(&[
+                    x as u8,
+                    y as u8,
+                    (x + y) as u8,
+                    127,
+                ]);
+            }
+        }
+        let pixels = PixelSlice::new(&raw, w, h, stride, PixelDescriptor::RGBA8_SRGB).unwrap();
+        let bytes = QoiEncoderConfig::new().encode(pixels.clone()).unwrap();
+        for rtt in [0.0, 160.0] {
+            for cache in [0, 131072] {
+                for read_size in [1, 7, 4096] {
+                    let ledger = Rc::new(RefCell::new(Ledger::default()));
+                    let cfg = Config {
+                        ranges: true,
+                        cache_bytes: cache,
+                        latency_ms: rtt,
+                        bytes_per_ms: 12500.0,
+                        concurrency: 8,
+                        merge_gap: 4096,
+                        max_range: 131072,
+                        part_size: 0,
+                        shared_cache: true,
+                    };
+                    let mut source = Transport::new(
+                        SliceReadAt::new(bytes.data()),
+                        "native-qoi".into(),
+                        cfg,
+                        ledger.clone(),
+                    )
+                    .unwrap();
+                    // No as_slice shortcut on Transport: actual decoder requests hit the model.
+                    assert!(source.as_slice().is_none());
+                    let mut dec = QoiDecoderConfig::new()
+                        .job()
+                        .into_incremental_decoder(&[])
+                        .unwrap();
+                    let mut sink = CollectSink::new();
+                    drive_from_read_at(
+                        &mut dec,
+                        &mut source,
+                        &mut sink,
+                        None,
+                        DriveOptions::new(0, read_size),
+                    )
+                    .unwrap();
+                    assert!(sink.finished());
+                    let out = sink.as_pixel_slice().unwrap();
+                    assert_eq!(out.descriptor(), PixelDescriptor::RGBA8);
+                    for y in 0..h {
+                        assert_eq!(out.row(y), pixels.row(y));
+                    }
+                    assert!(!ledger.borrow().events.is_empty());
+                    assert!(source.retained() <= cache);
+                }
+            }
+        }
+    }
+}

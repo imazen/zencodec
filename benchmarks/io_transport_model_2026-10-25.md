@@ -48,3 +48,22 @@ cannot alone establish raw-storage release under client backpressure. See the
 ```
 run-heavy: done rc=0 0s | peak-RSS 0.17GiB | min-avail 16055MiB | peak-load 1.10
 ```
+
+## Native codec integration
+
+The same model also serves actual zencodec `drive_from_read_at` requests from
+the pinned native QOI incremental decoder. An authored 37×29 RGBA fixture uses
+16 padding bytes per row and nonopaque samples. The test exercises 0/160 ms RTT,
+0/131072 cached bytes and configured read sizes 1/7/4096: all 12 combinations
+return the exact original sample rows and the native RGBA8 descriptor. Decoder
+minimum-request sizes still apply; a configured size of 1 is not a promise of
+one-byte physical reads. The transport deliberately exposes no `as_slice`
+shortcut, and nonempty event ledgers confirm the requests traverse the model.
+
+This is correctness integration, not a decoder speed or WAN measurement. The
+32 policy-comparison CSV rows above remain unchanged. The Documentation workflow
+runs both model regressions and this native integration on every revision.
+
+```
+native integration and guide gates: rc=0 0s | peak-RSS 0.18GiB | min-avail 17584MiB | peak-load 0.19
+```
