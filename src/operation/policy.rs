@@ -116,6 +116,17 @@ pub enum Selection {
     },
 }
 
+/// The facts that prompted a question, retained even when no route was selected.
+/// This is diagnostic context, not authority to resume or execute anything.
+#[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
+pub enum DecisionContext {
+    /// Facts about the pixels awaiting an encoder configuration.
+    Encode(EncodeFacts),
+    /// Facts at a mandatory interpretation suspension, including any refusal reason.
+    Boundary(InterpretationFacts),
+}
+
 /// A mechanism offered at a real decoder suspension. Continuing discovery
 /// keeps affected output blocked; this offer makes no native memory claim.
 #[derive(Clone, Copy, Debug)]
@@ -292,6 +303,8 @@ pub enum DecisionCode {
 pub struct DecisionRecord {
     /// Globally unique question identity (zero only if identity allocation failed).
     pub question: u64,
+    /// What prompted this decision, including on refusal or callback failure.
+    pub context: DecisionContext,
     /// Number of qualified alternatives presented.
     pub offered: u8,
     /// Selected contract, including its original request preference index.
@@ -408,6 +421,7 @@ pub(super) fn choose_encode<R: PolicyResolver + ?Sized>(
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>> {
     choose(
         offers,
+        DecisionContext::Encode(facts),
         |choices| Question::Encode { facts, choices },
         Selection::Encode,
         resolver,
@@ -440,6 +454,7 @@ pub fn resolve_boundary<R: PolicyResolver + ?Sized>(
     };
     let (index, record) = choose(
         offers,
+        DecisionContext::Boundary(facts),
         |choices| Question::Boundary { facts, choices },
         |offer| Selection::Boundary {
             action: offer.action,
@@ -454,6 +469,7 @@ pub fn resolve_boundary<R: PolicyResolver + ?Sized>(
 
 fn choose<'a, T: Copy, R: PolicyResolver + ?Sized>(
     offers: &'a [T],
+    context: DecisionContext,
     question: impl FnOnce(Choices<'a, T>) -> Question<'a>,
     selection: impl FnOnce(T) -> Selection,
     resolver: &mut R,
@@ -462,6 +478,7 @@ fn choose<'a, T: Copy, R: PolicyResolver + ?Sized>(
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>> {
     let mut record = DecisionRecord {
         question: 0,
+        context,
         offered: offers.len().min(255) as u8,
         selected: None,
         used_preset: false,
@@ -523,12 +540,10 @@ mod tests {
     use super::*;
     #[test]
     fn boundaries_refuse_unavailable_facts_and_cross_domain_choice_tokens() {
-        let unavailable = DecodeBoundary::new(InterpretationFacts::new(
-            2,
-            3,
-            None,
-            InterpretationState::Unavailable,
-        ))
+        let unavailable = DecodeBoundary::new(
+            InterpretationFacts::new(2, 3, None, InterpretationState::Unavailable)
+                .with_unavailable(crate::decode::InterpretationUnavailable::ForbiddenColorMetadata),
+        )
         .unwrap();
         let mut called = false;
         let error = resolve_boundary(
@@ -548,6 +563,18 @@ mod tests {
         assert!(called);
         assert_eq!(error.error().record().code, DecisionCode::Declined);
         assert_eq!(error.error().record().offered, 0);
+        let DecisionContext::Boundary(facts) = error.error().record().context else {
+            panic!("refusal lost its domain");
+        };
+        assert_eq!(facts, unavailable.facts());
+        assert_eq!(
+            facts.unavailable,
+            Some(crate::decode::InterpretationUnavailable::ForbiddenColorMetadata)
+        );
+        let mut misleading = facts;
+        misleading.state = InterpretationState::Final;
+        misleading.descriptor = Some(PixelDescriptor::RGB8_SRGB);
+        assert!(!BoundaryAction::AdoptInterpretation.permits(misleading));
 
         let mut token = None;
         choose_encode(
@@ -604,6 +631,11 @@ mod tests {
         for question in 1..=20 {
             report.record(DecisionRecord {
                 question,
+                context: DecisionContext::Encode(EncodeFacts {
+                    width: 2,
+                    height: 3,
+                    descriptor: PixelDescriptor::RGB8_SRGB,
+                }),
                 offered: 1,
                 selected: None,
                 used_preset: false,

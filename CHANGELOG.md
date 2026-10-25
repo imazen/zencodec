@@ -6,6 +6,8 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### [Unreleased]
 
+- Policy decision reports retain typed question context on refusal and callback failure; controlled decoders can report payload-free interpretation failure reasons.
+
 ### Fixed
 
 - Compare discarded ICC/CICP against a clean same-policy encode in the testkit, distinguishing native/default color from retained optional metadata; unexpected color values and discarded descriptive metadata still fail.

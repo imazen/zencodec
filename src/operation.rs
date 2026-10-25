@@ -18,9 +18,9 @@ use zenpixels::{PixelDescriptor, PixelSlice};
 mod decoding;
 mod policy;
 pub use policy::{
-    BoundaryOffer, Choice, ChoiceId, Choices, Decision, DecisionCode, DecisionRecord, Decline,
-    EncodeFacts, EncodeOffer, OperationReport, PolicyFailure, PolicyResolver, PolicySet, Question,
-    Selection, resolve_boundary,
+    BoundaryOffer, Choice, ChoiceId, Choices, Decision, DecisionCode, DecisionContext,
+    DecisionRecord, Decline, EncodeFacts, EncodeOffer, OperationReport, PolicyFailure,
+    PolicyResolver, PolicySet, Question, Selection, resolve_boundary,
 };
 
 /// Successful output and the decisions that selected its permitted contract.

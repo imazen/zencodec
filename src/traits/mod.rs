@@ -34,7 +34,7 @@ mod unsupported;
 pub use control::{
     BoundaryAction, BoundaryId, ControlError, ControlledIncrementalDecode, ControlledProgress,
     DecodeBoundary, DynControlledDecoder, InterpretationFacts, InterpretationState,
-    erase_controlled,
+    InterpretationUnavailable, erase_controlled,
 };
 pub use decoder::{AnimationFrameDecoder, Decode, StreamingDecode};
 pub use decoding::{DecodeJob, DecoderConfig};

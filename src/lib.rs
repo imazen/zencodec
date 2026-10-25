@@ -231,7 +231,7 @@ pub mod decode {
     pub use crate::traits::{
         BoundaryAction, BoundaryId, ControlError, ControlledIncrementalDecode, ControlledProgress,
         DecodeBoundary, DynControlledDecoder, InterpretationFacts, InterpretationState,
-        erase_controlled,
+        InterpretationUnavailable, erase_controlled,
     };
     // Traits — config, job, execution
     pub use crate::traits::{

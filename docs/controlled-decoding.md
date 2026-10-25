@@ -181,3 +181,16 @@ Registration controls cover detection, inherited-policy rejection, limits,
 required-versus-preferred output, pre-effect refusal and reuse of a request over
 two drivers. These authored tests establish facade behavior; the native JPEG
 qualification currently supplies its own adapter until the codec entry point lands.
+
+## Diagnosing a refused boundary
+
+`InterpretationFacts::with_unavailable(InterpretationUnavailable::...)` records
+why a route cannot establish interpretation: late, forbidden or incomplete color
+metadata, unsupported color, or an unqualified output path. These codes are
+facts, not policy exceptions. Setting `Final` cannot authorize facts that still
+carry an unavailability reason.
+
+Every `DecisionRecord` retains `DecisionContext`, including refusals and callback
+errors. A failed question therefore retains the interpretation facts even when
+its `selected` field is `None`. Reports contain no metadata bytes, profile names,
+paths or application error text; traced native causes remain separately inspectable.

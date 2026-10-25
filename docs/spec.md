@@ -162,6 +162,10 @@ drops prepared jobs; a caught panic does not leave an operation to resume.
 Cancellation is checked before preparation and on both sides of the callback.
 This does not make uncooperative native encoding preemptible.
 
+`DecisionRecord::context` retains typed `DecisionContext` facts even on refusal;
+`InterpretationFacts::unavailable` carries an optional `InterpretationUnavailable`
+code without metadata payloads. `with_unavailable(reason)` marks the facts unavailable.
+
 `OperationReport` keeps the latest 16 `DecisionRecord`s and counts omitted older
 records. A record carries question identity, offer count, selected typed contract
 (`Selection::Encode(EncodeOffer)` or `Selection::Boundary { action, facts }`),

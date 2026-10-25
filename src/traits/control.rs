@@ -27,6 +27,23 @@ pub enum InterpretationState {
     Unavailable,
 }
 
+/// Why a decoder cannot establish the interpretation of its proposed output.
+/// These codes carry no profile contents, names, paths or other input payloads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum InterpretationUnavailable {
+    /// Relevant color metadata arrived outside this route's qualified scope.
+    LateColorMetadata,
+    /// The request forbids extracting metadata needed to interpret the samples.
+    ForbiddenColorMetadata,
+    /// A recognized color carrier is incomplete or malformed.
+    IncompleteColorMetadata,
+    /// This route cannot establish the source's color interpretation.
+    UnsupportedColor,
+    /// The selected sample path has not been qualified for this contract.
+    UnqualifiedOutput,
+}
+
 /// Facts exposed before affected decode output. Contains no metadata payloads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -39,6 +56,9 @@ pub struct InterpretationFacts {
     pub descriptor: Option<PixelDescriptor>,
     /// Whether this interpretation can still change.
     pub state: InterpretationState,
+    /// Structured explanation when interpretation is unavailable. Older adapters
+    /// may leave this absent; absence never means the route is permitted.
+    pub unavailable: Option<InterpretationUnavailable>,
 }
 impl InterpretationFacts {
     /// Describe the interpretation of one still image. Final facts require a
@@ -54,7 +74,15 @@ impl InterpretationFacts {
             height,
             descriptor,
             state,
+            unavailable: None,
         }
+    }
+
+    /// Mark these facts unavailable and retain a payload-free explanation.
+    pub const fn with_unavailable(mut self, reason: InterpretationUnavailable) -> Self {
+        self.state = InterpretationState::Unavailable;
+        self.unavailable = Some(reason);
+        self
     }
 }
 
@@ -118,7 +146,9 @@ impl BoundaryAction {
                 InterpretationState::Pending | InterpretationState::Provisional
             ),
             Self::AdoptInterpretation => {
-                matches!(facts.state, InterpretationState::Final) && facts.descriptor.is_some()
+                matches!(facts.state, InterpretationState::Final)
+                    && facts.descriptor.is_some()
+                    && facts.unavailable.is_none()
             }
         }
     }
