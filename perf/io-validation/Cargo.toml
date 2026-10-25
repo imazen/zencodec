@@ -23,6 +23,10 @@ zenmp4 = { path = "vendor/zenmp4" }
 zenwebm = { path = "vendor/zenwebm" }
 zenivf = { path = "vendor/zenivf" }
 zenbitmaps = { path = "vendor/zenbitmaps", features = ["std", "zencodec", "inventory", "qoi", "bmp"] }
+zenmeta = { path = "../../zenmeta", features = ["rewrite"] }
+
+[dev-dependencies]
+kamadak-exif = "0.6.1"
 
 [patch.crates-io]
 zencodec = { path = "../.." }

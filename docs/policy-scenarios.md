@@ -65,9 +65,9 @@ it does not certify a codec's memory bounds or actual metadata effects.
 | Shared reservation | Another job consumes space during selection; partial RAM reservation rolls back when disk admission fails | Unified `policy_execution` control passed; partial reservation rollback and simultaneous contenders |
 | Coupled choices | Individually valid metadata/execution selections exceed a combined budget or conflict; selected plan becomes stale before start | Control passed: `policy_execution`; conservative summed bounds and source/plan/epoch checks |
 | Unknown growth | Actual reservation before each growth, exact-cap failure, release on failure/cancellation | Actual payload control passed: `policy_execution`; allocator overhead and native codec storage are outside this scope |
-| Native codec path | Same policy through concrete config and CodecSet/erased jobs, strided pixels, unsupported metadata, native failures | Pending integration |
-| Metadata reality | Actual packets, malformed/opaque EXIF, retention/removal conflict, missing carrier, independent output inspection | Pending integration |
-| Output failure | Slow/short/failing writer, partial artifact, no automatic retry, raw/staging lifetimes | Existing retention control; unified diagnostics pending |
+| Native codec path | Same policy through concrete config and CodecSet/erased jobs, strided pixels, unsupported metadata, native failures | Passed for two pinned QOI/BMP configurations in `policy_native`; other codecs and whole-operation memory bounds remain unqualified |
+| Metadata reality | Actual packets, malformed/opaque EXIF, retention/removal conflict, missing carrier, independent output inspection | Extracted EXIF controls pass with kamadak-exif inspection; whole-file privacy and carrier roundtrips beyond QOI/BMP are not qualified |
+| Output failure | Slow/short/failing writer, partial artifact, no automatic retry, raw/staging lifetimes | Short/interrupted/zero/failing Write diagnostics passed in `policy_native`; slow async retention remains the separate native retention control |
 | Transport and viewport | Reused simulator, range/source version changes, view cancellation and disk/resident controls | Existing transport model; unified resolver integration pending |
 | Media | Real packet/frame facts, epoch changes, late decisions, retained frames and multiple tracks | Existing media evidence; unified resolver integration pending |
 | Concurrency | Independent mutable resolvers, shared immutable preset configuration, unique operation/question tickets | Concurrent control passed: `policy_engine`; no shared callback mutex |
@@ -155,4 +155,52 @@ joint plan and actual payload controls:
 
 ```text
 run-heavy: done rc=0 1s | peak-RSS 0.19GiB | min-avail 18499MiB | peak-load 0.11
+```
+
+## Native metadata, pixels and output failures
+
+`just io-policy-native-check` exercises QOI and BMP from the recorded zenbitmaps
+pin through concrete configurations and CodecSet's erased configurations. The
+same resolver selects EXIF disposition, fidelity and execution. Both paths
+produce identical encoded bytes for the strided RGBA fixture and decode to its
+exact samples. This is a two-configuration vertical slice, not a codec fleet
+certification. Native memory bounds are unknown, so a hard operation RAM cap
+refuses before parsing or invoking the callback.
+
+The test reproduces the existing QOI setter's successful omission of supplied
+EXIF. The checked operation refuses required rights retention before calling
+the codec or writing output. If omission is allowed, it proceeds explicitly.
+Preserving existing rights is different from requiring rights to be present:
+empty input satisfies preservation without inventing an attribution.
+
+Extracted EXIF filtering uses the existing zenmeta rewrite processor. Independent
+kamadak-exif inspection confirms copyright and orientation retention, GPS IFD
+removal, and removal of the fixture's camera identifiers, timestamps and
+thumbnail fields. Exact preservation conflicts with GPS removal when the packet
+contains GPS or cannot be validated. An opaque malformed packet can still be
+retained byte-for-byte when privacy removal is not required and a carrier exists.
+These are packet-scoped statements: arbitrary private data in unknown tags,
+XMP, other carriers, ICC, HDR/gain-map and pixel-content privacy are not certified.
+The native wrapper refuses unqualified color/orientation/XMP inputs explicitly.
+
+Interrupted and short writes complete without changing bytes. Write-zero and
+injected native I/O errors retain their typed cause, exact accepted-byte count,
+and incomplete-output status. They do not invoke the resolver again or restart
+encoding. Accepted bytes mean the Write contract, not disk durability or receipt
+by a remote peer. Codec pixel-limit failures remain codec errors, not policy
+declines.
+
+Two interface findings need to shape the public design:
+
+- A metadata preference alone is not a privacy guarantee. A named privacy profile
+  must install required effects as well as the resolver's preferences. Otherwise
+  ordinary fallback could keep an opaque packet when filtering is unavailable.
+- Generic boxed errors do not automatically preserve a whereat envelope's inner
+  type or trace. `At::source` skips its wrapped error and delegates to that error's
+  source. The qualified bitmap adapter explicitly downcasts its known
+  `At<CodecError>` envelope and maps it into the outer report, keeping the trace.
+  A general erased interface needs an explicit trace-preserving boundary.
+
+```text
+run-heavy: done rc=0 0s | peak-RSS 0.20GiB | min-avail 18489MiB | peak-load 0.18
 ```
