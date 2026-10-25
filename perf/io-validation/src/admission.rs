@@ -178,11 +178,13 @@ impl Drop for Reservation {
 pub(crate) struct Identity(pub u64);
 
 pub(crate) struct Transfer {
+    // Cancellation must free the payload before making its reservation reusable.
+    bytes: Vec<u8>,
     reservation: Reservation,
     identity: Identity,
     range: ByteRange,
-    bytes: Vec<u8>,
     filled: usize,
+    failed: bool,
 }
 impl Transfer {
     pub fn new(storage: &Storage, identity: Identity, range: ByteRange) -> Result<Self, Refusal> {
@@ -209,19 +211,29 @@ impl Transfer {
             range,
             bytes,
             filled: 0,
+            failed: false,
         })
     }
     pub fn append(&mut self, chunk: &[u8]) -> Result<(), Refusal> {
-        let end = self
+        if self.failed {
+            return Err(Refusal::Bytes);
+        }
+        let Some(end) = self
             .filled
             .checked_add(chunk.len())
             .filter(|n| *n <= self.bytes.len())
-            .ok_or(Refusal::Bytes)?;
+        else {
+            self.failed = true;
+            return Err(Refusal::Bytes);
+        };
         self.bytes[self.filled..end].copy_from_slice(chunk);
         self.filled = end;
         Ok(())
     }
     pub fn publish(self, verified_identity: Identity) -> Result<Lease, Refusal> {
+        if self.failed {
+            return Err(Refusal::Bytes);
+        }
         if self.identity != verified_identity {
             return Err(Refusal::Identity);
         }
@@ -258,8 +270,9 @@ impl Lease {
 }
 
 /// Completed packets may arrive out of order, while decode order stays strict.
-/// Each waiting value keeps its storage lease. The caller admits work in order
-/// (including the missing head) to avoid filling the budget behind a missing head.
+/// Each waiting value keeps its storage lease. Only the next `limit` ordinals
+/// can complete into the queue, preserving a slot for the missing head. Callers
+/// must also admit the head's transport storage before launching later work.
 pub(crate) struct Ordered {
     next: u64,
     generation: u64,
@@ -282,7 +295,7 @@ impl Ordered {
         if ordinal < self.next || self.ready.contains_key(&ordinal) {
             return Err(Refusal::Duplicate);
         }
-        if self.ready.len() >= self.limit {
+        if !usize::try_from(ordinal - self.next).is_ok_and(|delta| delta < self.limit) {
             return Err(Refusal::Descriptors);
         }
         self.ready.insert(ordinal, lease);

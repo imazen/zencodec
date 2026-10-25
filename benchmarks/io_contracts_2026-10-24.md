@@ -239,3 +239,33 @@ run-heavy: done rc=0 8s | peak-RSS 0.09GiB | min-avail 15922MiB | peak-load 0.23
 ```
 
 Reproduce with `just io-validation-disk-profile <new-output> <file> 2,3`.
+
+## Adversarial qualification of the candidate
+
+Two added tests fail against the first candidate and pass after hardening:
+
+- An exactly filled transfer followed by an extra byte used to return an append
+  error yet remain publishable. An append overflow now makes the transfer
+  terminally unpublishable, even if the caller retains it after the error.
+- A completion queue could fill with ordinals 1, 2, 3 while waiting for 0.
+  The bounded ordinal window now accepts only the next `limit` ordinals, leaving
+  room for the missing head. Transport storage must still be admitted for that
+  head first; the queue is not a transport scheduler.
+
+Cancellation also drops a transfer's payload before releasing its reservation,
+matching the published lease's ordering. An independent byte-mask oracle checks
+2048 small overlapping/reversed/disjoint range-plan cases for complete coverage,
+no duplicate transfers and bounded bytes/descriptors. All ten candidate tests
+and standalone all-target clippy pass. The candidate still does not make
+`Arc`/`BTreeMap` metadata allocations fallible or account arbitrary backend memory.
+
+[Hardened candidate benchmark](io_admission_hardened_2026-10-24.log), same workload
+and three-pass method: 1024-byte allocation/copy + shared ownership is 16.4 ns
+for Vec/Arc versus 50.4 ns for the reserved lease. At 65536 bytes it is 818.7 ns
+versus 1233 ns. These are whole-path costs with the earlier qualifications;
+the extra checks have been remeasured rather than extrapolated.
+
+```
+adversarial tests/clippy: rc=0 1s | peak-RSS 0.20GiB | min-avail 16047MiB | peak-load 0.20
+hardened lease benchmark: rc=0 15s | peak-RSS 0.30GiB | min-avail 15880MiB | peak-load 0.66
+```

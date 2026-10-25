@@ -93,6 +93,75 @@ fn incomplete_wrong_identity_and_oversized_responses_never_publish() {
 }
 
 #[test]
+fn extra_body_bytes_poison_even_an_already_complete_transfer() {
+    let storage = Storage::new(limits(8));
+    let mut transfer = Transfer::new(&storage, Identity(1), ByteRange::new(0, 8)).unwrap();
+    transfer.append(&[1; 8]).unwrap();
+    assert_eq!(transfer.append(&[2]), Err(Refusal::Bytes));
+    assert!(matches!(transfer.publish(Identity(1)), Err(Refusal::Bytes)));
+    assert_eq!(storage.occupancy().bytes, 0);
+}
+
+#[test]
+fn later_completions_cannot_take_the_missing_heads_queue_slot() {
+    let storage = Storage::new(limits(8));
+    let mut ordered = Ordered::new(3);
+    for ordinal in [2, 1] {
+        ordered
+            .insert(0, ordinal, ready(&storage, Identity(1), ordinal as u8, 1))
+            .unwrap();
+    }
+    assert_eq!(
+        ordered.insert(0, 3, ready(&storage, Identity(1), 3, 1)),
+        Err(Refusal::Descriptors)
+    );
+    ordered
+        .insert(0, 0, ready(&storage, Identity(1), 0, 1))
+        .unwrap();
+    for expected in 0..3 {
+        assert_eq!(ordered.pop().unwrap().bytes(), [expected]);
+    }
+    assert_eq!(storage.occupancy().bytes, 0);
+}
+
+#[test]
+fn small_range_plans_preserve_an_independent_byte_coverage_oracle() {
+    // Enumerate overlapping, reversed and disjoint dependencies. The oracle
+    // marks individual source bytes; it does not reproduce the merge algorithm.
+    for a in 0..8 {
+        for b in 0..8 {
+            for length in 1..=8 {
+                let input = [ByteRange::new(b, length), ByteRange::new(a, length)];
+                let mut needed = [false; 16];
+                for r in input {
+                    needed[r.offset as usize..r.end() as usize].fill(true);
+                }
+                for cap in [0, 4, 8, 16] {
+                    let mut l = limits(cap);
+                    l.range_bytes = 3;
+                    if let Ok(plan) = plan_all(&input, 16, l) {
+                        let mut fetched = [false; 16];
+                        let mut total = 0;
+                        for r in &plan {
+                            assert!(r.length > 0 && r.length <= 3);
+                            for present in &mut fetched[r.offset as usize..r.end() as usize] {
+                                assert!(!*present, "transferred a byte twice");
+                                *present = true;
+                            }
+                            total += r.length as usize;
+                        }
+                        assert!(total <= cap && plan.len() <= l.descriptors);
+                        assert!(needed.iter().zip(fetched).all(|(need, have)| !need || have));
+                    } else {
+                        assert!(needed.iter().filter(|v| **v).count() > cap);
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn video_completion_order_is_separate_from_decode_order_and_seek_generation() {
     let storage = Storage::new(limits(4));
     // Admit the head before later packets, even when it completes last.
