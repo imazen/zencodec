@@ -17,6 +17,12 @@ has a 30-second deadline. Existing artifacts are never overwritten: choose a
 fresh directory for each run. The Cargo manifest pins the native PRs and patches
 all shared zencodec types to this tree. `dependencies.lock` records resolution.
 
+CI installs Ubuntu's signed FFmpeg package from its archive mirror, with
+separate two-minute update and three-minute installation deadlines. The initial
+Azure mirror attempt exhausted the job's 15-minute deadline before tests began
+(run 40237893129). Installation failure fails qualification; it never skips the
+independent decoder checks.
+
 The matrix covers 8/10/12-bit mono, YUV 4:2:0, 4:2:2, 4:4:4 and identity-matrix
 GBR, each at 17x13 with padded input strides. Other tests check queued epoch
 changes at one/four native threads, multiple presentations per packet, repeated
