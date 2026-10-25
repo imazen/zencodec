@@ -926,6 +926,8 @@ impl CodecErrorExt for dyn core::error::Error + 'static {
 /// the first match. At each link, also inspects [`At<T>`], whose `source()`
 /// delegates past its inner `T`. This preserves access to a traced native error
 /// without requiring it to use the shared [`CodecError`] envelope.
+/// With `std`, also enters custom `std::io::Error` payloads: its `source()`
+/// delegates past the embedded error rather than returning that value itself.
 ///
 /// Prefer [`CodecErrorExt`] methods for common types. Use this for
 /// codec-specific error types not covered by the extension trait.
@@ -939,6 +941,13 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(
         if let Some(at) = err.downcast_ref::<At<T>>() {
             return Some(at.error());
         }
+        #[cfg(feature = "std")]
+        if let Some(io) = err.downcast_ref::<std::io::Error>()
+            && let Some(inner) = io.get_ref()
+        {
+            err = inner;
+            continue;
+        }
         err = err.source()?;
     }
 }
@@ -949,6 +958,39 @@ mod tests {
     use alloc::boxed::Box;
     use alloc::string::String;
     use core::fmt;
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn native_custom_io_cause_survives_nested_io_and_trace_wrappers() {
+        #[derive(Debug)]
+        struct TransportFailure(u64);
+        impl fmt::Display for TransportFailure {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "transport failed")
+            }
+        }
+        impl core::error::Error for TransportFailure {}
+
+        let native = At::wrap(TransportFailure(73));
+        let io = std::io::Error::new(std::io::ErrorKind::TimedOut, native);
+        let nested = std::io::Error::other(io);
+        let erased: Box<dyn core::error::Error> = Box::new(nested);
+        assert_eq!(find_cause::<TransportFailure>(&*erased).unwrap().0, 73);
+        assert!(find_cause::<At<TransportFailure>>(&*erased).is_some());
+        assert!(find_cause::<UnsupportedOperation>(&*erased).is_none());
+        // Lookup still returns the first requested type; it does not replace
+        // the outer I/O classification with a deeper one.
+        assert_eq!(
+            find_cause::<std::io::Error>(&*erased).unwrap().kind(),
+            std::io::ErrorKind::Other
+        );
+        let os = std::io::Error::from_raw_os_error(2);
+        assert_eq!(
+            find_cause::<std::io::Error>(&os).unwrap().raw_os_error(),
+            Some(2)
+        );
+        assert!(find_cause::<TransportFailure>(&os).is_none());
+    }
 
     // A codec error that opts into CategorizedError and exposes typed causes
     // via source() — exactly the pattern a real codec follows.

@@ -231,6 +231,12 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed during native TIFF spatial qualification (2026-10-25): `find_cause`
+  skipped a transport error embedded in `std::io::Error`, whose `source()`
+  delegates past its payload. With `std`, lookup now follows `get_ref()` before
+  the next source link. Native partial-read/version failures and nested traced
+  payloads exercise the regression; no error type or signature changes.
+
 - Found during native PNG transcode qualification (2026-10-25): a native batch
   taller than the checked adapter's admitted strip failed with `StripGeometry`
   (97x65 guide fixture, default 64-row adapter). The added sink capacity method

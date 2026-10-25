@@ -396,6 +396,9 @@ None.
 - `find_cause::<E>` inspects traced `At<E>` values before following their source
   links, preserving concrete native error lookup before and after erasure.
   Codec traits retain their associated error types.
+- With `std`, cause lookup enters custom `std::io::Error` payloads as well.
+  Native TIFF source-failure tests exposed the otherwise skipped transport
+  error; nested I/O and traced payloads remain downcastable after erasure.
 - The default `DynEncoder::begin` now refuses unsupported row encoding, matching
   `Encoder::begin`. This fixes handwritten dyn implementations; the ordinary
   typed-to-dyn shim already delegated correctly. Rejection preserves the
