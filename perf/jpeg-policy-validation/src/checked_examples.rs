@@ -82,3 +82,54 @@ fn public_guide_executes_all_transport_and_policy_recipes() {
         }
     }
 }
+
+#[test]
+fn public_guide_required_density_survives_or_refuses_before_encoding() {
+    use zencodec::{Resolution, ResolutionError, ResolutionUnit};
+    let codecs = guide::gallery_codecs();
+    let source = fixtures::fixture(false, fixtures::Placement::Header);
+    let preview = guide::preview(&codecs, &source).unwrap();
+    for resolution in [
+        Resolution {
+            x: 254.0,
+            y: 127.0,
+            unit: ResolutionUnit::Inch,
+        },
+        Resolution {
+            x: 100.0,
+            y: 50.0,
+            unit: ResolutionUnit::Centimeter,
+        },
+        Resolution {
+            x: 120.0,
+            y: 80.0,
+            unit: ResolutionUnit::Unknown,
+        },
+    ] {
+        let encoded = guide::with_density(&codecs, preview.pixels(), resolution).unwrap();
+        // The native integration also checks pHYs with an independent PNG reader.
+        // This gate executes the exact example and its default transcode policy.
+        let decoded = guide::preview(&codecs, encoded.data()).unwrap();
+        assert!(resolution.is_equivalent_to(&decoded.info().resolution.unwrap()));
+        let retained = guide::derivative(&codecs, encoded.data()).unwrap();
+        let decoded = guide::preview(&codecs, retained.data()).unwrap();
+        assert!(resolution.is_equivalent_to(&decoded.info().resolution.unwrap()));
+        for row in 0..preview.height() {
+            assert_eq!(preview.pixels().row(row), decoded.pixels().row(row));
+        }
+    }
+    let error = guide::with_density(
+        &codecs,
+        preview.pixels(),
+        Resolution {
+            x: 300.0,
+            y: 150.0,
+            unit: ResolutionUnit::Inch,
+        },
+    )
+    .unwrap_err();
+    assert!(matches!(
+        zencodec::find_cause::<ResolutionError>(&error),
+        Some(ResolutionError::NotRepresentable)
+    ));
+}

@@ -57,6 +57,33 @@ mod automatic {
 }
 pub(crate) use automatic::derivative;
 
+mod print {
+    // EXAMPLE: checked_resolution
+    use zencodec::{
+        At, CodecSet, ImageFormat, Resolution,
+        encode::EncodeOutput,
+        operation::{EncodeRequest, OperationError, Outcome},
+    };
+    use zenpixels::PixelSlice;
+
+    pub fn with_density(
+        codecs: &CodecSet,
+        pixels: PixelSlice<'_>,
+        resolution: Resolution,
+    ) -> Result<Outcome<EncodeOutput>, At<OperationError>> {
+        // ANCHOR: checked_resolution
+        let output = EncodeRequest::new(ImageFormat::Png)
+            .with_resolution(resolution)
+            .encode(codecs, pixels)?;
+        // END: checked_resolution
+        // Required means exact: 254 DPI fits PNG; 300 DPI refuses.
+        // No implicit rounding or unit change may alter the represented density.
+        Ok(output)
+    }
+    // END EXAMPLE: checked_resolution
+}
+pub(crate) use print::with_density;
+
 mod web {
     // EXAMPLE: checked_web
     use zencodec::{

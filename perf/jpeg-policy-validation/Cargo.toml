@@ -13,13 +13,13 @@ zencodec-coroutine = { path = "../../zencodec-coroutine", version = "0.1.0" }
 zenmeta = { path = "../../zenmeta", features = ["rewrite", "xmp"] }
 zenpixels = ">=0.2.16, <0.4.0"
 zenpixels-convert = { version = ">=0.2.16, <0.4.0", features = ["icc-db"] }
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "02fa386631845cc08543090abb3fd1ba2da31012", features = ["controlled-decode", "metadata-rewrite", "extended-metadata"] }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "4535ec499d88b04f58882df03e61761526c35756", features = ["controlled-decode", "metadata-rewrite", "extended-metadata"] }
 
-zencodecs = { git = "https://github.com/imazen/zenpipe", rev = "0287369dc87f2bf00929ad074a95e54efca5ccaa", default-features = false, features = ["std", "cms", "jpeg", "png", "checked-transcode-async"] }
+zencodecs = { git = "https://github.com/imazen/zenpipe", rev = "ffecbf56ec8dc0ebcc6dbb16eb1d5925dccd37a5", default-features = false, features = ["std", "cms", "jpeg", "png", "checked-transcode-async"] }
 
 [patch.crates-io]
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "02fa386631845cc08543090abb3fd1ba2da31012" }
-zenpng = { git = "https://github.com/imazen/zenpng", rev = "3046bd77d1bae58516ee760043a444af087ee3c7" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "4535ec499d88b04f58882df03e61761526c35756" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "7f13367f8f2d8ad78f60c9638c07214997451f54" }
 zencodec = { path = "../.." }
 # Reproduce zenjpeg main's unpublished workspace bridges at immutable commits.
 zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "8ca647c525cf488c61bbf35475ca8ba3db6b628e" }
