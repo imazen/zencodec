@@ -143,6 +143,24 @@ qualify that work; their recorded test claims are not a fresh local rerun here.
 
 ## Qualification status
 
-The source review above is complete. New opaque-XML and suspended-stream controls
-are being added to the private harness. No production state-machine or public
-policy interface has changed in this investigation.
+The private [disclosure adapter](../perf/io-validation/src/policy_disclosure.rs)
+uses `zenmeta::xmp::Packet` for bounded XML/RDF parsing. Its versioned allowlist
+covers **one field: TIFF orientation, values 1 through 8**. It can preserve an
+exact canonical packet, regenerate the supported value without other fields,
+drop a removable optional packet, or refuse. The approved result owns or borrows
+the exact outgoing bytes, so a receipt cannot authorize a substituted packet.
+
+`just io-policy-disclosure-check` passes the carrier controls and existing resolver
+regressions, with Clippy warnings denied. Cases include unknown namespaces and
+free text, comments and blobs, unavailable inspection, invalid UTF-8/XML, DTDs,
+byte/depth limits, duplicate/unsupported RDF values, required reconstruction,
+opaque ICC and nested/critical objects. Five route labels exercise the same
+disclosure contract; they do **not** implement five transcode pipelines. The
+orientation read-back uses the same parser, not an independent XML oracle.
+
+The test/build process receipt was `rc=0 16s | peak-RSS 0.45GiB | min-avail
+15949MiB | peak-load 2.15`. This is a process measurement, not a codec or parser
+memory bound. Byte/node/depth limits do not establish whole-operation heap usage.
+
+Suspended-stream controls are being added next. No production state-machine or
+public policy interface has changed in this investigation.

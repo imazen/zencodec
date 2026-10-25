@@ -23,7 +23,7 @@ zenmp4 = { path = "vendor/zenmp4" }
 zenwebm = { path = "vendor/zenwebm" }
 zenivf = { path = "vendor/zenivf" }
 zenbitmaps = { path = "vendor/zenbitmaps", features = ["std", "zencodec", "inventory", "qoi", "bmp"] }
-zenmeta = { path = "../../zenmeta", features = ["rewrite"] }
+zenmeta = { path = "../../zenmeta", features = ["rewrite", "xmp"] }
 
 [dev-dependencies]
 kamadak-exif = "0.6.1"
