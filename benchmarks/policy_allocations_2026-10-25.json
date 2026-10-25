@@ -1,0 +1,54 @@
+{
+  "binary_sha256": "42f566fb1b8293afb2a6eae0d8bc7762816385133a34a8c168cb698e62faa7a1",
+  "count_method": "sum of allocation-cost flamegraph leaves; operation symbol filter",
+  "results": [
+    {
+      "mode": "startup-control",
+      "operations": 0,
+      "total_allocation_calls": 15,
+      "allocation_calls_under_operation": 0
+    },
+    {
+      "mode": "direct-preset",
+      "operations": 10000,
+      "total_allocation_calls": 15,
+      "allocation_calls_under_operation": 0
+    },
+    {
+      "mode": "closure-fallback",
+      "operations": 10000,
+      "total_allocation_calls": 15,
+      "allocation_calls_under_operation": 0
+    },
+    {
+      "mode": "dyn-preset",
+      "operations": 10000,
+      "total_allocation_calls": 15,
+      "allocation_calls_under_operation": 0
+    },
+    {
+      "mode": "erased-success",
+      "operations": 10000,
+      "total_allocation_calls": 15,
+      "allocation_calls_under_operation": 0
+    },
+    {
+      "mode": "decline",
+      "operations": 10000,
+      "total_allocation_calls": 50015,
+      "allocation_calls_under_operation": 50000
+    },
+    {
+      "mode": "callback-error",
+      "operations": 10000,
+      "total_allocation_calls": 60015,
+      "allocation_calls_under_operation": 60000
+    },
+    {
+      "mode": "no-alternative",
+      "operations": 10000,
+      "total_allocation_calls": 30015,
+      "allocation_calls_under_operation": 30000
+    }
+  ]
+}

@@ -72,7 +72,7 @@ it does not certify a codec's memory bounds or actual metadata effects.
 | Media | Real packet/frame facts, epoch changes, late decisions, retained frames and multiple tracks | Native multi-track packet checks and toy-session epoch/frame-ownership controls pass; native decoded-video allocation bounds remain unqualified |
 | Concurrency | Independent mutable resolvers, shared immutable preset configuration, unique operation/question tickets | Concurrent control passed: `policy_engine`; no shared callback mutex |
 | Portability | Actual root types on WASM; isolated resolver on a freestanding target | Passed as described below; full root freestanding graph blocked by issue 165 |
-| Cost | Static versus erased dispatch, allocation/error-report cost | Pending measurement |
+| Cost | Static versus erased dispatch, allocation/error-report cost | [Measured workload](../benchmarks/policy_cost_2026-10-25.md): success paths 89.5–94.2 ns, no operation allocations; failure paths allocate for causes, traces and evidence. Not a codec or I/O benchmark. |
 
 The admission matrix exercises all 64 choice positions over 2,080 combinations
 of budgets, required effects, replayability and published output. It checks that
@@ -275,6 +275,12 @@ expected decline, an erased application error carrying data, and no admissible
 alternative. Each iteration includes operation creation, identity issuance and
 the bounded diagnostic journal; none includes codec work or real I/O. These
 controls can measure dispatch/report costs without changing the enforced contract.
+
+The [measured report](../benchmarks/policy_cost_2026-10-25.md) records source and
+executable hashes, raw-data locations, commands, resource-wrapper receipts, timing
+uncertainty and allocation attribution. Successful paths did not allocate in this
+workload; arbitrary callbacks, native codecs and failure reporting are outside
+that claim. The measurements support a hook at operation/epoch boundaries.
 
 ## Output-waiting policy is exercised, not inferred from timing flags
 

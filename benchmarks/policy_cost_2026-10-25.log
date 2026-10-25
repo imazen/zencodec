@@ -1,0 +1,56 @@
+run-heavy: mem-cap=12G (cgroup, hard) jobs=4/24 avail=18430MiB :: just io-policy-bench 2,3
+taskset -c "2,3" cargo bench --manifest-path perf/io-validation/Cargo.toml -p io-validation --bench policy --locked -- --cpu-policy=unrestricted --median-of-passes=3
+    Blocking waiting for file lock on package cache
+    Finished `bench` profile [optimized + debuginfo] target(s) in 0.60s
+     Running benches/policy.rs (target/release/deps/policy-61cf17ea0a44b4b8)
+[zenbench] Guides: zenbench guide | zenbench guide --topic simd | benchmark options: --help
+[zenbench] pass 1/3
+[zenbench] mode=iterate inference=exploratory workload=None
+[zenbench] cpu_policy=unrestricted cpu_placement=UNVERIFIED_UNRESTRICTED cpu_class=null cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=null cpu_class_uniform=false pool_thread_count=unknown cpu_frequency_verified=false
+[zenbench] calibration: int=0.20ns/iter mem_bw=110.8GiB/s mem_lat=10.9ns
+[zenbench] timer resolution: 10ns, loop overhead: 0.37ns/iter, TSC: 4.691 ticks/ns (invariant)
+[zenbench] results → .zenbench/data/attempts/18e1ab7169c5abb0-20f20a-11c2e91c8255a511.json.gz
+[zenbench] evidence → .zenbench/data/runs/18e1ab71ee2a2f9f-20f20a-620d1b9241f2cf2d.json
+[zenbench] pass 2/3
+[zenbench] mode=iterate inference=exploratory workload=None
+[zenbench] cpu_policy=unrestricted cpu_placement=UNVERIFIED_UNRESTRICTED cpu_class=null cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=null cpu_class_uniform=false pool_thread_count=unknown cpu_frequency_verified=false
+[zenbench] calibration: int=0.18ns/iter mem_bw=122.5GiB/s mem_lat=9.3ns
+[zenbench] timer resolution: 10ns, loop overhead: 0.18ns/iter, TSC: 4.691 ticks/ns (invariant)
+[zenbench] results → .zenbench/data/attempts/18e1ab71f82eebd1-20f20a-6e38c47ce6cd079f.json.gz
+[zenbench] evidence → .zenbench/data/runs/18e1ab7272154284-20f20a-288d4c017265d2de.json
+[zenbench] pass 3/3
+[zenbench] mode=iterate inference=exploratory workload=None
+[zenbench] cpu_policy=unrestricted cpu_placement=UNVERIFIED_UNRESTRICTED cpu_class=null cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=null cpu_class_uniform=false pool_thread_count=unknown cpu_frequency_verified=false
+[zenbench] calibration: int=0.18ns/iter mem_bw=116.0GiB/s mem_lat=9.5ns
+[zenbench] timer resolution: 10ns, loop overhead: 0.18ns/iter, TSC: 4.691 ticks/ns (invariant)
+[zenbench] results → .zenbench/data/attempts/18e1ab727aa1ebad-20f20a-bba3c57e743e21b6.json.gz
+[zenbench] evidence → .zenbench/data/runs/18e1ab72fafa3b49-20f20a-8ae81f6a7beff91d.json
+
+═══════════════════════════════════════════════════════════════
+  zenbench  18e1ab72fe18e30c-20f20a-9a9c6054a96373af
+═══════════════════════════════════════════════════════════════
+[zenbench] median of 3 passes (mad = inter-pass spread)
+[zenbench] cpu_policy=unrestricted cpu_placement=UNVERIFIED_UNRESTRICTED cpu_class=null cpu_enforcement=cpuset cpu_effective_set=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23] cpu_requested_set=null cpu_thread_requested=null cpu_thread_effective=[2,3] cpu_class_uniform=false pool_thread_count=unknown cpu_frequency_verified=false
+
+  one-operation-three-offers  60 rounds
+                        mean ±mad ns  95% CI vs base
+  ├─ direct-preset       89.5 ±0.1ns  
+  ├─ closure-fallback    90.2 ±0.6ns  
+  ├─ dyn-preset          94.2 ±0.8ns  
+  ├─ erased-success      90.6 ±0.8ns  
+  ├─ decline             92.8 ±0.7ns  
+  ├─ callback-error     118.3 ±0.4ns  
+  ╰─ no-alternative      81.1 ±0.1ns  
+
+  no-alternative    ████████████████████████████████████ 81.1ns
+  direct-preset     ███████████████████████████████████████ 89.5ns
+  closure-fallback  ████████████████████████████████████████ 90.2ns
+  erased-success    ████████████████████████████████████████ 90.6ns
+  decline           █████████████████████████████████████████ 92.8ns
+  dyn-preset        █████████████████████████████████████████ 94.2ns
+  callback-error    ████████████████████████████████████████████████████ 118.3ns
+
+  total: 5.6s  (20 noisy rounds)
+═══════════════════════════════════════════════════════════════
+  filter: cargo bench -- --group=NAME  format: --format=llm|csv|md|json
+run-heavy: done rc=0 8s | peak-RSS 0.06GiB | min-avail 17276MiB | peak-load 0.65
