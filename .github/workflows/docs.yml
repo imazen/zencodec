@@ -73,6 +73,30 @@ jobs:
           cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked -- --nocapture --test-threads=1
           cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
 
+  av1:
+    name: Qualify native AV1 policy and guide
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CARGO_BUILD_JOBS: 4
+      CARGO_INCREMENTAL: 0
+      AV1_POLICY_ARTIFACTS: ${{ github.workspace }}/perf/av1-policy-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: perf/av1-policy-validation
+      - name: Install independent AV1 oracle
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Test pinned native ownership, policy and independent readback
+        run: |
+          cp perf/av1-policy-validation/dependencies.lock perf/av1-policy-validation/Cargo.lock
+          timeout --kill-after=15s 10m cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked -- --nocapture --test-threads=1
+          timeout --kill-after=15s 5m cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
   build:
     name: Build and exercise guide
     runs-on: ubuntu-latest
@@ -110,7 +134,7 @@ jobs:
 
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: [examples, jpeg, build]
+    needs: [examples, jpeg, av1, build]
     runs-on: ubuntu-latest
     permissions:
       pages: write

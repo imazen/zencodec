@@ -257,6 +257,8 @@ av1-policy-sync export:
     mkdir -p "{{export}}/perf/av1-policy-validation/src"
     cp perf/av1-policy-validation/Cargo.toml "{{export}}/perf/av1-policy-validation/"
     cp perf/av1-policy-validation/src/*.rs "{{export}}/perf/av1-policy-validation/src/"
+    mkdir -p "{{export}}/docs/examples"
+    cp docs/examples/checked_video.rs "{{export}}/docs/examples/"
 
 av1-policy-resolve:
     cargo generate-lockfile --manifest-path perf/av1-policy-validation/Cargo.toml
@@ -266,6 +268,10 @@ av1-policy-setup:
 
 av1-policy-check artifacts:
     AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+av1-policy-guide-check:
+    cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked guide_default_and_midstream_preview_rule -- --nocapture
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
 
 operation-policy-check:

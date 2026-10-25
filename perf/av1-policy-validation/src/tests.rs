@@ -412,3 +412,46 @@ fn native_error_keeps_rav1d_whereat_trace_through_policy_and_erasure() {
         zencodec_media::session::erase_video_decoder(PolicyDecoder::new(native, PolicySet::new()));
     check(&mut *erased, &observed);
 }
+
+#[test]
+fn guide_default_and_midstream_preview_rule_execute_on_native_frames() {
+    let s = settings(10, Subsampling::Yuv420, false).with_color(Cicp::new(2, 2, 2, true));
+    let inputs: Vec<_> = (0..2).map(|i| frame(&s, i)).collect();
+    let (config, packets) = encode(s, &inputs);
+    let mut ordinary = crate::checked_video::open_video().unwrap();
+    let frames = decode(&mut ordinary, &config, &packets, &Unstoppable).unwrap();
+    assert_eq!(
+        frames.iter().map(samples).collect::<Vec<_>>(),
+        inputs.iter().map(samples).collect::<Vec<_>>()
+    );
+    let mut preview = crate::checked_video::open_preview().unwrap();
+    let colors = [Cicp::new(1, 13, 1, true), Cicp::new(9, 16, 9, true)];
+    for (i, (packet, color)) in packets.iter().zip(colors).enumerate() {
+        let config = config
+            .clone()
+            .with_epoch(i as u32)
+            .with_video(VideoTrackInfo::new(17, 13).with_color(color));
+        preview.configure(&config, &Unstoppable).unwrap();
+        let mut packet = packet.clone().with_config_epoch(config.epoch);
+        assert_eq!(
+            preview.send(&mut packet, &Unstoppable).unwrap(),
+            SendStatus::Accepted
+        );
+        if i == 0 {
+            let Receive::Ready(frame) = preview.receive(&Unstoppable).unwrap() else {
+                panic!("accepted preview frame missing")
+            };
+            assert_eq!(samples(&frame), samples(&inputs[0]));
+        }
+    }
+    preview.end_input().unwrap();
+    let error = preview.receive(&Unstoppable).unwrap_err();
+    assert!(cause::<At<crate::checked_video::PreviewTransfer>>(&error).frame_count() > 0);
+    assert!(preview.is_failed());
+    let record = preview.report().decisions().last().unwrap();
+    let zencodec::operation::DecisionContext::Frame(facts) = record.context else {
+        panic!("missing frame facts")
+    };
+    assert_eq!(facts.config_epoch, 1);
+    assert_eq!(facts.color.resolved, Some(colors[1]));
+}
