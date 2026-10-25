@@ -61,9 +61,14 @@ test('above, focus and below reconstruct complete independently compiled example
   const shown=new Set([
     ...entries.map(e=>e.snippet),
     ...lanes.flatMap(l=>l.steps.map(s=>s.snippet).filter(Boolean)),
-    ...Object.values(supplementalExamples).flat().map(e=>e.snippet),
   ]);
   const cases=[...shown].map(name=>[source,name]);
+  const byFile={'docs/examples/journeys.rs':source,'docs/examples/pixel_conversion.rs':pixelSource};
+  for(const extra of Object.values(supplementalExamples).flat()) {
+    const text=byFile[extra.file||'docs/examples/journeys.rs'];
+    assert.ok(text,`uncatalogued supplemental source: ${extra.file}`);
+    cases.push([text,extra.snippet]);
+  }
   for(const name of ['policy_default','policy_custom']) cases.push([policySource,name]);
   for(const name of ['jpeg_rewrite','jpeg_icc_refusal','jpeg_icc_admission']) cases.push([jpegSource,name]);
   for(const name of ['convert_display','convert_framebuffer']) cases.push([pixelSource,name]);

@@ -32,6 +32,10 @@ contents, independent expansion, audience/deep-link behavior, unlisted status,
 and stacked diagrams on mobile. No proposed signature is presented as an
 importable public API.
 
+The display-conversion scope also appears in consumer chapter 3 on the main
+guide. It follows format preference negotiation with an explicit conversion;
+the unlisted page itself is not linked from that journey.
+
 ```sh
 npm ci --prefix docs --ignore-scripts
 just docs-site-check

@@ -63,6 +63,7 @@ export const entries = [
 ];
 export const supplementalExamples = {
   'consumer-1':[{title:'Let CodecSet choose the decoder',snippet:'codecset',note:'Registration is application setup. Each decode borrows the set; you can reuse it for the next file.'}],
+  'consumer-3':[{title:'Require the display layout with zenpixels-convert',snippet:'convert_display',file:'docs/examples/pixel_conversion.rs',note:'This complete example registers JpegDecoderConfig and takes JPEG bytes. PixelBufferConvertExt::convert_to allocates BGRA8 sRGB pixels or returns a conversion error. Keep the returned residual orientation for presentation. CodecSet and the pinned color-aware conversion path require the unpublished sources used by the native JPEG harness.'}],
   'consumer-4':[{title:'Configure a registry job for this derivative',snippet:'codecset_job',note:'CodecSet returns a boxed DynEncodeJob. Its set_* methods mutate that job; typed EncodeJob uses with_* builders.'}],
   'adapter-1':[{title:'Keep format detection inside the same driver path',snippet:'codecset_incremental',note:'CodecSet::incremental_decoder clones the registered templates into an owned decoder and detects from the offered prefix.'}],
 };
