@@ -862,3 +862,99 @@ fn callback_failure_remains_primary_when_cancellation_also_arrives() {
         "native resolver failure"
     );
 }
+
+#[test]
+fn all_64_choice_bits_obey_budget_effect_and_irreversibility_monotonicity() {
+    let offers: Vec<_> = (0..64)
+        .map(|n| Alternative {
+            action: Action::Metadata(MetadataAction::KeepExact),
+            ram: Evidence::Upper(n),
+            disk: Evidence::Upper(0),
+            accounting: Accounting::Operation,
+            effects: Effects((n % 8) as u8),
+            needs_replay: n % 3 == 0,
+            preserves_published: n % 5 != 0,
+        })
+        .collect();
+    let facts = Facts::Metadata(MetadataFacts {
+        packet_bytes: 0,
+        parse_complete: true,
+        has_location: None,
+        has_rights: None,
+    });
+    let mut masks = [[[[0u64; 65]; 8]; 2]; 2];
+    for replayable in [false, true] {
+        for published in [0u64, 1] {
+            for effects in 0u8..8 {
+                for cap in 0..65 {
+                    let mut e = Engine::new(PolicySet::default(), 1);
+                    let mut last = |q: Question<'_>| -> Result<Decision, At<Infallible>> {
+                        Ok(Decision::choose(
+                            q.choices().unwrap().iter().last().unwrap(),
+                        ))
+                    };
+                    let result = e.resolve(
+                        facts,
+                        &offers,
+                        Requirements {
+                            ram: Some(cap),
+                            effects: Effects(effects),
+                            ..requirements()
+                        },
+                        Context {
+                            replayable,
+                            published_bytes: published,
+                            ..context()
+                        },
+                        &mut last,
+                        &Unstoppable,
+                    );
+                    let mask = e.records().last().unwrap().admitted;
+                    if mask == 0 {
+                        assert_eq!(result.unwrap_err().error().code(), Code::NoAlternative);
+                    } else {
+                        assert_eq!(result.unwrap().index, 63 - mask.leading_zeros() as usize);
+                    }
+                    masks[usize::from(replayable)][published as usize][effects as usize]
+                        [cap as usize] = mask;
+                }
+            }
+        }
+    }
+    for replayable in 0..2 {
+        for published in 0..2 {
+            for required in 0..8 {
+                for cap in 1..65 {
+                    let here = masks[replayable][published][required][cap];
+                    assert_eq!(
+                        masks[replayable][published][required][cap - 1] & !here,
+                        0,
+                        "more budget cannot remove a feasible choice"
+                    );
+                    for (stronger, stronger_masks) in
+                        masks[replayable][published].iter().enumerate()
+                    {
+                        if stronger & required == required {
+                            assert_eq!(
+                                stronger_masks[cap] & !here,
+                                0,
+                                "stronger effects cannot add choices"
+                            );
+                        }
+                    }
+                    if replayable == 0 {
+                        assert_eq!(here & !masks[1][published][required][cap], 0);
+                    }
+                    if published == 1 {
+                        assert_eq!(here & !masks[replayable][0][required][cap], 0);
+                    }
+                }
+            }
+        }
+    }
+    assert_ne!(
+        masks[1][0][0][64] & (1u64 << 63),
+        0,
+        "exercise the highest choice token bit"
+    );
+}

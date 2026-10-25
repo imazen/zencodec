@@ -115,65 +115,70 @@ fn fixture() -> Arc<[u8]> {
     // The original raw fixture is dropped before the observed drive starts.
 }
 
+async fn observe(encoded: Arc<[u8]>, retain: bool, finish_first: bool) -> (Arc<State>, GateWriter) {
+    let state = Arc::new(State::default());
+    let encoder = Retaining {
+        inner: QoiEncoderConfig::new().job().encoder().unwrap(),
+        retain,
+        raw: Vec::new(),
+        state: state.clone(),
+    };
+    let decoder = QoiDecoderConfig::new()
+        .job()
+        .into_incremental_decoder(&[])
+        .unwrap();
+    let mut source = BytesSource(encoded.clone());
+    let mut writer = GateWriter {
+        state: state.clone(),
+        at_stall: None,
+        bytes: Vec::new(),
+    };
+    let mut work = Box::pin(async {
+        if finish_first {
+            // A finite admitted-job control: complete into owned encoded
+            // storage, releasing raw state before waiting on the writer.
+            // This is NOT a generic bounded-output spool implementation.
+            let (_, sink) = decode_async(
+                decoder,
+                EncoderSink::new(encoder),
+                &mut source,
+                Inline,
+                DriveOptions::default(),
+                None,
+            )
+            .await
+            .unwrap();
+            let output = sink.finish().unwrap();
+            writer.write_all(output.data()).await.unwrap();
+        } else {
+            transcode_async(
+                decoder,
+                encoder,
+                &mut source,
+                &mut writer,
+                Inline,
+                DriveOptions::default(),
+                None,
+            )
+            .await
+            .unwrap();
+        }
+    });
+    std::future::poll_fn(|cx| {
+        assert!(work.as_mut().poll(cx).is_pending());
+        Poll::Ready(())
+    })
+    .await;
+    state.writer_open.store(true, SeqCst);
+    work.await;
+    (state, writer)
+}
+
 #[tokio::test]
 async fn output_timing_does_not_establish_raw_storage_release() {
     let encoded = fixture();
     for (retain, finish_first) in [(true, false), (true, true), (false, false)] {
-        let state = Arc::new(State::default());
-        let encoder = Retaining {
-            inner: QoiEncoderConfig::new().job().encoder().unwrap(),
-            retain,
-            raw: Vec::new(),
-            state: state.clone(),
-        };
-        let decoder = QoiDecoderConfig::new()
-            .job()
-            .into_incremental_decoder(&[])
-            .unwrap();
-        let mut source = BytesSource(encoded.clone());
-        let mut writer = GateWriter {
-            state: state.clone(),
-            at_stall: None,
-            bytes: Vec::new(),
-        };
-        let mut work = Box::pin(async {
-            if finish_first {
-                // A finite admitted-job control: complete into owned encoded
-                // storage, releasing raw state before waiting on the writer.
-                // This is NOT a generic bounded-output spool implementation.
-                let (_, sink) = decode_async(
-                    decoder,
-                    EncoderSink::new(encoder),
-                    &mut source,
-                    Inline,
-                    DriveOptions::default(),
-                    None,
-                )
-                .await
-                .unwrap();
-                let output = sink.finish().unwrap();
-                writer.write_all(output.data()).await.unwrap();
-            } else {
-                transcode_async(
-                    decoder,
-                    encoder,
-                    &mut source,
-                    &mut writer,
-                    Inline,
-                    DriveOptions::default(),
-                    None,
-                )
-                .await
-                .unwrap();
-            }
-        });
-        std::future::poll_fn(|cx| {
-            assert!(work.as_mut().poll(cx).is_pending());
-            Poll::Ready(())
-        })
-        .await;
-        state.writer_open.store(true, SeqCst);
-        work.await;
+        let (state, writer) = observe(encoded.clone(), retain, finish_first).await;
         let (raw, finalized) = writer.at_stall.expect("writer must actually stall");
         assert!(state.streaming.load(SeqCst));
         assert_eq!(
@@ -194,5 +199,74 @@ async fn output_timing_does_not_establish_raw_storage_release() {
             "retain={retain} finish_first={finish_first} raw_bytes_at_stall={raw} finalized_at_stall={finalized} encoded_bytes={} exact=true",
             encoded.len()
         );
+    }
+}
+
+#[path = "../src/policy/mod.rs"]
+mod policy;
+
+#[tokio::test]
+async fn one_policy_decision_selects_a_schedule_that_releases_raw_before_waiting() {
+    use policy::*;
+    use std::convert::Infallible;
+    use zencodec::{At, Unstoppable};
+    let encoded = fixture();
+    for retains_whole_raster in [true, false] {
+        // This adapter knows which control wrapper it configured. A general
+        // backend needs qualified ownership facts; OutputTiming cannot supply them.
+        let mut calls = 0;
+        let mut resolver = |q: Question<'_>| -> Result<Decision, At<Infallible>> {
+            calls += 1;
+            let strategy = if retains_whole_raster {
+                Execution::Buffered
+            } else {
+                Execution::Sequential
+            };
+            Ok(Decision::choose(
+                q.choices()
+                    .unwrap()
+                    .iter()
+                    .find(|c| c.value.action == Action::Execution(strategy))
+                    .unwrap(),
+            ))
+        };
+        let offers = [Execution::Buffered, Execution::Sequential].map(|strategy| Alternative {
+            action: Action::Execution(strategy),
+            ram: Evidence::Unknown,
+            disk: Evidence::Upper(0),
+            accounting: Accounting::Operation,
+            effects: Effects(0),
+            needs_replay: false,
+            preserves_published: false,
+        });
+        let selected = Engine::new(PolicySet::default(), 1)
+            .resolve(
+                Facts::Execution(ExecutionFacts {
+                    resident_input: 0,
+                    source_length: Some(encoded.len() as u64),
+                    network: true,
+                }),
+                &offers,
+                Requirements {
+                    ram: None,
+                    disk: Some(0),
+                    accounting: Accounting::Operation,
+                    effects: Effects(0),
+                },
+                Context::default(),
+                &mut resolver,
+                &Unstoppable,
+            )
+            .unwrap();
+        let finish_first = selected.alternative.action == Action::Execution(Execution::Buffered);
+        let (_, writer) = observe(encoded.clone(), retains_whole_raster, finish_first).await;
+        let (retained_rows, finalized) = writer.at_stall.unwrap();
+        assert_eq!(retained_rows, 0);
+        assert_eq!(finalized, retains_whole_raster);
+        assert_eq!(
+            calls, 1,
+            "writer stalls do not re-enter the policy callback"
+        );
+        assert_eq!(writer.bytes.as_slice(), encoded.as_ref());
     }
 }

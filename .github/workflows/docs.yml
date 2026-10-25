@@ -37,7 +37,7 @@ jobs:
       - name: Execute the exact Rust displayed in the guide
         run: |
           cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test encoder_retention --test policy_resolution --test policy_engine --test policy_execution --test policy_native --bin policy_media --bin transport_contracts --locked
-          cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test policy_resolution --test policy_engine --test policy_execution --test policy_native --bin policy_media --bin transport_contracts --locked -- -D warnings
+          cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test encoder_retention --test policy_resolution --test policy_engine --test policy_execution --test policy_native --bin policy_media --bin transport_contracts --locked -- -D warnings
       - name: Verify committed simulation results
         run: |
           cargo run --quiet --manifest-path perf/io-validation/Cargo.toml -p io-validation --bin transport_contracts --locked > "$RUNNER_TEMP/transport.csv"

@@ -67,12 +67,18 @@ it does not certify a codec's memory bounds or actual metadata effects.
 | Unknown growth | Actual reservation before each growth, exact-cap failure, release on failure/cancellation | Actual payload control passed: `policy_execution`; allocator overhead and native codec storage are outside this scope |
 | Native codec path | Same policy through concrete config and CodecSet/erased jobs, strided pixels, unsupported metadata, native failures | Passed for two pinned QOI/BMP configurations in `policy_native`; other codecs and whole-operation memory bounds remain unqualified |
 | Metadata reality | Actual packets, malformed/opaque EXIF, retention/removal conflict, missing carrier, independent output inspection | Extracted EXIF controls pass with kamadak-exif inspection; whole-file privacy and carrier roundtrips beyond QOI/BMP are not qualified |
-| Output failure | Slow/short/failing writer, partial artifact, no automatic retry, raw/staging lifetimes | Short/interrupted/zero/failing Write diagnostics passed in `policy_native`; slow async retention remains the separate native retention control |
+| Output failure | Slow/short/failing writer, partial artifact, no automatic retry, raw/staging lifetimes | Short/interrupted/zero/failing Write diagnostics passed in `policy_native`; the native retention control now executes a resolver-selected finish-first or sequential schedule |
 | Transport and viewport | Reused simulator, range/source version changes, view cancellation and disk/resident controls | Native MP4/WebM/IVF decisions agree over resident, disk and reused network model; changed-source admission controls pass; viewport-specific adapter remains unqualified |
 | Media | Real packet/frame facts, epoch changes, late decisions, retained frames and multiple tracks | Native multi-track packet checks and toy-session epoch/frame-ownership controls pass; native decoded-video allocation bounds remain unqualified |
 | Concurrency | Independent mutable resolvers, shared immutable preset configuration, unique operation/question tickets | Concurrent control passed: `policy_engine`; no shared callback mutex |
 | Portability | Actual root types on WASM; isolated resolver on a freestanding target | Passed as described below; full root freestanding graph blocked by issue 165 |
 | Cost | Static versus erased dispatch, allocation/error-report cost | Pending measurement |
+
+The admission matrix exercises all 64 choice positions over 2,080 combinations
+of budgets, required effects, replayability and published output. It checks that
+more budget cannot remove a choice, and that stronger requirements or less
+replay freedom cannot add one. These are invariants of the selection mechanism;
+they do not establish the truth of a backend's resource or effect claims.
 
 ## Commands and observed limits
 
@@ -269,3 +275,18 @@ expected decline, an erased application error carrying data, and no admissible
 alternative. Each iteration includes operation creation, identity issuance and
 the bounded diagnostic journal; none includes codec work or real I/O. These
 controls can measure dispatch/report costs without changing the enforced contract.
+
+## Output-waiting policy is exercised, not inferred from timing flags
+
+The existing native QOI retention control now runs a schedule selected by the
+unified resolver. The adapter knows whether its explicit wrapper retains the
+raster: it chooses finish-first in that case and direct sequential output for
+the non-retaining configuration. Both encounter a genuinely pending async writer,
+retain zero wrapper-owned raw rows at the stall, and preserve exact encoded bytes.
+The callback runs once; stalls do not re-enter it. The original contrasting
+control remains intact. Whole-operation memory, bounded staging and native
+codec ownership qualification are still required before generalizing this choice.
+
+```text
+run-heavy: done rc=0 2s | peak-RSS 0.19GiB | min-avail 16447MiB | peak-load 0.77
+```
