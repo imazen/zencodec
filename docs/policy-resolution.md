@@ -75,8 +75,9 @@ and view cancellation, not a universal requirement to stream the entire image.
 
 The shared boundary should obtain facts, construct permitted alternatives,
 exclude candidates that violate required effects, ask the policy to choose,
-then reserve and execute. Resolve once at a meaningful planning boundary, not
-per row, packet, allocation or writer stall. A closure can capture application
+then reserve and execute. Resolve at each relevant fact/admission boundary,
+including discoveries during streaming, not per row, packet, allocation or writer
+stall. A previous choice only remains valid for its unchanged fact scope. A closure can capture application
 context without putting application types in the codec API.
 
 The current private experiment uses a typed, fallible interface:
@@ -110,6 +111,13 @@ It cannot justify replaying consumed non-replayable input, silently restarting
 after output publication, or an unbounded negotiation loop. Probe/planning reads
 and metadata parsing also need budgets. New video configuration facts may require
 revalidation at an epoch boundary; they do not permit retroactive policy changes.
+
+The [native JPEG qualification](policy-jpeg.md) shows why a successful header or
+full-probe call cannot yet certify final interpretation. Color readiness,
+complete metadata inventory and privacy admission are separate obligations.
+The [suspension/disclosure experiment](policy-transcoding.md) binds the same
+resolver to new facts, bounded holding and independent irreversible effects.
+Production adoption requires [the mandatory barrier contract](https://github.com/imazen/zencodec/issues/166).
 
 ## What can actually be guaranteed
 

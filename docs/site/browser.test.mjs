@@ -5,6 +5,8 @@ import { example } from './source.mjs';
 import { entries } from './api.mjs';
 const examples=await readFile(new URL('../examples/journeys.rs',import.meta.url),'utf8');
 const policyExamples=await readFile(new URL('../examples/policy.rs',import.meta.url),'utf8');
+const jpegExamples=await readFile(new URL('../examples/jpeg_policy.rs',import.meta.url),'utf8');
+const sources={'docs/examples/journeys.rs':examples,'docs/examples/policy.rs':policyExamples,'docs/examples/jpeg_policy.rs':jpegExamples};
 const url=process.env.SITE_URL || 'http://127.0.0.1:3537/';
 const output=process.env.SITE_SCREENSHOTS;
 if(output) await mkdir(output,{recursive:true});
@@ -22,7 +24,7 @@ try {
     const name=await panel.getAttribute('data-example');
     const parts=await panel.locator('[data-example-part]').allTextContents();
     const source=await panel.getAttribute('data-example-source');
-    assert.equal(parts.join(''),example(source==='docs/examples/policy.rs'?policyExamples:examples,name).full,`rendered complete scope: ${name}`);
+    assert.equal(parts.join(''),example(sources[source],name).full,`rendered complete scope: ${name}`);
   }
   if(output) await page.screenshot({path:`${output}/desktop.png`,fullPage:true});
   for(const entry of entries) {
@@ -55,17 +57,20 @@ try {
   await below.locator('summary').click();
   assert.ok(!await below.evaluate(el=>el.open));
   await page.goto(`${url}#policy`);
-  assert.ok((await page.locator('#policy .api-panel[open]').textContent()).includes('At<Self::Error>'));
-  for(const [name,id] of [['policy_default','policy-default'],['policy_custom','policy-custom']]) {
+  assert.ok((await page.locator('#policy .api-panel[data-api="policyResolver"][open]').textContent()).includes('At<Self::Error>'));
+  for(const [name,id] of [['policy_default','policy-default'],['policy_custom','policy-custom'],['jpeg_rewrite','policy-jpeg'],['jpeg_icc_admission','policy-jpeg-icc']]) {
     const panel=page.locator(`#${id}-example`);
     for(const summary of await panel.locator('.code-context summary').all()) await summary.click();
     assert.ok(await panel.locator('[data-example-part="above"]').isVisible());
     assert.ok(await panel.locator('[data-example-part="below"]').isVisible());
     await panel.locator('[data-copy-full]').click();
     await page.waitForFunction(id=>document.querySelector(`#${id}-example [data-copy-full]`).textContent==='Copied',id);
-    assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),example(policyExamples,name).full);
+    assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),example(sources[await panel.getAttribute('data-example-source')],name).full);
   }
-  if(output) await page.locator('#policy').screenshot({path:`${output}/policy-expanded.png`});
+  if(output) {
+    await page.locator('#policy').screenshot({path:`${output}/policy-expanded.png`});
+    await page.locator('.policy-lifecycle').screenshot({path:`${output}/policy-lifecycle.png`});
+  }
   for(const lane of ['consumer','adapter','implementor']) {
     await page.locator(`[data-lane-link="${lane}"]`).click();
     for(let step=1;step<=5;step++) {
@@ -109,6 +114,13 @@ try {
     assert.ok(expanded.scroll<=expanded.w,`expanded context overflows at ${width}: ${JSON.stringify(expanded)}`);
     assert.ok(await page.locator('#entry-registry [data-example-part="above"]').isVisible());
     if(output) await page.locator('#entry-registry').screenshot({path:`${output}/registry-expanded-${width}.png`});
+    await page.goto(`${url}#policy`);
+    for(const context of await page.locator('#policy-jpeg-icc-example .code-context').all()) {
+      if(!await context.evaluate(el=>el.open)) await context.locator('summary').click();
+    }
+    const policyBounds=await page.evaluate(()=>({w:innerWidth,scroll:document.documentElement.scrollWidth}));
+    assert.ok(policyBounds.scroll<=policyBounds.w,`expanded policy overflows at ${width}`);
+    assert.ok(await page.locator('#policy-jpeg-icc-example [data-example-part="above"]').isVisible());
   }
   const links=await page.locator('a[href^="https://github.com/imazen/zencodec/blob/main/"]').evaluateAll(els=>els.map(el=>el.href));
   assert.ok(links.length>20);

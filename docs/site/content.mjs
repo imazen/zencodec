@@ -83,6 +83,7 @@ export const lanes = [
   ]},
 ];
 export const questions = [
+  { n:166, title:'When are facts final enough to commit?', text:'Late color, orientation and opaque carriers need explicit scope and suspension before affected work. Current informational events cannot establish that barrier.' },
   { n: 27, title: 'Can one request replace capability coordination?', text: 'The private resolver now binds requirements, configured presets and traced application errors through native and registry paths. Public API reduction still needs a reviewed integration.' },
   { n: 160, title: 'Where should an encode wait?', text: 'Separate CPU fairness from output waiting. Qualify raw/intermediate ownership and upstream pause behavior for the exact configuration.' },
   { n: 161, title: 'Who admits the next byte?', text: 'Driver limits must apply before reads and allocation. Keep checked buffering policy, coalescing, shared leases, and retained media ownership explicit.' },
@@ -90,6 +91,7 @@ export const questions = [
   { n: 159, title: 'Does every layer earn its place?', text: 'Keep current codec/media protocols. Review a small driver-level limits and scheduling surface first; avoid adding a parallel Read/Seek family without a concrete parser need.' },
 ];
 export const evidence = [
+  ['NATIVE / JPEG', 'Late metadata and configuration', 'Actual progressive/row encode, short-read input, opaque ICC admission and metadata rewrite. Independent ICC/EXIF/pixel checks distinguish inventory from interpretation.', 'docs/policy-jpeg.md'],
   ['TESTED / PRIVATE', 'Fallible policy resolver', 'Configured profiles, scoped choices, traced native causes, shared reservations, EXIF checks, real container packets and retained decision reports. Explicit gaps for native accounting and other metadata domains.', 'docs/policy-scenarios.md'],
   ['PROPOSED / API REVIEW', 'A minimal 0.3', 'Keep the consumer calls and byte/session protocols; review admission, interpretation, ownership and image selection. Concrete removal candidates and native experiment gates.', 'docs/minimal-0.3.md'],
   ['MEASURED / TESTED', 'Raw ownership at a stalled writer', '786432 versus 0 logical retained raw bytes in a deliberate ownership control around native QOI; all outputs exactly 4255 bytes. Not a measurement of QOI internal memory.', 'benchmarks/io_encoder_retention_2026-10-25.md'],

@@ -234,7 +234,19 @@ can require analysis and a result-side report; a config-time match cannot prove
 losslessness for arbitrary input ([104](https://github.com/imazen/zencodec/issues/104)).
 Admission can be staged after required headers arrive through the existing byte
 protocol. It must not require an upfront scan of an entire remote object. Recheck
-facts that change at a page or configuration epoch.
+facts that change during discovery or at a page/configuration epoch. The
+[native JPEG probes](policy-jpeg.md) can return a partial ICC as successful
+metadata, so method names and HeaderReady cannot certify interpretation.
+
+**Scoped finality and suspension.** Keep pending/provisional/final/unavailable
+facts distinct and name the scope that is final. A mandatory decision barrier
+must precede affected conversion, encoder setup and publication. Waiting needs
+bounded admitted storage; replay or a fresh media segment is an alternative only
+when implemented and permitted. The same typed resolver handles new relevant
+facts. Complete disclosure inventory remains separate from rendering authority.
+Do not encode this as another ignorable Event variant. See
+[166](https://github.com/imazen/zencodec/issues/166) and the
+[private suspension controls](policy-transcoding.md).
 
 **One encode interpretation boundary.** Validate the submitted pixels' current
 color, precision, alpha and orientation against the actual target. Keep source

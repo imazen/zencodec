@@ -12,3 +12,7 @@ mod policy;
 #[cfg(test)]
 #[path = "../../io-validation/src/policy_disclosure.rs"]
 mod policy_disclosure;
+
+#[cfg(test)]
+#[path = "../../../docs/examples/jpeg_policy.rs"]
+mod guide;

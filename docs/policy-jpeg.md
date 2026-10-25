@@ -69,7 +69,7 @@ results, not network or CPU measurements, and do not qualify gigapixel ROI acces
 
 ## Validation and remaining gates
 
-Ten native tests and harness Clippy with warnings denied pass. The pinned
+The native tests and harness Clippy with warnings denied pass. The pinned
 future zenpixels bridge produces existing deprecation warnings in zencodec;
 those dependency warnings were not suppressed. The run-heavy process receipt:
 `rc=0 4s | peak-RSS 0.55GiB | min-avail 18298MiB | peak-load 0.20`.
@@ -112,3 +112,24 @@ must not change the eventual interpretation guarantee.
 include the command, source revisions and process receipt. Still unqualified:
 ICC-managed color equivalence, native encoder retention while a writer stalls,
 automatic replay and native video reconfiguration. No public interface changed.
+
+
+## Guide integration
+
+The [compiled JPEG examples](examples/jpeg_policy.rs) first execute the native
+metadata rewrite, then add admission for retained opaque ICC. Both the no-ICC
+success and ICC refusal paths run in the native harness. The refusal retains its
+typed `At<Failure<Infallible>>` envelope and writes zero bytes; no callback is
+invoked when no alternative can meet the requirement. This extra example checks
+ICC admission, not all possible retained carriers or sample-level PII.
+
+Tracked in [zenjpeg #238](https://github.com/imazen/zenjpeg/issues/238) and
+[zencodec #166](https://github.com/imazen/zencodec/issues/166).
+
+The guide's native example run passed with `rc=0 2s | peak-RSS 0.24GiB |
+min-avail 18558MiB | peak-load 0.10`. Browser checks cover both JPEG examples'
+full-source copying and inline expansion at desktop and mobile widths. The
+CI-equivalent browser run passed (`rc=0 6s | peak-RSS 0.18GiB | min-avail
+18661MiB | peak-load 0.43`). Optional full-page screenshot capture failed on one
+local run; the lifecycle cards and earlier expanded views were captured and
+inspected. No functional check was skipped.

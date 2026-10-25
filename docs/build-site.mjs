@@ -10,6 +10,7 @@ const root = path.dirname(docs);
 const dest = path.join(docs, '_site');
 const source = await readFile(path.join(docs, 'examples/journeys.rs'), 'utf8');
 const policySource = await readFile(path.join(docs, 'examples/policy.rs'), 'utf8');
+const jpegSource = await readFile(path.join(docs, 'examples/jpeg_policy.rs'), 'utf8');
 const sha = process.env.GITHUB_SHA || execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
 const escape = s => String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 const signatures = new Map();
@@ -27,15 +28,17 @@ function highlight(code) {
   return out + escape(code.slice(end));
 }
 function codePanel(id, name, file = 'docs/examples/journeys.rs') {
-  const proposed = file === 'docs/examples/policy.rs';
-  const parts = example(proposed ? policySource : source, name);
+  const jpeg = file === 'docs/examples/jpeg_policy.rs';
+  const proposed = file === 'docs/examples/policy.rs' || jpeg;
+  const parts = example(jpeg ? jpegSource : proposed ? policySource : source, name);
+  const tests = jpeg ? 'perf/jpeg-policy-validation/src/tests.rs' : `perf/io-validation/tests/${proposed ? 'policy_native' : 'site_examples'}.rs`;
   const context = (direction, label) => `<details class="code-context" data-direction="${direction}"><summary>${label}<span>${parts[direction].trimEnd().split('\n').length} lines</span></summary><pre><code data-example-part="${direction}">${highlight(parts[direction])}</code></pre></details>`;
   return `<div class="code-panel" id="${id}-example" data-example="${name}" data-example-source="${file}">
     <div class="code-toolbar"><span>Rust · ${proposed ? 'tested private prototype' : 'tested example'}</span><div class="code-actions"><button type="button" data-copy="${id}-code">Copy focus</button><button type="button" data-copy-full="${id}-example">Copy full example</button></div></div>
     ${context('above', '↑ Expand above · imports &amp; setup')}
     <pre class="code-focus"><code id="${id}-code" data-example-part="focus">${highlight(parts.focus)}</code></pre>
     ${context('below', '↓ Expand below · return &amp; continuation')}
-    <div class="code-provenance"><a href="https://github.com/imazen/zencodec/blob/${sha}/${file}#L${parts.line}">Complete source ↗</a><a href="https://github.com/imazen/zencodec/blob/${sha}/perf/io-validation/tests/${proposed ? 'policy_native' : 'site_examples'}.rs">${proposed ? 'Native contract tests' : 'Native pixel-parity tests'} ↗</a><span class="copy-status" role="status" aria-live="polite"></span></div>
+    <div class="code-provenance"><a href="https://github.com/imazen/zencodec/blob/${sha}/${file}#L${parts.line}">Complete source ↗</a><a href="https://github.com/imazen/zencodec/blob/${sha}/${tests}">${proposed ? 'Native contract tests' : 'Native pixel-parity tests'} ↗</a><span class="copy-status" role="status" aria-live="polite"></span></div>
   </div>`;
 }
 function apiPanels(id, keys) {
@@ -78,7 +81,26 @@ ${codePanel('policy-default','policy_default','docs/examples/policy.rs')}
 ${codePanel('policy-custom','policy_custom','docs/examples/policy.rs')}
 ${apiPanels('policy',['policyResolver','policyRequest'])}
 ${flow('policy-execution',[['consumer','Choose / delegate','or traced refusal / error'],['adapter','Reserve + execute','recheck source and capacity'],['consumer','Result + decisions','cause, trace, partial progress']])}
-<p>Resolve at operation or configuration-epoch boundaries. Writer stalls and individual rows or packets do not re-enter the callback. Native codec and transport errors keep their own causes. A later failure retains earlier selections.</p>
+<h3>3. A JPEG upload brings real metadata obligations.</h3>
+<p>The gallery now preserves JPEG scan data while removing descriptive metadata. The native rewrite below retains color and orientation; it does not decode or re-encode pixels. The plan borrows unchanged chunks, exposes exact output size and reports retained opaque carriers.</p>
+${codePanel('policy-jpeg','jpeg_rewrite','docs/examples/jpeg_policy.rs')}
+${apiPanels('policy-jpeg',['rewriteRequest','rewritePlan'])}
+<h3>4. An account requires retained ICC to be inspected.</h3>
+<p>The ordinary rewrite reports opaque ICC. The additional gate below uses the same fallible resolver and refuses before writing because this prototype has no qualified ICC sanitizer. It cannot remove the profile and assume sRGB. Requests with no feasible choice fail before calling application code. This example checks the retained ICC obligation; it does not certify all carriers or pixels free of PII.</p>
+${codePanel('policy-jpeg-icc','jpeg_icc_admission','docs/examples/jpeg_policy.rs')}
+${apiPanels('policy-disclosure',['disclosurePrepared'])}
+<h3>5. A stream reveals information after the first header.</h3>
+<p>Current zenjpeg can report a header at 4 KiB while retaining a whole-file input requirement. Its snapshot can contain half an ICC profile; full decode can later recover color, XMP and orientation. Even probe_full_metadata inherits the header probe. A complete inventory and a final interpretation need distinct guarantees.</p>
+${flow('policy-discovery',[['implementor','Discover relevant fact','scope + revision + completeness'],['adapter','Suspend affected work','before conversion / begin / write'],['consumer','Resolve typed question','preset, conditional code or error']])}
+<div class="policy-lifecycle" aria-label="Proposed streaming decision branches">
+  <div class="policy-state adapter"><b>Pending or provisional</b><p>Admit bounded holding or qualified lookahead. Do not start affected work. If capacity runs out, refuse.</p><span>Wait → new facts → resolve again</span></div>
+  <div class="policy-state implementor"><b>Final and compatible</b><p>Validate the choice and its source, revision and epoch. Resume only the effects that it authorizes.</p><span>Adopt → execute → report</span></div>
+  <div class="policy-state consumer"><b>Unavailable or incompatible</b><p>Offer only executable alternatives that satisfy the request. Otherwise return a traced error before prohibited output.</p><span>Refuse → preserve cause and progress</span></div>
+</div>
+${apiPanels('policy-suspension',['policyGate'])}
+<p>The suspension signatures are a tested private controller, not a production IncrementalDecode extension. Existing metadata notifications are informational and can arrive after sink calls; an observer alone cannot provide this barrier. The callback runs again for new relevant facts, not for every row, packet or writer stall. Header publication, encoder start, discarded originals and body publication are separate commitments.</p>
+<p>For video, bind interpretation to the relevant track/configuration epoch and keep returned frames tied to their original epoch. An independently interpreted segment can admit new facts; that is an authored control here, not qualified native muxer reconfiguration.</p>
+<p><a href="https://github.com/imazen/zencodec/blob/main/docs/policy-jpeg.md">Native JPEG results and independent oracle limits ↗</a> · <a href="https://github.com/imazen/zencodec/blob/main/docs/policy-transcoding.md">Opaque carriers, transcode routes and suspension ↗</a> · <a href="https://github.com/imazen/zencodec/issues/166">Required production barrier #166 ↗</a></p>
 <p><a href="https://github.com/imazen/zencodec/blob/main/docs/policy-resolution.md">Proposed contract and API removal candidates ↗</a> · <a href="https://github.com/imazen/zencodec/blob/main/docs/policy-scenarios.md">Scenario matrix and qualification gaps ↗</a> · <a href="https://github.com/imazen/zencodec/blob/main/benchmarks/policy_cost_2026-10-25.md">Measured dispatch and allocation costs ↗</a></p>`;
 let html=await readFile(path.join(docs,'site/index.html'),'utf8');
 html=html.replace('<!-- ENTRYPOINTS -->',entryHtml).replace('<!-- ARCHITECTURE -->',architecture).replace('<!-- JOURNEYS -->',journeyHtml).replace('<!-- OWNERSHIP -->',ownership).replace('<!-- POLICY -->',policyHtml)
@@ -88,6 +110,7 @@ await mkdir(dest,{recursive:true});
 await writeFile(path.join(dest,'index.html'),html);
 for(const file of ['styles.css','app.mjs']) await copyFile(path.join(docs,'site',file),path.join(dest,file));
 await copyFile(path.join(docs,'examples/journeys.rs'),path.join(dest,'journeys.rs'));
+await copyFile(path.join(docs,'examples/jpeg_policy.rs'),path.join(dest,'jpeg_policy.rs'));
 await copyFile(path.join(root,'benchmarks/io_transport_model_2026-10-25.csv'),path.join(dest,'transport.csv'));
 await writeFile(path.join(dest,'.nojekyll'),'');
 await writeFile(path.join(dest,'build.json'),JSON.stringify({revision:sha,chapters:lanes.reduce((n,l)=>n+l.steps.length,0),source:'docs/'})+'\n');

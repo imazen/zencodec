@@ -1,5 +1,9 @@
 // Paths and method selections only. Signatures are extracted from current Rust source.
 export const api = {
+  rewriteRequest: {path:'zencodec::metadata_rewrite::Request',file:'src/metadata_rewrite.rs',scope:"impl<'a> Request<'a>",methods:['new','with_policy']},
+  rewritePlan: {path:'zencodec::metadata_rewrite::Plan',file:'src/metadata_rewrite.rs',scope:"impl<'a> Plan<'a>",methods:['report','chunks','output_len','to_vec']},
+  disclosurePrepared: {path:'prototype::Prepared (private)',file:'perf/io-validation/src/policy_disclosure.rs',scope:"impl<'a> Prepared<'a>",methods:['opaque','xmp','resolve']},
+  policyGate: {path:'prototype::Gate (private)',file:'perf/io-validation/src/policy_stream.rs',scope:'impl Gate {',methods:['discover','resolve','before_effect']},
   policyResolver: {path:'prototype::PolicyResolver (private)',file:'perf/io-validation/src/policy/resolver.rs',scope:'pub(crate) trait PolicyResolver',methods:['resolve']},
   policyRequest: {path:'prototype::Request (private)',file:'perf/io-validation/src/policy_native.rs',scope:'impl Request {',methods:['new','via_registry','encode','encode_with']},
   decoder: {path:'zencodec::decode::DecoderConfig',file:'src/traits/decoding.rs',scope:'pub trait DecoderConfig',methods:['decode','probe','job']},

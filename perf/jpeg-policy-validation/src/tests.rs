@@ -550,3 +550,36 @@ fn unknown_length_short_reads_do_not_publish_rows_before_full_input() {
         }
     }
 }
+
+#[test]
+fn guide_executes_native_rewrite_and_checks_icc_before_publication() {
+    let mut callback_calls = 0;
+    let mut resolver =
+        |_: policy::Question<'_>| -> Result<policy::Decision, zencodec::At<Infallible>> {
+            callback_calls += 1;
+            Ok(policy::Decision::UsePreset)
+        };
+    for progressive in [false, true] {
+        let source = fixture(progressive, Placement::BeforeEoi);
+        let ordinary = crate::guide::derivative(&source).unwrap();
+        assert_eq!(scans(&ordinary), scans(&source));
+        assert_eq!(oracle(&ordinary), oracle(&source));
+        let mut writer = Vec::new();
+        let error =
+            crate::guide::require_inspected_icc(&source, &mut writer, &mut resolver).unwrap_err();
+        assert!(
+            error
+                .downcast_ref::<zencodec::At<policy::Failure<Infallible>>>()
+                .is_some()
+        );
+        assert!(writer.is_empty());
+
+        let clean = base(progressive);
+        crate::guide::require_inspected_icc(&clean, &mut writer, &mut resolver).unwrap();
+        assert_eq!(scans(&writer), scans(&clean));
+        assert_eq!(oracle(&writer), oracle(&clean));
+    }
+    // Impossible requests are rejected by admission, not sent to application
+    // code to negotiate away a hard requirement.
+    assert_eq!(callback_calls, 0);
+}

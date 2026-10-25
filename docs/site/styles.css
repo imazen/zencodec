@@ -1539,3 +1539,8 @@ footer p {
   .api-panel summary code {font-size:10px}
   .code-provenance {padding:12px}
 }
+
+.policy-lifecycle{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;margin:1.5rem 0}
+.policy-state{border:1px solid var(--line);border-top:4px solid var(--role);border-radius:10px;padding:1.2rem;background:var(--paper)}
+.policy-state b{display:block;font-size:1.05rem}.policy-state p{font-size:.95rem}.policy-state span{font-size:.82rem;font-weight:650}
+@media(max-width:760px){.policy-lifecycle{grid-template-columns:1fr}}

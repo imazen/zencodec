@@ -282,6 +282,8 @@ jpeg-policy-sync export:
     mkdir -p "{{export}}/perf/jpeg-policy-validation/src"
     cp perf/jpeg-policy-validation/Cargo.toml perf/jpeg-policy-validation/dependencies.lock "{{export}}/perf/jpeg-policy-validation/"
     cp perf/jpeg-policy-validation/src/*.rs "{{export}}/perf/jpeg-policy-validation/src/"
+    mkdir -p "{{export}}/docs/examples"
+    cp docs/examples/jpeg_policy.rs "{{export}}/docs/examples/"
     cp justfile "{{export}}/justfile"
 
 # Paths are required; this integration never silently skips missing fixtures.
