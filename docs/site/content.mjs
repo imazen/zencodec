@@ -7,7 +7,7 @@ export const lanes = [
       nodes: [['consumer','Encoded bytes','already resident'],['implementor','config.decode','one operation'],['consumer','Owned pixels','preview uses a view']],
       note: 'The executable examples use native QOI as a lossless fixture. For browser delivery, select a browser-supported codec; for registration, format detection and dispatch, use CodecSet in zencodec. The higher-level zencodecs facade is optional. This guide describes repository main, including unpublished workspace code.', source: 'src/traits/decoding.rs' },
     { title: 'Accept a user upload', trigger: 'An upload can be much larger than the preview surface.', snippet: 'limits',
-      body: 'Move just this operation into a job and set a pixel limit before constructing the decoder. The config still describes the codec. The job now describes what this request may spend.',
+      body: 'Move this operation into a job and set a pixel limit before constructing the decoder. The maximum is inclusive: width × height equal to the limit is accepted. The config describes the codec; the job describes this request.',
       why: 'Admission is a requirement of the service. Adding it here keeps unrelated preview calls simple.',
       nodes: [['consumer','Upload policy','pixel limit'],['implementor','Decode job','check before allocation'],['consumer','Pixels or refusal','handle the result']],
       note: 'Codec ResourceLimits are not a global memory budget. Input read-ahead, encoded staging, concurrent jobs, and retained frames need separate accounting. Driver admission gaps remain tracked.', issue: 161, source: 'src/limits.rs' },

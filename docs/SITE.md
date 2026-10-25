@@ -116,3 +116,34 @@ sRGB descriptors. `CodecSet::transcode` correctly refuses that mismatch with
 shows the actual refusal boundary; it does not bypass the guard or silently
 relabel pixels. The test accepts a future successful path only with exact
 sample parity. Expanded examples each have their own compiled import scope.
+
+## Compact examples and sequential reader assessment
+
+Code panels prioritize the complete-example copy and a direct source link.
+Imports/setup and continuation still expand independently in source order.
+Additional copy and native-test links are under More. The primary signature
+remains open, with methods selected for the operation being taught. In
+particular, decoder registration does not also show encoder registration bounds.
+
+Rust highlighting uses [Shiki](https://shiki.style/guide/install) at build time.
+Only static token markup is deployed; no highlighter or grammar is loaded by the
+reader. Browser checks compare rendered and copied text to the complete compiled
+scope, including whitespace. The signature check ignores color spans while
+requiring the same error type text.
+
+The [sequential learning protocol](evaluation/README.md) fixes four native coding
+oracles and two conceptual rubrics before the reader assessment. Baseline and
+revised readers receive visible and expanded packets separately, without source
+lookup or compiler feedback. This measures a restricted model workflow, not a
+human success rate. Targeted desktop/mobile captures use `just guide-visuals`.
+
+Compact-layout verification: source/build checks and the existing clipboard,
+inline expansion, navigation and responsive browser checks passed on 2026-10-25.
+The registry entry measured 707.640625 CSS px at 1440 px viewport width in the
+first revised capture. Raw captures stay with the assessment artifacts; the
+completed comparison is recorded separately from these layout checks.
+
+```
+browser: rc=0 6s | peak-RSS 0.18GiB | min-avail 18976MiB | peak-load 0.80
+visuals: rc=0 4s | peak-RSS 0.19GiB | min-avail 18940MiB | peak-load 0.47
+```

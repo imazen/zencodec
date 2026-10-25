@@ -499,26 +499,26 @@ figcaption {
   margin-bottom:22px
 }
 .code-panel {
-  background:#122833;
-  color:#eef4ef;
+  background:#fff;
+  color:#24292e;
+  border:1px solid var(--line);
   border-radius:7px;
-  overflow:hidden;
-  margin-bottom:23px
+  margin-bottom:18px
 }
 .code-toolbar {
   display:flex;
   justify-content:space-between;
   align-items:center;
-  padding:11px 16px;
-  border-bottom:1px solid #30454e;
-  font:10px var(--mono);
-  color:#bacac7
+  padding:6px 12px;
+  border-bottom:1px solid var(--line);
+  font:11px var(--mono);
+  color:var(--muted)
 }
 .code-toolbar button {
-  border:1px solid #607079;
+  border:1px solid #c6d1d5;
   border-radius:3px;
   background:transparent;
-  color:#e9f6f0;
+  color:var(--ink);
   font:10px var(--mono);
   padding:4px 10px;
   min-height:28px
@@ -528,7 +528,7 @@ figcaption {
   margin:0;
   white-space:pre;
   overflow:auto;
-  font:12px/1.8 var(--mono);
+  font:12.5px/1.55 var(--mono);
   tab-size:4
 }
 code {
@@ -1415,30 +1415,31 @@ footer p {
 }
 .code-panel .code-context {
   padding:0;
-  background:#1c333e;
-  border-top:1px solid #30454e
+  background:#f5f7f8;
+  border-top:0
 }
 .code-context summary {
-  padding:12px 16px;
-  min-height:44px;
-  font:11px/1.7 var(--mono)
+  padding:5px 12px;
+  min-height:28px;
+  font:11px/1.6 var(--mono);
+  color:var(--muted)
 }
 .code-context summary span {
   float:right;
-  color:#b1c5cb;
+  color:var(--muted);
   margin-left:12px
 }
 .code-context[open] summary {
-  border-bottom:1px dashed #52616b
+  border-bottom:1px dashed var(--line)
 }
 .code-panel .code-focus {
   border-left:3px solid var(--role);
-  padding-block:20px;
-  background:#102731
+  padding:12px 14px;
+  background:#fff
 }
 .code-panel .code-context pre {
-  padding-block:12px;
-  color:#dce8e9
+  padding:10px 14px;
+  color:#24292e
 }
 .code-provenance {
   display:flex;
@@ -1467,7 +1468,7 @@ footer p {
   margin:0 0 12px
 }
 .api-section {
-  margin:28px 0;
+  margin:18px 0;
   min-width:0
 }
 .api-section>p {
@@ -1478,16 +1479,15 @@ footer p {
 }
 .api-panel {
   border:1px solid var(--line);
-  border-left:3px solid var(--role);
   border-radius:5px;
-  margin-bottom:10px;
+  margin-bottom:6px;
   overflow:hidden;
   background:#f7f9f8
 }
 .api-panel summary {
   cursor:pointer;
-  padding:13px 16px;
-  line-height:1.8;
+  padding:8px 12px;
+  line-height:1.5;
   overflow-wrap:anywhere;
   font-size:12px
 }
@@ -1501,12 +1501,12 @@ footer p {
 }
 .api-panel pre {
   margin:0;
-  padding:18px;
+  padding:10px 14px;
   border-top:1px solid var(--line);
   overflow:auto;
-  font:12px/1.8 var(--mono);
-  background:#f0f4f2;
-  color:#233d40
+  font:12px/1.55 var(--mono);
+  background:#fff;
+  color:#24292e
 }
 .api-panel .syntax-keyword {
   color:#155d49
@@ -1516,7 +1516,7 @@ footer p {
 }
 .api-source {
   display:block;
-  padding:10px 16px;
+  padding:6px 12px;
   font-size:11px
 }
 @media(max-width:720px) {
@@ -1528,11 +1528,10 @@ footer p {
   .entry-panel h3 {font-size:21px}
   .entry-orientation {font-size:12px}
   .entry-summary,.example-context {font-size:12px}
-  .code-toolbar {padding:10px 12px}
-  .code-actions {width:100%}
-  .code-actions button {min-height:36px}
-  .code-context summary {font-size:10px;padding:12px}
-  .code-context summary span {float:none;display:block;margin-left:15px}
+  .code-toolbar {padding:6px 10px}
+  .code-actions button,.code-source summary {min-height:44px}
+  .code-context summary {font-size:11px;padding:12px;min-height:44px}
+  .code-context summary span {float:right;display:inline;margin-left:8px}
   .code-panel pre,.api-panel pre {font-size:11px;padding-inline:12px}
   .api-panel summary {padding:12px}
   .api-panel summary>span {display:block;font-size:9px}
@@ -1544,3 +1543,22 @@ footer p {
 .policy-state{border:1px solid var(--line);border-top:4px solid var(--role);border-radius:10px;padding:1.2rem;background:var(--paper)}
 .policy-state b{display:block;font-size:1.05rem}.policy-state p{font-size:.95rem}.policy-state span{font-size:.82rem;font-weight:650}
 @media(max-width:760px){.policy-lifecycle{grid-template-columns:1fr}}
+
+/* The call is the visual anchor; setup and provenance stay within reach. */
+.code-toolbar small {font:inherit;color:var(--muted)}
+.code-panel .code-source {position:relative;padding:0;border:0;color:var(--muted);min-width:58px}
+.code-source summary {min-height:28px;padding:7px 5px;font:10px var(--mono)}
+.code-source[open] {padding-bottom:4px}
+.code-source a,.code-source button {display:block;margin:7px 4px;font:11px/1.5 var(--mono)}
+.code-source a {color:var(--ink)}
+.code-source[open] summary {font-weight:600}
+.code-panel .copy-status {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.api-section h4 {font-size:13px;margin-bottom:9px}
+.api-section h4 small {font-weight:400;font-size:11px;color:var(--muted);margin-left:8px}
+.api-panel summary>span {color:var(--muted)}
+.code-panel [data-copy-full] {background:#edf3f1;border-color:#c4d6ce}
+.code-context summary:hover,.api-panel summary:hover {background:#eaf0f1}
+
+.code-toolbar .code-provenance {align-items:center;padding:0;border:0;font:10px var(--mono);gap:10px;color:var(--muted)}
+.code-toolbar .code-provenance>a {color:var(--ink);text-decoration:none}
+.code-toolbar .code-provenance>a:hover {text-decoration:underline}

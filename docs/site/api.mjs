@@ -12,7 +12,7 @@ export const api = {
   encoderConfig: {path:'zencodec::encode::EncoderConfig',file:'src/traits/encoding.rs',scope:'pub trait EncoderConfig',methods:['encode','job']},
   encodeJob: {path:'zencodec::encode::EncodeJob',file:'src/traits/encoding.rs',scope:'pub trait EncodeJob: Sized',methods:['with_metadata_policy','encode','encoder']},
   dynEncodeJob: {path:'zencodec::encode::DynEncodeJob',file:'src/traits/dyn_encoding.rs',scope:'pub trait DynEncodeJob',methods:['set_metadata_policy','encode']},
-  registry: {path:'zencodec::CodecSet',file:'src/set.rs',scope:'impl CodecSet {',methods:['new','with_decoder','with_encoder','decode']},
+  registry: {path:'zencodec::CodecSet',file:'src/set.rs',scope:'impl CodecSet {',methods:['new','with_decoder','decode']},
   registryCalls: {path:'zencodec::CodecSet',file:'src/set.rs',scope:'impl CodecSet {',methods:['probe','decode','decode_preferring','encode','encode_with','transcode']},
   registryJobs: {path:'zencodec::CodecSet',file:'src/set.rs',scope:'impl CodecSet {',methods:['with_limits','decode_job','encode_job','incremental_decoder']},
   registryEncode: {path:'zencodec::CodecSet',file:'src/set.rs',scope:'impl CodecSet {',methods:['encode','encode_with']},
@@ -51,7 +51,7 @@ export const chapterApi = {
   'implementor-5':['video','animation'],
 };
 export const entries = [
-  {id:'registry',label:'CodecSet · detect + decode',snippet:'codecset',api:'registry',summary:'Register your codec configurations once, then call the shared set by reference. Detection only considers registered decoders. CodecSet is in zencodec itself; no additional dispatch crate is required.',context:'Here, bytes is an encoded QOI or BMP file. gallery_codecs() constructs the two-format fixture; registered_preview receives a shared reference and returns owned pixels.'},
+  {id:'registry',label:'CodecSet · detect + decode',snippet:'codecset',api:'registry',summary:'Register the formats your app accepts once. CodecSet lives in zencodec; concrete codec configurations come from codec crates. Unknown input returns an error.',context:'Setup uses zenbitmaps::{QoiDecoderConfig, BmpDecoderConfig}, both constructed with new(). bytes is an encoded file; DecodeOutput owns the result. image.width() and image.height() return u32 dimensions. Expand Imports & setup for the complete registration.'},
   {id:'decode',label:'One codec · decode',snippet:'preview',api:'decoder',summary:'Already know the codec? DecoderConfig::decode creates the default job and decoder for you. Import DecoderConfig (or zencodec::prelude::*) to call the trait method.',context:'bytes: &[u8] is the encoded file. The concrete config is QoiDecoderConfig in this runnable fixture. This call consumes the config; clone a reusable config first.'},
   {id:'probe',label:'One codec · probe',snippet:'probe',api:'decoder',summary:'Read ImageInfo before allocating the decoded raster. Config-level probe borrows the config; use a job when probing must honor per-request settings.',context:'The input is the same encoded byte slice. The returned ImageInfo contains the dimensions and metadata reported by the codec’s probe.'},
   {id:'encode',label:'One codec · encode',snippet:'encode',api:'encoderConfig',summary:'EncoderConfig::encode accepts a typed pixel view, including row stride, and supplies the default job. EncodeOutput owns the encoded bytes.',context:'pixels: PixelSlice carries width, row count, stride and descriptor. The caller owns its backing storage for the call. Pixel types are imported from zenpixels.'},

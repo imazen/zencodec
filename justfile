@@ -377,3 +377,6 @@ guide-learning-grade task submission export output:
 
 guide-learning-deliver task stage packets reader:
     python3 docs/evaluation/deliver.py "{{task}}" "{{stage}}" "{{packets}}" "{{reader}}"
+
+guide-visuals url output:
+    node docs/evaluation/visuals.mjs "{{url}}" "{{output}}"

@@ -92,6 +92,7 @@ try {
   await page.goto(`${url}#adapter-5`);await page.waitForSelector('#adapter-5:visible');
   for(const context of await page.locator('#adapter-5 .code-context summary').all()) await context.click();
   assert.ok(await page.locator('#adapter-5 .code-provenance a').first().isVisible());
+  await page.locator('#adapter-5 .code-source summary').click();
   await page.locator('#adapter-5 [data-copy]').click();
   await page.waitForFunction(()=>/Copied|Selected/.test(document.querySelector('#adapter-5 [data-copy]').textContent));
   if(output) await page.screenshot({path:`${output}/adapter.png`,fullPage:true});

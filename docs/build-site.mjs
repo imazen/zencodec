@@ -5,6 +5,7 @@ import path from 'node:path';
 import { lanes, questions, evidence } from './site/content.mjs';
 import { api, chapterApi, entries, supplementalExamples } from './site/api.mjs';
 import { declarations, example } from './site/source.mjs';
+import { highlight } from './site/highlight.mjs';
 const docs = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(docs);
 const dest = path.join(docs, '_site');
@@ -17,33 +18,23 @@ const signatures = new Map();
 for (const [key, spec] of Object.entries(api)) {
   signatures.set(key, declarations(await readFile(path.join(root, spec.file), 'utf8'), spec));
 }
-function highlight(code) {
-  const pattern = /\/\/[^\n]*|"(?:[^"\\]|\\.)*"|\b(?:let|mut|fn|pub|use|async|await|impl|for|return|if|else|match|Some|None|Ok|Err)\b/g;
-  let out='', end=0;
-  for(const m of code.matchAll(pattern)) {
-    out += escape(code.slice(end,m.index));
-    const kind=m[0].startsWith('//')?'comment':m[0].startsWith('"')?'string':'keyword';
-    out += `<span class="syntax-${kind}">${escape(m[0])}</span>`;end=m.index+m[0].length;
-  }
-  return out + escape(code.slice(end));
-}
 function codePanel(id, name, file = 'docs/examples/journeys.rs') {
   const jpeg = file === 'docs/examples/jpeg_policy.rs';
-  const proposed = file === 'docs/examples/policy.rs' || jpeg;
+  const proposed = file === 'docs/examples/policy.rs' || name === 'jpeg_icc_admission';
   const parts = example(jpeg ? jpegSource : proposed ? policySource : source, name);
   const tests = jpeg ? 'perf/jpeg-policy-validation/src/tests.rs' : `perf/io-validation/tests/${proposed ? 'policy_native' : 'site_examples'}.rs`;
   const context = (direction, label) => `<details class="code-context" data-direction="${direction}"><summary>${label}<span>${parts[direction].trimEnd().split('\n').length} lines</span></summary><pre><code data-example-part="${direction}">${highlight(parts[direction])}</code></pre></details>`;
   return `<div class="code-panel" id="${id}-example" data-example="${name}" data-example-source="${file}">
-    <div class="code-toolbar"><span>Rust · ${proposed ? 'tested private prototype' : 'tested example'}</span><div class="code-actions"><button type="button" data-copy="${id}-code">Copy focus</button><button type="button" data-copy-full="${id}-example">Copy full example</button></div></div>
-    ${context('above', '↑ Expand above · imports &amp; setup')}
+    <div class="code-toolbar"><span>${proposed ? 'Private prototype' : 'Current API'} <small>· Rust</small></span><div class="code-actions code-provenance"><a href="https://github.com/imazen/zencodec/blob/${sha}/${file}#L${parts.line}">Source ↗</a><details class="code-source"><summary>More</summary><a href="https://github.com/imazen/zencodec/blob/${sha}/${tests}">Native tests ↗</a><button type="button" data-copy="${id}-code">Copy focus only</button></details><button type="button" data-copy-full="${id}-example">Copy full example</button></div></div>
+    ${context('above', 'Imports &amp; setup')}
     <pre class="code-focus"><code id="${id}-code" data-example-part="focus">${highlight(parts.focus)}</code></pre>
-    ${context('below', '↓ Expand below · return &amp; continuation')}
-    <div class="code-provenance"><a href="https://github.com/imazen/zencodec/blob/${sha}/${file}#L${parts.line}">Complete source ↗</a><a href="https://github.com/imazen/zencodec/blob/${sha}/${tests}">${proposed ? 'Native contract tests' : 'Native pixel-parity tests'} ↗</a><span class="copy-status" role="status" aria-live="polite"></span></div>
+    ${context('below', 'Return &amp; continuation')}
+    <span class="copy-status sr-only" role="status" aria-live="polite"></span>
   </div>`;
 }
 function apiPanels(id, keys) {
   if (!keys?.length) throw Error(`No API selection for ${id}`);
-  return `<section class="api-section" aria-labelledby="${id}-api-title"><h4 id="${id}-api-title">The API used here</h4><p>Selected declarations from this revision. Bodies are omitted; receivers, lifetimes, associated types and bounds are retained. Expand another interface for its signatures.</p>${keys.map((key, i) => {
+  return `<section class="api-section" aria-labelledby="${id}-api-title"><h4 id="${id}-api-title">Signatures <small>from this revision · bodies omitted</small></h4>${keys.map((key, i) => {
     const spec = api[key], signature = signatures.get(key);
     const kind = !spec.scope ? 'Function' : spec.scope.startsWith('impl') ? 'Inherent methods' : 'Trait methods';
     const feature = spec.file === 'zencodec-io/src/tokio_io.rs' ? ' · zencodec-io feature: tokio' : spec.file === 'zencodec-io/src/file.rs' ? ' · zencodec-io feature: std' : '';
