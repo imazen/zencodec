@@ -61,11 +61,102 @@ core `FormatSet`: current `ImageFormat` already has equality and hashing, includ
 Custom definitions. Test a consumer allowlist over that identity first
 ([121](https://github.com/imazen/zencodec/issues/121)).
 
+## Caller contract: required effects, preferences, and checked results
+
+The primary consumer path should be **record intent -> execute -> success or a
+typed error**. Capability queries are optional discovery for UI and format
+selection. They are not a prerequisite for safely calling an operation, and
+query-then-set-then-read-back is not how a caller establishes correctness.
+
+A builder can remain infallible when it only records a request. It must retain
+every supplied requirement. The shared execution boundary validates and resolves
+the whole request automatically, using the actual codec configuration and input;
+it must not discard a field because a backend does not implement its setter.
+Malformed values can fail earlier. An optional prepare operation uses that same
+validation path and binds the resolved configuration; it is not a second,
+weaker boolean checklist or a guarantee that later input/I/O cannot fail.
+
+Use two semantic classes, not a matrix callers have to reconstruct:
+
+- A **requirement** must hold for successful completion. An unsupported or
+  conflicting requirement produces an error. A plain method that appears to
+  select an output or set an exact value should have this meaning.
+- An explicitly named **preference/hint** permits documented alternatives.
+  Outcome information says what was selected or ignored. A warning/report must
+  never downgrade a failed requirement into successful output.
+
+Defaults and named presets are complete, documented requests. Ordinary callers
+choose one preset and execute; specialists override selected requirements.
+Result reports are useful for inspection and authorized approximation, but
+callers need not inspect them to discover whether their requirements held.
+
+Metadata needs distinct promises even when presets make them convenient:
+
+| Requested effect | Meaning of successful completion |
+|---|---|
+| Retain specified supplied fields | Their required semantics are present in the destination. A target lacking the carrier must refuse. Absent source fields are not invented; requiring presence is a separate explicit request. |
+| Preserve selected packet bytes exactly | Those bytes remain identical. A necessary orientation rewrite, carrier limitation or conflict with correct interpretation is an error unless the caller permits that change. |
+| Remove specified fields | Those fields are absent within the declared operation scope. An opaque record that prevents proving removal must be dropped when allowed, or cause refusal. |
+| Retain what the target supports | This explicitly permissive request may omit unsupported metadata and reports omissions. It must not be named “exact preservation.” |
+| Preserve rendering interpretation | The encoded interpretation matches the current pixels, including authoritative color and residual orientation. Descriptive metadata cannot override that interpretation. |
+
+Removing selected fields from a `Metadata` record is not a whole-file privacy or
+anonymity guarantee. Thumbnails, auxiliary images, opaque packets and identifying
+ICC text need the appropriate codec/editor scope. If required copyright retention
+and required private-tag removal cannot both be established for malformed EXIF,
+return an error; silently dropping the entire EXIF packet would satisfy only one
+requirement. Current `Metadata::filtered` intentionally drops such a packet under
+partial policies, so its result alone cannot certify both requirements.
+
+The existing `PreserveExact` name is too strong for the complete encode operation:
+filtering may reconcile orientation, and a codec may omit unsupported carriers.
+The breaking design should name semantic retention, byte-exact packet retention,
+and permissive retention distinctly. Do not silently change the published
+variant's behavior during migration.
+
+The same rule applies outside metadata. Required lossless coding, orientation
+application, frame selection, canvas size, loop count and gain-map delivery must
+be fulfilled or refused. An approximate quality target remains approximate; a
+preferred streaming mode remains optional. A crop optimization hint may be ignored,
+whereas selecting a particular output region must produce that region or fail.
+A setter/getter match proves only configuration selection, not content-dependent
+losslessness or achieved perceptual quality.
+
+Validate what is knowable before consuming non-replayable input or emitting bytes.
+Rejected mutable configuration must remain unchanged. Content-dependent and I/O
+failures can still happen later. For streaming output, a successful begin is not
+successful completion: late failure invalidates the partial artifact. Drivers
+should stage/commit or abort where their destination supports it, with separately
+admitted staging capacity. A raw writer cannot promise rollback. Do not automatically
+retry a failed streaming operation after publication or without replayable input.
+
+Keep caller recovery typed and small: invalid/conflicting request, unsupported
+requirement, resource limit, and execution failure (input/I/O/cancellation), with
+the failed requirement and native cause available as structured detail. A policy
+that permits alternatives can let the framework select among them before
+irreversible work; the caller should not write a capability-coordination loop.
+
+The implementation must centralize request storage, admission and metadata/color
+resolution, then give backends resolved input. Generic, erased, registry, one-shot,
+row and animation paths use that same machinery. Default no-op setters are not
+an implementation of required effects. Conformance tests must check actual output
+with independent metadata/pixel oracles where applicable, not just returned flags
+or the backend's own report.
+
+First tests for this boundary: an adapter that ignores requested metadata; a target
+with no requested carrier; malformed EXIF requiring both removal and retention;
+conflicting ICC/pixel interpretation; unsupported loop/frame/gain-map settings;
+and failures before and after output starts. Required cases must either produce
+the specified result or return a typed error. Permissive counterparts must report
+the actual deviation. Run the same fixtures through generic and erased paths.
+These are proposed acceptance tests, not claims of new completed native runs.
+
 ## Remove or replace in the breaking migration
 
 | Current surface | Proposed treatment | Reason and migration gate |
 |---|---|---|
 | Best-effort `DecodeJob::with_policy`, `EncodeJob::with_policy`, erased `set_policy` | Retire for correctness requirements; use the existing checked setters. Split parser compatibility, metadata return and content admission. | Current defaults may ignore the policy. Rejection must leave a mutable job unchanged. Metadata extraction must not disable interpretation needed for correct pixels. |
+| Best-effort `with_fidelity` / `with_lossless`, and exact-looking default no-op options such as loop count or frame selection | Store required intent and validate at execution; explicitly name permissive tuning hints. | Configuration read-back alone cannot certify the requested output. Preserve approximate quality semantics without allowing silent target substitution. |
 | Caller-facing unfiltered `with_metadata` / `set_metadata`; owned EXIF editing and `Metadata::filtered` in core | Move editing/filtering implementation to zenmeta. Give the codec validated, explicit metadata/interpretation input through a reviewed replacement. | These are also implementor primitives today: deleting them without replacing that boundary breaks `with_metadata_policy`. Preserve simple byte carriage, cheap orientation/color reading and ISO gain-map interpretation without zenmeta. |
 | Millisecond-only `push_frame` requirement and lossy duration getters | Make `FrameDuration` the primary contract. Keep exact millisecond constructors/conveniences over it. | `push_frame_timed` already exists and reports actual duration. Preserve cumulative quantization, explicit exactness, zero-duration semantics and rejection without state advancement. |
 | Animation `render_next_frame_to_sink -> Option<OutputInfo>` | Return frame timing/index as well as output facts. | Current signature loses timing on this path; already queued in the changelog. Use the same timing authority as the borrowed/owned frame paths. |
