@@ -1,5 +1,9 @@
 # Sans-I/O Decoding and Streaming Encoding Contract
 
+The [2026-10-24 IO proposal](io-contract-proposal.md) records subsequently tested
+driver repairs, private admission/ownership candidates and proposed extensions.
+It distinguishes measured behavior from additions awaiting API review.
+
 How a decoder that performs no I/O talks to whatever holds the bytes: a
 file, an HTTP body, an object store with range requests, an FFI host that
 pushes buffers, a WASM event loop. The same contract carries a decode
