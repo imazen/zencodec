@@ -120,8 +120,7 @@ mod slice_example {
         let mut decoder = QoiDecoderConfig::new().job().dyn_incremental_decoder(&[])?;
         let mut sink = CollectSink::new();
         // ANCHOR: slice
-        drive_from_slice(decoder.as_mut(), bytes, &mut sink, None, 4096)
-            .map_err(|e| e.to_string())?;
+        drive_from_slice(decoder.as_mut(), bytes, &mut sink, None, 4096)?;
         // END: slice
         Ok(sink)
     }
@@ -147,8 +146,7 @@ mod positioned_example {
             &mut sink,
             None,
             DriveOptions::default(),
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
         // END: positioned
         Ok(sink)
     }
@@ -201,8 +199,7 @@ mod async_example {
             DriveOptions::default(),
             None,
         )
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
         // END: async
         Ok(sink)
     }
@@ -237,8 +234,7 @@ mod finalize_example {
             DriveOptions::default(),
             None,
         )
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
         let output = sink.finish()?;
         // The encoder is consumed before the application awaits its output writer.
         // END: finalize
@@ -262,7 +258,7 @@ mod bridge_example {
         let mut decoder = erase_incremental(WholeFileIncremental::new(job, &[]));
         // END: bridge
         let mut sink = CollectSink::new();
-        drive_from_slice(decoder.as_mut(), bytes, &mut sink, None, 3).map_err(|e| e.to_string())?;
+        drive_from_slice(decoder.as_mut(), bytes, &mut sink, None, 3)?;
         Ok(sink)
     }
     // END EXAMPLE: bridge
@@ -381,8 +377,7 @@ mod codecset_incremental_example {
         let mut sink = CollectSink::new();
         // ANCHOR: codecset_incremental
         let mut decoder = codecs.incremental_decoder(&[]);
-        drive_from_slice(decoder.as_mut(), bytes, &mut sink, None, 4096)
-            .map_err(|e| e.to_string())?;
+        drive_from_slice(decoder.as_mut(), bytes, &mut sink, None, 4096)?;
         // END: codecset_incremental
         // Detection happens as the driver supplies the initial bytes.
         Ok(sink)

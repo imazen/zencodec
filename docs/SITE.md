@@ -147,3 +147,13 @@ completed comparison is recorded separately from these layout checks.
 browser: rc=0 6s | peak-RSS 0.18GiB | min-avail 18976MiB | peak-load 0.80
 visuals: rc=0 4s | peak-RSS 0.19GiB | min-avail 18940MiB | peak-load 0.47
 ```
+
+The blind reader identified a debugging defect in the earlier driver samples:
+`map_err(|e| e.to_string())` discarded structured causes. All six samples now
+propagate with `?`. A source-timeout regression test first failed on the old
+sample and now recovers the original `std::io::Error` kind and message. Native
+example/policy tests and Clippy passed:
+
+```
+examples and clippy: rc=0 1s | peak-RSS 0.20GiB | min-avail 19466MiB | peak-load 0.10
+```

@@ -5,6 +5,33 @@ mod guide;
 use std::sync::Arc;
 use zenpixels::{PixelDescriptor, PixelSlice};
 
+#[test]
+fn positioned_guide_keeps_the_original_source_error() {
+    struct BrokenSource;
+    impl zencodec::source::ReadAt for BrokenSource {
+        type Error = std::io::Error;
+        fn len(&mut self) -> Result<u64, Self::Error> {
+            Ok(64)
+        }
+        fn read_exact_at(&mut self, _: u64, _: &mut [u8]) -> Result<(), Self::Error> {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "fixture source timeout",
+            ))
+        }
+    }
+    let error = guide::positioned(&mut BrokenSource).err().unwrap();
+    let mut cause: &(dyn std::error::Error + 'static) = error.as_ref();
+    loop {
+        if let Some(io) = cause.downcast_ref::<std::io::Error>() {
+            assert_eq!(io.kind(), std::io::ErrorKind::TimedOut);
+            assert_eq!(io.to_string(), "fixture source timeout");
+            break;
+        }
+        cause = cause.source().expect("the typed source error must survive");
+    }
+}
+
 #[tokio::test]
 async fn guide_preserves_strided_pixels_across_real_codec_paths() {
     let (w, h, stride) = (37u32, 29u32, 37 * 4 + 16);

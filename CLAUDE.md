@@ -231,6 +231,11 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed in guide qualification (2026-10-25): six driver examples converted
+  errors to strings, losing their typed causes. They now propagate with `?`.
+  `positioned_guide_keeps_the_original_source_error` reproduces the former
+  failure and requires the original timeout kind and message in the error chain.
+
 - Native JPEG policy qualification (2026-10-25): `DecodeJob::probe_full` defaults
   to the header probe despite its complete-metadata wording. Current zenjpeg
   inherits this; a missing ICC chunk can appear as a successful 220-byte profile,
