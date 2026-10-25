@@ -176,3 +176,8 @@ alias deprecations; the guide change does not suppress them.
 
 The [reader assessment](guide-learning.md) records the frozen tasks, measured
 results, confusion analysis and proposed abstraction placement.
+
+The browser suite also checks a 4.5:1 contrast floor for every highlighted code
+token against its actual opaque background, including collapsed setup. Expanded
+code uses a white background so the grammar palette stays readable. This is a
+specific token-contrast check, not a complete accessibility certification.

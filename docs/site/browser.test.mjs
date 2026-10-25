@@ -26,6 +26,26 @@ try {
     const source=await panel.getAttribute('data-example-source');
     assert.equal(parts.join(''),example(sources[source],name).full,`rendered complete scope: ${name}`);
   }
+  const contrastFailures=await page.evaluate(()=>{
+    const rgb=s=>s.match(/[\d.]+/g).map(Number);
+    const luminance=c=>c.slice(0,3).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((n,v,i)=>n+v*[.2126,.7152,.0722][i],0);
+    const failures=[];
+    for(const token of document.querySelectorAll('.code-panel pre span,.api-panel pre span')) {
+      if(!token.textContent.trim()) continue;
+      const color=rgb(getComputedStyle(token).color);
+      let parent=token,bg;
+      while(parent) {
+        const candidate=rgb(getComputedStyle(parent).backgroundColor);
+        if(candidate.length===3||candidate[3]===1){bg=candidate;break;}
+        parent=parent.parentElement;
+      }
+      if(!bg) throw Error('Code has no opaque background');
+      const a=luminance(color),b=luminance(bg),ratio=(Math.max(a,b)+.05)/(Math.min(a,b)+.05);
+      if(ratio<4.5) failures.push({text:token.textContent,color,bg,ratio});
+    }
+    return failures;
+  });
+  assert.deepEqual(contrastFailures,[],'small code text needs 4.5:1 contrast, including expanded context');
   if(output) await page.screenshot({path:`${output}/desktop.png`,fullPage:true});
   for(const entry of entries) {
     await page.selectOption('#entry-select',entry.id);

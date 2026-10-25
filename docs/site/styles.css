@@ -1439,6 +1439,7 @@ footer p {
 }
 .code-panel .code-context pre {
   padding:10px 14px;
+  background:#fff;
   color:#24292e
 }
 .code-provenance {

@@ -142,3 +142,19 @@ is not a blanket statement that every production contract passed.
 ```
 semantic audit: rc=0 2s | peak-RSS 0.22GiB | min-avail 19364MiB | peak-load 0.10
 ```
+
+## Reading the scope correctly
+
+The coding tasks qualify consumer and adapter call sites. They do not measure
+writing a new codec implementation, dependency installation from crates.io, a
+native video reconfiguration pipeline, or a human beginner's onboarding time.
+The guide labels implemented repository interfaces separately from private
+prototypes; implemented-on-main does not imply that a release contains them.
+
+The revised JPEG section is shorter initially but longer with every detail
+expanded: 4017 versus 3456 CSS px (rounded) at the recorded desktop viewport.
+It now includes both a complete usable public example and the optional adapter
+experiment. Keeping that extra context available is preferable to hiding the
+policy needed for correctness or presenting private machinery as application
+setup. The initial coding packets total 1140 words versus 1368 in the baseline,
+including link lists. These are measured intake sizes, not reader time estimates.
