@@ -231,6 +231,12 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Found during native PNG transcode qualification (2026-10-25): a native batch
+  taller than the checked adapter's admitted strip failed with `StripGeometry`
+  (97x65 guide fixture, default 64-row adapter). The added sink capacity method
+  and shared copying path split delivery while retaining the native batch;
+  tests preserve strided samples, row coordinates and provisional passes.
+
 - Controlled-session retention regression (2026-10-25, ideal-api PR): native JPEG qualification found that a failed `PolicyDecoder` kept its suspended input allocation until the adapter was dropped. The adapter now drops the native session on error/unwind while retaining its report; decline, unavailable interpretation, native failure and callback unwind release the admitted input.
 
 - Controlled decode review (2026-10-25): the initial fused wrapper held pending suspensions but trusted a backend not to call the sink before its first boundary. An adversarial backend reproduced an early `begin`. The wrapper now guards begin/final rows/provisional rows/finish independently and refuses swallowed guard errors. Coroutine-level adoption checks remain; native computation and final-fact correctness still require qualification. See `docs/controlled-decoding.md`.

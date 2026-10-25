@@ -11,9 +11,9 @@ use core::task::{Context, Poll, Waker};
 use enough::Stop;
 use zencodec::ImageInfo;
 use zencodec::decode::{
-    BatchMeta, BoundaryAction, BoundaryId, ControlError, ControlledIncrementalDecode,
-    ControlledProgress, DecodeBoundary, DecodeRowSink, Event, IncrementalDecode, Input,
-    MetadataUpdate, OutputInfo, Progress, Request, SinkError, StepError,
+    BoundaryAction, BoundaryId, ControlError, ControlledIncrementalDecode, ControlledProgress,
+    DecodeBoundary, DecodeRowSink, Event, IncrementalDecode, Input, MetadataUpdate, OutputInfo,
+    Progress, Request, SinkError, StepError,
 };
 use zencodec::source::AccessPattern;
 use zenpixels::PixelDescriptor;
@@ -563,20 +563,17 @@ fn copy_rows(
     rows: &crate::context::PendingRows,
     accepts_provisional: bool,
 ) -> Result<(), SinkError> {
-    let meta: BatchMeta = rows.meta;
-    let mut dst = if meta.is_final {
-        sink.provide_next_buffer(meta.y, rows.rows, rows.width, rows.descriptor)?
-    } else if accepts_provisional {
-        sink.provide_pass_buffer(meta, rows.rows, rows.width, rows.descriptor)?
-    } else {
+    if !rows.meta.is_final && !accepts_provisional {
         return Err("decoder wrote provisional rows to a sink that does not accept them".into());
-    };
-    for r in 0..rows.rows {
-        let start = r as usize * rows.stride;
-        dst.row_mut(r)
-            .copy_from_slice(&rows.data.as_slice()[start..start + rows.stride]);
     }
-    Ok(())
+    let pixels = zenpixels::PixelSlice::new(
+        rows.data.as_slice(),
+        rows.width,
+        rows.rows,
+        rows.stride,
+        rows.descriptor,
+    )?;
+    zencodec::helpers::copy_rows_to_sink(sink, rows.meta, &pixels)
 }
 
 impl<F, E> CoroutineDecoder<F, E>

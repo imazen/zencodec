@@ -285,6 +285,41 @@ fn bytes() -> Vec<u8> {
     ]
 }
 
+#[test]
+fn controlled_erasure_preserves_the_sinks_admitted_row_capacity() {
+    struct OneRow(Sink);
+    impl DecodeRowSink for OneRow {
+        fn max_buffer_rows(&self) -> core::num::NonZeroU32 {
+            core::num::NonZeroU32::MIN
+        }
+        fn begin(&mut self, w: u32, h: u32, d: PixelDescriptor) -> Result<(), SinkError> {
+            self.0.begin(w, h, d)
+        }
+        fn provide_next_buffer(
+            &mut self,
+            y: u32,
+            h: u32,
+            w: u32,
+            d: PixelDescriptor,
+        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            assert_eq!(h, 1);
+            self.0.provide_next_buffer(y, h, w, d)
+        }
+        fn finish(&mut self) -> Result<(), SinkError> {
+            self.0.finish()
+        }
+    }
+    let work = Arc::new(AtomicUsize::new(0));
+    let mut resolver =
+        |_: Question<'_>| -> Result<Decision, At<Infallible>> { Ok(Decision::UsePreset) };
+    let mut dec = PolicyDecoder::new(decoder(work, false, false), &mut resolver);
+    let mut sink = OneRow(Sink::default());
+    drive_from_slice(&mut dec, &bytes(), &mut sink, None, 3).unwrap();
+    assert_eq!(sink.0.pixels.bytes(), &(1..=16).collect::<Vec<u8>>());
+    assert_eq!((sink.0.began, sink.0.rows, sink.0.ended), (1, 2, 1));
+    assert_eq!(dec.report().decisions().count(), 2);
+}
+
 fn decoder(work: Arc<AtomicUsize>, early: bool, change_final: bool) -> Box<DynControlledDecoder> {
     erase_controlled(CoroutineDecoder::controlled(
         32,

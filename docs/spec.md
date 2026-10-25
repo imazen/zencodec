@@ -50,6 +50,15 @@ metadata. The caller handles CMS transforms.
 
 ## Stored operation requests
 
+`DecodeRowSink::max_buffer_rows() -> core::num::NonZeroU32` reports the sink's
+admitted strip capacity after `begin`. Its default is unconstrained. Shared
+`helpers::copy_rows_to_sink` and coroutine delivery divide larger native batches,
+preserving absolute row coordinates and provisional-pass metadata. This bounds
+sink buffers only: native reconstruction and a coroutine's held batch may be
+larger. Existing codecs that request larger buffers can still receive a typed
+sink failure; bounded sinks must not grow silently. One native progress event
+can represent several consecutive sink buffer requests.
+
 `zencodec::operation` records intent and checks it during execution. These
 additive entry points use the same registered templates and native jobs as
 `CodecSet`. Builders do not query capabilities. A required policy uses the

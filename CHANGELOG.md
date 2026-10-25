@@ -354,6 +354,10 @@ None.
 
 ### Added
 
+- `DecodeRowSink::max_buffer_rows` exposes admitted strip capacity. Shared copy
+  helpers and coroutine delivery divide native batches without growing sink
+  storage or changing samples, stride, coordinates or progress-event counts.
+
 - Checked encode adapter defaults fill only unspecified policy fields. Explicit caller requirements, including false gates, win in local and transferable preparation; unsupported defaults refuse before encoding.
 
 - Coupled transcode choices in the shared policy resolver, with typed metadata treatment, opaque-profile retention and scoped storage facts. Configurable presets reject unknown workspace bounds and missing privacy evidence; final interpretation and fresh choice tokens are required. Adapters retain the prepared route and validate output before constructing its outcome.

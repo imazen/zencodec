@@ -133,6 +133,25 @@ write provisional rows (a pass a later one refines) through
 `true` at `begin`. A decoder with no provisional output ignores both, and a
 final-only sink never sees a provisional row.
 
+Sink capacity is independent of a native decoder's batch size. After `begin`,
+`DecodeRowSink::max_buffer_rows` reports the admitted height per borrowed buffer.
+`helpers::copy_rows_to_sink`, whole-image/frame copy helpers and coroutine
+delivery split larger native batches into consecutive buffer requests. They
+preserve source/destination stride and provisional pass coordinates. A single
+`Event::Rows` still reports the native batch as a whole. The held native batch
+and reconstruction workspace remain outside this sink-capacity guarantee.
+Legacy direct sinks must refuse oversized requests rather than grow silently.
+
+Qualification (2026-10-25): the 97x65 PNG guide input exposed a 65-row native
+batch against an admitted 64-row transcode buffer. Shared helper controls use
+capacities 1/2/3/7/9/unbounded with trimmed strided input, nonzero origins,
+provisional passes and failure partway through copying. Controlled erasure
+preserves a one-row limit across both policy suspensions. `just
+sink-capacity-check` passes conformance, coroutine, strict Clippy, no-default
+compilation and public API checks. Resource receipt: rc=0, 8 s; run-heavy peak
+RSS 0.33 GiB, minimum available 17014 MiB, peak load 0.73. This measures the
+validation process, not native workspace or throughput.
+
 **Termination.** After `Done`, every step returns `Done` again with
 nothing consumed. After any error, every step returns `Finished`. `stop` is
 checked at least once per step; a tripped stop is `Cancelled`, and

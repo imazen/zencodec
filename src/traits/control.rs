@@ -352,6 +352,10 @@ impl<'a> GuardedSink<'a> {
     }
 }
 impl DecodeRowSink for GuardedSink<'_> {
+    fn max_buffer_rows(&self) -> core::num::NonZeroU32 {
+        self.inner.max_buffer_rows()
+    }
+
     fn begin(
         &mut self,
         width: u32,

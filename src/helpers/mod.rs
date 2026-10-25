@@ -31,6 +31,46 @@ pub use icc::{
 };
 pub use whole_file::WholeFileIncremental;
 
+/// Copy already-decoded rows into the sink's admitted strip capacity.
+///
+/// Preserves source and destination strides, absolute row coordinates and
+/// progressive-pass metadata. Calls neither `begin` nor `finish`; the codec
+/// owns that lifecycle. A provisional batch must already be authorized by the
+/// sink's `accepts_provisional` contract. Does not allocate or change the native
+/// batch's lifetime. A sink failure can follow partially copied strips.
+pub fn copy_rows_to_sink(
+    sink: &mut dyn crate::DecodeRowSink,
+    meta: crate::decode::BatchMeta,
+    pixels: &zenpixels::PixelSlice<'_>,
+) -> Result<(), SinkError> {
+    meta.y
+        .checked_add(pixels.rows())
+        .ok_or_else(|| SinkError::from("copied rows exceed the row coordinate range"))?;
+    let max_rows = sink.max_buffer_rows().get();
+    let mut offset = 0;
+    while offset < pixels.rows() {
+        let rows = max_rows.min(pixels.rows() - offset);
+        let mut part = meta;
+        part.y += offset;
+        let mut dst = if part.is_final {
+            sink.provide_next_buffer(part.y, rows, pixels.width(), pixels.descriptor())?
+        } else {
+            sink.provide_pass_buffer(part, rows, pixels.width(), pixels.descriptor())?
+        };
+        if dst.width() != pixels.width()
+            || dst.rows() != rows
+            || dst.descriptor() != pixels.descriptor()
+        {
+            return Err("sink returned a buffer with a different geometry or descriptor".into());
+        }
+        for row in 0..rows {
+            dst.row_mut(row).copy_from_slice(pixels.row(offset + row));
+        }
+        offset += rows;
+    }
+    Ok(())
+}
+
 /// Implement `push_decoder` by doing a full decode and copying rows to the sink.
 ///
 /// Most codecs that don't have a native streaming decode path can use this to
@@ -65,13 +105,8 @@ where
 
     sink.begin(w, h, desc).map_err(wrap_sink_error)?;
 
-    let mut dst = sink
-        .provide_next_buffer(0, h, w, desc)
+    copy_rows_to_sink(sink, crate::decode::BatchMeta::final_rows(0), &ps)
         .map_err(wrap_sink_error)?;
-    for row in 0..h {
-        dst.row_mut(row).copy_from_slice(ps.row(row));
-    }
-    drop(dst);
 
     sink.finish().map_err(wrap_sink_error)?;
 
@@ -108,13 +143,8 @@ pub fn copy_frame_to_sink<D: AnimationFrameDecoder>(
     let h = ps.rows();
 
     sink.begin(w, h, desc).map_err(D::wrap_sink_error)?;
-    let mut dst = sink
-        .provide_next_buffer(0, h, w, desc)
+    copy_rows_to_sink(sink, crate::decode::BatchMeta::final_rows(0), ps)
         .map_err(D::wrap_sink_error)?;
-    for row in 0..h {
-        dst.row_mut(row).copy_from_slice(ps.row(row));
-    }
-    drop(dst);
     sink.finish().map_err(D::wrap_sink_error)?;
 
     Ok(Some(OutputInfo::full_decode(w, h, desc)))

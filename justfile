@@ -522,3 +522,18 @@ checked-guide-integration:
 # Pinned source signatures with caller-facing import paths and parameter names.
 checked-guide-api checkout revision:
     node docs/capture-integration-api.mjs "{{checkout}}" "{{revision}}"
+
+# Sink admission is independent of the native decoder's batch size.
+sink-capacity-sync export:
+    just control-sync "{{export}}"
+    cp src/sink.rs "{{export}}/src/"
+    cp src/helpers/mod.rs "{{export}}/src/helpers/"
+    cp tests/sink_capacity.rs "{{export}}/tests/"
+
+sink-capacity-check:
+    cargo test -p zencodec --test sink_capacity --locked
+    cargo test -p zencodec-coroutine --tests --locked
+    cargo test -p zencodec-testkit --locked
+    cargo clippy -p zencodec -p zencodec-coroutine --all-targets --all-features --locked -- -D warnings
+    cargo check -p zencodec-coroutine --no-default-features --locked
+    just api-doc
