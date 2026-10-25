@@ -21,4 +21,6 @@ pixel dependencies do not alter the original I/O experiments.
 
 [Evidence and limits](../../docs/policy-jpeg.md). Tests fail when the independent
 `djpeg` oracle is missing. Fixtures are generated with the actual encoder and
-metadata serializers; there are no committed image binaries.
+metadata serializers; there are no committed image binaries. The recipe supplies
+`JPEG_POLICY_ARTIFACTS` for independent ICC extraction; direct Cargo invocations
+must set it explicitly to a disk directory.

@@ -359,10 +359,12 @@ fn real_jpeg_requests_run_over_the_reused_imi_model_without_pixel_changes() {
                 ledger.clone(),
             )
             .unwrap();
-            let mut decoder = JpegDecoderConfig::new()
-                .job()
-                .dyn_incremental_decoder(&[])
-                .unwrap();
+            let mut decoder = Observed::new(
+                JpegDecoderConfig::new()
+                    .job()
+                    .dyn_incremental_decoder(&[])
+                    .unwrap(),
+            );
             let mut sink = CollectSink::new();
             drive_from_read_at(
                 &mut decoder,
@@ -384,13 +386,167 @@ fn real_jpeg_requests_run_over_the_reused_imi_model_without_pixel_changes() {
             }
             let data = ledger.borrow();
             println!(
-                "JPEG_TRANSPORT progressive={progressive} cache={cache} file={} fetched={} rounds={} simulated_ms={:.5}",
+                "JPEG_TRANSPORT progressive={progressive} cache={cache} file={} fetched={} rounds={} simulated_ms={:.5} header_at={} header_icc={}",
                 bytes.len(),
                 data.transferred_bytes,
                 data.rounds,
-                data.now_ms
+                data.now_ms,
+                decoder.metadata[0].supplied,
+                decoder.metadata[0].icc
             );
             assert!(source.retained() <= cache);
+        }
+    }
+}
+
+#[test]
+fn inventory_and_rendering_scope_are_distinct_and_full_probe_is_observed() {
+    use zenjpeg::container::metadata::JpegMetadata;
+    for progressive in [false, true] {
+        for placement in [
+            Placement::Header,
+            Placement::AfterFirstScan,
+            Placement::BeforeEoi,
+            Placement::SplitIcc,
+        ] {
+            let bytes = fixture(progressive, placement);
+            let inventory = JpegMetadata::parse(&bytes).unwrap();
+            let inspected = inventory.icc_profile();
+            let independent = oracle_icc(&bytes);
+            match placement {
+                Placement::Header => assert_eq!(inspected.unwrap().unwrap().as_ref(), profile()),
+                Placement::AfterFirstScan | Placement::BeforeEoi => {
+                    assert!(inspected.unwrap().is_none())
+                }
+                Placement::SplitIcc => assert!(inspected.is_err()),
+            }
+            // djpeg calls ICC extraction after start_decompress, which can
+            // consume all progressive scans. Observe this independently of the
+            // header-only accessor, without certifying either as universal scope.
+            println!(
+                "JPEG_ORACLE progressive={progressive} placement={placement:?} bytes={} status={} diagnostic={:?}",
+                independent.bytes.len(),
+                independent.status,
+                independent.diagnostic
+            );
+            if independent.bytes.is_empty() {
+                assert!(independent.diagnostic.contains("ICC"));
+                assert!([0, 2].contains(&independent.status));
+            } else {
+                assert_eq!(independent.bytes, profile());
+                assert_eq!(independent.status, 0);
+            }
+            let cfg = JpegDecoderConfig::new();
+            let header = cfg.probe_header(&bytes).unwrap();
+            let full = cfg.probe_full_metadata(&bytes).unwrap();
+            let decoded = cfg.decode(&bytes).unwrap();
+            let icc_len =
+                |info: &ImageInfo| info.metadata().icc_profile.as_ref().map_or(0, |v| v.len());
+            println!(
+                "JPEG_SCOPE progressive={progressive} placement={placement:?} header_icc={} full_probe_icc={} decoded_icc={} inventory_items={} independent_icc={}",
+                icc_len(&header),
+                icc_len(&full),
+                icc_len(decoded.info()),
+                inventory.items().len(),
+                independent.bytes.len()
+            );
+        }
+    }
+}
+
+#[test]
+fn complete_reversed_header_icc_reassembles_but_a_missing_part_never_passes_inspection() {
+    use zenjpeg::container::metadata::JpegMetadata;
+    let jpeg = base(true);
+    let icc = profile();
+    let mid = icc.len() / 2;
+    let first = icc_part(&icc[..mid], 1, 2);
+    let second = icc_part(&icc[mid..], 2, 2);
+    for (name, chunks) in [
+        ("reversed", [second, first.clone()].concat()),
+        ("missing", first),
+    ] {
+        let bytes = [&jpeg[..2], &chunks, &jpeg[2..]].concat();
+        let inventory = JpegMetadata::parse(&bytes).unwrap();
+        let inspected = inventory.icc_profile();
+        let independent = oracle_icc(&bytes);
+        if name == "reversed" {
+            assert_eq!(inspected.unwrap().unwrap().as_ref(), icc);
+            assert_eq!(independent.bytes, icc);
+            assert_eq!(independent.status, 0);
+        } else {
+            assert!(inspected.is_err());
+            assert!(independent.bytes.is_empty());
+            assert_eq!(independent.status, 2);
+            assert!(independent.diagnostic.contains("bad ICC marker"));
+        }
+        let probe = JpegDecoderConfig::new().probe_full_metadata(&bytes);
+        println!(
+            "JPEG_CHUNKS case={name} full_probe={:?}",
+            probe.map(|i| i.metadata().icc_profile.as_ref().map_or(0, |v| v.len()))
+        );
+    }
+}
+
+#[test]
+fn unknown_length_short_reads_do_not_publish_rows_before_full_input() {
+    use std::io::Read;
+    struct Short<'a> {
+        rest: &'a [u8],
+        max: usize,
+    }
+    impl Read for Short<'_> {
+        fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
+            let n = out.len().min(self.max).min(self.rest.len());
+            out[..n].copy_from_slice(&self.rest[..n]);
+            self.rest = &self.rest[n..];
+            Ok(n)
+        }
+    }
+    for progressive in [false, true] {
+        let bytes = fixture(progressive, Placement::BeforeEoi);
+        let expected = JpegDecoderConfig::new().decode(&bytes).unwrap();
+        for chunk in [1, 7, 4096] {
+            let mut decoder = Observed::new(
+                JpegDecoderConfig::new()
+                    .job()
+                    .dyn_incremental_decoder(&[])
+                    .unwrap(),
+            );
+            let mut sink = CollectSink::new();
+            zencodec_io::pump_read_to_sink(
+                Short {
+                    rest: &bytes,
+                    max: chunk,
+                },
+                &mut decoder,
+                &mut sink,
+                None,
+                7,
+                32768,
+            )
+            .unwrap();
+            assert!(sink.finished());
+            for y in 0..sink.height() {
+                assert_eq!(
+                    sink.as_pixel_slice().unwrap().row(y),
+                    expected.pixels().row(y)
+                );
+            }
+            assert!(
+                decoder
+                    .row_inputs
+                    .iter()
+                    .all(|(n, eof)| *n == bytes.len() && *eof)
+            );
+            println!(
+                "JPEG_SHORT progressive={progressive} chunk={chunk} file={} header_at={} metadata_events={} header_icc={} rows_at={}",
+                bytes.len(),
+                decoder.metadata[0].supplied,
+                decoder.metadata.len(),
+                decoder.metadata[0].icc,
+                decoder.row_inputs[0].0
+            );
         }
     }
 }

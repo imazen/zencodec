@@ -231,6 +231,15 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Native JPEG policy qualification (2026-10-25): `DecodeJob::probe_full` defaults
+  to the header probe despite its complete-metadata wording. Current zenjpeg
+  inherits this; a missing ICC chunk can appear as a successful 220-byte profile,
+  and whole-file incremental `info()` remains the early snapshot after decoding.
+  The native container inspector rejects that incomplete sequence. Informational
+  metadata events are not a suspension barrier before sink effects. Evidence and
+  scope: `docs/policy-jpeg.md`, `docs/policy-transcoding.md`. Public API and codec
+  behavior remain unchanged; these need qualified completeness and barrier contracts.
+
 - Freestanding policy qualification (2026-10-25): the root zenpixels dependency
   enables its default `std` feature. Disabling that edge in an export exposes
   12 `powf`/`floor`/`round` calls in `src/gainmap.rs` that fail on

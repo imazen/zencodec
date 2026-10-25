@@ -273,7 +273,7 @@ jpeg-policy-update-lock:
     cargo update --manifest-path perf/jpeg-policy-validation/Cargo.toml
 
 jpeg-policy-check:
-    cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked -- --nocapture --test-threads=1
+    JPEG_POLICY_ARTIFACTS="$HOME/tmp/zencodec-jpeg-oracles" cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
 
 jpeg-policy-sync export:

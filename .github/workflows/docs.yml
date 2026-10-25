@@ -50,6 +50,29 @@ jobs:
           cargo test --manifest-path perf/policy-check/Cargo.toml --locked --no-default-features --lib
           cargo clippy --manifest-path perf/policy-check/Cargo.toml --locked --no-default-features --lib -- -D warnings
 
+  jpeg:
+    name: Qualify native JPEG contracts
+    runs-on: ubuntu-latest
+    env:
+      CARGO_BUILD_JOBS: 4
+      CARGO_INCREMENTAL: 0
+      JPEG_POLICY_ARTIFACTS: ${{ github.workspace }}/perf/jpeg-policy-validation/target/oracle
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: perf/jpeg-policy-validation
+      - name: Install independent JPEG oracle
+        run: sudo apt-get update && sudo apt-get install -y libjpeg-turbo-progs
+      - name: Test pinned JPEG configurations and metadata boundaries
+        run: |
+          cp perf/jpeg-policy-validation/dependencies.lock perf/jpeg-policy-validation/Cargo.lock
+          cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked -- --nocapture --test-threads=1
+          cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
   build:
     name: Build and exercise guide
     runs-on: ubuntu-latest
@@ -87,7 +110,7 @@ jobs:
 
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: [examples, build]
+    needs: [examples, jpeg, build]
     runs-on: ubuntu-latest
     permissions:
       pages: write

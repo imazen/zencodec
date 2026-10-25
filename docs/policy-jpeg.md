@@ -69,12 +69,46 @@ results, not network or CPU measurements, and do not qualify gigapixel ROI acces
 
 ## Validation and remaining gates
 
-Seven native tests and harness Clippy with warnings denied pass. The pinned
+Ten native tests and harness Clippy with warnings denied pass. The pinned
 future zenpixels bridge produces existing deprecation warnings in zencodec;
 those dependency warnings were not suppressed. The run-heavy process receipt:
-`rc=0 5s | peak-RSS 0.52GiB | min-avail 18008MiB | peak-load 0.48`.
+`rc=0 4s | peak-RSS 0.55GiB | min-avail 18298MiB | peak-load 0.20`.
 This measures the build/test process, not a JPEG encoder retention bound.
 
-Still to qualify: header/full-probe completeness, independently interpreted
-ICC chunk scope, unknown-length/short-read discovery, and the memory retained
-while a real JPEG encoder waits on output. No public interface has changed.
+Additional native controls now distinguish these scopes:
+
+| Placement | Header/full probe ICC bytes | Full decode | Container header accessor | `djpeg -icc`, baseline / progressive |
+|---|---:|---:|---|---|
+| Both parts before scans | 440 | 440 | 440 | 440 / 440 |
+| Both after first scan | 0 | 440 | None | None / 440 |
+| Both before EOI | 0 | 440 | None | None / 440 |
+| Part 1 before, part 2 after first scan | 220 | 440 | Invalid sequence | Invalid sequence / 440 |
+
+A complete reversed-order pair before scans reassembles correctly. With part 2
+missing entirely, the container accessor and libjpeg reject the sequence, while
+`probe_full_metadata()` succeeds with the 220-byte fragment. That is a concrete
+reason not to treat successful probing as final color qualification. The default
+[`DecodeJob::probe_full`](../src/traits/decoding.rs) delegates to `probe`; zenjpeg
+inherits it. Complete-metadata wording is insufficient to establish the effect.
+
+The independent CLI is itself timing-sensitive: in
+[`djpeg 2.1.5`](https://github.com/libjpeg-turbo/libjpeg-turbo/blob/2.1.5/djpeg.c#L809),
+ICC extraction runs after scanline reads and before `jpeg_finish_decompress`.
+Progressive input has consumed later markers at that point. Its different
+baseline/progressive answers are observations, not a format specification or a
+portable profile-selection rule. The
+[ICC embedding note](https://www.color.org/technotes/ICC-Technote-ProfileEmbedding.pdf)
+defines APP2 identification and chunk numbering/count consistency; it does not
+supply the missing operation-finality contract.
+
+Unknown-length input with actual reads capped at 1, 7 or 4,096 bytes reports
+HeaderReady after the 4,096-byte prefix and still emits rows only with the full
+6,695/6,950 bytes and EOF. The IMI transport path also reports its header at 4,096;
+its initial request does not yet carry the source length. Known-length slices
+instead ask for the entire source on the first failed probe. These differences
+must not change the eventual interpretation guarantee.
+
+[All native observation lines](../benchmarks/jpeg_policy_discovery_2026-10-25.txt)
+include the command, source revisions and process receipt. Still unqualified:
+ICC-managed color equivalence, native encoder retention while a writer stalls,
+automatic replay and native video reconfiguration. No public interface changed.

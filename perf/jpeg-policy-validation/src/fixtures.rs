@@ -141,3 +141,42 @@ pub fn oracle(bytes: &[u8]) -> Vec<u8> {
     assert!(result.stdout.starts_with(b"P6\n"));
     result.stdout
 }
+
+pub struct OracleIcc {
+    pub bytes: Vec<u8>,
+    pub status: i32,
+    pub diagnostic: String,
+}
+pub fn oracle_icc(bytes: &[u8]) -> OracleIcc {
+    // Explicit caller-provided disk location; never use std::env::temp_dir().
+    let root = std::env::var_os("JPEG_POLICY_ARTIFACTS")
+        .expect("set JPEG_POLICY_ARTIFACTS to a disk-backed artifact directory");
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let dir = std::path::PathBuf::from(root).join(format!("{}-{nonce}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let profile = dir.join("profile.icc");
+    let mut child = Command::new("djpeg")
+        .arg("-icc")
+        .arg(&profile)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("djpeg is required by the caller; install libjpeg-turbo-progs");
+    child.stdin.take().unwrap().write_all(bytes).unwrap();
+    let output = child.wait_with_output().unwrap();
+    std::fs::write(dir.join("stderr.txt"), &output.stderr).unwrap();
+    // djpeg creates an empty file when no profile was found. An error status
+    // still matters: the caller distinguishes no profile from bad chunks.
+    OracleIcc {
+        bytes: std::fs::read(profile).expect("djpeg must create its requested ICC output"),
+        status: output
+            .status
+            .code()
+            .expect("oracle must not terminate by signal"),
+        diagnostic: String::from_utf8(output.stderr).unwrap(),
+    }
+}

@@ -12,7 +12,7 @@ zencodec-io = { path = "../../zencodec-io", features = ["std"] }
 zenmeta = { path = "../../zenmeta", features = ["rewrite", "xmp"] }
 zenpixels = ">=0.2.16, <0.4.0"
 zenpixels-convert = { version = ">=0.2.16, <0.4.0", features = ["icc-db"] }
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "a2a128ab0bc36f01338225f61c285f462ae67ca6", features = ["zencodec", "metadata-rewrite"] }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "a2a128ab0bc36f01338225f61c285f462ae67ca6", features = ["zencodec", "metadata-rewrite", "extended-metadata"] }
 
 [patch.crates-io]
 zencodec = { path = "../.." }

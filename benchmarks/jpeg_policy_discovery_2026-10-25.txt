@@ -1,0 +1,61 @@
+Native JPEG contract observations, 2026-10-25
+Command: just jpeg-policy-check (see perf/jpeg-policy-validation/README.md)
+zencodec production source: 4e3a64657b93002becb3117232c8a9286e141bbe
+zenjpeg source: a2a128ab0bc36f01338225f61c285f462ae67ca6
+Dependencies: perf/jpeg-policy-validation/dependencies.lock
+Oracle: djpeg libjpeg-turbo 2.1.5 (build 20260406); kamadak-exif 0.6.1
+Transport milliseconds are simulated; process RSS is not a codec bound.
+
+JPEG_CHUNKS case=reversed full_probe=Ok(440)
+JPEG_CHUNKS case=missing full_probe=Ok(220)
+JPEG_ORACLE progressive=false placement=Header bytes=440 status=0 diagnostic=""
+JPEG_SCOPE progressive=false placement=Header header_icc=440 full_probe_icc=440 decoded_icc=440 inventory_items=12 independent_icc=440
+JPEG_ORACLE progressive=false placement=AfterFirstScan bytes=0 status=0 diagnostic="djpeg: no ICC profile data in JPEG file\n"
+JPEG_SCOPE progressive=false placement=AfterFirstScan header_icc=0 full_probe_icc=0 decoded_icc=440 inventory_items=12 independent_icc=0
+JPEG_ORACLE progressive=false placement=BeforeEoi bytes=0 status=0 diagnostic="djpeg: no ICC profile data in JPEG file\n"
+JPEG_SCOPE progressive=false placement=BeforeEoi header_icc=0 full_probe_icc=0 decoded_icc=440 inventory_items=12 independent_icc=0
+JPEG_ORACLE progressive=false placement=SplitIcc bytes=0 status=2 diagnostic="Corrupt JPEG data: bad ICC marker\n"
+JPEG_SCOPE progressive=false placement=SplitIcc header_icc=220 full_probe_icc=220 decoded_icc=440 inventory_items=12 independent_icc=0
+JPEG_ORACLE progressive=true placement=Header bytes=440 status=0 diagnostic=""
+JPEG_SCOPE progressive=true placement=Header header_icc=440 full_probe_icc=440 decoded_icc=440 inventory_items=28 independent_icc=440
+JPEG_ORACLE progressive=true placement=AfterFirstScan bytes=440 status=0 diagnostic=""
+JPEG_SCOPE progressive=true placement=AfterFirstScan header_icc=0 full_probe_icc=0 decoded_icc=440 inventory_items=28 independent_icc=440
+JPEG_ORACLE progressive=true placement=BeforeEoi bytes=440 status=0 diagnostic=""
+JPEG_SCOPE progressive=true placement=BeforeEoi header_icc=0 full_probe_icc=0 decoded_icc=440 inventory_items=28 independent_icc=440
+JPEG_ORACLE progressive=true placement=SplitIcc bytes=440 status=0 diagnostic=""
+JPEG_SCOPE progressive=true placement=SplitIcc header_icc=220 full_probe_icc=220 decoded_icc=440 inventory_items=28 independent_icc=440
+JPEG_DISCOVERY progressive=false placement=Header orient=Preserve file=6695 header_at=6695 metadata_events=1 header_orientation=Rotate90 header_icc=440 header_xmp=55 decoded_orientation=Rotate90 decoded_icc=440 decoded_xmp=55 row_calls=1
+JPEG_DISCOVERY progressive=false placement=Header orient=Correct file=6695 header_at=6695 metadata_events=1 header_orientation=Rotate90 header_icc=440 header_xmp=55 decoded_orientation=Identity decoded_icc=440 decoded_xmp=55 row_calls=1
+JPEG_DISCOVERY progressive=false placement=AfterFirstScan orient=Preserve file=6695 header_at=6695 metadata_events=1 header_orientation=Identity header_icc=0 header_xmp=0 decoded_orientation=Rotate90 decoded_icc=440 decoded_xmp=55 row_calls=1
+JPEG_DISCOVERY progressive=false placement=AfterFirstScan orient=Correct file=6695 header_at=6695 metadata_events=1 header_orientation=Identity header_icc=0 header_xmp=0 decoded_orientation=Identity decoded_icc=440 decoded_xmp=55 row_calls=1
+JPEG_DISCOVERY progressive=false placement=BeforeEoi orient=Preserve file=6695 header_at=6695 metadata_events=1 header_orientation=Identity header_icc=0 header_xmp=0 decoded_orientation=Rotate90 decoded_icc=440 decoded_xmp=55 row_calls=1
+JPEG_DISCOVERY progressive=false placement=BeforeEoi orient=Correct file=6695 header_at=6695 metadata_events=1 header_orientation=Identity header_icc=0 header_xmp=0 decoded_orientation=Identity decoded_icc=440 decoded_xmp=55 row_calls=1
+JPEG_DISCOVERY progressive=false placement=SplitIcc orient=Preserve file=6695 header_at=6695 metadata_events=1 header_orientation=Identity header_icc=220 header_xmp=0 decoded_orientation=Rotate90 decoded_icc=440 decoded_xmp=55 row_calls=1
+JPEG_DISCOVERY progressive=false placement=SplitIcc orient=Correct file=6695 header_at=6695 metadata_events=1 header_orientation=Identity header_icc=220 header_xmp=0 decoded_orientation=Identity decoded_icc=440 decoded_xmp=55 row_calls=1
+JPEG_DISCOVERY progressive=true placement=Header orient=Preserve file=6950 header_at=6950 metadata_events=1 header_orientation=Rotate90 header_icc=440 header_xmp=55 decoded_orientation=Rotate90 decoded_icc=440 decoded_xmp=55 row_calls=1
+JPEG_DISCOVERY progressive=true placement=Header orient=Correct file=6950 header_at=6950 metadata_events=1 header_orientation=Rotate90 header_icc=440 header_xmp=55 decoded_orientation=Identity decoded_icc=440 decoded_xmp=55 row_calls=1
+JPEG_DISCOVERY progressive=true placement=AfterFirstScan orient=Preserve file=6950 header_at=6950 metadata_events=1 header_orientation=Identity header_icc=0 header_xmp=0 decoded_orientation=Rotate90 decoded_icc=440 decoded_xmp=55 row_calls=1
+JPEG_DISCOVERY progressive=true placement=AfterFirstScan orient=Correct file=6950 header_at=6950 metadata_events=1 header_orientation=Identity header_icc=0 header_xmp=0 decoded_orientation=Identity decoded_icc=440 decoded_xmp=55 row_calls=1
+JPEG_DISCOVERY progressive=true placement=BeforeEoi orient=Preserve file=6950 header_at=6950 metadata_events=1 header_orientation=Identity header_icc=0 header_xmp=0 decoded_orientation=Rotate90 decoded_icc=440 decoded_xmp=55 row_calls=1
+JPEG_DISCOVERY progressive=true placement=BeforeEoi orient=Correct file=6950 header_at=6950 metadata_events=1 header_orientation=Identity header_icc=0 header_xmp=0 decoded_orientation=Identity decoded_icc=440 decoded_xmp=55 row_calls=1
+JPEG_DISCOVERY progressive=true placement=SplitIcc orient=Preserve file=6950 header_at=6950 metadata_events=1 header_orientation=Identity header_icc=220 header_xmp=0 decoded_orientation=Rotate90 decoded_icc=440 decoded_xmp=55 row_calls=1
+JPEG_DISCOVERY progressive=true placement=SplitIcc orient=Correct file=6950 header_at=6950 metadata_events=1 header_orientation=Identity header_icc=220 header_xmp=0 decoded_orientation=Identity decoded_icc=440 decoded_xmp=55 row_calls=1
+JPEG_REWRITE progressive=false placement=Header input=6723 output=6533 scans=1 opaque_icc=true
+JPEG_REWRITE progressive=false placement=AfterFirstScan input=6723 output=6533 scans=1 opaque_icc=true
+JPEG_REWRITE progressive=false placement=BeforeEoi input=6723 output=6533 scans=1 opaque_icc=true
+JPEG_REWRITE progressive=false placement=SplitIcc input=6723 output=6533 scans=1 opaque_icc=true
+JPEG_REWRITE progressive=true placement=Header input=6978 output=6788 scans=15 opaque_icc=true
+JPEG_REWRITE progressive=true placement=AfterFirstScan input=6978 output=6788 scans=15 opaque_icc=true
+JPEG_REWRITE progressive=true placement=BeforeEoi input=6978 output=6788 scans=15 opaque_icc=true
+JPEG_REWRITE progressive=true placement=SplitIcc input=6978 output=6788 scans=15 opaque_icc=true
+JPEG_TRANSPORT progressive=false cache=0 file=6695 fetched=6695 rounds=2 simulated_ms=320.53560 header_at=4096 header_icc=220
+JPEG_TRANSPORT progressive=false cache=131072 file=6695 fetched=6695 rounds=2 simulated_ms=320.53560 header_at=4096 header_icc=220
+JPEG_TRANSPORT progressive=true cache=0 file=6950 fetched=6950 rounds=2 simulated_ms=320.55600 header_at=4096 header_icc=220
+JPEG_TRANSPORT progressive=true cache=131072 file=6950 fetched=6950 rounds=2 simulated_ms=320.55600 header_at=4096 header_icc=220
+JPEG_SHORT progressive=false chunk=1 file=6695 header_at=4096 metadata_events=1 header_icc=0 rows_at=6695
+JPEG_SHORT progressive=false chunk=7 file=6695 header_at=4096 metadata_events=1 header_icc=0 rows_at=6695
+JPEG_SHORT progressive=false chunk=4096 file=6695 header_at=4096 metadata_events=1 header_icc=0 rows_at=6695
+JPEG_SHORT progressive=true chunk=1 file=6950 header_at=4096 metadata_events=1 header_icc=0 rows_at=6950
+JPEG_SHORT progressive=true chunk=7 file=6950 header_at=4096 metadata_events=1 header_icc=0 rows_at=6950
+JPEG_SHORT progressive=true chunk=4096 file=6950 header_at=4096 metadata_events=1 header_icc=0 rows_at=6950
+run-heavy: done rc=0 4s | peak-RSS 0.55GiB | min-avail 18298MiB | peak-load 0.20
