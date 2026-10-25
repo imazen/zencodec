@@ -204,6 +204,8 @@ removes that whole class).
 
 #### Fixed
 
+- Drop the native controlled session on policy/native failure or unwind while retaining its report. Native JPEG qualification caught retained input after decline; whole-source baseline/progressive pixel parity and refusal before unqualified late-profile effects are tested.
+
 - Async image drivers bound their copied request alternatives before allocation.
   Failed compute batches no longer drain newly pending output after the failure.
 

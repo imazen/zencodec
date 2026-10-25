@@ -107,3 +107,39 @@ for the truth of their final facts; qualification must check those separately.
 The early-effect regression failed before this guard with an actual call to the
 application sink. The regression, coroutine tests, workspace tests and Clippy
 pass after the fix.
+
+## Native JPEG qualification
+
+`perf/jpeg-policy-validation/src/control.rs` executes this protocol around
+zenjpeg `de26db2f20c2290b7f4f93ea2377a14bcbec5c6d`. This qualification adapter
+holds the whole encoded input in a managed allocation and feeds the existing
+native row decoder. It does not make JPEG byte-incremental or establish a
+whole-codec memory bound.
+
+Baseline and progressive JPEG, with no ICC or a complete header ICC, agree
+row-for-row with native direct decoding over short slice windows and positional
+reads. An independent djpeg invocation accepts each source. The native row
+constructor (which can decode progressive coefficients) and every row call occur
+only after final adoption. The full probe inspects through the primary EOI;
+profiles discovered only later, or split between header and later scans, receive
+an unavailable interpretation and no executable offer. This is a qualification
+limit, not a universal JPEG placement rule. Source inventory and pixel authority
+remain separate contracts.
+
+The native test exposed retained input after a policy refusal. `PolicyDecoder`
+now drops its native session on error or unwind while retaining the decision
+report. Thus keeping a failed adapter for debugging does not retain the native
+session's managed allocations. Its metadata accessors return no native metadata
+after failure. Admission failure, policy decline, unavailable interpretation,
+callback unwind and native missing-EOI failure are checked before any sink effect.
+Native error causes survive the adapter.
+
+```text
+just jpeg-policy-check control-check io-contract-check
+run-heavy: done rc=0 8s | peak-RSS 0.33GiB | min-avail 17323MiB | peak-load 0.50
+```
+
+This receipt measures the validation process. Native workspace, source caches,
+coroutine row copies and sink allocations are outside the input-owner allowance.
+The qualification adapter is private; a production codec entry point must carry
+these restrictions and use the same checked operation boundary.

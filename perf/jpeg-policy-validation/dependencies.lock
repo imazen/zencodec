@@ -126,6 +126,7 @@ version = "0.0.0"
 dependencies = [
  "kamadak-exif",
  "zencodec",
+ "zencodec-coroutine",
  "zencodec-io",
  "zenjpeg",
  "zenmeta",
@@ -260,6 +261,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9c874fb993656d484725d58fbfddb39dfcf98ebcadc1a1d09568aa6b39bafba"
 
 [[package]]
+name = "spin"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0134f9043ed38b087ac4f7d4af44c79e2c9e5094421fe3164f435ce585953b10"
+
+[[package]]
 name = "syn"
 version = "2.0.119"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -365,6 +372,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "zencodec-coroutine"
+version = "0.1.0"
+dependencies = [
+ "enough",
+ "spin",
+ "zencodec",
+ "zenpixels",
+]
+
+[[package]]
 name = "zencodec-io"
 version = "0.1.0"
 dependencies = [
@@ -377,7 +394,7 @@ dependencies = [
 [[package]]
 name = "zenjpeg"
 version = "0.9.0"
-source = "git+https://github.com/imazen/zenjpeg?rev=a2a128ab0bc36f01338225f61c285f462ae67ca6#a2a128ab0bc36f01338225f61c285f462ae67ca6"
+source = "git+https://github.com/imazen/zenjpeg?rev=de26db2f20c2290b7f4f93ea2377a14bcbec5c6d#de26db2f20c2290b7f4f93ea2377a14bcbec5c6d"
 dependencies = [
  "aligned-vec",
  "archmage",
@@ -443,7 +460,7 @@ dependencies = [
 [[package]]
 name = "zenyuv"
 version = "0.1.3"
-source = "git+https://github.com/imazen/zenjpeg?rev=a2a128ab0bc36f01338225f61c285f462ae67ca6#a2a128ab0bc36f01338225f61c285f462ae67ca6"
+source = "git+https://github.com/imazen/zenjpeg?rev=de26db2f20c2290b7f4f93ea2377a14bcbec5c6d#de26db2f20c2290b7f4f93ea2377a14bcbec5c6d"
 dependencies = [
  "archmage",
  "imgref",

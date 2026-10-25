@@ -20,5 +20,7 @@ mod guide;
 #[cfg(test)]
 mod conversion;
 #[cfg(test)]
+mod control;
+#[cfg(test)]
 #[path = "../../../docs/examples/pixel_conversion.rs"]
 mod pixel_guide;

@@ -209,7 +209,9 @@ refuses output before final adoption and refuses changed final interpretation.
 See [the authoring contract](controlled-decoding.md#coroutine-authoring-and-transport-execution)
 for enforcement and current storage scope.
 
-`PolicyDecoder` owns the controlled decoder and callback. It answers a real
+`PolicyDecoder` owns the controlled decoder and callback. Failure or unwind drops
+the native session while retaining its decision report; native metadata accessors
+then return `None`. It answers a real
 suspension, resumes that same decoder with the selected action, then returns to
 the driver before more native work. It keeps its report after a driver error
 and is terminal after callback failure or caught unwind. `ContinueReading`

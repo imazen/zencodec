@@ -47,7 +47,7 @@ impl<E: core::error::Error + 'static> core::error::Error for PolicyDecodeError<E
 /// certify native workspace or admit a codec's internal staging. Its bounded
 /// report contains facts and decisions, not metadata or application payloads.
 pub struct PolicyDecoder<D, R> {
-    decoder: Fused<D>,
+    decoder: Option<Fused<D>>,
     resolver: R,
     preset: PolicySet,
     report: OperationReport,
@@ -58,7 +58,7 @@ impl<D, R> PolicyDecoder<D, R> {
     /// when it returns `UsePreset`.
     pub fn new(decoder: D, resolver: R) -> Self {
         Self {
-            decoder: Fused::new(decoder),
+            decoder: Some(Fused::new(decoder)),
             resolver,
             preset: PolicySet::new(),
             report: OperationReport::default(),
@@ -88,8 +88,11 @@ impl<D: ControlledIncrementalDecode, R: PolicyResolver> IncrementalDecode for Po
         }
         // Pessimistic poisoning covers panics in native code and the callback.
         self.failed = true;
-        let progress = match self
-            .decoder
+        // Keep the native session on this stack while doing fallible work. An
+        // error or unwind drops its retained storage even if the caller keeps
+        // this adapter to inspect the report. Only a successful step restores it.
+        let mut decoder = self.decoder.take().ok_or(StepError::Finished)?;
+        let progress = match decoder
             .step_controlled(input, sink, stop)
             .map_err(|e| e.map_codec(PolicyDecodeError::Native))?
         {
@@ -104,7 +107,7 @@ impl<D: ControlledIncrementalDecode, R: PolicyResolver> IncrementalDecode for Po
                         }
                     };
                 self.report.record(record);
-                self.decoder
+                decoder
                     .resume(boundary.id(), action, stop)
                     .map_err(|e| e.map_codec(PolicyDecodeError::Native))?;
                 // The decision is already handled. Let the outer driver observe
@@ -112,6 +115,7 @@ impl<D: ControlledIncrementalDecode, R: PolicyResolver> IncrementalDecode for Po
                 Progress::new(consumed, Event::Metadata(MetadataUpdate::Updated))
             }
         };
+        self.decoder = Some(decoder);
         self.failed = false;
         Ok(progress)
     }
@@ -119,16 +123,18 @@ impl<D: ControlledIncrementalDecode, R: PolicyResolver> IncrementalDecode for Po
         if self.failed {
             &[]
         } else {
-            self.decoder.requested()
+            self.decoder.as_ref().map_or(&[], |d| d.requested())
         }
     }
     fn info(&self) -> Option<&ImageInfo> {
-        self.decoder.info()
+        self.decoder.as_ref().and_then(|d| d.info())
     }
     fn output_descriptor(&self) -> Option<PixelDescriptor> {
-        self.decoder.output_descriptor()
+        self.decoder.as_ref().and_then(|d| d.output_descriptor())
     }
     fn access_pattern(&self) -> AccessPattern {
-        self.decoder.access_pattern()
+        self.decoder
+            .as_ref()
+            .map_or(AccessPattern::default(), |d| d.access_pattern())
     }
 }
