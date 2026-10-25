@@ -12,8 +12,8 @@ precedents and the conclusions retained from Argon's review.
   later facts that require a new decision before affected output.
 - Coherent transcode routes that couple metadata obligations, explicit
   zenpixels-convert work, encoder signaling and resource admission.
-- Mandatory native suspension before affected conversion, encoder or publication
-  effects. A metadata notification is insufficient.
+- Qualify native codecs against the implemented controlled suspension protocol
+  before affected conversion, encoder or publication effects.
 - Metadata exclusion/retention with explicit inspection scope, including opaque
   carriers, malformed XML, reconstruction data and nested content.
 - Integrate managed storage ownership into policy waiting, conversion scratch
@@ -34,6 +34,7 @@ precedents and the conclusions retained from Argon's review.
 | Terminal erased video errors | `FusedEncoder` protects every work method and cancellation, preserves native causes, and remains failed after a caught unwind; decoder reset still reopens its session |
 | Initial stored requests | Required policy, fidelity configuration and output descriptors checked at execution; inherited defaults, rejection and strided pixels tested; native baseline/progressive JPEG encoding bytes and decoding pixels match direct calls |
 | First executing resolver domain | Typed prepared encoder offers, configurable built-in policy, fallible application callback, scoped choices and bounded reports; stale/nested tokens, cancellation, unwind cleanup and native error traces tested |
+| Controlled interpretation protocol | Explicit suspensions and scoped replies; fused enforcement, coroutine await, and a shared policy adapter for existing transports. Authored controls cover early output, stale replies, finality changes, cancellation and unwind; native codec qualification remains separate |
 | Managed storage owners | Byte/object admission follows allocations through subviews, packets, side data and old-epoch frames; exact strided 8/10-bit samples and concurrent contention checked. [Scope](storage-admission.md) excludes native workspace and explicit unaccounted copies |
 
 Driver input capacity is a scoped allowance. It excludes source caches,

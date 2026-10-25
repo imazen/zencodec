@@ -202,6 +202,13 @@ impl<D, R> PolicyDecoder<D, R> {
 }
 ```
 
+Codec authors can implement the protocol directly or use
+`zencodec_coroutine::CoroutineDecoder::controlled(input_cap, access, init)`.
+The coroutine awaits `ctx.interpretation(facts)` before affected work. It
+refuses output before final adoption and refuses changed final interpretation.
+See [the authoring contract](controlled-decoding.md#coroutine-authoring-and-transport-execution)
+for enforcement and current storage scope.
+
 `PolicyDecoder` owns the controlled decoder and callback. It answers a real
 suspension, resumes that same decoder with the selected action, then returns to
 the driver before more native work. It keeps its report after a driver error

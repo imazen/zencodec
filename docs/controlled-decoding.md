@@ -56,3 +56,39 @@ The core adversarial control deliberately uses a backend that accepts every
 reply. The wrapper prevents repeated execution, rejects a discovery-only reply
 to final facts, and blocks a legacy step without calling its sink. These tests
 establish the mechanism, not native codec correctness or a memory bound.
+
+## Coroutine authoring and transport execution
+
+`CoroutineDecoder::controlled(input_cap, access, init)` creates a controlled
+session. The codec sets its image info and output descriptor, then awaits
+`ctx.interpretation(facts)`. The future is not polled beyond that await until a
+matching reply arrives. Header notifications do not call `sink.begin` in this
+mode. `write_rows` refuses before copying rows unless final interpretation was
+adopted, and the runner checks the row descriptor and width before calling the
+sink. Updates to source color, orientation, dimensions or output descriptor after
+adoption are terminal. Descriptive-only metadata may still be announced.
+
+The coroutine's input cap remains scoped to its input store. Its existing row
+copy, native parser storage and native workspace are not covered by the managed
+`StorageBudget` yet. This authoring path adds no whole-operation memory claim.
+
+`zencodec_io::PolicyDecoder::new(decoder, resolver)` serves these suspensions
+through the shared `PolicyResolver`. It implements the existing
+`IncrementalDecode`, so slice, positional-read, stream and async drivers retain
+their input admission and scheduling behavior. The adapter records the chosen
+mechanism, resumes the same native session, and returns to the driver before
+polling more native work. A callback failure, cancellation or caught panic
+leaves the adapter terminal. `report()` remains available after driver failure.
+
+The authored late-fact fixture exercises short slices and positional reads,
+strided rows, stale/replayed replies, callback error traces and redacted default
+formatting, decline, cancellation, panic, early output and changed final facts.
+Native JPEG qualification is separate work; a passing authored fixture does not
+establish JPEG metadata authority or codec storage bounds.
+
+```text
+just control-check io-contract-check
+run-heavy: done rc=0 14s | peak-RSS 0.37GiB | min-avail 17135MiB | peak-load 0.49
+```
+
+This receipt is for workspace tests and Clippy, not decoder working memory.

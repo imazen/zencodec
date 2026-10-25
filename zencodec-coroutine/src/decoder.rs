@@ -11,8 +11,9 @@ use core::task::{Context, Poll, Waker};
 use enough::Stop;
 use zencodec::ImageInfo;
 use zencodec::decode::{
-    BatchMeta, DecodeRowSink, Event, IncrementalDecode, Input, MetadataUpdate, OutputInfo,
-    Progress, Request, SinkError, StepError,
+    BatchMeta, BoundaryAction, BoundaryId, ControlError, ControlledIncrementalDecode,
+    ControlledProgress, DecodeBoundary, DecodeRowSink, Event, IncrementalDecode, Input,
+    MetadataUpdate, OutputInfo, Progress, Request, SinkError, StepError,
 };
 use zencodec::source::AccessPattern;
 use zenpixels::PixelDescriptor;
@@ -70,6 +71,20 @@ where
     /// [`AccessPattern::RandomAccess`].
     pub fn new(init: impl FnOnce(CoroutineContext) -> F) -> Self {
         Self::with_options(DEFAULT_INPUT_CAP, AccessPattern::RandomAccess, init)
+    }
+
+    /// Create a decoder requiring explicit interpretation decisions. No sink
+    /// effects are allowed until `ctx.interpretation(...).await` has received
+    /// adoption of final facts. Serve this through `step_controlled`; legacy
+    /// `step` refuses before polling the future.
+    pub fn controlled(
+        input_cap: usize,
+        access: AccessPattern,
+        init: impl FnOnce(CoroutineContext) -> F,
+    ) -> Self {
+        let decoder = Self::with_options(input_cap, access, init);
+        decoder.shared.lock().controlled = true;
+        decoder
     }
 
     /// Create a decoder that keeps at most `input_cap` unread bytes and
@@ -173,6 +188,7 @@ where
     }
 
     fn begin_if_ready(&mut self, sink: &mut dyn DecodeRowSink) -> Result<(), StepError<E>> {
+        self.check_interpretation()?;
         if self.begun {
             return Ok(());
         }
@@ -192,27 +208,36 @@ where
         }
         Ok(())
     }
+
+    fn check_interpretation(&self) -> Result<(), StepError<E>> {
+        let shared = self.shared.lock();
+        if let Some(error) = shared.control_failure {
+            return Err(StepError::Control(error));
+        }
+        if shared.controlled && (shared.boundary.is_some() || shared.adopted.is_none()) {
+            return Err(StepError::Control(ControlError::OutputBeforeInterpretation));
+        }
+        Ok(())
+    }
 }
 
-impl<F, E> IncrementalDecode for CoroutineDecoder<F, E>
+impl<F, E> CoroutineDecoder<F, E>
 where
     F: Future<Output = Result<OutputInfo, E>> + Send + 'static,
     E: core::error::Error + Send + Sync + From<CoroutineError> + 'static,
 {
-    type Error = E;
-
-    fn step(
+    fn advance(
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
         stop: &dyn Stop,
-    ) -> Result<Progress, StepError<E>> {
+    ) -> Result<ControlledProgress, StepError<E>> {
         match &self.state {
-            State::Done(info) => return Ok(Progress::new(0, Event::Done(info.clone()))),
+            State::Done(info) => return Ok(Progress::new(0, Event::Done(info.clone())).into()),
             State::Failed => return Err(StepError::Finished),
             State::Finishing(info) => {
                 let info = info.clone();
-                return self.finish(sink, info, 0);
+                return self.finish(sink, info, 0).map(Into::into);
             }
             State::Running => {}
         }
@@ -221,18 +246,42 @@ where
             self.state = State::Failed;
             return Err(StepError::Cancelled(reason));
         }
+        if let Some(boundary) = self.shared.lock().boundary {
+            return Ok(ControlledProgress::Suspended {
+                consumed: 0,
+                boundary,
+            });
+        }
         let mut consumed = Self::absorb(&mut self.shared.lock(), &input, 0);
         let waker = Waker::noop();
         let mut cx = Context::from_waker(waker);
         loop {
+            // A caught panic never permits polling the half-mutated future again.
+            self.state = State::Failed;
             let polled = self.future.as_mut().poll(&mut cx);
+            self.state = State::Running;
+            if let Err(reason) = stop.check() {
+                self.shared.lock().cancelled = Some(reason);
+                self.state = State::Failed;
+                return Err(StepError::Cancelled(reason));
+            }
             let event = {
                 let mut shared = self.shared.lock();
                 if shared.info_generation != self.cached_info_generation {
                     self.cached_info = shared.info.clone();
                     self.cached_info_generation = shared.info_generation;
                 }
-                if let Some(rows) = shared.rows.take() {
+                if let Some(error) = shared.control_failure {
+                    self.state = State::Failed;
+                    return Err(StepError::Control(error));
+                }
+                if let Some(boundary) = shared.boundary {
+                    if shared.rows.is_some() {
+                        self.state = State::Failed;
+                        return Err(StepError::Control(ControlError::OutputBeforeInterpretation));
+                    }
+                    Pending::Boundary(boundary)
+                } else if let Some(rows) = shared.rows.take() {
                     Pending::Rows(rows)
                 } else if let Some(update) = shared.metadata.take() {
                     Pending::Metadata(update)
@@ -244,13 +293,17 @@ where
             };
             match polled {
                 Poll::Ready(Ok(info)) => {
+                    if matches!(event, Pending::Boundary(_)) {
+                        self.state = State::Failed;
+                        return Err(StepError::Control(ControlError::InconsistentFacts));
+                    }
                     if matches!(event, Pending::Rows(_) | Pending::Metadata(_)) {
                         // Deliver what was deposited before finishing; the
                         // future is complete and must not be polled again.
                         self.state = State::Finishing(info);
                         self.need.clear();
                     } else {
-                        return self.finish(sink, info, consumed);
+                        return self.finish(sink, info, consumed).map(Into::into);
                     }
                 }
                 Poll::Ready(Err(e)) => {
@@ -261,7 +314,24 @@ where
                 Poll::Pending => {}
             }
             match event {
+                Pending::Boundary(boundary) => {
+                    self.need.clear();
+                    return Ok(ControlledProgress::Suspended { consumed, boundary });
+                }
                 Pending::Rows(rows) => {
+                    let inconsistent = {
+                        let shared = self.shared.lock();
+                        shared.controlled
+                            && (shared.descriptor != Some(rows.descriptor)
+                                || shared
+                                    .info
+                                    .as_ref()
+                                    .is_none_or(|info| info.width != rows.width))
+                    };
+                    if inconsistent {
+                        self.state = State::Failed;
+                        return Err(StepError::Control(ControlError::InconsistentFacts));
+                    }
                     if let Err(e) = self.begin_if_ready(sink) {
                         self.state = State::Failed;
                         return Err(e);
@@ -279,7 +349,8 @@ where
                                 meta: rows.meta,
                                 rows: rows.rows,
                             },
-                        )),
+                        )
+                        .into()),
                         Err(e) => {
                             self.state = State::Failed;
                             Err(StepError::Sink(e))
@@ -287,13 +358,15 @@ where
                     };
                 }
                 Pending::Metadata(update) => {
-                    if update.is_header_ready()
+                    let controlled = self.shared.lock().controlled;
+                    if !controlled
+                        && update.is_header_ready()
                         && let Err(e) = self.begin_if_ready(sink)
                     {
                         self.state = State::Failed;
                         return Err(e);
                     }
-                    return Ok(Progress::new(consumed, Event::Metadata(update)));
+                    return Ok(Progress::new(consumed, Event::Metadata(update)).into());
                 }
                 Pending::Need => {
                     // The same input may hold what the coroutine now asks
@@ -307,12 +380,42 @@ where
                     }
                     self.need.clear();
                     self.need.extend_from_slice(&shared.need);
-                    return Ok(Progress::need(consumed));
+                    return Ok(Progress::need(consumed).into());
                 }
                 Pending::Stalled => {
                     self.state = State::Failed;
                     return Err(StepError::Codec(E::from(CoroutineError::Stalled)));
                 }
+            }
+        }
+    }
+}
+
+impl<F, E> IncrementalDecode for CoroutineDecoder<F, E>
+where
+    F: Future<Output = Result<OutputInfo, E>> + Send + 'static,
+    E: core::error::Error + Send + Sync + From<CoroutineError> + 'static,
+{
+    type Error = E;
+
+    fn step(
+        &mut self,
+        input: Input<'_>,
+        sink: &mut dyn DecodeRowSink,
+        stop: &dyn Stop,
+    ) -> Result<Progress, StepError<E>> {
+        if matches!(self.state, State::Failed) {
+            return Err(StepError::Finished);
+        }
+        if self.shared.lock().controlled {
+            self.state = State::Failed;
+            return Err(StepError::Control(ControlError::UnhandledBoundary));
+        }
+        match self.advance(input, sink, stop)? {
+            ControlledProgress::Decode(progress) => Ok(progress),
+            ControlledProgress::Suspended { .. } => {
+                self.state = State::Failed;
+                Err(StepError::Control(ControlError::UnhandledBoundary))
             }
         }
     }
@@ -337,7 +440,71 @@ where
     }
 }
 
+impl<F, E> ControlledIncrementalDecode for CoroutineDecoder<F, E>
+where
+    F: Future<Output = Result<OutputInfo, E>> + Send + 'static,
+    E: core::error::Error + Send + Sync + From<CoroutineError> + 'static,
+{
+    fn step_controlled(
+        &mut self,
+        input: Input<'_>,
+        sink: &mut dyn DecodeRowSink,
+        stop: &dyn Stop,
+    ) -> Result<ControlledProgress, StepError<E>> {
+        if matches!(self.state, State::Failed) {
+            return Err(StepError::Finished);
+        }
+        if !self.shared.lock().controlled {
+            self.state = State::Failed;
+            return Err(StepError::Control(ControlError::NotControlled));
+        }
+        self.advance(input, sink, stop)
+    }
+
+    fn resume(
+        &mut self,
+        id: BoundaryId,
+        action: BoundaryAction,
+        stop: &dyn Stop,
+    ) -> Result<(), StepError<E>> {
+        let state = core::mem::replace(&mut self.state, State::Failed);
+        if !matches!(state, State::Running) {
+            return Err(StepError::Finished);
+        }
+        stop.check()?;
+        let mut shared = self.shared.lock();
+        if !shared.controlled {
+            return Err(StepError::Control(ControlError::NotControlled));
+        }
+        if let Some(error) = shared.control_failure {
+            return Err(StepError::Control(error));
+        }
+        let Some(boundary) = shared.boundary.take() else {
+            return Err(StepError::Control(ControlError::InvalidReply));
+        };
+        if boundary.id() != id || !action.permits(boundary.facts()) || shared.reply.is_some() {
+            return Err(StepError::Control(ControlError::InvalidReply));
+        }
+        let facts = boundary.facts();
+        if facts.descriptor != shared.descriptor
+            || shared
+                .info
+                .as_ref()
+                .is_none_or(|info| info.width != facts.width || info.height != facts.height)
+        {
+            return Err(StepError::Control(ControlError::InconsistentFacts));
+        }
+        if action == BoundaryAction::AdoptInterpretation {
+            shared.adopted = Some(facts);
+        }
+        shared.reply = Some((id, action));
+        self.state = State::Running;
+        Ok(())
+    }
+}
+
 enum Pending {
+    Boundary(DecodeBoundary),
     Rows(crate::context::PendingRows),
     Metadata(MetadataUpdate),
     Need,
@@ -383,6 +550,19 @@ where
         info: OutputInfo,
         consumed: usize,
     ) -> Result<Progress, StepError<E>> {
+        let inconsistent = {
+            let shared = self.shared.lock();
+            shared.controlled
+                && shared.adopted.is_some_and(|facts| {
+                    facts.width != info.width
+                        || facts.height != info.height
+                        || facts.descriptor != Some(info.native_format)
+                })
+        };
+        if inconsistent {
+            self.state = State::Failed;
+            return Err(StepError::Control(ControlError::InconsistentFacts));
+        }
         if let Err(e) = self.begin_if_ready(sink) {
             self.state = State::Failed;
             return Err(e);

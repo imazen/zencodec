@@ -451,3 +451,15 @@ guide-visuals url output:
 
 guide-learning-summary artifacts output +cohorts:
     python3 docs/evaluation/summarize.py "{{artifacts}}" "{{output}}" {{cohorts}}
+
+# Controlled protocol, policy adapter and coroutine implementation share one export.
+control-sync export:
+    just operation-sync "{{export}}"
+    just io-core-sync "{{export}}"
+    cp src/traits/control.rs src/traits/incremental.rs src/traits/mod.rs "{{export}}/src/traits/"
+    cp zencodec-coroutine/src/context.rs zencodec-coroutine/src/decoder.rs "{{export}}/zencodec-coroutine/src/"
+    cp zencodec-coroutine/tests/control.rs "{{export}}/zencodec-coroutine/tests/"
+
+control-check:
+    cargo test -p zencodec-coroutine --tests --locked
+    cargo clippy -p zencodec-coroutine -p zencodec-io -p zencodec --all-targets --all-features --locked -- -D warnings

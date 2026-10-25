@@ -280,6 +280,18 @@ removes that whole class).
   cancellation and progress. The input window is zeroed once and compacts only when
   its tail is full (`34346a05`).
 
+## zencodec-coroutine
+
+### [Unreleased]
+
+#### QUEUED BREAKING CHANGES
+
+None.
+
+#### Added
+
+- Controlled construction and awaited interpretation boundaries block affected output until final adoption, reject changed final facts, and poison failed/unwound sessions. Legacy execution refuses controlled sessions. Row copying now reserves fallibly and refuses unapproved output before allocation. This does not add a native or whole-operation memory bound.
+
 ## Workspace
 
 ### [Unreleased]

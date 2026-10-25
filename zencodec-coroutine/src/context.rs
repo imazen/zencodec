@@ -9,7 +9,10 @@ use core::task::{Context, Poll};
 
 use enough::StopReason;
 use zencodec::ImageInfo;
-use zencodec::decode::{BatchMeta, ByteRange, MetadataUpdate, Request, SinkError};
+use zencodec::decode::{
+    BatchMeta, BoundaryAction, BoundaryId, ByteRange, ControlError, DecodeBoundary,
+    InterpretationFacts, MetadataUpdate, Request, SinkError,
+};
 use zencodec::source::SourceError;
 use zenpixels::{PixelDescriptor, PixelSlice};
 
@@ -19,6 +22,10 @@ use crate::input::InputStore;
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum CoroutineError {
+    /// A required interpretation boundary was violated.
+    Control(ControlError),
+    /// A row buffer size overflowed or its allocation failed.
+    RowAllocation,
     /// A read could not be satisfied (past the announced end).
     Source(SourceError),
     /// The sink refused rows.
@@ -45,6 +52,8 @@ pub enum CoroutineError {
 impl fmt::Display for CoroutineError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Control(e) => e.fmt(f),
+            Self::RowAllocation => f.write_str("coroutine row allocation failed"),
             Self::Source(e) => write!(f, "coroutine decode: {e}"),
             Self::Sink(e) => write!(f, "coroutine decode: sink: {e}"),
             Self::Cancelled(r) => write!(f, "coroutine decode cancelled: {r:?}"),
@@ -65,6 +74,7 @@ impl fmt::Display for CoroutineError {
 impl core::error::Error for CoroutineError {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
+            Self::Control(e) => Some(e),
             Self::Source(e) => Some(e),
             Self::Sink(e) => Some(e.as_ref()),
             _ => None,
@@ -75,6 +85,11 @@ impl core::error::Error for CoroutineError {
 impl From<SourceError> for CoroutineError {
     fn from(e: SourceError) -> Self {
         Self::Source(e)
+    }
+}
+impl From<ControlError> for CoroutineError {
+    fn from(error: ControlError) -> Self {
+        Self::Control(error)
     }
 }
 
@@ -104,6 +119,11 @@ pub(crate) struct PendingRows {
 /// State shared between the decoder and the coroutine it polls. Only one
 /// side runs at a time, so the lock is never contended.
 pub(crate) struct Shared {
+    pub(crate) controlled: bool,
+    pub(crate) boundary: Option<DecodeBoundary>,
+    pub(crate) reply: Option<(BoundaryId, BoundaryAction)>,
+    pub(crate) adopted: Option<InterpretationFacts>,
+    pub(crate) control_failure: Option<ControlError>,
     pub(crate) input: InputStore,
     pub(crate) need: Vec<Request>,
     /// Scratch for a read's satisfied spans and missing gaps, reused across polls.
@@ -125,6 +145,11 @@ pub(crate) struct Shared {
 impl Shared {
     pub(crate) fn new(cap: usize) -> Self {
         Self {
+            controlled: false,
+            boundary: None,
+            reply: None,
+            adopted: None,
+            control_failure: None,
             input: InputStore::new(cap),
             need: Vec::new(),
             satisfied: Vec::new(),
@@ -233,18 +258,48 @@ impl CoroutineContext {
         meta: BatchMeta,
         rows: &PixelSlice<'_>,
     ) -> impl Future<Output = Result<(), CoroutineError>> + 'a {
+        let refusal = {
+            let shared = self.shared.lock();
+            shared.control_failure.or_else(|| {
+                (shared.controlled && (shared.adopted.is_none() || shared.boundary.is_some()))
+                    .then_some(ControlError::OutputBeforeInterpretation)
+            })
+        };
+        if let Some(error) = refusal {
+            return WriteRows {
+                shared: &self.shared,
+                pending: None,
+                error: Some(error.into()),
+            };
+        }
         let width = rows.width();
         let count = rows.rows();
         let descriptor = rows.descriptor();
-        let stride = width as usize * descriptor.bytes_per_pixel();
+        let size = (width as usize)
+            .checked_mul(descriptor.bytes_per_pixel())
+            .and_then(|stride| stride.checked_mul(count as usize).map(|len| (stride, len)));
+        let Some((stride, len)) = size else {
+            return WriteRows {
+                shared: &self.shared,
+                pending: None,
+                error: Some(CoroutineError::RowAllocation),
+            };
+        };
         let mut data = core::mem::take(&mut self.shared.lock().spare);
         data.clear();
-        data.reserve(stride * count as usize);
+        if data.try_reserve_exact(len).is_err() {
+            return WriteRows {
+                shared: &self.shared,
+                pending: None,
+                error: Some(CoroutineError::RowAllocation),
+            };
+        }
         for r in 0..count {
             data.extend_from_slice(&rows.row(r)[..stride]);
         }
         WriteRows {
             shared: &self.shared,
+            error: None,
             pending: Some(PendingRows {
                 meta,
                 data,
@@ -272,13 +327,42 @@ impl CoroutineContext {
     /// Set image metadata (visible through `IncrementalDecode::info`).
     pub fn set_info(&mut self, info: ImageInfo) {
         let mut shared = self.shared.lock();
+        if shared.adopted.is_some()
+            && shared.info.as_ref().is_some_and(|old| {
+                old.width != info.width
+                    || old.height != info.height
+                    || old.orientation != info.orientation
+                    || old.source_color != info.source_color
+            })
+        {
+            shared.control_failure = Some(ControlError::FinalInterpretationChanged);
+        }
         shared.info = Some(info);
         shared.info_generation += 1;
     }
 
     /// Set the negotiated output descriptor.
     pub fn set_output_descriptor(&mut self, descriptor: PixelDescriptor) {
-        self.shared.lock().descriptor = Some(descriptor);
+        let mut shared = self.shared.lock();
+        if shared.adopted.is_some() && shared.descriptor != Some(descriptor) {
+            shared.control_failure = Some(ControlError::FinalInterpretationChanged);
+        }
+        shared.descriptor = Some(descriptor);
+    }
+
+    /// Suspend before work affected by these interpretation facts. Await this
+    /// before conversion or output. `ContinueReading` permits discovery only;
+    /// rows stay blocked until final interpretation is adopted. This future is
+    /// served only by the controlled protocol; legacy execution refuses it.
+    pub fn interpretation(
+        &mut self,
+        facts: InterpretationFacts,
+    ) -> impl Future<Output = Result<BoundaryAction, CoroutineError>> + '_ {
+        Interpret {
+            shared: &self.shared,
+            facts: Some(facts),
+            id: None,
+        }
     }
 
     /// Whether the driver's sink takes provisional (progressive) rows.
@@ -290,9 +374,64 @@ impl CoroutineContext {
 
     /// Check the driver's stop token without suspending.
     pub fn check_stop(&self) -> Result<(), CoroutineError> {
-        match self.shared.lock().cancelled {
+        let shared = self.shared.lock();
+        if let Some(error) = shared.control_failure {
+            return Err(error.into());
+        }
+        match shared.cancelled {
             Some(r) => Err(CoroutineError::Cancelled(r)),
             None => Ok(()),
+        }
+    }
+}
+
+struct Interpret<'a> {
+    shared: &'a SharedCell,
+    facts: Option<InterpretationFacts>,
+    id: Option<BoundaryId>,
+}
+impl Future for Interpret<'_> {
+    type Output = Result<BoundaryAction, CoroutineError>;
+    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+        let mut shared = this.shared.lock();
+        if let Some(reason) = shared.cancelled {
+            return Poll::Ready(Err(reason.into()));
+        }
+        if let Some(error) = shared.control_failure {
+            return Poll::Ready(Err(error.into()));
+        }
+        if !shared.controlled {
+            return Poll::Ready(Err(ControlError::UnhandledBoundary.into()));
+        }
+        if let Some(facts) = this.facts.take() {
+            if shared.boundary.is_some() || shared.reply.is_some() {
+                return Poll::Ready(Err(ControlError::InvalidReply.into()));
+            }
+            if let Some(adopted) = shared.adopted {
+                return Poll::Ready(if adopted == facts {
+                    Ok(BoundaryAction::AdoptInterpretation)
+                } else {
+                    Err(ControlError::FinalInterpretationChanged.into())
+                });
+            }
+            if facts.descriptor != shared.descriptor
+                || shared
+                    .info
+                    .as_ref()
+                    .is_none_or(|info| info.width != facts.width || info.height != facts.height)
+            {
+                return Poll::Ready(Err(ControlError::InconsistentFacts.into()));
+            }
+            let boundary = DecodeBoundary::new(facts)?;
+            this.id = Some(boundary.id());
+            shared.boundary = Some(boundary);
+            return Poll::Pending;
+        }
+        match shared.reply.take() {
+            Some((id, action)) if Some(id) == this.id => Poll::Ready(Ok(action)),
+            Some(_) => Poll::Ready(Err(ControlError::InvalidReply.into())),
+            None => Poll::Pending,
         }
     }
 }
@@ -420,6 +559,7 @@ impl Future for Len<'_> {
 struct WriteRows<'a> {
     shared: &'a SharedCell,
     pending: Option<PendingRows>,
+    error: Option<CoroutineError>,
 }
 
 impl Future for WriteRows<'_> {
@@ -427,6 +567,9 @@ impl Future for WriteRows<'_> {
 
     fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
+        if let Some(error) = this.error.take() {
+            return Poll::Ready(Err(error));
+        }
         let mut shared = this.shared.lock();
         if let Some(r) = shared.cancelled {
             return Poll::Ready(Err(CoroutineError::Cancelled(r)));
