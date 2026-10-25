@@ -4,6 +4,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { example } from './source.mjs';
 import { entries } from './api.mjs';
 const examples=await readFile(new URL('../examples/journeys.rs',import.meta.url),'utf8');
+const policyExamples=await readFile(new URL('../examples/policy.rs',import.meta.url),'utf8');
 const url=process.env.SITE_URL || 'http://127.0.0.1:3537/';
 const output=process.env.SITE_SCREENSHOTS;
 if(output) await mkdir(output,{recursive:true});
@@ -20,7 +21,8 @@ try {
   for(const panel of await page.locator('.code-panel').all()) {
     const name=await panel.getAttribute('data-example');
     const parts=await panel.locator('[data-example-part]').allTextContents();
-    assert.equal(parts.join(''),example(examples,name).full,`rendered complete scope: ${name}`);
+    const source=await panel.getAttribute('data-example-source');
+    assert.equal(parts.join(''),example(source==='docs/examples/policy.rs'?policyExamples:examples,name).full,`rendered complete scope: ${name}`);
   }
   if(output) await page.screenshot({path:`${output}/desktop.png`,fullPage:true});
   for(const entry of entries) {
@@ -52,6 +54,18 @@ try {
   assert.ok(!await above.evaluate(el=>el.open));assert.ok(await below.evaluate(el=>el.open));
   await below.locator('summary').click();
   assert.ok(!await below.evaluate(el=>el.open));
+  await page.goto(`${url}#policy`);
+  assert.ok((await page.locator('#policy .api-panel[open]').textContent()).includes('At<Self::Error>'));
+  for(const [name,id] of [['policy_default','policy-default'],['policy_custom','policy-custom']]) {
+    const panel=page.locator(`#${id}-example`);
+    for(const summary of await panel.locator('.code-context summary').all()) await summary.click();
+    assert.ok(await panel.locator('[data-example-part="above"]').isVisible());
+    assert.ok(await panel.locator('[data-example-part="below"]').isVisible());
+    await panel.locator('[data-copy-full]').click();
+    await page.waitForFunction(id=>document.querySelector(`#${id}-example [data-copy-full]`).textContent==='Copied',id);
+    assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),example(policyExamples,name).full);
+  }
+  if(output) await page.locator('#policy').screenshot({path:`${output}/policy-expanded.png`});
   for(const lane of ['consumer','adapter','implementor']) {
     await page.locator(`[data-lane-link="${lane}"]`).click();
     for(let step=1;step<=5;step++) {

@@ -83,12 +83,14 @@ export const lanes = [
   ]},
 ];
 export const questions = [
+  { n: 27, title: 'Can one request replace capability coordination?', text: 'The private resolver now binds requirements, configured presets and traced application errors through native and registry paths. Public API reduction still needs a reviewed integration.' },
   { n: 160, title: 'Where should an encode wait?', text: 'Separate CPU fairness from output waiting. Qualify raw/intermediate ownership and upstream pause behavior for the exact configuration.' },
   { n: 161, title: 'Who admits the next byte?', text: 'Driver limits must apply before reads and allocation. Keep checked buffering policy, coalescing, shared leases, and retained media ownership explicit.' },
   { n: 154, title: 'Who resolves color before encode?', text: 'Animation and descriptor/configuration color paths must honor the same resolver. Metadata policy alone cannot prove that the target can carry the chosen color description.' },
   { n: 159, title: 'Does every layer earn its place?', text: 'Keep current codec/media protocols. Review a small driver-level limits and scheduling surface first; avoid adding a parallel Read/Seek family without a concrete parser need.' },
 ];
 export const evidence = [
+  ['TESTED / PRIVATE', 'Fallible policy resolver', 'Configured profiles, scoped choices, traced native causes, shared reservations, EXIF checks, real container packets and retained decision reports. Explicit gaps for native accounting and other metadata domains.', 'docs/policy-scenarios.md'],
   ['PROPOSED / API REVIEW', 'A minimal 0.3', 'Keep the consumer calls and byte/session protocols; review admission, interpretation, ownership and image selection. Concrete removal candidates and native experiment gates.', 'docs/minimal-0.3.md'],
   ['MEASURED / TESTED', 'Raw ownership at a stalled writer', '786432 versus 0 logical retained raw bytes in a deliberate ownership control around native QOI; all outputs exactly 4255 bytes. Not a measurement of QOI internal memory.', 'benchmarks/io_encoder_retention_2026-10-25.md'],
   ['SIMULATED', 'Remote range policy', '32 cases through the reused IMI transport model. Exact returned bytes, shared bandwidth, cached extents. No DNS/TLS, retries, CPU time, cancellation, or concurrent views.', 'benchmarks/io_transport_model_2026-10-25.md'],

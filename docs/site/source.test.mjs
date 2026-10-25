@@ -6,6 +6,7 @@ import {api,chapterApi,entries,supplementalExamples} from './api.mjs';
 import {lanes} from './content.mjs';
 const root=new URL('../../',import.meta.url);
 const source=await readFile(new URL('docs/examples/journeys.rs',root),'utf8');
+const policySource=await readFile(new URL('docs/examples/policy.rs',root),'utf8');
 
 test('source signatures preserve GATs, lifetimes, bounds and futures without default bodies',()=>{
   const rust=`// 🦀 pub trait False { fn hidden(); }
@@ -60,15 +61,17 @@ test('above, focus and below reconstruct complete independently compiled example
     ...lanes.flatMap(l=>l.steps.map(s=>s.snippet).filter(Boolean)),
     ...Object.values(supplementalExamples).flat().map(e=>e.snippet),
   ]);
-  for(const name of shown) {
-    const parts=example(source,name);
+  const cases=[...shown].map(name=>[source,name]);
+  for(const name of ['policy_default','policy_custom']) cases.push([policySource,name]);
+  for(const [text,name] of cases) {
+    const parts=example(text,name);
     assert.ok(parts.above.startsWith('use '),name);
     assert.ok(parts.focus.trim(),name);
     assert.ok(parts.below.endsWith('}'),name);
     assert.equal(parts.full,parts.above+parts.focus+parts.below);
     assert.ok(!parts.full.includes('// ANCHOR:'));
     assert.ok(!parts.full.includes('// END:'));
-    const scope=source.split(`// EXAMPLE: ${name}\n`)[1].split(`// END EXAMPLE: ${name}`)[0];
+    const scope=text.split(`// EXAMPLE: ${name}\n`)[1].split(`// END EXAMPLE: ${name}`)[0];
     const original=scope.split('\n').filter(l=>!/^\s*\/\/ (?:ANCHOR|END):/.test(l)).join('\n');
     assert.equal(parts.full.trim(),original.split('\n').map(l=>l.startsWith('    ')?l.slice(4):l).join('\n').trim());
   }

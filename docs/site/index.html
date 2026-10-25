@@ -8,7 +8,7 @@
 </head>
 <body>
 <a class="skip" href="#journeys">Skip to the guide</a>
-<header class="topbar"><a class="brand" href="#top" aria-label="zencodec home"><span class="mark" aria-hidden="true">z</span>zen<span>codec</span></a><nav aria-label="Main"><a href="#entrypoints">Start</a><a href="#journeys">Journeys</a><a href="#lab">Lab</a><a href="https://github.com/imazen/zencodec">Source ↗</a></nav><span class="edition">A living guide · main</span></header>
+<header class="topbar"><a class="brand" href="#top" aria-label="zencodec home"><span class="mark" aria-hidden="true">z</span>zen<span>codec</span></a><nav aria-label="Main"><a href="#entrypoints">Start</a><a href="#journeys">Journeys</a><a href="#lab">Lab</a><a href="#policy">Policy</a><a href="https://github.com/imazen/zencodec">Source ↗</a></nav><span class="edition">A living guide · main</span></header>
 <main id="top">
 <section class="hero wrap">
   <div class="eyebrow"><span class="live-dot"></span> Shared contracts for image &amp; media codecs</div>
@@ -34,6 +34,7 @@
 <!-- OWNERSHIP -->
 <div class="callout"><b>Qualify the configuration.</b> Couple encoding to a slow writer only when raw/intermediate storage is bounded and the upstream can pause. Otherwise, finish and release into independently admitted encoded storage; cap staging and concurrent jobs. A caller-owned full raster still counts.</div>
 <a href="https://github.com/imazen/zencodec/blob/main/benchmarks/io_encoder_retention_2026-10-25.md">Read the native QOI ownership control and its limits ↗</a></section>
+<section class="wrap policy-proposal consumer" id="policy" aria-labelledby="policy-title"><div class="section-kicker">Private prototype / testing a smaller caller contract</div><div class="section-heading"><h2 id="policy-title">One request, one resolver.</h2><p>These examples execute in the qualification harness. They are proposed shapes, not exported zencodec interfaces. Current library calls remain in the journeys above.</p></div><!-- POLICY --></section>
 <section class="wrap evidence" id="evidence"><div class="section-kicker">The record / claims you can inspect</div><div class="section-heading"><h2>Current, measured, proposed.</h2><p>Protocol support, native incremental behavior, and performance qualification are separate claims. Every result has a scope.</p></div><!-- EVIDENCE --></section>
 <section class="wrap questions" id="questions"><div class="section-kicker">The friction / keep it visible</div><div class="section-heading"><h2>Complexity has to earn its place.</h2><p>These steps still need a better contract or more evidence. The guide links the open design question at the point it becomes relevant.</p></div><!-- QUESTIONS --><p class="nostdio">A <a href="https://docs.rs/nostdio/0.2.0/nostdio/">nostdio-style Read/Seek adapter</a> can help an existing synchronous parser. It does not supply suspension, all-required range plans, immutable object identity, or shared storage admission. Keep that bridge narrow; the current evidence does not justify a second core I/O hierarchy.</p></section>
 </main>

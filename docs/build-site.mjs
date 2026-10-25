@@ -9,6 +9,7 @@ const docs = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(docs);
 const dest = path.join(docs, '_site');
 const source = await readFile(path.join(docs, 'examples/journeys.rs'), 'utf8');
+const policySource = await readFile(path.join(docs, 'examples/policy.rs'), 'utf8');
 const sha = process.env.GITHUB_SHA || execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
 const escape = s => String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 const signatures = new Map();
@@ -25,15 +26,16 @@ function highlight(code) {
   }
   return out + escape(code.slice(end));
 }
-function codePanel(id, name) {
-  const parts = example(source, name);
+function codePanel(id, name, file = 'docs/examples/journeys.rs') {
+  const proposed = file === 'docs/examples/policy.rs';
+  const parts = example(proposed ? policySource : source, name);
   const context = (direction, label) => `<details class="code-context" data-direction="${direction}"><summary>${label}<span>${parts[direction].trimEnd().split('\n').length} lines</span></summary><pre><code data-example-part="${direction}">${highlight(parts[direction])}</code></pre></details>`;
-  return `<div class="code-panel" id="${id}-example" data-example="${name}">
-    <div class="code-toolbar"><span>Rust · tested example</span><div class="code-actions"><button type="button" data-copy="${id}-code">Copy focus</button><button type="button" data-copy-full="${id}-example">Copy full example</button></div></div>
+  return `<div class="code-panel" id="${id}-example" data-example="${name}" data-example-source="${file}">
+    <div class="code-toolbar"><span>Rust · ${proposed ? 'tested private prototype' : 'tested example'}</span><div class="code-actions"><button type="button" data-copy="${id}-code">Copy focus</button><button type="button" data-copy-full="${id}-example">Copy full example</button></div></div>
     ${context('above', '↑ Expand above · imports &amp; setup')}
     <pre class="code-focus"><code id="${id}-code" data-example-part="focus">${highlight(parts.focus)}</code></pre>
     ${context('below', '↓ Expand below · return &amp; continuation')}
-    <div class="code-provenance"><a href="https://github.com/imazen/zencodec/blob/${sha}/docs/examples/journeys.rs#L${parts.line}">Complete source ↗</a><a href="https://github.com/imazen/zencodec/blob/${sha}/perf/io-validation/tests/site_examples.rs">Native pixel-parity tests ↗</a><span class="copy-status" role="status" aria-live="polite"></span></div>
+    <div class="code-provenance"><a href="https://github.com/imazen/zencodec/blob/${sha}/${file}#L${parts.line}">Complete source ↗</a><a href="https://github.com/imazen/zencodec/blob/${sha}/perf/io-validation/tests/${proposed ? 'policy_native' : 'site_examples'}.rs">${proposed ? 'Native contract tests' : 'Native pixel-parity tests'} ↗</a><span class="copy-status" role="status" aria-live="polite"></span></div>
   </div>`;
 }
 function apiPanels(id, keys) {
@@ -65,8 +67,21 @@ function chapter(lane,step,i) {
 const journeyHtml = `<nav class="lane-tabs" aria-label="Audience">${lanes.map(l=>`<a class="lane-tab ${l.id}" data-lane-link="${l.id}" href="#${l.id}-1"><span>${l.number} / ${l.name}</span><strong>${l.title}</strong><small>${l.scope}</small></a>`).join('')}</nav><div class="journey-layout"><aside class="journey-nav" aria-label="Chapter navigation">${lanes.map(l=>`<div class="steps-group" data-lane="${l.id}"><p class="journey-intro">${l.intro}</p><ol>${l.steps.map((s,i)=>`<li><a href="#${l.id}-${i+1}" class="step-link"><span>${String(i+1).padStart(2,'0')}</span>${escape(s.title)}</a></li>`).join('')}</ol><a class="small-link" href="#questions">See unresolved design questions ↘</a></div>`).join('')}</aside><div class="chapter-container">${lanes.flatMap(l=>l.steps.map((s,i)=>chapter(l,s,i))).join('')}</div></div>`;
 for (const lane of lanes) for (const step of lane.steps) await stat(path.join(root,step.source));
 for (const row of evidence) await stat(path.join(root,row[3]));
+const policyHtml = `
+${flow('policy-admission',[['consumer','Stored request','required effects + preferences'],['implementor','Operation facts','qualified alternatives'],['adapter','Check requirements','offer feasible choices']])}
+<div class="callout"><b>No feasible choice?</b> Refuse with the failed requirements before calling application code. Estimates cannot certify a hard cap.</div>
+<h3>1. The gallery needs reliable metadata handling.</h3>
+<p>A profile binds requirements and preferences once. The consumer makes one call. The native QOI fixture refuses supplied rights retention because it has no EXIF carrier; missing metadata is not invented. Both concrete and CodecSet paths use the same stored request.</p>
+${codePanel('policy-default','policy_default','docs/examples/policy.rs')}
+<h3>2. Publication gains an account-specific rule.</h3>
+<p>Add one callback when the application has a conditional decision. A missing account rule returns its own traced error; a disabled account deliberately declines; enabled accounts delegate to the stored preset. None of these answers can weaken required effects.</p>
+${codePanel('policy-custom','policy_custom','docs/examples/policy.rs')}
+${apiPanels('policy',['policyResolver','policyRequest'])}
+${flow('policy-execution',[['consumer','Choose / delegate','or traced refusal / error'],['adapter','Reserve + execute','recheck source and capacity'],['consumer','Result + decisions','cause, trace, partial progress']])}
+<p>Resolve at operation or configuration-epoch boundaries. Writer stalls and individual rows or packets do not re-enter the callback. Native codec and transport errors keep their own causes. A later failure retains earlier selections.</p>
+<p><a href="https://github.com/imazen/zencodec/blob/main/docs/policy-resolution.md">Proposed contract and API removal candidates ↗</a> · <a href="https://github.com/imazen/zencodec/blob/main/docs/policy-scenarios.md">Scenario matrix and qualification gaps ↗</a> · <a href="https://github.com/imazen/zencodec/blob/main/benchmarks/policy_cost_2026-10-25.md">Measured dispatch and allocation costs ↗</a></p>`;
 let html=await readFile(path.join(docs,'site/index.html'),'utf8');
-html=html.replace('<!-- ENTRYPOINTS -->',entryHtml).replace('<!-- ARCHITECTURE -->',architecture).replace('<!-- JOURNEYS -->',journeyHtml).replace('<!-- OWNERSHIP -->',ownership)
+html=html.replace('<!-- ENTRYPOINTS -->',entryHtml).replace('<!-- ARCHITECTURE -->',architecture).replace('<!-- JOURNEYS -->',journeyHtml).replace('<!-- OWNERSHIP -->',ownership).replace('<!-- POLICY -->',policyHtml)
 .replace('<!-- EVIDENCE -->',`<div class="evidence-grid">${evidence.map(([tag,title,text,url])=>`<a class="evidence-item" href="https://github.com/imazen/zencodec/blob/main/${url}"><span class="evidence-tag">${tag}</span><h3>${title} <span aria-hidden="true">↗</span></h3><p>${text}</p></a>`).join('')}</div>`)
 .replace('<!-- QUESTIONS -->',`<div class="question-list">${questions.map(q=>`<a href="https://github.com/imazen/zencodec/issues/${q.n}"><span class="issue-number">#${q.n}</span><div><h3>${q.title}</h3><p>${q.text}</p></div><span aria-hidden="true">↗</span></a>`).join('')}</div>`).replaceAll('BUILD_SHA',sha).replaceAll('BUILD_SHORT',sha.slice(0,8));
 await mkdir(dest,{recursive:true});

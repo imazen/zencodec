@@ -16,6 +16,11 @@ test('all chapter anchors, diagrams, and Rust examples survive the build',()=>{
   for(const [,anchor] of html.matchAll(/href="#([^"]+)"/g)) assert.ok(ids.includes(anchor),anchor);
   assert.equal((html.match(/class="chapter /g)||[]).length,15);
   assert.ok(!html.includes('BUILD_SHA'));assert.ok(!html.includes('<!-- JOURNEYS -->'));
+  assert.ok(!html.includes('<!-- POLICY -->'));
+  assert.ok(html.includes('data-api="policyResolver"'));
+  assert.ok(html.includes('At&lt;Self::Error&gt;'));
+  assert.ok(html.includes('data-example="policy_default"'));
+  assert.ok(html.includes('data-example="policy_custom"'));
 });
 test('deployment only needs local allowlisted assets',async()=>{
   for(const [,url] of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
