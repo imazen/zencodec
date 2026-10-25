@@ -77,6 +77,7 @@ impl EncodeRequest {
     fn with_fidelity(self, fidelity: Fidelity) -> Self;
     fn preferring_fidelity(self, targets: impl Into<Vec<Fidelity>>) -> Self;
     const fn with_policy(self, policy: EncodePolicy) -> Self;
+    const fn with_policy_defaults(self, defaults: EncodePolicy) -> Self;
     const fn with_policy_set(self, preset: PolicySet) -> Self;
     fn prepare(&self, codecs: &CodecSet) -> Result<Vec<PreparedEncode>, At<OperationError>>;
     fn prepare_send(&self, codecs: &CodecSet) -> Result<Vec<PreparedSendEncode>, At<OperationError>>;

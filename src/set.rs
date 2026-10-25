@@ -682,6 +682,10 @@ impl CodecSet {
         }
     }
 
+    pub(crate) fn operation_encode_policy(&self) -> Option<EncodePolicy> {
+        self.encode_policy
+    }
+
     pub(crate) fn checked_encode_job(
         &self,
         format: ImageFormat,

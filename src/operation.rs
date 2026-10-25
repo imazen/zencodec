@@ -359,6 +359,7 @@ pub struct EncodeRequest {
     format: ImageFormat,
     fidelity: FidelityRequest,
     policy: Option<EncodePolicy>,
+    policy_defaults: EncodePolicy,
     preset: PolicySet,
 }
 
@@ -376,6 +377,7 @@ impl EncodeRequest {
             format,
             fidelity: FidelityRequest::Template,
             policy: None,
+            policy_defaults: EncodePolicy::none(),
             preset: PolicySet::new(),
         }
     }
@@ -407,6 +409,31 @@ impl EncodeRequest {
         self
     }
 
+    /// Supply adapter defaults for unspecified policy fields.
+    ///
+    /// Explicit fields in the request's policy (or the inherited set policy)
+    /// win, including `Some(false)`. Filled fields go through the same checked
+    /// setter as requirements; an unsupported default refuses preparation.
+    /// An all-`None` default leaves the registered template unchanged.
+    pub const fn with_policy_defaults(mut self, defaults: EncodePolicy) -> Self {
+        self.policy_defaults = defaults;
+        self
+    }
+
+    fn effective_policy(&self, codecs: &CodecSet) -> Option<EncodePolicy> {
+        let required = self.policy.or(codecs.operation_encode_policy());
+        if self.policy_defaults == EncodePolicy::none() {
+            return required;
+        }
+        let mut policy = required.unwrap_or_else(EncodePolicy::none);
+        policy.color = policy.color.or(self.policy_defaults.color);
+        policy.embed_icc = policy.embed_icc.or(self.policy_defaults.embed_icc);
+        policy.embed_exif = policy.embed_exif.or(self.policy_defaults.embed_exif);
+        policy.embed_xmp = policy.embed_xmp.or(self.policy_defaults.embed_xmp);
+        policy.strict = policy.strict.or(self.policy_defaults.strict);
+        Some(policy)
+    }
+
     /// Prepare permitted configurations without constructing an encoder or
     /// touching pixels. Adapter API for coupling conversion, metadata and
     /// encode into one question. All malformed targets reject the request;
@@ -417,7 +444,7 @@ impl EncodeRequest {
     pub fn prepare(&self, codecs: &CodecSet) -> Result<Vec<PreparedEncode>, At<OperationError>> {
         self.prepare_with(codecs, |offer| {
             codecs
-                .checked_encode_job(self.format, offer.fidelity, self.policy)
+                .checked_encode_job(self.format, offer.fidelity, self.effective_policy(codecs))
                 .map(|job| PreparedEncode { offer, job })
         })
     }
@@ -432,7 +459,7 @@ impl EncodeRequest {
     ) -> Result<Vec<PreparedSendEncode>, At<OperationError>> {
         self.prepare_with(codecs, |offer| {
             codecs
-                .checked_send_encode_job(self.format, offer.fidelity, self.policy)
+                .checked_send_encode_job(self.format, offer.fidelity, self.effective_policy(codecs))
                 .map(|job| PreparedSendEncode { offer, job })
         })
     }

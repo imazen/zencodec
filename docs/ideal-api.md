@@ -97,3 +97,21 @@ resource bounds, sequential publication and other codec routes remain open work.
 The goal is successful execution that establishes the requested contract, or an
 actionable refusal. Completion requires native codec and pipeline evidence for
 each remaining row above, not only types or synthetic protocol tests.
+
+## Adapter policy defaults (2026-10-25)
+
+`EncodeRequest::with_policy_defaults` lets a coupled adapter preserve its
+prepared color description without replacing application requirements. Each
+explicit field in the request policy, or the inherited registry policy when no
+request policy is supplied, takes precedence. This includes explicit `false`.
+Unspecified fields receive adapter defaults, and the complete result goes
+through the codec's checked setter. Unsupported defaults refuse preparation.
+The all-`None` default leaves the backend template untouched.
+
+Local and transferable preparation share this rule. `operation_defaults` tests
+inheritance, explicit replacement, all five fields, unchanged templates and
+unsupported defaults through both paths. The full workspace, `no_std`, strict
+core lint and public API snapshots passed. Resource-wrapper receipt for
+`just operation-send-integration`: rc=0, 10 s, peak RSS 0.33 GiB, minimum
+available 16869 MiB, peak load 0.51. This is test-process usage, not a codec
+workspace bound.
