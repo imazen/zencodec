@@ -304,6 +304,7 @@ io-policy-sync export:
     cp perf/io-validation/profile-policy.py "{{export}}/perf/io-validation/"
     cp perf/io-validation/Cargo.toml "{{export}}/perf/io-validation/"
     cp perf/io-validation/tests/policy*.rs "{{export}}/perf/io-validation/tests/"
+    cp docs/examples/policy.rs "{{export}}/docs/examples/"
     cp perf/policy-check/Cargo.toml "{{export}}/perf/policy-check/"
     cp perf/policy-check/dependencies.lock "{{export}}/perf/policy-check/"
     cp perf/policy-check/src/lib.rs "{{export}}/perf/policy-check/src/"

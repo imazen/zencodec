@@ -6,6 +6,8 @@ mod fixtures;
 mod native;
 #[path = "../src/policy/mod.rs"]
 mod policy;
+#[path = "../../../docs/examples/policy.rs"]
+mod policy_examples;
 use policy::*;
 use std::{
     convert::Infallible,
@@ -504,6 +506,62 @@ fn late_callback_error_keeps_earlier_selections_and_the_original_trace() {
     assert_eq!(decisions.records[0].unwrap().code, Code::Selected);
     assert_eq!(decisions.records[1].unwrap().code, Code::Callback);
     assert!(decisions.records[2].is_none());
+}
+
+#[test]
+fn documented_consumer_calls_preserve_success_decline_and_callback_error() {
+    let fixture = fixture();
+    let mut expected = Vec::new();
+    policy_examples::derivative(pixels(&fixture), &Metadata::none(), &mut expected).unwrap();
+    let mut output = Vec::new();
+    policy_examples::account_derivative(
+        pixels(&fixture),
+        &Metadata::none(),
+        &mut output,
+        Some(true),
+    )
+    .unwrap();
+    assert_eq!(output, expected);
+    for may_publish in [Some(false), None] {
+        let mut output = Vec::new();
+        let error = policy_examples::account_derivative(
+            pixels(&fixture),
+            &Metadata::none(),
+            &mut output,
+            may_publish,
+        )
+        .unwrap_err();
+        assert!(output.is_empty());
+        let failure =
+            zencodec::find_cause::<Failure<policy_examples::AccountRuleUnavailable>>(&error)
+                .unwrap();
+        assert_eq!(
+            failure.code(),
+            if may_publish.is_none() {
+                Code::Callback
+            } else {
+                Code::Declined
+            }
+        );
+        assert_eq!(
+            zencodec::find_cause::<policy_examples::AccountRuleUnavailable>(&error).is_some(),
+            may_publish.is_none()
+        );
+    }
+    let mut output = Vec::new();
+    let error = policy_examples::derivative(
+        pixels(&fixture),
+        &Metadata::none().with_copyright("Required rights"),
+        &mut output,
+    )
+    .unwrap_err();
+    assert_eq!(
+        zencodec::find_cause::<Failure<Infallible>>(&error)
+            .unwrap()
+            .code(),
+        Code::NoAlternative
+    );
+    assert!(output.is_empty());
 }
 
 #[test]
