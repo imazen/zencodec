@@ -92,3 +92,18 @@ run-heavy: done rc=0 14s | peak-RSS 0.37GiB | min-avail 17135MiB | peak-load 0.4
 ```
 
 This receipt is for workspace tests and Clippy, not decoder working memory.
+
+
+## Independent sink enforcement
+
+The fused controlled wrapper also guards the actual sink. A backend cannot call
+`begin`, final/provisional row access or `finish` before adoption, even if it
+swallows the guard's refusal and returns successful progress. After adoption,
+geometry, row extents and descriptors must match the adopted facts. A controlled
+erased decoder refuses legacy execution from its first call. This adds no pixel
+copy. Native algorithms remain responsible for their internal computations and
+for the truth of their final facts; qualification must check those separately.
+
+The early-effect regression failed before this guard with an actual call to the
+application sink. The regression, coroutine tests, workspace tests and Clippy
+pass after the fix.

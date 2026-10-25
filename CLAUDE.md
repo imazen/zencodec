@@ -231,6 +231,8 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Controlled decode review (2026-10-25): the initial fused wrapper held pending suspensions but trusted a backend not to call the sink before its first boundary. An adversarial backend reproduced an early `begin`. The wrapper now guards begin/final rows/provisional rows/finish independently and refuses swallowed guard errors. Coroutine-level adoption checks remain; native computation and final-fact correctness still require qualification. See `docs/controlled-decoding.md`.
+
 - Fixed on the ideal API PR (2026-10-25): async image drivers copied every
   borrowed request before input admission, and transcode drained newly pending
   output even after a batch failed. Request copies are now bounded and failed

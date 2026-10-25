@@ -275,7 +275,94 @@ impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Incremental
 pub fn erase_controlled<D: ControlledIncrementalDecode + Send + 'static>(
     decoder: D,
 ) -> Box<DynControlledDecoder> {
-    Box::new(IncrementalDecoderShim(Fused::new(decoder)))
+    Box::new(IncrementalDecoderShim(Fused::controlled(decoder)))
+}
+
+/// No sink effects before adoption, even if a faulty codec ignores a refusal.
+pub(super) struct GuardedSink<'a> {
+    inner: &'a mut dyn DecodeRowSink,
+    facts: Option<InterpretationFacts>,
+    pub(super) refused: Option<ControlError>,
+}
+impl<'a> GuardedSink<'a> {
+    pub(super) fn new(
+        inner: &'a mut dyn DecodeRowSink,
+        facts: Option<InterpretationFacts>,
+    ) -> Self {
+        Self {
+            inner,
+            facts,
+            refused: None,
+        }
+    }
+    fn check(
+        &mut self,
+        width: Option<u32>,
+        extent: Option<(u32, u32)>,
+        descriptor: Option<PixelDescriptor>,
+    ) -> Result<(), crate::sink::SinkError> {
+        let error = match self.facts {
+            None => Some(ControlError::OutputBeforeInterpretation),
+            Some(facts)
+                if width.is_some_and(|w| w != facts.width)
+                    || descriptor.is_some_and(|d| facts.descriptor != Some(d))
+                    || extent.is_some_and(|(y, rows)| {
+                        y.checked_add(rows).is_none_or(|end| end > facts.height)
+                    }) =>
+            {
+                Some(ControlError::InconsistentFacts)
+            }
+            _ => None,
+        };
+        if let Some(error) = self.refused.or(error) {
+            self.refused = Some(error);
+            return Err(Box::new(error));
+        }
+        Ok(())
+    }
+}
+impl DecodeRowSink for GuardedSink<'_> {
+    fn begin(
+        &mut self,
+        width: u32,
+        height: u32,
+        descriptor: PixelDescriptor,
+    ) -> Result<(), crate::sink::SinkError> {
+        self.check(Some(width), Some((0, height)), Some(descriptor))?;
+        if self.facts.is_some_and(|facts| facts.height != height) {
+            self.refused = Some(ControlError::InconsistentFacts);
+            return Err(Box::new(ControlError::InconsistentFacts));
+        }
+        self.inner.begin(width, height, descriptor)
+    }
+    fn provide_next_buffer(
+        &mut self,
+        y: u32,
+        height: u32,
+        width: u32,
+        descriptor: PixelDescriptor,
+    ) -> Result<zenpixels::PixelSliceMut<'_>, crate::sink::SinkError> {
+        self.check(Some(width), Some((y, height)), Some(descriptor))?;
+        self.inner.provide_next_buffer(y, height, width, descriptor)
+    }
+    fn provide_pass_buffer(
+        &mut self,
+        meta: super::BatchMeta,
+        height: u32,
+        width: u32,
+        descriptor: PixelDescriptor,
+    ) -> Result<zenpixels::PixelSliceMut<'_>, crate::sink::SinkError> {
+        self.check(Some(width), Some((meta.y, height)), Some(descriptor))?;
+        self.inner
+            .provide_pass_buffer(meta, height, width, descriptor)
+    }
+    fn accepts_provisional(&self) -> bool {
+        self.facts.is_some() && self.refused.is_none() && self.inner.accepts_provisional()
+    }
+    fn finish(&mut self) -> Result<(), crate::sink::SinkError> {
+        self.check(None, None, None)?;
+        self.inner.finish()
+    }
 }
 
 #[cfg(test)]
@@ -289,6 +376,7 @@ mod tests {
     struct Hostile {
         calls: Arc<AtomicUsize>,
         boundary: DecodeBoundary,
+        early_output: u8,
     }
     impl IncrementalDecode for Hostile {
         type Error = core::fmt::Error;
@@ -317,10 +405,30 @@ mod tests {
         fn step_controlled(
             &mut self,
             _: Input<'_>,
-            _: &mut dyn DecodeRowSink,
+            sink: &mut dyn DecodeRowSink,
             _: &dyn Stop,
         ) -> Result<ControlledProgress, StepError<Self::Error>> {
             self.calls.fetch_add(1, Ordering::SeqCst);
+            match self.early_output {
+                1 => {
+                    let _ = sink.begin(1, 1, PixelDescriptor::RGBA8_SRGB);
+                }
+                2 => {
+                    let _ = sink.provide_next_buffer(0, 1, 1, PixelDescriptor::RGBA8_SRGB);
+                }
+                3 => {
+                    let _ = sink.provide_pass_buffer(
+                        super::super::BatchMeta::new(0, false),
+                        1,
+                        1,
+                        PixelDescriptor::RGBA8_SRGB,
+                    );
+                }
+                4 => {
+                    let _ = sink.finish();
+                }
+                _ => {}
+            }
             Ok(ControlledProgress::Suspended {
                 consumed: 0,
                 boundary: self.boundary,
@@ -338,6 +446,18 @@ mod tests {
     }
     struct NoEffects;
     impl DecodeRowSink for NoEffects {
+        fn finish(&mut self) -> Result<(), SinkError> {
+            panic!("unexpected finish")
+        }
+        fn provide_pass_buffer(
+            &mut self,
+            _: super::super::BatchMeta,
+            _: u32,
+            _: u32,
+            _: PixelDescriptor,
+        ) -> Result<PixelSliceMut<'_>, SinkError> {
+            panic!("unexpected provisional rows")
+        }
         fn begin(&mut self, _: u32, _: u32, _: PixelDescriptor) -> Result<(), SinkError> {
             panic!("unexpected sink effect")
         }
@@ -362,7 +482,11 @@ mod tests {
         .unwrap();
         (
             calls.clone(),
-            Fused::new(Hostile { calls, boundary }),
+            Fused::new(Hostile {
+                calls,
+                boundary,
+                early_output: 0,
+            }),
             boundary,
         )
     }
@@ -408,5 +532,19 @@ mod tests {
         )
         .unwrap();
         assert_eq!(calls.load(Ordering::SeqCst), 2);
+    }
+    #[test]
+    fn controlled_wrapper_blocks_early_effects_even_when_native_swallows_the_error() {
+        for effect in 1..=4 {
+            let (calls, dec, _) = fixture();
+            let mut inner = dec.into_inner();
+            inner.early_output = effect;
+            let mut dec = Fused::new(inner);
+            assert!(matches!(
+                dec.step_controlled(Input::empty(), &mut NoEffects, &enough::Unstoppable),
+                Err(StepError::Control(ControlError::OutputBeforeInterpretation))
+            ));
+            assert_eq!(calls.load(Ordering::SeqCst), 1);
+        }
     }
 }

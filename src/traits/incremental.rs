@@ -80,7 +80,7 @@ use enough::{Stop, StopReason};
 
 use super::control::{
     BoundaryAction, BoundaryId, ControlError, ControlledIncrementalDecode, ControlledProgress,
-    DecodeBoundary,
+    DecodeBoundary, GuardedSink, InterpretationFacts,
 };
 use crate::sink::{DecodeRowSink, SinkError};
 use crate::{ImageInfo, OutputInfo};
@@ -578,6 +578,8 @@ impl<D: IncrementalDecode + ?Sized> IncrementalDecode for &mut D {
 pub struct Fused<D> {
     inner: D,
     state: FusedState,
+    controlled: bool,
+    interpretation: Option<InterpretationFacts>,
 }
 
 #[derive(Debug)]
@@ -594,6 +596,15 @@ impl<D> Fused<D> {
         Self {
             inner,
             state: FusedState::Running,
+            controlled: false,
+            interpretation: None,
+        }
+    }
+
+    pub(super) fn controlled(inner: D) -> Self {
+        Self {
+            controlled: true,
+            ..Self::new(inner)
         }
     }
 
@@ -625,6 +636,10 @@ impl<D: IncrementalDecode> IncrementalDecode for Fused<D> {
                 return Err(StepError::Control(ControlError::UnhandledBoundary));
             }
             FusedState::Running => {}
+        }
+        if self.controlled {
+            self.state = FusedState::Failed;
+            return Err(StepError::Control(ControlError::UnhandledBoundary));
         }
         if let Err(reason) = stop.check() {
             self.state = FusedState::Failed;
@@ -674,6 +689,7 @@ impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Fused<D> {
         sink: &mut dyn DecodeRowSink,
         stop: &dyn Stop,
     ) -> Result<ControlledProgress, StepError<D::Error>> {
+        self.controlled = true;
         match &self.state {
             FusedState::Done(info) => return Ok(Progress::new(0, Event::Done(info.clone())).into()),
             FusedState::Failed => return Err(StepError::Finished),
@@ -691,7 +707,30 @@ impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Fused<D> {
         }
         // Caught unwinds cannot resume a half-mutated native decoder.
         self.state = FusedState::Failed;
-        let progress = self.inner.step_controlled(input, sink, stop)?;
+        let mut guarded = GuardedSink::new(sink, self.interpretation);
+        let result = self.inner.step_controlled(input, &mut guarded, stop);
+        if let Some(error) = guarded.refused {
+            return Err(StepError::Control(error));
+        }
+        let progress = result?;
+        if self.interpretation.is_none()
+            && matches!(
+                &progress,
+                ControlledProgress::Decode(Progress {
+                    event: Event::Done(_) | Event::Rows { .. },
+                    ..
+                })
+            )
+        {
+            return Err(StepError::Control(ControlError::OutputBeforeInterpretation));
+        }
+        if let ControlledProgress::Suspended { boundary, .. } = &progress
+            && self
+                .interpretation
+                .is_some_and(|facts| facts != boundary.facts())
+        {
+            return Err(StepError::Control(ControlError::FinalInterpretationChanged));
+        }
         self.state = match &progress {
             ControlledProgress::Decode(Progress {
                 event: Event::Done(info),
@@ -718,6 +757,9 @@ impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Fused<D> {
             return Err(StepError::Control(ControlError::InvalidReply));
         }
         self.inner.resume(id, action, stop)?;
+        if action == BoundaryAction::AdoptInterpretation {
+            self.interpretation = Some(boundary.facts());
+        }
         self.state = FusedState::Running;
         Ok(())
     }
