@@ -90,7 +90,15 @@ jobs:
         with:
           workspaces: perf/av1-policy-validation
       - name: Install independent AV1 oracle
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        timeout-minutes: 6
+        run: |
+          # The Azure package mirror exhausted the entire job deadline while
+          # downloading FFmpeg. Keep Ubuntu's signed packages, using its archive
+          # mirror and explicit command deadlines instead.
+          sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources
+          sudo timeout --kill-after=15s 2m apt-get -o Acquire::Retries=1 -o Acquire::https::Timeout=20 update
+          sudo timeout --kill-after=15s 3m apt-get -o Acquire::Retries=1 -o Acquire::https::Timeout=20 install -y --no-install-recommends ffmpeg
+          timeout --kill-after=5s 10s ffmpeg -version
       - name: Test pinned native ownership, policy and independent readback
         run: |
           cp perf/av1-policy-validation/dependencies.lock perf/av1-policy-validation/Cargo.lock
