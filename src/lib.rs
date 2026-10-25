@@ -77,6 +77,7 @@ mod metadata;
 /// Metadata-only rewrite requests, reports and runtime service contracts.
 pub mod metadata_rewrite;
 mod negotiate;
+pub mod operation;
 mod orientation;
 mod output;
 mod output_buffer;

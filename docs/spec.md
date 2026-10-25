@@ -48,6 +48,43 @@ metadata. The caller handles CMS transforms.
 
 ---
 
+## Stored operation requests
+
+`zencodec::operation` records intent and checks it during execution. These
+additive entry points use the same registered templates and native jobs as
+`CodecSet`. Builders do not query capabilities. A required policy uses the
+checked setter, including an inherited set policy; explicit request policies
+replace that default. Required output rejects a native fallback while an
+explicit preference permits it. Fidelity confirms configuration selection,
+with the existing content-dependent codec restrictions still enforced at encode.
+
+```rust
+struct DecodeRequest { /* private */ }
+impl DecodeRequest {
+    const fn new() -> Self;
+    const fn with_format(self, format: ImageFormat) -> Self;
+    const fn with_policy(self, policy: DecodePolicy) -> Self;
+    fn with_output(self, descriptor: PixelDescriptor) -> Self;
+    fn preferring_output(self, descriptors: impl Into<Vec<PixelDescriptor>>) -> Self;
+    fn decode(&self, codecs: &CodecSet, input: &[u8]) -> Result<DecodeOutput, At<OperationError>>;
+}
+struct EncodeRequest { /* private */ }
+impl EncodeRequest {
+    const fn new(format: ImageFormat) -> Self;
+    const fn with_fidelity(self, fidelity: Fidelity) -> Self;
+    const fn with_policy(self, policy: EncodePolicy) -> Self;
+    fn encode(&self, codecs: &CodecSet, pixels: PixelSlice<'_>) -> Result<EncodeOutput, At<OperationError>>;
+}
+enum OperationError {
+    Codec(CodecSetError),
+    OutputDescriptor { requested: PixelDescriptor, actual: PixelDescriptor },
+}
+```
+
+The full implementation target and current gaps are recorded in
+[ideal-api.md](ideal-api.md). These requests do not yet supply the proposed
+policy resolver, metadata obligations, conversion routes or native suspension.
+
 ## Encode traits
 
 ### `EncoderConfig` (codec config, `Clone + Send + Sync`)

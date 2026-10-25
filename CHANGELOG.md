@@ -298,7 +298,7 @@ removes that whole class).
 
 - `erase_video_encoder` now applies strict terminal-error handling, including
   native validation errors. Callers deliberately using a backend's retryable
-  validation contract can use the error-only `VideoEncoderShim`.
+  validation contract can use the error-only `VideoEncoderShim` (`ffaddb6b`).
 
 #### Added
 
@@ -324,6 +324,12 @@ removes that whole class).
   row methods. A strided multi-strip regression checks exact output.
 
 ### Added
+
+- `operation::{DecodeRequest, EncodeRequest, OperationError}` store required
+  policy, output descriptor and fidelity choices, then validate them automatically
+  during execution through `CodecSet` templates. Required policies use checked
+  setters, explicit descriptor preferences allow native fallback, and native
+  errors remain recoverable through the traced result. Requests are reusable.
 
 - `EncodePolicy::strict` (`with_strict`, `resolve_strict`), the encode-side
   twin of `DecodePolicy::strict`: when set, an encode the target can only

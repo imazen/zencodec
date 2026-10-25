@@ -533,6 +533,59 @@ impl CodecSet {
         Ok(job)
     }
 
+    pub(crate) fn checked_decode_job<'a>(
+        &'a self,
+        format: ImageFormat,
+        policy: Option<DecodePolicy>,
+    ) -> Result<Box<dyn DynDecodeJob<'a> + 'a>, CodecSetError> {
+        let entry = self
+            .decoder_entry(format)
+            .ok_or(CodecSetError::NoDecoder(format))?;
+        let mut job = entry.dyn_job();
+        if let Some(limits) = self.limits {
+            job.set_limits(limits);
+        }
+        if let Some(pulse) = &self.pulse {
+            job.set_pulse(pulse.clone());
+        } else if let Some(stop) = &self.stop {
+            job.set_stop(stop.clone());
+        }
+        if let Some(policy) = policy.or(self.decode_policy) {
+            job.try_set_policy(policy)?;
+        }
+        Ok(job)
+    }
+
+    pub(crate) fn checked_encode_job(
+        &self,
+        format: ImageFormat,
+        fidelity: Option<Fidelity>,
+        policy: Option<EncodePolicy>,
+    ) -> Result<Box<dyn DynEncodeJob>, CodecSetError> {
+        let config = self
+            .encoder_entry(format)
+            .ok_or(CodecSetError::NoEncoder(format))?
+            .as_dyn();
+        let mut job = match fidelity {
+            Some(target) => config
+                .try_fidelity_job(target)
+                .map_err(|e| CodecSetError::Codec(Box::new(e)))?,
+            None => config.dyn_job(),
+        };
+        if let Some(limits) = self.limits {
+            job.set_limits(limits);
+        }
+        if let Some(pulse) = &self.pulse {
+            job.set_pulse(pulse.clone());
+        } else if let Some(stop) = &self.stop {
+            job.set_stop(stop.clone());
+        }
+        if let Some(policy) = policy.or(self.encode_policy) {
+            job.try_set_policy(policy)?;
+        }
+        Ok(job)
+    }
+
     // --- Encode -------------------------------------------------------------
 
     /// Encode `pixels` to `format` using the registered encoder template.

@@ -4,6 +4,36 @@ use zenjpeg::JpegDecoderConfig;
 use zenpixels::{ColorContext, PixelDescriptor, PixelSlice, TransferFunction};
 
 #[test]
+fn stored_requests_execute_native_jpeg_templates_without_changing_bytes_or_pixels() {
+    use zencodec::encode::EncoderConfig;
+    use zencodec::operation::{DecodeRequest, EncodeRequest};
+    for progressive in [false, true] {
+        let config = fixtures::config(progressive, true);
+        let raw = fixtures::raw();
+        let direct = config.clone().encode(fixtures::pixels(&raw)).unwrap();
+        let codecs = CodecSet::new()
+            .with_encoder(config)
+            .with_decoder(JpegDecoderConfig::new());
+        let encoded = EncodeRequest::new(zencodec::ImageFormat::Jpeg)
+            .encode(&codecs, fixtures::pixels(&raw))
+            .unwrap();
+        assert_eq!(encoded.data(), direct.data());
+        let direct_pixels = codecs.decode(encoded.data()).unwrap();
+        let decoded = DecodeRequest::new()
+            .with_output(PixelDescriptor::RGB8_SRGB)
+            .decode(&codecs, encoded.data())
+            .unwrap();
+        for y in 0..fixtures::HEIGHT {
+            assert_eq!(decoded.pixels().row(y), direct_pixels.pixels().row(y));
+        }
+        assert_eq!(
+            fixtures::oracle(encoded.data()),
+            fixtures::oracle(direct.data())
+        );
+    }
+}
+
+#[test]
 fn migration_display_conversion_keeps_pixels_and_residual_orientation() {
     for progressive in [false, true] {
         let mut source = fixtures::base(progressive);
