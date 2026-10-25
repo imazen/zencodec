@@ -3,5 +3,7 @@
 #![cfg(test)]
 
 mod io_bridge;
+#[cfg(test)]
+mod strip_tests;
 mod tests;
 mod tiff_region;

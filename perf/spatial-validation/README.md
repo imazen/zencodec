@@ -7,7 +7,8 @@ TIFF parsing and coding-unit decoding come from the pinned native codec.
 
 Missing qualification: full color/ICC interpretation, auxiliary-image dependencies,
 whole-container privacy, live HTTP version binding, total native workspace bounds,
-cross-unit batched scheduling, wide samples and strips. The current external
+cross-unit batched scheduling, wide planar samples and independent wide-sample
+readback. The current external
 oracle covers the first classic RGB8 page, with both chunky and planar tiles;
 it does not establish those missing contracts.
 
@@ -73,6 +74,28 @@ run-heavy: done rc=0 1s | peak-RSS 0.19GiB | min-avail 16698MiB | peak-load 0.61
 That process-tree peak includes compilation, tests, oracle and Clippy. It is not
 a codec workspace measurement. Artifacts remain in the directory above with
 `SHA256SUMS`; independent readback recorded Pillow 13.0.0 / libtiff 4.7.2.
+
+## Strip and sample extension
+
+`strip_tests.rs` adds 22 native layouts: Gray unsigned/signed 8/16/32/64 and
+float 32/64; RGB/RGBA unsigned 8/16/32/64 and float 32/64. All run with classic
+TIFF and BigTIFF, uncompressed/PackBits/LZW/Deflate, and no predictor versus the
+applicable horizontal or floating-point predictor. Each checks a middle region,
+the final partial strip and the complete image against original sample bits.
+All eight orientations are reported without transforming stored coordinates.
+Float fixtures include signed zero, infinities, subnormals and NaN payloads;
+comparison is byte exact, including payloads. This is native fixture parity,
+not an independent wide-sample oracle.
+
+The same full gate passed with artifact argument `run5`. Full local log:
+`~/tmp/zencodec-spatial-wide2-2026-10-25.log`.
+
+```text
+run-heavy: done rc=0 3s | peak-RSS 0.37GiB | min-avail 16559MiB | peak-load 0.45
+```
+
+This includes compilation and the original external RGB8 gate. GrayAlpha,
+half-float TIFF, wide planar tiles and opposite-endian files remain unqualified.
 
 ## API implications
 
