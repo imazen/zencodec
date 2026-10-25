@@ -6,8 +6,6 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### [Unreleased]
 
-- Policy decision reports retain typed question context on refusal and callback failure; controlled decoders can report payload-free interpretation failure reasons.
-
 ### Fixed
 
 - Compare discarded ICC/CICP against a clean same-policy encode in the testkit, distinguishing native/default color from retained optional metadata; unexpected color values and discarded descriptive metadata still fail.
@@ -308,6 +306,8 @@ None.
 
 #### Added
 
+- Native JPEG qualification calls the codec-owned controlled factory through stored requests, with exact pixels over slice/range drivers and typed late-ICC refusal before sink output. Pinned native implementation: zenjpeg PR 240 (`3e9050ef`).
+
 - CI and `just doc-default` check workspace and standalone I/O documentation with default features and warnings denied (`7e3c8666`).
 
 #### Fixed
@@ -345,6 +345,8 @@ None.
 ## [Unreleased]
 
 ### Added
+
+- Policy decision reports retain typed question context on refusal and callback failure; controlled decoders can report payload-free interpretation failure reasons (`184f1291`).
 
 - `DecodeRequest::start_controlled` binds required policy/output and inherited context to registered controlled jobs. Generic/erased job creation share one primitive; default refusal prevents silent fallback, and required output mismatch fails before adoption or sink effects (`fd132f55`).
 

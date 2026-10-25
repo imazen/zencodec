@@ -179,8 +179,39 @@ positional-read and async drivers remain the transport layer.
 
 Registration controls cover detection, inherited-policy rejection, limits,
 required-versus-preferred output, pre-effect refusal and reuse of a request over
-two drivers. These authored tests establish facade behavior; the native JPEG
-qualification currently supplies its own adapter until the codec entry point lands.
+two drivers. The initial authored controls establish facade behavior; the native
+factory qualification below exercises the codec-owned implementation.
+
+### Codec-owned JPEG factory
+
+[zenjpeg PR 240](https://github.com/imazen/zenjpeg/pull/240), pinned here at
+`3e9050efb1b33cc0e553b2f6712631979a505918`, implements the factory behind the
+default-off `controlled-decode` feature. The native crate tests generic jobs,
+erased jobs and registered requests, with baseline/progressive RGB8, RGBA8,
+BGRA8, RGBX8, BGRX8 and grayscale output. Its input, input-index and row staging
+share the supplied allowance. Native workspace and sink storage remain outside
+that allowance; this route retains complete encoded input.
+
+The integration harness now calls `DecodeRequest::start_controlled` directly
+through a real `CodecSet`. Short slices and positioned reads agree exactly with
+the same stored request's ordinary decode. Header ICC is qualified; late/split
+ICC refuses before sink effects and retains `LateColorMetadata` in the report.
+Admitted storage returns to zero even while the failed adapter is retained.
+
+Float reconstruction still differs between the native one-shot and strip
+paths ([zenjpeg issue 239](https://github.com/imazen/zenjpeg/issues/239)). The
+controlled factory reports `UnqualifiedOutput` before affected work. The native
+qualification also exposed invalid grayscale entropy geometry under a color
+encoder configuration; `581ccc4e` fixes it on zenjpeg main with independent
+decoder readback. These findings are distinct from interpretation suspension.
+
+```text
+just jpeg-policy-check
+run-heavy: done rc=0 6s | peak-RSS 0.55GiB | min-avail 17493MiB | peak-load 0.21
+```
+
+This receipt measures the integration test/Clippy process, not native codec RAM.
+The API and native factory remain under review; no crate release is implied.
 
 ## Diagnosing a refused boundary
 

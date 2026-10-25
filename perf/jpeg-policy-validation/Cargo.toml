@@ -13,7 +13,7 @@ zencodec-coroutine = { path = "../../zencodec-coroutine", version = "0.1.0" }
 zenmeta = { path = "../../zenmeta", features = ["rewrite", "xmp"] }
 zenpixels = ">=0.2.16, <0.4.0"
 zenpixels-convert = { version = ">=0.2.16, <0.4.0", features = ["icc-db"] }
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "de26db2f20c2290b7f4f93ea2377a14bcbec5c6d", features = ["zencodec", "metadata-rewrite", "extended-metadata"] }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "3e9050efb1b33cc0e553b2f6712631979a505918", features = ["controlled-decode", "metadata-rewrite", "extended-metadata"] }
 
 [patch.crates-io]
 zencodec = { path = "../.." }
@@ -24,6 +24,8 @@ zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "1d3ddd
 
 [patch."https://github.com/imazen/zencodec"]
 zencodec = { path = "../.." }
+zencodec-io = { path = "../../zencodec-io" }
+zencodec-coroutine = { path = "../../zencodec-coroutine" }
 zenmeta = { path = "../../zenmeta" }
 
 [dev-dependencies]

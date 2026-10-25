@@ -8,12 +8,12 @@ precedents and the conclusions retained from Argon's review.
 
 ## What still needs production implementation
 
-- Extend the fallible resolver beyond prepared encoder configuration, including
-  later facts that require a new decision before affected output.
+- Extend the fallible resolver beyond prepared encoder configuration and
+  controlled interpretation to metadata, coupled transcode and resource choices.
 - Coherent transcode routes that couple metadata obligations, explicit
   zenpixels-convert work, encoder signaling and resource admission.
-- Qualify native codecs against the implemented controlled suspension protocol
-  before affected conversion, encoder or publication effects.
+- Extend native controlled-suspension qualification beyond the whole-source JPEG
+  route to a second codec, native byte resumption and video epochs.
 - Metadata exclusion/retention with explicit inspection scope, including opaque
   carriers, malformed XML, reconstruction data and nested content.
 - Integrate managed storage ownership into policy waiting, conversion scratch
@@ -34,7 +34,7 @@ precedents and the conclusions retained from Argon's review.
 | Terminal erased video errors | `FusedEncoder` protects every work method and cancellation, preserves native causes, and remains failed after a caught unwind; decoder reset still reopens its session |
 | Initial stored requests | Required policy, fidelity configuration and output descriptors checked at execution; controlled sessions use the same registry templates and reject required-descriptor mismatch before adoption; inherited defaults, rejection and strided pixels tested; native baseline/progressive JPEG encoding bytes and decoding pixels match direct calls |
 | First executing resolver domain | Typed prepared encoder offers, configurable built-in policy, fallible application callback, scoped choices and bounded reports; stale/nested tokens, cancellation, unwind cleanup and native error traces tested |
-| Controlled interpretation protocol | Explicit suspensions and scoped replies; fused enforcement, coroutine await, and a shared policy adapter for existing transports. Authored controls cover early output, stale replies, finality changes, cancellation and unwind. Native baseline/progressive JPEG qualification covers whole-source, header-authoritative decoding; unqualified late ICC refuses before native construction. Failed sessions release their native storage while retaining reports |
+| Controlled interpretation protocol | Explicit suspensions and scoped replies; fused enforcement, coroutine await, and a shared policy adapter for existing transports. Authored controls cover early output, stale replies, finality changes, cancellation and unwind. [Native JPEG PR 240](https://github.com/imazen/zenjpeg/pull/240) supplies generic, erased and registered factories for the qualified whole-source byte-output route. Unqualified late ICC and float reconstruction refuse before native construction. Failed sessions release admitted storage while retaining typed refusal reports |
 | Managed storage owners | Byte/object admission follows allocations through subviews, packets, side data and old-epoch frames; exact strided 8/10-bit samples and concurrent contention checked. [Scope](storage-admission.md) excludes native workspace and explicit unaccounted copies |
 
 Driver input capacity is a scoped allowance. It excludes source caches,
@@ -78,7 +78,8 @@ The extension to other domains must preserve that execution link. The resolver
 chooses only offered, permitted routes or returns a traced refusal/error. It
 cannot invent support or authorize stale facts. Adapters construct and admit
 executable routes; codecs expose facts and mechanisms without depending on an
-application policy. Late metadata and resource decisions are still open work.
+application policy. Native late-metadata suspensions now execute through that
+same resolver; coherent transcode and resource choices remain open work.
 
 ## Compatibility plan
 

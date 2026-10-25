@@ -26,6 +26,104 @@ use zencodec_io::{
 use zenjpeg::{JpegDecoderConfig, container::metadata::JpegMetadata};
 use zenpixels::{PixelDescriptor, PixelSliceMut};
 
+#[test]
+fn registered_native_controlled_jpeg_matches_the_same_stored_request() {
+    use zencodec::{CodecSet, operation::DecodeRequest};
+    let codecs = CodecSet::new().with_decoder(JpegDecoderConfig::new());
+    for progressive in [false, true] {
+        for bytes in [
+            fixtures::base(progressive),
+            fixtures::fixture(progressive, fixtures::Placement::Header),
+        ] {
+            let direct = DecodeRequest::new().decode(&codecs, &bytes).unwrap();
+            let request = DecodeRequest::new().with_output(direct.pixels().descriptor());
+            assert!(!fixtures::oracle(&bytes).is_empty());
+            for positioned in [false, true] {
+                let budget = StorageBudget::new(64 * 1024, 4);
+                let native = request.start_controlled(&codecs, budget.clone()).unwrap();
+                let mut session = PolicyDecoder::new(native, PolicySet::new());
+                let mut sink = Sink::default();
+                if positioned {
+                    drive_from_read_at(
+                        &mut session,
+                        &mut SliceReadAt::new(&bytes),
+                        &mut sink,
+                        None,
+                        DriveOptions::new(0, 43),
+                    )
+                    .unwrap();
+                } else {
+                    drive_from_slice(&mut session, &bytes, &mut sink, None, 7).unwrap();
+                }
+                let pixels = sink.pixels.as_pixel_slice().unwrap();
+                assert_eq!(pixels.descriptor(), direct.pixels().descriptor());
+                assert_eq!(
+                    (pixels.width(), pixels.rows()),
+                    (direct.width(), direct.height())
+                );
+                for y in 0..pixels.rows() {
+                    assert_eq!(pixels.row(y), direct.pixels().row(y));
+                }
+                assert_eq!((sink.begin, sink.finish), (1, 1));
+                let states: Vec<_> = session
+                    .report()
+                    .decisions()
+                    .map(|d| {
+                        let zencodec::operation::DecisionContext::Boundary(facts) = d.context
+                        else {
+                            panic!("unexpected native decision domain")
+                        };
+                        assert_eq!(facts.unavailable, None);
+                        facts.state
+                    })
+                    .collect();
+                assert_eq!(
+                    states,
+                    [InterpretationState::Provisional, InterpretationState::Final]
+                );
+                assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+            }
+        }
+    }
+}
+
+#[test]
+fn registered_native_refusal_preserves_reason_without_output_or_owned_storage() {
+    use zencodec::{
+        CodecSet,
+        operation::{DecisionContext, DecodeRequest},
+    };
+    let codecs = CodecSet::new().with_decoder(JpegDecoderConfig::new());
+    for progressive in [false, true] {
+        for placement in [
+            fixtures::Placement::AfterFirstScan,
+            fixtures::Placement::BeforeEoi,
+            fixtures::Placement::SplitIcc,
+        ] {
+            let bytes = fixtures::fixture(progressive, placement);
+            let budget = StorageBudget::new(64 * 1024, 4);
+            let native = DecodeRequest::new()
+                .start_controlled(&codecs, budget.clone())
+                .unwrap();
+            let mut session = PolicyDecoder::new(native, PolicySet::new());
+            let mut sink = Sink::default();
+            let error = drive_from_slice(&mut session, &bytes, &mut sink, None, 13).unwrap_err();
+            assert!(zencodec::find_cause::<zencodec::operation::PolicyFailure>(&error).is_some());
+            let record = session.report().decisions().last().unwrap();
+            let DecisionContext::Boundary(facts) = record.context else {
+                panic!()
+            };
+            assert_eq!(
+                facts.unavailable,
+                Some(InterpretationUnavailable::LateColorMetadata)
+            );
+            assert_eq!(record.offered, 0);
+            assert_eq!((sink.begin, sink.rows, sink.finish), (0, 0, 0));
+            assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+        }
+    }
+}
+
 #[derive(Debug)]
 enum Error {
     Coroutine(CoroutineError),
