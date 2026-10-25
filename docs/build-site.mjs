@@ -16,6 +16,7 @@ const policySource = await readFile(path.join(docs, 'examples/policy.rs'), 'utf8
 const jpegSource = await readFile(path.join(docs, 'examples/jpeg_policy.rs'), 'utf8');
 const pixelSource = await readFile(path.join(docs, 'examples/pixel_conversion.rs'), 'utf8');
 const checkedSource = await readFile(path.join(docs, 'examples/checked_operations.rs'), 'utf8');
+const videoSource = await readFile(path.join(docs, 'examples/checked_video.rs'), 'utf8');
 const sha = process.env.GITHUB_SHA || execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
 const escape = s => String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 const signatures = new Map();
@@ -23,12 +24,13 @@ for (const [key, spec] of Object.entries(api)) {
   signatures.set(key, declarations(await readFile(path.join(root, spec.file), 'utf8'), spec));
 }
 function codePanel(id, name, file = 'docs/examples/journeys.rs') {
-  const checked = file === 'docs/examples/checked_operations.rs';
+  const video = file === 'docs/examples/checked_video.rs';
+  const checked = video || file === 'docs/examples/checked_operations.rs';
   const jpeg = file === 'docs/examples/jpeg_policy.rs';
   const pixels = file === 'docs/examples/pixel_conversion.rs';
   const proposed = file === 'docs/examples/policy.rs' || name === 'jpeg_icc_admission';
-  const parts = example(checked ? checkedSource : pixels ? pixelSource : jpeg ? jpegSource : proposed ? policySource : source, name);
-  const tests = checked ? 'perf/jpeg-policy-validation/src/checked_examples.rs' : pixels ? 'perf/jpeg-policy-validation/src/conversion.rs' : jpeg ? 'perf/jpeg-policy-validation/src/tests.rs' : `perf/io-validation/tests/${proposed ? 'policy_native' : 'site_examples'}.rs`;
+  const parts = example(video ? videoSource : checked ? checkedSource : pixels ? pixelSource : jpeg ? jpegSource : proposed ? policySource : source, name);
+  const tests = video ? 'perf/av1-policy-validation/src/tests.rs' : checked ? 'perf/jpeg-policy-validation/src/checked_examples.rs' : pixels ? 'perf/jpeg-policy-validation/src/conversion.rs' : jpeg ? 'perf/jpeg-policy-validation/src/tests.rs' : `perf/io-validation/tests/${proposed ? 'policy_native' : 'site_examples'}.rs`;
   const context = (direction, label) => `<details class="code-context" data-direction="${direction}"><summary>${label}<span>${parts[direction].trimEnd().split('\n').length} lines</span></summary><pre><code data-example-part="${direction}">${highlight(parts[direction])}</code></pre></details>`;
   return `<div class="code-panel" id="${id}-example" data-example="${name}" data-example-source="${file}">
     <div class="code-toolbar"><span>${checked ? 'Implemented · review PRs' : proposed ? 'Private prototype' : 'Implemented · main'} <small>· Rust</small></span><div class="code-actions code-provenance"><a href="https://github.com/imazen/zencodec/blob/${sha}/${file}#L${parts.line}">Source ↗</a><details class="code-source"><summary>More</summary><a href="https://github.com/imazen/zencodec/blob/${sha}/${tests}">Native tests ↗</a><button type="button" data-copy="${id}-code">Copy focus only</button></details><button type="button" data-copy-full="${id}-example">Copy full example</button></div></div>

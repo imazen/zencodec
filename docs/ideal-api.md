@@ -12,7 +12,9 @@ precedents and the conclusions retained from Argon's review.
   Add encoded rewrite choices, whole-container disclosure guarantees and
   qualified native workspace/staging bounds to the existing typed resolver.
 - Extend native controlled-suspension qualification beyond the whole-source JPEG/PNG
-  routes to native byte resumption and video epochs.
+  routes to native byte resumption. Native AV1 frame publication now uses the
+  shared resolver; coupled planar conversion and admission before native
+  reconstruction remain open.
 - Metadata exclusion/retention with explicit inspection scope, including opaque
   carriers, malformed XML, reconstruction data and nested content.
 - Integrate managed storage ownership into policy waiting, conversion scratch
@@ -26,6 +28,7 @@ precedents and the conclusions retained from Argon's review.
 
 | Contract | Implementation and verification |
 |---|---|
+| Native video policy and accepted packet provenance | `Question::Frame` shares core interpretation/timing facts with media sessions. `zencodec_media::policy::PolicyDecoder` retains the native picture through every callback. Native AV1 queued clocks/epochs/colors and repeated ordinals preserve accepted context; refusal, stale decisions, cancellation, errors and caught unwinds release unpublished owners. 15 depth/layout configurations re-encode sample-exact under independent FFmpeg/libdav1d. [Qualification and limits](../perf/av1-policy-validation/README.md); this is after reconstruction, with native allocation and coupled conversion still unqualified |
 | Native batches fit admitted sink strips | `DecodeRowSink::max_buffer_rows` and shared copying split delivery automatically. Native PNG RGB8/RGBA16 at 97x65/257 preserve exact independent samples with 1/3/64-row transcode buffers. Native batch/workspace storage remains separate |
 | Native standard-source errors survive erasure | `StdSourceError` retains I/O kind, OS code and custom payload; source, truncation and erased-driver tests |
 | Buffered input admission precedes exact reads | Checked lookback selection, bounded retained history, exact-cap EOF probe, terminal excess and fallible retained allocation |

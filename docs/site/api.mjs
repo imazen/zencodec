@@ -7,6 +7,8 @@ export const api = {
   operationPreset: {path:'zencodec::operation::PolicySet',file:'src/operation/policy.rs',scope:'impl PolicySet {',methods:['new','prefer_lossless','require_metadata','allow_opaque_profiles','with_workspace_limit']},
   operationRegistration: {path:'zencodec::CodecSet',file:'src/set.rs',scope:'impl CodecSet {',methods:['new','with_decoder','with_send_encoder','with_limits','with_stop']},
   operationControl: {path:'zencodec::decode::ControlledIncrementalDecode',file:'src/traits/control.rs',scope:'pub trait ControlledIncrementalDecode: IncrementalDecode',methods:['step_controlled','resume']},
+  framePolicy: {path:'zencodec_media::policy::PolicyDecoder',file:'zencodec-media/src/policy.rs',scope:'impl<D, R> PolicyDecoder<D, R>',methods:['new','with_policy_set','report','is_failed']},
+  frameResolution: {path:'zencodec::operation::resolve_frame',file:'src/operation/frame.rs',methods:['resolve_frame']},
 
   checkedDecodePolicy: {path:"zencodec::decode::DecodeJob<'a>",file:'src/traits/decoding.rs',scope:"pub trait DecodeJob<'a>",methods:['try_set_policy','try_with_policy'],associated:false},
   checkedEncodePolicy: {path:'zencodec::encode::EncodeJob',file:'src/traits/encoding.rs',scope:'pub trait EncodeJob: Sized',methods:['try_set_policy','try_with_policy'],associated:false},

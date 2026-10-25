@@ -4,6 +4,7 @@ import { example } from './source.mjs';
 
 export async function checkIdeal(browser,url,output) {
   const source=await readFile(new URL('../examples/checked_operations.rs',import.meta.url),'utf8');
+  const video=await readFile(new URL('../examples/checked_video.rs',import.meta.url),'utf8');
   const page=await browser.newPage({viewport:{width:1440,height:1100},reducedMotion:'reduce',permissions:['clipboard-read','clipboard-write']});
   const errors=[];
   page.on('pageerror',error=>errors.push(error.message));
@@ -17,7 +18,9 @@ export async function checkIdeal(browser,url,output) {
       assert.equal(await page.locator(`section#${role}.${role}`).count(),1);
     }
     for(const panel of await page.locator('.code-panel').all()) {
-      const parts=example(source,await panel.getAttribute('data-example'));
+      const exampleSource=await panel.getAttribute('data-example-source');
+      assert.ok(['docs/examples/checked_operations.rs','docs/examples/checked_video.rs'].includes(exampleSource));
+      const parts=example(exampleSource==='docs/examples/checked_video.rs'?video:source,await panel.getAttribute('data-example'));
       assert.equal((await panel.locator('[data-example-part]').allTextContents()).join(''),parts.full);
       const above=panel.locator('[data-direction="above"]');
       const below=panel.locator('[data-direction="below"]');
@@ -38,7 +41,7 @@ export async function checkIdeal(browser,url,output) {
       if(!await details.evaluate(el=>el.open)) await details.locator(':scope>summary').click();
     }
     const signatures=(await page.locator('.ideal-signatures,.api-panel').allTextContents()).join('\n');
-    for(const required of ['with_send_encoder','PolicyResolver','At<Self::Error>','step_controlled','transcode_async','prepare_send']) assert.ok(signatures.includes(required),required);
+    for(const required of ['with_send_encoder','PolicyResolver','At<Self::Error>','step_controlled','transcode_async','prepare_send','resolve_frame','is_failed']) assert.ok(signatures.includes(required),required);
     assert.ok((await page.locator('#target').textContent()).includes('Native/CMS workspace'));
     assert.ok((await page.locator('#target').textContent()).includes('source version'));
     for(const width of [390,768,1440]) {

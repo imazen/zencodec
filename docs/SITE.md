@@ -52,6 +52,19 @@ persistent scratch directory when running locally.
 
 ## Keeping examples truthful
 
+The checked video examples in `examples/checked_video.rs` execute through the
+standalone native AV1 harness. The guide extracts their complete source scopes
+and current `PolicyDecoder`/`resolve_frame` signatures. Browser checks verify
+independent inline context expansion and full-example copying for both still
+and video examples. The Documentation workflow qualifies native frame policy
+and independent FFmpeg readback before deployment, with explicit deadlines.
+
+The video story adds a renderer requirement after the ordinary native session:
+a later PQ presentation fails a route requiring declared sRGB transfer. Its
+callback uses `At::wrap(error).at_named(...)` so the original application error
+has an inspectable trace location. The policy wrapper preserves that chain;
+wrapping an error alone does not create an application trace frame.
+
 The build extracts marked fragments from `examples/journeys.rs`, never a second
 hand-copied code block. `perf/io-validation/tests/site_examples.rs` executes
 that same file against pinned native QOI with strided, nonopaque pixels.
