@@ -68,3 +68,20 @@ linked to their open issues; no public library API was introduced by this site.
 examples and clippy: rc=0 0s | peak-RSS 0.20GiB | min-avail 16109MiB | peak-load 0.33
 browser: rc=0 5s | peak-RSS 0.22GiB | min-avail 15855MiB | peak-load 1.16
 ```
+
+## CodecSet fixture coverage
+
+The guide's executable scopes include config `probe`/`decode`/`encode`,
+job-level encode, registry registration and detection, registry encode and
+per-operation dyn jobs, and registry incremental dispatch. The registry fixture
+reuses one set for native QOI and BMP and compares exact strided RGB samples.
+Unrecognized input and a set-level pixel limit are exercised too.
+
+The pinned bitmap adapters also reproduce a concrete transcode limitation:
+`decode` returns an unknown-transfer descriptor, while the QOI encoder advertises
+sRGB descriptors. `CodecSet::transcode` correctly refuses that mismatch with
+`TranscodeBarrier::PixelDescriptor`. This is recorded in
+[zenbitmaps issue 28](https://github.com/imazen/zenbitmaps/issues/28). The example
+shows the actual refusal boundary; it does not bypass the guard or silently
+relabel pixels. The test accepts a future successful path only with exact
+sample parity. Expanded examples each have their own compiled import scope.
