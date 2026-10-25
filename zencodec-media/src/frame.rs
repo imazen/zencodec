@@ -685,6 +685,11 @@ pub enum PlaneData {
     U8(Vec<u8>),
     /// 16-bit words.
     U16(Vec<u16>),
+    /// Shared 8-bit storage admitted before allocation. A frame, plane clone
+    /// or retained view keeps the entire backing allocation charged.
+    AccountedU8(zencodec_io::storage::SharedStorage<u8>),
+    /// Shared 16-bit storage, preserving native word alignment and encoding.
+    AccountedU16(zencodec_io::storage::SharedStorage<u16>),
 }
 
 /// One owned plane.
@@ -727,6 +732,8 @@ impl OwnedPlanes {
         let samples = match &p.data {
             PlaneData::U8(v) => PlaneSamples::U8(v),
             PlaneData::U16(v) => PlaneSamples::U16(v),
+            PlaneData::AccountedU8(v) => PlaneSamples::U8(v.as_slice()),
+            PlaneData::AccountedU16(v) => PlaneSamples::U16(v.as_slice()),
         };
         PlaneView::new(samples, p.width, p.height, p.stride_bytes, self.encoding)
     }

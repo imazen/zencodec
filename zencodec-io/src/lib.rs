@@ -62,6 +62,7 @@ mod admission;
 pub use admission::{InputError, IoLimits};
 mod work_quota;
 pub use work_quota::WorkQuota;
+pub mod storage;
 
 pub use drive::{
     DriveError, DriveOptions, DriveStats, coalesce_byte_ranges, coalesce_into, drive_from_read_at,

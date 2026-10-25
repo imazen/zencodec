@@ -32,6 +32,9 @@ pub enum PacketPayload {
         /// Payload length.
         len: usize,
     },
+    /// Admitted storage. Clones and subviews retain the backing allocation's
+    /// charge until its last owner drops.
+    Accounted(zencodec_io::storage::SharedStorage<u8>),
 }
 
 impl PacketPayload {
@@ -40,6 +43,7 @@ impl PacketPayload {
         match self {
             Self::Owned(v) => v,
             Self::Shared { bytes, start, len } => &bytes[*start..*start + *len],
+            Self::Accounted(bytes) => bytes.as_slice(),
         }
     }
 
@@ -53,11 +57,14 @@ impl PacketPayload {
         self.len() == 0
     }
 
-    /// The payload as an owned vector: free for `Owned`, a copy for `Shared`.
+    /// The payload as an ordinary, unaccounted vector: free for `Owned`, a copy
+    /// for `Shared` and `Accounted`. The copy is outside a storage budget.
+    /// Budget-enforcing adapters keep the accounted payload instead of calling
+    /// this legacy ownership bridge.
     pub fn into_vec(self) -> Vec<u8> {
         match self {
             Self::Owned(v) => v,
-            Self::Shared { .. } => self.as_bytes().to_vec(),
+            Self::Shared { .. } | Self::Accounted(_) => self.as_bytes().to_vec(),
         }
     }
 }
@@ -215,6 +222,17 @@ impl Packet {
             return Err(PacketError::Empty);
         }
         Ok(Self::with_payload(PacketPayload::Owned(bytes)))
+    }
+
+    /// A packet over already admitted storage, without copying or releasing
+    /// the charge. Packet clones and `take()` retain the same allocation owner.
+    pub fn from_accounted(
+        bytes: zencodec_io::storage::SharedStorage<u8>,
+    ) -> Result<Self, PacketError> {
+        if bytes.is_empty() {
+            return Err(PacketError::Empty);
+        }
+        Ok(Self::with_payload(PacketPayload::Accounted(bytes)))
     }
 
     /// A packet over `len` bytes of `bytes` from `start`, without copying.

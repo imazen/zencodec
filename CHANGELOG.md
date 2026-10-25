@@ -228,6 +228,12 @@ removes that whole class).
 
 #### Added
 
+- `storage::StorageBudget`, `OwnedStorage` and `SharedStorage` admit typed,
+  fixed-size payload allocations before creating them and retain their charges
+  through clones and subviews until the last backing owner drops. Byte and object
+  limits are independent; native codec workspace and allocation overhead remain
+  outside this managed-payload scope. See `docs/storage-admission.md`.
+
 - `WorkQuota` and `DriveOptions::with_work_quota` bound async compute turns and
   ready packet loops by complete codec steps. Quota yields do not drain encoded
   output; CPU fairness remains separate from destination backpressure.
@@ -296,11 +302,19 @@ removes that whole class).
 
 #### QUEUED BREAKING CHANGES
 
+- `PlaneData` gains accounted 8/16-bit storage variants on the unpublished media
+  API. Exhaustive matches must handle the new variants.
+
 - `erase_video_encoder` now applies strict terminal-error handling, including
   native validation errors. Callers deliberately using a backend's retryable
   validation contract can use the error-only `VideoEncoderShim` (`ffaddb6b`).
 
 #### Added
+
+- Accounted packet payloads and native-word planes preserve storage charges
+  through packet take/clone, side data, frame clones, show-existing presentations
+  and old epochs. Legacy conversion to an ordinary vector remains explicitly
+  outside managed accounting.
 
 - `FusedEncoder` enforces cancellation before backend work and refuses all work
   after failure. Both fused session wrappers remain failed across a caught

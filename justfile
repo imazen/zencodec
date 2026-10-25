@@ -238,6 +238,11 @@ operation-policy-check:
     cargo test -p zencodec-testkit --test operation_policy --test operation_requests --locked
     cargo test -p zencodec --lib operation::policy --locked
 
+storage-sync export:
+    just io-core-sync "{{export}}"
+    cp zencodec-media/src/frame.rs zencodec-media/src/packet.rs "{{export}}/zencodec-media/src/"
+    cp zencodec-media-testkit/tests/storage_ownership.rs "{{export}}/zencodec-media-testkit/tests/"
+
 # Refresh an owned validation export without inheriting parent workspace patches.
 io-core-sync export:
     test ! -e "{{export}}/.git"
