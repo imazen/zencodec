@@ -244,8 +244,8 @@ io-policy-resolution-check:
 
 # One typed resolver, configured presets, traced failures and adversarial choices.
 io-policy-engine-check:
-    cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test policy_engine --locked
-    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test policy_engine --locked -- -D warnings
+    cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test policy_engine --test policy_execution --locked
+    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test policy_engine --test policy_execution --locked -- -D warnings
 
 # Isolated no_std check; invoke in the prepared export to exclude path overrides.
 io-policy-portability target="wasm32-unknown-unknown":
@@ -270,6 +270,7 @@ io-policy-sync export:
     test -f "{{export}}/perf/io-validation/Cargo.toml"
     mkdir -p "{{export}}/perf/io-validation/src/policy" "{{export}}/perf/policy-check/src"
     cp perf/io-validation/src/policy/*.rs "{{export}}/perf/io-validation/src/policy/"
+    cp perf/io-validation/src/policy_execution.rs "{{export}}/perf/io-validation/src/"
     cp perf/io-validation/tests/policy*.rs "{{export}}/perf/io-validation/tests/"
     cp perf/policy-check/Cargo.toml "{{export}}/perf/policy-check/"
     cp perf/policy-check/dependencies.lock "{{export}}/perf/policy-check/"
@@ -294,5 +295,5 @@ docs-site-browser:
 
 # Run in the prepared standalone harness (see perf/io-validation/README.md).
 docs-site-examples:
-    cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test encoder_retention --test policy_resolution --test policy_engine --bin transport_contracts --locked
-    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test policy_resolution --test policy_engine --bin transport_contracts --locked -- -D warnings
+    cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test encoder_retention --test policy_resolution --test policy_engine --test policy_execution --bin transport_contracts --locked
+    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test policy_resolution --test policy_engine --test policy_execution --bin transport_contracts --locked -- -D warnings

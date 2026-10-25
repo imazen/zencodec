@@ -4,6 +4,7 @@
 extern crate alloc;
 
 mod engine;
+pub(crate) mod plan;
 mod resolver;
 mod types;
 

@@ -117,6 +117,69 @@ pub(crate) struct Requirements {
     pub effects: Effects,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RejectedBy {
+    Ram {
+        cost: Evidence,
+        limit: u64,
+    },
+    Disk {
+        cost: Evidence,
+        limit: u64,
+    },
+    Scope {
+        available: Accounting,
+        required: Accounting,
+    },
+    Effects {
+        available: Effects,
+        required: Effects,
+    },
+    Replay,
+    PublishedPrefix,
+}
+impl Alternative {
+    pub fn rejections(
+        self,
+        requirements: Requirements,
+        kind: Kind,
+        context: Context,
+    ) -> [Option<RejectedBy>; 6] {
+        let effects = requirements.effects.domain(kind);
+        [
+            requirements
+                .ram
+                .filter(|_| !self.ram.fits(requirements.ram))
+                .map(|limit| RejectedBy::Ram {
+                    cost: self.ram,
+                    limit,
+                }),
+            requirements
+                .disk
+                .filter(|_| !self.disk.fits(requirements.disk))
+                .map(|limit| RejectedBy::Disk {
+                    cost: self.disk,
+                    limit,
+                }),
+            (requirements.ram.is_some()
+                && requirements.accounting == Accounting::Operation
+                && self.accounting != Accounting::Operation)
+                .then_some(RejectedBy::Scope {
+                    available: self.accounting,
+                    required: requirements.accounting,
+                }),
+            (!self.effects.contains(effects)).then_some(RejectedBy::Effects {
+                available: self.effects,
+                required: effects,
+            }),
+            (self.needs_replay && (!context.replayable || context.published_bytes != 0))
+                .then_some(RejectedBy::Replay),
+            (context.published_bytes != 0 && !self.preserves_published)
+                .then_some(RejectedBy::PublishedPrefix),
+        ]
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Context {
     pub source_revision: u64,

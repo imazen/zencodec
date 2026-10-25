@@ -1,4 +1,8 @@
-use super::{alloc::boxed::Box, resolver::*, types::*};
+use super::{
+    alloc::{boxed::Box, vec::Vec},
+    resolver::*,
+    types::*,
+};
 use core::{
     error::Error,
     fmt,
@@ -75,10 +79,38 @@ pub(crate) struct Failure<E>(Box<FailureData<E>>);
 struct FailureData<E> {
     record: Record,
     cause: Cause<E>,
+    details: Option<FailureDetails>,
+}
+/// Bounded numeric/enum evidence, allocated only on failure. Payloads and
+/// callback Display text are deliberately absent. Counts are not RSS claims.
+#[derive(Debug)]
+pub(crate) struct FailureDetails {
+    pub facts: Facts,
+    pub requirements: Requirements,
+    pub offered: Vec<Alternative>,
+    pub omitted: usize,
+}
+impl FailureDetails {
+    pub fn rejections(&self, context: Context) -> impl Iterator<Item = (usize, RejectedBy)> + '_ {
+        self.offered
+            .iter()
+            .enumerate()
+            .flat_map(move |(index, offer)| {
+                offer
+                    .rejections(self.requirements, self.facts.kind(), context)
+                    .into_iter()
+                    .flatten()
+                    .map(move |reason| (index, reason))
+            })
+    }
 }
 impl<E> Failure<E> {
     fn new(record: Record, cause: Cause<E>) -> Self {
-        Self(Box::new(FailureData { record, cause }))
+        Self(Box::new(FailureData {
+            record,
+            cause,
+            details: None,
+        }))
     }
     pub fn record(&self) -> Record {
         self.0.record
@@ -89,11 +121,35 @@ impl<E> Failure<E> {
     pub fn cause(&self) -> &Cause<E> {
         &self.0.cause
     }
+    pub fn details(&self) -> Option<&FailureDetails> {
+        self.0.details.as_ref()
+    }
+    fn with_details(
+        mut self,
+        facts: Facts,
+        requirements: Requirements,
+        entries: &[Alternative],
+    ) -> Self {
+        let count = entries.len().min(MAX_CHOICES);
+        let mut offered = Vec::new();
+        // Diagnostics must not turn an ordinary refusal into an allocation panic.
+        if offered.try_reserve_exact(count).is_ok() {
+            offered.extend_from_slice(&entries[..count]);
+        }
+        self.0.details = Some(FailureDetails {
+            facts,
+            requirements,
+            omitted: entries.len() - offered.len(),
+            offered,
+        });
+        self
+    }
 }
 impl<E> fmt::Debug for Failure<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("PolicyFailure")
             .field("record", &self.0.record)
+            .field("details", &self.0.details)
             .finish_non_exhaustive()
     }
 }
@@ -203,6 +259,20 @@ impl Engine {
         resolver: &mut R,
         stop: &dyn Stop,
     ) -> Result<Selected, At<Failure<R::Error>>> {
+        self.resolve_inner(facts, entries, requirements, context, resolver, stop)
+            .map_err(|e| e.map_error(|e| e.with_details(facts, requirements, entries)))
+    }
+
+    #[track_caller]
+    fn resolve_inner<R: PolicyResolver + ?Sized>(
+        &mut self,
+        facts: Facts,
+        entries: &[Alternative],
+        requirements: Requirements,
+        context: Context,
+        resolver: &mut R,
+        stop: &dyn Stop,
+    ) -> Result<Selected, At<Failure<R::Error>>> {
         let mut record = Record {
             operation: self.operation.unwrap_or(0),
             question: 0,
@@ -265,31 +335,13 @@ impl Engine {
             {
                 return Err(self.fail(record, Code::InvalidOffer, Cause::Framework));
             }
-            let mut rejected = 0;
-            if !entry.ram.fits(requirements.ram) {
-                rejected |= 1;
-            }
-            if !entry.disk.fits(requirements.disk) {
-                rejected |= 2;
-            }
-            if requirements.ram.is_some()
-                && requirements.accounting == Accounting::Operation
-                && entry.accounting != Accounting::Operation
-            {
-                rejected |= 4;
-            }
-            if !entry
-                .effects
-                .contains(requirements.effects.domain(facts.kind()))
-            {
-                rejected |= 8;
-            }
-            if entry.needs_replay && (!context.replayable || context.published_bytes != 0) {
-                rejected |= 16;
-            }
-            if context.published_bytes != 0 && !entry.preserves_published {
-                rejected |= 32;
-            }
+            let rejected = entry
+                .rejections(requirements, facts.kind(), context)
+                .iter()
+                .enumerate()
+                .fold(0, |mask, (bit, reason)| {
+                    mask | if reason.is_some() { 1 << bit } else { 0 }
+                });
             record.rejected_reasons |= rejected;
             if rejected == 0 {
                 record.admitted |= 1u64 << index;
