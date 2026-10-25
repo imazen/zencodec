@@ -241,3 +241,16 @@ Every `DecisionRecord` retains `DecisionContext`, including refusals and callbac
 errors. A failed question therefore retains the interpretation facts even when
 its `selected` field is `None`. Reports contain no metadata bytes, profile names,
 paths or application error text; traced native causes remain separately inspectable.
+
+### Preparing the encoder side of a joint decision
+
+`EncodeRequest::prepare(&CodecSet)` performs the same checked configuration work
+as ordinary `encode_with`, without invoking a resolver or constructing an
+encoder. Each `PreparedEncode` retains its `EncodeOffer` and the original job.
+An adapter holds it alongside the conversion and metadata plan, then consumes
+`into_job()` only for the selected route. Abandoned jobs are dropped.
+
+Preparation confirms requested fidelity and encode policy and inherits registry
+controls. It does not prove output-carrier support, apply a privacy policy, or
+bound native allocations. Those remain obligations of the executing transcode
+adapter. Replacing checked configuration after preparation invalidates its offer.

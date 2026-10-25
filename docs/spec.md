@@ -78,9 +78,15 @@ impl EncodeRequest {
     fn preferring_fidelity(self, targets: impl Into<Vec<Fidelity>>) -> Self;
     const fn with_policy(self, policy: EncodePolicy) -> Self;
     const fn with_policy_set(self, preset: PolicySet) -> Self;
+    fn prepare(&self, codecs: &CodecSet) -> Result<Vec<PreparedEncode>, At<OperationError>>;
     fn encode(&self, codecs: &CodecSet, pixels: PixelSlice<'_>) -> Result<Outcome<EncodeOutput>, At<OperationError>>;
     fn encode_with<R: PolicyResolver + ?Sized>(&self, codecs: &CodecSet,
         pixels: PixelSlice<'_>, resolver: &mut R) -> Result<Outcome<EncodeOutput>, At<OperationError>>;
+}
+struct PreparedEncode { /* private; Debug */ }
+impl PreparedEncode {
+    const fn offer(&self) -> EncodeOffer;
+    fn into_job(self) -> Box<dyn encode::DynEncodeJob>;
 }
 struct Outcome<T> { /* private */ }
 impl<T> Outcome<T> { // Also Deref<Target = T>.

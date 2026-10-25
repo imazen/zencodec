@@ -354,6 +354,10 @@ None.
 
 ### Added
 
+- `EncodeRequest::prepare` retains checked jobs for an adapter's coupled decision.
+  Ordinary encoding uses the same preparation. `PreparedEncode` exposes the
+  confirmed offer and transfers the original job without reconstructing it.
+
 - Policy decision reports retain typed question context on refusal and callback failure; controlled decoders can report payload-free interpretation failure reasons (`184f1291`).
 
 - `DecodeRequest::start_controlled` binds required policy/output and inherited context to registered controlled jobs. Generic/erased job creation share one primitive; default refusal prevents silent fallback, and required output mismatch fails before adoption or sink effects (`fd132f55`).

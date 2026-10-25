@@ -455,3 +455,37 @@ fn a_caught_callback_panic_drops_prepared_jobs_without_encoding() {
     request().encode(&set, pixels.as_slice()).unwrap(); // a fresh operation
     assert_eq!(counts.executed.load(Ordering::SeqCst), 1);
 }
+
+#[test]
+fn adapters_retain_the_same_checked_jobs_without_running_a_resolver_or_encoder() {
+    let (counts, set, pixels) = setup();
+    let mut prepared = request().prepare(&set).unwrap();
+    assert_eq!(prepared.len(), 2);
+    assert_eq!(prepared[0].offer().preference_index, 1);
+    assert_eq!(prepared[1].offer().preference_index, 2);
+    assert_eq!(counts.made.load(Ordering::SeqCst), 2);
+    assert_eq!(counts.executed.load(Ordering::SeqCst), 0);
+    assert_eq!(counts.dropped.load(Ordering::SeqCst), 0);
+    let chosen = prepared.swap_remove(1).into_job();
+    drop(prepared);
+    assert_eq!(counts.dropped.load(Ordering::SeqCst), 1);
+    let output = chosen.encode(pixels.as_slice()).unwrap();
+    assert_eq!(counts.last_id.load(Ordering::SeqCst), 2);
+    assert_eq!(counts.executed.load(Ordering::SeqCst), 1);
+    assert_eq!(counts.dropped.load(Ordering::SeqCst), 2);
+    assert_eq!(
+        output.data(),
+        ReferenceEncoderConfig::new()
+            .encode(pixels.as_slice())
+            .unwrap()
+            .data()
+    );
+
+    let abandoned = request().prepare(&set).unwrap();
+    drop(abandoned);
+    assert_eq!(
+        counts.made.load(Ordering::SeqCst),
+        counts.dropped.load(Ordering::SeqCst)
+    );
+    assert_eq!(counts.executed.load(Ordering::SeqCst), 1);
+}

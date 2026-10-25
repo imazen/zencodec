@@ -284,6 +284,38 @@ impl DecodeRequest {
     }
 }
 
+/// A checked encoder job retained for a pipeline's joint decision.
+///
+/// Preparing it checks required fidelity and encode policy and stamps the
+/// registry's limits/cancellation. It does not construct an encoder, read
+/// pixels, validate output metadata, or establish a native memory bound.
+/// Ordinary callers use `EncodeRequest::encode`; adapters can retain this
+/// same object alongside a conversion plan until their resolver chooses it.
+pub struct PreparedEncode {
+    offer: EncodeOffer,
+    job: Box<dyn crate::encode::DynEncodeJob>,
+}
+impl fmt::Debug for PreparedEncode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PreparedEncode")
+            .field("offer", &self.offer)
+            .finish_non_exhaustive()
+    }
+}
+impl PreparedEncode {
+    /// Configuration confirmed during preparation.
+    pub const fn offer(&self) -> EncodeOffer {
+        self.offer
+    }
+
+    /// Transfer the exact prepared job to an adapter. Metadata/carrier
+    /// validation and any further configuration are that adapter's obligation.
+    /// Replacing its checked policy or fidelity invalidates the original offer.
+    pub fn into_job(self) -> Box<dyn crate::encode::DynEncodeJob> {
+        self.job
+    }
+}
+
 /// Reusable requirements for encoding pixels with a registered template.
 ///
 /// A fidelity target is checked at configuration time. This confirms the
@@ -342,30 +374,14 @@ impl EncodeRequest {
         self
     }
 
-    /// Validate configuration and encode, preserving strided pixel input and
-    /// native errors. The stored request and registered template are reusable.
+    /// Prepare permitted configurations without constructing an encoder or
+    /// touching pixels. Adapter API for coupling conversion, metadata and
+    /// encode into one question. All malformed targets reject the request;
+    /// unsupported alternatives are omitted. An empty result is an error.
+    /// The returned jobs retain original preference indices and must be the
+    /// objects executed after selection. This method never calls a resolver.
     #[track_caller]
-    pub fn encode(
-        &self,
-        codecs: &CodecSet,
-        pixels: PixelSlice<'_>,
-    ) -> Result<Outcome<EncodeOutput>, At<OperationError>> {
-        let mut delegate = |_: Question<'_>| -> Result<Decision, At<core::convert::Infallible>> {
-            Ok(Decision::UsePreset)
-        };
-        self.encode_with(codecs, pixels, &mut delegate)
-    }
-
-    /// Execute with one application resolver. Only prepared jobs are offered;
-    /// callback failures retain their concrete `At<E>` in the error chain.
-    /// Callback success cannot authorize a stale or fabricated choice.
-    #[track_caller]
-    pub fn encode_with<R: PolicyResolver + ?Sized>(
-        &self,
-        codecs: &CodecSet,
-        pixels: PixelSlice<'_>,
-        resolver: &mut R,
-    ) -> Result<Outcome<EncodeOutput>, At<OperationError>> {
+    pub fn prepare(&self, codecs: &CodecSet) -> Result<Vec<PreparedEncode>, At<OperationError>> {
         let targets = match &self.fidelity {
             FidelityRequest::Template => None,
             FidelityRequest::Required(target) => Some(core::slice::from_ref(target)),
@@ -393,12 +409,8 @@ impl EncodeRequest {
                 })?;
             }
         }
-        let mut offers = Vec::new();
         let mut jobs = Vec::new();
         let mut rejections = Vec::new();
-        offers
-            .try_reserve_exact(count)
-            .map_err(|_| failure(OperationError::Allocation))?;
         jobs.try_reserve_exact(count)
             .map_err(|_| failure(OperationError::Allocation))?;
         rejections
@@ -412,12 +424,14 @@ impl EncodeRequest {
             let fidelity = targets.map(|targets| targets[index]);
             match codecs.checked_encode_job(self.format, fidelity, self.policy) {
                 Ok(job) => {
-                    offers.push(EncodeOffer {
-                        format: self.format,
-                        fidelity,
-                        preference_index: index,
+                    jobs.push(PreparedEncode {
+                        offer: EncodeOffer {
+                            format: self.format,
+                            fidelity,
+                            preference_index: index,
+                        },
+                        job,
                     });
-                    jobs.push(job);
                 }
                 Err(cause) => rejections.push(RouteRejection {
                     preference_index: index,
@@ -429,6 +443,39 @@ impl EncodeRequest {
         if jobs.is_empty() {
             return Err(failure(OperationError::NoEncodeRoute(rejections)));
         }
+        Ok(jobs)
+    }
+
+    /// Validate configuration and encode, preserving strided pixel input and
+    /// native errors. The stored request and registered template are reusable.
+    #[track_caller]
+    pub fn encode(
+        &self,
+        codecs: &CodecSet,
+        pixels: PixelSlice<'_>,
+    ) -> Result<Outcome<EncodeOutput>, At<OperationError>> {
+        let mut delegate = |_: Question<'_>| -> Result<Decision, At<core::convert::Infallible>> {
+            Ok(Decision::UsePreset)
+        };
+        self.encode_with(codecs, pixels, &mut delegate)
+    }
+
+    /// Execute with one application resolver. Only prepared jobs are offered;
+    /// callback failures retain their concrete `At<E>` in the error chain.
+    /// Callback success cannot authorize a stale or fabricated choice.
+    #[track_caller]
+    pub fn encode_with<R: PolicyResolver + ?Sized>(
+        &self,
+        codecs: &CodecSet,
+        pixels: PixelSlice<'_>,
+        resolver: &mut R,
+    ) -> Result<Outcome<EncodeOutput>, At<OperationError>> {
+        let mut jobs = self.prepare(codecs)?;
+        let mut offers = Vec::new();
+        offers
+            .try_reserve_exact(jobs.len())
+            .map_err(|_| At::wrap(OperationError::Allocation).at())?;
+        offers.extend(jobs.iter().map(PreparedEncode::offer));
         let facts = EncodeFacts {
             width: pixels.width(),
             height: pixels.rows(),
@@ -448,7 +495,7 @@ impl EncodeRequest {
         })?;
         let mut report = OperationReport::default();
         report.record(record);
-        let job = jobs.swap_remove(selected);
+        let job = jobs.swap_remove(selected).into_job();
         // Release unselected jobs before starting the chosen codec. The chosen
         // configuration is exactly the prepared object described by its offer.
         drop(jobs);
