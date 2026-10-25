@@ -245,7 +245,7 @@ impl Alternative {
                     cost: self.disk,
                     limit,
                 }),
-            (requirements.ram.is_some()
+            ((requirements.ram.is_some() || requirements.disk.is_some())
                 && requirements.accounting == Accounting::Operation
                 && self.accounting != Accounting::Operation)
                 .then_some(RejectedBy::Scope {

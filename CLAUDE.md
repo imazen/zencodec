@@ -231,6 +231,12 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed during API comparison (2026-10-25): the private policy resolver checked
+  accounting scope only when a RAM cap existed, allowing driver-only evidence
+  under an operation-wide disk-only cap. The regression fails before the fix;
+  scope rejection now precedes the callback for either capped resource. Evidence:
+  `docs/policy-scenarios.md#accounting-scope-regression-2026-10-25`. No released API changed.
+
 - Fixed in guide qualification (2026-10-25): six driver examples converted
   errors to strings, losing their typed causes. They now propagate with `?`.
   `positioned_guide_keeps_the_original_source_error` reproduces the former

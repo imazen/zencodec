@@ -84,6 +84,35 @@ they do not establish the truth of a backend's resource or effect claims.
 
 ## Commands and observed limits
 
+### Accounting-scope regression, 2026-10-25
+
+Review against `c949d3f5` found that a disk-only operation cap accepted a
+driver-scoped offer. The scope predicate checked whether a RAM cap existed,
+so `ram: None, disk: Some(0), accounting: Operation` admitted an offer with
+`accounting: Driver`. A claimed zero driver disk cost says nothing about codec
+or editor disk use. This is a private-prototype defect, not a measured violation
+by a native codec or a change to the released API.
+
+`accounting_scope_applies_to_disk_caps_without_a_ram_cap` failed on that exact
+case before the fix. Scope now applies whenever either resource has a cap. The
+test crosses RAM absent/present, disk absent/zero/positive, and both required
+and available scopes. A scope rejection occurs before the callback and retains
+its typed rejection reason. Explicit driver-only requests and uncapped requests
+remain permitted. The evidence values in this test are authored inputs.
+
+Validation: `just io-policy-engine-check io-policy-native-check
+io-policy-stream-check` in the prepared export passed, including Clippy. This
+covers selection, joint admission, native bitmap integration, disclosure and
+stream suspension controls; it does not qualify whole-operation codec storage.
+
+```text
+run-heavy: done rc=0 2s | peak-RSS 0.22GiB | min-avail 18279MiB | peak-load 0.46
+```
+
+This is the test process receipt, not a codec memory bound.
+
+### Earlier qualification
+
 Run `just io-policy-engine-check` in the
 [prepared export](../perf/io-validation/README.md#prepare-an-export).
 The initial engine test suite and warning-free Clippy passed:

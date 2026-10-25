@@ -409,6 +409,54 @@ fn unknown_questions_delegate_once_then_refuse() {
 }
 
 #[test]
+fn accounting_scope_applies_to_disk_caps_without_a_ram_cap() {
+    for ram in [None, Some(64)] {
+        for disk in [None, Some(0), Some(64)] {
+            for required in [Accounting::Driver, Accounting::Operation] {
+                for available in [Accounting::Driver, Accounting::Operation] {
+                    let req = Requirements {
+                        ram,
+                        disk,
+                        accounting: required,
+                        effects: Effects(0),
+                    };
+                    let mut offer = alternative(Action::Execution(Execution::Buffered));
+                    offer.accounting = available;
+                    let mut calls = 0;
+                    let mut resolver = |question: Question<'_>| {
+                        calls += 1;
+                        first(question)
+                    };
+                    let result = engine().resolve(
+                        facts(),
+                        &[offer],
+                        req,
+                        context(),
+                        &mut resolver,
+                        &Unstoppable,
+                    );
+                    let refuse = (ram.is_some() || disk.is_some())
+                        && required == Accounting::Operation
+                        && available == Accounting::Driver;
+                    assert_eq!(result.is_err(), refuse, "request={req:?}, offer={offer:?}");
+                    assert_eq!(calls, usize::from(!refuse));
+                    if let Err(error) = result {
+                        assert_eq!(error.error().code(), Code::NoAlternative);
+                        assert!(error.error().details().unwrap().rejections(context()).any(
+                            |(_, reason)| reason
+                                == RejectedBy::Scope {
+                                    available,
+                                    required
+                                }
+                        ));
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn a_hard_cap_accepts_upper_or_enforced_bounds_but_not_estimates_or_wrong_scope() {
     for cost in [
         Evidence::Upper(64),
