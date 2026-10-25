@@ -1,0 +1,11 @@
+{
+  "collection": "output/zencodec/guide-learning-2026-10-25",
+  "manifest": "sha256-complete.json",
+  "manifest_sha256": "046050cf14dceb965b14fb8163ae02c97026cb02b986ba3559d02c2d84029d4e",
+  "files": 236,
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "high",
+  "baseline_revision": "75f37b7870c4f93b229e388a80aa1a168d2f2fb3",
+  "revised_revision": "d4280dff880013b055b37bd9be404e3013178bc2",
+  "frozen_protocol_commit": "ef35079b91eb485bfa25d67f9fc86060150f9f99"
+}

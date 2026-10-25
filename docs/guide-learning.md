@@ -165,7 +165,9 @@ Documentation clarity does not implement these mechanisms.
 Raw packets, answers, compiler logs, control submissions and screenshots are
 retained under `output/zencodec/guide-learning-2026-10-25/` in the experiment
 artifact store. The source definitions, grading code and compact measurements
-are in this repository. No production public API changed in this assessment.
+are in this repository. The [artifact pointer](../benchmarks/guide_learning_artifacts_2026-10-25.json)
+records the complete manifest hash, file count and pinned assessment revisions.
+No production public API changed in this assessment.
 
 ## Supplemental semantic audit
 
