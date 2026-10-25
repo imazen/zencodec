@@ -117,6 +117,7 @@ try {
     assert.ok(await page.locator('#entry-registry [data-example-part="above"]').isVisible());
     if(output) await page.locator('#entry-registry').screenshot({path:`${output}/registry-expanded-${width}.png`});
     await page.goto(`${url}#policy`);
+    await page.locator('.policy-deep-dive>summary').click();
     for(const context of await page.locator('#policy-jpeg-icc-example .code-context').all()) {
       if(!await context.evaluate(el=>el.open)) await context.locator('summary').click();
     }
