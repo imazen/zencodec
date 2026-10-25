@@ -64,3 +64,6 @@ fuzz-*.log
 apidoc/target/
 .jj/
 !perf/streaming-regress/Cargo.lock
+
+# Built documentation artifact
+docs/_site/

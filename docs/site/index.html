@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="A visual guide to zencodec: consumer, adapter and codec implementor journeys, tested examples, and measured I/O contracts.">
+  <meta name="color-scheme" content="light"><title>zencodec — From one image to a pipeline</title>
+  <link rel="icon" href="data:,"><link rel="stylesheet" href="styles.css"><script type="module" src="app.mjs"></script>
+</head>
+<body>
+<a class="skip" href="#journeys">Skip to the guide</a>
+<header class="topbar"><a class="brand" href="#top" aria-label="zencodec home"><span class="mark" aria-hidden="true">z</span>zen<span>codec</span></a><nav aria-label="Main"><a href="#journeys">Journeys</a><a href="#lab">Transport lab</a><a href="#evidence">Evidence</a><a href="https://github.com/imazen/zencodec">Source ↗</a></nav><span class="edition">A living guide · main</span></header>
+<main id="top">
+<section class="hero wrap">
+  <div class="eyebrow"><span class="live-dot"></span> Shared contracts for image &amp; media codecs</div>
+  <div class="hero-grid"><div><h1>One image.<br><em>Three points of view.</em></h1><p class="lede">Start with a single call. Add complexity when the application gives you a reason.</p><a class="primary" href="#consumer-1">Follow the image <span aria-hidden="true">↘</span></a></div><div class="hero-aside"><div class="code-caption">The first useful result</div><pre><code><span class="syntax-keyword">let</span> image = config.decode(bytes)?;</code></pre><p>One photo becomes a preview.<br>Then a gallery. Then a remote viewer.<br>Then moving images.</p><span class="micro">Rust · no_std + alloc · sans-I/O core</span></div></div>
+  <div class="legend" aria-label="Diagram color key"><span class="consumer"><i></i>Consumer <small>intent &amp; results</small></span><span class="adapter"><i></i>Adapter <small>transport &amp; scheduling</small></span><span class="implementor"><i></i>Implementor <small>codec state &amp; promises</small></span></div>
+</section>
+<section class="architecture wrap" aria-labelledby="architecture-title"><div class="section-kicker">The map / before the details</div><div class="section-heading"><h2 id="architecture-title">Every boundary has an owner.</h2><p>Colors identify responsibility in every diagram. Arrows name what crosses the boundary.</p></div>
+<!-- ARCHITECTURE -->
+<div class="boundary-notes"><p><b>Consumer</b> chooses pixels, metadata policy, and time.</p><p><b>Adapter</b> owns bytes, budgets, scheduling, and delivery.</p><p><b>Implementor</b> reports what this codec configuration can actually do.</p></div></section>
+<section class="journeys wrap" id="journeys" aria-labelledby="journey-title"><div class="section-kicker">The guide / three connected journeys</div><div class="section-heading"><h2 id="journey-title">Choose your side of the interface.</h2><p>The same photo, viewed from three responsibilities. Each step explains what changed and why it earns another line.</p></div>
+<!-- JOURNEYS -->
+</section>
+<section class="lab-section" id="lab"><div class="wrap"><div class="section-kicker">The lab / reuse the simulator</div><div class="section-heading"><h2>Would another abstraction help?</h2><p>Explore results from the reused IMI transport model. These are calculated network costs, with exact byte checks—not measured WAN timings.</p></div>
+<div class="lab-grid"><div class="lab-controls"><h3>Two visits to one viewport</h3><p>16 independent 4 KiB ranges, separated by 4 KiB gaps. Repeat the same view. One shared 12.5 MB/s link.</p><label for="rtt">Round-trip latency</label><select id="rtt"><option value="160">160 ms</option><option value="0">0 ms</option></select><label for="cache">Encoded cache budget</label><select id="cache"><option value="0">No cache</option><option value="131072">128 KiB</option></select><label for="concurrency">Concurrent requests</label><select id="concurrency"><option value="8">8 requests</option><option value="1">1 request</option></select><p class="micro">The budgeted planner admits at most 64 KiB per view. Cached extents are logical accounting, not allocated memory.</p></div><div class="lab-results"><h3>Read policy → completion cost</h3><div id="bars" aria-hidden="true"></div><div class="table-scroll"><table><caption class="sr-only">Calculated transport results for the selected settings</caption><thead><tr><th>Policy</th><th>Simulated ms</th><th>Bytes fetched</th><th>Read rounds</th></tr></thead><tbody id="lab-table"></tbody></table></div><p id="lab-takeaway" aria-live="polite"></p><a href="transport.csv" download>Download all 32 results ↓</a> <a href="https://github.com/imazen/zencodec/blob/main/benchmarks/io_transport_model_2026-10-25.md">Method &amp; limitations ↗</a></div></div>
+<noscript><p>The interactive controls require JavaScript. <a href="transport.csv">Read all recorded results as CSV.</a></p></noscript>
+</div></section>
+<section class="wrap ownership" aria-labelledby="ownership-title"><div class="section-kicker">A different question / when to wait</div><div class="section-heading"><h2 id="ownership-title">A small output queue can pin a large image.</h2><p>Byte availability and storage release are different contracts. CPU fairness remains useful in both paths.</p></div>
+<!-- OWNERSHIP -->
+<div class="callout"><b>Qualify the configuration.</b> Couple encoding to a slow writer only when raw/intermediate storage is bounded and the upstream can pause. Otherwise, finish and release into independently admitted encoded storage; cap staging and concurrent jobs. A caller-owned full raster still counts.</div>
+<a href="https://github.com/imazen/zencodec/blob/main/benchmarks/io_encoder_retention_2026-10-25.md">Read the native QOI ownership control and its limits ↗</a></section>
+<section class="wrap evidence" id="evidence"><div class="section-kicker">The record / claims you can inspect</div><div class="section-heading"><h2>Current, measured, proposed.</h2><p>Protocol support, native incremental behavior, and performance qualification are separate claims. Every result has a scope.</p></div><!-- EVIDENCE --></section>
+<section class="wrap questions" id="questions"><div class="section-kicker">The friction / keep it visible</div><div class="section-heading"><h2>Complexity has to earn its place.</h2><p>These steps still need a better contract or more evidence. The guide links the open design question at the point it becomes relevant.</p></div><!-- QUESTIONS --><p class="nostdio">A <a href="https://docs.rs/nostdio/0.2.0/nostdio/">nostdio-style Read/Seek adapter</a> can help an existing synchronous parser. It does not supply suspension, all-required range plans, immutable object identity, or shared storage admission. Keep that bridge narrow; the current evidence does not justify a second core I/O hierarchy.</p></section>
+</main>
+<footer class="wrap"><a class="brand" href="#top">zen<span>codec</span></a><p>Source and examples live in <code>docs/</code> on main.<br>GitHub Actions checks and deploys this guide.</p><p class="build-info">Built from <a href="https://github.com/imazen/zencodec/commit/BUILD_SHA">BUILD_SHORT</a><br><a href="https://github.com/imazen/zencodec/blob/main/docs/spec.md">API specification ↗</a></p></footer>
+</body></html>
