@@ -1,5 +1,13 @@
 // Paths and method selections only. Signatures are extracted from current Rust source.
 export const api = {
+  operationDecode: {path:'zencodec::operation::DecodeRequest',file:'src/operation.rs',scope:'impl DecodeRequest {',methods:['new','with_output','preferring_output','with_policy','decode','start_controlled']},
+  operationEncode: {path:'zencodec::operation::EncodeRequest',file:'src/operation.rs',scope:'impl EncodeRequest {',methods:['new','with_fidelity','preferring_fidelity','with_policy','with_policy_set','encode','encode_with']},
+  operationPreparation: {path:'zencodec::operation::EncodeRequest (adapter)',file:'src/operation.rs',scope:'impl EncodeRequest {',methods:['with_policy_defaults','prepare','prepare_send']},
+  operationResolver: {path:'zencodec::operation::PolicyResolver',file:'src/operation/policy.rs',scope:'pub trait PolicyResolver',methods:['resolve']},
+  operationPreset: {path:'zencodec::operation::PolicySet',file:'src/operation/policy.rs',scope:'impl PolicySet {',methods:['new','prefer_lossless','require_metadata','allow_opaque_profiles','with_workspace_limit']},
+  operationRegistration: {path:'zencodec::CodecSet',file:'src/set.rs',scope:'impl CodecSet {',methods:['new','with_decoder','with_send_encoder','with_limits','with_stop']},
+  operationControl: {path:'zencodec::decode::ControlledIncrementalDecode',file:'src/traits/control.rs',scope:'pub trait ControlledIncrementalDecode: IncrementalDecode',methods:['step_controlled','resume']},
+
   checkedDecodePolicy: {path:"zencodec::decode::DecodeJob<'a>",file:'src/traits/decoding.rs',scope:"pub trait DecodeJob<'a>",methods:['try_set_policy','try_with_policy'],associated:false},
   checkedEncodePolicy: {path:'zencodec::encode::EncodeJob',file:'src/traits/encoding.rs',scope:'pub trait EncodeJob: Sized',methods:['try_set_policy','try_with_policy'],associated:false},
   rewriteRequest: {path:'zencodec::metadata_rewrite::Request',file:'src/metadata_rewrite.rs',scope:"impl<'a> Request<'a>",methods:['new','with_policy']},

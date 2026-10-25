@@ -7,6 +7,7 @@ import { api, chapterApi, entries, supplementalExamples } from './site/api.mjs';
 import { declarations, example } from './site/source.mjs';
 import { highlight } from './site/highlight.mjs';
 import { migrationPage } from './site/migration.mjs';
+import { idealPage } from './site/ideal.mjs';
 const docs = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(docs);
 const dest = path.join(docs, '_site');
@@ -14,6 +15,7 @@ const source = await readFile(path.join(docs, 'examples/journeys.rs'), 'utf8');
 const policySource = await readFile(path.join(docs, 'examples/policy.rs'), 'utf8');
 const jpegSource = await readFile(path.join(docs, 'examples/jpeg_policy.rs'), 'utf8');
 const pixelSource = await readFile(path.join(docs, 'examples/pixel_conversion.rs'), 'utf8');
+const checkedSource = await readFile(path.join(docs, 'examples/checked_operations.rs'), 'utf8');
 const sha = process.env.GITHUB_SHA || execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
 const escape = s => String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
 const signatures = new Map();
@@ -21,14 +23,15 @@ for (const [key, spec] of Object.entries(api)) {
   signatures.set(key, declarations(await readFile(path.join(root, spec.file), 'utf8'), spec));
 }
 function codePanel(id, name, file = 'docs/examples/journeys.rs') {
+  const checked = file === 'docs/examples/checked_operations.rs';
   const jpeg = file === 'docs/examples/jpeg_policy.rs';
   const pixels = file === 'docs/examples/pixel_conversion.rs';
   const proposed = file === 'docs/examples/policy.rs' || name === 'jpeg_icc_admission';
-  const parts = example(pixels ? pixelSource : jpeg ? jpegSource : proposed ? policySource : source, name);
-  const tests = pixels ? 'perf/jpeg-policy-validation/src/conversion.rs' : jpeg ? 'perf/jpeg-policy-validation/src/tests.rs' : `perf/io-validation/tests/${proposed ? 'policy_native' : 'site_examples'}.rs`;
+  const parts = example(checked ? checkedSource : pixels ? pixelSource : jpeg ? jpegSource : proposed ? policySource : source, name);
+  const tests = checked ? 'perf/jpeg-policy-validation/src/checked_examples.rs' : pixels ? 'perf/jpeg-policy-validation/src/conversion.rs' : jpeg ? 'perf/jpeg-policy-validation/src/tests.rs' : `perf/io-validation/tests/${proposed ? 'policy_native' : 'site_examples'}.rs`;
   const context = (direction, label) => `<details class="code-context" data-direction="${direction}"><summary>${label}<span>${parts[direction].trimEnd().split('\n').length} lines</span></summary><pre><code data-example-part="${direction}">${highlight(parts[direction])}</code></pre></details>`;
   return `<div class="code-panel" id="${id}-example" data-example="${name}" data-example-source="${file}">
-    <div class="code-toolbar"><span>${proposed ? 'Private prototype' : 'Implemented · main'} <small>· Rust</small></span><div class="code-actions code-provenance"><a href="https://github.com/imazen/zencodec/blob/${sha}/${file}#L${parts.line}">Source ↗</a><details class="code-source"><summary>More</summary><a href="https://github.com/imazen/zencodec/blob/${sha}/${tests}">Native tests ↗</a><button type="button" data-copy="${id}-code">Copy focus only</button></details><button type="button" data-copy-full="${id}-example">Copy full example</button></div></div>
+    <div class="code-toolbar"><span>${checked ? 'Implemented · review PRs' : proposed ? 'Private prototype' : 'Implemented · main'} <small>· Rust</small></span><div class="code-actions code-provenance"><a href="https://github.com/imazen/zencodec/blob/${sha}/${file}#L${parts.line}">Source ↗</a><details class="code-source"><summary>More</summary><a href="https://github.com/imazen/zencodec/blob/${sha}/${tests}">Native tests ↗</a><button type="button" data-copy="${id}-code">Copy focus only</button></details><button type="button" data-copy-full="${id}-example">Copy full example</button></div></div>
     ${context('above', 'Imports &amp; setup')}
     <pre class="code-focus"><code id="${id}-code" data-example-part="focus">${highlight(parts.focus)}</code></pre>
     ${context('below', 'Return &amp; continuation')}
@@ -108,7 +111,8 @@ html=html.replace('<!-- ENTRYPOINTS -->',entryHtml).replace('<!-- ARCHITECTURE -
 await mkdir(dest,{recursive:true});
 await writeFile(path.join(dest,'index.html'),html);
 await writeFile(path.join(dest,'migration.html'),await migrationPage({sha,codePanel,apiPanels,flow}));
-for(const file of ['styles.css','app.mjs','migration.css','migration-ui.mjs']) await copyFile(path.join(docs,'site',file),path.join(dest,file));
+await writeFile(path.join(dest,'ideal.html'),await idealPage({sha,codePanel,apiPanels,flow,docs}));
+for(const file of ['styles.css','app.mjs','migration.css','migration-ui.mjs','ideal.css','ideal-ui.mjs']) await copyFile(path.join(docs,'site',file),path.join(dest,file));
 await copyFile(path.join(docs,'migration-baseline.json'),path.join(dest,'migration-baseline.json'));
 await copyFile(path.join(docs,'examples/journeys.rs'),path.join(dest,'journeys.rs'));
 await copyFile(path.join(docs,'examples/jpeg_policy.rs'),path.join(dest,'jpeg_policy.rs'));
