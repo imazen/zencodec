@@ -20,8 +20,9 @@
 //!   from the new position.
 //!
 //! Sessions do no I/O, need no async runtime and know nothing about
-//! containers. Every call takes a `&dyn Stop`; [`FusedDecoder`] makes errors
-//! and cancellation terminal until a successful `reset`.
+//! containers. Work calls take a `&dyn Stop`; [`FusedDecoder`] makes errors
+//! and cancellation terminal until a successful `reset`. [`FusedEncoder`]
+//! makes encoder errors terminal; a fresh encoder starts a new operation.
 
 use alloc::boxed::Box;
 use alloc::sync::Arc;
@@ -411,14 +412,12 @@ impl<D: VideoDecoder> FusedDecoder<D> {
         if self.failed {
             return Err(SessionError::Finished);
         }
+        self.failed = true;
         if let Err(r) = stop.check() {
-            self.failed = true;
             return Err(SessionError::Cancelled(r));
         }
         let r = f(&mut self.inner);
-        if r.is_err() {
-            self.failed = true;
-        }
+        self.failed = r.is_err();
         r
     }
 }
@@ -446,13 +445,13 @@ impl<D: VideoDecoder> VideoDecoder for FusedDecoder<D> {
         if self.failed {
             return Err(SessionError::Finished);
         }
+        self.failed = true;
         let r = self.inner.end_input();
-        if r.is_err() {
-            self.failed = true;
-        }
+        self.failed = r.is_err();
         r
     }
     fn reset(&mut self) -> Result<(), SessionError<D::Error>> {
+        self.failed = true;
         let r = self.inner.reset();
         self.failed = r.is_err();
         r
@@ -462,15 +461,82 @@ impl<D: VideoDecoder> VideoDecoder for FusedDecoder<D> {
     }
 }
 
+/// Makes every encoder error and cancellation terminal, including native
+/// validation errors that an unwrapped backend might otherwise permit retrying.
+///
+/// Unlike a decoder, an encoder has no reset operation: create a fresh session
+/// after failure. Informational `output_config` remains available. If a backend
+/// unwinds and the application catches the panic, later work calls still refuse.
+pub struct FusedEncoder<E> {
+    inner: E,
+    failed: bool,
+}
+
+impl<E> FusedEncoder<E> {
+    /// Wrap an encoder with strict terminal-error handling.
+    pub const fn new(inner: E) -> Self {
+        Self {
+            inner,
+            failed: false,
+        }
+    }
+
+    /// Recover the backend, explicitly leaving the fused contract.
+    pub fn into_inner(self) -> E {
+        self.inner
+    }
+}
+
+impl<E: VideoEncoder> FusedEncoder<E> {
+    fn guard<T>(
+        &mut self,
+        stop: &dyn Stop,
+        f: impl FnOnce(&mut E) -> Result<T, SessionError<E::Error>>,
+    ) -> Result<T, SessionError<E::Error>> {
+        if self.failed {
+            return Err(SessionError::Finished);
+        }
+        // Set before entering either user-supplied operation so an unwinding
+        // backend/stop cannot accidentally reopen partially changed state.
+        self.failed = true;
+        stop.check().map_err(SessionError::Cancelled)?;
+        let result = f(&mut self.inner);
+        self.failed = result.is_err();
+        result
+    }
+}
+
+impl<E: VideoEncoder> VideoEncoder for FusedEncoder<E> {
+    type Error = E::Error;
+    fn send(
+        &mut self,
+        frame: &Frame,
+        stop: &dyn Stop,
+    ) -> Result<SendStatus, SessionError<E::Error>> {
+        self.guard(stop, |encoder| encoder.send(frame, stop))
+    }
+    fn receive(&mut self, stop: &dyn Stop) -> Result<Receive<Packet>, SessionError<E::Error>> {
+        self.guard(stop, |encoder| encoder.receive(stop))
+    }
+    fn end_input(&mut self) -> Result<(), SessionError<E::Error>> {
+        self.guard(&enough::Unstoppable, VideoEncoder::end_input)
+    }
+    fn output_config(&self) -> Option<&CodecConfig> {
+        self.inner.output_config()
+    }
+}
+
 /// Erase a decoder: errors become [`ErasedError`], and errors and
 /// cancellation become terminal until `reset` ([`FusedDecoder`]).
 pub fn erase_video_decoder<D: VideoDecoder + Send + 'static>(d: D) -> Box<DynVideoDecoder> {
     Box::new(VideoDecoderShim(FusedDecoder::new(d)))
 }
 
-/// Erase an encoder's error type.
+/// Erase an encoder's error type and make all errors/cancellation terminal
+/// ([`FusedEncoder`]). Use [`VideoEncoderShim`] directly when preserving a
+/// backend's explicitly documented retryable validation contract is required.
 pub fn erase_video_encoder<E: VideoEncoder + Send + 'static>(e: E) -> Box<DynVideoEncoder> {
-    Box::new(VideoEncoderShim(e))
+    Box::new(VideoEncoderShim(FusedEncoder::new(e)))
 }
 
 impl<D: VideoDecoder + ?Sized> VideoDecoder for Box<D> {

@@ -290,6 +290,22 @@ removes that whole class).
   experiment, with a failing-before/fixed-after regression. Public APIs are unchanged.
 - `zencodec-coroutine` delivers rows or metadata deposited during the future's final poll before reporting completion (`7cc3d3ec`).
 
+## zencodec-media
+
+### [Unreleased]
+
+#### QUEUED BREAKING CHANGES
+
+- `erase_video_encoder` now applies strict terminal-error handling, including
+  native validation errors. Callers deliberately using a backend's retryable
+  validation contract can use the error-only `VideoEncoderShim`.
+
+#### Added
+
+- `FusedEncoder` enforces cancellation before backend work and refuses all work
+  after failure. Both fused session wrappers remain failed across a caught
+  backend/stop unwind; a successful decoder reset still reopens the decoder.
+
 ## zencodec
 
 ## [Unreleased]

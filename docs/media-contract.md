@@ -36,6 +36,16 @@ rules marked (checked); run those checks against your implementation.
   not a stall.
 - Sessions do no I/O, start no threads, and never block waiting for input.
 
+`erase_video_encoder` now applies `FusedEncoder`: all errors, including native
+validation errors, are terminal. Later send/receive/end-input calls return
+`Finished` without re-entering the backend. Cancellation is checked before work.
+An encoder has no reset, so recovery uses a fresh session. `VideoEncoderShim`
+remains an error-only adapter for a backend with an explicitly documented
+retryable validation contract. `output_config` remains readable after failure.
+Both fused wrappers stay failed if a backend or stop unwinds and the caller
+catches the panic; only a successful decoder reset reopens a fused decoder.
+These properties are checked by `zencodec-media-testkit/tests/encoder_fusing.rs`.
+
 ## Demuxers
 
 - `step` takes a prefix of the input it asked for and returns an event, or
