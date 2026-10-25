@@ -8,11 +8,11 @@ precedents and the conclusions retained from Argon's review.
 
 ## What still needs production implementation
 
-- Extend coupled routes beyond the qualified JPEG source and JPEG/PNG targets.
+- Extend coupled routes beyond the qualified JPEG/PNG sources and JPEG/PNG targets.
   Add encoded rewrite choices, whole-container disclosure guarantees and
   qualified native workspace/staging bounds to the existing typed resolver.
-- Extend native controlled-suspension qualification beyond the whole-source JPEG
-  route to a second codec, native byte resumption and video epochs.
+- Extend native controlled-suspension qualification beyond the whole-source JPEG/PNG
+  routes to native byte resumption and video epochs.
 - Metadata exclusion/retention with explicit inspection scope, including opaque
   carriers, malformed XML, reconstruction data and nested content.
 - Integrate managed storage ownership into policy waiting, conversion scratch
@@ -26,6 +26,7 @@ precedents and the conclusions retained from Argon's review.
 
 | Contract | Implementation and verification |
 |---|---|
+| Native batches fit admitted sink strips | `DecodeRowSink::max_buffer_rows` and shared copying split delivery automatically. Native PNG RGB8/RGBA16 at 97x65/257 preserve exact independent samples with 1/3/64-row transcode buffers. Native batch/workspace storage remains separate |
 | Native standard-source errors survive erasure | `StdSourceError` retains I/O kind, OS code and custom payload; source, truncation and erased-driver tests |
 | Buffered input admission precedes exact reads | Checked lookback selection, bounded retained history, exact-cap EOF probe, terminal excess and fallible retained allocation |
 | Driver input allowances | `IoLimits` across sync/async incremental drivers; independent byte/call/capacity oracles, affordable alternatives, bounded batches, atomic range publication after partial failure/cancellation |
@@ -33,8 +34,8 @@ precedents and the conclusions retained from Argon's review.
 | Terminal erased video errors | `FusedEncoder` protects every work method and cancellation, preserves native causes, and remains failed after a caught unwind; decoder reset still reopens its session |
 | Initial stored requests | Required policy, fidelity configuration and output descriptors checked at execution; controlled sessions use the same registry templates and reject required-descriptor mismatch before adoption; inherited defaults, rejection and strided pixels tested; native baseline/progressive JPEG encoding bytes and decoding pixels match direct calls |
 | Shared resolver domains | Typed prepared encoder and coupled transcode offers, configurable built-in policy, fallible application callback, scoped choices and bounded reports; stale/nested tokens, cancellation, unwind cleanup and native error traces tested. Metadata treatment, opaque-profile retention and qualified workspace bounds can filter complete transcode choices; unknown evidence refuses |
-| Controlled interpretation protocol | Explicit suspensions and scoped replies; fused enforcement, coroutine await, and a shared policy adapter for existing transports. Authored controls cover early output, stale replies, finality changes, cancellation and unwind. [Native JPEG PR 240](https://github.com/imazen/zenjpeg/pull/240) supplies generic, erased and registered factories for the qualified whole-source byte-output route. Unqualified late ICC and float reconstruction refuse before native construction. Failed sessions release admitted storage while retaining typed refusal reports |
-| Coupled native pixel transcode | `zencodecs::checked_transcode::TranscodeRequest` on the [integration PR 105](https://github.com/imazen/zenpipe/pull/105) retains the actual OutputPlan, checked encoder jobs and admitted row buffers during the shared callback. JPEG→sRGB PNG matches independent CMS/pixel inspection; JPEG preservation checks ICC/EXIF/XMP. File/range input matches slice output. Callback/source failures and cancellation retain causes and release managed owners. Lost reported DPI refuses; positive preservation is [169](https://github.com/imazen/zencodec/issues/169). Native workspace and encoded staging remain unqualified |
+| Controlled interpretation protocol | Explicit suspensions and scoped replies; fused enforcement, coroutine await, and a shared policy adapter for existing transports. Authored controls cover early output, stale replies, finality changes, cancellation and unwind. [Native JPEG PR 240](https://github.com/imazen/zenjpeg/pull/240) supplies generic, erased and registered factories for the qualified whole-source byte-output route. Unqualified late ICC and float reconstruction refuse before native construction. [Native PNG PR 46](https://github.com/imazen/zenpng/pull/46) qualifies row and Adam7 reconstruction, packed and 8/16-bit layouts, late EXIF and conservative gain-map/extension discovery. Failed sessions release admitted storage while retaining typed refusal reports |
+| Coupled native pixel transcode | `zencodecs::checked_transcode::TranscodeRequest` on the [integration PR 105](https://github.com/imazen/zenpipe/pull/105) retains the actual OutputPlan, checked encoder jobs and admitted row buffers during the shared callback. JPEG→sRGB PNG matches independent CMS/pixel inspection; JPEG preservation checks ICC/EXIF/XMP. PNG sources retain six integer layouts with exact independent readback and P3 CMS conversion. File/range and delayed network input match slice output. Callback/source failures and cancellation retain causes and release managed owners. Lost reported DPI refuses; positive preservation is [169](https://github.com/imazen/zencodec/issues/169). Native workspace and encoded staging remain unqualified |
 | Managed storage owners | Byte/object admission follows allocations through subviews, packets, side data and old-epoch frames; exact strided 8/10-bit samples and concurrent contention checked. [Scope](storage-admission.md) excludes native workspace and explicit unaccounted copies |
 
 Driver input capacity is a scoped allowance. It excludes source caches,
@@ -155,3 +156,23 @@ no-overflow assertions pass without changed thresholds (`just
 docs-site-browser-check 3547`, rc 0; run-heavy peak RSS 0.17 GiB, minimum available
 17154 MiB, peak load 0.13). These are browser-process observations, not codec
 memory measurements.
+
+### Native PNG and admitted row capacity (2026-10-25)
+
+All checked guide recipes now run on both native JPEG (baseline/progressive)
+and the resulting PNG sources, including file input, delayed short network
+reads, automatic selection, explicit CMS and callback refusal. The larger guide
+fixture found and now covers native batches exceeding admitted sink rows. The
+separate native integration checks six integer layouts with exact independent
+PNG readback and P3-to-sRGB against a separately constructed CMS transform.
+
+`just checked-guide-integration` passes the complete native harness and strict
+Clippy with zenpipe `0287369d`, zenjpeg `02fa3866`, zenpng `3046bd77`,
+zenpixels `f8596aae` and this core. run-heavy: rc=0, 13 s, peak RSS 0.73 GiB,
+minimum available 15591 MiB, peak load 0.47. This is a test-process receipt;
+native codec/CMS workspace and encoded staging remain unqualified.
+
+The updated site passes its source/signature checks and browser checks at
+390/768/1440 px, including inline expansion, complete-example copy and hidden
+migration views (`just docs-site-browser-check 3557`; rc=0, 7 s; run-heavy peak
+RSS 0.17 GiB, minimum available 15977 MiB, peak load 0.39).

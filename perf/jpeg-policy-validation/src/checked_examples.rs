@@ -45,37 +45,40 @@ fn public_guide_executes_all_transport_and_policy_recipes() {
     let codecs = guide::gallery_codecs();
     for progressive in [false, true] {
         let source = fixtures::fixture(progressive, fixtures::Placement::Header);
-        let preview = guide::preview(&codecs, &source).unwrap();
-        assert_eq!(
-            (preview.width(), preview.height()),
-            (fixtures::WIDTH, fixtures::HEIGHT)
-        );
-        let retained = guide::derivative(&codecs, &source).unwrap_or_else(|error| {
-            let mut detail = error.to_string();
-            let mut cause = std::error::Error::source(&error);
-            while let Some(e) = cause {
-                detail.push_str(&format!("\nCaused by: {e:?}"));
-                cause = e.source();
-            }
-            panic!("{detail}")
-        });
-        assert_eq!(&retained.data()[..8], b"\x89PNG\r\n\x1a\n");
-        let request = guide::web_request();
-        let expected = request.transcode(&codecs, &source).unwrap();
-        let conditional = guide::for_tenant(&request, &codecs, &source, false).unwrap();
-        assert_eq!(conditional.data(), expected.data());
-        let refusal = guide::for_tenant(&request, &codecs, &source, true).unwrap_err();
-        assert!(zencodec::find_cause::<guide::WorkspaceEvidenceRequired>(&refusal).is_some());
-        let path = artifacts.join(format!("checked-guide-{progressive}.jpg"));
-        std::fs::write(&path, &source).unwrap();
-        let file = guide::from_file(&request, &codecs, &path).unwrap();
-        assert_eq!(file.data(), expected.data());
-        let network =
-            complete(guide::from_network(&request, &codecs, &mut Bytes(&source))).unwrap();
-        assert_eq!(network.data(), expected.data());
-        assert_eq!(
-            network.report().decisions().count(),
-            expected.report().decisions().count()
-        );
+        let png = guide::derivative(&codecs, &source).unwrap();
+        for (format, source) in [("jpeg", source.as_slice()), ("png", png.data())] {
+            let preview = guide::preview(&codecs, source).unwrap();
+            assert_eq!(
+                (preview.width(), preview.height()),
+                (fixtures::WIDTH, fixtures::HEIGHT)
+            );
+            let retained = guide::derivative(&codecs, source).unwrap_or_else(|error| {
+                let mut detail = error.to_string();
+                let mut cause = std::error::Error::source(&error);
+                while let Some(e) = cause {
+                    detail.push_str(&format!("\nCaused by: {e:?}"));
+                    cause = e.source();
+                }
+                panic!("{detail}")
+            });
+            assert_eq!(&retained.data()[..8], b"\x89PNG\r\n\x1a\n");
+            let request = guide::web_request();
+            let expected = request.transcode(&codecs, source).unwrap();
+            let conditional = guide::for_tenant(&request, &codecs, source, false).unwrap();
+            assert_eq!(conditional.data(), expected.data());
+            let refusal = guide::for_tenant(&request, &codecs, source, true).unwrap_err();
+            assert!(zencodec::find_cause::<guide::WorkspaceEvidenceRequired>(&refusal).is_some());
+            let path = artifacts.join(format!("checked-guide-{progressive}.{format}"));
+            std::fs::write(&path, source).unwrap();
+            let file = guide::from_file(&request, &codecs, &path).unwrap();
+            assert_eq!(file.data(), expected.data());
+            let network =
+                complete(guide::from_network(&request, &codecs, &mut Bytes(source))).unwrap();
+            assert_eq!(network.data(), expected.data());
+            assert_eq!(
+                network.report().decisions().count(),
+                expected.report().decisions().count()
+            );
+        }
     }
 }
