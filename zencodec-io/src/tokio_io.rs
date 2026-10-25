@@ -11,7 +11,10 @@
 //!
 //! [`transcode_async`] adds an encoder: rows go through an
 //! [`EncoderSink`](crate::EncoderSink) and encoded bytes are written to an
-//! `AsyncWrite` after every batch, so memory stays bounded end to end.
+//! `AsyncWrite` after every batch. The decoder and encoder stay alive while
+//! a write waits; their raw input and intermediate storage are not bounded
+//! by the encoded-output queue. Choose this coupling for configurations
+//! whose retained state and upstream production are bounded.
 //!
 //! [`pull_decode_on_thread`] runs a pull-native decoder (one written against
 //! [`DecodeJob::push_decoder_from_source`](zencodec::decode::DecodeJob::push_decoder_from_source))
@@ -589,8 +592,11 @@ impl AsyncCursor {
 /// Encoding is CPU work, so where `push_rows` runs is the caller's choice
 /// (a blocking thread, a compute pool); this only moves the bytes. Between
 /// pushes, awaiting it is the backpressure point: no more rows go in until
-/// the transport took the last batch. On an error nothing is consumed and
-/// the transport holds an unknown prefix: abort it.
+/// the transport took the last batch. This also keeps the encoder's raw and
+/// intermediate state alive during the wait. For an admitted buffered job,
+/// completing into separately budgeted encoded storage can release that state
+/// earlier. On an error nothing is consumed and the transport holds an unknown
+/// prefix: abort it.
 pub async fn write_pending_async<E, W>(enc: &mut E, w: &mut W) -> std::io::Result<usize>
 where
     E: Encoder,
@@ -673,8 +679,11 @@ where
 }
 
 /// Decode from an async source straight into a streaming encoder, writing
-/// encoded bytes to `out` after every batch. Memory stays bounded by the
-/// input window, one batch of strips, and the encoder's pending output.
+/// encoded bytes to `out` after every batch. This does not establish an
+/// end-to-end memory bound: codec-owned raw/intermediate state and caller-owned
+/// input can remain live while the output is stalled. The current driver also
+/// drains pending output before finalizing the encoder. Select an operation
+/// strategy based on the actual configuration's retention and release behavior.
 ///
 /// The encoder is told the image size through [`Encoder::begin`] when the
 /// decoder reaches its header; an encoder that answers with a streaming

@@ -41,8 +41,10 @@ const _: () = assert!(core::mem::size_of::<EncodeOutput>() == 96);
 ///
 /// Drivers use it to choose a strategy before any row moves: an HTTP
 /// response can send a `Content-Length` when the output comes all at once
-/// and use chunked transfer when it streams; a pipeline can size its
-/// buffers from [`lag_rows`](Self::lag_rows).
+/// and use chunked transfer when it streams. [`lag_rows`](Self::lag_rows)
+/// describes output delay, not when raw input or intermediate allocations
+/// are released. Choosing output backpressure also requires knowing the
+/// configuration's retained state and the caller's input ownership.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct OutputTiming {
     /// `None`: everything arrives from `finish`.

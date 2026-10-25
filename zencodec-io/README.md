@@ -25,6 +25,13 @@ and its output to an `AsyncWrite`. A whole-file decoder or an `AT_FINISH`
 encoder can retain a complete input or output. Driver measurements:
 [benchmarks](https://github.com/imazen/zencodec/tree/main/zencodec-io/benchmarks).
 
+Output backpressure is configuration-specific. Pausing a truly sequential
+pipeline can bound both upstream production and encoded queues. Pausing an
+encoder that retains a complete raster can instead keep that raster alive
+for a slow client. Admit buffered jobs and their encoded staging separately;
+`OutputTiming` describes byte availability, not raw-storage release. See the
+[ownership experiment](https://github.com/imazen/zencodec/blob/main/benchmarks/io_encoder_retention_2026-10-25.md).
+
 `no_std + alloc` by default. `std` adds the stream pump, `FileReadAt` and
 `BufferedReadAt`; `tokio` adds `tokio_io` (it uses `tokio::sync` and
 `tokio::io` only and never starts a runtime). Design:

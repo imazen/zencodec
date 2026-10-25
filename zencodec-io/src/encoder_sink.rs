@@ -46,11 +46,14 @@ impl<E: core::error::Error + 'static> core::error::Error for EncoderSinkError<E>
 /// `provide_next_buffer` returns the sink's own strip buffer, so the
 /// decoder writes straight into the bytes the encoder reads; the strip is
 /// pushed on the next `provide_next_buffer` or on `finish`. No pixel is
-/// copied between decoder and encoder.
+/// copied by this handoff; the encoder may copy or retain its own input/state.
 ///
 /// Drain encoded bytes between decode steps with
 /// [`pending_output`](Self::pending_output) and
 /// [`consume_output`](Self::consume_output) to keep output memory bounded.
+/// That bounds queued encoded bytes only. Awaiting a slow writer can keep
+/// much larger raw/intermediate allocations alive; output timing alone does
+/// not establish when those allocations are released.
 /// Encoder errors reach the decoder's caller as the sink error, typed, so
 /// they can be told apart from malformed input.
 pub struct EncoderSink<E> {

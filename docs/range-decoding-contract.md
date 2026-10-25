@@ -7,8 +7,11 @@ It distinguishes measured behavior from additions awaiting API review.
 How a decoder that performs no I/O talks to whatever holds the bytes: a
 file, an HTTP body, an object store with range requests, an FFI host that
 pushes buffers, a WASM event loop. The same contract carries a decode
-straight into a streaming encoder, so a transcode holds a bounded amount of
-memory end to end.
+straight into an encoder. End-to-end bounded memory additionally requires
+verified codec/configuration retention, caller ownership and driver budgets;
+streaming byte availability alone does not establish it. The
+[scheduling proposal](io-contract-proposal.md#5-bound-compute-batches-and-preserve-media-order)
+separates CPU fairness, raw-storage release and output backpressure.
 
 The trait lives in `zencodec::decode` (`src/traits/incremental.rs`); the
 drivers live in `zencodec-io`; `zencodec-coroutine` lets a decoder be
