@@ -132,6 +132,13 @@ denials for the sake of one error funnel.
 
 ## Joint decisions and resource admission
 
+Joint validation is not a solver. An explicit control rejects a 48-unit selected
+plan under a 40-unit cap, then admits a different 32-unit combination with the
+same requirements before any irreversible work. Costs here are logical fixture
+inputs. The prototype does not automatically backtrack or replay a callback.
+Production questions with coupled effects need coherent offered plans or carried
+constraints, and a distinct bounded-search exhaustion outcome.
+
 `policy/plan.rs` combines execution, metadata and fidelity decisions from one
 operation, request and source/plan/epoch context. Missing and duplicate questions
 refuse. It checks resource sums with checked arithmetic and revalidates context

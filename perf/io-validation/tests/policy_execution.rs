@@ -183,6 +183,40 @@ fn individual_choices_do_not_establish_a_combined_bound() {
 }
 
 #[test]
+fn a_joint_refusal_is_not_proof_that_no_other_combination_fits() {
+    let req = Requirements {
+        ram: Some(40),
+        ..req()
+    };
+    let mut engine = Engine::new(PolicySet::default(), 8);
+    let mut selected = choices(&mut engine, req, context());
+    assert_eq!(
+        *Plan::combine(&selected, context()).unwrap_err().error(),
+        PlanError::Ram
+    );
+    // Before any irreversible work, the adapter can offer a different qualified
+    // execution candidate. No callback is silently replayed by Plan::combine.
+    let smaller = Alternative {
+        ram: Evidence::Enforced(16),
+        ..selected[0].alternative
+    };
+    selected[0] = engine
+        .resolve(
+            selected[0].facts,
+            &[smaller],
+            req,
+            context(),
+            &mut PolicySet::default(),
+            &Unstoppable,
+        )
+        .unwrap();
+    let plan = Plan::combine(&selected, context()).unwrap();
+    assert_eq!(plan.ram, 32);
+    assert_eq!(plan.requirements, req);
+    assert_eq!(engine.records().count(), 4);
+}
+
+#[test]
 fn partial_admission_rolls_back_and_competing_reservations_refuse() {
     let memory = storage(48);
     let disk = storage(8);

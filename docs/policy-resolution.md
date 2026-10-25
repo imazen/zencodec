@@ -197,6 +197,16 @@ remain their own mechanisms. Coupled choices still need a coherent final plan:
 independently accepted metadata and execution answers do not establish that their
 combination is realizable.
 
+A refusal of one combination is not proof that no feasible combination exists.
+The private control demonstrates a selected 48-unit plan failing a 40-unit budget
+while another 32-unit combination meets the same requirements. These are authored
+logical costs. `Plan::combine` validates a plan; it does not search or silently
+replay callbacks. A production planner should offer coherent combined alternatives
+when domains interact, or carry the remaining constraints into later questions.
+Bound any search and report planning exhaustion separately from an impossible
+contract. Do not shift that coordination loop back to ordinary callers, or silently
+undo a custom choice to make a different plan fit.
+
 Place the shared question vocabulary where its dependencies fit. The core can
 carry lightweight codec facts; it must not acquire a dependency on its I/O or
 media drivers to name their decisions. An integration layer can translate those
