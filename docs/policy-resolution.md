@@ -201,11 +201,10 @@ media drivers to name their decisions. An integration layer can translate those
 typed questions into the single application-facing resolver. Feature-gated media
 support should not force image-only users to configure media policy.
 
-This extends the private experiment's execution-only callback; the heterogeneous
-question enum, preset delegation and scoped choice tokens above have not yet
-been implemented. The next prototype should exercise the same resolver through
-both metadata and execution decisions, including default delegation, unknown
-questions, stale choices and invalid combinations, before freezing the types.
+The [fallible resolver experiment and scenario matrix](policy-scenarios.md) now
+exercise the heterogeneous question enum, configurable preset, scoped choice
+tokens and traced callback errors. Native operation integration and coupled
+plan validation remain qualification gates before freezing the public types.
 
 ## How resolution can reduce the API
 

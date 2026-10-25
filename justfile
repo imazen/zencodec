@@ -242,6 +242,11 @@ io-policy-resolution-check:
     cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test policy_resolution --locked
     cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test policy_resolution --locked -- -D warnings
 
+# One typed resolver, configured presets, traced failures and adversarial choices.
+io-policy-engine-check:
+    cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test policy_engine --locked
+    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test policy_engine --locked -- -D warnings
+
 # Reuse the IMI transport model to compare read API policies.
 io-transport-model:
     cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --bin transport_contracts --locked
@@ -260,5 +265,5 @@ docs-site-browser:
 
 # Run in the prepared standalone harness (see perf/io-validation/README.md).
 docs-site-examples:
-    cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test encoder_retention --test policy_resolution --bin transport_contracts --locked
-    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test policy_resolution --bin transport_contracts --locked -- -D warnings
+    cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test encoder_retention --test policy_resolution --test policy_engine --bin transport_contracts --locked
+    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test policy_resolution --test policy_engine --bin transport_contracts --locked -- -D warnings
