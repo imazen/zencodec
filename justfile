@@ -245,7 +245,7 @@ io-transport-model:
 # Documentation source stays under docs/ on main; only its artifact is deployed.
 docs-site-check:
     node docs/build-site.mjs
-    node --test docs/site/site.test.mjs
+    node --test docs/site/site.test.mjs docs/site/source.test.mjs
 
 docs-site-serve:
     python3 -m http.server 3537 --bind 0.0.0.0 --directory docs/_site
