@@ -236,3 +236,8 @@ io-admission-bench cpus="2,3":
 io-encoder-retention-check:
     cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test encoder_retention --locked -- --nocapture
     cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --all-targets --locked -- -D warnings
+
+# Reuse the IMI transport model to compare read API policies.
+io-transport-model:
+    cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --bin transport_contracts --locked
+    cargo run --manifest-path perf/io-validation/Cargo.toml -p io-validation --bin transport_contracts --locked
