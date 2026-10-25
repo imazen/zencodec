@@ -1,0 +1,61 @@
+{
+  "checked_on": "2026-10-25",
+  "zencodec_review_revision": "5bf50685982aca8f961fdd12382dc57a4705e9e2",
+  "conversion_recipe_revision": "1d3ddd2131b22e9e3754c765d4ce45ce3901de59",
+  "packages": [
+    {
+      "name": "zencodec",
+      "version": "0.1.26",
+      "published": "2026-07-14T02:28:22.387681Z",
+      "sha256": "be4b0d4108a8f062c85090bf8d0e6dd00fea976ffacc0e4f3cb6b03284a75531",
+      "vcs_revision": "998edf5f5152f675bbe3b4e959470dffe1536c36",
+      "source_checks": {
+        "present": [
+          "with_metadata_policy",
+          "struct ColorEmitPlan",
+          "trait StreamingDecode"
+        ],
+        "absent": [
+          "struct CodecSet",
+          "trait IncrementalDecode",
+          "fn try_set_policy",
+          "struct FrameDuration",
+          "mod metadata_rewrite"
+        ]
+      }
+    },
+    {
+      "name": "zenpixels",
+      "version": "0.2.16",
+      "published": "2026-07-24T19:02:48.595048Z",
+      "sha256": "5851fd39b312749a3c367a0cd3522bd95d43276cfa613e9c18df748447cef3a8",
+      "vcs_revision": "640dcedf1ee3f828c66dd19c0a08f08a68da9685",
+      "source_checks": {
+        "present": [
+          "pub struct PixelDescriptor",
+          "pub struct PixelBuffer"
+        ],
+        "absent": []
+      }
+    },
+    {
+      "name": "zenpixels-convert",
+      "version": "0.2.16",
+      "published": "2026-07-24T19:03:06.516886Z",
+      "sha256": "cf516a64a98f08fa2aa19e86f1389e49894f750441044d65369687cf88a1b8dd",
+      "vcs_revision": "640dcedf1ee3f828c66dd19c0a08f08a68da9685",
+      "source_checks": {
+        "present": [
+          "trait PixelBufferConvertExt",
+          "fn convert_to",
+          "pub fn new_explicit",
+          "pub fn adapt_for_encode_explicit_cow"
+        ],
+        "absent": [
+          "pub fn prepare",
+          "pub fn try_convert_row"
+        ]
+      }
+    }
+  ]
+}

@@ -364,6 +364,10 @@ docs-site-serve:
 docs-site-browser:
     node docs/site/browser.test.mjs
 
+# Explicit network check of the frozen crates.io baseline; site builds stay offline.
+docs-migration-baseline:
+    python3 docs/verify-migration-baseline.py
+
 # Run in the prepared standalone harness (see perf/io-validation/README.md).
 docs-site-examples:
     cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test encoder_retention --test policy_resolution --test policy_engine --test policy_execution --test policy_native --test policy_disclosure --test policy_stream --bin policy_media --bin transport_contracts --locked
