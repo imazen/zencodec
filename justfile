@@ -367,3 +367,13 @@ docs-site-browser:
 docs-site-examples:
     cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test encoder_retention --test policy_resolution --test policy_engine --test policy_execution --test policy_native --test policy_disclosure --test policy_stream --bin policy_media --bin transport_contracts --locked
     cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test encoder_retention --test policy_resolution --test policy_engine --test policy_execution --test policy_native --test policy_disclosure --test policy_stream --bin policy_media --bin transport_contracts --locked -- -D warnings
+
+# Sequential documentation-learning study: preserve submissions and native results.
+guide-learning-capture url output revision:
+    node docs/evaluation/capture.mjs "{{url}}" "{{output}}" "{{revision}}"
+
+guide-learning-grade task submission export output:
+    python3 docs/evaluation/run.py "{{task}}" "{{submission}}" "{{export}}" "{{output}}"
+
+guide-learning-deliver task stage packets reader:
+    python3 docs/evaluation/deliver.py "{{task}}" "{{stage}}" "{{packets}}" "{{reader}}"

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "t1",
+    "kind": "code",
+    "selector": "#entry-registry",
+    "task": "Write a complete Rust function named decode_upload(bytes: &[u8]) -> Result<(u32, u32), Box<dyn std::error::Error + Send + Sync>>. Accept QOI or BMP by file contents, without an extension or manual format branch, and return decoded dimensions. Unrecognized input must return an error. Include your imports. Available dependencies are the crates named by this excerpt."
+  },
+  {
+    "id": "t2",
+    "kind": "code",
+    "selector": "#consumer-2",
+    "task": "Write a complete Rust function named decode_limited(bytes: &[u8], max_pixels: u64) -> Result<zencodec::decode::DecodeOutput, Box<dyn std::error::Error + Send + Sync>> for QOI uploads. Enforce the caller's pixel limit using the codec job, accepting an image exactly at the limit and refusing one above it. Include your imports."
+  },
+  {
+    "id": "t3",
+    "kind": "code",
+    "selector": "#adapter-2",
+    "task": "Write a complete Rust function named decode_positioned(source: &mut impl zencodec::source::ReadAt) -> Result<zencodec_io::CollectSink, Box<dyn std::error::Error + Send + Sync>> that decodes QOI through positioned reads. Preserve all rows and surface a source error. Include your imports."
+  },
+  {
+    "id": "t4",
+    "kind": "code",
+    "selector": "#policy-jpeg-scenario",
+    "task": "Write a complete Rust function named rewrite_jpeg(source: &[u8], writer: &mut dyn std::io::Write) -> Result<(), Box<dyn std::error::Error + Send + Sync>>. Preserve JPEG scan data, color and orientation while removing descriptive metadata. There is an additional account requirement: refuse any retained uninspected ICC before writing any bytes. You may use public zencodec and zenjpeg APIs; private prototype modules in the guide are not installed dependencies. Include your imports."
+  },
+  {
+    "id": "t5",
+    "kind": "reasoning",
+    "selector": "#policy-stream-scenario",
+    "task": "A remote JPEG decoder reports HeaderReady with no ICC. The application wants to convert pixels to sRGB and start an HTTP response while the remaining input arrives. Based only on the guide seen so far, what may it safely commit, what must be established first, and what happens if relevant interpretation arrives later? Answer in at most 180 words, distinguishing available interfaces from proposals."
+  },
+  {
+    "id": "t6",
+    "kind": "reasoning",
+    "selector": ".ownership",
+    "task": "An encoder reports streaming output, but the caller still owns a large raw raster and the network writer may stall. Is backpressure safe, and does a configured memory limit establish successful bounded completion? Give the facts needed to choose between waiting, finishing into storage, or refusing. Answer in at most 180 words."
+  }
+]
