@@ -7,7 +7,7 @@ use core::{convert::Infallible, error::Error, fmt};
 use policy::*;
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, AtomicU64, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 use zencodec::encode::Fidelity;
 use zencodec::{
@@ -714,8 +714,8 @@ fn planning_candidate_and_ticket_limits_refuse_without_wrapping() {
         .code(),
         Code::PlanningLimit
     );
-    let counter = AtomicU64::new(u64::MAX - 1);
-    assert_eq!(issue_ticket(&counter), Some(u64::MAX - 1));
+    let counter = AtomicUsize::new(usize::MAX - 1);
+    assert_eq!(issue_ticket(&counter), Some((usize::MAX - 1) as u64));
     assert_eq!(issue_ticket(&counter), None);
     assert_eq!(issue_ticket(&counter), None);
 }
@@ -746,5 +746,119 @@ fn diagnostic_ring_is_bounded_and_chronological() {
         records
             .iter()
             .all(|r| r.code == Code::Selected && r.chosen == Some(0))
+    );
+}
+
+#[test]
+fn independent_thread_local_policies_do_not_share_mutable_state_or_tickets() {
+    let profile = Arc::new(PolicySet {
+        execution: ExecutionPreference::Sequential,
+        ..PolicySet::default()
+    });
+    let tickets = std::thread::scope(|scope| {
+        let jobs: Vec<_> = (0..8)
+            .map(|_| {
+                let profile = profile.clone();
+                scope.spawn(move || {
+                    let mut host = Engine::new(*profile, 32);
+                    let offers = [
+                        alternative(Action::Execution(Execution::Buffered)),
+                        alternative(Action::Execution(Execution::Sequential)),
+                    ];
+                    let mut calls = 0;
+                    let mut callback = |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+                        calls += 1;
+                        Ok(Decision::UsePreset)
+                    };
+                    let mut tickets = Vec::new();
+                    for _ in 0..32 {
+                        let selected = host
+                            .resolve(
+                                facts(),
+                                &offers,
+                                requirements(),
+                                context(),
+                                &mut callback,
+                                &Unstoppable,
+                            )
+                            .unwrap();
+                        assert_eq!(selected.index, 1);
+                        tickets.push((selected.operation, selected.question));
+                    }
+                    assert_eq!(calls, 32);
+                    tickets
+                })
+            })
+            .collect();
+        jobs.into_iter()
+            .flat_map(|j| j.join().unwrap())
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(tickets.len(), 256);
+    let questions: std::collections::BTreeSet<_> = tickets.iter().map(|(_, q)| q).collect();
+    let operations: std::collections::BTreeSet<_> = tickets.iter().map(|(op, _)| op).collect();
+    assert_eq!(questions.len(), tickets.len());
+    assert_eq!(operations.len(), 8);
+}
+
+#[test]
+fn callback_errors_without_frames_or_at_the_trace_limit_keep_their_cause() {
+    let offers = [alternative(Action::Execution(Execution::Buffered))];
+    for frames in [0, zencodec::whereat::AT_MAX_FRAMES + 10] {
+        let mut callback = |_: Question<'_>| -> Result<Decision, At<ApplicationError>> {
+            let mut error = At::wrap(ApplicationError("retained original"));
+            for _ in 0..frames {
+                error = error.at();
+            }
+            Err(error)
+        };
+        let error = engine()
+            .resolve(
+                facts(),
+                &offers,
+                requirements(),
+                context(),
+                &mut callback,
+                &Unstoppable,
+            )
+            .unwrap_err();
+        assert_eq!(
+            zencodec::find_cause::<ApplicationError>(&error).unwrap().0,
+            "retained original"
+        );
+        assert_eq!(
+            error.frame_count(),
+            if frames == 0 {
+                1
+            } else {
+                zencodec::whereat::AT_MAX_FRAMES
+            }
+        );
+    }
+}
+
+#[test]
+fn callback_failure_remains_primary_when_cancellation_also_arrives() {
+    let flag = Arc::new(AtomicBool::new(false));
+    let stop = FlagStop(flag.clone());
+    let mut callback = |_: Question<'_>| -> Result<Decision, At<ApplicationError>> {
+        flag.store(true, Ordering::SeqCst);
+        Err(At::wrap(ApplicationError("native resolver failure")).at())
+    };
+    let offers = [alternative(Action::Execution(Execution::Buffered))];
+    let error = engine()
+        .resolve(
+            facts(),
+            &offers,
+            requirements(),
+            context(),
+            &mut callback,
+            &stop,
+        )
+        .unwrap_err();
+    assert_eq!(error.error().code(), Code::Callback);
+    assert_eq!(
+        zencodec::find_cause::<ApplicationError>(&error).unwrap().0,
+        "native resolver failure"
     );
 }

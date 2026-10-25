@@ -2,24 +2,24 @@ use super::{alloc::boxed::Box, resolver::*, types::*};
 use core::{
     error::Error,
     fmt,
-    sync::atomic::{AtomicU64, Ordering},
+    sync::atomic::{AtomicUsize, Ordering},
 };
 use zencodec::{
     At,
     enough::{Stop, StopReason},
 };
 
-static NEXT_QUESTION: AtomicU64 = AtomicU64::new(1);
+static NEXT_QUESTION: AtomicUsize = AtomicUsize::new(1);
 pub(crate) const MAX_CHOICES: usize = 64;
 pub(crate) const JOURNAL_CAPACITY: usize = 16;
 
 /// Checked exhaustion never wraps a ticket back onto a stale choice.
-pub(crate) fn issue_ticket(counter: &AtomicU64) -> Option<u64> {
+pub(crate) fn issue_ticket(counter: &AtomicUsize) -> Option<u64> {
     let mut observed = counter.load(Ordering::Relaxed);
     loop {
         let next = observed.checked_add(1)?;
         match counter.compare_exchange_weak(observed, next, Ordering::Relaxed, Ordering::Relaxed) {
-            Ok(_) => return Some(observed),
+            Ok(_) => return u64::try_from(observed).ok(),
             Err(current) => observed = current,
         }
     }
@@ -51,6 +51,7 @@ pub(crate) enum Route {
 /// input filenames or callback Display text are copied into it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Record {
+    pub operation: u64,
     pub question: u64,
     pub ordinal: u32,
     pub kind: Kind,
@@ -128,6 +129,7 @@ enum State {
 }
 
 pub(crate) struct Engine {
+    operation: Option<u64>,
     preset: PolicySet,
     limit: u32,
     count: u32,
@@ -140,6 +142,8 @@ pub(crate) struct Engine {
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Selected {
+    pub operation: u64,
+    pub requirements: Requirements,
     pub alternative: Alternative,
     pub index: usize,
     pub context: Context,
@@ -149,6 +153,7 @@ pub(crate) struct Selected {
 impl Engine {
     pub fn new(preset: PolicySet, max_decisions: u32) -> Self {
         Self {
+            operation: issue_ticket(&NEXT_QUESTION),
             preset,
             limit: max_decisions,
             count: 0,
@@ -199,6 +204,7 @@ impl Engine {
         stop: &dyn Stop,
     ) -> Result<Selected, At<Failure<R::Error>>> {
         let mut record = Record {
+            operation: self.operation.unwrap_or(0),
             question: 0,
             ordinal: self.count,
             kind: facts.kind(),
@@ -211,6 +217,9 @@ impl Engine {
         };
         if self.state != State::Ready {
             return Err(self.fail(record, Code::InterruptedCallback, Cause::Framework));
+        }
+        if self.operation.is_none() {
+            return Err(self.fail(record, Code::IdentityExhausted, Cause::Framework));
         }
         if self.count >= self.limit {
             return Err(self.fail(record, Code::PlanningLimit, Cause::Framework));
@@ -231,15 +240,18 @@ impl Engine {
             }
             if let Action::Fidelity(target) = entry.action {
                 use zencodec::encode::{Fidelity, LossyTarget};
-                let finite = match target {
-                    Fidelity::Lossless => true,
-                    Fidelity::Lossy(
-                        LossyTarget::ApproxSsim2(v)
-                        | LossyTarget::ApproxButteraugli(v)
-                        | LossyTarget::ApproxZensimB(v)
-                        | LossyTarget::CodecSpecificQuality(v),
-                    ) => v.is_finite(),
-                    _ => false,
+                let finite = if target == Fidelity::Lossless {
+                    true
+                } else if let Fidelity::Lossy(
+                    LossyTarget::ApproxSsim2(v)
+                    | LossyTarget::ApproxButteraugli(v)
+                    | LossyTarget::ApproxZensimB(v)
+                    | LossyTarget::CodecSpecificQuality(v),
+                ) = target
+                {
+                    v.is_finite()
+                } else {
+                    false
                 };
                 if !finite
                     || entry.effects.contains(Effects::LOSSLESS) != (target == Fidelity::Lossless)
@@ -323,6 +335,8 @@ impl Engine {
                 record.chosen = Some(index as u8);
                 self.record(record);
                 Ok(Selected {
+                    operation: record.operation,
+                    requirements,
                     alternative: *alternative,
                     index,
                     context,

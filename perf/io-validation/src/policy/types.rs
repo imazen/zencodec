@@ -109,7 +109,7 @@ pub(crate) struct Alternative {
     pub preserves_published: bool,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct Requirements {
     pub ram: Option<u64>,
     pub disk: Option<u64>,

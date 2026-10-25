@@ -70,8 +70,9 @@ it does not certify a codec's memory bounds or actual metadata effects.
 | Output failure | Slow/short/failing writer, partial artifact, no automatic retry, raw/staging lifetimes | Existing retention control; unified diagnostics pending |
 | Transport and viewport | Reused simulator, range/source version changes, view cancellation and disk/resident controls | Existing transport model; unified resolver integration pending |
 | Media | Real packet/frame facts, epoch changes, late decisions, retained frames and multiple tracks | Existing media evidence; unified resolver integration pending |
-| Concurrency | Independent mutable resolvers, shared immutable preset configuration, unique tickets, no lock held across callbacks | Pending concurrent control |
-| Portability/cost | no_std/WASM compile, static versus erased dispatch, allocation/error-report cost | Pending measurement |
+| Concurrency | Independent mutable resolvers, shared immutable preset configuration, unique operation/question tickets | Concurrent control passed: `policy_engine`; no shared callback mutex |
+| Portability | Actual root types on WASM; isolated resolver on a freestanding target | Passed as described below; full root freestanding graph blocked by issue 165 |
+| Cost | Static versus erased dispatch, allocation/error-report cost | Pending measurement |
 
 ## Commands and observed limits
 
@@ -89,6 +90,34 @@ and effect claims. A dishonest backend can still lie about those claims; native
 output tests and actual accounting must qualify them. No policy callback can
 prevent arbitrary trusted application code from blocking, allocating or panicking.
 The engine checks cancellation at its boundaries but does not preempt Rust code.
+
+## Portability and concurrent use
+
+`just io-policy-portability-check io-policy-engine-check` passes the root-linked
+consumer on `wasm32-unknown-unknown`, the isolated resolver on
+`thumbv7em-none-eabihf`, host execution of the isolated consumer, and Clippy for
+both checks. The isolated mode compiles the existing `src/fidelity.rs` directly
+with whereat 0.1.5 and enough 0.4.5; it does not invent replacement fidelity types.
+The native harness retains its separately pinned enough version. The checked
+ticket issuer uses pointer-width atomics and refuses exhaustion without wrapping.
+
+The concurrent control runs separate mutable callbacks with shared immutable
+preset configuration. Operation identities and question tickets remain distinct.
+Additional error controls cover missing origin frames, whereat's frame cap, and
+a callback failure arriving with cancellation. Callback failure remains primary;
+after a successful callback, cancellation wins before selecting an operation.
+
+```text
+run-heavy: done rc=0 1s | peak-RSS 0.19GiB | min-avail 18454MiB | peak-load 0.34
+```
+
+**Full freestanding integration is blocked by existing code**, not qualified by
+the isolated check. The root zenpixels dependency enables its default std
+feature. Turning that edge off in a disposable export exposes 12 gain-map float
+operations that also fail on the freestanding target. Root production code was
+left unchanged; [issue 165](https://github.com/imazen/zencodec/issues/165) records
+the reproduction and required math/feature qualification. A successful WASM
+check with std available is not a std-free dependency-graph proof.
 
 Policy should centralize anticipated refusals. Corrupt input, transport failure,
 cancelled work, resource exhaustion and implementation defects remain distinct

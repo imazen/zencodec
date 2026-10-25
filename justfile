@@ -247,6 +247,35 @@ io-policy-engine-check:
     cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test policy_engine --locked
     cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test policy_engine --locked -- -D warnings
 
+# Isolated no_std check; invoke in the prepared export to exclude path overrides.
+io-policy-portability target="wasm32-unknown-unknown":
+    cp perf/policy-check/dependencies.lock perf/policy-check/Cargo.lock
+    cargo check --manifest-path perf/policy-check/Cargo.toml --locked --target "{{target}}"
+
+# Isolate policy code using the real fidelity source, whereat and enough.
+io-policy-core-portability target="thumbv7em-none-eabihf":
+    cp perf/policy-check/dependencies.lock perf/policy-check/Cargo.lock
+    cargo check --manifest-path perf/policy-check/Cargo.toml --locked --no-default-features --target "{{target}}"
+
+io-policy-portability-check:
+    just io-policy-portability wasm32-unknown-unknown
+    just io-policy-core-portability thumbv7em-none-eabihf
+    cargo test --manifest-path perf/policy-check/Cargo.toml --locked --no-default-features --lib
+    cargo clippy --manifest-path perf/policy-check/Cargo.toml --locked --no-default-features --lib -- -D warnings
+
+# Copy only this experiment's text into an existing disposable source export.
+io-policy-sync export:
+    test ! -e "{{export}}/.git"
+    test ! -e "{{export}}/.jj"
+    test -f "{{export}}/perf/io-validation/Cargo.toml"
+    mkdir -p "{{export}}/perf/io-validation/src/policy" "{{export}}/perf/policy-check/src"
+    cp perf/io-validation/src/policy/*.rs "{{export}}/perf/io-validation/src/policy/"
+    cp perf/io-validation/tests/policy*.rs "{{export}}/perf/io-validation/tests/"
+    cp perf/policy-check/Cargo.toml "{{export}}/perf/policy-check/"
+    cp perf/policy-check/dependencies.lock "{{export}}/perf/policy-check/"
+    cp perf/policy-check/src/lib.rs "{{export}}/perf/policy-check/src/"
+    cp justfile "{{export}}/justfile"
+
 # Reuse the IMI transport model to compare read API policies.
 io-transport-model:
     cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --bin transport_contracts --locked

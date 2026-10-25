@@ -23,6 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown,thumbv7em-none-eabihf
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: perf/io-validation
@@ -38,6 +40,13 @@ jobs:
         run: |
           cargo run --quiet --manifest-path perf/io-validation/Cargo.toml -p io-validation --bin transport_contracts --locked > "$RUNNER_TEMP/transport.csv"
           diff -u benchmarks/io_transport_model_2026-10-25.csv "$RUNNER_TEMP/transport.csv"
+      - name: Check policy portability without the native harness
+        run: |
+          cp perf/policy-check/dependencies.lock perf/policy-check/Cargo.lock
+          cargo check --manifest-path perf/policy-check/Cargo.toml --locked --target wasm32-unknown-unknown
+          cargo check --manifest-path perf/policy-check/Cargo.toml --locked --no-default-features --target thumbv7em-none-eabihf
+          cargo test --manifest-path perf/policy-check/Cargo.toml --locked --no-default-features --lib
+          cargo clippy --manifest-path perf/policy-check/Cargo.toml --locked --no-default-features --lib -- -D warnings
 
   build:
     name: Build and exercise guide
