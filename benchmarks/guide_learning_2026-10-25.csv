@@ -1,0 +1,9 @@
+cohort,task,stage,revision,packet_words,section_css_px,compile_test_returncode,self_reported_confidence
+baseline,t1,visible,75f37b7870c4f93b229e388a80aa1a168d2f2fb3,222,1064.21875,101,10
+baseline,t1,expanded,75f37b7870c4f93b229e388a80aa1a168d2f2fb3,282,1544.09375,0,50
+baseline,t2,visible,75f37b7870c4f93b229e388a80aa1a168d2f2fb3,367,1977.515625,0,65
+baseline,t2,expanded,75f37b7870c4f93b229e388a80aa1a168d2f2fb3,481,2823.609375,0,90
+baseline,t3,visible,75f37b7870c4f93b229e388a80aa1a168d2f2fb3,342,1786.765625,0,55
+baseline,t3,expanded,75f37b7870c4f93b229e388a80aa1a168d2f2fb3,467,2611.265625,0,90
+baseline,t4,visible,75f37b7870c4f93b229e388a80aa1a168d2f2fb3,437,2291.171875,101,15
+baseline,t4,expanded,75f37b7870c4f93b229e388a80aa1a168d2f2fb3,630,3455.625,0,95

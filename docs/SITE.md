@@ -173,3 +173,6 @@ JPEG tests and clippy: rc=0 2s | peak-RSS 0.24GiB | min-avail 19389MiB | peak-lo
 
 The JPEG dependency bridge still emits the previously recorded root-crate HDR
 alias deprecations; the guide change does not suppress them.
+
+The [reader assessment](guide-learning.md) records the frozen tasks, measured
+results, confusion analysis and proposed abstraction placement.

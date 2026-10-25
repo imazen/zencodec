@@ -375,8 +375,14 @@ guide-learning-capture url output revision:
 guide-learning-grade task submission export output:
     python3 docs/evaluation/run.py "{{task}}" "{{submission}}" "{{export}}" "{{output}}"
 
+guide-learning-grade-session reader export output:
+    python3 docs/evaluation/grade_session.py "{{reader}}" "{{export}}" "{{output}}"
+
 guide-learning-deliver task stage packets reader:
     python3 docs/evaluation/deliver.py "{{task}}" "{{stage}}" "{{packets}}" "{{reader}}"
 
 guide-visuals url output:
     node docs/evaluation/visuals.mjs "{{url}}" "{{output}}"
+
+guide-learning-summary artifacts output +cohorts:
+    python3 docs/evaluation/summarize.py "{{artifacts}}" "{{output}}" {{cohorts}}
