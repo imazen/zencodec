@@ -243,6 +243,18 @@ storage-sync export:
     cp zencodec-media/src/frame.rs zencodec-media/src/packet.rs "{{export}}/zencodec-media/src/"
     cp zencodec-media-testkit/tests/storage_ownership.rs "{{export}}/zencodec-media-testkit/tests/"
 
+storage-cost-sync export:
+    test ! -e "{{export}}/.git"
+    test ! -e "{{export}}/.jj"
+    cp perf/io-validation/benches/admission.rs "{{export}}/perf/io-validation/benches/"
+    cp justfile "{{export}}/justfile"
+
+storage-cost-check:
+    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --bench admission --locked -- -D warnings
+
+storage-cost-bench cpu="4":
+    taskset -c {{cpu}} cargo bench --manifest-path perf/io-validation/Cargo.toml -p io-validation --bench admission --locked -- --cpu-policy=unrestricted --median-of-passes=3
+
 # Refresh an owned validation export without inheriting parent workspace patches.
 io-core-sync export:
     test ! -e "{{export}}/.git"

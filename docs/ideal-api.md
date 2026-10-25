@@ -16,8 +16,8 @@ precedents and the conclusions retained from Argon's review.
   effects. A metadata notification is insufficient.
 - Metadata exclusion/retention with explicit inspection scope, including opaque
   carriers, malformed XML, reconstruction data and nested content.
-- Storage charges retained through actual packet/frame/cache owners, including
-  old video epochs during reconfiguration, and qualified encoded staging.
+- Integrate managed storage ownership into policy waiting, conversion scratch
+  and qualified encoded staging; qualify native codec/service storage separately.
 - Shared image item, level and region selection with bounded discovery and
   source-version binding for the gigapixel consumer.
 - A generated consumer/adapter/implementor guide for the completed surface,
@@ -34,6 +34,7 @@ precedents and the conclusions retained from Argon's review.
 | Terminal erased video errors | `FusedEncoder` protects every work method and cancellation, preserves native causes, and remains failed after a caught unwind; decoder reset still reopens its session |
 | Initial stored requests | Required policy, fidelity configuration and output descriptors checked at execution; inherited defaults, rejection and strided pixels tested; native baseline/progressive JPEG encoding bytes and decoding pixels match direct calls |
 | First executing resolver domain | Typed prepared encoder offers, configurable built-in policy, fallible application callback, scoped choices and bounded reports; stale/nested tokens, cancellation, unwind cleanup and native error traces tested |
+| Managed storage owners | Byte/object admission follows allocations through subviews, packets, side data and old-epoch frames; exact strided 8/10-bit samples and concurrent contention checked. [Scope](storage-admission.md) excludes native workspace and explicit unaccounted copies |
 
 Driver input capacity is a scoped allowance. It excludes source caches,
 codec/output allocations, allocator bookkeeping and transient reallocation.

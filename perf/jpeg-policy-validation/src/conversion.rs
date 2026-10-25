@@ -124,6 +124,39 @@ fn production_resolver_selects_native_jpeg_jobs_and_preserves_direct_output() {
 }
 
 #[test]
+fn finishing_native_jpeg_does_not_release_the_callers_admitted_raster() {
+    use zencodec::{ImageFormat, encode::EncoderConfig, operation::EncodeRequest};
+    use zencodec_io::storage::{StorageBudget, StorageError};
+    let original = fixtures::raw();
+    let budget = StorageBudget::new(original.len(), 1);
+    let mut owned = budget.bytes(original.len()).unwrap();
+    owned.as_mut_slice().copy_from_slice(&original);
+    let shared = owned.freeze();
+    let caller_copy = shared.clone();
+    let expected = fixtures::config(true, true)
+        .encode(fixtures::pixels(&original))
+        .unwrap();
+    let codecs = CodecSet::new().with_encoder(fixtures::config(true, true));
+    let encoded = EncodeRequest::new(ImageFormat::Jpeg)
+        .encode(&codecs, fixtures::pixels(shared.as_slice()))
+        .unwrap();
+    assert_eq!(encoded.data(), expected.data());
+    assert_eq!(
+        fixtures::oracle(encoded.data()),
+        fixtures::oracle(expected.data())
+    );
+    assert_eq!(budget.reserved_bytes(), original.len());
+    assert!(matches!(
+        budget.bytes(1),
+        Err(StorageError::Objects { limit: 1 })
+    ));
+    drop(shared);
+    assert_eq!(budget.reserved_bytes(), original.len());
+    drop(caller_copy);
+    assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+}
+
+#[test]
 fn migration_display_conversion_keeps_pixels_and_residual_orientation() {
     for progressive in [false, true] {
         let mut source = fixtures::base(progressive);

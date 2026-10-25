@@ -39,6 +39,17 @@ fn admission(suite: &mut Suite) {
                     black_box(lease);
                 })
             });
+            let budget = zencodec_io::storage::StorageBudget::new(size, 1);
+            let payload = vec![7; size];
+            g.bench("production-budget", move |b| {
+                b.iter(|| {
+                    let mut owned = budget.bytes(size).unwrap();
+                    owned.as_mut_slice().copy_from_slice(&payload);
+                    let shared = owned.freeze();
+                    black_box(shared.clone());
+                    black_box(shared);
+                })
+            });
         });
     }
 }

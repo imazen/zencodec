@@ -303,7 +303,7 @@ removes that whole class).
 #### QUEUED BREAKING CHANGES
 
 - `PlaneData` gains accounted 8/16-bit storage variants on the unpublished media
-  API. Exhaustive matches must handle the new variants.
+  API. Exhaustive matches must handle the new variants (`5019a40a`).
 
 - `erase_video_encoder` now applies strict terminal-error handling, including
   native validation errors. Callers deliberately using a backend's retryable
