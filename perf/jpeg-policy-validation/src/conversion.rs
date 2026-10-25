@@ -34,6 +34,96 @@ fn stored_requests_execute_native_jpeg_templates_without_changing_bytes_or_pixel
 }
 
 #[test]
+fn production_resolver_selects_native_jpeg_jobs_and_preserves_direct_output() {
+    use std::convert::Infallible;
+    use zencodec::{
+        At, ImageFormat,
+        encode::{EncoderConfig, Fidelity, FidelityTargetError},
+        operation::{Decision, EncodeRequest, Question, Selection},
+    };
+    for progressive in [false, true] {
+        let config = fixtures::config(progressive, true);
+        let raw = fixtures::raw();
+        let set = CodecSet::new().with_encoder(config.clone());
+        let targets = [
+            Fidelity::Lossless,
+            Fidelity::codec_quality(35.0),
+            Fidelity::codec_quality(80.0),
+        ];
+        let request = EncodeRequest::new(ImageFormat::Jpeg).preferring_fidelity(targets.to_vec());
+        for index in [1, 2] {
+            let mut calls = 0;
+            let actual = request
+                .encode_with(&set, fixtures::pixels(&raw), &mut |question: Question<
+                    '_,
+                >|
+                 -> Result<
+                    _,
+                    At<Infallible>,
+                > {
+                    calls += 1;
+                    let Question::Encode { facts, choices } = question else {
+                        panic!()
+                    };
+                    assert_eq!(
+                        (facts.width, facts.height),
+                        (fixtures::WIDTH, fixtures::HEIGHT)
+                    );
+                    assert_eq!(
+                        choices.len(),
+                        2,
+                        "JPEG cannot qualify mathematical losslessness"
+                    );
+                    assert!(
+                        choices
+                            .iter()
+                            .all(|c| c.value().fidelity != Some(Fidelity::Lossless))
+                    );
+                    Ok(Decision::choose(
+                        choices
+                            .iter()
+                            .find(|c| c.value().preference_index == index)
+                            .unwrap(),
+                    ))
+                })
+                .unwrap();
+            let direct = config
+                .clone()
+                .try_with_fidelity(targets[index])
+                .unwrap()
+                .encode(fixtures::pixels(&raw))
+                .unwrap();
+            assert_eq!(actual.data(), direct.data());
+            assert_eq!(
+                fixtures::oracle(actual.data()),
+                fixtures::oracle(direct.data())
+            );
+            let Selection::Encode(selected) = actual
+                .report()
+                .decisions()
+                .next()
+                .unwrap()
+                .selected
+                .unwrap()
+            else {
+                panic!()
+            };
+            assert_eq!(selected.fidelity, Some(targets[index]));
+            assert_eq!(selected.preference_index, index);
+            assert_eq!(calls, 1);
+        }
+        let error = EncodeRequest::new(ImageFormat::Jpeg)
+            .with_fidelity(Fidelity::Lossless)
+            .encode(&set, fixtures::pixels(&raw))
+            .unwrap_err();
+        assert!(matches!(
+            zencodec::find_cause::<FidelityTargetError>(&error),
+            Some(FidelityTargetError::Substituted { .. })
+        ));
+    }
+}
+
+#[test]
 fn migration_display_conversion_keeps_pixels_and_residual_orientation() {
     for progressive in [false, true] {
         let mut source = fixtures::base(progressive);

@@ -556,6 +556,13 @@ impl CodecSet {
         Ok(job)
     }
 
+    pub(crate) fn operation_stop(&self) -> &dyn enough::Stop {
+        match &self.stop {
+            Some(stop) => stop,
+            None => &enough::Unstoppable,
+        }
+    }
+
     pub(crate) fn checked_encode_job(
         &self,
         format: ImageFormat,

@@ -8,8 +8,8 @@ precedents and the conclusions retained from Argon's review.
 
 ## What still needs production implementation
 
-- One fallible resolver with typed, qualified offers and bounded diagnostics,
-  used by ordinary request execution and by later fact changes.
+- Extend the fallible resolver beyond prepared encoder configuration, including
+  later facts that require a new decision before affected output.
 - Coherent transcode routes that couple metadata obligations, explicit
   zenpixels-convert work, encoder signaling and resource admission.
 - Mandatory native suspension before affected conversion, encoder or publication
@@ -33,6 +33,7 @@ precedents and the conclusions retained from Argon's review.
 | CPU scheduling independent of output pressure | `WorkQuota` limits complete steps per async turn; inline scheduling and packet loops yield; quota yields do not drain output; exact native QOI bytes at four quotas |
 | Terminal erased video errors | `FusedEncoder` protects every work method and cancellation, preserves native causes, and remains failed after a caught unwind; decoder reset still reopens its session |
 | Initial stored requests | Required policy, fidelity configuration and output descriptors checked at execution; inherited defaults, rejection and strided pixels tested; native baseline/progressive JPEG encoding bytes and decoding pixels match direct calls |
+| First executing resolver domain | Typed prepared encoder offers, configurable built-in policy, fallible application callback, scoped choices and bounded reports; stale/nested tokens, cancellation, unwind cleanup and native error traces tested |
 
 Driver input capacity is a scoped allowance. It excludes source caches,
 codec/output allocations, allocator bookkeeping and transient reallocation.
@@ -64,11 +65,18 @@ result with a warning that callers must discover. `preferring_output` explicitly
 allows the decoder's native fallback. Conversion remains an explicit operation;
 the next layer must qualify its interpretation and destination signaling together.
 
-The intended extension is one resolver invoked at meaningful decisions. It
+The resolver now selects prepared encoder jobs. A caller can use
+`preferring_fidelity(...)` and `with_policy_set(PolicySet::new().prefer_lossless(true))`,
+or pass a `PolicyResolver` to `encode_with`. Required targets never become
+preferences. The selected job is the same object that was checked before the
+callback, and execution errors do not trigger a retry. The returned `Outcome`
+contains both output and a bounded decision report.
+
+The extension to other domains must preserve that execution link. The resolver
 chooses only offered, permitted routes or returns a traced refusal/error. It
-cannot invent support, waive a hard invariant, authorize stale facts or resume
-after a terminal failure. The adapter constructs and admits executable routes;
-codecs expose facts and mechanisms without depending on an application policy.
+cannot invent support or authorize stale facts. Adapters construct and admit
+executable routes; codecs expose facts and mechanisms without depending on an
+application policy. Late metadata and resource decisions are still open work.
 
 ## Compatibility plan
 

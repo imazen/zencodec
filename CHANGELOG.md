@@ -330,6 +330,14 @@ removes that whole class).
   during execution through `CodecSet` templates. Required policies use checked
   setters, explicit descriptor preferences allow native fallback, and native
   errors remain recoverable through the traced result. Requests are reusable.
+- `operation::PolicyResolver` selects prepared encoder configurations through
+  typed offers and opaque question-scoped choices. Callbacks return traced native
+  errors, can decline explicitly or delegate once to a configurable `PolicySet`.
+  Successful requests return `Outcome<T>` with bounded decision records; selected
+  native execution failures retain the report. Unsupported fidelity alternatives
+  are filtered before policy, malformed lists are refused, and native execution
+  is never retried automatically. This is the first production question domain;
+  late metadata and transcode decisions remain separate implementation work.
 
 - `EncodePolicy::strict` (`with_strict`, `resolve_strict`), the encode-side
   twin of `DecodePolicy::strict`: when set, an encode the target can only

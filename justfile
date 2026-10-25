@@ -224,6 +224,20 @@ io-contract-check:
     cargo test --workspace --all-features --locked
     cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
+# Refresh the operation API and its conformance controls in an owned export.
+operation-sync export:
+    test ! -e "{{export}}/.git"
+    test ! -e "{{export}}/.jj"
+    mkdir -p "{{export}}/src/operation"
+    cp src/operation.rs src/lib.rs src/set.rs "{{export}}/src/"
+    cp src/operation/*.rs "{{export}}/src/operation/"
+    cp zencodec-testkit/tests/operation_*.rs "{{export}}/zencodec-testkit/tests/"
+    cp justfile "{{export}}/justfile"
+
+operation-policy-check:
+    cargo test -p zencodec-testkit --test operation_policy --test operation_requests --locked
+    cargo test -p zencodec --lib operation::policy --locked
+
 # Refresh an owned validation export without inheriting parent workspace patches.
 io-core-sync export:
     test ! -e "{{export}}/.git"

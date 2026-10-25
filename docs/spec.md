@@ -66,24 +66,110 @@ impl DecodeRequest {
     const fn with_policy(self, policy: DecodePolicy) -> Self;
     fn with_output(self, descriptor: PixelDescriptor) -> Self;
     fn preferring_output(self, descriptors: impl Into<Vec<PixelDescriptor>>) -> Self;
-    fn decode(&self, codecs: &CodecSet, input: &[u8]) -> Result<DecodeOutput, At<OperationError>>;
+    fn decode(&self, codecs: &CodecSet, input: &[u8]) -> Result<Outcome<DecodeOutput>, At<OperationError>>;
 }
 struct EncodeRequest { /* private */ }
 impl EncodeRequest {
     const fn new(format: ImageFormat) -> Self;
-    const fn with_fidelity(self, fidelity: Fidelity) -> Self;
+    fn with_fidelity(self, fidelity: Fidelity) -> Self;
+    fn preferring_fidelity(self, targets: impl Into<Vec<Fidelity>>) -> Self;
     const fn with_policy(self, policy: EncodePolicy) -> Self;
-    fn encode(&self, codecs: &CodecSet, pixels: PixelSlice<'_>) -> Result<EncodeOutput, At<OperationError>>;
+    const fn with_policy_set(self, preset: PolicySet) -> Self;
+    fn encode(&self, codecs: &CodecSet, pixels: PixelSlice<'_>) -> Result<Outcome<EncodeOutput>, At<OperationError>>;
+    fn encode_with<R: PolicyResolver + ?Sized>(&self, codecs: &CodecSet,
+        pixels: PixelSlice<'_>, resolver: &mut R) -> Result<Outcome<EncodeOutput>, At<OperationError>>;
+}
+struct Outcome<T> { /* private */ }
+impl<T> Outcome<T> { // Also Deref<Target = T>.
+    const fn output(&self) -> &T;
+    fn into_output(self) -> T;
+    fn into_parts(self) -> (T, OperationReport);
+    const fn report(&self) -> &OperationReport;
 }
 enum OperationError {
     Codec(CodecSetError),
+    AlternativeCount { count: usize, limit: usize },
+    InvalidFidelity { preference_index: usize, cause: FidelityTargetError },
+    NoEncodeRoute(Vec<RouteRejection>),
+    Allocation,
+    Stopped(enough::StopReason),
+    Policy(PolicyFailure),
+    Execution { cause: Box<CodecSetError>, report: Box<OperationReport> },
     OutputDescriptor { requested: PixelDescriptor, actual: PixelDescriptor },
 }
 ```
 
+### One application resolver
+
+The ordinary `encode` call uses its configured `PolicySet`. `encode_with` accepts
+the same built-in object, an application object, a trait object, or a closure.
+The callback returns `Result<Decision, At<E>>`; the native `At<E>` survives in
+the error chain, including its trace. Annotate a closure argument as
+`question: Question<'_>` so Rust infers its borrowed-question lifetime correctly.
+
+```rust
+trait PolicyResolver {
+    type Error: core::error::Error + Send + Sync + 'static;
+    fn resolve(&mut self, question: Question<'_>) -> Result<Decision, At<Self::Error>>;
+}
+enum Question<'a> { // non_exhaustive
+    Encode { facts: EncodeFacts, choices: Choices<'a, EncodeOffer> },
+}
+struct EncodeFacts { width: u32, height: u32, descriptor: PixelDescriptor }
+struct EncodeOffer { format: ImageFormat, fidelity: Option<Fidelity>, preference_index: usize }
+struct ChoiceId { /* opaque, scoped to one question */ }
+struct Choice<'a, T> { /* private */ }
+impl<'a, T> Choice<'a, T> {
+    const fn value(self) -> &'a T;
+    const fn id(self) -> ChoiceId;
+}
+struct Choices<'a, T> { /* private */ }
+impl<'a, T> Choices<'a, T> {
+    const fn len(self) -> usize;
+    const fn is_empty(self) -> bool;
+    fn first(self) -> Option<Choice<'a, T>>;
+    fn iter(self) -> impl ExactSizeIterator<Item = Choice<'a, T>>;
+}
+enum Decision { Choose(ChoiceId), UsePreset, Decline(At<Decline>) }
+impl Decision {
+    fn choose<T>(choice: Choice<'_, T>) -> Self;
+    fn decline(reason: Decline) -> Self;
+}
+enum Decline { ApplicationRule, NoPreferredChoice, UnsupportedQuestion }
+struct PolicySet { /* private */ }
+impl PolicySet {
+    const fn new() -> Self;
+    const fn prefer_lossless(self, enabled: bool) -> Self;
+}
+```
+
+Offers are prepared encoder jobs whose fidelity configuration and required
+policy were checked. The selected job survives the callback unchanged; the
+other jobs are dropped before encoding. Malformed targets reject the entire
+request; unsupported targets may be omitted from a preference list. The planner
+accepts 1–64 targets, reserves its list storage fallibly, and never retries an
+execution failure with another target. Preparation can allocate inside codecs;
+the offer limit is not a total-memory guarantee.
+
+Tokens from another question, including a nested operation, are refused.
+`UsePreset` delegates once. A callback panic unwinds this one-shot operation and
+drops prepared jobs; a caught panic does not leave an operation to resume.
+Cancellation is checked before preparation and on both sides of the callback.
+This does not make uncooperative native encoding preemptible.
+
+`OperationReport` keeps the latest 16 `DecisionRecord`s and counts omitted older
+records. A record carries question identity, offer count, selected typed contract
+(`Selection::Encode(EncodeOffer)`), preset delegation and `DecisionCode`.
+Success returns this report with the output; native execution failure retains it
+in `OperationError::Execution`. `PolicyFailure::record()` identifies refusal,
+stale choice, callback failure or cancellation. Default policy-failure formatting
+excludes application error payloads; explicit source/trace inspection can reveal
+them. Native codec errors keep their codec's own formatting.
+
 The full implementation target and current gaps are recorded in
-[ideal-api.md](ideal-api.md). These requests do not yet supply the proposed
-policy resolver, metadata obligations, conversion routes or native suspension.
+[ideal-api.md](ideal-api.md). The production resolver currently executes the
+encode-configuration domain. Metadata obligations, coherent conversion routes
+and native suspension still require their own executing adapters.
 
 ## Encode traits
 
