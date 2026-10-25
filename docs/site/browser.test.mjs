@@ -58,7 +58,8 @@ try {
   assert.ok(!await below.evaluate(el=>el.open));
   await page.goto(`${url}#policy`);
   assert.ok((await page.locator('#policy .api-panel[data-api="policyResolver"][open]').textContent()).includes('At<Self::Error>'));
-  for(const [name,id] of [['policy_default','policy-default'],['policy_custom','policy-custom'],['jpeg_rewrite','policy-jpeg'],['jpeg_icc_admission','policy-jpeg-icc']]) {
+  for(const [name,id] of [['policy_default','policy-default'],['policy_custom','policy-custom'],['jpeg_rewrite','policy-jpeg'],['jpeg_icc_refusal','policy-jpeg-checked'],['jpeg_icc_admission','policy-jpeg-icc']]) {
+    if(name==='jpeg_icc_admission') await page.locator('.policy-deep-dive>summary').click();
     const panel=page.locator(`#${id}-example`);
     for(const summary of await panel.locator('.code-context summary').all()) await summary.click();
     assert.ok(await panel.locator('[data-example-part="above"]').isVisible());

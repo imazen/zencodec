@@ -27,7 +27,7 @@ try {
       if(start<0) throw Error(`Missing section: ${selector}`);
       elements=policy.slice(start,end);
     }
-    for(const el of elements) for(const d of el.querySelectorAll('details')) if(expanded) d.open=true;
+    for(const el of elements) for(const d of [...(el.matches('details')?[el]:[]),...el.querySelectorAll('details')]) if(expanded) d.open=true;
     return {text:elements.map(el=>el.innerText).join('\n\n'),links:elements.flatMap(el=>[...el.querySelectorAll('a')].map(a=>({text:a.textContent.trim(),href:a.href}))),height:elements.reduce((n,el)=>n+el.getBoundingClientRect().height,0)};
    },{selector:task.selector,expanded});
    const stage=expanded?'expanded':'visible';

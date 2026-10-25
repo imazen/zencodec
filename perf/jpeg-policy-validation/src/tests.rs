@@ -574,10 +574,22 @@ fn guide_executes_native_rewrite_and_checks_icc_before_publication() {
         );
         assert!(writer.is_empty());
 
+        let error = crate::guide::checked_derivative(&source, &mut writer).unwrap_err();
+        assert!(
+            error
+                .downcast_ref::<crate::guide::UninspectedIcc>()
+                .is_some()
+        );
+        assert!(writer.is_empty());
+
         let clean = base(progressive);
         crate::guide::require_inspected_icc(&clean, &mut writer, &mut resolver).unwrap();
         assert_eq!(scans(&writer), scans(&clean));
         assert_eq!(oracle(&writer), oracle(&clean));
+        let mut checked = Vec::new();
+        crate::guide::checked_derivative(&clean, &mut checked).unwrap();
+        assert_eq!(scans(&checked), scans(&clean));
+        assert_eq!(oracle(&checked), oracle(&clean));
     }
     // Impossible requests are rejected by admission, not sent to application
     // code to negotiate away a hard requirement.

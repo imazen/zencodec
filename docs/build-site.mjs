@@ -25,7 +25,7 @@ function codePanel(id, name, file = 'docs/examples/journeys.rs') {
   const tests = jpeg ? 'perf/jpeg-policy-validation/src/tests.rs' : `perf/io-validation/tests/${proposed ? 'policy_native' : 'site_examples'}.rs`;
   const context = (direction, label) => `<details class="code-context" data-direction="${direction}"><summary>${label}<span>${parts[direction].trimEnd().split('\n').length} lines</span></summary><pre><code data-example-part="${direction}">${highlight(parts[direction])}</code></pre></details>`;
   return `<div class="code-panel" id="${id}-example" data-example="${name}" data-example-source="${file}">
-    <div class="code-toolbar"><span>${proposed ? 'Private prototype' : 'Current API'} <small>· Rust</small></span><div class="code-actions code-provenance"><a href="https://github.com/imazen/zencodec/blob/${sha}/${file}#L${parts.line}">Source ↗</a><details class="code-source"><summary>More</summary><a href="https://github.com/imazen/zencodec/blob/${sha}/${tests}">Native tests ↗</a><button type="button" data-copy="${id}-code">Copy focus only</button></details><button type="button" data-copy-full="${id}-example">Copy full example</button></div></div>
+    <div class="code-toolbar"><span>${proposed ? 'Private prototype' : 'Implemented · main'} <small>· Rust</small></span><div class="code-actions code-provenance"><a href="https://github.com/imazen/zencodec/blob/${sha}/${file}#L${parts.line}">Source ↗</a><details class="code-source"><summary>More</summary><a href="https://github.com/imazen/zencodec/blob/${sha}/${tests}">Native tests ↗</a><button type="button" data-copy="${id}-code">Copy focus only</button></details><button type="button" data-copy-full="${id}-example">Copy full example</button></div></div>
     ${context('above', 'Imports &amp; setup')}
     <pre class="code-focus"><code id="${id}-code" data-example-part="focus">${highlight(parts.focus)}</code></pre>
     ${context('below', 'Return &amp; continuation')}
@@ -75,11 +75,16 @@ ${flow('policy-execution',[['consumer','Choose / delegate','or traced refusal / 
 <h3>3. A JPEG upload brings real metadata obligations.</h3>
 <p>The gallery now preserves JPEG scan data while removing descriptive metadata. The native rewrite below retains color and orientation; it does not decode or re-encode pixels. The plan borrows unchanged chunks, exposes exact output size and reports retained opaque carriers.</p>
 ${codePanel('policy-jpeg','jpeg_rewrite','docs/examples/jpeg_policy.rs')}
-${apiPanels('policy-jpeg',['rewriteRequest','rewritePlan'])}
+<p class="example-context">The preset is <code>zencodec::MetadataPolicy::ColorAndRotation</code>. It is a retention rule; it does not certify opaque data as safe to publish.</p>
+${apiPanels('policy-jpeg',['rewritePlan','rewriteRequest'])}
 <h3>4. An account requires retained ICC to be inspected.</h3>
-<p>The ordinary rewrite reports opaque ICC. The additional gate below uses the same fallible resolver and refuses before writing because this prototype has no qualified ICC sanitizer. It cannot remove the profile and assume sRGB. Requests with no feasible choice fail before calling application code. This example checks the retained ICC obligation; it does not certify all carriers or pixels free of PII.</p>
+<p>Use the public plan report to enforce this narrow requirement today. <code>Action</code> is in <code>zencodec::metadata_rewrite</code>. With no qualified ICC inspector, refuse the retained profile before writing anything. Removing it and assuming sRGB would change the color contract. This check does not certify other carriers or pixels free of PII.</p>
+${codePanel('policy-jpeg-checked','jpeg_icc_refusal','docs/examples/jpeg_policy.rs')}
+<details class="policy-deep-dive"><summary>Adapter design: share this rule across operations</summary>
+<p>A shared resolver becomes useful when account rules apply to multiple carriers and transcode routes. The private adapter below constructs the question, validates feasible choices and preserves traced errors. Ordinary callers should supply requirements and a preset or callback; they should not construct Prepared, Engine or authorization receipts. An impossible request fails before application code runs.</p>
 ${codePanel('policy-jpeg-icc','jpeg_icc_admission','docs/examples/jpeg_policy.rs')}
 ${apiPanels('policy-disclosure',['disclosurePrepared'])}
+</details>
 <h3>5. A stream reveals information after the first header.</h3>
 <p>Current zenjpeg can report a header at 4 KiB while retaining a whole-file input requirement. Its snapshot can contain half an ICC profile; full decode can later recover color, XMP and orientation. Even probe_full_metadata inherits the header probe. A complete inventory and a final interpretation need distinct guarantees.</p>
 ${flow('policy-discovery',[['implementor','Discover relevant fact','scope + revision + completeness'],['adapter','Suspend affected work','before conversion / begin / write'],['consumer','Resolve typed question','preset, conditional code or error']])}

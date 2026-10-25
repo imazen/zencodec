@@ -7,8 +7,8 @@ mod ordinary {
 
     pub(crate) fn derivative(source: &[u8]) -> Result<Vec<u8>, BoxedError> {
         // Actual JPEG rewrite; scan data is borrowed without pixel decoding.
-        let request = Request::new(source).with_policy(MetadataPolicy::ColorAndRotation);
         // ANCHOR: jpeg_rewrite
+        let request = Request::new(source).with_policy(MetadataPolicy::ColorAndRotation);
         let plan = zenjpeg::metadata::rewrite(&request)?;
         // END: jpeg_rewrite
         // This preserves opaque ICC. Success does not certify its privacy.
@@ -17,6 +17,49 @@ mod ordinary {
     // END EXAMPLE: jpeg_rewrite
 }
 pub(crate) use ordinary::derivative;
+
+mod checked {
+    // EXAMPLE: jpeg_icc_refusal
+    use std::io::Write;
+    use zencodec::{
+        MetadataPolicy,
+        decode::BoxedError,
+        metadata_rewrite::{Action, Request},
+    };
+
+    #[derive(Debug)]
+    pub(crate) struct UninspectedIcc;
+    impl std::fmt::Display for UninspectedIcc {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("retained ICC has not been inspected")
+        }
+    }
+    impl std::error::Error for UninspectedIcc {}
+
+    pub(crate) fn checked_derivative(
+        source: &[u8],
+        writer: &mut dyn Write,
+    ) -> Result<(), BoxedError> {
+        let request = Request::new(source).with_policy(MetadataPolicy::ColorAndRotation);
+        let plan = zenjpeg::metadata::rewrite(&request)?;
+        // ANCHOR: jpeg_icc_refusal
+        if plan
+            .report()
+            .iter()
+            .any(|entry| entry.action() == Action::OpaqueIcc)
+        {
+            return Err(UninspectedIcc.into());
+        }
+        // All checks precede the first write. Writer errors can leave partial output.
+        for chunk in plan.chunks() {
+            writer.write_all(chunk)?;
+        }
+        // END: jpeg_icc_refusal
+        Ok(())
+    }
+    // END EXAMPLE: jpeg_icc_refusal
+}
+pub(crate) use checked::{UninspectedIcc, checked_derivative};
 
 mod inspected {
     // EXAMPLE: jpeg_icc_admission

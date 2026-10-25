@@ -157,3 +157,19 @@ example/policy tests and Clippy passed:
 ```
 examples and clippy: rc=0 1s | peak-RSS 0.20GiB | min-avail 19466MiB | peak-load 0.10
 ```
+
+The JPEG progression now shows the actual retention preset in the initial
+example and an executable public-plan ICC refusal before the private resolver
+adapter. The latter expands as an adapter design detail. The implemented guard
+has its own typed application error, checks before any write, and uses borrowed
+plan chunks. Baseline/progressive native tests require zero output on the ICC
+refusal and scan-byte plus independent decoded-pixel equality on accepted input.
+It is a retained-ICC requirement, not a universal PII certification. This change
+adds no exported library API.
+
+```
+JPEG tests and clippy: rc=0 2s | peak-RSS 0.24GiB | min-avail 19389MiB | peak-load 0.97
+```
+
+The JPEG dependency bridge still emits the previously recorded root-crate HDR
+alias deprecations; the guide change does not suppress them.

@@ -22,7 +22,7 @@ test('all chapter anchors, diagrams, and Rust examples survive the build',()=>{
   assert.ok(html.replace(/<\/?span\b[^>]*>/g, '').includes('At&lt;Self::Error&gt;'));
   assert.ok(html.includes('data-example="policy_default"'));
   assert.ok(html.includes('data-example="policy_custom"'));
-  for(const name of ['jpeg_rewrite','jpeg_icc_admission']) assert.ok(html.includes(`data-example="${name}"`));
+  for(const name of ['jpeg_rewrite','jpeg_icc_refusal','jpeg_icc_admission']) assert.ok(html.includes(`data-example="${name}"`));
   assert.ok(html.includes('data-api="policyGate"'));
   assert.ok(html.includes('policy-discovery-title'));
 });

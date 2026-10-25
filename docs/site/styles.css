@@ -1562,3 +1562,6 @@ footer p {
 .code-toolbar .code-provenance {align-items:center;padding:0;border:0;font:10px var(--mono);gap:10px;color:var(--muted)}
 .code-toolbar .code-provenance>a {color:var(--ink);text-decoration:none}
 .code-toolbar .code-provenance>a:hover {text-decoration:underline}
+
+.policy-deep-dive {border-left:2px solid var(--adapter);padding:0 0 0 16px;margin:24px 0}
+.policy-deep-dive>summary {cursor:pointer;min-height:44px;padding:12px 0;font-size:14px;color:var(--adapter)}
