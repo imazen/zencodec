@@ -53,6 +53,7 @@ dependencies = [
  "enough",
  "whereat",
  "zencodec",
+ "zenpixels",
 ]
 
 [[package]]

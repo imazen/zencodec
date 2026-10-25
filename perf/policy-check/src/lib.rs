@@ -13,6 +13,8 @@ pub(crate) use enough::{self, Unstoppable};
 #[cfg(not(feature = "full-zencodec"))]
 pub(crate) use whereat::At;
 #[cfg(not(feature = "full-zencodec"))]
+pub(crate) use zenpixels::Cicp;
+#[cfg(not(feature = "full-zencodec"))]
 #[allow(dead_code)]
 #[path = "../../../src/fidelity.rs"]
 mod fidelity;

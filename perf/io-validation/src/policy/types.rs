@@ -67,11 +67,11 @@ pub(crate) enum MediaAction {
 /// Adapters qualify these alternatives before presenting them to the resolver.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum BoundaryAction {
+    Wait,
     Keep,
     Regenerate,
     Drop,
     Adopt,
-    Replay,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -91,6 +91,14 @@ pub(crate) enum Inspection {
     SyntaxOnly,
     SupportedSubset,
     Canonical,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FactStatus {
+    Pending,
+    Provisional,
+    Final,
+    Unavailable,
 }
 
 /// These are independent commitments: zero body bytes does not imply that a
@@ -113,9 +121,9 @@ pub(crate) enum BoundaryTrigger {
         strict: bool,
     },
     Interpretation {
-        known: bool,
-        final_for_epoch: bool,
-        changes_samples: bool,
+        status: FactStatus,
+        cicp: Option<zencodec::Cicp>,
+        changes_interpretation: bool,
     },
 }
 
