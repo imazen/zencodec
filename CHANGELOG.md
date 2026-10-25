@@ -228,6 +228,8 @@ removes that whole class).
 
 #### Added
 
+- `PolicyDecoder` serves actual controlled suspensions through the shared fallible resolver, preserves native failures and bounded reports, and poisons execution after callback failure or unwind. Existing transports drive the adapter.
+
 - `storage::StorageBudget`, `OwnedStorage` and `SharedStorage` admit typed,
   fixed-size payload allocations before creating them and retain their charges
   through clones and subviews until the last backing owner drops. Byte and object
@@ -338,6 +340,8 @@ removes that whole class).
   row methods. A strided multi-strip regression checks exact output.
 
 ### Added
+
+- `ControlledIncrementalDecode` adds mandatory interpretation suspensions, scoped replies and fused enforcement independently of metadata events (`050069b1`). `Question::Boundary` supplies typed mechanisms and finality facts to the existing resolver; native codec qualification remains explicit.
 
 - `operation::{DecodeRequest, EncodeRequest, OperationError}` store required
   policy, output descriptor and fidelity choices, then validate them automatically

@@ -113,8 +113,10 @@ trait PolicyResolver {
     fn resolve(&mut self, question: Question<'_>) -> Result<Decision, At<Self::Error>>;
 }
 enum Question<'a> { // non_exhaustive
+    Boundary { facts: InterpretationFacts, choices: Choices<'a, BoundaryOffer> },
     Encode { facts: EncodeFacts, choices: Choices<'a, EncodeOffer> },
 }
+struct BoundaryOffer { action: BoundaryAction }
 struct EncodeFacts { width: u32, height: u32, descriptor: PixelDescriptor }
 struct EncodeOffer { format: ImageFormat, fidelity: Option<Fidelity>, preference_index: usize }
 struct ChoiceId { /* opaque, scoped to one question */ }
@@ -159,7 +161,9 @@ This does not make uncooperative native encoding preemptible.
 
 `OperationReport` keeps the latest 16 `DecisionRecord`s and counts omitted older
 records. A record carries question identity, offer count, selected typed contract
-(`Selection::Encode(EncodeOffer)`), preset delegation and `DecisionCode`.
+(`Selection::Encode(EncodeOffer)` or `Selection::Boundary { action, facts }`),
+preset delegation and `DecisionCode`. Adapters append records with
+`OperationReport::record(record)`.
 Success returns this report with the output; native execution failure retains it
 in `OperationError::Execution`. `PolicyFailure::record()` identifies refusal,
 stale choice, callback failure or cancellation. Default policy-failure formatting
@@ -167,9 +171,44 @@ excludes application error payloads; explicit source/trace inspection can reveal
 them. Native codec errors keep their codec's own formatting.
 
 The full implementation target and current gaps are recorded in
-[ideal-api.md](ideal-api.md). The production resolver currently executes the
-encode-configuration domain. Metadata obligations, coherent conversion routes
-and native suspension still require their own executing adapters.
+[ideal-api.md](ideal-api.md). The production resolver serves prepared encoder configuration and mandatory
+interpretation boundaries. Metadata obligations, coherent conversion routes
+and each native codec still require qualification.
+
+## Controlled decode adapters
+
+The [controlled protocol](controlled-decoding.md) adds
+`ControlledIncrementalDecode::step_controlled` and `resume` alongside the
+legacy incremental methods. `ControlledProgress::Suspended` holds an opaque
+`BoundaryId` and `InterpretationFacts`; it is separate from `Event::Metadata`
+and from byte `Request`s. `erase_controlled` preserves native errors and enforces
+suspension, cancellation and terminal failures through `Fused`.
+
+```rust
+// zencodec::operation: adapter entry point, not a caller coordination step
+fn resolve_boundary<R: PolicyResolver + ?Sized>(
+    boundary: DecodeBoundary,
+    resolver: &mut R,
+    preset: PolicySet,
+    stop: &dyn Stop,
+) -> Result<(BoundaryAction, DecisionRecord), At<PolicyFailure>>;
+
+// zencodec_io: runs with the existing slice/read-at/stream/async drivers
+struct PolicyDecoder<D, R> { /* private */ }
+impl<D, R> PolicyDecoder<D, R> {
+    fn new(decoder: D, resolver: R) -> Self;
+    fn with_policy_set(self, preset: PolicySet) -> Self;
+    fn report(&self) -> &OperationReport;
+}
+```
+
+`PolicyDecoder` owns the controlled decoder and callback. It answers a real
+suspension, resumes that same decoder with the selected action, then returns to
+the driver before more native work. It keeps its report after a driver error
+and is terminal after callback failure or caught unwind. `ContinueReading`
+keeps affected output blocked; unavailable facts offer no valid action and
+normally produce a traced refusal. Neither action certifies native workspace
+or metadata disclosure safety.
 
 ## Encode traits
 

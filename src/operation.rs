@@ -17,8 +17,9 @@ use zenpixels::{PixelDescriptor, PixelSlice};
 
 mod policy;
 pub use policy::{
-    Choice, ChoiceId, Choices, Decision, DecisionCode, DecisionRecord, Decline, EncodeFacts,
-    EncodeOffer, OperationReport, PolicyFailure, PolicyResolver, PolicySet, Question, Selection,
+    BoundaryOffer, Choice, ChoiceId, Choices, Decision, DecisionCode, DecisionRecord, Decline,
+    EncodeFacts, EncodeOffer, OperationReport, PolicyFailure, PolicyResolver, PolicySet, Question,
+    Selection, resolve_boundary,
 };
 
 /// Successful output and the decisions that selected its permitted contract.
@@ -425,7 +426,7 @@ impl EncodeRequest {
                 .at_named("resolve encode route")
         })?;
         let mut report = OperationReport::default();
-        report.push(record);
+        report.record(record);
         let job = jobs.swap_remove(selected);
         // Release unselected jobs before starting the chosen codec. The chosen
         // configuration is exactly the prepared object described by its offer.

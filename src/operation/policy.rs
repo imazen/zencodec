@@ -1,5 +1,6 @@
 //! Application decisions over immutable, prepared alternatives.
 
+use crate::decode::{BoundaryAction, DecodeBoundary, InterpretationFacts, InterpretationState};
 use crate::{At, ImageFormat, encode::Fidelity};
 use alloc::boxed::Box;
 use core::{
@@ -106,6 +107,22 @@ pub struct EncodeOffer {
 pub enum Selection {
     /// The selected prepared encoder configuration.
     Encode(EncodeOffer),
+    /// The selected mechanism at a mandatory interpretation suspension.
+    Boundary {
+        /// Mechanism selected for these facts.
+        action: BoundaryAction,
+        /// Interpretation state and output geometry at the suspension.
+        facts: InterpretationFacts,
+    },
+}
+
+/// A mechanism offered at a real decoder suspension. Continuing discovery
+/// keeps affected output blocked; this offer makes no native memory claim.
+#[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
+pub struct BoundaryOffer {
+    /// Mechanism the suspended decoder will execute after this decision.
+    pub action: BoundaryAction,
 }
 
 /// Facts about the actual pixels awaiting encoding.
@@ -127,6 +144,13 @@ pub struct EncodeFacts {
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum Question<'a> {
+    /// Decide what to do before effects under newly discovered interpretation.
+    Boundary {
+        /// Facts about proposed output, excluding metadata payloads.
+        facts: InterpretationFacts,
+        /// Only mechanisms permitted by these facts.
+        choices: Choices<'a, BoundaryOffer>,
+    },
     /// Select a prepared encoder configuration for these pixels.
     Encode {
         /// Input facts; no pixel bytes or metadata payloads are exposed here.
@@ -220,7 +244,15 @@ impl PolicySet {
 impl PolicyResolver for PolicySet {
     type Error = Infallible;
     fn resolve(&mut self, question: Question<'_>) -> Result<Decision, At<Infallible>> {
-        let Question::Encode { choices, .. } = question;
+        let choices = match question {
+            Question::Encode { choices, .. } => choices,
+            Question::Boundary { choices, .. } => {
+                return Ok(choices
+                    .first()
+                    .map(Decision::choose)
+                    .unwrap_or_else(|| Decision::decline(Decline::NoPreferredChoice)));
+            }
+        };
         let choice = if self.prefer_lossless {
             choices
                 .iter()
@@ -286,7 +318,8 @@ impl OperationReport {
     pub const fn dropped_decisions(&self) -> u64 {
         self.dropped
     }
-    pub(super) fn push(&mut self, record: DecisionRecord) {
+    /// Append an adapter's decision, retaining only the bounded recent history.
+    pub fn record(&mut self, record: DecisionRecord) {
         if self.count == self.records.len() {
             self.records.rotate_left(1);
             self.count -= 1;
@@ -370,6 +403,60 @@ pub(super) fn choose_encode<R: PolicyResolver + ?Sized>(
     facts: EncodeFacts,
     offers: &[EncodeOffer],
     resolver: &mut R,
+    preset: PolicySet,
+    stop: &dyn Stop,
+) -> Result<(usize, DecisionRecord), At<PolicyFailure>> {
+    choose(
+        offers,
+        |choices| Question::Encode { facts, choices },
+        Selection::Encode,
+        resolver,
+        preset,
+        stop,
+    )
+}
+
+/// Resolve a real decoder boundary through the operation's one policy
+/// interface. Adapter API: the caller must apply the returned mechanism to this
+/// same suspended decoder and retain the decision record, including on failure.
+pub fn resolve_boundary<R: PolicyResolver + ?Sized>(
+    boundary: DecodeBoundary,
+    resolver: &mut R,
+    preset: PolicySet,
+    stop: &dyn Stop,
+) -> Result<(BoundaryAction, DecisionRecord), At<PolicyFailure>> {
+    let facts = boundary.facts();
+    let action = match facts.state {
+        InterpretationState::Pending | InterpretationState::Provisional => {
+            BoundaryAction::ContinueReading
+        }
+        _ => BoundaryAction::AdoptInterpretation,
+    };
+    let offers = [BoundaryOffer { action }];
+    let offers = if action.permits(facts) {
+        &offers[..]
+    } else {
+        &offers[..0]
+    };
+    let (index, record) = choose(
+        offers,
+        |choices| Question::Boundary { facts, choices },
+        |offer| Selection::Boundary {
+            action: offer.action,
+            facts,
+        },
+        resolver,
+        preset,
+        stop,
+    )?;
+    Ok((offers[index].action, record))
+}
+
+fn choose<'a, T: Copy, R: PolicyResolver + ?Sized>(
+    offers: &'a [T],
+    question: impl FnOnce(Choices<'a, T>) -> Question<'a>,
+    selection: impl FnOnce(T) -> Selection,
+    resolver: &mut R,
     mut preset: PolicySet,
     stop: &dyn Stop,
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>> {
@@ -380,7 +467,7 @@ pub(super) fn choose_encode<R: PolicyResolver + ?Sized>(
         used_preset: false,
         code: DecisionCode::Exhausted,
     };
-    if offers.is_empty() || offers.len() > MAX_OFFERS {
+    if offers.len() > MAX_OFFERS {
         return Err(At::wrap(PolicyFailure::new(record, Cause::Framework)).at());
     }
     record.question = ticket(&NEXT_QUESTION)
@@ -393,7 +480,7 @@ pub(super) fn choose_encode<R: PolicyResolver + ?Sized>(
         ticket: record.question,
         entries: offers,
     };
-    let question = Question::Encode { facts, choices };
+    let question = question(choices);
     // The resolver acquires no resource-budget locks. Prepared jobs remain
     // owned by the caller of this function while application code runs.
     let mut decision = resolver.resolve(question).map_err(|error| {
@@ -414,7 +501,7 @@ pub(super) fn choose_encode<R: PolicyResolver + ?Sized>(
     match decision {
         Decision::Choose(id) => match choices.selected(id) {
             Some(index) => {
-                record.selected = Some(Selection::Encode(offers[index]));
+                record.selected = Some(selection(offers[index]));
                 record.code = DecisionCode::Selected;
                 Ok((index, record))
             }
@@ -435,6 +522,75 @@ pub(super) fn choose_encode<R: PolicyResolver + ?Sized>(
 mod tests {
     use super::*;
     #[test]
+    fn boundaries_refuse_unavailable_facts_and_cross_domain_choice_tokens() {
+        let unavailable = DecodeBoundary::new(InterpretationFacts::new(
+            2,
+            3,
+            None,
+            InterpretationState::Unavailable,
+        ))
+        .unwrap();
+        let mut called = false;
+        let error = resolve_boundary(
+            unavailable,
+            &mut |question: Question<'_>| -> Result<Decision, At<Infallible>> {
+                let Question::Boundary { choices, .. } = question else {
+                    panic!("wrong domain")
+                };
+                called = true;
+                assert!(choices.is_empty());
+                Ok(Decision::UsePreset)
+            },
+            PolicySet::new(),
+            &enough::Unstoppable,
+        )
+        .unwrap_err();
+        assert!(called);
+        assert_eq!(error.error().record().code, DecisionCode::Declined);
+        assert_eq!(error.error().record().offered, 0);
+
+        let mut token = None;
+        choose_encode(
+            EncodeFacts {
+                width: 2,
+                height: 3,
+                descriptor: PixelDescriptor::RGB8_SRGB,
+            },
+            &[EncodeOffer {
+                format: ImageFormat::Jpeg,
+                fidelity: None,
+                preference_index: 0,
+            }],
+            &mut |question: Question<'_>| -> Result<Decision, At<Infallible>> {
+                let Question::Encode { choices, .. } = question else {
+                    panic!("wrong domain")
+                };
+                token = Some(choices.first().unwrap().id());
+                Ok(Decision::UsePreset)
+            },
+            PolicySet::new(),
+            &enough::Unstoppable,
+        )
+        .unwrap();
+        let final_facts = DecodeBoundary::new(InterpretationFacts::new(
+            2,
+            3,
+            Some(PixelDescriptor::RGB8_SRGB),
+            InterpretationState::Final,
+        ))
+        .unwrap();
+        let error = resolve_boundary(
+            final_facts,
+            &mut |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+                Ok(Decision::Choose(token.unwrap()))
+            },
+            PolicySet::new(),
+            &enough::Unstoppable,
+        )
+        .unwrap_err();
+        assert_eq!(error.error().record().code, DecisionCode::InvalidChoice);
+    }
+    #[test]
     fn question_identity_never_wraps() {
         let counter = AtomicUsize::new(usize::MAX - 1);
         assert_eq!(ticket(&counter), Some((usize::MAX - 1) as u64));
@@ -446,7 +602,7 @@ mod tests {
     fn journal_retains_recent_decisions_and_reports_omissions() {
         let mut report = OperationReport::default();
         for question in 1..=20 {
-            report.push(DecisionRecord {
+            report.record(DecisionRecord {
                 question,
                 offered: 1,
                 selected: None,
