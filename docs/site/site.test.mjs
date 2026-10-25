@@ -71,3 +71,23 @@ test('unlisted migration map separates release states and deploys with the guide
   assert.ok(page.includes('data-example="convert_display"'));
   assert.ok(page.includes('data-example="convert_framebuffer"'));
 });
+
+test('checked API page links executable examples and actual signatures for each role',async()=>{
+  const page=await readFile(new URL('ideal.html',root),'utf8');
+  assert.ok(html.includes('href="ideal.html"'));
+  const ids=[...page.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);
+  assert.equal(new Set(ids).size,ids.length);
+  for(const role of ['consumer','adapter','implementor','target'])assert.ok(ids.includes(role));
+  for(const [,url] of page.matchAll(/(?:href|src)="([^"]+)"/g)) {
+    if(url.startsWith('#')){assert.ok(ids.includes(url.slice(1)),url);continue;}
+    if(url.startsWith('https://')||url==='data:,')continue;
+    assert.ok(!url.includes('..'),url);
+    assert.ok((await stat(new URL(url,root))).isFile(),url);
+  }
+  assert.ok(page.includes('docs/examples/checked_operations.rs'));
+  assert.ok(page.includes('perf/jpeg-policy-validation/src/checked_examples.rs'));
+  assert.ok(page.includes('data-api="operationResolver"'));
+  assert.ok(page.includes('data-api="operationControl"'));
+  assert.ok(page.includes('qualification gaps'));
+  assert.ok(!page.includes('prototype::PolicyResolver'));
+});

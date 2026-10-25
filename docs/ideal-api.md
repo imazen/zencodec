@@ -115,3 +115,35 @@ core lint and public API snapshots passed. Resource-wrapper receipt for
 `just operation-send-integration`: rc=0, 10 s, peak RSS 0.33 GiB, minimum
 available 16869 MiB, peak load 0.51. This is test-process usage, not a codec
 workspace bound.
+
+## Executable API guide (2026-10-25)
+
+The documentation build now produces `ideal.html`, linked as **Checked API**.
+It separates consumer, adapter and implementor interfaces and distinguishes
+implemented review changes from the remaining 0.3 target. The independent
+migration page remains unlisted. The new page's one-line calls grow into an
+explicit sRGB export, a conditional tenant policy, positional-file input and
+async byte demand. Imports and return context expand independently inline.
+
+The displayed Rust is `docs/examples/checked_operations.rs`, executed directly
+by the pinned native harness. All 26 native JPEG/conversion scenarios passed;
+the guide case covers baseline/progressive source, default P3 preservation,
+metadata exclusion, a traced tenant refusal and identical file/async results.
+Strict harness Clippy passed after simplifying the example's conditional.
+`just docs-checked-examples` receipt: rc=0, 1 s, peak RSS 0.51 GiB, minimum
+available 17664 MiB, peak load 0.27. These are test-process observations.
+
+Core signatures are extracted from current source. The companion integration
+signatures retain parameter names and public imports, captured from the exact
+commit used by the compiled examples (`just checked-guide-api CHECKOUT COMMIT`).
+The build rejects a revision/checksum mismatch. Browser checks cover exact
+clipboard content, independent context expansion, keyboard navigation and
+390/768/1440 px layouts with expanded signatures. Receipt for `just
+docs-site-browser-check`: rc=0, 11 s, peak RSS 0.19 GiB, minimum available
+16901 MiB, peak load 0.77. This is browser-test usage, not application memory.
+
+Executing the default example exposed the P3 carrier-authority and packed
+palette precision regressions fixed in the coupled adapter. Native PNG checked
+verbatim emission is on [PR 46](https://github.com/imazen/zenpng/pull/46).
+The broader content-dependent fidelity contract remains
+[104](https://github.com/imazen/zencodec/issues/104).
