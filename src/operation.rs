@@ -323,6 +323,32 @@ impl PreparedEncode {
     }
 }
 
+/// A prepared encoder job with compile-time thread-transfer capability.
+///
+/// The same checked requirements and offer as `PreparedEncode`, retaining Send
+/// until native encoder construction. Created by `EncodeRequest::prepare_send`.
+pub struct PreparedSendEncode {
+    offer: EncodeOffer,
+    job: Box<dyn crate::encode::DynEncodeJob + Send>,
+}
+impl fmt::Debug for PreparedSendEncode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PreparedSendEncode")
+            .field("offer", &self.offer)
+            .finish_non_exhaustive()
+    }
+}
+impl PreparedSendEncode {
+    /// Confirmed configuration, with the original preference index.
+    pub const fn offer(&self) -> EncodeOffer {
+        self.offer
+    }
+    /// Transfer the same job, retaining its Send guarantee.
+    pub fn into_job(self) -> Box<dyn crate::encode::DynEncodeJob + Send> {
+        self.job
+    }
+}
+
 /// Reusable requirements for encoding pixels with a registered template.
 ///
 /// A fidelity target is checked at configuration time. This confirms the
@@ -389,6 +415,33 @@ impl EncodeRequest {
     /// objects executed after selection. This method never calls a resolver.
     #[track_caller]
     pub fn prepare(&self, codecs: &CodecSet) -> Result<Vec<PreparedEncode>, At<OperationError>> {
+        self.prepare_with(codecs, |offer| {
+            codecs
+                .checked_encode_job(self.format, offer.fidelity, self.policy)
+                .map(|job| PreparedEncode { offer, job })
+        })
+    }
+
+    /// Prepare transferable jobs for an adapter that holds them across awaits.
+    /// The selected registry entry must use `CodecSet::with_send_encoder`.
+    /// Refusal occurs during preparation, before the adapter consumes input.
+    #[track_caller]
+    pub fn prepare_send(
+        &self,
+        codecs: &CodecSet,
+    ) -> Result<Vec<PreparedSendEncode>, At<OperationError>> {
+        self.prepare_with(codecs, |offer| {
+            codecs
+                .checked_send_encode_job(self.format, offer.fidelity, self.policy)
+                .map(|job| PreparedSendEncode { offer, job })
+        })
+    }
+
+    fn prepare_with<T>(
+        &self,
+        codecs: &CodecSet,
+        mut create: impl FnMut(EncodeOffer) -> Result<T, CodecSetError>,
+    ) -> Result<Vec<T>, At<OperationError>> {
         let targets = match &self.fidelity {
             FidelityRequest::Template => None,
             FidelityRequest::Required(target) => Some(core::slice::from_ref(target)),
@@ -429,17 +482,12 @@ impl EncodeRequest {
                 .check()
                 .map_err(|reason| failure(OperationError::Stopped(reason)))?;
             let fidelity = targets.map(|targets| targets[index]);
-            match codecs.checked_encode_job(self.format, fidelity, self.policy) {
-                Ok(job) => {
-                    jobs.push(PreparedEncode {
-                        offer: EncodeOffer {
-                            format: self.format,
-                            fidelity,
-                            preference_index: index,
-                        },
-                        job,
-                    });
-                }
+            match create(EncodeOffer {
+                format: self.format,
+                fidelity,
+                preference_index: index,
+            }) {
+                Ok(job) => jobs.push(job),
                 Err(cause) => rejections.push(RouteRejection {
                     preference_index: index,
                     fidelity,

@@ -356,6 +356,12 @@ None.
 
 - Coupled transcode choices in the shared policy resolver, with typed metadata treatment, opaque-profile retention and scoped storage facts. Configurable presets reject unknown workspace bounds and missing privacy evidence; final interpretation and fresh choice tokens are required. Adapters retain the prepared route and validate output before constructing its outcome.
 
+- `CodecSet::with_send_encoder`, `EncodeRequest::prepare_send` and
+  `PreparedSendEncode` retain thread-transfer capability through job erasure.
+  Registration checks the concrete job's `Send` bound without restricting
+  existing thread-affine jobs. Preparation refuses unqualified registrations
+  before source consumption; shared configuration checking and exact retained
+  job identity are covered by a real thread-transfer test.
 - `EncodeRequest::prepare` retains checked jobs for an adapter's coupled decision.
   Ordinary encoding uses the same preparation. `PreparedEncode` exposes the
   confirmed offer and transfers the original job without reconstructing it.

@@ -231,6 +231,7 @@ operation-sync export:
     mkdir -p "{{export}}/src/operation"
     cp src/operation.rs src/lib.rs src/set.rs src/info.rs "{{export}}/src/"
     cp src/operation/*.rs "{{export}}/src/operation/"
+    cp src/traits/dyn_encoding.rs src/traits/mod.rs "{{export}}/src/traits/"
     cp zencodec-testkit/tests/operation_*.rs "{{export}}/zencodec-testkit/tests/"
     cp justfile "{{export}}/justfile"
 
@@ -495,3 +496,15 @@ transcode-policy-check:
     just operation-policy-check
     cargo clippy -p zencodec --all-targets --locked -- -D warnings
     cargo check -p zencodec --no-default-features --locked
+
+operation-send-check:
+    cargo test -p zencodec-testkit --test operation_requests --test operation_policy --locked
+    cargo clippy -p zencodec --all-targets --locked -- -D warnings
+    cargo check -p zencodec --no-default-features --locked
+
+# Preserve checked preparation across erasure and review the additive surface.
+operation-send-integration:
+    just operation-send-check
+    cargo test --workspace --locked
+    cargo clippy -p zencodec-testkit --test operation_policy --locked -- -D warnings
+    just api-doc

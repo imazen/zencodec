@@ -6,25 +6,25 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2420 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 144 lines (144 hidden + 0 excluded-feature)
+# files: zencodec.txt 2428 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 144 lines (144 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                16
-#   pub types (struct/enum/trait/alias)       269
-#   pub consts/statics                        279
+#   pub types (struct/enum/trait/alias)       270
+#   pub consts/statics                        280
 #   free functions                             80
-#   inherent methods                          959
+#   inherent methods                          962
 #   struct fields                             300
-#   enum variants                             374
+#   enum variants                             375
 #   re-exports                                 15
-#   trait roster entries (type × trait)       739
+#   trait roster entries (type × trait)       740
 #   conditional trait impls (verbatim)          8
 #   auto-trait-complete types                 130
-#   auto-trait exceptions                      27
+#   auto-trait exceptions                      28
 #
 # per-module pub lines:
-#   (root)                          925
+#   (root)                          928
 #   animation                        11
 #   decode                          282
 #   encode                          186
@@ -35,13 +35,13 @@
 #   icc                               1
 #   inventory                       103
 #   metadata_rewrite                 58
-#   operation                       119
+#   operation                       122
 #   prelude                         230
 #   source                           37
 #   storage                          34
 #   time                             22
 
-## items (2214 lines)
+## items (2220 lines)
 
 pub mod zencodec
 pub use At
@@ -1270,6 +1270,7 @@ pub fn operation::EncodeRequest::encode_with<R: operation::PolicyResolver + ?cor
 pub const fn operation::EncodeRequest::new(ImageFormat) -> Self
 pub fn operation::EncodeRequest::preferring_fidelity(self, impl core::convert::Into<alloc::vec::Vec<encode::Fidelity>>) -> Self
 pub fn operation::EncodeRequest::prepare(&self, &CodecSet) -> core::result::Result<alloc::vec::Vec<operation::PreparedEncode>, whereat::at::At<operation::OperationError>>
+pub fn operation::EncodeRequest::prepare_send(&self, &CodecSet) -> core::result::Result<alloc::vec::Vec<operation::PreparedSendEncode>, whereat::at::At<operation::OperationError>>
 pub fn operation::EncodeRequest::with_fidelity(self, encode::Fidelity) -> Self
 pub const fn operation::EncodeRequest::with_policy(self, encode::EncodePolicy) -> Self
 pub const fn operation::EncodeRequest::with_policy_set(self, operation::PolicySet) -> Self
@@ -1295,6 +1296,9 @@ pub const fn operation::PolicySet::with_workspace_limit(self, u64) -> Self
 pub struct operation::PreparedEncode
 pub fn operation::PreparedEncode::into_job(self) -> alloc::boxed::Box<dyn encode::DynEncodeJob>
 pub const fn operation::PreparedEncode::offer(&self) -> operation::EncodeOffer
+pub struct operation::PreparedSendEncode
+pub fn operation::PreparedSendEncode::into_job(self) -> alloc::boxed::Box<(dyn encode::DynEncodeJob + core::marker::Send)>
+pub const fn operation::PreparedSendEncode::offer(&self) -> operation::EncodeOffer
 pub struct operation::RouteRejection
 pub operation::RouteRejection::cause: CodecSetError
 pub operation::RouteRejection::fidelity: core::option::Option<encode::Fidelity>
@@ -1649,6 +1653,7 @@ pub CicpEmission::WhereverSupported
 #[non_exhaustive] pub enum CodecSetError
 pub CodecSetError::Cancelled
 pub CodecSetError::Codec(encode::BoxedError)
+pub CodecSetError::EncoderJobNotSend(ImageFormat)
 pub CodecSetError::NoDecoder(ImageFormat)
 pub CodecSetError::NoEncoder(ImageFormat)
 pub CodecSetError::TranscodeRequiresExplicitHandling(TranscodeBarrier)
@@ -1936,6 +1941,7 @@ pub fn CodecSet::with_encode_policy(self, encode::EncodePolicy) -> Self
 pub fn CodecSet::with_encoder<C>(self, C) -> Self where C: encode::EncoderConfig + 'static, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::Enc: encode::Encoder + core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::AnimationFrameEnc: encode::AnimationFrameEncoder
 pub fn CodecSet::with_limits(self, ResourceLimits) -> Self
 pub fn CodecSet::with_pulse(self, how_far::pulse::SharedPulse) -> Self
+pub fn CodecSet::with_send_encoder<C>(self, C) -> Self where C: encode::EncoderConfig + 'static, <C as encode::EncoderConfig>::Job: core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::Enc: encode::Encoder + core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::AnimationFrameEnc: encode::AnimationFrameEncoder
 pub fn CodecSet::with_stop(self, almost_enough::stop_token::StopToken) -> Self
 pub struct CodecSetIncrementalDecoder
 pub fn CodecSetIncrementalDecoder::new(CodecSet, &[zenpixels::descriptor::PixelDescriptor]) -> Self
@@ -2258,7 +2264,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (170 types)
+## trait impls (171 types)
 
 &mut D: decode::ControlledIncrementalDecode, decode::IncrementalDecode
 &mut S: source::DynReadAt
@@ -2413,6 +2419,7 @@ operation::Outcome<T>: Debug, Deref
 operation::PolicyFailure: Debug, Display, Error
 operation::PolicySet: Clone, Copy, Debug, Default, operation::PolicyResolver
 operation::PreparedEncode: Debug
+operation::PreparedSendEncode: Debug
 operation::Question<'a>: Clone, Copy, Debug
 operation::RouteRejection: Debug
 operation::Selection: Clone, Copy, Debug
@@ -2465,6 +2472,7 @@ operation::OperationError: !RefUnwindSafe !UnwindSafe
 operation::Outcome<T>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 operation::PolicyFailure: !RefUnwindSafe !UnwindSafe
 operation::PreparedEncode: !RefUnwindSafe !Send !Sync !UnwindSafe
+operation::PreparedSendEncode: !RefUnwindSafe !Sync !UnwindSafe
 operation::RouteRejection: !RefUnwindSafe !UnwindSafe
 source::ReadAtShim<S>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 storage::OwnedStorage<T>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe

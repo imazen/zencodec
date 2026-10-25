@@ -103,10 +103,16 @@ where
     }
 }
 
-trait EncoderEntry: DynEncoderConfig {
+trait EncoderEntry: Send + Sync {
     fn clone_entry(&self) -> Box<dyn EncoderEntry>;
     fn with_fidelity_entry(self: Box<Self>, fidelity: Fidelity) -> Box<dyn EncoderEntry>;
     fn as_dyn(&self) -> &dyn DynEncoderConfig;
+    fn send_job(
+        &self,
+        _fidelity: Option<Fidelity>,
+    ) -> Result<Box<dyn DynEncodeJob + Send>, CodecSetError> {
+        Err(CodecSetError::EncoderJobNotSend(self.as_dyn().format()))
+    }
 }
 
 impl<C> EncoderEntry for C
@@ -123,6 +129,41 @@ where
     }
     fn as_dyn(&self) -> &dyn DynEncoderConfig {
         self
+    }
+}
+
+// Registration captures Send while the concrete job type is still known.
+// Legacy entries remain available for thread-affine jobs.
+struct SendEncoderEntry<C>(C);
+impl<C> EncoderEntry for SendEncoderEntry<C>
+where
+    C: EncoderConfig + 'static,
+    C::Job: Send,
+    <C::Job as EncodeJob>::Enc: Encoder + Send,
+    <C::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
+{
+    fn clone_entry(&self) -> Box<dyn EncoderEntry> {
+        Box::new(Self(self.0.clone()))
+    }
+    fn with_fidelity_entry(self: Box<Self>, fidelity: Fidelity) -> Box<dyn EncoderEntry> {
+        Box::new(Self(self.0.with_fidelity(fidelity)))
+    }
+    fn as_dyn(&self) -> &dyn DynEncoderConfig {
+        &self.0
+    }
+    fn send_job(
+        &self,
+        fidelity: Option<Fidelity>,
+    ) -> Result<Box<dyn DynEncodeJob + Send>, CodecSetError> {
+        let config = match fidelity {
+            Some(target) => self
+                .0
+                .clone()
+                .try_with_fidelity(target)
+                .map_err(|error| CodecSetError::Codec(Box::new(error)))?,
+            None => self.0.clone(),
+        };
+        Ok(crate::traits::erase_send_job(config.job()))
     }
 }
 
@@ -155,6 +196,9 @@ pub enum CodecSetError {
     Cancelled,
     /// The selected codec failed.
     Codec(BoxedError),
+    /// A transferable job was required, but this entry used local registration.
+    /// Register it with `CodecSet::with_send_encoder` when its job is Send.
+    EncoderJobNotSend(ImageFormat),
 }
 
 /// Source property that the still-image transcode convenience cannot preserve.
@@ -182,6 +226,10 @@ impl fmt::Display for CodecSetError {
             }
             Self::Cancelled => f.write_str("operation cancelled"),
             Self::Codec(e) => write!(f, "codec error: {e}"),
+            Self::EncoderJobNotSend(format) => write!(
+                f,
+                "encoder job for {format} was not registered with with_send_encoder"
+            ),
         }
     }
 }
@@ -271,6 +319,22 @@ impl CodecSet {
         self
     }
 
+    /// Register an encoder whose prepared jobs may move between threads.
+    ///
+    /// Use this for async operations that retain a job across an I/O wait.
+    /// Existing `with_encoder` keeps supporting thread-affine jobs. Both have
+    /// the same first-registration-wins rule and work with synchronous calls.
+    pub fn with_send_encoder<C>(mut self, config: C) -> Self
+    where
+        C: EncoderConfig + 'static,
+        C::Job: Send,
+        <C::Job as EncodeJob>::Enc: Encoder + Send,
+        <C::Job as EncodeJob>::AnimationFrameEnc: AnimationFrameEncoder,
+    {
+        self.encoders.push(Box::new(SendEncoderEntry(config)));
+        self
+    }
+
     // --- Operation defaults -------------------------------------------------
 
     /// Resource limits stamped onto every job this set creates.
@@ -347,7 +411,7 @@ impl CodecSet {
 
     /// Formats with a registered encoder, in registration order.
     pub fn encodable_formats(&self) -> impl Iterator<Item = ImageFormat> + '_ {
-        self.encoders.iter().map(|e| e.format())
+        self.encoders.iter().map(|e| e.as_dyn().format())
     }
 
     /// Detect the input's format from magic bytes, consulting only formats
@@ -634,6 +698,28 @@ impl CodecSet {
                 .map_err(|e| CodecSetError::Codec(Box::new(e)))?,
             None => config.dyn_job(),
         };
+        self.stamp_checked_encode_job(&mut *job, policy)?;
+        Ok(job)
+    }
+
+    pub(crate) fn checked_send_encode_job(
+        &self,
+        format: ImageFormat,
+        fidelity: Option<Fidelity>,
+        policy: Option<EncodePolicy>,
+    ) -> Result<Box<dyn DynEncodeJob + Send>, CodecSetError> {
+        let entry = self
+            .encoder_entry(format)
+            .ok_or(CodecSetError::NoEncoder(format))?;
+        let mut job = entry.send_job(fidelity)?;
+        self.stamp_checked_encode_job(&mut *job, policy)?;
+        Ok(job)
+    }
+    fn stamp_checked_encode_job(
+        &self,
+        job: &mut dyn DynEncodeJob,
+        policy: Option<EncodePolicy>,
+    ) -> Result<(), CodecSetError> {
         if let Some(limits) = self.limits {
             job.set_limits(limits);
         }
@@ -645,7 +731,7 @@ impl CodecSet {
         if let Some(policy) = policy.or(self.encode_policy) {
             job.try_set_policy(policy)?;
         }
-        Ok(job)
+        Ok(())
     }
 
     // --- Encode -------------------------------------------------------------
@@ -910,7 +996,7 @@ impl CodecSet {
     fn encoder_entry(&self, format: ImageFormat) -> Option<&dyn EncoderEntry> {
         self.encoders
             .iter()
-            .find(|e| e.format() == format)
+            .find(|e| e.as_dyn().format() == format)
             .map(|b| &**b)
     }
 

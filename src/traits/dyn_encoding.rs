@@ -458,6 +458,15 @@ pub trait DynEncodeJob {
     ) -> Result<Box<dyn DynAnimationFrameEncoder>, BoxedError>;
 }
 
+pub(crate) fn erase_send_job<J>(job: J) -> Box<dyn DynEncodeJob + Send>
+where
+    J: EncodeJob + Send + 'static,
+    J::Enc: Encoder + Send,
+    J::AnimationFrameEnc: AnimationFrameEncoder,
+{
+    Box::new(EncodeJobShim(Some(job)))
+}
+
 struct EncodeJobShim<J>(Option<J>);
 
 impl<J> EncodeJobShim<J> {

@@ -57,3 +57,5 @@ use alloc::boxed::Box;
 /// Used by [`EncodeJob::dyn_encoder`], [`DecodeJob::dyn_decoder`], and
 /// related methods that erase the concrete codec type.
 pub type BoxedError = Box<dyn core::error::Error + Send + Sync>;
+
+pub(crate) use dyn_encoding::erase_send_job;

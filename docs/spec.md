@@ -79,6 +79,7 @@ impl EncodeRequest {
     const fn with_policy(self, policy: EncodePolicy) -> Self;
     const fn with_policy_set(self, preset: PolicySet) -> Self;
     fn prepare(&self, codecs: &CodecSet) -> Result<Vec<PreparedEncode>, At<OperationError>>;
+    fn prepare_send(&self, codecs: &CodecSet) -> Result<Vec<PreparedSendEncode>, At<OperationError>>;
     fn encode(&self, codecs: &CodecSet, pixels: PixelSlice<'_>) -> Result<Outcome<EncodeOutput>, At<OperationError>>;
     fn encode_with<R: PolicyResolver + ?Sized>(&self, codecs: &CodecSet,
         pixels: PixelSlice<'_>, resolver: &mut R) -> Result<Outcome<EncodeOutput>, At<OperationError>>;
@@ -87,6 +88,11 @@ struct PreparedEncode { /* private; Debug */ }
 impl PreparedEncode {
     const fn offer(&self) -> EncodeOffer;
     fn into_job(self) -> Box<dyn encode::DynEncodeJob>;
+}
+struct PreparedSendEncode { /* private; Debug + Send */ }
+impl PreparedSendEncode {
+    const fn offer(&self) -> EncodeOffer;
+    fn into_job(self) -> Box<dyn encode::DynEncodeJob + Send>;
 }
 struct Outcome<T> { /* private */ }
 impl<T> Outcome<T> { // Also Deref<Target = T>.
@@ -108,6 +114,13 @@ enum OperationError {
     OutputDescriptor { requested: PixelDescriptor, actual: PixelDescriptor },
 }
 ```
+
+Transferable preparation requires registration with
+`CodecSet::with_send_encoder(config)`, where `Config::Job: Send`. Ordinary
+`with_encoder` remains available for thread-affine jobs. Both registrations use
+the same first-registration-wins lookup and retain their behavior on set clones.
+The send path stamps the same required policy, limits and cancellation controls
+before exposing an offer; it does not rebuild the chosen job on another thread.
 
 ### One application resolver
 

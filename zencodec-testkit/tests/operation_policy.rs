@@ -146,6 +146,160 @@ fn setup() -> (Arc<Counts>, CodecSet, TestImage) {
         .with_stop(StopToken::new(Stop(counts.clone())));
     (counts, set, TestImage::rgb8_gradient(3, 2))
 }
+
+#[test]
+fn transferable_preparation_keeps_identity_fidelity_and_registration_on_clone() {
+    let counts = Arc::new(Counts::default());
+    let set = CodecSet::new().with_send_encoder(Control {
+        counts: counts.clone(),
+        target: None,
+    });
+    let jobs = request().prepare_send(&set.clone()).unwrap();
+    assert_eq!(jobs.len(), 2);
+    assert_eq!(jobs[0].offer().preference_index, 1);
+    assert_eq!(jobs[1].offer().preference_index, 2);
+    assert_eq!(counts.made.load(Ordering::SeqCst), 2);
+    assert_eq!(counts.executed.load(Ordering::SeqCst), 0);
+    let actual = std::thread::spawn(move || {
+        let mut jobs = jobs;
+        let selected = jobs.remove(1);
+        assert_eq!(selected.offer().fidelity, Some(Fidelity::Lossless));
+        drop(jobs);
+        selected
+            .into_job()
+            .into_encoder()
+            .unwrap()
+            .encode(TestImage::rgb8_gradient(3, 2).as_slice())
+            .unwrap()
+            .into_vec()
+    })
+    .join()
+    .unwrap();
+    assert_eq!(counts.made.load(Ordering::SeqCst), 2, "no reconstruction");
+    assert_eq!(counts.last_id.load(Ordering::SeqCst), 2);
+    assert_eq!(counts.dropped.load(Ordering::SeqCst), 2);
+    assert_eq!(counts.executed.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        actual,
+        ReferenceEncoderConfig::new()
+            .encode(TestImage::rgb8_gradient(3, 2).as_slice())
+            .unwrap()
+            .into_vec()
+    );
+    // A transferable registration also serves the existing synchronous path.
+    request().prepare(&set).unwrap();
+}
+
+#[test]
+fn transferable_preparation_checks_required_policy_and_cancellation() {
+    use zencodec::encode::EncodePolicy;
+    let (counts, _, _) = setup();
+    let set = CodecSet::new()
+        .with_send_encoder(Control {
+            counts: counts.clone(),
+            target: None,
+        })
+        .with_stop(StopToken::new(Stop(counts.clone())))
+        .with_encode_policy(EncodePolicy::none().with_strict(true));
+    let error = EncodeRequest::new(ImageFormat::Pnm)
+        .with_fidelity(Fidelity::Lossless)
+        .prepare_send(&set)
+        .unwrap_err();
+    assert_eq!(
+        zencodec::find_cause::<UnsupportedOperation>(&error),
+        Some(&UnsupportedOperation::EncodePolicy)
+    );
+    assert_eq!(counts.executed.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        counts.made.load(Ordering::SeqCst),
+        counts.dropped.load(Ordering::SeqCst)
+    );
+    request()
+        .with_policy(EncodePolicy::none())
+        .prepare_send(&set)
+        .unwrap();
+    let made = counts.made.load(Ordering::SeqCst);
+    counts.stop.store(true, Ordering::SeqCst);
+    assert!(matches!(
+        request().prepare_send(&set).unwrap_err().error(),
+        OperationError::Stopped(_)
+    ));
+    assert_eq!(counts.made.load(Ordering::SeqCst), made);
+}
+
+// The configuration is transferable; its freshly created job deliberately is not.
+#[derive(Clone)]
+struct ThreadAffine(Control);
+struct ThreadAffineJob {
+    inner: Job,
+    _local: std::rc::Rc<()>,
+}
+impl EncoderConfig for ThreadAffine {
+    type Error = RefError;
+    type Job = ThreadAffineJob;
+    fn format() -> ImageFormat {
+        ImageFormat::Pnm
+    }
+    fn supported_descriptors() -> &'static [PixelDescriptor] {
+        Control::supported_descriptors()
+    }
+    fn job(self) -> Self::Job {
+        ThreadAffineJob {
+            inner: self.0.job(),
+            _local: std::rc::Rc::new(()),
+        }
+    }
+}
+impl EncodeJob for ThreadAffineJob {
+    type Error = RefError;
+    type Enc = Enc;
+    type AnimationFrameEnc = ();
+    fn with_stop(self, _: StopToken) -> Self {
+        self
+    }
+    fn with_limits(self, _: ResourceLimits) -> Self {
+        self
+    }
+    #[allow(deprecated)]
+    fn with_metadata(mut self, metadata: Metadata) -> Self {
+        self.inner = self.inner.with_metadata(metadata);
+        self
+    }
+    fn encoder(self) -> Result<Enc, RefError> {
+        self.inner.encoder()
+    }
+    fn animation_frame_encoder(self) -> Result<(), RefError> {
+        Err(RefError::Unsupported(UnsupportedOperation::AnimationEncode))
+    }
+}
+
+#[test]
+fn thread_affine_jobs_remain_supported_and_first_registration_still_wins() {
+    let counts = Arc::new(Counts::default());
+    let control = Control {
+        counts: counts.clone(),
+        target: None,
+    };
+    let set = CodecSet::new()
+        .with_encoder(ThreadAffine(control.clone()))
+        .with_send_encoder(control);
+    let req = EncodeRequest::new(ImageFormat::Pnm);
+    for set in [&set, &set.clone()] {
+        let error = req.prepare_send(set).unwrap_err();
+        assert!(matches!(
+            zencodec::find_cause::<zencodec::CodecSetError>(&error),
+            Some(zencodec::CodecSetError::EncoderJobNotSend(ImageFormat::Pnm))
+        ));
+    }
+    assert_eq!(
+        counts.made.load(Ordering::SeqCst),
+        0,
+        "refusal precedes job creation"
+    );
+    req.encode(&set, TestImage::rgb8_gradient(3, 2).as_slice())
+        .unwrap();
+    assert_eq!(counts.executed.load(Ordering::SeqCst), 1);
+}
 fn request() -> EncodeRequest {
     EncodeRequest::new(ImageFormat::Pnm).preferring_fidelity(vec![
         Fidelity::codec_quality(25.0),
