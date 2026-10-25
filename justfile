@@ -231,3 +231,8 @@ io-admission-check:
 
 io-admission-bench cpus="2,3":
     taskset -c "{{cpus}}" cargo bench --manifest-path perf/io-validation/Cargo.toml -p io-validation --bench admission --locked -- --cpu-policy=unrestricted --median-of-passes=3
+
+# Native QOI with an explicit raw-retention control and a gated short writer.
+io-encoder-retention-check:
+    cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test encoder_retention --locked -- --nocapture
+    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --all-targets --locked -- -D warnings

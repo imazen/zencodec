@@ -174,17 +174,39 @@ shared color handoff.
 
 ## 5. Bound compute batches and preserve media order
 
-Propose one driver `WorkQuota` with maximum steps per compute batch and a soft
-pending-output-byte threshold. Drain output before another compute batch when
-either threshold is reached. Rows/packets can inform an application policy,
-but the shared driver should not interpret a video frame as a row batch.
-Use the existing `Stop`/`Pulse` cancellation boundary.
+Separate CPU fairness from transport backpressure. A maximum-steps `WorkQuota`
+may yield a worker without waiting for a client to read. Coupling further encode
+work to draining output is appropriate only for a configuration whose retained
+raw/intermediate state is bounded and whose upstream can stop supplying pixels.
+`OutputTiming::streaming`, a small output lag, or a codec-wide capability flag
+does not establish that ownership/release property.
+
+| Admitted operation | Scheduling policy |
+|---|---|
+| Verified sequential decode/encode with bounded retained state and pausable upstream | Bound pending encoded bytes and propagate a slow destination upstream; this is essential to keeping the whole pipeline bounded |
+| Encoder or caller already owns a complete raw image, coefficient planes or substantial lookahead | Prefer completing an admitted work unit and releasing that state into separately budgeted encoded storage before waiting on a slow destination |
+| Retention/release behavior unknown | Account the whole admitted job conservatively; do not infer a streaming memory guarantee or select output-coupled scheduling from early bytes alone |
+
+The encoded staging store needs its own byte/job cap or explicit disk-spool
+policy. A full store stops new admission; it does not authorize unlimited
+encode-ahead. Required capacity must be admitted before starting work that
+cannot safely suspend. Output backpressure still exists at that storage boundary.
+Cancellation and CPU fairness remain active in every mode.
+
+The [native QOI retention control](../benchmarks/io_encoder_retention_2026-10-25.md)
+demonstrates the distinction with real drivers: both wrappers report streaming
+output, but the deliberately retaining wrapper still owns 786432 raw bytes at
+the first blocked write. Completing to owned encoded output first releases them
+before that write. The non-retaining control owns no copied raw rows there.
+All three emit the same 4255 QOI bytes. This is an ownership counterexample,
+not evidence that native QOI retains a whole raster or a general spool solution.
 
 The 64-row/65536-byte experiment reduced the high-expansion fixture's first
 write from 1024 produced rows to 64 and pending output from 1048576 to 65536
 bytes. It used 18 pool jobs; yielding every row used 1026. QOI parity holds,
 but extra worker handoffs still cost time. These values are experiment points,
-not selected library defaults.
+not selected library defaults. They qualify that sequential workload only;
+they do not justify applying output-coupled scheduling to buffering encoders.
 
 A decoder step, encoder call or finalizer is indivisible to the driver. A
 single whole-frame step still queues 1048576 bytes in that experiment. Thus
@@ -192,6 +214,13 @@ single whole-frame step still queues 1048576 bytes in that experiment. Thus
 Native codecs must expose appropriate work units and enforce their own
 allocation/cancellation contracts. Required bounded operation must refuse an
 incompatible whole-file fallback before committing to it.
+
+Measure raw/intermediate ownership at a stalled writer, time until those
+allocations are released, peak allocated storage and aggregate occupancy across
+slow clients. First-byte latency and pending encoded bytes alone can reward a
+schedule that keeps much larger raw allocations alive. A caller-owned complete
+image also remains live while borrowed by a slow streaming call, even when the
+encoder itself is sequential. The operation plan must include that ownership.
 
 The tested `Ordered` candidate admits completions only in the next bounded
 ordinal window, preserving a slot for the missing head. Reserve the head's
@@ -227,7 +256,9 @@ Observed strip height alone cannot prove bounded internal memory.
 ## Scope of the next API review
 
 Start with `IoLimits`, a driver limit failure, checked `BufferPolicy` selection,
-and `WorkQuota` in `zencodec-io`. Keep range plans, shared leases, HTTP validation
+and a CPU-fairness `WorkQuota` in `zencodec-io`. Output-coupled scheduling needs
+an explicit, configuration-specific admission policy; it is not the universal
+meaning of that quota. Keep range plans, shared leases, HTTP validation
 and completion scheduling private while integrating actual consumers. Leave
 codec signatures and the existing media payload/session APIs unchanged in that
 first review. Changes needed to propagate a lease into backend ownership are

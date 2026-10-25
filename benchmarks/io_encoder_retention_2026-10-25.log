@@ -1,0 +1,20 @@
+Library baseline 1d7e54bbcdeb45ce961fb68df018bcbb6100052c
+Native zenbitmaps 11fbd887985e59769d2aeb48295767b7d04209b9; Rust 1.99.1; r7900x
+run-heavy: mem-cap=12G (cgroup, hard) jobs=4/24 avail=16150MiB :: bash -c cargo fmt --manifest-path perf/io-validation/Cargo.toml -p io-validation && just io-encoder-retention-check
+cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test encoder_retention --locked -- --nocapture
+[1m[92m   Compiling[0m io-validation v0.0.0 (/home/lilith/tmp/zencodec-io-experiments-2026-10-24/source/perf/io-validation)
+[1m[92m    Finished[0m `test` profile [unoptimized + debuginfo] target(s) in 0.29s
+[1m[92m     Running[0m tests/encoder_retention.rs (target/debug/deps/encoder_retention-704c65f53525f4a0)
+
+running 1 test
+retain=true finish_first=false raw_bytes_at_stall=786432 finalized_at_stall=false encoded_bytes=4255 exact=true
+retain=true finish_first=true raw_bytes_at_stall=0 finalized_at_stall=true encoded_bytes=4255 exact=true
+retain=false finish_first=false raw_bytes_at_stall=0 finalized_at_stall=false encoded_bytes=4255 exact=true
+test output_timing_does_not_establish_raw_storage_release ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --all-targets --locked -- -D warnings
+[1m[92m    Checking[0m io-validation v0.0.0 (/home/lilith/tmp/zencodec-io-experiments-2026-10-24/source/perf/io-validation)
+[1m[92m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+run-heavy: done rc=0 0s | peak-RSS 0.19GiB | min-avail 16150MiB | peak-load 0.15
