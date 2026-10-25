@@ -245,3 +245,40 @@ pub fn coroutine_ranges(strip_rows: u32) -> Coro {
         },
     )
 }
+
+/// Same controlled operation with legacy or admitted input/row storage.
+/// The synthetic codec's own strip and the output sink are outside admission.
+pub fn coroutine_controlled(strip_rows: u32, input_cap: usize, admitted: bool) -> Coro {
+    let init = move |mut ctx: zencodec_coroutine::CoroutineContext| -> zencodec_coroutine::BoxFuture<SynError> {
+        Box::pin(async move {
+            let mut header = [0u8; HEADER];
+            ctx.read_exact(&mut header).await?;
+            let (w, h) = dims(&header);
+            ctx.set_info(ImageInfo::new(w, h, ImageFormat::Png));
+            ctx.set_output_descriptor(DESC);
+            ctx.interpretation(zencodec::decode::InterpretationFacts::new(w, h, Some(DESC), zencodec::decode::InterpretationState::Final)).await?;
+            let row = w as usize * 4;
+            let mut strip = vec![0u8; row * strip_rows as usize];
+            let mut y = 0;
+            while y < h {
+                let rows = (h - y).min(strip_rows);
+                let n = rows as usize * row;
+                ctx.read_exact(&mut strip[..n]).await?;
+                ctx.write_rows(BatchMeta::final_rows(y), &PixelSlice::new(&strip[..n], w, rows, row, DESC).unwrap()).await?;
+                y += rows;
+            }
+            Ok(OutputInfo::full_decode(w, h, DESC))
+        })
+    };
+    if admitted {
+        CoroutineDecoder::controlled_with_storage(
+            input_cap,
+            AccessPattern::Sequential,
+            zencodec::storage::StorageBudget::new(64 << 20, 3),
+            init,
+        )
+        .unwrap()
+    } else {
+        CoroutineDecoder::controlled(input_cap, AccessPattern::Sequential, init)
+    }
+}

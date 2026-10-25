@@ -62,3 +62,7 @@ required-features = ["std"]
 name = "transcode"
 harness = false
 required-features = ["tokio"]
+
+[[bench]]
+name = "coroutine_admission"
+harness = false

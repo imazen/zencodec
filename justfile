@@ -255,6 +255,17 @@ storage-cost-check:
 storage-cost-bench cpu="4":
     taskset -c {{cpu}} cargo bench --manifest-path perf/io-validation/Cargo.toml -p io-validation --bench admission --locked -- --cpu-policy=unrestricted --median-of-passes=3
 
+coroutine-cost-sync export:
+    just control-sync "{{export}}"
+    cp zencodec-io/Cargo.toml "{{export}}/zencodec-io/"
+    cp zencodec-io/benches/coroutine_admission.rs zencodec-io/benches/fixture.rs "{{export}}/zencodec-io/benches/"
+
+coroutine-cost-check:
+    cargo clippy -p zencodec-io --bench coroutine_admission --locked -- -D warnings
+
+coroutine-cost-bench cpu="4":
+    taskset -c {{cpu}} cargo bench -p zencodec-io --bench coroutine_admission --locked -- --cpu-policy=unrestricted --median-of-passes=3
+
 # Refresh an owned validation export without inheriting parent workspace patches.
 io-core-sync export:
     test ! -e "{{export}}/.git"
