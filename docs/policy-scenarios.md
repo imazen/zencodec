@@ -265,6 +265,26 @@ That view's length is not a claim about the caller's entire backing allocation.
 run-heavy: done rc=0 1s | peak-RSS 0.20GiB | min-avail 18479MiB | peak-load 0.14
 ```
 
+The native experiment now stores both halves in `Request::new(format, profile)`.
+`request.encode(...)` uses the configured resolver; `request.encode_with(...)`
+uses application code with that same configured fallback. `via_registry()` sends
+the same request through `CodecSet`. Native QOI/BMP controls verify identical
+output across these paths, the selected nondefault preset, and refusal of required
+rights retention before invoking a callback when the format has no carrier.
+This is a private consumer-shape experiment, not a newly supported library API.
+
+The operation report retains selected metadata/fidelity/execution alternatives
+and all three bounded decision records on success and on later failure. A
+callback failure at the second question retains the first selection and original
+application trace; a writer failure retains all selections and accepted-byte
+progress. Failed operation reports are boxed; successful reports do not require
+that box. A local closure can borrow non-Send application state. The callback
+itself is not required to be Send merely because its error is erasable.
+
+```text
+run-heavy: done rc=0 1s | peak-RSS 0.22GiB | min-avail 16587MiB | peak-load 0.62
+```
+
 ## Reproducible cost workload
 
 `just io-policy-cost-build` builds the shared policy workload for zenbench and

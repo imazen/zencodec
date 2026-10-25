@@ -180,6 +180,7 @@ fn native_setter_is_best_effort_but_checked_retention_refuses_before_encoding() 
             };
             let error = native::encode(
                 native::Request {
+                    preset: PolicySet::default(),
                     format,
                     erased,
                     requirements: req(Effects::RIGHTS),
@@ -220,6 +221,7 @@ fn typed_and_registered_operations_preserve_strided_pixels_and_call_order() {
             let mut output = Vec::new();
             let report = native::encode(
                 native::Request {
+                    preset: PolicySet::default(),
                     format,
                     erased,
                     requirements: req(Effects::LOSSLESS.union(Effects::NO_GPS)),
@@ -305,6 +307,7 @@ fn output_errors_keep_progress_and_native_causes_without_reencoding() {
             };
             let error = native::encode(
                 native::Request {
+                    preset: PolicySet::default(),
                     format: ImageFormat::Qoi,
                     erased,
                     requirements: req(Effects::LOSSLESS),
@@ -322,6 +325,19 @@ fn output_errors_keep_progress_and_native_causes_without_reencoding() {
                 if zero { 0 } else { 11 }
             );
             assert!(!error.error().report.output_complete);
+            let selected = &error.error().report.decisions;
+            assert_eq!(selected.metadata, Some(MetadataAction::KeepExact));
+            assert_eq!(
+                selected.fidelity,
+                Some(zencodec::encode::Fidelity::Lossless)
+            );
+            assert_eq!(selected.execution, Some(Execution::Buffered));
+            assert!(
+                selected
+                    .records
+                    .iter()
+                    .all(|r| r.unwrap().code == Code::Selected)
+            );
             assert_eq!(decisions, 3);
             let io = zencodec::find_cause::<io::Error>(&error).unwrap();
             if zero {
@@ -340,6 +356,7 @@ fn output_errors_keep_progress_and_native_causes_without_reencoding() {
     };
     native::encode(
         native::Request {
+            preset: PolicySet::default(),
             format: ImageFormat::Qoi,
             erased: false,
             requirements: req(Effects::LOSSLESS),
@@ -361,12 +378,142 @@ fn output_errors_keep_progress_and_native_causes_without_reencoding() {
 }
 
 #[test]
+fn one_stored_request_keeps_profile_requirements_and_its_configured_fallback() {
+    let fixture = fixture();
+    let profile = Profile {
+        requirements: req(Effects::LOSSLESS),
+        preset: PolicySet {
+            metadata: MetadataAction::DropDescriptive,
+            ..PolicySet::default()
+        },
+    };
+    for format in [ImageFormat::Qoi, ImageFormat::Bmp] {
+        let mut outputs = Vec::new();
+        for erased in [false, true] {
+            for custom in [false, true] {
+                let mut request = native::Request::new(format, profile);
+                if erased {
+                    request = request.via_registry();
+                }
+                let mut output = Vec::new();
+                // Captured application state need not be Send. Each operation
+                // borrows its own callback; no shared callback mutex is required.
+                let calls = std::rc::Rc::new(std::cell::Cell::new(0));
+                let mut resolver = |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+                    calls.set(calls.get() + 1);
+                    Ok(Decision::UsePreset)
+                };
+                let report = if custom {
+                    request.encode_with(
+                        pixels(&fixture),
+                        &Metadata::none(),
+                        &mut resolver,
+                        &mut output,
+                    )
+                } else {
+                    // EXAMPLE: policy_one_call
+                    // ANCHOR: policy_one_call
+                    request.encode(pixels(&fixture), &Metadata::none(), &mut output)
+                    // END: policy_one_call
+                    // END EXAMPLE: policy_one_call
+                }
+                .unwrap();
+                assert_eq!(calls.get(), if custom { 3 } else { 0 });
+                assert_eq!(
+                    report.decisions.metadata,
+                    Some(MetadataAction::DropDescriptive)
+                );
+                for r in report.decisions.records.into_iter().flatten() {
+                    assert_eq!(r.code, Code::Selected);
+                    assert_eq!(
+                        r.route,
+                        if custom {
+                            Route::Preset
+                        } else {
+                            Route::Resolver
+                        }
+                    );
+                }
+                outputs.push(output);
+            }
+            // A callback cannot remove the stored web profile's rights requirement.
+            let mut request = native::Request::new(format, Profile::web_exif());
+            if erased {
+                request = request.via_registry();
+            }
+            let mut called = false;
+            let mut resolver = |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+                called = true;
+                Ok(Decision::UsePreset)
+            };
+            let mut output = Vec::new();
+            let error = request
+                .encode_with(
+                    pixels(&fixture),
+                    &Metadata::none().with_copyright("Required"),
+                    &mut resolver,
+                    &mut output,
+                )
+                .unwrap_err();
+            assert!(!called);
+            assert!(output.is_empty());
+            let failure = zencodec::find_cause::<Failure<Infallible>>(&error).unwrap();
+            assert_eq!(failure.code(), Code::NoAlternative);
+            assert_eq!(
+                failure.details().unwrap().requirements,
+                Profile::web_exif().requirements
+            );
+            assert_eq!(
+                error.error().report.decisions.records[0].unwrap().code,
+                Code::NoAlternative
+            );
+        }
+        assert!(outputs.iter().all(|output| output == &outputs[0]));
+    }
+}
+
+#[test]
+fn late_callback_error_keeps_earlier_selections_and_the_original_trace() {
+    let fixture = fixture();
+    let mut calls = 0;
+    let mut resolver = |question: Question<'_>| -> Result<Decision, At<WriterBroke>> {
+        calls += 1;
+        if matches!(question, Question::Fidelity { .. }) {
+            return Err(At::wrap(WriterBroke).at_named("application fidelity rule"));
+        }
+        Ok(Decision::UsePreset)
+    };
+    let mut output = Vec::new();
+    let error = native::Request::new(ImageFormat::Qoi, Profile::exact_exif())
+        .via_registry()
+        .encode_with(
+            pixels(&fixture),
+            &Metadata::none(),
+            &mut resolver,
+            &mut output,
+        )
+        .unwrap_err();
+    assert!(output.is_empty());
+    assert_eq!(calls, 2);
+    assert!(zencodec::find_cause::<WriterBroke>(&error).is_some());
+    assert!(format!("{error:?}").contains("application fidelity rule"));
+    let decisions = &error.error().report.decisions;
+    assert_eq!(decisions.metadata, Some(MetadataAction::KeepExact));
+    assert!(decisions.fidelity.is_none());
+    assert!(decisions.execution.is_none());
+    assert_eq!(decisions.records[0].unwrap().code, Code::Selected);
+    assert_eq!(decisions.records[1].unwrap().code, Code::Callback);
+    assert!(decisions.records[2].is_none());
+}
+
+#[test]
 fn native_limit_failure_stays_a_codec_error_and_unknown_memory_refuses_before_callback() {
     let fixture = fixture();
     for erased in [false, true] {
         let mut output = Vec::new();
         let error = native::encode(
             native::Request {
+                preset: PolicySet::default(),
                 format: ImageFormat::Qoi,
                 erased,
                 requirements: req(Effects::LOSSLESS),
@@ -390,6 +537,7 @@ fn native_limit_failure_stays_a_codec_error_and_unknown_memory_refuses_before_ca
     assert!(
         native::encode(
             native::Request {
+                preset: PolicySet::default(),
                 format: ImageFormat::Qoi,
                 erased: false,
                 requirements: Requirements {
@@ -461,6 +609,7 @@ fn still_requests_reject_requirements_from_other_domains_instead_of_ignoring_the
     };
     let result = native::encode(
         native::Request {
+            preset: PolicySet::default(),
             format: ImageFormat::Qoi,
             erased: false,
             requirements: req(Effects::KEEP_TRACK),

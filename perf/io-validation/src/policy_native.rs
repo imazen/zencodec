@@ -2,7 +2,7 @@
 //! No whole-file privacy or whole-operation allocation claim is made here.
 #![allow(dead_code)]
 use crate::policy::*;
-use core::{error::Error, fmt};
+use core::{convert::Infallible, error::Error, fmt};
 use std::{
     io::{self, Write},
     sync::Arc,
@@ -28,6 +28,16 @@ pub(crate) struct Report {
     /// Accepted by Write, not a durability/remote-receipt assertion.
     pub accepted_bytes: u64,
     pub output_complete: bool,
+    pub decisions: Decisions,
+}
+/// Selected effects and boundary records survive both success and later failure.
+/// This still-image slice makes at most three decisions; it retains all of them.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct Decisions {
+    pub metadata: Option<MetadataAction>,
+    pub fidelity: Option<Fidelity>,
+    pub execution: Option<Execution>,
+    pub records: [Option<Record>; 3],
 }
 pub(crate) enum Cause<E> {
     Policy(Failure<E>),
@@ -35,7 +45,7 @@ pub(crate) enum Cause<E> {
     Other(Box<dyn Error + Send + Sync>),
 }
 pub(crate) struct RunError<E> {
-    pub report: Report,
+    pub report: Box<Report>,
     pub cause: Cause<E>,
 }
 pub(crate) type RunResult<T, E> = Result<T, At<RunError<E>>>;
@@ -43,7 +53,41 @@ pub(crate) struct Request {
     pub format: ImageFormat,
     pub erased: bool,
     pub requirements: Requirements,
+    pub preset: PolicySet,
     pub limits: ResourceLimits,
+}
+impl Request {
+    pub fn new(format: ImageFormat, profile: Profile) -> Self {
+        Self {
+            format,
+            erased: false,
+            requirements: profile.requirements,
+            preset: profile.preset,
+            limits: ResourceLimits::none(),
+        }
+    }
+    pub fn via_registry(mut self) -> Self {
+        self.erased = true;
+        self
+    }
+    pub fn encode(
+        self,
+        pixels: PixelSlice<'_>,
+        metadata: &Metadata,
+        writer: &mut impl Write,
+    ) -> RunResult<Report, Infallible> {
+        let mut preset = self.preset;
+        encode(self, pixels, metadata, &mut preset, writer)
+    }
+    pub fn encode_with<R: PolicyResolver + ?Sized>(
+        self,
+        pixels: PixelSlice<'_>,
+        metadata: &Metadata,
+        resolver: &mut R,
+        writer: &mut impl Write,
+    ) -> RunResult<Report, R::Error> {
+        encode(self, pixels, metadata, resolver, writer)
+    }
 }
 impl<E> fmt::Debug for RunError<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -70,11 +114,12 @@ impl<E: Error + 'static> Error for RunError<E> {
 }
 fn failure<E>(stage: Stage, cause: Cause<E>, bytes: u64) -> RunError<E> {
     RunError {
-        report: Report {
+        report: Box::new(Report {
             stage,
             accepted_bytes: bytes,
             output_complete: false,
-        },
+            decisions: Decisions::default(),
+        }),
         cause,
     }
 }
@@ -115,6 +160,21 @@ pub(crate) fn exif<R: PolicyResolver + ?Sized>(
     requirements: Requirements,
     resolver: &mut R,
 ) -> RunResult<Option<Arc<[u8]>>, R::Error> {
+    select_exif(engine, bytes, carrier, requirements, resolver).map(|resolved| resolved.packet)
+}
+
+struct ResolvedExif {
+    packet: Option<Arc<[u8]>>,
+    selection: Selected,
+}
+
+fn select_exif<R: PolicyResolver + ?Sized>(
+    engine: &mut Engine,
+    bytes: Option<&[u8]>,
+    carrier: bool,
+    requirements: Requirements,
+    resolver: &mut R,
+) -> RunResult<ResolvedExif, R::Error> {
     // Hard operation memory requirements cannot use this unqualified native
     // processing path. Refuse before parsing or constructing output packets.
     if requirements.ram.is_some() {
@@ -132,7 +192,10 @@ pub(crate) fn exif<R: PolicyResolver + ?Sized>(
                 resolver,
                 &Unstoppable,
             )
-            .map(|_| None)
+            .map(|selection| ResolvedExif {
+                packet: None,
+                selection,
+            })
             .map_err(policy_error);
     }
     let request = zencodec::metadata_rewrite::Request::new(b"")
@@ -202,7 +265,10 @@ pub(crate) fn exif<R: PolicyResolver + ?Sized>(
             &Unstoppable,
         )
         .map_err(policy_error)?;
-    Ok(packets.swap_remove(selected.index))
+    Ok(ResolvedExif {
+        packet: packets.swap_remove(selected.index),
+        selection: selected,
+    })
 }
 
 pub(crate) struct CountWriter<'a, W> {
@@ -242,145 +308,176 @@ pub(crate) fn encode<R: PolicyResolver + ?Sized>(
         format,
         erased,
         requirements,
+        preset,
         limits,
     } = request;
-    if requirements.effects.0 & !31 != 0 {
-        return Err(At::wrap(failure(
-            Stage::Configuration,
-            Cause::Metadata(zencodec::metadata_rewrite::Error::Unsupported(
-                "requirement outside still-image operation",
-            )),
-            0,
-        ))
-        .at());
-    }
-    // Scope is explicit: these controls accept EXIF only. No color/orientation
-    // conversion, XMP editor or HDR/gain-map handling is silently supplied.
-    if metadata.xmp.is_some()
-        || metadata.icc_profile.is_some()
-        || metadata.cicp.is_some()
-        || metadata.content_light_level.is_some()
-        || metadata.mastering_display.is_some()
-        || metadata.diffuse_white.is_some()
-        || metadata.orientation != zencodec::Orientation::Identity
-    {
-        return Err(At::wrap(failure(
-            Stage::Metadata,
-            Cause::Metadata(zencodec::metadata_rewrite::Error::Unsupported(
-                "unqualified metadata or orientation request",
-            )),
-            0,
-        ))
-        .at());
-    }
-    let mut engine = Engine::new(PolicySet::default(), 3);
-    let selected_metadata = exif(
-        &mut engine,
-        metadata.exif.as_deref(),
-        false,
-        requirements,
-        resolver,
-    )?;
-    assert!(selected_metadata.is_none());
-    let fidelity = [offer(
-        Action::Fidelity(Fidelity::Lossless),
-        Effects::LOSSLESS,
-    )];
-    engine
-        .resolve(
-            Facts::Fidelity(FidelityFacts {
-                alpha: pixels.descriptor().has_alpha(),
-                bits_per_sample: (pixels.descriptor().channel_type().byte_size() * 8) as u8,
-            }),
-            &fidelity,
-            requirements,
-            Context::default(),
-            resolver,
-            &Unstoppable,
-        )
-        .map_err(policy_error)?;
-    let execution = [offer(
-        Action::Execution(Execution::Buffered),
-        Effects::default(),
-    )];
-    engine
-        .resolve(
-            Facts::Execution(ExecutionFacts {
-                resident_input: pixels.as_strided_bytes().len() as u64,
-                source_length: None,
-                network: false,
-            }),
-            &execution,
-            requirements,
-            Context::default(),
-            resolver,
-            &Unstoppable,
-        )
-        .map_err(policy_error)?;
-    let output = if erased {
-        let set = CodecSet::new()
-            .with_encoder(QoiEncoderConfig::new())
-            .with_encoder(BmpEncoderConfig::new());
-        let config = set.encoder_for(format).ok_or_else(|| {
-            At::wrap(failure(
+    let mut engine = Engine::new(preset, 3);
+    let mut decisions = Decisions::default();
+    let result = (|| {
+        if requirements.effects.0 & !31 != 0 {
+            return Err(At::wrap(failure(
                 Stage::Configuration,
-                Cause::Other(Box::new(zencodec::UnsupportedOperation::EncodePolicy)),
+                Cause::Metadata(zencodec::metadata_rewrite::Error::Unsupported(
+                    "requirement outside still-image operation",
+                )),
                 0,
             ))
-            .at()
-        })?;
-        // Use the existing checked target/job constructor; encode_job_with is
-        // currently best-effort and cannot substitute for this validation.
-        let mut job = config.try_fidelity_job(Fidelity::Lossless).map_err(|e| {
-            At::wrap(failure(Stage::Configuration, Cause::Other(Box::new(e)), 0)).at()
-        })?;
-        job.set_limits(limits);
-        job.encode(pixels).map_err(codec_error)?
-    } else {
-        let output = match format {
-            ImageFormat::Qoi => QoiEncoderConfig::new()
-                .try_with_fidelity(Fidelity::Lossless)
-                .unwrap()
-                .job()
-                .with_limits(limits)
-                .encode(pixels),
-            ImageFormat::Bmp => BmpEncoderConfig::new()
-                .try_with_fidelity(Fidelity::Lossless)
-                .unwrap()
-                .job()
-                .with_limits(limits)
-                .encode(pixels),
-            _ => {
-                return Err(At::wrap(failure(
+            .at());
+        }
+        // Scope is explicit: these controls accept EXIF only. No color/orientation
+        // conversion, XMP editor or HDR/gain-map handling is silently supplied.
+        if metadata.xmp.is_some()
+            || metadata.icc_profile.is_some()
+            || metadata.cicp.is_some()
+            || metadata.content_light_level.is_some()
+            || metadata.mastering_display.is_some()
+            || metadata.diffuse_white.is_some()
+            || metadata.orientation != zencodec::Orientation::Identity
+        {
+            return Err(At::wrap(failure(
+                Stage::Metadata,
+                Cause::Metadata(zencodec::metadata_rewrite::Error::Unsupported(
+                    "unqualified metadata or orientation request",
+                )),
+                0,
+            ))
+            .at());
+        }
+        let resolved = select_exif(
+            &mut engine,
+            metadata.exif.as_deref(),
+            false,
+            requirements,
+            resolver,
+        )?;
+        let Action::Metadata(action) = resolved.selection.alternative.action else {
+            unreachable!("engine enforces question family")
+        };
+        decisions.metadata = Some(action);
+        assert!(resolved.packet.is_none());
+        let fidelity = [offer(
+            Action::Fidelity(Fidelity::Lossless),
+            Effects::LOSSLESS,
+        )];
+        let selected = engine
+            .resolve(
+                Facts::Fidelity(FidelityFacts {
+                    alpha: pixels.descriptor().has_alpha(),
+                    bits_per_sample: (pixels.descriptor().channel_type().byte_size() * 8) as u8,
+                }),
+                &fidelity,
+                requirements,
+                Context::default(),
+                resolver,
+                &Unstoppable,
+            )
+            .map_err(policy_error)?;
+        let Action::Fidelity(action) = selected.alternative.action else {
+            unreachable!("engine enforces question family")
+        };
+        decisions.fidelity = Some(action);
+        let execution = [offer(
+            Action::Execution(Execution::Buffered),
+            Effects::default(),
+        )];
+        let selected = engine
+            .resolve(
+                Facts::Execution(ExecutionFacts {
+                    resident_input: pixels.as_strided_bytes().len() as u64,
+                    source_length: None,
+                    network: false,
+                }),
+                &execution,
+                requirements,
+                Context::default(),
+                resolver,
+                &Unstoppable,
+            )
+            .map_err(policy_error)?;
+        let Action::Execution(action) = selected.alternative.action else {
+            unreachable!("engine enforces question family")
+        };
+        decisions.execution = Some(action);
+        let output = if erased {
+            let set = CodecSet::new()
+                .with_encoder(QoiEncoderConfig::new())
+                .with_encoder(BmpEncoderConfig::new());
+            let config = set.encoder_for(format).ok_or_else(|| {
+                At::wrap(failure(
                     Stage::Configuration,
                     Cause::Other(Box::new(zencodec::UnsupportedOperation::EncodePolicy)),
                     0,
                 ))
-                .at());
-            }
+                .at()
+            })?;
+            // Use the existing checked target/job constructor; encode_job_with is
+            // currently best-effort and cannot substitute for this validation.
+            let mut job = config.try_fidelity_job(Fidelity::Lossless).map_err(|e| {
+                At::wrap(failure(Stage::Configuration, Cause::Other(Box::new(e)), 0)).at()
+            })?;
+            job.set_limits(limits);
+            job.encode(pixels).map_err(codec_error)?
+        } else {
+            let output = match format {
+                ImageFormat::Qoi => QoiEncoderConfig::new()
+                    .try_with_fidelity(Fidelity::Lossless)
+                    .unwrap()
+                    .job()
+                    .with_limits(limits)
+                    .encode(pixels),
+                ImageFormat::Bmp => BmpEncoderConfig::new()
+                    .try_with_fidelity(Fidelity::Lossless)
+                    .unwrap()
+                    .job()
+                    .with_limits(limits)
+                    .encode(pixels),
+                _ => {
+                    return Err(At::wrap(failure(
+                        Stage::Configuration,
+                        Cause::Other(Box::new(zencodec::UnsupportedOperation::EncodePolicy)),
+                        0,
+                    ))
+                    .at());
+                }
+            };
+            output.map_err(|e| {
+                e.map_error(|e| failure(Stage::Codec, Cause::Other(Box::new(e)), 0))
+                    .at_named("native encoder")
+            })?
         };
-        output.map_err(|e| {
-            e.map_error(|e| failure(Stage::Codec, Cause::Other(Box::new(e)), 0))
-                .at_named("native encoder")
-        })?
-    };
-    let mut counted = CountWriter {
-        writer,
-        accepted: 0,
-    };
-    counted.write_all(output.data()).map_err(|e| {
-        At::wrap(failure(
-            Stage::Output,
-            Cause::Other(Box::new(e)),
-            counted.accepted,
-        ))
-        .at()
-    })?;
-    // Completion means the encoded bytes were accepted by Write. Flushing,
-    // durable publication and remote acknowledgement are adapter contracts.
-    Ok(Report {
-        stage: Stage::Output,
-        accepted_bytes: counted.accepted,
-        output_complete: true,
-    })
+        let mut counted = CountWriter {
+            writer,
+            accepted: 0,
+        };
+        counted.write_all(output.data()).map_err(|e| {
+            At::wrap(failure(
+                Stage::Output,
+                Cause::Other(Box::new(e)),
+                counted.accepted,
+            ))
+            .at()
+        })?;
+        // Completion means the encoded bytes were accepted by Write. Flushing,
+        // durable publication and remote acknowledgement are adapter contracts.
+        Ok(Report {
+            stage: Stage::Output,
+            accepted_bytes: counted.accepted,
+            output_complete: true,
+            decisions,
+        })
+    })();
+    for (slot, record) in decisions.records.iter_mut().zip(engine.records()) {
+        *slot = Some(record);
+    }
+    result
+        .map(|mut report| {
+            report.decisions = decisions;
+            report
+        })
+        .map_err(|error: At<RunError<R::Error>>| {
+            error.map_error(|mut error| {
+                error.report.decisions = decisions;
+                error
+            })
+        })
 }
