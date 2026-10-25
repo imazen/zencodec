@@ -126,14 +126,154 @@ is charged once until its last owner releases it. A caller can retain unrelated
 allocations outside the operation. A time estimate likewise cannot become a hard
 deadline when a codec step is not preemptible.
 
-Start with concrete execution selection in the I/O/pipeline layer. Keep
+Keep concrete execution planning in the I/O/pipeline layer. Keep
 `resolve_color_emit` as a domain resolver, the metadata rewrite `Services` trait
 as injected editing/compression mechanisms, and checked fidelity selection as
 configuration selection. None currently proves all operation effects. Reuse
-them behind the checked boundary instead of wrapping every knob in one universal
-policy-event enum. A future application policy object can compose typed selectors.
+them behind a shared policy boundary. A single typed question enum can give the
+application one place to express decisions across these domains, while the
+planning/editing implementations retain their own responsibilities.
 Async approval/remote negotiation should be added only with a consumer that needs
 it; an async callback requirement does not belong in every core codec call.
+
+## One typed interface, ordinary application code
+
+A single resolver handling an enum of decision questions is the recommended
+direction. Each variant carries the facts needed for that decision and concrete
+alternatives. Applications can write `match`, `if` and ordinary helper functions;
+they do not need a policy language or a separate callback for each option.
+
+Illustrative public shape, not implemented or approved signatures:
+
+```rust,ignore
+trait PolicyResolver {
+    fn resolve(&mut self, question: PolicyQuestion<'_>) -> PolicyDecision;
+}
+
+#[non_exhaustive]
+enum PolicyQuestion<'a> {
+    Execution(ExecutionQuestion<'a>),
+    Metadata(MetadataQuestion<'a>),
+    Fidelity(FidelityQuestion<'a>),
+}
+
+enum PolicyDecision {
+    Choose(ChoiceId),
+    UsePreset,
+    Reject,
+}
+```
+
+For example, one application resolver can choose location removal for an upload,
+retain supplied attribution, choose bounded sequential execution for a large
+input, and delegate every other decision to its selected preset. The metadata
+choices describe their effects, including any lost attribution; the execution
+choices describe storage evidence and output behavior. Application code can make
+the conditions clear without reproducing codec capability negotiation.
+
+`ChoiceId` should be an opaque token for an offered alternative, validated against
+the current question and operation generation. One answer shape avoids returning
+a metadata answer to an execution question. Selection cannot manufacture a codec
+implementation or waive an independently required effect. Already-known input
+facts should be supplied, rather than requiring callback-side probing. Report
+unknown facts explicitly. For choices that eventually need a continuous value,
+use a typed constrained proposal with validation; do not enumerate an unbounded
+set or add an untyped payload escape hatch.
+
+Presets, parameterized formulas and handwritten code should implement the same
+resolution semantics. `UsePreset` invokes the configured fallback once; it must
+not recurse into the overriding callback. Unknown future questions are refused
+unless that fallback knows how to resolve them. A preset cannot silently weaken
+an explicit hard requirement. Keep serialization on the preset/configuration
+data; an arbitrary Rust callback need not be serializable.
+
+One hook does not require one giant global context. Question variants can borrow
+the relevant small records without owning copies of pixels or metadata. The
+resolver is called at decision points, not for every row, allocation or progress
+event. Cancellation, error propagation, allocation enforcement and data transport
+remain their own mechanisms. Coupled choices still need a coherent final plan:
+independently accepted metadata and execution answers do not establish that their
+combination is realizable.
+
+Place the shared question vocabulary where its dependencies fit. The core can
+carry lightweight codec facts; it must not acquire a dependency on its I/O or
+media drivers to name their decisions. An integration layer can translate those
+typed questions into the single application-facing resolver. Feature-gated media
+support should not force image-only users to configure media policy.
+
+This extends the private experiment's execution-only callback; the heterogeneous
+question enum, preset delegation and scoped choice tokens above have not yet
+been implemented. The next prototype should exercise the same resolver through
+both metadata and execution decisions, including default delegation, unknown
+questions, stale choices and invalid combinations, before freezing the types.
+
+## How resolution can reduce the API
+
+The saving comes from retiring duplicate ways to make the same decision. Adding
+a callback beside every existing flag and setter increases the surface. Moving
+all those flags into an untyped payload protocol only hides it. Typed question
+variants are useful when they consolidate the actual decision and its validation.
+
+The smaller consumer contract is: record an operation request, apply a reusable
+policy, execute, and inspect the result when the selected alternative matters.
+Keep ordinary config/job and `CodecSet` conveniences. They all use the same
+resolution boundary; callers do not need a separate capability/check/set/read-back
+sequence. A custom resolver is optional. Named policies handle ordinary requests,
+and simple preferences can use an ordered list rather than a callback.
+
+These are concrete ablation candidates, checked against source at `46fe941d`:
+
+| Current surface | Replacement candidate | What must remain |
+|---|---|---|
+| `with_policy`, `try_set_policy`, `try_with_policy`, and erased `set_policy` / `try_set_policy` | One recorded request with automatic checked admission. Retire the unchecked path first; retire specialized application hooks only after the shared boundary replaces their enforcement. | Early validation of malformed input, rejection without partial mutation, typed execution errors. |
+| `with_fidelity`, `resolved_target_fidelity`, `try_with_fidelity`, `check_fidelity_target`, `select_fidelity`; erased `try_fidelity_job` / `select_fidelity_job` | Express the required fidelity or permitted alternatives once. Use the common resolution path and return the selected target in operation facts. | Codec-specific tuning, approximate-target semantics, and validation against actual input. Config read-back is not proof of output fidelity. |
+| `EncodePolicy::embed_icc/embed_exif/embed_xmp`, metadata retention policy, color-emission policy and a broad `strict` switch | One authoritative description of required metadata/rendering effects and allowed carrier alternatives, resolved together. Presets are recipes over that description. | Byte-exact versus semantic retention, explicit carrier requirements, pixel interpretation, and parser compatibility as a separate concern. |
+| `with_prefer_streaming` plus `prefers_streaming`, followed by caller-selected execution paths | Select an admitted execution strategy from storage/latency/source facts. Retire the boolean negotiation when real callers can use that path. | Native row/session protocols, explicit early-output requirements, ownership, limits and codec-specific performance controls. |
+| Per-option typed job setters and their erased forwarders | A framework-owned typed request, passed through generic and erased dispatch as the same data. Put fluent conveniences on the request rather than requiring every codec trait/shim to implement them. | Efficient static dispatch and the distinct execution hooks needed for borrowing, mutation, rows and media sessions. |
+
+This is a candidate removal list, not an approved API change. The existing
+checked setters remain the immediate safe migration path. Eliminating them later
+requires a request boundary that actually retains and enforces every field;
+`set_request` with a no-op default would recreate the present problem.
+
+Three boundaries should become simpler:
+
+- **Consumer:** requested effects, allowed alternatives and one execution result.
+  Capability information remains useful for UI/discovery, without being required
+  for correct execution. Common cases need no callback or manual prepare step.
+- **Adapter:** construct input facts, supply transport/editing/storage mechanisms,
+  and preserve the request and selected contract through dispatch. Metadata
+  `Services`, `ReadAt` and async transport interfaces do real work and remain.
+- **Implementor:** describe actual operation alternatives and execute resolved
+  choices. Share request storage, invocation of the one resolver and reporting
+  instead of independently interpreting application fallback policy in every codec.
+
+Request fields still need typed semantics. The callback cannot eliminate the
+types describing fidelity, metadata, limits, timing or pixel layout. A single
+`resolve(anything)` method with a large new protocol would reduce method count
+while increasing what callers must understand. Likewise, actual result facts
+must describe execution, not merely echo the plan the callback selected.
+
+Place reusable policy configuration at the application boundary, with mutable
+decision state scoped to each operation. Do not serialize concurrent `CodecSet`
+operations behind a shared mutable-callback lock. Fixed policies should resolve
+without callbacks or allocation of a Cartesian product of every option. Obtain
+only the relevant alternatives, under bounded planning work.
+
+The resolver does not justify removing distinct image/video ownership and
+execution mechanisms. One-shot versus borrowed strips, mutable pixel fast paths,
+incremental byte demand and ordered media sessions still need their own measured
+consolidation experiments. This proposal targets duplicated policy coordination.
+
+The next ablation should replace one complete vertical slice: fidelity and
+metadata requests through a typed native codec and `CodecSet`/erased dispatch,
+with a shared stored request and the same checked boundary. Compare actual output
+and errors for mandatory, permissive and conflicting requests; include a backend
+that attempts to ignore a requested field. Compile both ordinary and custom-policy
+consumers, preserving the one-call path. Inventory retired public methods, new
+request fields/types and remaining backend hooks together, and measure added
+allocation/dispatch cost. The private selector below verifies decisions and
+reservations; it has not yet demonstrated a net reduction in the production API.
 
 ## Executed experiment and remaining qualification
 
