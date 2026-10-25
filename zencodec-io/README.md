@@ -23,6 +23,14 @@ original `std::io::Error`, including its kind, OS code and custom payload. Typed
 causes survive the normal erased source and driver paths. Retry still requires
 checking whether input was consumed and whether output has been committed.
 
+Use `BufferPolicy::try_for_pattern(pattern, max_bytes)` to reject insufficient
+lookback before reading. Windows retain at most their configured history even
+when a forward read is larger. Spools reject impossible exact ranges before I/O;
+finding EOF at the exact cap uses one stack byte of lookahead. An excess byte
+makes the spool terminal. These are retained-payload limits, not whole-operation
+memory or total-input-byte limits; `retained_bytes()` and `watermark()` expose
+those distinct counts.
+
 The async drivers keep the decoder in the task between batches and run each
 batch on a `Compute` (`spawn_blocking`, a rayon pool, or `Inline`), so no
 thread is held while bytes are in flight and codecs stay synchronous.

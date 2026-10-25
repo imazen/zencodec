@@ -204,6 +204,10 @@ removes that whole class).
 
 #### Fixed
 
+- Buffered sources reserve retained capacity fallibly before reads, reject
+  impossible exact spool requests before consuming input, and retain only the
+  declared window during large forward reads. Exact-cap EOF uses one stack-byte
+  probe; excess input makes the spool terminal without growing retained payload.
 - `FileReadAt` uses safe positional file reads on Unix/Windows, with seek/read
   retained for other targets. Construction reads metadata without moving the cursor.
 - Synchronous and async cursors reuse prefetched ranges, read only a missing
@@ -216,6 +220,9 @@ removes that whole class).
 
 #### Added
 
+- `BufferPolicy::try_for_pattern` refuses insufficient required lookback instead
+  of clamping it. `BufferedReadAt::retained_bytes` reports cached payload separately
+  from consumed input. `StdSourceError::Allocation` preserves allocation refusals.
 - Observational I/O contract probes and a high-expansion transcode benchmark
   for output backpressure, spool admission, and one-shot encoder fallback.
   A pinned standalone harness adds positional-file comparisons, native QOI

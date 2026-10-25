@@ -231,6 +231,14 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed on the ideal API PR (2026-10-25): buffered exact spool requests formerly
+  consumed input before discovering they exceeded the cap, and a large windowed
+  read retained its entire requested span. Admission now precedes exact reads;
+  forward output is filled directly while only the configured history survives.
+  Tests cover zero/small caps, exact EOF, terminal excess, overflow, interrupted
+  reads and fallible capacity reservation. The cap is retained payload, not whole
+  process memory; length discovery admits one stack-byte EOF probe.
+
 - Ideal API PR integration (2026-10-25): changing the standard source error
   type exposed fixed `ReadAt<Error = SourceError>` assumptions in the disk
   comparison harness. The controls now use a common lossless error adapter;

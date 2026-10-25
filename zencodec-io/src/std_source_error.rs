@@ -15,6 +15,13 @@ pub enum StdSourceError {
     Source(SourceError),
     /// The original filesystem or reader error.
     Io(std::io::Error),
+    /// Retained input storage could not be reserved before reading.
+    Allocation {
+        /// Total retained payload capacity requested, excluding allocator overhead.
+        requested: usize,
+        /// The allocator's original refusal.
+        source: alloc::collections::TryReserveError,
+    },
 }
 
 impl fmt::Display for StdSourceError {
@@ -22,6 +29,9 @@ impl fmt::Display for StdSourceError {
         match self {
             Self::Source(error) => error.fmt(f),
             Self::Io(error) => write!(f, "byte source: {error}"),
+            Self::Allocation { requested, source } => {
+                write!(f, "reserving {requested} retained input bytes: {source}")
+            }
         }
     }
 }
@@ -31,6 +41,7 @@ impl core::error::Error for StdSourceError {
         match self {
             Self::Source(error) => Some(error),
             Self::Io(error) => Some(error),
+            Self::Allocation { source, .. } => Some(source),
         }
     }
 }

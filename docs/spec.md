@@ -426,8 +426,10 @@ enum AccessPattern { Sequential, BoundedBacktrack { window_bytes: u64 }, RandomA
 enum SourceError { BeyondWindow {..}, BeyondLimit {..}, UnexpectedEof {..}, Io {..} }
 
 // zencodec-io, feature std: filesystem/reader errors retain their native cause.
-enum StdSourceError { Source(SourceError), Io(std::io::Error) }
+enum StdSourceError { Source(SourceError), Io(std::io::Error), Allocation { requested: usize, source: TryReserveError } }
 // FileReadAt and BufferedReadAt implement ReadAt<Error = StdSourceError>.
+// BufferPolicy::try_for_pattern(pattern, max_bytes) -> Result<BufferPolicy, SourceError>
+// rejects an undersized required backtrack window before constructing a source.
 
 // DecodeJob<'a> — default Err(UnsupportedOperation::SeekableDecode)
 fn push_decoder_from_source(self, source: &mut dyn DynReadAt,
