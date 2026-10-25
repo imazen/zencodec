@@ -405,3 +405,11 @@ The [comparison with established codec interfaces](api-review-2026-10-25.md)
 checks this boundary against explicit progress, buffer ownership, metadata
 ordering and image-region contracts, and records the accounting-scope regression
 found while reviewing the private resolver.
+
+The [independent Argon review and audit](api-review-2026-10-25.md#independent-argon-review-and-disposition)
+favor domain-specific offers and coherent transcode routes behind that same
+consumer boundary. They do not justify a second application callback, a universal
+codec error, or treating calibrated estimates as hard resource bounds. A common
+item/level/region selector needs viewport qualification before adding more decode
+trait families. These remain proposed refinements; the reproduced dyn encoder
+default mismatch was fixed separately without changing public signatures.

@@ -221,6 +221,15 @@ media drivers to name their decisions. An integration layer can translate those
 typed questions into the single application-facing resolver. Feature-gated media
 support should not force image-only users to configure media policy.
 
+The [audited independent review](api-review-2026-10-25.md#independent-argon-review-and-disposition)
+proposes typed offer views within each question (`Choices<MetadataOffer>`, for
+example), so application code does not need a second heterogeneous `Action`
+match. Coupled transcodes should receive coherent route offers from the adapter.
+These refinements still need a private ablation; the current executable
+prototype keeps its shared `Alternative` representation. Mechanical suspension
+and application choice remain separate responsibilities, with late decisions
+still going through the same fallible resolver after the codec has paused.
+
 The [fallible resolver experiment and scenario matrix](policy-scenarios.md) now
 exercise the heterogeneous question enum, configured profiles, scoped choice
 tokens, traced errors, joint-plan validation, actual charged payload growth,
