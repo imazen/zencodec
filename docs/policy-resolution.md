@@ -1,7 +1,8 @@
 # Situational policy: choose a feasible execution plan
 
-Proposal and private experiment, 2026-10-25. Reviewed against main
-`c6943f6cd40ec1cb9c1338a2ecdb385d467c02d1`. This adds no public library API.
+Proposal and private experiments, 2026-10-25. Native stored-request integration
+is on main at `98db8a318d9d5bcaf1676a807dec34a3266302c9`.
+This adds no public library API.
 It extends the [checked caller contract](minimal-0.3.md#caller-contract-required-effects-preferences-and-checked-results).
 
 An application often wants “use the fastest acceptable path within this budget,”
@@ -78,19 +79,23 @@ then reserve and execute. Resolve once at a meaningful planning boundary, not
 per row, packet, allocation or writer stall. A closure can capture application
 context without putting application types in the codec API.
 
-The executable experiment uses this deliberately small interface:
+The current private experiment uses a typed, fallible interface:
 
 ```rust
 trait PolicyResolver {
-    fn choose(&mut self, alternatives: &[&Offer]) -> Option<usize>;
+    type Error: core::error::Error + Send + Sync + 'static;
+    fn resolve(&mut self, question: Question<'_>)
+        -> Result<Decision, zencodec::At<Self::Error>>;
 }
 ```
 
-This is a private test shape, not the proposed final public signature. An offer
-contains a strategy, memory/disk bounds and two metadata effects. `None` refuses;
-an invalid index fails. Indices exist only within one synchronous call. The
-callback cannot alter an offer or its requirements. Its answer is a selection,
-not a replacement for resource admission or backend enforcement.
+This is implemented by closures and a configurable `PolicySet`. Questions borrow
+typed facts and immutable alternatives. An answer selects an offered token, uses
+the configured preset, or declines with a traced reason. `Err(At<E>)` preserves
+an application failure distinct from an expected decline. The callback cannot
+alter an offer or its requirements. Its answer is a selection, not a replacement
+for resource admission or backend enforcement. The original `choose`/index
+experiment remains a small historical control in `policy_resolution.rs`.
 
 Production offers need facts bound to the actual input, configuration and source
 version. Deferred choices must also be bound to that planning generation; stale
@@ -143,24 +148,16 @@ direction. Each variant carries the facts needed for that decision and concrete
 alternatives. Applications can write `match`, `if` and ordinary helper functions;
 they do not need a policy language or a separate callback for each option.
 
-Illustrative public shape, not implemented or approved signatures:
+The executable vocabulary is below; public names and placement still need API
+review. The question variants carry small facts and borrowed choices, not owned
+copies of image data. The prototype's media facts contain primitives and do not
+introduce a dependency from the core onto a media driver.
 
 ```rust,ignore
-trait PolicyResolver {
-    fn resolve(&mut self, question: PolicyQuestion<'_>) -> PolicyDecision;
-}
-
-#[non_exhaustive]
-enum PolicyQuestion<'a> {
-    Execution(ExecutionQuestion<'a>),
-    Metadata(MetadataQuestion<'a>),
-    Fidelity(FidelityQuestion<'a>),
-}
-
-enum PolicyDecision {
+enum Decision {
     Choose(ChoiceId),
     UsePreset,
-    Reject,
+    Reject(zencodec::At<Decline>),
 }
 ```
 
@@ -185,7 +182,12 @@ resolution semantics. `UsePreset` invokes the configured fallback once; it must
 not recurse into the overriding callback. Unknown future questions are refused
 unless that fallback knows how to resolve them. A preset cannot silently weaken
 an explicit hard requirement. Keep serialization on the preset/configuration
-data; an arbitrary Rust callback need not be serializable.
+data; an arbitrary Rust callback need not be serializable. A named `Profile`
+binds hard requirements and preset preferences together. Configuring the
+`PolicySet` alone only ranks already-admissible alternatives: it cannot guarantee
+privacy, preservation or a memory cap. `Request::new(format, profile)` stores
+both halves once in the native experiment. Ordinary callers use `encode`;
+specialists use `encode_with`, whose UsePreset answer uses that stored preset.
 
 One hook does not require one giant global context. Question variants can borrow
 the relevant small records without owning copies of pixels or metadata. The
@@ -202,9 +204,59 @@ typed questions into the single application-facing resolver. Feature-gated media
 support should not force image-only users to configure media policy.
 
 The [fallible resolver experiment and scenario matrix](policy-scenarios.md) now
-exercise the heterogeneous question enum, configurable preset, scoped choice
-tokens and traced callback errors. Native operation integration and coupled
-plan validation remain qualification gates before freezing the public types.
+exercise the heterogeneous question enum, configured profiles, scoped choice
+tokens, traced errors, joint-plan validation, actual charged payload growth,
+native QOI/BMP operations and real container packets. Native whole-operation
+accounting and broader metadata/color/media effects remain qualification gates.
+
+## Debugging and predictable failure
+
+Keep the common boundary responsible for reports without sending every failure
+back through application policy. Corrupt input, native codec failures, transport
+failure and cancellation retain their causes. A policy decision cannot turn them
+into successful output. Replanning requires new facts and an explicitly safe
+boundary; it is not an automatic retry after an error.
+
+| Outcome | Caller meaning |
+|---|---|
+| No admissible alternative | The required contract cannot be met by the offered implementations; the callback was not invoked. |
+| Explicit decline | The application chose not to proceed; its reason and rule location survive. |
+| Callback error | Decision-making itself failed; the original typed error and whereat frames survive. |
+| Invalid/stale choice | The answer is not authorized for this question/source/epoch; no execution starts. |
+| Admission failure | Capacity changed or reservation failed after selection; partial reservations roll back. |
+| Native/I/O failure | Report stage and partial progress, with the native cause; successful policy selection did not promise execution success. |
+
+The error record needs operation/question identity, domain, source/configuration
+epoch, required effects and budget scope, rejected choices with typed reasons,
+selection/fallback route, and publication progress. Prior successful selections
+must survive a later failure. The native experiment retains all three decisions
+and selected alternatives; the general engine has a bounded chronological journal
+with a dropped-record count. Production correlation should add backend/configuration
+identity and a caller-supplied request identifier at the integration boundary.
+Do not use source offsets or transient token numbers as persistent resource identity.
+
+Use bounded enum/numeric summaries by default. Error sources and custom whereat
+contexts remain available for deliberate inspection and may contain application
+data. Requiring `At<E>` does not force the callback to add an origin frame; the
+boundary adds its own location. Typed and erased tests cover empty traces, capped
+traces and native-cause lookup. `At::map_error` preserves frames, whereas a naive
+`Box<dyn Error>` containing `At<E>` can hide `E` from source-chain traversal.
+A reviewed erasure envelope must preserve both, instead of flattening to text.
+
+Cancellation is checked before and after callback execution. An actual callback
+error remains primary if cancellation also arrives; after a successful answer,
+cancellation prevents admission. Arbitrary Rust callbacks cannot be preempted or
+made allocation-bounded. Panics propagate, and the interrupted engine cannot be
+reused. No unwind-catching or global callback lock is required. Error construction
+still allocates; the prototype does not promise usable diagnostics after process
+allocation failure.
+
+For testing, inject typed facts, a deterministic resolver, storage admission and
+the stop signal. Assert selected effects, rejection codes and emitted output,
+not diagnostic wording. Record enough facts to reproduce the choice without
+copying pixel payloads into logs. Replaying arbitrary callbacks can repeat side
+effects: require deterministic callbacks when replay is part of the application
+contract. A record is evidence of a past decision, not authority to reuse its token.
 
 ## How resolution can reduce the API
 
@@ -264,47 +316,40 @@ execution mechanisms. One-shot versus borrowed strips, mutable pixel fast paths,
 incremental byte demand and ordered media sessions still need their own measured
 consolidation experiments. This proposal targets duplicated policy coordination.
 
-The next ablation should replace one complete vertical slice: fidelity and
-metadata requests through a typed native codec and `CodecSet`/erased dispatch,
-with a shared stored request and the same checked boundary. Compare actual output
-and errors for mandatory, permissive and conflicting requests; include a backend
-that attempts to ignore a requested field. Compile both ordinary and custom-policy
-consumers, preserving the one-call path. Inventory retired public methods, new
-request fields/types and remaining backend hooks together, and measure added
-allocation/dispatch cost. The private selector below verifies decisions and
-reservations; it has not yet demonstrated a net reduction in the production API.
+The private native slice now passes the same stored fidelity/EXIF request through
+concrete and `CodecSet` paths. Ordinary and custom-policy consumers preserve the
+one-call path; mandatory, permissive and conflicting requests check actual output
+and errors. The existing bitmap metadata setter can silently omit supplied EXIF,
+while the checked boundary refuses required retention before encoding. This is
+evidence for centralizing the request, not permission to delete production methods.
+Inventory retired methods, replacement request fields and remaining backend hooks
+together when preparing that API PR. No production API has been removed here.
 
 ## Executed experiment and remaining qualification
 
-Run `just io-policy-resolution-check` in the prepared
-[standalone harness](../perf/io-validation/README.md#prepare-an-export).
-The [implementation](../perf/io-validation/src/policy_resolution.rs) reuses the
-existing shared reservation model; [tests](../perf/io-validation/tests/policy_resolution.rs)
-exercise conditional small/large decisions, a misleading streaming shape,
-already-resident input, unknown/estimated costs, required metadata versus permitted
-omission, invalid/refused choices and capacity taken during resolution. Failure
-to reserve disk rolls back the RAM reservation; successful reservations remain
-held until the admitted plan is dropped.
+Run the `io-policy-engine-check`, `io-policy-native-check`, `io-policy-media-check`
+and `io-policy-portability-check` recipes in the
+[prepared export](../perf/io-validation/README.md#prepare-an-export). Media inputs
+are explicit fixture arguments. The [scenario matrix](policy-scenarios.md) maps
+each guarantee to mechanism tests, native evidence and remaining gaps.
 
-The decision tests and warning-free Clippy passed. Resource-wrapper observation
-for that command, including compilation:
+[Cost measurements](../benchmarks/policy_cost_2026-10-25.md) include configured,
+closure, borrowed trait-object and error-erased paths. The tested successful
+operation paths did not allocate; failures allocated for traces and evidence.
+These are bounded authored-choice workloads, not native codec speed claims.
 
-```text
-run-heavy: done rc=0 1s | peak-RSS 0.13GiB | min-avail 18643MiB | peak-load 0.09
-```
+Before freezing public types, qualify whole-operation bounds for named native
+codec configurations, a bounded encoded spool with disk exhaustion behavior,
+and ownership charges through retained media packets/frames. Expand actual
+carrier/color/HDR/gain-map and animation conformance, and integrate viewport
+cancellation/source changes with the policy boundary. The prototype deliberately
+refuses unqualified native hard-memory requirements and metadata domains. Full
+root freestanding compilation has an existing blocker in
+[165](https://github.com/imazen/zencodec/issues/165); isolated policy-core and WASM
+checks pass. Process-wide memory enforcement and diagnostic survival under OOM
+are not promised. No 10 GB input was allocated or extrapolated from smaller tests.
 
-These are authored logical costs, not codec measurements. No 10 GB buffer was
-allocated. The experiment covers synchronous finite alternatives and conservative
-upper-bound reservation only. It does not implement native cost discovery,
-runtime-accounted unknown growth, disk spooling, metadata editing, deferred/stale
-choices, process-wide memory enforcement or a production codec resolver.
-
-Before choosing public types, connect selection to the native encoder-retention
-experiment and independently checked metadata output. Exercise caps immediately
-below/at/above real requirements, exhausted staging, cancellation, writer failure,
-non-replayable input and shared storage across jobs. Reuse the transport simulator
-for allowed range plans and viewport changes, then validate the selected plans
-against real HTTP and disk behavior. Keep resource admission in
+Keep resource admission in
 [161](https://github.com/imazen/zencodec/issues/161), output waiting in
 [160](https://github.com/imazen/zencodec/issues/160), and the consumer contract in
 [27](https://github.com/imazen/zencodec/issues/27).

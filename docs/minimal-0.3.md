@@ -151,11 +151,21 @@ the specified result or return a typed error. Permissive counterparts must repor
 the actual deviation. Run the same fixtures through generic and erased paths.
 These are proposed acceptance tests, not claims of new completed native runs.
 
+The [private qualification matrix](policy-scenarios.md) now supplies native
+QOI/BMP typed/registry evidence, extracted EXIF checks with an independent reader,
+and callback/writer failures with retained decisions. Color/HDR/gain-map and
+animation effect guarantees still require their native qualification. No public
+setter has been removed by these experiments.
+
 Requirements can be conditional without becoming unchecked: specify permitted
 alternatives and choose among them using operation-specific facts. The
 [situational policy proposal and executable resolver experiment](policy-resolution.md)
 separate selection from reservation, distinguish bounds from estimates, and
 explain why streaming shape alone cannot decide memory or output-wait policy.
+The tested shape uses `Result<Decision, At<E>>`, one configured fallback, and
+profiles that bind requirements with preferences. A stored request supplies the
+one-call path; custom code remains optional. Expected refusal, application failure
+and native failure retain distinct codes, causes and traces.
 
 ## Remove or replace in the breaking migration
 

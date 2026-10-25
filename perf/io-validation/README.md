@@ -135,11 +135,24 @@ decompressed file. Keep large results and binaries outside git.
 
 ## Situational policy resolution
 
-`just io-policy-resolution-check` runs a private synchronous resolver over
-authored execution alternatives, then acquires shared RAM/disk reservations.
-It tests changing choices with input cost, mandatory metadata effects, unknown
-costs, invalid selections and capacity taken during the callback. Costs are
-logical fixture inputs, not codec measurements or RSS. It allocates no large
-fixture buffers and implements no encoder or disk spool. The
-[proposal and qualification limits](../../docs/policy-resolution.md) explain
-what the experiment establishes and what still needs native testing.
+`just io-policy-resolution-check` retains the initial authored-choice control.
+The current private typed/fallible resolver is under `src/policy/`:
+
+- `just io-policy-engine-check`: requirements, scoped choices, traces, joint
+  plans, concurrent admission, real payload reservations and lifetime checks.
+- `just io-policy-native-check`: stored profiles through native QOI/BMP and
+  CodecSet, independently read EXIF, exact strided pixels, failure causes and
+  accepted-byte progress. Also executes `docs/examples/policy.rs`.
+- `just io-policy-media-check <mp4> <webm> <ivf>`: native container packets over
+  resident/disk/reused transport-model sources, track omission and epoch controls.
+  Fixture arguments are required; use the video-container preparation above.
+- `just io-policy-portability-check`: WASM plus an isolated freestanding core.
+- `just io-policy-cost-build`, `just io-policy-bench 2,3`, and
+  `just io-policy-allocations <new-directory>`: common dispatch/error workloads
+  and serial heaptrack captures. The allocation script requires rustfilt.
+
+See the [scenario matrix](../../docs/policy-scenarios.md),
+[measured costs](../../benchmarks/policy_cost_2026-10-25.md), and
+[proposed contract](../../docs/policy-resolution.md). All types remain private
+experiments. The harness does not implement a generic disk spool or establish
+native whole-operation memory bounds. Logical fixture costs are not measured RSS.
