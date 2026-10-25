@@ -364,3 +364,21 @@ workspace overrides, check default/no_std/WASM and supported platform builds,
 and run independent codec oracles. Keep optional transports, rich editors and
 concrete codecs out of the core dependency graph. Publication remains a separate
 approval. No new public library API has been implemented by this document.
+
+## Reader check on the proposed boundary
+
+The [sequential guide assessment](guide-learning.md) used two fresh Sol sessions,
+four native coding tasks and two contract questions. Improving local context and
+separating implemented JPEG policy from private adapter machinery changed
+initial coding passes from 2/4 to 4/4. Both readers regarded config/job,
+CodecSet and source/driver/sink separation as useful. This small model study
+supports better entry points and disclosure, not removing those layers.
+
+The remaining abstraction change is enforcement behind the operation boundary:
+callers state requirements and a preset or fallible resolver; adapters construct
+questions, validate choices, reserve resources and guard effects. Codec authors
+supply qualified facts. Prepared data, engine construction and authorization
+receipts should not become mandatory caller ceremony. A fixed ICC refusal still
+has a simpler current public-plan implementation. Retire old coordination paths
+only when the checked request replaces their enforcement across real routes.
+Production streaming barriers and ownership qualification remain the gates above.

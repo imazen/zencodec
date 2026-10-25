@@ -7,7 +7,7 @@ export const lanes = [
       nodes: [['consumer','Encoded bytes','already resident'],['implementor','config.decode','one operation'],['consumer','Owned pixels','preview uses a view']],
       note: 'The executable examples use native QOI as a lossless fixture. For browser delivery, select a browser-supported codec; for registration, format detection and dispatch, use CodecSet in zencodec. The higher-level zencodecs facade is optional. This guide describes repository main, including unpublished workspace code.', source: 'src/traits/decoding.rs' },
     { title: 'Accept a user upload', trigger: 'An upload can be much larger than the preview surface.', snippet: 'limits',
-      body: 'Move this operation into a job and set a pixel limit before constructing the decoder. The maximum is inclusive: width × height equal to the limit is accepted. The config describes the codec; the job describes this request.',
+      body: 'Move this operation into a job and set zencodec::ResourceLimits before constructing the decoder. The maximum is inclusive: width × height equal to the limit is accepted. The config describes the codec; the job describes this request.',
       why: 'Admission is a requirement of the service. Adding it here keeps unrelated preview calls simple.',
       nodes: [['consumer','Upload policy','pixel limit'],['implementor','Decode job','check before allocation'],['consumer','Pixels or refusal','handle the result']],
       note: 'Codec ResourceLimits are not a global memory budget. Input read-ahead, encoded staging, concurrent jobs, and retained frames need separate accounting. Driver admission gaps remain tracked.', issue: 161, source: 'src/limits.rs' },
@@ -34,7 +34,7 @@ export const lanes = [
       nodes: [['adapter','Slice driver','owns input offer'],['implementor','step(input, sink)','consumes a prefix'],['consumer','CollectSink','owns full output']],
       note: 'CollectSink deliberately holds the full raster. Incremental input does not make that output buffer small. Use a sink that matches the consumer’s actual lifetime requirements.', source: 'zencodec-io/src/drive.rs' },
     { title: 'Read the archive from disk', trigger: 'The gallery opens a local file instead of loading every encoded byte up front.', snippet: 'positioned',
-      body: 'Keep the decoder and sink. Replace the source with FileReadAt::new(file)? and use the positional driver. It uses native positioned file reads on Unix and Windows; already resident sources keep a direct slice path.',
+      body: 'Imports & setup above constructs the decoder and CollectSink. This sink owns the full raster; the function returns it only when the driver succeeds, preserving typed error causes on failure. FileReadAt::new(file)? supplies native positioned file reads on Unix and Windows; resident sources keep a direct slice path.',
       why: 'The codec names offsets. The file adapter can satisfy them without manufacturing a generic seek cursor at every boundary.',
       nodes: [['adapter','FileReadAt','positioned disk reads'],['adapter','ReadAt driver','buffer and reuse'],['implementor','Same decoder','same row contract']],
       note: 'Warm dispersed reads improved in the recorded test. Cold-file results were mixed. Network coalescing thresholds should not become unconditional disk read-ahead defaults. Windows seek_read can change the file cursor.', source: 'benchmarks/io_contracts_2026-10-24.md' },
@@ -91,6 +91,7 @@ export const questions = [
   { n: 159, title: 'Does every layer earn its place?', text: 'Keep current codec/media protocols. Review a small driver-level limits and scheduling surface first; avoid adding a parallel Read/Seek family without a concrete parser need.' },
 ];
 export const evidence = [
+  ['READER / MODEL STUDY', 'Can a new reader use the API?', 'Two fresh Sol sessions, sequential site packets, preserved submissions and native grading. Initial coding passes changed from 2/4 to 4/4; this is a small model study, not a human success rate.', 'docs/guide-learning.md'],
   ['NATIVE / JPEG', 'Late metadata and configuration', 'Actual progressive/row encode, short-read input, opaque ICC admission and metadata rewrite. Independent ICC/EXIF/pixel checks distinguish inventory from interpretation.', 'docs/policy-jpeg.md'],
   ['TESTED / PRIVATE', 'Fallible policy resolver', 'Configured profiles, scoped choices, traced native causes, shared reservations, EXIF checks, real container packets and retained decision reports. Explicit gaps for native accounting and other metadata domains.', 'docs/policy-scenarios.md'],
   ['PROPOSED / API REVIEW', 'A minimal 0.3', 'Keep the consumer calls and byte/session protocols; review admission, interpretation, ownership and image selection. Concrete removal candidates and native experiment gates.', 'docs/minimal-0.3.md'],

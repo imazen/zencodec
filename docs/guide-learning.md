@@ -26,6 +26,45 @@ initial instruction-file listing and unsuccessful `git status` in its non-repo
 assessment directory. That initial command violated the intake protocol but
 obtained no repository contents. The restriction is procedural, not a sandbox.
 
+## Comparison
+
+The fresh revised reader passed **4/4 initial coding attempts**, compared with
+**2/4** for the baseline. Both readers passed **4/4 expanded attempts**. All four
+revised expanded Rust submissions are byte-identical to their initial attempts;
+extra context confirmed their code instead of repairing it. Both initial and
+expanded revised t3/t4 submissions also pass the separate concrete-cause and
+independent-orientation audits.
+
+Both readers satisfy **4/4 late-metadata criteria** and **4/4 ownership criteria**
+on each view. The [rubric and matching excerpts](../benchmarks/guide_learning_rubric_2026-10-25.json)
+record these coordinator judgments separately from the executed coding oracles.
+The revised tool audit found only supplied-file reads, own-answer existence and
+word-count checks, and answer writes; no repository, network or compiler intake.
+[Exact coding submissions](evaluation/submissions/README.md) are committed,
+including the failures, without formatting or repair.
+
+| Coding exposure | Baseline | Revised |
+| --- | ---: | ---: |
+| Initial section view | 2/4 | 4/4 |
+| After inline expansion, no compiler feedback | 4/4 | 4/4 |
+
+The revised reader ranks registry use least confusing, while positioned decode
+is now the largest remaining assembly question. It distinguishes the usable
+public ICC guard from optional private coordination. Both readers recommend
+keeping config/job, registry and source/driver/sink roles; missing setup does
+not justify merging them. Both identify the streaming barrier and whole-job
+ownership qualification as production work beyond documentation.
+
+```
+revised grading and audits: rc=0 3s | peak-RSS 0.23GiB | min-avail 19185MiB | peak-load 0.44
+```
+
+After the measured comparison, the guide names ResourceLimits at its use site
+and states CollectSink's full-raster ownership, success-only return and typed
+error propagation. The code and frozen comparison packets remain unchanged.
+The contrast follow-up changes only the expanded code background. Scores and
+intake/height measurements refer to the recorded revisions, not subsequent prose.
+
 ## Baseline results
 
 The initial views yielded **2/4** passing coding tasks. Expanded views yielded

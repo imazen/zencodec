@@ -1,0 +1,229 @@
+{
+  "method": "Coordinator 0/1 judgment against prewritten criteria; evidence excerpts are checked against preserved answers. Not executable behavior or a human success rate.",
+  "results": [
+    {
+      "cohort": "baseline",
+      "task": "t5",
+      "stage": "visible",
+      "answer_words": 175,
+      "checks": [
+        {
+          "criterion": "Provisional absence is not final interpretation",
+          "score": 1,
+          "evidence": "does not establish sRGB"
+        },
+        {
+          "criterion": "Affected conversion/publication requires qualification or holding",
+          "score": 1,
+          "evidence": "before affected output"
+        },
+        {
+          "criterion": "Late facts cannot repair already published output",
+          "score": 1,
+          "evidence": "Already published HTTP bytes cannot be retracted"
+        },
+        {
+          "criterion": "Current notifications are not a production resume barrier",
+          "score": 1,
+          "evidence": "notifications are informational"
+        }
+      ]
+    },
+    {
+      "cohort": "baseline",
+      "task": "t5",
+      "stage": "expanded",
+      "answer_words": 175,
+      "checks": [
+        {
+          "criterion": "Provisional absence is not final interpretation",
+          "score": 1,
+          "evidence": "does not establish sRGB"
+        },
+        {
+          "criterion": "Affected conversion/publication requires qualification or holding",
+          "score": 1,
+          "evidence": "before affected output"
+        },
+        {
+          "criterion": "Late facts cannot repair already published output",
+          "score": 1,
+          "evidence": "Already published HTTP bytes cannot be retracted"
+        },
+        {
+          "criterion": "Current notifications are not a production resume barrier",
+          "score": 1,
+          "evidence": "notifications are informational"
+        }
+      ]
+    },
+    {
+      "cohort": "baseline",
+      "task": "t6",
+      "stage": "visible",
+      "answer_words": 171,
+      "checks": [
+        {
+          "criterion": "Output timing does not bound retained memory",
+          "score": 1,
+          "evidence": "byte availability, not release of raw storage"
+        },
+        {
+          "criterion": "Caller and native ownership matter",
+          "score": 1,
+          "evidence": "caller-owned raster counts"
+        },
+        {
+          "criterion": "Waiting and staging require separate admission",
+          "score": 1,
+          "evidence": "admit independent encoded storage"
+        },
+        {
+          "criterion": "A cap can require refusal rather than guarantee completion",
+          "score": 1,
+          "evidence": "does not guarantee successful bounded completion"
+        }
+      ]
+    },
+    {
+      "cohort": "baseline",
+      "task": "t6",
+      "stage": "expanded",
+      "answer_words": 171,
+      "checks": [
+        {
+          "criterion": "Output timing does not bound retained memory",
+          "score": 1,
+          "evidence": "byte availability, not release of raw storage"
+        },
+        {
+          "criterion": "Caller and native ownership matter",
+          "score": 1,
+          "evidence": "caller-owned raster counts"
+        },
+        {
+          "criterion": "Waiting and staging require separate admission",
+          "score": 1,
+          "evidence": "admit independent encoded storage"
+        },
+        {
+          "criterion": "A cap can require refusal rather than guarantee completion",
+          "score": 1,
+          "evidence": "does not guarantee successful bounded completion"
+        }
+      ]
+    },
+    {
+      "cohort": "revised",
+      "task": "t5",
+      "stage": "visible",
+      "answer_words": 172,
+      "checks": [
+        {
+          "criterion": "Provisional absence is not final interpretation",
+          "score": 1,
+          "evidence": "does not establish sRGB or final metadata absence"
+        },
+        {
+          "criterion": "Affected conversion/publication requires qualification or holding",
+          "score": 1,
+          "evidence": "must defer affected color conversion and HTTP publication"
+        },
+        {
+          "criterion": "Late facts cannot repair already published output",
+          "score": 1,
+          "evidence": "Already published bytes cannot be retracted"
+        },
+        {
+          "criterion": "Current notifications are not a production resume barrier",
+          "score": 1,
+          "evidence": "production IncrementalDecode barrier is proposed"
+        }
+      ]
+    },
+    {
+      "cohort": "revised",
+      "task": "t5",
+      "stage": "expanded",
+      "answer_words": 172,
+      "checks": [
+        {
+          "criterion": "Provisional absence is not final interpretation",
+          "score": 1,
+          "evidence": "does not establish sRGB or final metadata absence"
+        },
+        {
+          "criterion": "Affected conversion/publication requires qualification or holding",
+          "score": 1,
+          "evidence": "must defer affected color conversion and HTTP publication"
+        },
+        {
+          "criterion": "Late facts cannot repair already published output",
+          "score": 1,
+          "evidence": "Already published bytes cannot be retracted"
+        },
+        {
+          "criterion": "Current notifications are not a production resume barrier",
+          "score": 1,
+          "evidence": "production IncrementalDecode barrier is proposed"
+        }
+      ]
+    },
+    {
+      "cohort": "revised",
+      "task": "t6",
+      "stage": "visible",
+      "answer_words": 164,
+      "checks": [
+        {
+          "criterion": "Output timing does not bound retained memory",
+          "score": 1,
+          "evidence": "byte availability, not release of raw storage"
+        },
+        {
+          "criterion": "Caller and native ownership matter",
+          "score": 1,
+          "evidence": "caller's retained raster still counts"
+        },
+        {
+          "criterion": "Waiting and staging require separate admission",
+          "score": 1,
+          "evidence": "admit encoded storage first"
+        },
+        {
+          "criterion": "A cap can require refusal rather than guarantee completion",
+          "score": 1,
+          "evidence": "does not guarantee successful bounded completion"
+        }
+      ]
+    },
+    {
+      "cohort": "revised",
+      "task": "t6",
+      "stage": "expanded",
+      "answer_words": 164,
+      "checks": [
+        {
+          "criterion": "Output timing does not bound retained memory",
+          "score": 1,
+          "evidence": "byte availability, not release of raw storage"
+        },
+        {
+          "criterion": "Caller and native ownership matter",
+          "score": 1,
+          "evidence": "caller's retained raster still counts"
+        },
+        {
+          "criterion": "Waiting and staging require separate admission",
+          "score": 1,
+          "evidence": "admit encoded storage first"
+        },
+        {
+          "criterion": "A cap can require refusal rather than guarantee completion",
+          "score": 1,
+          "evidence": "does not guarantee successful bounded completion"
+        }
+      ]
+    }
+  ]
+}
