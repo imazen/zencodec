@@ -103,3 +103,19 @@ memory caps. A decoder step is indivisible, and an encoder may buffer a
 whole frame. The window prototype handles only ranges fully contained in
 the active window; partial overlaps, suffix retention and the synchronous
 driver still need implementation and adversarial checks before landing.
+
+## Qualification after the initial prototypes
+
+The [implementation qualification report](../../benchmarks/io_contracts_2026-10-24.md)
+records the subsequently landed synchronous/async overlap handling and actual
+`FileReadAt` implementation. Use `disk_probe file` for that implementation;
+`seek` remains the frozen baseline and `positional` the original experiment.
+The executable storage/ordering candidate is checked with
+`just io-admission-check` and measured with `just io-admission-bench 2,3`.
+
+`just io-validation-disk-cold <file> 2,3` adds a Linux cache-miss experiment.
+It advises eviction of that file before each sample, without changing the
+system-wide cache. Every sample must charge at least the requested data bytes
+to `/proc/self/io`'s `read_bytes`. Eviction and verification run outside the
+timer. This verifies kernel block-read accounting, not a cold device/controller
+cache. Keep these results separate from the warm benchmark.

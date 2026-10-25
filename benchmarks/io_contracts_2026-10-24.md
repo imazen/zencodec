@@ -178,3 +178,36 @@ run-heavy: done rc=0 18s | peak-RSS 0.27GiB | min-avail 15778MiB | peak-load 0.8
 ```
 
 Reproduce with `just io-admission-check` and `just io-admission-bench 2,3`.
+
+## File-cache misses
+
+The additional Linux benchmark uses `rustix` 1.1.5 `fadvise(DontNeed)` on the
+individual 64 MiB fixture before every timed sample. It does not clear global
+caches. Setup and teardown are outside timing; teardown asserts that the
+process's kernel `read_bytes` increased by at least the requested payload.
+This is evidence of block-read accounting, not proof of a cold device cache.
+Both arms verify authored fixture bytes before measuring.
+
+[Raw output](io_disk_cold_2026-10-24.log), median of three passes with nine
+single-iteration rounds per pass, 128 reads per sample, milliseconds:
+
+| Pattern | Bytes/read | Frozen seek/read | Current FileReadAt |
+|---|---:|---:|---:|
+| Sequential | 4096 | 1.03 | 0.94646 |
+| Dispersed | 4096 | 9.04 | 8.65 |
+| Sequential | 65536 | 2.16 | 2.36 |
+| Dispersed | 65536 | 18.08 | 18.23 |
+
+The positional 4096-byte sequential cell has 42% CV. CPU placement has the same
+unrestricted/unverified qualification as the warm run. These measurements do
+not establish a universal cache-miss speedup. The warm syscall reduction remains
+useful, but device waiting and read-ahead policy matter much more here. Network
+coalescing thresholds should not become unconditional disk read-ahead defaults.
+
+```
+cache-miss benchmark: rc=0 29s | peak-RSS 0.22GiB | min-avail 15683MiB | peak-load 0.79
+standalone all-target clippy: rc=0 1s | peak-RSS 0.16GiB | min-avail 16096MiB | peak-load 0.31
+```
+
+Reproduce with `just io-validation-disk-cold <file> 2,3` under the resource
+wrapper. The log names the underlying zenbench attempt and run artifacts.

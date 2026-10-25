@@ -84,6 +84,10 @@ io-validation-batching output cpus="2,3" suite="synthetic":
 io-validation-disk file cpus="2,3":
     IO_DISK_FILE="{{file}}" taskset -c "{{cpus}}" cargo bench --manifest-path perf/io-validation/Cargo.toml -p io-validation --bench disk --locked -- --cpu-policy=unrestricted --median-of-passes=3
 
+# Linux: per-file eviction, verified using the process's kernel read-byte charge.
+io-validation-disk-cold file cpus="2,3":
+    IO_DISK_FILE="{{file}}" taskset -c "{{cpus}}" cargo bench --manifest-path perf/io-validation/Cargo.toml -p io-validation --bench disk_cold --locked -- --cpu-policy=unrestricted --median-of-passes=3
+
 io-validation-transport mp4 webm output:
     bash perf/io-validation/run-transport.sh "{{mp4}}" "{{webm}}" "{{output}}"
 

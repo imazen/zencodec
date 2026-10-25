@@ -378,6 +378,7 @@ name = "io-validation"
 version = "0.0.0"
 dependencies = [
  "enough",
+ "rustix",
  "tokio",
  "zenbench",
  "zenbitmaps",

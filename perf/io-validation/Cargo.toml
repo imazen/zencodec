@@ -18,6 +18,7 @@ zenpixels = ">=0.2.16, <0.4.0"
 enough = "0.4.4"
 tokio = { version = "1.53.3", features = ["rt-multi-thread", "time", "macros", "io-util", "sync"] }
 zenbench = "0.1.11"
+rustix = { version = "1.1.5", features = ["fs"] }
 zenmp4 = { path = "vendor/zenmp4" }
 zenwebm = { path = "vendor/zenwebm" }
 zenivf = { path = "vendor/zenivf" }
@@ -47,4 +48,8 @@ harness = false
 
 [[bench]]
 name = "admission"
+harness = false
+
+[[bench]]
+name = "disk_cold"
 harness = false
