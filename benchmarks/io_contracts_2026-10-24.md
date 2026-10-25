@@ -211,3 +211,31 @@ standalone all-target clippy: rc=0 1s | peak-RSS 0.16GiB | min-avail 16096MiB | 
 
 Reproduce with `just io-validation-disk-cold <file> 2,3` under the resource
 wrapper. The log names the underlying zenbench attempt and run artifacts.
+
+## Allocation and instruction profiles
+
+The [fixed-work profile summary](io_disk_profiles_2026-10-24.log) records
+`perf stat -r 3` and heaptrack runs, using the existing verified disk probe and
+the same 4096-byte reusable output. Both adapters make **20 allocation calls**
+for both 256 and 1280128 reads. All four heaptrack reports show **79.67K peak
+heap consumption** (heaptrack's units, whole process). Thus this workload does
+not allocate per read in either implementation. It says nothing about a codec's
+heap or a network client's buffers. The 548-byte exit residue includes runtime
+state and is not attributed to the adapter.
+
+For 1280128 reads, whole-process mean counters over three runs:
+
+| Adapter | Instructions | Cycles | Cache misses |
+|---|---:|---:|---:|
+| Frozen seek/read | 3372209446 | 5712069839 | 4778149 |
+| Current FileReadAt | 2769217018 | 3843638661 | 4337071 |
+
+These profiles explain the warm-path improvement without assigning every cycle
+to a source line. Perf/heaptrack elapsed times are not replacement throughput
+benchmarks. The trace binaries and input hashes are retained with the raw data.
+
+```
+run-heavy: done rc=0 8s | peak-RSS 0.09GiB | min-avail 15922MiB | peak-load 0.23
+```
+
+Reproduce with `just io-validation-disk-profile <new-output> <file> 2,3`.

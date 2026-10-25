@@ -1,0 +1,61 @@
+Fixed-work FileReadAt profiles; library baseline c3a5ddd132cd4fd407e4cb43e013fed9cf75958b
+Host r7900x, Rust 1.99.1. 4096 bytes/read; repetitions add 128 verification reads.
+Command: just io-validation-disk-profile <new-output> <64-MiB-fixture> 2,3
+
+file-perf.csv
+# started on Sat Oct 24 18:12:43 2026
+
+2769217018,,instructions,0.01%,671864973,100.00,,
+3843638661,,cycles,2.66%,671864973,100.00,,
+4337071,,cache-misses,6.84%,671864973,100.00,,
+9,,context-switches,18.52%,671864973,100.00,,
+
+seek-perf.csv
+# started on Sat Oct 24 18:12:38 2026
+
+3372209446,,instructions,0.02%,1016914014,100.00,,
+5712069839,,cycles,1.89%,1016914014,100.00,,
+4778149,,cache-misses,5.51%,1016914014,100.00,,
+14,,context-switches,8.58%,1016914014,100.00,,
+
+file-1.txt
+
+total runtime: 0.00s.
+calls to allocation functions: 20 (10000/s)
+temporary memory allocations: 3 (1500/s)
+peak heap memory consumption: 79.67K
+peak RSS (including heaptrack overhead): 5.39M
+total memory leaked: 548B
+
+file-10000.txt
+
+total runtime: 0.72s.
+calls to allocation functions: 20 (27/s)
+temporary memory allocations: 3 (4/s)
+peak heap memory consumption: 79.67K
+peak RSS (including heaptrack overhead): 5.41M
+total memory leaked: 548B
+
+seek-1.txt
+
+total runtime: 0.00s.
+calls to allocation functions: 20 (10000/s)
+temporary memory allocations: 3 (1500/s)
+peak heap memory consumption: 79.67K
+peak RSS (including heaptrack overhead): 5.35M
+total memory leaked: 548B
+
+seek-10000.txt
+
+total runtime: 1.09s.
+calls to allocation functions: 20 (18/s)
+temporary memory allocations: 3 (2/s)
+peak heap memory consumption: 79.67K
+peak RSS (including heaptrack overhead): 5.38M
+total memory leaked: 548B
+
+run-heavy: mem-cap=12G (cgroup, hard) jobs=4/24 avail=16100MiB :: just io-validation-disk-profile /home/lilith/tmp/io-contracts-2026-10-25/disk-profile-final /home/lilith/tmp/zencodec-io-experiments-2026-10-24/disk-fixture.bin 2,3
+cargo build --manifest-path perf/io-validation/Cargo.toml -p io-validation --bin disk_probe --release --locked
+[1m[92m    Finished[0m `release` profile [optimized + debuginfo] target(s) in 0.03s
+bash perf/io-validation/profile-disk.sh "/home/lilith/tmp/io-contracts-2026-10-25/disk-profile-final" "/home/lilith/tmp/zencodec-io-experiments-2026-10-24/disk-fixture.bin" "2,3"
+run-heavy: done rc=0 8s | peak-RSS 0.09GiB | min-avail 15922MiB | peak-load 0.23

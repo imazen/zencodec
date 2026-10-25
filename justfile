@@ -88,6 +88,10 @@ io-validation-disk file cpus="2,3":
 io-validation-disk-cold file cpus="2,3":
     IO_DISK_FILE="{{file}}" taskset -c "{{cpus}}" cargo bench --manifest-path perf/io-validation/Cargo.toml -p io-validation --bench disk_cold --locked -- --cpu-policy=unrestricted --median-of-passes=3
 
+io-validation-disk-profile output file cpus="2,3":
+    cargo build --manifest-path perf/io-validation/Cargo.toml -p io-validation --bin disk_probe --release --locked
+    bash perf/io-validation/profile-disk.sh "{{output}}" "{{file}}" "{{cpus}}"
+
 io-validation-transport mp4 webm output:
     bash perf/io-validation/run-transport.sh "{{mp4}}" "{{webm}}" "{{output}}"
 

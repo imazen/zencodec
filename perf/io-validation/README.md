@@ -119,3 +119,9 @@ system-wide cache. Every sample must charge at least the requested data bytes
 to `/proc/self/io`'s `read_bytes`. Eviction and verification run outside the
 timer. This verifies kernel block-read accounting, not a cold device/controller
 cache. Keep these results separate from the warm benchmark.
+
+`just io-validation-disk-profile <new-output> <file> 2,3` records fixed-work
+`perf stat` counters and heaptrack traces for both disk adapters. It compares
+256 and 1280128 reads, including initial verification, with the same reusable
+4096-byte output. Preserve the complete output directory outside git; the
+qualification report links the compact counters and heap summary.
