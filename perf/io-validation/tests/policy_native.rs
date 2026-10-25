@@ -407,3 +407,73 @@ fn native_limit_failure_stays_a_codec_error_and_unknown_memory_refuses_before_ca
     );
     assert!(!called);
 }
+
+#[test]
+fn a_named_profile_installs_requirements_even_when_a_custom_callback_delegates() {
+    let invalid = b"II*\0\xff\xff\xff\xff";
+    let profile = Profile::web_exif();
+    let mut fallback =
+        |_: Question<'_>| -> Result<Decision, At<Infallible>> { Ok(Decision::UsePreset) };
+    assert!(
+        native::exif(
+            &mut Engine::new(profile.preset, 3),
+            Some(invalid),
+            true,
+            profile.requirements,
+            &mut fallback
+        )
+        .is_err()
+    );
+    let exact = Profile::exact_exif();
+    assert_eq!(
+        native::exif(
+            &mut Engine::new(exact.preset, 3),
+            Some(invalid),
+            true,
+            exact.requirements,
+            &mut fallback
+        )
+        .unwrap()
+        .unwrap()
+        .as_ref(),
+        invalid
+    );
+    let bounded = exact.with_memory_cap(1024);
+    assert!(
+        native::exif(
+            &mut Engine::new(bounded.preset, 3),
+            Some(invalid),
+            true,
+            bounded.requirements,
+            &mut fallback
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn still_requests_reject_requirements_from_other_domains_instead_of_ignoring_them() {
+    let fixture = fixture();
+    let mut called = false;
+    let mut callback = |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+        called = true;
+        Ok(Decision::UsePreset)
+    };
+    let result = native::encode(
+        native::Request {
+            format: ImageFormat::Qoi,
+            erased: false,
+            requirements: req(Effects::KEEP_TRACK),
+            limits: ResourceLimits::none(),
+        },
+        pixels(&fixture),
+        &Metadata::none(),
+        &mut callback,
+        &mut Vec::new(),
+    );
+    assert_eq!(
+        result.unwrap_err().error().report.stage,
+        native::Stage::Configuration
+    );
+    assert!(!called);
+}

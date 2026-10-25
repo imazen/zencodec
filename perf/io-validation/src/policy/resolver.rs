@@ -42,6 +42,43 @@ impl Default for PolicySet {
         }
     }
 }
+
+/// A named application policy binds hard requirements and preferences together.
+/// The resolver alone is only a preference selector. EXIF scope is explicit.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Profile {
+    pub requirements: Requirements,
+    pub preset: PolicySet,
+}
+impl Profile {
+    pub fn web_exif() -> Self {
+        Self {
+            requirements: Requirements {
+                ram: None,
+                disk: None,
+                accounting: Accounting::Operation,
+                effects: Effects::NO_GPS.union(Effects::RIGHTS),
+            },
+            preset: PolicySet::default(),
+        }
+    }
+    pub fn exact_exif() -> Self {
+        Self {
+            requirements: Requirements {
+                effects: Effects::EXACT_METADATA.union(Effects::RIGHTS),
+                ..Self::web_exif().requirements
+            },
+            preset: PolicySet {
+                metadata: MetadataAction::KeepExact,
+                ..PolicySet::default()
+            },
+        }
+    }
+    pub fn with_memory_cap(mut self, bytes: u64) -> Self {
+        self.requirements.ram = Some(bytes);
+        self
+    }
+}
 impl PolicyResolver for PolicySet {
     type Error = Infallible;
     fn resolve(&mut self, question: Question<'_>) -> Result<Decision, At<Infallible>> {

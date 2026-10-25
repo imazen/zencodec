@@ -240,3 +240,21 @@ is an explicit local command, not silently skipped in that CI job.
 ```text
 run-heavy: done rc=0 1s | peak-RSS 0.21GiB | min-avail 18506MiB | peak-load 0.19
 ```
+
+## Named profiles bind intent to preferences
+
+The `Profile` control now constructs EXIF-web and exact-EXIF configurations
+containing both requirements and a `PolicySet`. Custom code can return UsePreset;
+that delegation never removes the profile's hard requirements. Unknown native
+memory cost still refuses a configured hard cap. The native boundary also rejects
+requirements outside its operation domain: a still-image function cannot silently
+ignore a media-track requirement just because none of its questions handles it.
+This is why the final consumer API should bind the profile to the request once,
+instead of exposing the prototype's separate requirements/preset arguments.
+
+Native callback facts now use the actual input descriptor and strided byte view.
+That view's length is not a claim about the caller's entire backing allocation.
+
+```text
+run-heavy: done rc=0 1s | peak-RSS 0.20GiB | min-avail 18479MiB | peak-load 0.14
+```

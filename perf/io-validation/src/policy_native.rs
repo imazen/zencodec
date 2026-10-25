@@ -244,6 +244,16 @@ pub(crate) fn encode<R: PolicyResolver + ?Sized>(
         requirements,
         limits,
     } = request;
+    if requirements.effects.0 & !31 != 0 {
+        return Err(At::wrap(failure(
+            Stage::Configuration,
+            Cause::Metadata(zencodec::metadata_rewrite::Error::Unsupported(
+                "requirement outside still-image operation",
+            )),
+            0,
+        ))
+        .at());
+    }
     // Scope is explicit: these controls accept EXIF only. No color/orientation
     // conversion, XMP editor or HDR/gain-map handling is silently supplied.
     if metadata.xmp.is_some()
@@ -279,8 +289,8 @@ pub(crate) fn encode<R: PolicyResolver + ?Sized>(
     engine
         .resolve(
             Facts::Fidelity(FidelityFacts {
-                alpha: true,
-                bits_per_sample: 8,
+                alpha: pixels.descriptor().has_alpha(),
+                bits_per_sample: (pixels.descriptor().channel_type().byte_size() * 8) as u8,
             }),
             &fidelity,
             requirements,
@@ -296,7 +306,7 @@ pub(crate) fn encode<R: PolicyResolver + ?Sized>(
     engine
         .resolve(
             Facts::Execution(ExecutionFacts {
-                resident_input: 0,
+                resident_input: pixels.as_strided_bytes().len() as u64,
                 source_length: None,
                 network: false,
             }),
