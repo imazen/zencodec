@@ -204,6 +204,11 @@ removes that whole class).
 
 #### Fixed
 
+- Check request address overflow before serving bytes. `ReadCursor::max_window`
+  now bounds prefetch and skipped-input buffering as well as contiguous requests.
+- Publish fetched ranges only after the complete batch succeeds; partial source
+  failures and async cancellation cannot expose unfilled cache bytes on retry.
+
 - Buffered sources reserve retained capacity fallibly before reads, reject
   impossible exact spool requests before consuming input, and retain only the
   declared window during large forward reads. Exact-cap EOF uses one stack-byte
@@ -219,6 +224,12 @@ removes that whole class).
 - Default-feature rustdoc renders gated driver names with their required features instead of unresolved links (`7e3c8666`).
 
 #### Added
+
+- `IoLimits`, `InputError` and `DriveOptions::with_limits` provide retained-input
+  admission across synchronous and async incremental drivers. Optional range
+  prefetch/gap merging fits the allowance; required spans refuse before I/O.
+  Allocations are fallible, borrowed slices stay allocation-free, and source
+  errors retain their own types. Cursors expose retained input capacity.
 
 - `BufferPolicy::try_for_pattern` refuses insufficient required lookback instead
   of clamping it. `BufferedReadAt::retained_bytes` reports cached payload separately

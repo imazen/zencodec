@@ -31,6 +31,19 @@ makes the spool terminal. These are retained-payload limits, not whole-operation
 memory or total-input-byte limits; `retained_bytes()` and `watermark()` expose
 those distinct counts.
 
+`DriveOptions::with_limits(IoLimits::new(input_bytes, ranges, in_flight))`
+applies input admission to `ReadAtCursor`, `AsyncCursor` and the incremental
+image drivers. It bounds retained input capacity, planned ranges and ranges
+passed to a source per batch. Requests are alternatives: the driver chooses an
+affordable one and reduces optional prefetch/gap merging to fit. Impossible
+contiguous requests return `InputError` before reading. Resident borrowed
+slices need no input allocation allowance. Defaults preserve existing behavior.
+
+This allowance excludes source caches, codec/output allocations, allocator
+bookkeeping and transient reallocation. `retained_input_capacity()` exposes
+the cursor's charged capacities. `ReadCursor` applies its existing `max_window`
+to prefetch and skipping as well as the decoder's minimum request.
+
 The async drivers keep the decoder in the task between batches and run each
 batch on a `Compute` (`spawn_blocking`, a rayon pool, or `Inline`), so no
 thread is held while bytes are in flight and codecs stay synchronous.

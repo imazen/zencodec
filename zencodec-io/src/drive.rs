@@ -22,6 +22,8 @@ pub struct DriveOptions {
     /// Bytes read per round for a sequential request, on top of the
     /// decoder's minimum.
     pub read_size: usize,
+    /// Admission for driver-owned input. Defaults to historical unlimited behavior.
+    pub limits: crate::IoLimits,
 }
 
 impl Default for DriveOptions {
@@ -29,6 +31,7 @@ impl Default for DriveOptions {
         Self {
             max_gap: 0,
             read_size: 64 * 1024,
+            limits: crate::IoLimits::unlimited(),
         }
     }
 }
@@ -36,7 +39,17 @@ impl Default for DriveOptions {
 impl DriveOptions {
     /// Options with the given coalescing gap and sequential read size.
     pub const fn new(max_gap: u64, read_size: usize) -> Self {
-        Self { max_gap, read_size }
+        Self {
+            max_gap,
+            read_size,
+            limits: crate::IoLimits::unlimited(),
+        }
+    }
+
+    /// Apply input admission to synchronous and asynchronous drivers alike.
+    pub const fn with_limits(mut self, limits: crate::IoLimits) -> Self {
+        self.limits = limits;
+        self
     }
 }
 

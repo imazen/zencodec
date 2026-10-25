@@ -56,7 +56,8 @@ use zencodec::encode::Encoder;
 use zencodec::source::{DynReadAt, SourceError};
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSliceMut};
 
-use crate::drive::{DriveOptions, Progressor, coalesce_into};
+use crate::admission::{self, InputError};
+use crate::drive::{DriveOptions, Progressor};
 use crate::window::{ProtocolViolation, Window, check_need, read_target};
 
 // ───────────────────────────── sources and compute ─────────────────────────────
@@ -293,6 +294,8 @@ pub enum AsyncDriveError<E> {
     Write(std::io::Error),
     /// The decoder broke the protocol.
     Protocol(ProtocolViolation),
+    /// Driver-owned input could not be admitted or allocated.
+    Input(InputError),
     /// The pulse tripped while the driver was waiting.
     Cancelled(StopReason),
     /// A compute job was dropped without a result (its pool shut down or
@@ -314,6 +317,7 @@ fn widen<F>(e: AsyncDriveError<core::convert::Infallible>) -> AsyncDriveError<F>
             AsyncDriveError::Source(e) => AsyncDriveError::Source(e),
             AsyncDriveError::Write(e) => AsyncDriveError::Write(e),
             AsyncDriveError::Protocol(p) => AsyncDriveError::Protocol(p),
+            AsyncDriveError::Input(e) => AsyncDriveError::Input(e),
             AsyncDriveError::Cancelled(r) => AsyncDriveError::Cancelled(r),
             AsyncDriveError::Disconnected => AsyncDriveError::Disconnected,
         }
@@ -327,6 +331,7 @@ impl<E: fmt::Display> fmt::Display for AsyncDriveError<E> {
             Self::Source(e) => write!(f, "source: {e}"),
             Self::Write(e) => write!(f, "writing output: {e}"),
             Self::Protocol(e) => write!(f, "protocol: {e}"),
+            Self::Input(e) => write!(f, "input: {e}"),
             Self::Cancelled(r) => write!(f, "cancelled: {r:?}"),
             Self::Disconnected => write!(f, "compute job dropped without a result"),
         }
@@ -340,6 +345,7 @@ impl<E: core::error::Error + 'static> core::error::Error for AsyncDriveError<E> 
             Self::Source(e) => Some(e.as_ref()),
             Self::Write(e) => Some(e),
             Self::Protocol(e) => Some(e),
+            Self::Input(e) => Some(e),
             _ => None,
         }
     }
@@ -422,18 +428,29 @@ fn fill<'a, Src: AsyncSource + ?Sized, E: 'a>(
     opts: DriveOptions,
 ) -> impl Future<Output = Result<(), AsyncDriveError<E>>> + Send + 'a {
     async move {
-        let request = requests[0];
+        let limits = opts.limits;
+        let request = admission::select(requests, limits).map_err(AsyncDriveError::Input)?;
         match request {
             Request::AtLeast { offset, min_len } => {
                 window.position(offset, fetched);
                 // Read until the request is met (or the source ends), asking
                 // for up to `read_size` more each time; a network source returns
                 // what has arrived, so the decoder steps as soon as it can.
-                let target = read_target(min_len, opts.read_size);
+                let target = read_target(min_len, opts.read_size)
+                    .min(limits.max_input_bytes())
+                    .min(usize::try_from(u64::MAX - offset).unwrap_or(usize::MAX));
+                admission::make_room(window, fetched, target, limits);
                 while window.len() < min_len.max(1) && window.total != Some(window.end()) {
+                    limits.reading().map_err(AsyncDriveError::Input)?;
                     let end = window.end();
-                    let want = target - window.len().min(target);
-                    let spare = window.spare(want);
+                    let want = (target - window.len().min(target))
+                        .min(usize::try_from(u64::MAX - end).unwrap_or(usize::MAX));
+                    let spare = window
+                        .try_spare(
+                            want,
+                            limits.max_input_bytes() - admission::capacity(fetched),
+                        )
+                        .map_err(AsyncDriveError::Input)?;
                     let n = source
                         .read_at(end, spare)
                         .await
@@ -461,44 +478,51 @@ fn fill<'a, Src: AsyncSource + ?Sized, E: 'a>(
                 if window.position(r.offset, fetched) {
                     let missing = (r.end() - window.end()) as usize;
                     let offset = window.end();
-                    read_full(source, offset, window.spare(missing))
+                    limits.reading().map_err(AsyncDriveError::Input)?;
+                    admission::make_room(window, fetched, r.length as usize, limits);
+                    let spare = window
+                        .try_spare(
+                            missing,
+                            limits.max_input_bytes() - admission::capacity(fetched),
+                        )
+                        .map_err(AsyncDriveError::Input)?;
+                    read_full(source, offset, spare)
                         .await
                         .map_err(AsyncDriveError::Source)?;
                     window.commit(missing);
                     return Ok(());
                 }
-                let ranges: Vec<ByteRange> = requests
-                    .iter()
-                    .filter_map(|q| match q {
-                        Request::Range(r) => Some(*r),
-                        _ => None,
-                    })
-                    .collect();
                 let mut coalesced = Vec::new();
-                coalesce_into(&ranges, opts.max_gap, &mut coalesced);
-                let mut bufs: Vec<(u64, Vec<u8>)> = coalesced
-                    .iter()
-                    .map(|c| (c.offset, vec![0u8; c.length as usize]))
-                    .collect();
+                admission::plan(r, requests, opts.max_gap, limits, &mut coalesced)
+                    .map_err(AsyncDriveError::Input)?;
+                window.release();
+                let mut pending = core::mem::take(fetched);
+                admission::allocate_ranges(&coalesced, limits, &mut pending)
+                    .map_err(AsyncDriveError::Input)?;
                 {
-                    let mut reqs: Vec<(u64, &mut [u8])> =
-                        bufs.iter_mut().map(|(o, b)| (*o, &mut b[..])).collect();
-                    source
-                        .read_ranges(&mut reqs)
-                        .await
-                        .map_err(AsyncDriveError::Source)?;
+                    let mut reqs = Vec::new();
+                    admission::reserve(&mut reqs, pending.len()).map_err(AsyncDriveError::Input)?;
+                    reqs.extend(pending.iter_mut().map(|(o, b)| (*o, &mut b[..])));
+                    for batch in reqs.chunks_mut(limits.max_in_flight()) {
+                        source
+                            .read_ranges(batch)
+                            .await
+                            .map_err(AsyncDriveError::Source)?;
+                    }
                 }
-                let i = bufs
+                // Cancellation drops pending storage without publishing zeros.
+                *fetched = pending;
+                let i = fetched
                     .iter()
                     .position(|(off, buf)| r.offset >= *off && r.end() <= off + buf.len() as u64)
                     .expect("coalesced ranges cover every request");
-                let (off, buf) = bufs.swap_remove(i);
-                *fetched = bufs;
+                let (off, buf) = fetched.swap_remove(i);
                 window.adopt(off, buf);
                 window.consume((r.offset - off) as usize);
             }
             Request::Len => {
                 if window.total.is_none() {
+                    limits.reading().map_err(AsyncDriveError::Input)?;
                     window.total = Some(source.len().await.map_err(AsyncDriveError::Source)?);
                 }
             }
@@ -535,6 +559,13 @@ impl AsyncCursor {
             fetched: Vec::new(),
             started: false,
         }
+    }
+
+    /// Retained driver-owned payload capacity, excluding source caches and outputs.
+    pub fn retained_input_capacity(&self) -> usize {
+        self.window
+            .capacity()
+            .saturating_add(admission::capacity(&self.fetched))
     }
 
     /// Step `stage` until it produces an output, awaiting `source` for every
@@ -578,6 +609,7 @@ impl AsyncCursor {
             .map_err(|e| match e {
                 AsyncDriveError::Source(e) => DriveFailure::Source(e),
                 AsyncDriveError::Protocol(p) => DriveFailure::Protocol(p),
+                AsyncDriveError::Input(e) => DriveFailure::Input(e),
                 // `fill` reports only source and protocol failures.
                 _ => DriveFailure::Protocol(ProtocolViolation::EmptyRequest),
             })?;

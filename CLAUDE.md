@@ -231,6 +231,15 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed on the ideal API PR (2026-10-25): the sequential pump limited the
+  requested minimum but could prefetch/skip into a larger allocation than its
+  `max_window`. The existing cap now covers these paths; random-access and async
+  drivers share explicit retained-input admission. `tests/input_admission.rs`
+  verifies byte parity, capacity, alternative selection, batches and refusal
+  before source reads. This does not bound source/codec/output allocations.
+  Completed range batches are published atomically; partial errors and async
+  cancellation leave no partial cache that a later call could consume.
+
 - Fixed on the ideal API PR (2026-10-25): buffered exact spool requests formerly
   consumed input before discovering they exceeded the cap, and a large windowed
   read retained its entire requested span. Admission now precedes exact reads;

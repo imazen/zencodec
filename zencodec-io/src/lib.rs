@@ -58,6 +58,9 @@ mod std_source_error;
 #[cfg(feature = "tokio")]
 pub mod tokio_io;
 
+mod admission;
+pub use admission::{InputError, IoLimits};
+
 pub use drive::{
     DriveError, DriveOptions, DriveStats, coalesce_byte_ranges, coalesce_into, drive_from_read_at,
     drive_from_slice,

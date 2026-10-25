@@ -431,6 +431,20 @@ enum StdSourceError { Source(SourceError), Io(std::io::Error), Allocation { requ
 // BufferPolicy::try_for_pattern(pattern, max_bytes) -> Result<BufferPolicy, SourceError>
 // rejects an undersized required backtrack window before constructing a source.
 
+// zencodec-io: retained driver input admission, shared by sync/async drivers.
+struct IoLimits { /* private; new(input_bytes, ranges, in_flight), unlimited() */ }
+impl DriveOptions {
+    fn with_limits(self, limits: IoLimits) -> Self;
+}
+enum InputError {
+    Limit { needed: u64, limit: usize }, RangesDisabled, ReadsDisabled,
+    Allocation { bytes: usize, source: TryReserveError },
+}
+// DriveFailure::Input / AsyncDriveError::Input retain these errors separately
+// from source and codec failures. Zero allowances still permit borrowed slices.
+// Ranges are alternatives; optional prefetch stays within the allowance.
+// Capacity excludes sources, codecs, output and allocator transients.
+
 // DecodeJob<'a> — default Err(UnsupportedOperation::SeekableDecode)
 fn push_decoder_from_source(self, source: &mut dyn DynReadAt,
     sink: &mut dyn DecodeRowSink, preferred: &[PixelDescriptor])
