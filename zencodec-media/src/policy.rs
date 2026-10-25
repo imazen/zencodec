@@ -102,7 +102,7 @@ impl<D, R> PolicyDecoder<D, R> {
         }
     }
     /// The built-in policy used when this resolver returns `UsePreset`.
-    pub fn with_preset(mut self, preset: PolicySet) -> Self {
+    pub fn with_policy_set(mut self, preset: PolicySet) -> Self {
         self.preset = preset;
         self
     }

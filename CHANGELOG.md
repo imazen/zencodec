@@ -9,6 +9,9 @@
   until policy succeeds, preserves native samples/owners, and releases the
   decoder and unpublished frames on terminal failure or unwind. This guards
   publication after reconstruction; it adds no native workspace/privacy bound.
+- Use `with_policy_set` consistently for the new frame guard and the existing
+  still-image policy adapter. Native AV1 examples and independent re-encode
+  qualification accompany the source-extracted guide signatures.
 
 Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELOG.md).
 

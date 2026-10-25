@@ -149,6 +149,8 @@ enum Question<'a> { // non_exhaustive
     Transcode { facts: InterpretationFacts, choices: Choices<'a, TranscodeOffer> },
     Boundary { facts: InterpretationFacts, choices: Choices<'a, BoundaryOffer> },
     Encode { facts: EncodeFacts, choices: Choices<'a, EncodeOffer> },
+    Frame { interpretation: &'a frame::FrameInterpretation,
+        timing: frame::FrameTiming, choices: Choices<'a, FrameOffer> },
 }
 struct BoundaryOffer { action: BoundaryAction }
 struct EncodeFacts { width: u32, height: u32, descriptor: PixelDescriptor }
@@ -202,7 +204,7 @@ code without metadata payloads. `with_unavailable(reason)` marks the facts unava
 
 `OperationReport` keeps the latest 16 `DecisionRecord`s and counts omitted older
 records. A record carries question identity, offer count, selected typed contract
-(`Selection::Encode`, `Selection::Transcode` or `Selection::Boundary`),
+(`Selection::Encode`, `Selection::Transcode`, `Selection::Boundary` or `Selection::Frame`),
 preset delegation and `DecisionCode`. Adapters append records with
 `OperationReport::record(record)`.
 Success returns this report with the output; native execution failure retains it
@@ -213,7 +215,7 @@ them. Native codec errors keep their codec's own formatting.
 
 The full implementation target and current gaps are recorded in
 [ideal-api.md](ideal-api.md). The resolver serves prepared encoder configuration, mandatory interpretation
-boundaries and complete pixel-transcode routes. The executing transcode adapter
+boundaries, native frame publication and complete pixel-transcode routes. The executing transcode adapter
 is in zencodecs; each native route still needs qualification.
 
 ### Coupled transcode offers
@@ -326,6 +328,91 @@ and is terminal after callback failure or caught unwind. `ContinueReading`
 keeps affected output blocked; unavailable facts offer no valid action and
 normally produce a traced refusal. Neither action certifies native workspace
 or metadata disclosure safety.
+
+### Native frame publication
+
+`zencodec::frame` holds immutable interpretation and presentation facts shared
+by policy and media sessions. `zencodec_media::frame` keeps compatible imports
+of these same types. Native picture storage, mapping and sessions stay in
+`zencodec-media`. These facts do not flatten planar samples into a packed
+`zenpixels::PixelDescriptor`.
+
+```rust
+// zencodec::frame (public fields; non_exhaustive except Crop and SampleEncoding)
+enum Subsampling { Mono, Yuv420, Yuv422, Yuv444 }
+enum ChromaSiting { Unknown, Left, TopLeft, Center }
+enum PlaneRole { Luma, Cb, Cr, Green, Blue, Red, Alpha }
+struct Crop { x: u32, y: u32, width: u32, height: u32 }
+struct FrameGeometry {
+    coded_width: u32, coded_height: u32, crop: Crop,
+    render: Option<(u32, u32)>,
+}
+struct ColorClaim {
+    bitstream: Option<Cicp>, container: Option<Cicp>, resolved: Option<Cicp>,
+}
+struct FrameInterpretation {
+    geometry: FrameGeometry, subsampling: Subsampling, siting: ChromaSiting,
+    encoding: SampleEncoding, roles: Vec<PlaneRole>, color: ColorClaim,
+    config_epoch: u32,
+}
+struct FrameTiming {
+    pts: Option<Timestamp>, duration_ticks: Option<u64>,
+    packet_ordinal: Option<u64>, input_offset: Option<u64>,
+}
+struct SampleEncoding { /* private */ }
+impl SampleEncoding {
+    const U8: Self;
+    const fn new(storage: zenpixels::ChannelType, code_bits: u8, bit_shift: u8)
+        -> Result<Self, SampleEncodingError>;
+    const fn storage(self) -> zenpixels::ChannelType;
+    const fn code_bits(self) -> u8;
+    const fn bit_shift(self) -> u8;
+    const fn bytes_per_sample(self) -> usize;
+}
+
+// zencodec::operation
+enum FrameOffer { PreserveNative } // non_exhaustive
+fn resolve_frame<R: PolicyResolver + ?Sized>(
+    interpretation: &frame::FrameInterpretation, timing: frame::FrameTiming,
+    resolver: &mut R, preset: PolicySet, stop: &dyn Stop,
+) -> Result<DecisionRecord, At<PolicyFailure>>;
+
+// zencodec_media::policy, implements VideoDecoder
+struct PolicyDecoder<D, R> { /* private */ }
+impl<D, R> PolicyDecoder<D, R> {
+    fn new(decoder: D, resolver: R) -> Self;
+    fn with_policy_set(self, preset: PolicySet) -> Self;
+    fn report(&self) -> &OperationReport;
+    const fn is_failed(&self) -> bool;
+}
+enum Stage { Decode, Policy } // non_exhaustive
+struct Error { /* private: stage, report, native/traced cause */ }
+impl Error {
+    const fn stage(&self) -> Stage;
+    fn report(&self) -> &OperationReport;
+}
+```
+
+`FrameFacts` is the bounded report snapshot of geometry, subsampling, siting,
+encoding, plane count, color, epoch and timing; the question borrows the full
+component roles. `DecisionContext::Frame(FrameFacts)` remains available on
+failure and `Selection::Frame { offer, facts }` identifies a successful choice.
+
+Every native presentation passes policy before publication. The held frame and
+its picture owner survive unchanged on success. Failure or unwind drops the
+decoder and unpublished owners; later work returns `SessionError::Finished`.
+Previously returned frames remain valid. `Error::source` preserves native
+causes or `At<PolicyFailure>` and the original callback's `At<E>` chain.
+
+The native decoder has already reconstructed the frame at this boundary. The
+offer proves neither native allocation bounds nor container privacy. Presets
+requiring workspace or disclosure evidence therefore refuse. A conversion or
+encoder downstream must still check its own input contract. The compatibility
+`SampleEncoding` mirrors an unpublished zenpixels type; coordinated migration
+to that canonical pixel type remains a 0.3 task.
+
+[Native AV1 qualification](../perf/av1-policy-validation/README.md) exercises
+the publication guard, native ownership and independent re-encode readback.
 
 ## Encode traits
 
