@@ -256,6 +256,11 @@ io-policy-disclosure-check:
     cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test policy_disclosure --test policy_engine --locked
     cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test policy_disclosure --test policy_engine --locked -- -D warnings
 
+# Native publication ordering plus explicit waiting, finality and epoch controls.
+io-policy-stream-check:
+    cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test policy_stream --test policy_disclosure --locked
+    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test policy_stream --test policy_disclosure --locked -- -D warnings
+
 # Resolve newly enabled harness features outside workspace path overrides.
 io-policy-update-lock:
     cargo update --manifest-path perf/io-validation/Cargo.toml -p zenmeta
@@ -306,6 +311,7 @@ io-policy-sync export:
     cp perf/io-validation/src/policy_execution.rs "{{export}}/perf/io-validation/src/"
     cp perf/io-validation/src/policy_native.rs "{{export}}/perf/io-validation/src/"
     cp perf/io-validation/src/policy_disclosure.rs "{{export}}/perf/io-validation/src/"
+    cp perf/io-validation/src/policy_stream.rs "{{export}}/perf/io-validation/src/"
     cp perf/io-validation/src/policy_media.rs "{{export}}/perf/io-validation/src/"
     cp perf/io-validation/src/policy_benchmark.rs "{{export}}/perf/io-validation/src/"
     cp perf/io-validation/src/bin/policy_media.rs "{{export}}/perf/io-validation/src/bin/"
@@ -338,5 +344,5 @@ docs-site-browser:
 
 # Run in the prepared standalone harness (see perf/io-validation/README.md).
 docs-site-examples:
-    cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test encoder_retention --test policy_resolution --test policy_engine --test policy_execution --test policy_native --test policy_disclosure --bin policy_media --bin transport_contracts --locked
-    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test encoder_retention --test policy_resolution --test policy_engine --test policy_execution --test policy_native --test policy_disclosure --bin policy_media --bin transport_contracts --locked -- -D warnings
+    cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test encoder_retention --test policy_resolution --test policy_engine --test policy_execution --test policy_native --test policy_disclosure --test policy_stream --bin policy_media --bin transport_contracts --locked
+    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test encoder_retention --test policy_resolution --test policy_engine --test policy_execution --test policy_native --test policy_disclosure --test policy_stream --bin policy_media --bin transport_contracts --locked -- -D warnings

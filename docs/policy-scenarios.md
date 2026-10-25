@@ -18,7 +18,7 @@ trait PolicyResolver {
 }
 ```
 
-`Question` has typed execution, metadata, fidelity and media-track variants. Closures and
+`Question` has typed execution, metadata, fidelity, media-track and discovery-boundary variants. Closures and
 the configurable `PolicySet` implement the same trait. The predefined decisions
 are choose an offered token, use the configured preset, and decline with a
 reason. `Decision::reject` captures the rule's source location. A callback error
@@ -70,6 +70,8 @@ it does not certify a codec's memory bounds or actual metadata effects.
 | Output failure | Slow/short/failing writer, partial artifact, no automatic retry, raw/staging lifetimes | Short/interrupted/zero/failing Write diagnostics passed in `policy_native`; the native retention control now executes a resolver-selected finish-first or sequential schedule |
 | Transport and viewport | Reused simulator, range/source version changes, view cancellation and disk/resident controls | Native MP4/WebM/IVF decisions agree over resident, disk and reused network model; changed-source admission controls pass; viewport-specific adapter remains unqualified |
 | Media | Real packet/frame facts, epoch changes, late decisions, retained frames and multiple tracks | Native multi-track packet checks and toy-session epoch/frame-ownership controls pass; native decoded-video allocation bounds remain unqualified |
+| Late interpretation | Suspend before effects, bounded waiting, CICP/finality facts, independent commitments, stale receipts, typed callback failure | Native QOI ordering and post-barrier encoding pass; late discovery is authored. [Scope and evidence](policy-transcoding.md#qualification-status) |
+| Opaque disclosure | Syntax is not privacy evidence; qualified regeneration, optional omission, required retention conflict, exact inspected bytes | Native XML/RDF parsing passes for one orientation-only schema. Arbitrary ICC, nested content and whole-file PII are unqualified. [Scope and evidence](policy-transcoding.md#qualification-status) |
 | Concurrency | Independent mutable resolvers, shared immutable preset configuration, unique operation/question tickets | Concurrent control passed: `policy_engine`; no shared callback mutex |
 | Portability | Actual root types on WASM; isolated resolver on a freestanding target | Passed as described below; full root freestanding graph blocked by issue 165 |
 | Cost | Static versus erased dispatch, allocation/error-report cost | [Measured workload](../benchmarks/policy_cost_2026-10-25.md): success paths 89.5–94.2 ns, no operation allocations; failure paths allocate for causes, traces and evidence. Not a codec or I/O benchmark. |

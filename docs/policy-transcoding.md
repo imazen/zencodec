@@ -162,5 +162,32 @@ The test/build process receipt was `rc=0 16s | peak-RSS 0.45GiB | min-avail
 15949MiB | peak-load 2.15`. This is a process measurement, not a codec or parser
 memory bound. Byte/node/depth limits do not establish whole-operation heap usage.
 
-Suspended-stream controls are being added next. No production state-machine or
+The private [suspension controller](../perf/io-validation/src/policy_stream.rs)
+and [native integration controls](../perf/io-validation/tests/policy_stream.rs)
+now exercise this lifecycle. `Question::Boundary` carries discovery status,
+available CICP values and independent commitments through the same fallible
+resolver. Waiting authorizes bounded payload staging only; it does not authorize
+encoding, conversion or publication. Ready receipts bind gate, fact revision and
+epoch. A contradictory fact after promised finality is a protocol failure, not
+a preference the callback can waive.
+
+| Case | Executed evidence |
+|---|---|
+| Observer timing | Native QOI makes its 14-byte header available before `step` returns HeaderReady. This establishes ordering, not a QOI color defect. |
+| Late fact resumes work | Authored late-color discovery, actual charged row staging, then native QOI encoding. Output bytes equal the ordinary encode; strided input samples survive decode exactly. |
+| Bounded waiting | An 8-byte row is admitted under a 12-byte payload cap; the next 8-byte row refuses before allocation. Failure releases the first row and publishes nothing. These are allocation charges, not RSS measurements. |
+| Independent commitments | All 16 combinations of converted samples, encoder start, headers and body publication reject changed interpretation when any prior effect would be invalidated. Compatible interpretation remains admissible. |
+| State and debugging | Pending/provisional/unavailable are distinct; duplicate facts and rows do not repeat decisions; errors preserve callback type and trace; cancellation/decline cannot resume. Panic leaves storage charged until the abandoned gate is dropped. |
+| Disclosure after publication | A trailing opaque optional packet is dropped before writing; required exact retention refuses without leaking the packet. An unaffected color receipt stays valid. |
+| Media scope | An authored independently interpreted segment boundary allows a new epoch while preserving prior publication count; stale epoch/source/operation receipts refuse. This does not qualify a native muxer's reconfiguration behavior. |
+
+`just io-policy-stream-check` passes, including Clippy with warnings denied.
+The test/build process receipt was `rc=0 1s | peak-RSS 0.20GiB | min-avail
+17343MiB | peak-load 0.42`. Allocation overhead, native codec workspace and parser
+heap usage remain outside the payload cap. An application callback can itself
+block, allocate or panic; the engine cannot enforce its execution time.
+
+Native late-metadata JPEG behavior, automatic replay, metadata-aware seeking,
+disk spooling and native video reconfiguration remain unqualified. The controller
+does not offer a replay action it cannot execute. No production state-machine or
 public policy interface has changed in this investigation.
