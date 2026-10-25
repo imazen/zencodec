@@ -8,10 +8,11 @@
 </head>
 <body>
 <a class="skip" href="#journeys">Skip to the guide</a>
-<header class="topbar"><a class="brand" href="#top" aria-label="zencodec home"><span class="mark" aria-hidden="true">z</span>zen<span>codec</span></a><nav aria-label="Main"><a href="#entrypoints">Start</a><a href="#journeys">Journeys</a><a href="#lab">Lab</a><a href="#policy">Policy</a><a href="ideal.html">Checked API</a><a href="https://github.com/imazen/zencodec">Source ↗</a></nav><span class="edition">A living guide · main</span></header>
+<header class="topbar"><a class="brand" href="#top" aria-label="zencodec home"><span class="mark" aria-hidden="true">z</span>zen<span>codec</span></a><nav aria-label="Main"><a href="#entrypoints">Start</a><a href="#journeys">Journeys</a><a href="#lab">Lab</a><a href="#policy">Policy</a><a href="ideal.html">Checked API</a><a href="ideal.html#changes">Changes &amp; why</a><a href="https://github.com/imazen/zencodec">Source ↗</a></nav><span class="edition">A living guide · main</span></header>
 <main id="top">
 <section class="hero wrap">
   <div class="eyebrow"><span class="live-dot"></span> Shared contracts for image &amp; media codecs</div>
+  <p class="guide-current"><a href="ideal.html#changes">Current trait and adapter improvements →</a> Exact signatures, reasons, executing examples and remaining video gaps.</p>
   <div class="hero-grid"><div><h1>One image.<br><em>Three points of view.</em></h1><p class="lede">Start with a single call. Add complexity when the application gives you a reason.</p><a class="primary" href="#consumer-1">Follow the image <span aria-hidden="true">↘</span></a></div><div class="hero-aside"><div class="code-caption">The first useful result</div><pre><code><span class="syntax-keyword">let</span> image = config.decode(bytes)?;</code></pre><p>One photo becomes a preview.<br>Then a gallery. Then a remote viewer.<br>Then moving images.</p><a class="hero-context" href="#entry-decode">Show imports, caller &amp; trait signature ↘</a><span class="micro">Rust · no_std + alloc · sans-I/O core</span></div></div>
   <div class="legend" aria-label="Diagram color key"><span class="consumer"><i></i>Consumer <small>intent &amp; results</small></span><span class="adapter"><i></i>Adapter <small>transport &amp; scheduling</small></span><span class="implementor"><i></i>Implementor <small>codec state &amp; promises</small></span></div>
 </section>

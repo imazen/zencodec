@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile, stat } from 'node:fs/promises';
 import { lanes } from './content.mjs';
 import { migrations } from './migration-data.mjs';
+import { improvements } from './improvements.mjs';
 const root=new URL('../_site/',import.meta.url);
 const html=await readFile(new URL('index.html',root),'utf8');
 test('all chapter anchors, diagrams, and Rust examples survive the build',()=>{
@@ -90,4 +91,13 @@ test('checked API page links executable examples and actual signatures for each 
   assert.ok(page.includes('data-api="operationControl"'));
   assert.ok(page.includes('qualification gaps'));
   assert.ok(!page.includes('prototype::PolicyResolver'));
+  assert.ok(page.includes('data-example="checked_resolution"'));
+  assert.ok(html.includes('ideal.html#changes'));
+  for(const entry of improvements) {
+    assert.ok(ids.includes(`change-${entry.id}`));
+    for(const field of ['why','consumer','adapter','implementor','open']) assert.ok(entry[field]?.length,`${entry.id}: ${field}`);
+    assert.ok(entry.signatures.length>0);
+    assert.ok(entry.evidence.length>0);
+    for(const [,target] of entry.evidence) if(!target.startsWith('https://')) await stat(new URL(`../../${target}`,import.meta.url));
+  }
 });

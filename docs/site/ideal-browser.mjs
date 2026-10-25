@@ -15,6 +15,15 @@ export async function checkIdeal(browser,url,output) {
     assert.equal(response.status(),200);
     assert.ok((await page.locator('h1').textContent()).includes('executes today'));
     assert.equal(await page.locator('.ideal-step').count(),5);
+    const changes=page.locator('.api-change');
+    assert.equal(await changes.count(),4);
+    for(const change of await changes.all()) assert.ok(!await change.evaluate(el=>el.open));
+    const videoChange=page.locator('#change-video');
+    await videoChange.locator(':scope>summary').focus();
+    await page.keyboard.press('Enter');
+    assert.ok(await videoChange.evaluate(el=>el.open));
+    assert.ok((await videoChange.textContent()).includes('after native reconstruction'));
+    assert.ok((await videoChange.textContent()).includes('byte budget'));
     for(const role of ['consumer','adapter','implementor']) {
       assert.equal(await page.locator(`section#${role}.${role}`).count(),1);
     }
@@ -43,10 +52,11 @@ export async function checkIdeal(browser,url,output) {
       assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),parts.full);
     }
     for(const details of await page.locator('.ideal-signatures').all()) {
+      await details.evaluate(el=>{for(let p=el.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;});
       if(!await details.evaluate(el=>el.open)) await details.locator(':scope>summary').click();
     }
     const signatures=(await page.locator('.ideal-signatures,.api-panel').allTextContents()).join('\n');
-    for(const required of ['with_send_encoder','PolicyResolver','At<Self::Error>','step_controlled','transcode_async','prepare_send','resolve_frame','is_failed','ReadAtReader','stream_position']) assert.ok(signatures.includes(required),required);
+    for(const required of ['with_send_encoder','PolicyResolver','At<Self::Error>','step_controlled','transcode_async','prepare_send','resolve_frame','is_failed','ReadAtReader','stream_position','try_set_resolution','try_integer_density','with_resolution']) assert.ok(signatures.includes(required),required);
     assert.ok((await page.locator('#target').textContent()).includes('Native/CMS workspace'));
     assert.ok((await page.locator('#target').textContent()).includes('source version'));
     for(const width of [390,768,1440]) {
