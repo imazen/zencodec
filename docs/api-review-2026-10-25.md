@@ -136,3 +136,9 @@ claim. Existing tracking remains [27](https://github.com/imazen/zencodec/issues/
 [161](https://github.com/imazen/zencodec/issues/161),
 [166](https://github.com/imazen/zencodec/issues/166), and
 [131](https://github.com/imazen/zencodec/issues/131).
+
+Production debugging also needs end-to-end cause preservation. A
+[native missing-file probe](io-contract-proposal.md#native-error-provenance-2026-10-25)
+shows that FileReadAt loses the underlying `std::io::Error` before the policy or
+caller boundary sees it. The proposed traced callback alone cannot solve that
+gap. Preserve transport causes in the driver error model as well.

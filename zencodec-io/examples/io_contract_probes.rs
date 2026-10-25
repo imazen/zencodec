@@ -17,7 +17,7 @@ use zencodec::encode::{EncodeOutput, Encoder, OutputBuffer, OutputTiming};
 use zencodec::source::{AccessPattern, ReadAt};
 use zencodec::{ImageFormat, ImageInfo, UnsupportedOperation};
 use zencodec_io::tokio_io::{BytesSource, Inline, transcode_async};
-use zencodec_io::{BufferPolicy, BufferedReadAt, DriveOptions, encode_to_writer};
+use zencodec_io::{BufferPolicy, BufferedReadAt, DriveOptions, FileReadAt, encode_to_writer};
 use zenpixels::{PixelDescriptor, PixelSlice};
 
 const DESC: PixelDescriptor = PixelDescriptor::RGBA8_SRGB;
@@ -283,8 +283,26 @@ fn budgets() {
     );
 }
 
+fn file_error_provenance() {
+    let scratch = std::env::var_os("TMPDIR").expect("set TMPDIR for the file error probe");
+    let missing = std::path::PathBuf::from(scratch).join(format!(
+        "zencodec-missing-error-probe-{}",
+        std::process::id()
+    ));
+    assert!(!missing.exists(), "probe requires an absent path");
+    let native = std::fs::File::open(&missing).expect_err("absent file");
+    assert_eq!(native.kind(), io::ErrorKind::NotFound);
+    let adapted = FileReadAt::open(&missing).err().expect("absent file");
+    println!(
+        "file_error native_kind={:?} native_cause_preserved={}",
+        native.kind(),
+        zencodec::find_cause::<io::Error>(&adapted).is_some()
+    );
+}
+
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn main() {
+    file_error_provenance();
     let data = [7u8; 4];
     let px = PixelSlice::new(&data, 1, 1, 4, DESC).unwrap();
     assert_eq!(OneShot.encode(px.clone()).unwrap().data(), data);

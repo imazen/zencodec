@@ -291,3 +291,33 @@ and other codecs' native incremental performance. The cache-miss disk and
 native AV1 correctness gates now have measurements. Forward MP4 remains 4/108
 cases: [zenavif72](https://github.com/imazen/zenavif/issues/72) needs demuxer
 work, and no new trait can make the observed backwards reads forward-only.
+
+## Native error provenance, 2026-10-25
+
+Source reviewed at `ae41e8a1`: `FileReadAt::io_err` and the read path in
+`BufferedReadAt` turn `std::io::Error` into `SourceError::Io { message }`.
+`SourceError` exposes no underlying cause. Keeping typed callback errors or
+propagating a driver result with `?` cannot recover an error already flattened
+inside its source adapter.
+
+The existing `just io-contract-probes` now opens the same absent path directly
+and through FileReadAt. Observed:
+
+```text
+file_error native_kind=NotFound native_cause_preserved=false
+run-heavy: done rc=0 4s | peak-RSS 0.45GiB | min-avail 17748MiB | peak-load 0.18
+```
+
+The command also retains its previous exact-output/stalled-writer controls.
+Scoped example Clippy passed. This is a process receipt, not an I/O performance
+comparison. The probe prints behavior instead of asserting that cause loss is
+desirable. BufferedReadAt's equivalent flattening is source-verified here; this
+new native file observation does not exercise that path.
+
+The next driver API review should retain the original transport/filesystem
+cause, operation stage and structured range failure. A std-only driver error
+envelope can preserve `std::io::Error` without adding std to the core error
+vocabulary. Do not force callers to parse a localized message, or infer a retry
+permission from the error kind alone. Source replayability and output
+commitments still control retries. No production error signature changed in
+this investigation.

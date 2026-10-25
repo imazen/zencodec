@@ -231,6 +231,12 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- API comparison (2026-10-25): `FileReadAt` and `BufferedReadAt` stringify native
+  I/O failures into `SourceError::Io`, which exposes no cause. The native
+  missing-file control in `just io-contract-probes` observes NotFound directly
+  but cannot find `std::io::Error` through FileReadAt. Driver error signatures
+  are unchanged; see `docs/io-contract-proposal.md#native-error-provenance-2026-10-25`.
+
 - Fixed during API comparison (2026-10-25): the private policy resolver checked
   accounting scope only when a RAM cap existed, allowing driver-only evidence
   under an operation-wide disk-only cap. The regression fails before the fix;
