@@ -29,6 +29,8 @@ jobs:
         with:
           workspaces: perf/io-validation
       - name: Fetch pinned public codec sources
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           python3 perf/io-validation/setup.py
           cp perf/io-validation/locks/harness.lock perf/io-validation/Cargo.lock

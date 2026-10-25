@@ -3,7 +3,9 @@
 import concurrent.futures
 import hashlib
 import json
+import os
 from pathlib import Path
+import urllib.parse
 import urllib.request
 
 ROOT = Path(__file__).resolve().parent / "vendor"
@@ -15,7 +17,12 @@ PINS = [
 
 
 def get(url):
-    with urllib.request.urlopen(url, timeout=90) as r:
+    headers = {"User-Agent": "zencodec-source-qualification"}
+    # CI runners share the anonymous API quota. Raw source requests need no token.
+    if urllib.parse.urlsplit(url).netloc == "api.github.com" and os.environ.get("GH_TOKEN"):
+        headers["Authorization"] = "Bearer " + os.environ["GH_TOKEN"]
+    request = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(request, timeout=90) as r:
         return r.read()
 
 
