@@ -132,3 +132,14 @@ records the archived logs, fixtures, binaries, counters and traces with a
 manifest and verified archive hash. `just io-validation-pack-evidence <dir>
 <archive>` packages an explicitly selected evidence tree and verifies every
 decompressed file. Keep large results and binaries outside git.
+
+## Situational policy resolution
+
+`just io-policy-resolution-check` runs a private synchronous resolver over
+authored execution alternatives, then acquires shared RAM/disk reservations.
+It tests changing choices with input cost, mandatory metadata effects, unknown
+costs, invalid selections and capacity taken during the callback. Costs are
+logical fixture inputs, not codec measurements or RSS. It allocates no large
+fixture buffers and implements no encoder or disk spool. The
+[proposal and qualification limits](../../docs/policy-resolution.md) explain
+what the experiment establishes and what still needs native testing.

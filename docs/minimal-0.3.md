@@ -151,6 +151,12 @@ the specified result or return a typed error. Permissive counterparts must repor
 the actual deviation. Run the same fixtures through generic and erased paths.
 These are proposed acceptance tests, not claims of new completed native runs.
 
+Requirements can be conditional without becoming unchecked: specify permitted
+alternatives and choose among them using operation-specific facts. The
+[situational policy proposal and executable resolver experiment](policy-resolution.md)
+separate selection from reservation, distinguish bounds from estimates, and
+explain why streaming shape alone cannot decide memory or output-wait policy.
+
 ## Remove or replace in the breaking migration
 
 | Current surface | Proposed treatment | Reason and migration gate |
