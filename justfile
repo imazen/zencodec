@@ -283,6 +283,8 @@ spatial-validation-sync export:
     cp perf/spatial-validation/Cargo.toml "{{export}}/perf/spatial-validation/"
     cp perf/spatial-validation/oracle.py "{{export}}/perf/spatial-validation/"
     cp perf/spatial-validation/src/*.rs "{{export}}/perf/spatial-validation/src/"
+    mkdir -p "{{export}}/docs/examples"
+    cp docs/examples/checked_source.rs "{{export}}/docs/examples/"
     cp src/error.rs "{{export}}/src/error.rs"
     cp justfile "{{export}}/justfile"
 

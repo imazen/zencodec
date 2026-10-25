@@ -458,6 +458,13 @@ fn positional_disk_and_independent_libtiff_decode_match_native_selection() {
             .unwrap()
             .write_all(&bytes)
             .unwrap();
+        let mut limits = tiff::decoder::Limits::default();
+        limits.ifd_value_size = 64 * 1024;
+        limits.decoding_buffer_size = 16 * 1024 * 1024;
+        assert_eq!(
+            crate::checked_source::stored_dimensions(&path, limits).unwrap(),
+            (refs[0].width, refs[0].height)
+        );
         let disk = zencodec_io::FileReadAt::open(&path).unwrap();
         let decoded = tiff_region::decode(
             ReadAtReader::new(disk),

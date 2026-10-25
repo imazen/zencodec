@@ -105,6 +105,34 @@ jobs:
           timeout --kill-after=15s 10m cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked -- --nocapture --test-threads=1
           timeout --kill-after=15s 5m cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
 
+  spatial:
+    name: Qualify native TIFF spatial contracts and guide
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CARGO_BUILD_JOBS: 4
+      CARGO_INCREMENTAL: 0
+      SPATIAL_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}
+      SPATIAL_ORACLE_PYTHON: ${{ github.workspace }}/perf/spatial-validation/target/oracle-python/bin/python
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: perf/spatial-validation
+      - name: Install pinned independent libtiff oracle
+        timeout-minutes: 3
+        run: |
+          timeout --kill-after=10s 30s python3 -m venv perf/spatial-validation/target/oracle-python
+          timeout --kill-after=10s 2m "$SPATIAL_ORACLE_PYTHON" -m pip install --disable-pip-version-check --only-binary :all: --retries 1 --timeout 20 Pillow==13.0.0
+      - name: Execute native spatial selection and exact guide example
+        run: |
+          cp perf/spatial-validation/dependencies.lock perf/spatial-validation/Cargo.lock
+          timeout --kill-after=15s 10m cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked -- --nocapture --test-threads=1
+          timeout --kill-after=15s 5m cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
+
   build:
     name: Build and exercise guide
     runs-on: ubuntu-latest
@@ -142,7 +170,7 @@ jobs:
 
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: [examples, jpeg, av1, build]
+    needs: [examples, jpeg, av1, spatial, build]
     runs-on: ubuntu-latest
     permissions:
       pages: write

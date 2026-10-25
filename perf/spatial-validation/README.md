@@ -119,3 +119,17 @@ check also pass through `just io-reader-check`. Direct native I/O values keep
 their kind, OS code and payload; generic errors keep their concrete context.
 Additional controls cover invalid counts, failed end-relative spool discovery,
 EOF, standard buffered reads and no bridge-level retry on `Interrupted`.
+
+## Executable guide and CI
+
+The checked API page displays `docs/examples/checked_source.rs` directly. The
+native disk fixture executes that same file. Documentation CI pins the TIFF
+codec and Python oracle, runs this entire gate with command/job deadlines, and
+requires it before Pages deployment.
+
+The guide/native gate passed with `run7` (log
+`~/tmp/zencodec-spatial-guide1-2026-10-25.log`): run-heavy rc=0, 3 s, peak RSS
+0.39 GiB, minimum available 16483 MiB, peak load 0.51. Browser checks at
+390/768/1440 px pass with signatures expanded and exact full-example copying
+(`just docs-site-browser-check 3567`; rc=0, 8 s, peak RSS 0.17 GiB, minimum
+available 16227 MiB, peak load 0.35). These are test-process receipts.
