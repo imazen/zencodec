@@ -56,6 +56,7 @@ export async function checkMigration(browser,url,output) {
     await page.keyboard.press('Tab');
     assert.equal(await page.locator(':focus').getAttribute('class'),'skip');
     await page.keyboard.press('Enter');
+    await page.waitForURL(url=>url.hash==='#migration-main');
     assert.ok(page.url().endsWith('#migration-main'));
     assert.deepEqual(errors,[]);
     console.log('Migration browser checks passed: release-state diagrams, audience filters, deep links, exact full-example copy, independent inline expansion, signatures, keyboard and responsive layouts.');

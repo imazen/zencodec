@@ -433,6 +433,20 @@ docs-site-serve:
 docs-site-browser:
     node docs/site/browser.test.mjs
 
+# Start and stop an isolated server for the browser checks.
+docs-site-browser-check port="3547": docs-site-check
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "$HOME/tmp"
+    python3 -m http.server {{port}} --bind 127.0.0.1 --directory docs/_site > "$HOME/tmp/zencodec-docs-{{port}}.log" 2>&1 &
+    docs_pid=$!
+    trap 'kill "$docs_pid"' EXIT
+    for attempt in {1..30}; do
+        if curl --fail --silent "http://127.0.0.1:{{port}}/" > /dev/null; then break; fi
+        sleep 0.2
+    done
+    SITE_URL="http://127.0.0.1:{{port}}/" just docs-site-browser
+
 # Explicit network check of the frozen crates.io baseline; site builds stay offline.
 docs-migration-baseline:
     python3 docs/verify-migration-baseline.py

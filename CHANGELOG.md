@@ -317,6 +317,9 @@ None.
 
 #### Fixed
 
+- The migration-page keyboard check waits for fragment navigation before
+  asserting its URL, retaining the existing skip-link expectation.
+
 - Apply accounting-scope validation to disk-only caps in the private policy
   experiment, with a failing-before/fixed-after regression. Public APIs are unchanged.
 - `zencodec-coroutine` delivers rows or metadata deposited during the future's final poll before reporting completion (`7cc3d3ec`).
