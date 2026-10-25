@@ -6,6 +6,11 @@ API is implemented or stable. [spec.md](spec.md) contains current signatures;
 [the comparison review](api-review-2026-10-25.md) records the verified external
 precedents and the conclusions retained from Argon's review.
 
+The site’s **Changes & why** section is maintained with each trait or adapter
+change. It shows the problem, each role’s responsibilities, source-extracted
+signatures, evidence and remaining scope. The [maintenance contract](site/README.md)
+keeps the native examples and dependency revisions tied to that record.
+
 ## What still needs production implementation
 
 - Extend coupled routes beyond the qualified JPEG/PNG sources and JPEG/PNG targets.
@@ -14,15 +19,16 @@ precedents and the conclusions retained from Argon's review.
 - Extend native controlled-suspension qualification beyond the whole-source JPEG/PNG
   routes to native byte resumption. Native AV1 frame publication now uses the
   shared resolver; coupled planar conversion and admission before native
-  reconstruction remain open.
+  reconstruction remain open. The existing native pixel-count cap is separate
+  from a byte budget across pictures, workspace and queued output.
 - Metadata exclusion/retention with explicit inspection scope, including opaque
   carriers, malformed XML, reconstruction data and nested content.
 - Integrate managed storage ownership into policy waiting, conversion scratch
   and qualified encoded staging; qualify native codec/service storage separately.
 - Shared image item, level and region selection with bounded discovery and
   source-version binding for the gigapixel consumer.
-- A generated consumer/adapter/implementor guide for the completed surface,
-  with executable examples and migration diagrams.
+- Extend the source-extracted consumer/adapter/implementor guide as each remaining
+  contract is implemented; keep executable examples and migration diagrams current.
 
 ## Implemented on the PR
 
@@ -39,7 +45,7 @@ precedents and the conclusions retained from Argon's review.
 | Initial stored requests | Required policy, fidelity configuration and output descriptors checked at execution; controlled sessions use the same registry templates and reject required-descriptor mismatch before adoption; inherited defaults, rejection and strided pixels tested; native baseline/progressive JPEG encoding bytes and decoding pixels match direct calls |
 | Shared resolver domains | Typed prepared encoder and coupled transcode offers, configurable built-in policy, fallible application callback, scoped choices and bounded reports; stale/nested tokens, cancellation, unwind cleanup and native error traces tested. Metadata treatment, opaque-profile retention and qualified workspace bounds can filter complete transcode choices; unknown evidence refuses |
 | Controlled interpretation protocol | Explicit suspensions and scoped replies; fused enforcement, coroutine await, and a shared policy adapter for existing transports. Authored controls cover early output, stale replies, finality changes, cancellation and unwind. [Native JPEG PR 240](https://github.com/imazen/zenjpeg/pull/240) supplies generic, erased and registered factories for the qualified whole-source byte-output route. Unqualified late ICC and float reconstruction refuse before native construction. [Native PNG PR 46](https://github.com/imazen/zenpng/pull/46) qualifies row and Adam7 reconstruction, packed and 8/16-bit layouts, late EXIF and conservative gain-map/extension discovery. Failed sessions release admitted storage while retaining typed refusal reports |
-| Coupled native pixel transcode | `zencodecs::checked_transcode::TranscodeRequest` on the [integration PR 105](https://github.com/imazen/zenpipe/pull/105) retains the actual OutputPlan, checked encoder jobs and admitted row buffers during the shared callback. JPEG→sRGB PNG matches independent CMS/pixel inspection; JPEG preservation checks ICC/EXIF/XMP. PNG sources retain six integer layouts with exact independent readback and P3 CMS conversion. File/range and delayed network input match slice output. Callback/source failures and cancellation retain causes and release managed owners. Lost reported DPI refuses; positive preservation is [169](https://github.com/imazen/zencodec/issues/169). Native workspace and encoded staging remain unqualified |
+| Coupled native pixel transcode | `zencodecs::checked_transcode::TranscodeRequest` on the [integration PR 105](https://github.com/imazen/zenpipe/pull/105) retains the actual OutputPlan, checked encoder jobs and admitted row buffers during the shared callback. JPEG→sRGB PNG matches independent CMS/pixel inspection; JPEG preservation checks ICC/EXIF/XMP. PNG sources retain six integer layouts with exact independent readback and P3 CMS conversion. File/range and delayed network input match slice output. Callback/source failures and cancellation retain causes and release managed owners. Exact required density now passes from native PNG/JPEG input through retained jobs to native PNG output, with independent PNG metadata/pixel readback. Non-square JFIF aspect is retained; unrepresentable values and density with unqualified EXIF/XMP reconciliation refuse. Broader resolution cases remain [169](https://github.com/imazen/zencodec/issues/169). Native workspace and encoded staging remain unqualified |
 | Managed storage owners | Byte/object admission follows allocations through subviews, packets, side data and old-epoch frames; exact strided 8/10-bit samples and concurrent contention checked. [Scope](storage-admission.md) excludes native workspace and explicit unaccounted copies |
 
 Driver input capacity is a scoped allowance. It excludes source caches,
@@ -180,3 +186,25 @@ The updated site passes its source/signature checks and browser checks at
 390/768/1440 px, including inline expansion, complete-example copy and hidden
 migration views (`just docs-site-browser-check 3557`; rc=0, 7 s; run-heavy peak
 RSS 0.17 GiB, minimum available 15977 MiB, peak load 0.39).
+
+### Living improvement record and exact-density example (2026-10-25)
+
+The checked page now starts with a compact **Changes & why** section. Its video,
+density, resolver and positional-I/O entries separate the reason for the change,
+consumer/adapter/implementor consequences, extracted signatures and remaining
+work. The main guide links to it. The existing unlisted migration page remains
+separate from the implementation record.
+
+The exact `with_resolution` example executes against native PNG with JPEG-decoded
+input. It checks asymmetric physical densities, equivalent centimeter units,
+unitless aspect, retained transcode density and unchanged pixels; exact 300 DPI
+refuses. This guide gate supplements the independent reader checks in the
+native transcode repository and the separate rational arithmetic oracle.
+
+`just checked-guide-integration` passed native scenarios and strict Clippy with
+zenpipe `ffecbf56`, zenjpeg `4535ec49`, zenpng `7f13367f` and zenpixels `f8596aae`.
+run-heavy: rc=0, 18 s, peak RSS 0.75 GiB, minimum available 15443 MiB, peak load
+0.56. `just docs-site-browser-check 3557` passed source checks, keyboard expansion,
+full-example copying and 390/768/1440 px layouts: rc=0, 7 s, peak RSS 0.17 GiB,
+minimum available 15845 MiB, peak load 0.37. These are test-process receipts,
+not native codec memory bounds.

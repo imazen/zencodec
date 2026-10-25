@@ -1,5 +1,12 @@
 # Changelog
 
+## API guide (unreleased)
+
+- Keep a visible Changes & why record for video, required density, the shared
+  resolver and positional I/O, with each role’s consequences, extracted
+  signatures, qualification evidence and open scope. Execute the new required
+  density example against pinned native PNG/JPEG and checked-transcode adapters.
+
 ## Native frame policy (unreleased)
 
 - Retain decision history in a circular buffer, keeping the latest 16 records
