@@ -2,6 +2,9 @@
 
 ## Native frame policy (unreleased)
 
+- Retain decision history in a circular buffer, keeping the latest 16 records
+  and chronological iteration/debugging without shifting every record for each
+  video presentation. [Measured API cost](benchmarks/frame_policy_2026-10-25.md).
 - Share immutable media interpretation/timing facts through `zencodec::frame`,
   retaining the existing media import paths. Extend the shared resolver with
   typed native-frame questions and bounded presentation diagnostics.

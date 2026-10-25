@@ -207,6 +207,10 @@ records. A record carries question identity, offer count, selected typed contrac
 (`Selection::Encode`, `Selection::Transcode`, `Selection::Boundary` or `Selection::Frame`),
 preset delegation and `DecisionCode`. Adapters append records with
 `OperationReport::record(record)`.
+The fixed history overwrites its oldest slot without moving retained records;
+iteration and debug formatting remain chronological. The omitted count saturates
+at `u64::MAX`. [Frame-policy measurements](../benchmarks/frame_policy_2026-10-25.md)
+cover the actual resolver and report separately.
 Success returns this report with the output; native execution failure retains it
 in `OperationError::Execution`. `PolicyFailure::record()` identifies refusal,
 stale choice, callback failure or cancellation. Default policy-failure formatting

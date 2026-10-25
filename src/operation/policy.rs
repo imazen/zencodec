@@ -425,16 +425,35 @@ pub struct DecisionRecord {
 }
 
 /// Bounded decision report for a completed or failed operation.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct OperationReport {
     records: [Option<DecisionRecord>; 16],
+    head: usize,
     count: usize,
     dropped: u64,
+}
+impl fmt::Debug for OperationReport {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        struct Records<'a>(&'a OperationReport);
+        impl fmt::Debug for Records<'_> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.debug_list().entries(self.0.decisions()).finish()
+            }
+        }
+        f.debug_struct("OperationReport")
+            .field("records", &Records(self))
+            .field("dropped", &self.dropped)
+            .finish()
+    }
 }
 impl OperationReport {
     /// Records in decision order; older records are dropped when the bound fills.
     pub fn decisions(&self) -> impl Iterator<Item = &DecisionRecord> {
-        self.records[..self.count].iter().filter_map(Option::as_ref)
+        let first = self.count.min(self.records.len() - self.head);
+        self.records[self.head..self.head + first]
+            .iter()
+            .chain(self.records[..self.count - first].iter())
+            .filter_map(Option::as_ref)
     }
     /// Number of older records omitted from this bounded report.
     pub const fn dropped_decisions(&self) -> u64 {
@@ -443,12 +462,13 @@ impl OperationReport {
     /// Append an adapter's decision, retaining only the bounded recent history.
     pub fn record(&mut self, record: DecisionRecord) {
         if self.count == self.records.len() {
-            self.records.rotate_left(1);
-            self.count -= 1;
+            self.records[self.head] = Some(record);
+            self.head = (self.head + 1) % self.records.len();
             self.dropped = self.dropped.saturating_add(1);
+        } else {
+            self.records[self.count] = Some(record);
+            self.count += 1;
         }
-        self.records[self.count] = Some(record);
-        self.count += 1;
     }
 }
 
@@ -759,5 +779,66 @@ mod tests {
                 .collect::<alloc::vec::Vec<_>>(),
             (5..=20).collect::<alloc::vec::Vec<_>>()
         );
+    }
+
+    #[test]
+    fn journal_matches_recent_history_through_wraps_and_clones() {
+        use alloc::{collections::VecDeque, vec::Vec};
+        let mut report = OperationReport::default();
+        let mut expected = VecDeque::new();
+        assert_eq!(report.decisions().count(), 0);
+        assert_eq!(report.dropped_decisions(), 0);
+        let mut previous = report.clone();
+        let mut previous_questions = Vec::new();
+        for question in 1..=1024 {
+            let record = DecisionRecord {
+                question,
+                context: DecisionContext::Encode(EncodeFacts {
+                    width: question as u32,
+                    height: 3,
+                    descriptor: PixelDescriptor::RGB8_SRGB,
+                }),
+                offered: 1,
+                selected: None,
+                used_preset: question % 2 == 0,
+                code: DecisionCode::Declined,
+            };
+            expected.push_back(record);
+            if expected.len() > 16 {
+                expected.pop_front();
+            }
+            report.record(record);
+            // Debug includes every retained field and must keep chronological order.
+            assert_eq!(
+                alloc::format!("{:?}", report.decisions().collect::<Vec<_>>()),
+                alloc::format!("{:?}", expected.iter().collect::<Vec<_>>())
+            );
+            assert_eq!(report.dropped_decisions(), question.saturating_sub(16));
+            let actual = report
+                .decisions()
+                .map(|record| record.question)
+                .collect::<Vec<_>>();
+            assert_eq!(
+                previous
+                    .decisions()
+                    .map(|record| record.question)
+                    .collect::<Vec<_>>(),
+                previous_questions,
+                "cloning must not share mutable history"
+            );
+            let debug = alloc::format!("{report:?}");
+            let expected_debug = alloc::format!(
+                "OperationReport {{ records: {:?}, dropped: {} }}",
+                expected.iter().collect::<Vec<_>>(),
+                question.saturating_sub(16)
+            );
+            assert_eq!(debug, expected_debug);
+            previous = report.clone();
+            previous_questions = actual;
+        }
+        report.dropped = u64::MAX;
+        report.record(*expected.back().unwrap());
+        assert_eq!(report.dropped_decisions(), u64::MAX);
+        assert_eq!(report.decisions().count(), 16);
     }
 }

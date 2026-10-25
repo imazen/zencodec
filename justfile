@@ -387,6 +387,13 @@ frame-cost-profile output mode="record" count="1000000" cpus="2,3":
     test ! -e "{{output}}"
     taskset -c "{{cpus}}" perf stat -x, -o "{{output}}" -e instructions,cycles,cache-misses,context-switches "${CARGO_TARGET_DIR:-target}/release/examples/frame_policy_probe" "{{mode}}" "{{count}}"
 
+frame-cost-sample output mode="record" count="5000000" cpus="2,3":
+    test ! -e "{{output}}"
+    taskset -c "{{cpus}}" perf record --call-graph dwarf -F 997 -o "{{output}}" "${CARGO_TARGET_DIR:-target}/release/examples/frame_policy_probe" "{{mode}}" "{{count}}"
+
+frame-cost-sample-report input:
+    perf report --stdio -i "{{input}}" --percent-limit 2 --sort symbol
+
 # Rerun the exact existing fixture set without regenerating containers.
 io-validation-media mp4 webm ivf:
     cargo run --locked --manifest-path perf/io-validation/Cargo.toml --bin media_transport -- "{{mp4}}"/*.mp4 "{{webm}}"/*.webm "{{webm}}"/*.mkv "{{ivf}}"/*.ivf
