@@ -91,6 +91,15 @@ These properties are checked by `zencodec-media-testkit/tests/encoder_fusing.rs`
 
 ## Frames
 
+Immutable interpretation and timing types now live in `zencodec::frame`;
+the previous `zencodec_media::frame` import paths remain compatibility
+re-exports. Native pictures, plane mapping and storage remain in the media
+crate. This lets still and video operations share one typed policy resolver
+without making the core depend on media sessions or I/O drivers. The existing
+media `SampleEncoding` compatibility type still needs migration to
+`zenpixels::sample::SampleEncoding`; this move does not create a second new
+sample interpretation implementation.
+
 - A frame is valid after its decoder resets or drops. Two frames may share a
   picture (show-existing); `shares_picture` tells.
 - A frame's interpretation is immutable: a configuration change makes a new
@@ -100,6 +109,40 @@ These properties are checked by `zencodec-media-testkit/tests/encoder_fusing.rs`
   Render size is separate from coded size; pixels are not resized.
 - Sample codes are never widened implicitly: a 10-bit code in a 16-bit word is
   `SampleEncoding::new(U16, 10, shift)`, not a full-range 16-bit value.
+
+### Policy before native publication
+
+`zencodec_media::policy::PolicyDecoder::new(decoder, resolver)` wraps an existing
+`VideoDecoder`. Before returning each native frame it invokes the same
+`zencodec::operation::PolicyResolver` used by still-image operations, with a
+typed `Question::Frame`. The question borrows the held frame's full planar
+interpretation and includes its presentation timing. A successful choice returns
+the original frame; it does not convert, copy or relabel its samples.
+
+The callback runs for every presentation. Equal configuration epochs alone do
+not justify reusing a decision, and application policy can depend on timestamps.
+The bounded report retains recent frame facts and decisions. A native error,
+policy refusal, stale token, cancellation or caught unwind makes this operation
+terminal and drops its decoder and unpublished frames. Healthy reset remains
+available; recovery after a failed operation uses a fresh decoder. Previously
+published frames retain their native owners. Native and traced callback causes
+remain inspectable; default error formatting excludes their payload text.
+
+This is a publication boundary after native reconstruction. It does not admit
+native allocations before decoding, establish a whole-container privacy promise
+or implement planar conversion. Presets requiring metadata treatment, rejection
+of opaque profiles or a workspace bound refuse because this native publication
+offer lacks that evidence. A default preset preserves the native presentation,
+including unknown declarations. Codec/container interpretation rules remain the
+format adapter's responsibility.
+
+The authored ownership controls in `zencodec-media-testkit/tests/frame_policy.rs`
+verify exact strided 10-bit samples and picture identity, cancellation after
+callback, stale choices, typed causes, unwind release, terminal work methods and
+bounded reports. `just frame-policy-integration` passes those controls, strict
+lint, no_std builds, the full workspace suite and API snapshots. Native codec
+qualification is recorded separately; these authored controls alone do not
+establish a native codec memory bound.
 
 ## Colour
 

@@ -229,11 +229,27 @@ operation-sync export:
     test ! -e "{{export}}/.git"
     test ! -e "{{export}}/.jj"
     mkdir -p "{{export}}/src/operation"
-    cp src/operation.rs src/lib.rs src/set.rs src/info.rs "{{export}}/src/"
+    cp src/operation.rs src/lib.rs src/set.rs src/info.rs src/frame.rs "{{export}}/src/"
     cp src/operation/*.rs "{{export}}/src/operation/"
     cp src/traits/dyn_encoding.rs src/traits/mod.rs "{{export}}/src/traits/"
     cp zencodec-testkit/tests/operation_*.rs "{{export}}/zencodec-testkit/tests/"
     cp justfile "{{export}}/justfile"
+
+# Native frame facts and policy publication guard share the still-image resolver.
+frame-policy-sync export:
+    just operation-sync "{{export}}"
+    cp zencodec-media/src/*.rs "{{export}}/zencodec-media/src/"
+    cp zencodec-media-testkit/tests/frame_policy.rs "{{export}}/zencodec-media-testkit/tests/"
+
+frame-policy-check:
+    cargo test -p zencodec-media-testkit --test frame_policy --locked
+    cargo clippy -p zencodec -p zencodec-media -p zencodec-media-testkit --all-targets --locked -- -D warnings
+    cargo check -p zencodec -p zencodec-media --no-default-features --locked
+
+frame-policy-integration:
+    just frame-policy-check
+    cargo test --workspace --all-features --locked
+    just api-doc
 
 operation-policy-check:
     cargo test -p zencodec-testkit --test operation_policy --test operation_requests --locked

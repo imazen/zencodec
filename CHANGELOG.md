@@ -1,5 +1,15 @@
 # Changelog
 
+## Native frame policy (unreleased)
+
+- Share immutable media interpretation/timing facts through `zencodec::frame`,
+  retaining the existing media import paths. Extend the shared resolver with
+  typed native-frame questions and bounded presentation diagnostics.
+- Add `zencodec_media::policy::PolicyDecoder`, which holds each decoded frame
+  until policy succeeds, preserves native samples/owners, and releases the
+  decoder and unpublished frames on terminal failure or unwind. This guards
+  publication after reconstruction; it adds no native workspace/privacy bound.
+
 Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELOG.md).
 
 ## zencodec-testkit
