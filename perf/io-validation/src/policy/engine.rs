@@ -204,6 +204,7 @@ pub(crate) struct Selected {
     pub index: usize,
     pub context: Context,
     pub question: u64,
+    pub facts: Facts,
 }
 
 impl Engine {
@@ -298,7 +299,7 @@ impl Engine {
         if let Err(reason) = stop.check() {
             return Err(self.fail(record, Code::Stopped, Cause::Stopped(reason)));
         }
-        if requirements.effects.0 & !31 != 0 {
+        if requirements.effects.0 & !63 != 0 {
             return Err(self.fail(record, Code::InvalidRequirements, Cause::Framework));
         }
         if entries.len() > MAX_CHOICES {
@@ -306,6 +307,11 @@ impl Engine {
         }
         for (index, entry) in entries.iter().enumerate() {
             if entry.action.kind() != facts.kind() {
+                return Err(self.fail(record, Code::InvalidOffer, Cause::Framework));
+            }
+            if let Action::Media(action) = entry.action
+                && entry.effects.contains(Effects::KEEP_TRACK) != (action == MediaAction::KeepTrack)
+            {
                 return Err(self.fail(record, Code::InvalidOffer, Cause::Framework));
             }
             if let Action::Fidelity(target) = entry.action {
@@ -393,6 +399,7 @@ impl Engine {
                     index,
                     context,
                     question: ticket,
+                    facts,
                 })
             }
             Decision::Reject(error) => {

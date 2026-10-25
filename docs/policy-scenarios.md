@@ -18,7 +18,7 @@ trait PolicyResolver {
 }
 ```
 
-`Question` has typed execution, metadata and fidelity variants. Closures and
+`Question` has typed execution, metadata, fidelity and media-track variants. Closures and
 the configurable `PolicySet` implement the same trait. The predefined decisions
 are choose an offered token, use the configured preset, and decline with a
 reason. `Decision::reject` captures the rule's source location. A callback error
@@ -68,8 +68,8 @@ it does not certify a codec's memory bounds or actual metadata effects.
 | Native codec path | Same policy through concrete config and CodecSet/erased jobs, strided pixels, unsupported metadata, native failures | Passed for two pinned QOI/BMP configurations in `policy_native`; other codecs and whole-operation memory bounds remain unqualified |
 | Metadata reality | Actual packets, malformed/opaque EXIF, retention/removal conflict, missing carrier, independent output inspection | Extracted EXIF controls pass with kamadak-exif inspection; whole-file privacy and carrier roundtrips beyond QOI/BMP are not qualified |
 | Output failure | Slow/short/failing writer, partial artifact, no automatic retry, raw/staging lifetimes | Short/interrupted/zero/failing Write diagnostics passed in `policy_native`; slow async retention remains the separate native retention control |
-| Transport and viewport | Reused simulator, range/source version changes, view cancellation and disk/resident controls | Existing transport model; unified resolver integration pending |
-| Media | Real packet/frame facts, epoch changes, late decisions, retained frames and multiple tracks | Existing media evidence; unified resolver integration pending |
+| Transport and viewport | Reused simulator, range/source version changes, view cancellation and disk/resident controls | Native MP4/WebM/IVF decisions agree over resident, disk and reused network model; changed-source admission controls pass; viewport-specific adapter remains unqualified |
+| Media | Real packet/frame facts, epoch changes, late decisions, retained frames and multiple tracks | Native multi-track packet checks and toy-session epoch/frame-ownership controls pass; native decoded-video allocation bounds remain unqualified |
 | Concurrency | Independent mutable resolvers, shared immutable preset configuration, unique operation/question tickets | Concurrent control passed: `policy_engine`; no shared callback mutex |
 | Portability | Actual root types on WASM; isolated resolver on a freestanding target | Passed as described below; full root freestanding graph blocked by issue 165 |
 | Cost | Static versus erased dispatch, allocation/error-report cost | Pending measurement |
@@ -203,4 +203,40 @@ Two interface findings need to shape the public design:
 
 ```text
 run-heavy: done rc=0 0s | peak-RSS 0.20GiB | min-avail 18489MiB | peak-load 0.18
+```
+
+## Media and the reused network model
+
+The media-track question is resolved once per track/configuration epoch. The
+adapter copies known packet facts into the shared vocabulary without making it
+depend on the media crate. Unknown random-access status and missing timestamps
+remain unknown. A required track cannot be dropped; optional audio omission is
+an explicit permission and callback decision. The returned selection is bound
+to source revision, track and epoch and is checked on subsequent packets.
+
+Native MP4 (AV1/Opus), WebM (VP9/Opus), and IVF (AV1) fixtures produce the same
+packet bytes/timing and track descriptions over a resident slice, FileReadAt,
+and the reused IMI transport model, at read sizes 7 and 65,536. Observations:
+
+| Fixture | Recorded events | Policy decisions | Explicitly omitted audio packets |
+|---|---:|---:|---:|
+| AV1/Opus MP4 | 123 | 2 | 81 |
+| VP9/Opus WebM | 163 | 2 | 101 |
+| AV1 IVF | 42 | 1 | 0 |
+
+The omission column is a separate, explicitly permitted run. Default runs keep
+every track. These are packet/container controls, not new native-video decoding
+or live-network throughput measurements. Frame ownership uses the existing toy
+session as a protocol control: an old frame retains its samples and interpretation
+after reset and an epoch change, while a packet from the new epoch invalidates
+the old policy selection. Cancellation leaves the unaccepted packet untouched.
+
+The three fixture paths are required inputs to `just io-policy-media-check`;
+missing fixtures fail. Source generation and oracle provenance remain in the
+[existing media experiment](../perf/io-validation/README.md#video-containers).
+The two protocol controls run in Documentation CI; native fixture integration
+is an explicit local command, not silently skipped in that CI job.
+
+```text
+run-heavy: done rc=0 1s | peak-RSS 0.21GiB | min-avail 18506MiB | peak-load 0.19
 ```

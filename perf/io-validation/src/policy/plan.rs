@@ -16,6 +16,7 @@ pub(crate) enum PlanError {
     Ram,
     Disk,
     RequiredEffect,
+    UnexpectedQuestion,
 }
 impl fmt::Display for PlanError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -74,6 +75,7 @@ impl Plan {
                 Action::Execution(v) => execution.replace(v).is_some(),
                 Action::Metadata(v) => metadata.replace(v).is_some(),
                 Action::Fidelity(v) => fidelity.replace(v).is_some(),
+                Action::Media(_) => return Err(fail(PlanError::UnexpectedQuestion)),
             };
             if duplicate {
                 return Err(fail(PlanError::Duplicate));

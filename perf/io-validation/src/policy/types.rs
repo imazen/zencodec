@@ -7,6 +7,7 @@ pub(crate) enum Kind {
     Execution,
     Metadata,
     Fidelity,
+    Media,
     Unknown(u16),
 }
 
@@ -55,11 +56,18 @@ pub(crate) enum MetadataAction {
     DropDescriptive,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MediaAction {
+    KeepTrack,
+    DropTrack,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum Action {
     Execution(Execution),
     Metadata(MetadataAction),
     Fidelity(Fidelity),
+    Media(MediaAction),
 }
 impl Action {
     pub fn kind(self) -> Kind {
@@ -67,6 +75,7 @@ impl Action {
             Self::Execution(_) => Kind::Execution,
             Self::Metadata(_) => Kind::Metadata,
             Self::Fidelity(_) => Kind::Fidelity,
+            Self::Media(_) => Kind::Media,
         }
     }
 }
@@ -79,6 +88,7 @@ impl Effects {
     pub const EXACT_METADATA: Self = Self(4);
     pub const EARLY_OUTPUT: Self = Self(8);
     pub const LOSSLESS: Self = Self(16);
+    pub const KEEP_TRACK: Self = Self(32);
     pub const fn union(self, other: Self) -> Self {
         Self(self.0 | other.0)
     }
@@ -92,6 +102,7 @@ impl Effects {
                     Kind::Metadata => 7,
                     Kind::Execution => 8,
                     Kind::Fidelity => 16,
+                    Kind::Media => 32,
                     Kind::Unknown(_) => 0,
                 },
         )
@@ -211,11 +222,24 @@ pub(crate) struct FidelityFacts {
     pub bits_per_sample: u8,
 }
 
+/// Application-layer facts copied from the media contract, with no dependency
+/// from the core resolver vocabulary back to its media implementation.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct MediaFacts {
+    pub track: u32,
+    pub epoch: u32,
+    pub audio: bool,
+    pub first_packet_bytes: u64,
+    pub first_pts_known: bool,
+    pub random_access: Option<bool>,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Facts {
     Execution(ExecutionFacts),
     Metadata(MetadataFacts),
     Fidelity(FidelityFacts),
+    Media(MediaFacts),
     Unknown(u16),
 }
 impl Facts {
@@ -224,6 +248,7 @@ impl Facts {
             Self::Execution(_) => Kind::Execution,
             Self::Metadata(_) => Kind::Metadata,
             Self::Fidelity(_) => Kind::Fidelity,
+            Self::Media(_) => Kind::Media,
             Self::Unknown(code) => Kind::Unknown(code),
         }
     }
@@ -301,6 +326,10 @@ pub(crate) enum Question<'a> {
         facts: FidelityFacts,
         choices: Choices<'a>,
     },
+    Media {
+        facts: MediaFacts,
+        choices: Choices<'a>,
+    },
     /// A compatibility control for a question not understood by this version.
     Unknown { code: u16 },
 }
@@ -310,6 +339,7 @@ impl<'a> Question<'a> {
             Facts::Execution(facts) => Self::Execution { facts, choices },
             Facts::Metadata(facts) => Self::Metadata { facts, choices },
             Facts::Fidelity(facts) => Self::Fidelity { facts, choices },
+            Facts::Media(facts) => Self::Media { facts, choices },
             Facts::Unknown(code) => Self::Unknown { code },
         }
     }
@@ -318,6 +348,7 @@ impl<'a> Question<'a> {
             Self::Execution { choices, .. }
             | Self::Metadata { choices, .. }
             | Self::Fidelity { choices, .. } => Some(choices),
+            Self::Media { choices, .. } => Some(choices),
             Self::Unknown { .. } => None,
         }
     }
