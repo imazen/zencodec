@@ -378,6 +378,9 @@ guide-learning-grade task submission export output:
 guide-learning-grade-session reader export output:
     python3 docs/evaluation/grade_session.py "{{reader}}" "{{export}}" "{{output}}"
 
+guide-learning-audit task submission export output:
+    python3 docs/evaluation/run.py "{{task}}" "{{submission}}" "{{export}}" "{{output}}" --audit
+
 guide-learning-deliver task stage packets reader:
     python3 docs/evaluation/deliver.py "{{task}}" "{{stage}}" "{{packets}}" "{{reader}}"
 

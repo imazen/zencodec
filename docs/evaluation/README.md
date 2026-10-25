@@ -34,3 +34,9 @@ concept that took the most reasoning. The final learner report ranks confusion,
 visual hierarchy and abstraction placement based only on material received.
 Text-only site packets do not measure visual preference; the coordinator checks
 rendered desktop/mobile layouts separately with Playwright.
+
+Supplemental `t3_audit.rs` and `t4_audit.rs` checks were added after the baseline
+learning assessment. They check the concrete source-error cause and independent
+EXIF orientation without ICC. Run them with `just guide-learning-audit`; record
+these results separately, without changing the frozen four-task score. A model
+can pass an initial coding oracle while copying a debugging defect from a sample.

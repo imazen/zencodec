@@ -9,6 +9,7 @@ p.add_argument('task', choices=['t1','t2','t3','t4'])
 p.add_argument('submission', type=pathlib.Path)
 p.add_argument('export', type=pathlib.Path)
 p.add_argument('output', type=pathlib.Path)
+p.add_argument('--audit', action='store_true', help='Add separate t3/t4 debugging/semantic checks')
 a = p.parse_args()
 root = pathlib.Path(__file__).resolve().parents[2]
 export = a.export.resolve()
@@ -20,6 +21,9 @@ if a.task=='t4':
     fixture = crate/'src/fixtures.rs'
     source += '#[allow(dead_code)]\n#[path = '+json.dumps(str(fixture))+']\nmod fixtures;\n'
 source += (root/'docs/evaluation/oracles'/f'{a.task}.rs').read_text()
+if a.audit:
+    assert a.task in ['t3', 't4']
+    source += (root/'docs/evaluation/oracles'/f'{a.task}_audit.rs').read_text()
 (crate/'tests').mkdir(exist_ok=True)
 test_file = crate/'tests'/f'{test_name}.rs'
 assert not test_file.exists(), f'Remove the previous generated test from the export: {test_file}'
@@ -32,6 +36,6 @@ try:
         result = subprocess.run(cmd,stdout=log,stderr=subprocess.STDOUT)
 finally:
     test_file.unlink()
-record = {'task':a.task,'submission':str(a.submission),'command':cmd,'returncode':result.returncode}
+record = {'task':a.task,'audit':a.audit,'submission':str(a.submission),'command':cmd,'returncode':result.returncode}
 (a.output/'result.json').write_text(json.dumps(record,indent=2)+'\n')
 print(json.dumps(record))

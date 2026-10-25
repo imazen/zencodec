@@ -127,3 +127,18 @@ Raw packets, answers, compiler logs, control submissions and screenshots are
 retained under `output/zencodec/guide-learning-2026-10-25/` in the experiment
 artifact store. The source definitions, grading code and compact measurements
 are in this repository. No production public API changed in this assessment.
+
+## Supplemental semantic audit
+
+The frozen oracles intentionally remain unchanged. A later audit checks two
+contracts separately: the original concrete source-error cause must survive,
+and a no-ICC JPEG with EXIF orientation 6 must preserve that orientation while
+removing Artist, as read by the independent EXIF reader. Both coordinator
+controls pass. The baseline expanded positioned-source submission fails the
+cause check because it copied the old sample's string conversion; its JPEG
+submission passes the orientation check. Thus 4/4 on the frozen expanded tasks
+is not a blanket statement that every production contract passed.
+
+```
+semantic audit: rc=0 2s | peak-RSS 0.22GiB | min-avail 19364MiB | peak-load 0.10
+```
