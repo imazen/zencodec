@@ -306,6 +306,7 @@ operation-policy-check:
     cargo test -p zencodec --lib operation:: --locked
 
 resolution-core-check:
+    cargo fmt -p zencodec -p zencodec-testkit --check
     cargo test -p zencodec --lib resolution:: --locked
     cargo test -p zencodec-testkit --test operation_resolution --locked
     just operation-policy-check

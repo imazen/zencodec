@@ -115,11 +115,11 @@ pub use info::{
     ResolutionUnit, SourceColor, Supplements,
 };
 mod resolution;
-pub use resolution::ResolutionError;
 pub use limits::{AllocPreference, LimitExceeded, LimitKind, ResourceLimits, ThreadingPolicy};
 pub use metadata::{IccRetention, Metadata, MetadataFields, MetadataPolicy};
 pub use orientation::{Orientation, OrientationHint};
 pub use output::{AnimationFrame, OwnedAnimationFrame};
+pub use resolution::ResolutionError;
 pub use set::{CodecSet, CodecSetError, CodecSetIncrementalDecoder, TranscodeBarrier};
 pub use zenpixels::ColorAuthority;
 
