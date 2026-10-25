@@ -89,6 +89,7 @@ export const questions = [
   { n: 159, title: 'Does every layer earn its place?', text: 'Keep current codec/media protocols. Review a small driver-level limits and scheduling surface first; avoid adding a parallel Read/Seek family without a concrete parser need.' },
 ];
 export const evidence = [
+  ['PROPOSED / API REVIEW', 'A minimal 0.3', 'Keep the consumer calls and byte/session protocols; review admission, interpretation, ownership and image selection. Concrete removal candidates and native experiment gates.', 'docs/minimal-0.3.md'],
   ['MEASURED / TESTED', 'Raw ownership at a stalled writer', '786432 versus 0 logical retained raw bytes in a deliberate ownership control around native QOI; all outputs exactly 4255 bytes. Not a measurement of QOI internal memory.', 'benchmarks/io_encoder_retention_2026-10-25.md'],
   ['SIMULATED', 'Remote range policy', '32 cases through the reused IMI transport model. Exact returned bytes, shared bandwidth, cached extents. No DNS/TLS, retries, CPU time, cancellation, or concurrent views.', 'benchmarks/io_transport_model_2026-10-25.md'],
   ['MEASURED', 'Disk and allocation behavior', 'Warm and per-file cache-miss reads, heaptrack, and perf. Cold results are mixed; there is no universal positional-read speedup claim.', 'benchmarks/io_contracts_2026-10-24.md'],

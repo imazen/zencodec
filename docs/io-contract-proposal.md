@@ -6,6 +6,8 @@ Status: proposal for review, 2026-10-24. Tracking:
 [161](https://github.com/imazen/zencodec/issues/161).
 The [current contract](range-decoding-contract.md) remains the API reference.
 No public library types or signatures in this proposal have been added.
+The [minimal 0.3 proposal](minimal-0.3.md) places these driver changes in the
+broader image/media boundary, removal candidates, and consumer experiment gates.
 
 Keep `IncrementalDecode`, `ByteStepper`, `Input`/`Request`, `ReadAt`, and the
 media session/container interfaces. The experiments justify driver admission,
