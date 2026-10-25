@@ -90,6 +90,7 @@ impl PreparedEncode {
 }
 struct Outcome<T> { /* private */ }
 impl<T> Outcome<T> { // Also Deref<Target = T>.
+    const fn from_parts(output: T, report: OperationReport) -> Self;
     const fn output(&self) -> &T;
     fn into_output(self) -> T;
     fn into_parts(self) -> (T, OperationReport);
@@ -122,6 +123,7 @@ trait PolicyResolver {
     fn resolve(&mut self, question: Question<'_>) -> Result<Decision, At<Self::Error>>;
 }
 enum Question<'a> { // non_exhaustive
+    Transcode { facts: InterpretationFacts, choices: Choices<'a, TranscodeOffer> },
     Boundary { facts: InterpretationFacts, choices: Choices<'a, BoundaryOffer> },
     Encode { facts: EncodeFacts, choices: Choices<'a, EncodeOffer> },
 }
@@ -151,6 +153,9 @@ struct PolicySet { /* private */ }
 impl PolicySet {
     const fn new() -> Self;
     const fn prefer_lossless(self, enabled: bool) -> Self;
+    const fn require_metadata(self, treatment: MetadataTransfer) -> Self;
+    const fn allow_opaque_profiles(self, allowed: bool) -> Self;
+    const fn with_workspace_limit(self, bytes: u64) -> Self;
 }
 ```
 
@@ -174,7 +179,7 @@ code without metadata payloads. `with_unavailable(reason)` marks the facts unava
 
 `OperationReport` keeps the latest 16 `DecisionRecord`s and counts omitted older
 records. A record carries question identity, offer count, selected typed contract
-(`Selection::Encode(EncodeOffer)` or `Selection::Boundary { action, facts }`),
+(`Selection::Encode`, `Selection::Transcode` or `Selection::Boundary`),
 preset delegation and `DecisionCode`. Adapters append records with
 `OperationReport::record(record)`.
 Success returns this report with the output; native execution failure retains it
@@ -184,9 +189,42 @@ excludes application error payloads; explicit source/trace inspection can reveal
 them. Native codec errors keep their codec's own formatting.
 
 The full implementation target and current gaps are recorded in
-[ideal-api.md](ideal-api.md). The production resolver serves prepared encoder configuration and mandatory
-interpretation boundaries. Metadata obligations, coherent conversion routes
-and each native codec still require qualification.
+[ideal-api.md](ideal-api.md). The resolver serves prepared encoder configuration, mandatory interpretation
+boundaries and complete pixel-transcode routes. The executing transcode adapter
+is in zencodecs; each native route still needs qualification.
+
+### Coupled transcode offers
+
+```rust
+enum MetadataTransfer { PreserveReported, DiscardDescriptive } // non_exhaustive
+struct TranscodeOffer { // non_exhaustive; fields public
+    encoder: EncodeOffer,
+    output: PixelDescriptor,
+    metadata: MetadataTransfer,
+    retains_opaque_profile: bool,
+    admitted_bytes: usize,
+    workspace_upper_bound: Option<u64>,
+}
+fn resolve_transcode<R: PolicyResolver + ?Sized>(
+    boundary: DecodeBoundary, offers: &[TranscodeOffer], resolver: &mut R,
+    preset: PolicySet, stop: &dyn Stop,
+) -> Result<(usize, DecisionRecord), At<PolicyFailure>>;
+```
+
+The adapter retains actual conversion/encoder objects across the callback and
+executes the selected index. The source must be suspended with final usable
+interpretation; provisional or unavailable facts offer no route. This function
+checks choice authority, not the truth of an adapter's resource claims.
+`admitted_bytes` is the route's managed row/conversion storage; alternatives may
+share it. `workspace_upper_bound: None` means unknown. The built-in workspace
+limit rejects unknown bounds and excludes source, managed and encoded storage.
+It is not a total RAM cap.
+
+`PolicySet` can require descriptive metadata removal and forbid retaining opaque
+source profiles. Encode-only questions lack that evidence and refuse these
+requirements. Neither setting certifies pixels or unknown/nested carriers as
+PII-free. `Outcome::from_parts` assembles an adapter's result and report; the
+adapter remains responsible for validating postconditions.
 
 ## Controlled decode adapters
 

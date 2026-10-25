@@ -556,6 +556,13 @@ impl CodecSet {
         Ok(job)
     }
 
+    /// Inherited operation cancellation/progress stop for executing adapters.
+    /// With no configured token this returns `Unstoppable`. Use the same
+    /// handle around policy callbacks and between native pipeline stages.
+    pub fn stop(&self) -> &dyn enough::Stop {
+        self.operation_stop()
+    }
+
     pub(crate) fn operation_stop(&self) -> &dyn enough::Stop {
         match &self.stop {
             Some(stop) => stop,

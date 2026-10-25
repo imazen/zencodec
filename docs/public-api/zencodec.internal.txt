@@ -9,23 +9,24 @@
 
 ## summary
 #
-#   inherent methods                           51
-#   trait roster entries (type × trait)        69
+#   inherent methods                           55
+#   trait roster entries (type × trait)        89
 #
 # per-module pub lines:
 #   (root)                           18
 #   animation                         1
-#   decode                            9
+#   decode                           12
 #   encode                            4
 #   estimate                          2
 #   exif                              3
 #   gainmap                           2
 #   inventory                         6
 #   metadata_rewrite                  2
+#   operation                         1
 #   source                            2
 #   time                              2
 
-## items (51 lines)
+## items (55 lines)
 
 pub fn CodecIoKind::assert_fields_are_eq(&self)
 pub fn ColorEmitFields::assert_fields_are_eq(&self)
@@ -47,11 +48,14 @@ pub fn Supplements::assert_fields_are_eq(&self)
 pub fn ThreadingPolicy::assert_fields_are_eq(&self)
 pub fn animation::FrameDuration::assert_fields_are_eq(&self)
 pub fn decode::BatchMeta::assert_fields_are_eq(&self)
+pub fn decode::BoundaryId::assert_fields_are_eq(&self)
 pub fn decode::ByteRange::assert_fields_are_eq(&self)
+pub fn decode::DecodeBoundary::assert_fields_are_eq(&self)
 pub fn decode::DecodeCapabilities::assert_fields_are_eq(&self)
 pub fn decode::DecodePolicy::assert_fields_are_eq(&self)
 pub fn decode::Event::assert_fields_are_eq(&self)
 pub fn decode::Input<'a>::assert_fields_are_eq(&self)
+pub fn decode::InterpretationFacts::assert_fields_are_eq(&self)
 pub fn decode::OutputInfo::assert_fields_are_eq(&self)
 pub fn decode::Progress::assert_fields_are_eq(&self)
 pub fn decode::Request::assert_fields_are_eq(&self)
@@ -74,12 +78,13 @@ pub fn inventory::PartId::assert_fields_are_eq(&self)
 pub fn inventory::PartTag::assert_fields_are_eq(&self)
 pub fn metadata_rewrite::Entry::assert_fields_are_eq(&self)
 pub fn metadata_rewrite::Error::assert_fields_are_eq(&self)
+pub fn operation::ChoiceId::assert_fields_are_eq(&self)
 pub fn source::AccessPattern::assert_fields_are_eq(&self)
 pub fn source::SourceError::assert_fields_are_eq(&self)
 pub fn time::TimeBase::assert_fields_are_eq(&self)
 pub fn time::Timestamp::assert_fields_are_eq(&self)
 
-## trait impls (69 types)
+## trait impls (89 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -111,9 +116,16 @@ animation::FrameDuration: TrivialClone
 animation::TimingError: TrivialClone
 animation::TimingQuantizer: TrivialClone
 decode::BatchMeta: TrivialClone
+decode::BoundaryAction: TrivialClone
+decode::BoundaryId: TrivialClone
 decode::ByteRange: TrivialClone
+decode::ControlError: TrivialClone
+decode::DecodeBoundary: TrivialClone
 decode::DecodePolicy: TrivialClone
 decode::Input<'a>: TrivialClone
+decode::InterpretationFacts: TrivialClone
+decode::InterpretationState: TrivialClone
+decode::InterpretationUnavailable: TrivialClone
 decode::MetadataUpdate: TrivialClone
 decode::Request: TrivialClone
 encode::AnimationOutputTiming: TrivialClone
@@ -146,6 +158,19 @@ inventory::PartId: TrivialClone
 inventory::PartKind: TrivialClone
 metadata_rewrite::Action: TrivialClone
 metadata_rewrite::Compression: TrivialClone
+operation::BoundaryOffer: TrivialClone
+operation::ChoiceId: TrivialClone
+operation::DecisionCode: TrivialClone
+operation::DecisionContext: TrivialClone
+operation::DecisionRecord: TrivialClone
+operation::Decline: TrivialClone
+operation::EncodeFacts: TrivialClone
+operation::EncodeOffer: TrivialClone
+operation::MetadataTransfer: TrivialClone
+operation::PolicySet: TrivialClone
+operation::Question<'a>: TrivialClone
+operation::Selection: TrivialClone
+operation::TranscodeOffer: TrivialClone
 source::AccessPattern: TrivialClone
 time::Rounding: TrivialClone
 time::TimeBase: TrivialClone

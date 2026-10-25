@@ -1,5 +1,6 @@
 //! Application decisions over immutable, prepared alternatives.
 
+use super::{MetadataTransfer, TranscodeOffer};
 use crate::decode::{BoundaryAction, DecodeBoundary, InterpretationFacts, InterpretationState};
 use crate::{At, ImageFormat, encode::Fidelity};
 use alloc::boxed::Box;
@@ -105,6 +106,8 @@ pub struct EncodeOffer {
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum Selection {
+    /// Selected conversion, metadata, encoder and storage route.
+    Transcode(TranscodeOffer),
     /// The selected prepared encoder configuration.
     Encode(EncodeOffer),
     /// The selected mechanism at a mandatory interpretation suspension.
@@ -121,6 +124,8 @@ pub enum Selection {
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum DecisionContext {
+    /// Final interpretation for a coupled pixel-transcode route.
+    Transcode(InterpretationFacts),
     /// Facts about the pixels awaiting an encoder configuration.
     Encode(EncodeFacts),
     /// Facts at a mandatory interpretation suspension, including any refusal reason.
@@ -150,11 +155,18 @@ pub struct EncodeFacts {
 
 /// One situational decision. Each variant carries only its own typed offers.
 ///
-/// The current production path covers prepared still-image encoding. New
-/// domains are added with their executing adapters, not as unchecked actions.
+/// Domains are added with their executing adapters. Selecting an alternative
+/// never authorizes the adapter to change its prepared effects afterward.
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum Question<'a> {
+    /// Select one complete route while the source decoder is suspended.
+    Transcode {
+        /// Final source interpretation; no pixel bytes or metadata payloads.
+        facts: InterpretationFacts,
+        /// Prepared conversion/metadata/encoder combinations with storage scope.
+        choices: Choices<'a, TranscodeOffer>,
+    },
     /// Decide what to do before effects under newly discovered interpretation.
     Boundary {
         /// Facts about proposed output, excluding metadata payloads.
@@ -234,15 +246,26 @@ where
 
 /// Configurable built-in policy; applications can use it directly or delegate
 /// selected questions to it with `Decision::UsePreset`.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct PolicySet {
     prefer_lossless: bool,
+    metadata: Option<MetadataTransfer>,
+    allow_opaque_profiles: bool,
+    workspace_limit: Option<u64>,
+}
+impl Default for PolicySet {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 impl PolicySet {
     /// Choose the first prepared alternative in request order.
     pub const fn new() -> Self {
         Self {
             prefer_lossless: false,
+            metadata: None,
+            allow_opaque_profiles: true,
+            workspace_limit: None,
         }
     }
     /// Prefer a confirmed lossless mode when offered; otherwise preserve the
@@ -251,12 +274,64 @@ impl PolicySet {
         self.prefer_lossless = enabled;
         self
     }
+    /// Require this descriptive-metadata treatment from a transcode route.
+    /// This does not certify pixels, opaque profiles or unreported carriers.
+    /// An encode-only question lacks the evidence and is refused.
+    pub const fn require_metadata(mut self, treatment: MetadataTransfer) -> Self {
+        self.metadata = Some(treatment);
+        self
+    }
+    /// Permit retention of opaque source ICC profiles (the default). Disabling
+    /// this requires a transcode offer proving that it does not retain one;
+    /// encode-only questions cannot establish that and are refused.
+    pub const fn allow_opaque_profiles(mut self, allowed: bool) -> Self {
+        self.allow_opaque_profiles = allowed;
+        self
+    }
+    /// Require a qualified bound on additional codec/conversion workspace.
+    /// Unknown bounds refuse. This excludes managed storage, source storage and
+    /// encoded staging: it is deliberately not a whole-operation memory cap.
+    /// Encode-only questions have no such bound and are refused.
+    pub const fn with_workspace_limit(mut self, bytes: u64) -> Self {
+        self.workspace_limit = Some(bytes);
+        self
+    }
+    fn permits_transcode(self, offer: &TranscodeOffer) -> bool {
+        self.metadata.is_none_or(|m| m == offer.metadata)
+            && (self.allow_opaque_profiles || !offer.retains_opaque_profile)
+            && self.workspace_limit.is_none_or(|limit| {
+                offer
+                    .workspace_upper_bound
+                    .is_some_and(|bound| bound <= limit)
+            })
+    }
 }
 impl PolicyResolver for PolicySet {
     type Error = Infallible;
     fn resolve(&mut self, question: Question<'_>) -> Result<Decision, At<Infallible>> {
         let choices = match question {
-            Question::Encode { choices, .. } => choices,
+            Question::Transcode { choices, .. } => {
+                let permitted = || choices.iter().filter(|c| self.permits_transcode(c.value()));
+                let choice = if self.prefer_lossless {
+                    permitted()
+                        .find(|c| c.value().encoder.fidelity == Some(Fidelity::Lossless))
+                        .or_else(|| permitted().next())
+                } else {
+                    permitted().next()
+                };
+                return Ok(choice
+                    .map(Decision::choose)
+                    .unwrap_or_else(|| Decision::decline(Decline::NoPreferredChoice)));
+            }
+            Question::Encode { choices, .. } => {
+                if self.metadata.is_some()
+                    || !self.allow_opaque_profiles
+                    || self.workspace_limit.is_some()
+                {
+                    return Ok(Decision::decline(Decline::UnsupportedQuestion));
+                }
+                choices
+            }
             Question::Boundary { choices, .. } => {
                 return Ok(choices
                     .first()
@@ -467,7 +542,7 @@ pub fn resolve_boundary<R: PolicyResolver + ?Sized>(
     Ok((offers[index].action, record))
 }
 
-fn choose<'a, T: Copy, R: PolicyResolver + ?Sized>(
+pub(super) fn choose<'a, T: Copy, R: PolicyResolver + ?Sized>(
     offers: &'a [T],
     context: DecisionContext,
     question: impl FnOnce(Choices<'a, T>) -> Question<'a>,

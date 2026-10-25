@@ -354,6 +354,8 @@ None.
 
 ### Added
 
+- Coupled transcode choices in the shared policy resolver, with typed metadata treatment, opaque-profile retention and scoped storage facts. Configurable presets reject unknown workspace bounds and missing privacy evidence; final interpretation and fresh choice tokens are required. Adapters retain the prepared route and validate output before constructing its outcome.
+
 - `EncodeRequest::prepare` retains checked jobs for an adapter's coupled decision.
   Ordinary encoding uses the same preparation. `PreparedEncode` exposes the
   confirmed offer and transfers the original job without reconstructing it.

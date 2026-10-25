@@ -229,14 +229,14 @@ operation-sync export:
     test ! -e "{{export}}/.git"
     test ! -e "{{export}}/.jj"
     mkdir -p "{{export}}/src/operation"
-    cp src/operation.rs src/lib.rs src/set.rs "{{export}}/src/"
+    cp src/operation.rs src/lib.rs src/set.rs src/info.rs "{{export}}/src/"
     cp src/operation/*.rs "{{export}}/src/operation/"
     cp zencodec-testkit/tests/operation_*.rs "{{export}}/zencodec-testkit/tests/"
     cp justfile "{{export}}/justfile"
 
 operation-policy-check:
     cargo test -p zencodec-testkit --test operation_policy --test operation_requests --locked
-    cargo test -p zencodec --lib operation::policy --locked
+    cargo test -p zencodec --lib operation:: --locked
 
 storage-sync export:
     just io-core-sync "{{export}}"
@@ -489,3 +489,9 @@ control-sync export:
 control-check:
     cargo test -p zencodec-coroutine --tests --locked
     cargo clippy -p zencodec-coroutine -p zencodec-io -p zencodec --all-targets --all-features --locked -- -D warnings
+
+# Shared policy route constraints and compatibility of the no_std core.
+transcode-policy-check:
+    just operation-policy-check
+    cargo clippy -p zencodec --all-targets --locked -- -D warnings
+    cargo check -p zencodec --no-default-features --locked

@@ -17,11 +17,13 @@ use zenpixels::{PixelDescriptor, PixelSlice};
 
 mod decoding;
 mod policy;
+mod transcode;
 pub use policy::{
     BoundaryOffer, Choice, ChoiceId, Choices, Decision, DecisionCode, DecisionContext,
     DecisionRecord, Decline, EncodeFacts, EncodeOffer, OperationReport, PolicyFailure,
     PolicyResolver, PolicySet, Question, Selection, resolve_boundary,
 };
+pub use transcode::{MetadataTransfer, TranscodeOffer, resolve_transcode};
 
 /// Successful output and the decisions that selected its permitted contract.
 /// Dereferences to the ordinary codec output; reports never replace errors for
@@ -32,6 +34,11 @@ pub struct Outcome<T> {
     report: OperationReport,
 }
 impl<T> Outcome<T> {
+    /// Assemble an adapter's completed output and bounded decision record.
+    /// This container does not independently validate the adapter's postconditions.
+    pub const fn from_parts(output: T, report: OperationReport) -> Self {
+        Self { output, report }
+    }
     /// Inspect the ordinary codec output.
     pub const fn output(&self) -> &T {
         &self.output
