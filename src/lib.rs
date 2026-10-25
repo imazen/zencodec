@@ -227,6 +227,11 @@ pub mod encode {
 /// Codec implementors implement the generic traits. Dispatch callers
 /// use the `Dyn*` variants for codec-agnostic operation.
 pub mod decode {
+    pub use crate::traits::{
+        BoundaryAction, BoundaryId, ControlError, ControlledIncrementalDecode, ControlledProgress,
+        DecodeBoundary, DynControlledDecoder, InterpretationFacts, InterpretationState,
+        erase_controlled,
+    };
     // Traits — config, job, execution
     pub use crate::traits::{
         AnimationFrameDecoder, BatchMeta, Decode, DecodeJob, DecoderConfig, ErasedError, Event,

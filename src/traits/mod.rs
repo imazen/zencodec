@@ -21,6 +21,7 @@
 //! native pixels with ICC/CICP metadata. Encoders accept pixels as-is and
 //! embed the provided metadata. The caller handles CMS transforms.
 
+mod control;
 mod decoder;
 mod decoding;
 mod dyn_decoding;
@@ -30,6 +31,11 @@ mod encoding;
 mod incremental;
 mod unsupported;
 
+pub use control::{
+    BoundaryAction, BoundaryId, ControlError, ControlledIncrementalDecode, ControlledProgress,
+    DecodeBoundary, DynControlledDecoder, InterpretationFacts, InterpretationState,
+    erase_controlled,
+};
 pub use decoder::{AnimationFrameDecoder, Decode, StreamingDecode};
 pub use decoding::{DecodeJob, DecoderConfig};
 pub use dyn_decoding::{
