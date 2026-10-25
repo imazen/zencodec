@@ -8,6 +8,7 @@ const root=new URL('../../',import.meta.url);
 const source=await readFile(new URL('docs/examples/journeys.rs',root),'utf8');
 const policySource=await readFile(new URL('docs/examples/policy.rs',root),'utf8');
 const jpegSource=await readFile(new URL('docs/examples/jpeg_policy.rs',root),'utf8');
+const pixelSource=await readFile(new URL('docs/examples/pixel_conversion.rs',root),'utf8');
 
 test('source signatures preserve GATs, lifetimes, bounds and futures without default bodies',()=>{
   const rust=`// 🦀 pub trait False { fn hidden(); }
@@ -65,6 +66,7 @@ test('above, focus and below reconstruct complete independently compiled example
   const cases=[...shown].map(name=>[source,name]);
   for(const name of ['policy_default','policy_custom']) cases.push([policySource,name]);
   for(const name of ['jpeg_rewrite','jpeg_icc_refusal','jpeg_icc_admission']) cases.push([jpegSource,name]);
+  for(const name of ['convert_display','convert_framebuffer']) cases.push([pixelSource,name]);
   for(const [text,name] of cases) {
     const parts=example(text,name);
     assert.ok(parts.above.startsWith('use '),name);

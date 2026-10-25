@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, stat } from 'node:fs/promises';
 import { lanes } from './content.mjs';
+import { migrations } from './migration-data.mjs';
 const root=new URL('../_site/',import.meta.url);
 const html=await readFile(new URL('index.html',root),'utf8');
 test('all chapter anchors, diagrams, and Rust examples survive the build',()=>{
@@ -43,4 +44,30 @@ test('lab uses the exact committed matrix, with no invented timing interpolation
   assert.equal(rows.length,32);
   assert.equal(new Set(rows.map(r=>r.slice(0,4).join(','))).size,32);
   assert.ok(rows.some(r=>r.join(',')==='budgeted,160,0,8,650.48576,131072,0,2'));
+});
+
+test('unlisted migration map separates release states and deploys with the guide',async()=>{
+  const page=await readFile(new URL('migration.html',root),'utf8');
+  assert.ok(!/href="[^"\n]*migration\.html/.test(html),'migration page must stay out of guide navigation');
+  assert.match(page,/<meta name="robots" content="noindex, nofollow">/);
+  const ids=[...page.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);
+  assert.equal(new Set(ids).size,ids.length);
+  for(const migration of migrations) {
+    assert.ok(ids.includes(migration.id));
+    await stat(new URL(`../../${migration.source}`,import.meta.url));
+  }
+  for(const stage of ['released','current','proposed']) {
+    assert.equal((page.match(new RegExp(`data-stage="${stage}"`,'g'))||[]).length,migrations.length);
+  }
+  for(const [,url] of page.matchAll(/(?:href|src)="([^"]+)"/g)) {
+    if(url.startsWith('#')){assert.ok(ids.includes(url.slice(1)),url);continue;}
+    if(url.startsWith('https://')||url==='data:,')continue;
+    assert.ok(!url.includes('..'),url);
+    assert.ok((await stat(new URL(url,root))).isFile(),url);
+  }
+  const baseline=JSON.parse(await readFile(new URL('migration-baseline.json',root),'utf8'));
+  assert.equal(baseline.packages[0].version,'0.1.26');
+  assert.ok(page.includes('prototype::PolicyResolver (private)'));
+  assert.ok(page.includes('data-example="convert_display"'));
+  assert.ok(page.includes('data-example="convert_framebuffer"'));
 });
