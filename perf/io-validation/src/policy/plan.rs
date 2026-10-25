@@ -75,7 +75,9 @@ impl Plan {
                 Action::Execution(v) => execution.replace(v).is_some(),
                 Action::Metadata(v) => metadata.replace(v).is_some(),
                 Action::Fidelity(v) => fidelity.replace(v).is_some(),
-                Action::Media(_) => return Err(fail(PlanError::UnexpectedQuestion)),
+                Action::Media(_) | Action::Boundary(_) => {
+                    return Err(fail(PlanError::UnexpectedQuestion));
+                }
             };
             if duplicate {
                 return Err(fail(PlanError::Duplicate));

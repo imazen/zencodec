@@ -8,6 +8,7 @@ pub(crate) enum Kind {
     Metadata,
     Fidelity,
     Media,
+    Boundary,
     Unknown(u16),
 }
 
@@ -62,12 +63,75 @@ pub(crate) enum MediaAction {
     DropTrack,
 }
 
+/// Choices at a newly discovered interpretation or disclosure boundary.
+/// Adapters qualify these alternatives before presenting them to the resolver.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum BoundaryAction {
+    Keep,
+    Regenerate,
+    Drop,
+    Adopt,
+    Replay,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Carrier {
+    Xmp,
+    Icc,
+    Reconstruction,
+    NestedObject,
+    UnknownCritical,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Inspection {
+    Unavailable,
+    Malformed,
+    Limit,
+    SyntaxOnly,
+    SupportedSubset,
+    Canonical,
+}
+
+/// These are independent commitments: zero body bytes does not imply that a
+/// new format, sample interpretation or encoder configuration remains possible.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Commitments {
+    pub samples_changed: bool,
+    pub encoder_started: bool,
+    pub headers_sent: bool,
+    pub body_bytes: u64,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum BoundaryTrigger {
+    Disclosure {
+        carrier: Carrier,
+        inspection: Inspection,
+        bytes: u64,
+        required: bool,
+        strict: bool,
+    },
+    Interpretation {
+        known: bool,
+        final_for_epoch: bool,
+        changes_samples: bool,
+    },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct BoundaryFacts {
+    pub trigger: BoundaryTrigger,
+    pub commitments: Commitments,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum Action {
     Execution(Execution),
     Metadata(MetadataAction),
     Fidelity(Fidelity),
     Media(MediaAction),
+    Boundary(BoundaryAction),
 }
 impl Action {
     pub fn kind(self) -> Kind {
@@ -76,6 +140,7 @@ impl Action {
             Self::Metadata(_) => Kind::Metadata,
             Self::Fidelity(_) => Kind::Fidelity,
             Self::Media(_) => Kind::Media,
+            Self::Boundary(_) => Kind::Boundary,
         }
     }
 }
@@ -103,7 +168,7 @@ impl Effects {
                     Kind::Execution => 8,
                     Kind::Fidelity => 16,
                     Kind::Media => 32,
-                    Kind::Unknown(_) => 0,
+                    Kind::Boundary | Kind::Unknown(_) => 0,
                 },
         )
     }
@@ -240,6 +305,7 @@ pub(crate) enum Facts {
     Metadata(MetadataFacts),
     Fidelity(FidelityFacts),
     Media(MediaFacts),
+    Boundary(BoundaryFacts),
     Unknown(u16),
 }
 impl Facts {
@@ -249,6 +315,7 @@ impl Facts {
             Self::Metadata(_) => Kind::Metadata,
             Self::Fidelity(_) => Kind::Fidelity,
             Self::Media(_) => Kind::Media,
+            Self::Boundary(_) => Kind::Boundary,
             Self::Unknown(code) => Kind::Unknown(code),
         }
     }
@@ -330,6 +397,10 @@ pub(crate) enum Question<'a> {
         facts: MediaFacts,
         choices: Choices<'a>,
     },
+    Boundary {
+        facts: BoundaryFacts,
+        choices: Choices<'a>,
+    },
     /// A compatibility control for a question not understood by this version.
     Unknown { code: u16 },
 }
@@ -340,6 +411,7 @@ impl<'a> Question<'a> {
             Facts::Metadata(facts) => Self::Metadata { facts, choices },
             Facts::Fidelity(facts) => Self::Fidelity { facts, choices },
             Facts::Media(facts) => Self::Media { facts, choices },
+            Facts::Boundary(facts) => Self::Boundary { facts, choices },
             Facts::Unknown(code) => Self::Unknown { code },
         }
     }
@@ -348,7 +420,7 @@ impl<'a> Question<'a> {
             Self::Execution { choices, .. }
             | Self::Metadata { choices, .. }
             | Self::Fidelity { choices, .. } => Some(choices),
-            Self::Media { choices, .. } => Some(choices),
+            Self::Media { choices, .. } | Self::Boundary { choices, .. } => Some(choices),
             Self::Unknown { .. } => None,
         }
     }

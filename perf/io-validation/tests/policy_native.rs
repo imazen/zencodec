@@ -216,6 +216,7 @@ fn typed_and_registered_operations_preserve_strided_pixels_and_call_order() {
                     Question::Execution { .. } => Kind::Execution,
                     Question::Fidelity { .. } => Kind::Fidelity,
                     Question::Media { .. } => Kind::Media,
+                    Question::Boundary { .. } => Kind::Boundary,
                     Question::Unknown { code } => Kind::Unknown(code),
                 });
                 Ok(Decision::UsePreset)
