@@ -13,14 +13,18 @@ zencodec-coroutine = { path = "../../zencodec-coroutine", version = "0.1.0" }
 zenmeta = { path = "../../zenmeta", features = ["rewrite", "xmp"] }
 zenpixels = ">=0.2.16, <0.4.0"
 zenpixels-convert = { version = ">=0.2.16, <0.4.0", features = ["icc-db"] }
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "3e9050efb1b33cc0e553b2f6712631979a505918", features = ["controlled-decode", "metadata-rewrite", "extended-metadata"] }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "c9f82fc040a50e64fec88379c8add863e2ab3f50", features = ["controlled-decode", "metadata-rewrite", "extended-metadata"] }
+
+zencodecs = { git = "https://github.com/imazen/zenpipe", rev = "b2bea214bf6805fd7bd844789f61bb1c41b803d4", default-features = false, features = ["std", "cms", "jpeg", "png", "checked-transcode-async"] }
 
 [patch.crates-io]
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "c9f82fc040a50e64fec88379c8add863e2ab3f50" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "53861c95b5a2f982d0494f07242765c2ccf6729a" }
 zencodec = { path = "../.." }
 # Reproduce zenjpeg main's unpublished workspace bridges at immutable commits.
 zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "8ca647c525cf488c61bbf35475ca8ba3db6b628e" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "1d3ddd2131b22e9e3754c765d4ce45ce3901de59" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "1d3ddd2131b22e9e3754c765d4ce45ce3901de59" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f8596aae7a16aec7875b6fe2ef39b501c11a0e82" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "f8596aae7a16aec7875b6fe2ef39b501c11a0e82" }
 
 [patch."https://github.com/imazen/zencodec"]
 zencodec = { path = "../.." }

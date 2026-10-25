@@ -18,9 +18,15 @@ mod policy_disclosure;
 mod guide;
 
 #[cfg(test)]
-mod conversion;
-#[cfg(test)]
 mod control;
+#[cfg(test)]
+mod conversion;
 #[cfg(test)]
 #[path = "../../../docs/examples/pixel_conversion.rs"]
 mod pixel_guide;
+
+#[cfg(test)]
+mod checked_examples;
+#[cfg(test)]
+#[path = "../../../docs/examples/checked_operations.rs"]
+mod checked_guide;

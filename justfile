@@ -354,7 +354,7 @@ jpeg-policy-sync export:
     cp perf/jpeg-policy-validation/src/*.rs "{{export}}/perf/jpeg-policy-validation/src/"
     mkdir -p "{{export}}/docs/examples"
     cp docs/examples/jpeg_policy.rs "{{export}}/docs/examples/"
-    cp docs/examples/pixel_conversion.rs "{{export}}/docs/examples/"
+    cp docs/examples/pixel_conversion.rs docs/examples/checked_operations.rs "{{export}}/docs/examples/"
     cp justfile "{{export}}/justfile"
 
 # Paths are required; this integration never silently skips missing fixtures.
@@ -498,7 +498,7 @@ transcode-policy-check:
     cargo check -p zencodec --no-default-features --locked
 
 operation-send-check:
-    cargo test -p zencodec-testkit --test operation_requests --test operation_policy --locked
+    cargo test -p zencodec-testkit --test operation_requests --test operation_policy --test operation_defaults --locked
     cargo clippy -p zencodec --all-targets --locked -- -D warnings
     cargo check -p zencodec --no-default-features --locked
 
@@ -508,3 +508,17 @@ operation-send-integration:
     cargo test --workspace --locked
     cargo clippy -p zencodec-testkit --test operation_policy --locked -- -D warnings
     just api-doc
+
+# Execute the public checked-operation guide through the pinned native adapters.
+docs-checked-examples:
+    JPEG_POLICY_ARTIFACTS="$HOME/tmp/zencodec-jpeg-oracles" cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked checked_examples -- --nocapture
+    cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# Resolve the pinned checked guide graph before all native JPEG/CMS scenarios.
+checked-guide-integration:
+    just jpeg-policy-update-lock
+    just jpeg-policy-check
+
+# Pinned source signatures with caller-facing import paths and parameter names.
+checked-guide-api checkout revision:
+    node docs/capture-integration-api.mjs "{{checkout}}" "{{revision}}"
