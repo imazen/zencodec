@@ -947,8 +947,9 @@ footer p {
     padding-inline:20px
   }
   .topbar {
-    height:66px;
-    padding-inline:20px;
+    min-height:66px;
+    height:auto;
+    padding:10px 20px;
     justify-content:space-between;
     gap:15px
   }
@@ -963,7 +964,10 @@ footer p {
     margin-right:6px
   }
   .topbar nav {
-    gap:15px
+    min-width:0;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+    gap:8px 15px
   }
   .topbar nav a {
     font-size:11px

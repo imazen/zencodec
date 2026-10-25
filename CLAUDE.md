@@ -358,3 +358,9 @@ The testkit compares color metadata against a clean same-policy encode before
 reporting a leak: formats can require native color, and decoders can synthesize
 an equivalent ICC profile. The exception requires exact ICC bytes/CICP equality;
 unexpected color and discarded descriptive metadata remain failures.
+
+## Known Bugs: checked guide mobile navigation (2026-10-25)
+
+Fixed on the checked API review branch: adding a navigation entry overflowed the
+390 px CI viewport. The header wraps its links and grows vertically. Existing
+browser no-overflow assertions remain unchanged; evidence is in docs/ideal-api.md.

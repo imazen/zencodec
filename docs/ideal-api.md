@@ -147,3 +147,11 @@ palette precision regressions fixed in the coupled adapter. Native PNG checked
 verbatim emission is on [PR 46](https://github.com/imazen/zenpng/pull/46).
 The broader content-dependent fidelity contract remains
 [104](https://github.com/imazen/zencodec/issues/104).
+
+Mobile navigation regression (2026-10-25): adding the checked API entry exposed
+an unwrapped header in the CI browser at 390 px. The navigation now wraps within
+the available width and the header grows with its links. The existing strict
+no-overflow assertions pass without changed thresholds (`just
+docs-site-browser-check 3547`, rc 0; run-heavy peak RSS 0.17 GiB, minimum available
+17154 MiB, peak load 0.13). These are browser-process observations, not codec
+memory measurements.
