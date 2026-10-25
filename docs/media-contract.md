@@ -144,6 +144,14 @@ lint, no_std builds, the full workspace suite and API snapshots. Native codec
 qualification is recorded separately; these authored controls alone do not
 establish a native codec memory bound.
 
+The standalone [native AV1 qualification](../perf/av1-policy-validation/README.md)
+executes this guard with pinned native decoder/encoder PRs. It checks original
+picture identity, queued configuration facts, typed native causes and failure
+cleanup. Policy-approved 8/10/12-bit mono, subsampled YUV and identity GBR frames
+re-encode sample-exact under independent FFmpeg/libdav1d decoding. The
+[recorded run](../benchmarks/native_frame_policy_2026-10-25.txt) distinguishes
+these publication checks from native allocation or conversion guarantees.
+
 ## Colour
 
 - Colour claims are carried with provenance: what the bitstream says, what the

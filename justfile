@@ -251,6 +251,23 @@ frame-policy-integration:
     cargo test --workspace --all-features --locked
     just api-doc
 
+# Standalone native AV1 policy guard, real re-encode and required FFmpeg oracle.
+av1-policy-sync export:
+    just frame-policy-sync "{{export}}"
+    mkdir -p "{{export}}/perf/av1-policy-validation/src"
+    cp perf/av1-policy-validation/Cargo.toml "{{export}}/perf/av1-policy-validation/"
+    cp perf/av1-policy-validation/src/*.rs "{{export}}/perf/av1-policy-validation/src/"
+
+av1-policy-resolve:
+    cargo generate-lockfile --manifest-path perf/av1-policy-validation/Cargo.toml
+
+av1-policy-setup:
+    cp perf/av1-policy-validation/dependencies.lock perf/av1-policy-validation/Cargo.lock
+
+av1-policy-check artifacts:
+    AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
 operation-policy-check:
     cargo test -p zencodec-testkit --test operation_policy --test operation_requests --locked
     cargo test -p zencodec --lib operation:: --locked
