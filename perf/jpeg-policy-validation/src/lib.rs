@@ -1,0 +1,14 @@
+//! Private native JPEG qualification. No published API.
+#![forbid(unsafe_code)]
+
+#[cfg(test)]
+mod fixtures;
+#[cfg(test)]
+mod tests;
+
+#[cfg(test)]
+#[path = "../../io-validation/src/policy/mod.rs"]
+mod policy;
+#[cfg(test)]
+#[path = "../../io-validation/src/policy_disclosure.rs"]
+mod policy_disclosure;

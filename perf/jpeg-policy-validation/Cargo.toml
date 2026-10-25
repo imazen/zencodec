@@ -1,0 +1,33 @@
+[package]
+name = "jpeg-policy-validation"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+zencodec = { path = "../..", version = ">=0.1.27, <0.3.0", features = ["std"] }
+zencodec-io = { path = "../../zencodec-io", features = ["std"] }
+zenmeta = { path = "../../zenmeta", features = ["rewrite", "xmp"] }
+zenpixels = ">=0.2.16, <0.4.0"
+zenpixels-convert = { version = ">=0.2.16, <0.4.0", features = ["icc-db"] }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "a2a128ab0bc36f01338225f61c285f462ae67ca6", features = ["zencodec", "metadata-rewrite"] }
+
+[patch.crates-io]
+zencodec = { path = "../.." }
+# Reproduce zenjpeg main's unpublished workspace bridges at immutable commits.
+zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "8ca647c525cf488c61bbf35475ca8ba3db6b628e" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "1d3ddd2131b22e9e3754c765d4ce45ce3901de59" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "1d3ddd2131b22e9e3754c765d4ce45ce3901de59" }
+
+[patch."https://github.com/imazen/zencodec"]
+zencodec = { path = "../.." }
+zenmeta = { path = "../../zenmeta" }
+
+[dev-dependencies]
+kamadak-exif = "0.6.1"
+
+[profile.release]
+debug = 1
+lto = "thin"

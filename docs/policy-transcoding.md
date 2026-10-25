@@ -187,7 +187,9 @@ The test/build process receipt was `rc=0 1s | peak-RSS 0.20GiB | min-avail
 heap usage remain outside the payload cap. An application callback can itself
 block, allocate or panic; the engine cannot enforce its execution time.
 
-Native late-metadata JPEG behavior, automatic replay, metadata-aware seeking,
-disk spooling and native video reconfiguration remain unqualified. The controller
+Native JPEG discovery, rewrite and configuration-dependent output timing now
+have [executed evidence](policy-jpeg.md), including explicit placement and color
+interpretation limits. Automatic replay, metadata-aware seeking, disk spooling
+and native video reconfiguration remain unqualified. The controller
 does not offer a replay action it cannot execute. No production state-machine or
 public policy interface has changed in this investigation.

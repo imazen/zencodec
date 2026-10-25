@@ -265,6 +265,25 @@ io-policy-stream-check:
 io-policy-update-lock:
     cargo update --manifest-path perf/io-validation/Cargo.toml -p zenmeta
 
+# Standalone native JPEG qualification; requires djpeg.
+jpeg-policy-setup:
+    cp perf/jpeg-policy-validation/dependencies.lock perf/jpeg-policy-validation/Cargo.lock
+
+jpeg-policy-update-lock:
+    cargo update --manifest-path perf/jpeg-policy-validation/Cargo.toml
+
+jpeg-policy-check:
+    cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+jpeg-policy-sync export:
+    test ! -e "{{export}}/.git"
+    test ! -e "{{export}}/.jj"
+    mkdir -p "{{export}}/perf/jpeg-policy-validation/src"
+    cp perf/jpeg-policy-validation/Cargo.toml perf/jpeg-policy-validation/dependencies.lock "{{export}}/perf/jpeg-policy-validation/"
+    cp perf/jpeg-policy-validation/src/*.rs "{{export}}/perf/jpeg-policy-validation/src/"
+    cp justfile "{{export}}/justfile"
+
 # Paths are required; this integration never silently skips missing fixtures.
 io-policy-media-check +fixtures:
     cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --bin policy_media --locked
