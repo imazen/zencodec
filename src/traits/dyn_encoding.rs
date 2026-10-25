@@ -70,6 +70,8 @@ pub trait DynEncoder: Send {
 
     /// Declare the image before the first `push_rows` and learn when its
     /// bytes arrive; see [`Encoder::begin`](super::Encoder::begin).
+    /// The default refuses with [`crate::UnsupportedOperation::RowLevelEncode`],
+    /// leaving one-shot encoding available.
     fn begin(
         &mut self,
         width: u32,
@@ -77,7 +79,7 @@ pub trait DynEncoder: Send {
         descriptor: PixelDescriptor,
     ) -> Result<crate::encode::OutputTiming, BoxedError> {
         let _ = (width, height, descriptor);
-        Ok(crate::encode::OutputTiming::AT_FINISH)
+        Err(Box::new(crate::UnsupportedOperation::RowLevelEncode))
     }
 
     /// Encoded bytes ready to send; see
@@ -701,6 +703,91 @@ where
 
     fn dyn_job(&self) -> Box<dyn DynEncodeJob + 'static> {
         Box::new(EncodeJobShim(Some(self.clone().job())))
+    }
+}
+
+#[cfg(test)]
+mod begin_dispatch_tests {
+    use super::*;
+    use crate::UnsupportedOperation;
+
+    // Exercise both defaults independently: ordinary erased encoders delegate
+    // through EncoderShim, but callers may also implement DynEncoder directly.
+    struct OneShot;
+
+    impl Encoder for OneShot {
+        type Error = UnsupportedOperation;
+
+        fn reject(op: UnsupportedOperation) -> Self::Error {
+            op
+        }
+
+        fn encode(self, _: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error> {
+            // Only a dispatch fixture; this test does not encode an image.
+            Ok(EncodeOutput::new(alloc::vec::Vec::new(), ImageFormat::Png))
+        }
+    }
+
+    impl DynEncoder for OneShot {
+        fn preferred_strip_height(&self) -> u32 {
+            Encoder::preferred_strip_height(self)
+        }
+
+        fn encode(self: Box<Self>, pixels: PixelSlice<'_>) -> Result<EncodeOutput, BoxedError> {
+            Encoder::encode(*self, pixels).map_err(Into::into)
+        }
+
+        fn encode_srgba8(
+            self: Box<Self>,
+            data: &mut [u8],
+            make_opaque: bool,
+            width: u32,
+            height: u32,
+            stride_pixels: u32,
+        ) -> Result<EncodeOutput, BoxedError> {
+            Encoder::encode_srgba8(*self, data, make_opaque, width, height, stride_pixels)
+                .map_err(Into::into)
+        }
+
+        fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), BoxedError> {
+            Encoder::push_rows(self, rows).map_err(Into::into)
+        }
+
+        fn finish(self: Box<Self>) -> Result<EncodeOutput, BoxedError> {
+            Encoder::finish(*self).map_err(Into::into)
+        }
+
+        fn encode_from(
+            self: Box<Self>,
+            source: &mut dyn FnMut(u32, PixelSliceMut<'_>) -> usize,
+        ) -> Result<EncodeOutput, BoxedError> {
+            Encoder::encode_from(*self, source).map_err(Into::into)
+        }
+    }
+
+    #[test]
+    fn default_begin_refuses_rows_for_typed_shim_and_direct_dyn_encoders() {
+        let pixels = zenpixels::PixelBuffer::new(1, 1, PixelDescriptor::RGB8_SRGB);
+        let mut typed = OneShot;
+        assert_eq!(
+            Encoder::begin(&mut typed, 1, 1, PixelDescriptor::RGB8_SRGB),
+            Err(UnsupportedOperation::RowLevelEncode)
+        );
+        assert!(Encoder::encode(typed, pixels.as_slice()).is_ok());
+
+        let encoders: [Box<dyn DynEncoder>; 2] =
+            [Box::new(EncoderShim(OneShot)), Box::new(OneShot)];
+        for mut encoder in encoders {
+            let error = encoder
+                .begin(1, 1, PixelDescriptor::RGB8_SRGB)
+                .expect_err("one-shot default must refuse before accepting any rows");
+            assert_eq!(
+                error.downcast_ref::<UnsupportedOperation>(),
+                Some(&UnsupportedOperation::RowLevelEncode)
+            );
+            assert!(encoder.pending_output().is_empty());
+            assert!(encoder.encode(pixels.as_slice()).is_ok());
+        }
     }
 }
 

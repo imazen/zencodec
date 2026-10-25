@@ -220,6 +220,10 @@ io-contract-check:
     cargo test --workspace --all-features --locked
     cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
+# Default row admission agrees for typed, shimmed and handwritten dyn encoders.
+encoder-begin-check:
+    cargo test -p zencodec --all-features --locked --lib begin_dispatch_tests
+
 # Rerun the exact existing fixture set without regenerating containers.
 io-validation-media mp4 webm ivf:
     cargo run --locked --manifest-path perf/io-validation/Cargo.toml --bin media_transport -- "{{mp4}}"/*.mp4 "{{webm}}"/*.webm "{{webm}}"/*.mkv "{{ivf}}"/*.ivf

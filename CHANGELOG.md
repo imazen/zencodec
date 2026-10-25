@@ -269,6 +269,10 @@ removes that whole class).
 
 ### Fixed
 
+- The default `DynEncoder::begin` now refuses unsupported row encoding, matching
+  `Encoder::begin`. This fixes handwritten dyn implementations; the ordinary
+  typed-to-dyn shim already delegated correctly. Rejection preserves the
+  one-shot fallback and the concrete `RowLevelEncode` cause.
 - The default `Encoder::begin` refuses unsupported row encoding before any output,
   allowing `encode_to_writer` to use one-shot encoders that inherit the optional
   row methods. A strided multi-strip regression checks exact output.

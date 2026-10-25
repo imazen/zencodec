@@ -231,6 +231,12 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed during independent API review (2026-10-25): handwritten `DynEncoder`
+  implementations inherited a successful `begin` despite unsupported row input.
+  The default now returns `RowLevelEncode`, matching the typed default. The
+  ordinary `EncoderShim` was already correct. `just encoder-begin-check` covers
+  typed, shimmed and direct dyn admission plus one-shot fallback after refusal.
+
 - API comparison (2026-10-25): `FileReadAt` and `BufferedReadAt` stringify native
   I/O failures into `SourceError::Io`, which exposes no cause. The native
   missing-file control in `just io-contract-probes` observes NotFound directly
