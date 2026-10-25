@@ -16,3 +16,9 @@ mod policy_disclosure;
 #[cfg(test)]
 #[path = "../../../docs/examples/jpeg_policy.rs"]
 mod guide;
+
+#[cfg(test)]
+mod conversion;
+#[cfg(test)]
+#[path = "../../../docs/examples/pixel_conversion.rs"]
+mod pixel_guide;

@@ -284,6 +284,7 @@ jpeg-policy-sync export:
     cp perf/jpeg-policy-validation/src/*.rs "{{export}}/perf/jpeg-policy-validation/src/"
     mkdir -p "{{export}}/docs/examples"
     cp docs/examples/jpeg_policy.rs "{{export}}/docs/examples/"
+    cp docs/examples/pixel_conversion.rs "{{export}}/docs/examples/"
     cp justfile "{{export}}/justfile"
 
 # Paths are required; this integration never silently skips missing fixtures.
