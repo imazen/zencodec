@@ -563,6 +563,54 @@ impl CodecSet {
         }
     }
 
+    pub(crate) fn check_operation_stop(&self) -> Result<(), enough::StopReason> {
+        for stop in [
+            self.pulse.as_ref().map(|p| p as &dyn enough::Stop),
+            self.stop.as_ref().map(|s| s as &dyn enough::Stop),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            stop.check()?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn operation_access_pattern(&self) -> crate::source::AccessPattern {
+        self.decoders
+            .iter()
+            .map(|d| d.capabilities().access_pattern())
+            .fold(crate::source::AccessPattern::Sequential, |a, b| {
+                a.most_demanding(b)
+            })
+    }
+
+    pub(crate) fn detect_incremental(
+        &self,
+        input: &crate::decode::Input<'_>,
+    ) -> Result<Option<ImageFormat>, CodecSetError> {
+        if input.offset != 0 {
+            return Ok(None);
+        }
+        let detected = self.detect(input.bytes);
+        let complete = crate::decode::Request::at_least(0, ImageFormat::RECOMMENDED_PROBE_BYTES)
+            .is_satisfied_by(input);
+        // TIFF magic is shared with TIFF-based raws. Wait for the same complete
+        // prefix in both the legacy and controlled request entry points.
+        let conclusive = match detected {
+            Some(ImageFormat::Tiff) => complete,
+            Some(_) => true,
+            None => false,
+        };
+        if conclusive {
+            Ok(detected)
+        } else if complete {
+            Err(CodecSetError::UnrecognizedFormat)
+        } else {
+            Ok(None)
+        }
+    }
+
     pub(crate) fn checked_encode_job(
         &self,
         format: ImageFormat,
@@ -947,35 +995,15 @@ impl crate::traits::IncrementalDecode for CodecSetIncrementalDecoder {
         stop: &dyn enough::Stop,
     ) -> Result<crate::traits::Progress, crate::traits::StepError<CodecSetError>> {
         use crate::traits::{Progress, StepError};
-        for set_stop in [
-            self.set.pulse.as_ref().map(|p| p as &dyn enough::Stop),
-            self.set.stop.as_ref().map(|s| s as &dyn enough::Stop),
-        ]
-        .into_iter()
-        .flatten()
-        {
-            set_stop.check()?;
-        }
+        self.set.check_operation_stop()?;
         if self.inner.is_none() {
-            if input.offset != 0 {
+            let Some(format) = self
+                .set
+                .detect_incremental(&input)
+                .map_err(StepError::Codec)?
+            else {
                 return Ok(Progress::need(0));
-            }
-            let detected = self.set.detect(input.bytes);
-            let complete = self.probe[0].is_satisfied_by(&input);
-            let conclusive = match detected {
-                // TIFF magic is short and shared with TIFF-based raws: look
-                // at more of the file before committing.
-                Some(ImageFormat::Tiff) => complete,
-                Some(_) => true,
-                None => false,
             };
-            if !conclusive {
-                if complete {
-                    return Err(StepError::Codec(CodecSetError::UnrecognizedFormat));
-                }
-                return Ok(Progress::need(0));
-            }
-            let format = detected.expect("conclusive implies detected");
             let job = self.set.decode_job(format).map_err(StepError::Codec)?;
             let inner = job
                 .into_incremental_decoder(&self.preferred)
@@ -1006,14 +1034,7 @@ impl crate::traits::IncrementalDecode for CodecSetIncrementalDecoder {
     fn access_pattern(&self) -> crate::source::AccessPattern {
         match &self.inner {
             Some(inner) => inner.access_pattern(),
-            None => self
-                .set
-                .decoders
-                .iter()
-                .map(|d| d.capabilities().access_pattern())
-                .fold(crate::source::AccessPattern::Sequential, |a, b| {
-                    a.most_demanding(b)
-                }),
+            None => self.set.operation_access_pattern(),
         }
     }
 }

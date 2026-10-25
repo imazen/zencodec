@@ -15,6 +15,7 @@ use alloc::vec::Vec;
 use core::fmt;
 use zenpixels::{PixelDescriptor, PixelSlice};
 
+mod decoding;
 mod policy;
 pub use policy::{
     BoundaryOffer, Choice, ChoiceId, Choices, Decision, DecisionCode, DecisionRecord, Decline,
@@ -209,6 +210,26 @@ impl DecodeRequest {
     pub fn preferring_output(mut self, descriptors: impl Into<Vec<PixelDescriptor>>) -> Self {
         self.output = Output::Prefer(descriptors.into());
         self
+    }
+
+    /// Start controlled decoding through the same registered templates and
+    /// checked requirements as this request's one-shot path. Format detection
+    /// consumes no prefix bytes. A required descriptor is checked at final
+    /// interpretation, before policy adoption or sink effects.
+    ///
+    /// Serve the returned session with `zencodec_io::PolicyDecoder` and any
+    /// existing transport driver. Unsupported controlled execution refuses;
+    /// there is no automatic fallback to ordinary incremental decoding. A known
+    /// format is checked immediately, before the driver consumes any input.
+    #[track_caller]
+    pub fn start_controlled(
+        &self,
+        codecs: &CodecSet,
+        storage: crate::storage::StorageBudget,
+    ) -> Result<Box<crate::decode::DynControlledDecoder>, At<OperationError>> {
+        let session = decoding::CheckedDecoder::new(self.clone(), codecs.clone(), storage)
+            .map_err(|e| At::wrap(e).at_named("start controlled decode"))?;
+        Ok(crate::decode::erase_controlled(session))
     }
 
     /// Validate configuration and decode. No capability-query choreography is

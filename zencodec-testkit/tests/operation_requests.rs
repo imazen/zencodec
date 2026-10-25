@@ -120,3 +120,21 @@ fn required_fidelity_reports_substitution_without_mutating_the_template() {
         .unwrap();
     assert_eq!(before.data(), after.data());
 }
+
+#[test]
+fn controlled_execution_requires_a_qualified_implementation() {
+    let set = codecs();
+    let format = ReferenceZcrDecoderConfig::formats()[0];
+    use zencodec::decode::{ControlError, DecoderConfig};
+    let error = match DecodeRequest::new()
+        .with_format(format)
+        .start_controlled(&set, zencodec::storage::StorageBudget::new(4096, 4))
+    {
+        Err(error) => error,
+        Ok(_) => panic!("ordinary decode is not controlled decode"),
+    };
+    assert_eq!(
+        zencodec::find_cause::<ControlError>(&error),
+        Some(&ControlError::NotControlled)
+    );
+}

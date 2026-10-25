@@ -310,6 +310,18 @@ pub trait DynDecodeJob<'a> {
         ))
     }
 
+    /// Start a controlled session with this job's bound configuration.
+    /// Default refusal prevents an ordinary incremental implementation from
+    /// being used as evidence of mandatory interpretation suspension.
+    fn into_controlled_decoder(
+        self: Box<Self>,
+        preferred: &[PixelDescriptor],
+        storage: crate::storage::StorageBudget,
+    ) -> Result<Box<super::control::DynControlledDecoder>, BoxedError> {
+        let _ = (preferred, storage);
+        Err(Box::new(super::control::ControlError::NotControlled))
+    }
+
     /// Decode from a random-access source into `sink` (consumes this job).
     fn push_decoder_from_source(
         self: Box<Self>,
@@ -496,6 +508,14 @@ where
     ) -> Result<Box<super::incremental::DynIncrementalDecoder>, BoxedError> {
         let job = self.take()?;
         job.dyn_incremental_decoder(preferred)
+    }
+
+    fn into_controlled_decoder(
+        mut self: Box<Self>,
+        preferred: &[PixelDescriptor],
+        storage: crate::storage::StorageBudget,
+    ) -> Result<Box<super::control::DynControlledDecoder>, BoxedError> {
+        self.take()?.dyn_controlled_decoder(preferred, storage)
     }
 
     fn push_decoder_from_source(

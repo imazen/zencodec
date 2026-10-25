@@ -550,6 +550,23 @@ pub trait DecodeJob<'a>: Sized {
         ))
     }
 
+    /// Start a decoder that must suspend before interpretation-dependent work.
+    ///
+    /// The default refuses; ordinary incremental support does not establish this
+    /// contract. Implementations preserve this job's configuration and return an
+    /// [`erase_controlled`](crate::decode::erase_controlled) session. `storage`
+    /// admits participating owned buffers; it is not a native-workspace bound.
+    /// Preferred descriptors remain preferences. A required output is checked
+    /// before adoption by [`DecodeRequest`](crate::operation::DecodeRequest).
+    fn dyn_controlled_decoder(
+        self,
+        preferred: &[PixelDescriptor],
+        storage: crate::storage::StorageBudget,
+    ) -> Result<Box<super::control::DynControlledDecoder>, BoxedError> {
+        let _ = (preferred, storage);
+        Err(Box::new(super::control::ControlError::NotControlled))
+    }
+
     /// Decode from a random-access source into a caller-owned sink (pull
     /// model).
     ///

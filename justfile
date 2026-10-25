@@ -468,9 +468,9 @@ guide-learning-summary artifacts output +cohorts:
 control-sync export:
     just operation-sync "{{export}}"
     just io-core-sync "{{export}}"
-    cp src/traits/control.rs src/traits/incremental.rs src/traits/mod.rs "{{export}}/src/traits/"
+    cp src/traits/control.rs src/traits/decoding.rs src/traits/dyn_decoding.rs src/traits/incremental.rs src/traits/mod.rs "{{export}}/src/traits/"
     cp zencodec-coroutine/src/*.rs "{{export}}/zencodec-coroutine/src/"
-    cp zencodec-coroutine/tests/control.rs "{{export}}/zencodec-coroutine/tests/"
+    cp zencodec-coroutine/tests/control.rs zencodec-coroutine/tests/operation.rs "{{export}}/zencodec-coroutine/tests/"
 
 control-check:
     cargo test -p zencodec-coroutine --tests --locked
