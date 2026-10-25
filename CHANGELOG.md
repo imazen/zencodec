@@ -243,6 +243,11 @@ removes that whole class).
 
 #### Added
 
+- `ReadAtReader` bridges positional sources to synchronous `std::io::Read + Seek`
+  with an independent cursor, preserved native errors and no implicit buffering.
+  Native TIFF qualification exercises disk, direct and buffered range sources,
+  planar tiles, pages, reduced levels and wide samples.
+
 - `PolicyDecoder` serves actual controlled suspensions through the shared fallible resolver, preserves native failures and bounded reports, and poisons execution after callback failure or unwind. Existing transports drive the adapter.
 
 - `ControlledStepper` exposes mandatory suspensions through the existing byte

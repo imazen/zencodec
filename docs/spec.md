@@ -794,6 +794,16 @@ enum SourceError { BeyondWindow {..}, BeyondLimit {..}, UnexpectedEof {..}, Io {
 // zencodec-io, feature std: filesystem/reader errors retain their native cause.
 enum StdSourceError { Source(SourceError), Io(std::io::Error), Allocation { requested: usize, source: TryReserveError } }
 // FileReadAt and BufferedReadAt implement ReadAt<Error = StdSourceError>.
+struct ReadAtReader<S> { /* independent logical cursor; no internal buffer */ }
+impl<S> ReadAtReader<S> {
+    const fn new(source: S) -> Self;
+    fn into_inner(self) -> S;
+}
+// impl<S: ReadAt> std::io::{Read, Seek} for ReadAtReader<S>.
+// End-relative seeks call len(); other seeks do no I/O. Failed operations do
+// not advance the logical cursor, but the source/buffer may have changed.
+// Native io::Error and StdSourceError::Io values survive unchanged. Other
+// source errors remain typed payloads with an underlying I/O kind, when present.
 // BufferPolicy::try_for_pattern(pattern, max_bytes) -> Result<BufferPolicy, SourceError>
 // rejects an undersized required backtrack window before constructing a source.
 

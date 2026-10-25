@@ -30,6 +30,15 @@ original `std::io::Error`, including its kind, OS code and custom payload. Typed
 causes survive the normal erased source and driver paths. Retry still requires
 checking whether input was consumed and whether output has been committed.
 
+For an existing synchronous `Read + Seek` parser, use
+`ReadAtReader::new(FileReadAt::open(path)?)` or supply another `ReadAt` source.
+The bridge has its own cursor and adds no buffering. End-relative seeks can
+consume a sequential source to find its length. A `BufReader` is optional:
+[native TIFF measurements](../perf/spatial-validation/README.md) show fewer
+source calls but more transferred bytes, so its capacity belongs to the
+transport plan. This bridge does not turn a synchronous parser into a resumable
+decoder or combine individual reads into concurrent range batches.
+
 Use `BufferPolicy::try_for_pattern(pattern, max_bytes)` to reject insufficient
 lookback before reading. Windows retain at most their configured history even
 when a forward read is larger. Spools reject impossible exact ranges before I/O;

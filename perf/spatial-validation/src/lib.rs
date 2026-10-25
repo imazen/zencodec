@@ -2,7 +2,6 @@
 //! Executing native spatial candidates, not a promoted public API.
 #![cfg(test)]
 
-mod io_bridge;
 #[cfg(test)]
 mod strip_tests;
 mod tests;

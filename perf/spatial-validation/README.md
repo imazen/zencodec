@@ -99,7 +99,8 @@ half-float TIFF, wide planar tiles and opposite-endian files remain unqualified.
 
 ## API implications
 
-`ReadAtReader` is a small synchronous `Read + Seek` bridge with its own cursor.
+`zencodec_io::ReadAtReader` is the shared synchronous `Read + Seek` bridge used
+by the native candidate, with its own cursor.
 It adds no prefetch, retry or async suspension. End-relative seeks call `len`,
 which may consume a sequential source. A file, range cache or HTTP adapter owns
 those policies; adapting a parser does not make the parser resumable.
@@ -109,3 +110,12 @@ An arbitrary SubIFD is not automatically a pyramid level. An output-byte bound
 does not bound metadata, native workspace or transport staging. The eventual
 shared request needs executable choices and the existing policy resolver;
 this experiment's mechanical cancellation check is not a second policy system.
+
+The promoted bridge repeats this entire native matrix (`run6`, log
+`~/tmp/zencodec-spatial-shared-bridge1-2026-10-25.log`): rc=0, 3 s, peak RSS
+0.40 GiB, minimum available 16526 MiB, peak load 0.51 under `run-heavy`.
+The I/O crate's full all-feature tests, strict Clippy and no-default-feature
+check also pass through `just io-reader-check`. Direct native I/O values keep
+their kind, OS code and payload; generic errors keep their concrete context.
+Additional controls cover invalid counts, failed end-relative spool discovery,
+EOF, standard buffered reads and no bridge-level retry on `Interrupted`.

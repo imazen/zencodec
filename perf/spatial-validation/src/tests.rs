@@ -1,7 +1,4 @@
-use crate::{
-    io_bridge::ReadAtReader,
-    tiff_region::{self, Allowances, Rect, Selection},
-};
+use crate::tiff_region::{self, Allowances, Rect, Selection};
 use std::{
     cell::RefCell,
     io::{self, BufReader, Cursor, Read, Seek, SeekFrom, Write},
@@ -15,6 +12,7 @@ use tiff::{
     tags::Tag,
 };
 use zencodec::source::ReadAt;
+use zencodec_io::ReadAtReader;
 
 #[derive(Clone)]
 struct Raster {

@@ -276,6 +276,7 @@ av1-policy-guide-check:
 
 # Native TIFF spatial candidates and the positional-to-seek bridge.
 spatial-validation-sync export:
+    just io-core-sync "{{export}}"
     test ! -e "{{export}}/.git"
     test ! -e "{{export}}/.jj"
     mkdir -p "{{export}}/perf/spatial-validation/src"
@@ -352,6 +353,12 @@ encoder-begin-check:
 # Concrete codec causes, trace wrappers and nested causes survive erasure.
 error-cause-check:
     cargo test -p zencodec --all-features --locked --lib error::tests
+
+# Standard parser bridge and native source error semantics.
+io-reader-check:
+    cargo test -p zencodec-io --all-features --locked
+    cargo clippy -p zencodec-io --all-targets --all-features --locked -- -D warnings
+    cargo check -p zencodec-io --no-default-features --locked
 
 # Rerun the exact existing fixture set without regenerating containers.
 io-validation-media mp4 webm ivf:

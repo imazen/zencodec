@@ -1,8 +1,5 @@
 //! Native strip qualification with independently constructed sample bit patterns.
-use crate::{
-    io_bridge::ReadAtReader,
-    tiff_region::{self, Allowances, Rect, Selection},
-};
+use crate::tiff_region::{self, Allowances, Rect, Selection};
 use std::io::Cursor;
 use tiff::{
     ColorType,
@@ -10,6 +7,7 @@ use tiff::{
     tags::{SampleFormat, Tag},
 };
 use zencodec::source::SliceReadAt;
+use zencodec_io::ReadAtReader;
 
 const WIDTH: u32 = 35;
 const HEIGHT: u32 = 29;
