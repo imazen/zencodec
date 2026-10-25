@@ -27,6 +27,76 @@ use zenjpeg::{JpegDecoderConfig, container::metadata::JpegMetadata};
 use zenpixels::{PixelDescriptor, PixelSliceMut};
 
 #[test]
+fn registered_native_jpeg_stays_suspended_while_an_adapter_prepares_its_destination() {
+    use zencodec::{CodecSet, enough::Unstoppable, operation::DecodeRequest};
+    use zencodec_io::{ControlledEvent, ControlledStepper, ReadAtCursor, Yield};
+    let codecs = CodecSet::new().with_decoder(JpegDecoderConfig::new());
+    for progressive in [false, true] {
+        let bytes = fixtures::fixture(progressive, fixtures::Placement::Header);
+        let expected = DecodeRequest::new().decode(&codecs, &bytes).unwrap();
+        let budget = StorageBudget::new(64 * 1024, 4);
+        let native = DecodeRequest::new()
+            .start_controlled(&codecs, budget.clone())
+            .unwrap();
+        let mut source = SliceReadAt::new(&bytes);
+        let mut cursor = ReadAtCursor::new(DriveOptions::new(0, 43));
+        let mut sink = Sink::default();
+        let mut stage = ControlledStepper::new(native, &mut sink);
+        let mut states = Vec::new();
+        loop {
+            match cursor.next(&mut source, &mut stage, &Unstoppable).unwrap() {
+                Yield::Output(ControlledEvent::Suspended(boundary)) => {
+                    states.push(boundary.facts().state);
+                    assert_eq!(
+                        (stage.sink().begin, stage.sink().rows, stage.sink().finish),
+                        (0, 0, 0)
+                    );
+                    let before = cursor.stats();
+                    assert!(
+                        matches!(cursor.next(&mut source, &mut stage, &Unstoppable).unwrap(),
+                        Yield::Output(ControlledEvent::Suspended(again)) if again == boundary)
+                    );
+                    let after = cursor.stats();
+                    assert_eq!(
+                        (before.reads, before.bytes_read),
+                        (after.reads, after.bytes_read)
+                    );
+                    if boundary.facts().state == InterpretationState::Final {
+                        assert_eq!(
+                            stage.output_descriptor(),
+                            Some(expected.pixels().descriptor())
+                        );
+                        assert!(stage.info().unwrap().source_color.icc_profile.is_some());
+                        assert_eq!(budget.reserved_objects(), 3, "no native row staging yet");
+                    }
+                    let (action, _) = zencodec::operation::resolve_boundary(
+                        boundary,
+                        &mut PolicySet::new(),
+                        PolicySet::new(),
+                        &Unstoppable,
+                    )
+                    .unwrap();
+                    stage.resume(boundary.id(), action, &Unstoppable).unwrap();
+                    assert_eq!(stage.sink().begin, 0, "resume does not do native work");
+                }
+                Yield::Finished(ControlledEvent::Decode(Event::Done(_))) => break,
+                Yield::Output(ControlledEvent::Decode(_)) => {}
+                other => panic!("unexpected {other:?}"),
+            }
+        }
+        assert_eq!(
+            states,
+            [InterpretationState::Provisional, InterpretationState::Final]
+        );
+        assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+        let got = stage.sink().pixels.as_pixel_slice().unwrap();
+        for y in 0..got.rows() {
+            assert_eq!(got.row(y), expected.pixels().row(y));
+        }
+    }
+}
+
+#[test]
 fn registered_native_controlled_jpeg_matches_the_same_stored_request() {
     use zencodec::{CodecSet, operation::DecodeRequest};
     let codecs = CodecSet::new().with_decoder(JpegDecoderConfig::new());

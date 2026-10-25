@@ -64,6 +64,8 @@ mod work_quota;
 pub use work_quota::WorkQuota;
 mod policy_decoder;
 pub use policy_decoder::{PolicyDecodeError, PolicyDecoder};
+mod controlled_stepper;
+pub use controlled_stepper::{ControlledEvent, ControlledStepper};
 pub mod storage;
 
 pub use drive::{

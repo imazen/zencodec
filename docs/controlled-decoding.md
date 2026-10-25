@@ -84,6 +84,22 @@ mechanism, resumes the same native session, and returns to the driver before
 polling more native work. A callback failure, cancellation or caught panic
 leaves the adapter terminal. `report()` remains available after driver failure.
 
+Adapters that must prepare another stage use
+`zencodec_io::ControlledStepper::new(decoder, &mut sink)` instead. The existing
+byte cursors return `ControlledEvent::Suspended(boundary)`; the adapter can
+inspect `info()` and install a prepared destination with `sink_mut()` before
+resuming that exact boundary. Calling the cursor again while suspended does
+not read or advance native work. `resume` itself performs no subsequent native
+decode. A source failure still belongs to the cursor; abandoning the operation
+requires dropping the stepper and its held decoder.
+
+The async cursor test prepares its destination after suspension and verifies
+strided pixel output through short, yielding reads. Native baseline and
+progressive JPEG qualification holds both boundaries through positional reads,
+checks no sink effects or row-staging allocation, then compares every output
+row with the same stored request's direct decode. This validates an adapter
+primitive, not a complete transcode planner.
+
 The authored late-fact fixture exercises short slices and positional reads,
 strided rows, stale/replayed replies, callback error traces and redacted default
 formatting, decline, cancellation, panic, early output and changed final facts.

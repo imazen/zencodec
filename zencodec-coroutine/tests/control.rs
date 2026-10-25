@@ -21,6 +21,171 @@ use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 const RGBA: PixelDescriptor = PixelDescriptor::RGBA8_SRGB;
 
 #[test]
+fn retained_control_stepper_releases_native_storage_after_invalid_reply_stop_or_unwind() {
+    use zencodec_io::{ByteStepper, ControlledEvent, ControlledStepper, SliceCursor, Yield};
+    struct Stop(bool);
+    impl enough::Stop for Stop {
+        fn check(&self) -> Result<(), enough::StopReason> {
+            assert!(!self.0, "stop hook unwind");
+            Err(enough::StopReason::Cancelled)
+        }
+    }
+    for failure in 0..3 {
+        let budget = StorageBudget::new(4096, 3);
+        let owner = budget.clone();
+        let native = CoroutineDecoder::controlled_with_storage(
+            32,
+            AccessPattern::RandomAccess,
+            budget.clone(),
+            move |mut ctx| async move {
+                let retained = owner.bytes(8)?;
+                ctx.set_info(ImageInfo::new(2, 2, ImageFormat::Qoi));
+                ctx.set_output_descriptor(RGBA);
+                ctx.interpretation(InterpretationFacts::new(
+                    2,
+                    2,
+                    Some(RGBA),
+                    InterpretationState::Final,
+                ))
+                .await?;
+                core::hint::black_box(retained.as_slice());
+                Ok::<_, CoroutineError>(OutputInfo::full_decode(2, 2, RGBA))
+            },
+        )
+        .unwrap();
+        let mut sink = Sink::default();
+        let mut stage = ControlledStepper::new(native, &mut sink);
+        let mut cursor = SliceCursor::new(1);
+        let Yield::Output(ControlledEvent::Suspended(boundary)) =
+            cursor.next(&[], &mut stage, &Unstoppable).unwrap()
+        else {
+            panic!("expected final boundary")
+        };
+        assert_eq!(budget.reserved_objects(), 3);
+        if failure == 0 {
+            let stale = DecodeBoundary::new(boundary.facts()).unwrap();
+            assert!(matches!(
+                stage.resume(
+                    stale.id(),
+                    BoundaryAction::AdoptInterpretation,
+                    &Unstoppable
+                ),
+                Err(StepError::Control(ControlError::InvalidReply))
+            ));
+        } else if failure == 1 {
+            assert!(matches!(
+                stage.resume(
+                    boundary.id(),
+                    BoundaryAction::AdoptInterpretation,
+                    &Stop(false)
+                ),
+                Err(StepError::Cancelled(enough::StopReason::Cancelled))
+            ));
+        } else {
+            assert!(
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    stage.resume(
+                        boundary.id(),
+                        BoundaryAction::AdoptInterpretation,
+                        &Stop(true),
+                    )
+                }))
+                .is_err()
+            );
+        }
+        assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+        assert!(stage.info().is_none());
+        assert!(stage.requested().is_empty());
+        assert!(matches!(
+            stage.step(Input::new(0, &[]), &Unstoppable),
+            Err(StepError::Finished)
+        ));
+        drop(stage);
+        assert_eq!((sink.began, sink.rows, sink.ended), (0, 0, 0));
+    }
+}
+
+#[test]
+fn cursors_hold_real_boundaries_while_the_adapter_prepares_other_stages() {
+    use zencodec_io::{ControlledEvent, ControlledStepper, ReadAtCursor, SliceCursor, Yield};
+    for positioned in [false, true] {
+        let work = Arc::new(AtomicUsize::new(0));
+        let mut sink = Sink::default();
+        let input = bytes();
+        let mut source = SliceReadAt::new(&input);
+        let mut slice = SliceCursor::new(1);
+        let mut read = ReadAtCursor::new(DriveOptions::new(0, 3));
+        let mut stage = ControlledStepper::new(decoder(work.clone(), false, false), &mut sink);
+        let mut boundaries = 0;
+        loop {
+            let output = if positioned {
+                read.next(&mut source, &mut stage, &Unstoppable).unwrap()
+            } else {
+                slice.next(&input, &mut stage, &Unstoppable).unwrap()
+            };
+            match output {
+                Yield::Output(ControlledEvent::Suspended(boundary)) => {
+                    assert_eq!(work.load(Ordering::SeqCst), 0);
+                    assert_eq!(
+                        (stage.sink().began, stage.sink().rows, stage.sink().ended),
+                        (0, 0, 0)
+                    );
+                    assert_eq!(stage.info().unwrap().width, 2);
+                    let before = if positioned {
+                        read.stats()
+                    } else {
+                        slice.stats()
+                    };
+                    let repeated = if positioned {
+                        read.next(&mut source, &mut stage, &Unstoppable).unwrap()
+                    } else {
+                        slice.next(&input, &mut stage, &Unstoppable).unwrap()
+                    };
+                    assert!(matches!(repeated,
+                        Yield::Output(ControlledEvent::Suspended(again)) if again == boundary));
+                    let after = if positioned {
+                        read.stats()
+                    } else {
+                        slice.stats()
+                    };
+                    assert_eq!(
+                        (before.reads, before.bytes_read),
+                        (after.reads, after.bytes_read)
+                    );
+                    assert_eq!(work.load(Ordering::SeqCst), 0);
+                    let action = if boundaries == 0 {
+                        assert_eq!(boundary.facts().state, InterpretationState::Provisional);
+                        BoundaryAction::ContinueReading
+                    } else {
+                        assert_eq!(stage.output_descriptor(), Some(RGBA));
+                        assert_eq!(boundary.facts().state, InterpretationState::Final);
+                        BoundaryAction::AdoptInterpretation
+                    };
+                    boundaries += 1;
+                    stage.resume(boundary.id(), action, &Unstoppable).unwrap();
+                    assert_eq!(
+                        work.load(Ordering::SeqCst),
+                        0,
+                        "resume itself does no pixel work"
+                    );
+                }
+                Yield::Finished(ControlledEvent::Decode(Event::Done(info))) => {
+                    assert_eq!((info.width, info.height), (2, 2));
+                    break;
+                }
+                Yield::Output(ControlledEvent::Decode(_)) => {}
+                _ => panic!("invalid completion or boundary kind"),
+            }
+        }
+        drop(stage);
+        assert_eq!(boundaries, 2);
+        assert_eq!(work.load(Ordering::SeqCst), 1);
+        assert_eq!(sink.pixels.bytes(), &(1..=16).collect::<Vec<u8>>());
+        assert_eq!((sink.began, sink.rows, sink.ended), (1, 1, 1));
+    }
+}
+
+#[test]
 fn storage_admission_precedes_initialization_and_row_publication() {
     let initialized = Arc::new(AtomicUsize::new(0));
     let seen = initialized.clone();

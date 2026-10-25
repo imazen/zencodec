@@ -207,7 +207,38 @@ impl<D, R> PolicyDecoder<D, R> {
     fn with_policy_set(self, preset: PolicySet) -> Self;
     fn report(&self) -> &OperationReport;
 }
+
+// zencodec_io: adapters that must prepare other stages while suspended
+enum ControlledEvent {
+    Decode(decode::Event),
+    Suspended(decode::DecodeBoundary),
+}
+struct ControlledStepper<'a, D, S> { /* private */ }
+impl<'a, D: decode::ControlledIncrementalDecode, S: decode::DecodeRowSink>
+    ControlledStepper<'a, D, S>
+{
+    fn new(decoder: D, sink: &'a mut S) -> Self;
+    fn info(&self) -> Option<&ImageInfo>;
+    fn output_descriptor(&self) -> Option<zenpixels::PixelDescriptor>;
+    fn sink(&self) -> &S;
+    fn sink_mut(&mut self) -> &mut S;
+    fn resume(&mut self, boundary: decode::BoundaryId,
+        action: decode::BoundaryAction, stop: &dyn Stop)
+        -> Result<(), decode::StepError<D::Error>>;
+}
+// ByteStepper<Output = ControlledEvent, Error = decode::StepError<D::Error>>
 ```
+
+`ControlledStepper` runs through `SliceCursor`, `ReadAtCursor`, `ReadCursor`
+and feature `tokio`'s `AsyncCursor`. It exposes mandatory boundaries to an
+adapter that needs to prepare a destination before approving pixel work.
+`sink_mut` permits installing that destination while keeping the native
+session held. Repeated cursor calls return the same boundary without reads
+or native progress. `resume` performs the protocol transition; the following
+cursor call performs native work. Native/sink error, cancellation or unwind
+drops the native session even if the caller retains the stepper. Source
+errors belong to the cursor; the adapter must drop the stepper when abandoning
+an operation. This primitive does not itself prepare a transcode route.
 
 Codec authors can implement the protocol directly or use
 `zencodec_coroutine::CoroutineDecoder::controlled(input_cap, access, init)`.

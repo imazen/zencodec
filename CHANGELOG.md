@@ -232,6 +232,11 @@ removes that whole class).
 
 - `PolicyDecoder` serves actual controlled suspensions through the shared fallible resolver, preserves native failures and bounded reports, and poisons execution after callback failure or unwind. Existing transports drive the adapter.
 
+- `ControlledStepper` exposes mandatory suspensions through the existing byte
+  cursors so adapters can prepare a destination before approving pixel work.
+  Repeated calls at a pause do no I/O or native work; failed replies and native
+  failures release the held session even when the stepper remains alive.
+
 - `storage::StorageBudget`, `OwnedStorage` and `SharedStorage` admit typed,
   fixed-size payload allocations before creating them and retain their charges
   through clones and subviews until the last backing owner drops. Byte and object
