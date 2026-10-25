@@ -7,6 +7,31 @@ The source is `site/index.html`, `site/content.mjs`, `site/styles.css`, and
 `site/api.mjs` selects the source declarations used by each chapter and entry
 point. `site/source.mjs` extracts those signatures and complete example scopes.
 
+## Unlisted migration review
+
+`migration.html` is built from `site/migration.mjs`, `site/migration-data.mjs`,
+`site/migration.css` and `site/migration-ui.mjs`. It has no incoming link from
+the main guide and declares `noindex, nofollow`; it remains publicly accessible
+by URL. The same allowlisted artifact and Actions deployment include the page.
+
+Each diagram separates the checksum-verified published baseline, implementation
+on main (including explicitly private experiments), and proposed shifts. Role
+colors and text labels identify consumer, adapter and implementor responsibility.
+The audience selector filters the map; a deep link restores a hidden case.
+Expand migration gates for current source-extracted signatures and evidence.
+
+`migration-baseline.json` records the observed registry versions, archive hashes
+and source checks. `just docs-migration-baseline` re-verifies those frozen
+artifacts explicitly; the site build does not fetch a moving latest release.
+Refresh the baseline deliberately when published versions change.
+
+The real [pixel-conversion examples](pixel-conversion.md) use zenpixels-convert
+and native JPEG, compiled by the existing JPEG qualification job. The source
+reconstruction and browser checks include both new scopes, full clipboard
+contents, independent expansion, audience/deep-link behavior, unlisted status,
+and stacked diagrams on mobile. No proposed signature is presented as an
+importable public API.
+
 ```sh
 npm ci --prefix docs --ignore-scripts
 just docs-site-check
@@ -69,8 +94,8 @@ It also checks all seven entry points, actual clipboard contents against the
 compiled source, independent above/below expansion, and the expanded mobile
 layout. The entry selector keeps its position while switching examples.
 Deployment depends on both the browser/build job and Rust example job. Pull
-requests validate without deployment. The build publishes only seven explicit
-files; it does not upload the documentation directory or repository wholesale.
+requests validate without deployment. The build publishes explicit allowlisted
+assets; it does not upload the documentation directory or repository wholesale.
 
 ## Evidence and review
 

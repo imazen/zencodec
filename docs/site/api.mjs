@@ -1,5 +1,7 @@
 // Paths and method selections only. Signatures are extracted from current Rust source.
 export const api = {
+  checkedDecodePolicy: {path:"zencodec::decode::DecodeJob<'a>",file:'src/traits/decoding.rs',scope:"pub trait DecodeJob<'a>",methods:['try_set_policy','try_with_policy'],associated:false},
+  checkedEncodePolicy: {path:'zencodec::encode::EncodeJob',file:'src/traits/encoding.rs',scope:'pub trait EncodeJob: Sized',methods:['try_set_policy','try_with_policy'],associated:false},
   rewriteRequest: {path:'zencodec::metadata_rewrite::Request',file:'src/metadata_rewrite.rs',scope:"impl<'a> Request<'a>",methods:['new','with_policy']},
   rewritePlan: {path:'zencodec::metadata_rewrite::Plan',file:'src/metadata_rewrite.rs',scope:"impl<'a> Plan<'a>",methods:['report','chunks','output_len','to_vec']},
   disclosurePrepared: {path:'prototype::Prepared (private)',file:'perf/io-validation/src/policy_disclosure.rs',scope:"impl<'a> Prepared<'a>",methods:['opaque','xmp','resolve']},

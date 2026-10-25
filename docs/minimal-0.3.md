@@ -46,6 +46,7 @@ also does not establish that an interface earns its implementation cost.
 | Owner | Minimal responsibility |
 |---|---|
 | `zenpixels` | Strided packed/planar views, storage/sample precision, current color/alpha interpretation, and conversion primitives. No parallel sample vocabulary in zencodec. |
+| `zenpixels-convert` | Conversion planning and execution: layout, transfer, gamut, depth, alpha and explicit CMS/HDR paths. Adapters compose these with codec contracts; zencodec's core does not gain a mandatory conversion dependency. |
 | `zencodec` | Image config/job/convenience calls, registry, incremental byte demand and image output contracts, checked operation requirements/results, lightweight pixel-interpretation metadata, standard gain-map contracts and time vocabulary. |
 | `zencodec-io` | Slice/file/stream/async drivers, bounded input admission, work scheduling and explicit output staging policy. HTTP implementation and cache policy can remain adapters. |
 | `zencodec-media` | Packets/tracks, independently owned pictures, sessions, demux/mux, time/epoch/seek and patch contracts. Keep it optional. |
@@ -60,6 +61,23 @@ Custom-format allowlists must work, but that does not by itself require a new
 core `FormatSet`: current `ImageFormat` already has equality and hashing, including
 Custom definitions. Test a consumer allowlist over that identity first
 ([121](https://github.com/imazen/zencodec/issues/121)).
+
+### Conversion at the checked boundary
+
+The consumer requests a destination interpretation and permitted loss; the
+pipeline adapter qualifies the source, builds a zenpixels-convert plan and
+checks that the selected encoder can signal the converted pixels. A policy
+resolver can choose among executable routes, or refuse. It cannot make an
+unknown source interpretation trustworthy, turn an unsupported CMS transform
+into a relabel, or authorize contradictory old metadata over new pixels.
+
+The [native JPEG recipes](pixel-conversion.md) demonstrate buffer conversion
+for display and prepared row conversion before encoding. These still allocate
+whole-image destinations. The production extension must count those destinations
+alongside the input, codec state, frame queues and encoded output. Row conversion
+alone does not establish bounded streaming. Keep high-level composition in
+zenpipe / application adapters and expose explicit conversion as an operation;
+do not silently widen the current CodecSet::transcode contract.
 
 ## Caller contract: required effects, preferences, and checked results
 
