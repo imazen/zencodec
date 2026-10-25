@@ -20,6 +20,30 @@ mod ordinary {
 }
 pub(crate) use ordinary::open_video;
 
+mod storage {
+    // EXAMPLE: checked_video_storage
+    use zenavif::media::{Av1SessionError, Av1VideoDecoder};
+    use zencodec::operation::PolicySet;
+    use zencodec_media::policy::PolicyDecoder;
+
+    pub fn open_video_with_picture_limit(
+        picture_bytes: usize,
+    ) -> Result<PolicyDecoder<Av1VideoDecoder, PolicySet>, Av1SessionError> {
+        // ANCHOR: checked_video_storage
+        let mut settings = rav1d_safe::Settings::default();
+        settings.max_picture_bytes = Some(picture_bytes);
+        let native = Av1VideoDecoder::with_settings(settings)?;
+        let decoder = PolicyDecoder::new(native, PolicySet::new());
+        // END: checked_video_storage
+        // Native admission precedes reconstruction. Policy precedes publication.
+        // The allowance follows retained frames, including after decoder drop.
+        // This bounds requested native plane bytes, not workspace or total RAM.
+        Ok(decoder)
+    }
+    // END EXAMPLE: checked_video_storage
+}
+pub(crate) use storage::open_video_with_picture_limit;
+
 mod tenant {
     // EXAMPLE: checked_video_rule
     use zenavif::media::{Av1SessionError, Av1VideoDecoder};

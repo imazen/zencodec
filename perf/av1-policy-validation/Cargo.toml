@@ -11,8 +11,8 @@ zencodec = { path = "../..", version = ">=0.1.27, <0.3.0", features = ["std"] }
 zencodec-media = { path = "../../zencodec-media" }
 zenpixels = ">=0.2.16, <0.4.0"
 enough = "0.4.4"
-zenavif = { git = "https://github.com/imazen/zenavif", rev = "ea055f7de6a34d2b9a9942b39a3166801d6972e3", features = ["media-encode"] }
-rav1d-safe = { git = "https://github.com/imazen/rav1d-safe", rev = "5707a2e94ac88500892c9c7ad2ec77d5ab84fd59", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "feadc4c94b19acdcd82ee545a02263bc67c45d7d", features = ["media-encode"] }
+rav1d-safe = { git = "https://github.com/imazen/rav1d-safe", rev = "b19aec6561204ff310250bf2bc1b2c6faa42c3b5", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }
 
 [patch.crates-io]
 zencodec = { path = "../.." }

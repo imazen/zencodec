@@ -9,6 +9,11 @@
 
 ## Native frame policy (unreleased)
 
+- Qualify native AV1 plane admission before publication policy. The executable
+  guide configures the decoder's scoped picture-byte allowance; refused native
+  allocations retain their original trace and invoke no publication callback.
+  Both native allocation modes preserve all 15 tested depth/layout combinations
+  under independent FFmpeg readback. Full decoder workspace remains unbounded.
 - Retain decision history in a circular buffer, keeping the latest 16 records
   and chronological iteration/debugging without shifting every record for each
   video presentation. [Measured API cost](benchmarks/frame_policy_2026-10-25.md).

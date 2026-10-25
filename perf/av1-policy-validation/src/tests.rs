@@ -78,10 +78,14 @@ impl VideoDecoder for Watched {
     }
 }
 fn watched(threads: u32) -> (Watched, Arc<Observed>) {
+    watched_with_limit(threads, None)
+}
+fn watched_with_limit(threads: u32, picture_bytes: Option<usize>) -> (Watched, Arc<Observed>) {
     let observed = Arc::new(Observed::default());
     let mut settings = rav1d_safe::Settings::default();
     settings.threads = threads;
     settings.max_frame_delay = 4;
+    settings.max_picture_bytes = picture_bytes;
     (
         Watched {
             decoder: Av1VideoDecoder::with_settings(settings).unwrap(),
@@ -108,61 +112,66 @@ fn approved_native_frames_reencode_exactly_under_independent_decoder() {
             let s = settings(bits, sub, identity);
             let inputs: Vec<_> = (0..3).map(|i| frame(&s, i)).collect();
             let (config, packets) = encode(s.clone(), &inputs);
-            let (native, observed) = watched(4);
-            let mut seen = Vec::new();
-            let mut decoder = PolicyDecoder::new(
-                native,
-                |question: Question<'_>| -> Result<Decision, At<Infallible>> {
-                    let Question::Frame {
-                        interpretation,
-                        timing,
-                        choices,
-                    } = question
-                    else {
-                        panic!("expected frame decision")
-                    };
-                    assert_eq!(interpretation.encoding.code_bits(), bits);
-                    assert_eq!(interpretation.subsampling, sub);
-                    assert_eq!(interpretation.roles, inputs[0].interpretation().roles);
-                    assert_eq!(interpretation.color.bitstream, Some(s.color));
-                    seen.push(FrameFacts::new(interpretation, timing));
-                    Ok(Decision::choose(choices.first().unwrap()))
-                },
-            );
-            let outputs = decode(&mut decoder, &config, &packets, &Unstoppable).unwrap();
-            assert_eq!(outputs.len(), inputs.len());
-            assert_eq!(decoder.report().decisions().count(), inputs.len());
-            for ((output, input), owner) in outputs
-                .iter()
-                .zip(&inputs)
-                .zip(observed.pictures.lock().unwrap().iter())
-            {
-                assert!(Arc::ptr_eq(output.picture(), &owner.upgrade().unwrap()));
-                assert_eq!(samples(output), samples(input));
-                assert_eq!(output.timing().pts, input.timing().pts);
-            }
-            decoder.reset().unwrap();
-            drop(decoder);
-            assert!(observed.dropped.load(Ordering::SeqCst));
-            assert_eq!(seen.len(), inputs.len());
-            // Re-encode the original native owners, after their decoder is gone.
-            let (_, approved) = encode(s.clone(), &outputs);
-            oracle(
-                root,
-                &format!("{bits}-{sub:?}-identity-{identity}"),
-                &s,
-                &approved,
-                &inputs,
-            );
-            drop(outputs);
-            assert!(
-                observed
-                    .pictures
-                    .lock()
-                    .unwrap()
+            for picture_bytes in [None, Some(1024 * 1024)] {
+                let (native, observed) = watched_with_limit(4, picture_bytes);
+                let mut seen = Vec::new();
+                let mut decoder = PolicyDecoder::new(
+                    native,
+                    |question: Question<'_>| -> Result<Decision, At<Infallible>> {
+                        let Question::Frame {
+                            interpretation,
+                            timing,
+                            choices,
+                        } = question
+                        else {
+                            panic!("expected frame decision")
+                        };
+                        assert_eq!(interpretation.encoding.code_bits(), bits);
+                        assert_eq!(interpretation.subsampling, sub);
+                        assert_eq!(interpretation.roles, inputs[0].interpretation().roles);
+                        assert_eq!(interpretation.color.bitstream, Some(s.color));
+                        seen.push(FrameFacts::new(interpretation, timing));
+                        Ok(Decision::choose(choices.first().unwrap()))
+                    },
+                );
+                let outputs = decode(&mut decoder, &config, &packets, &Unstoppable).unwrap();
+                assert_eq!(outputs.len(), inputs.len());
+                assert_eq!(decoder.report().decisions().count(), inputs.len());
+                for ((output, input), owner) in outputs
                     .iter()
-                    .all(|p| p.upgrade().is_none())
-            );
+                    .zip(&inputs)
+                    .zip(observed.pictures.lock().unwrap().iter())
+                {
+                    assert!(Arc::ptr_eq(output.picture(), &owner.upgrade().unwrap()));
+                    assert_eq!(samples(output), samples(input));
+                    assert_eq!(output.timing().pts, input.timing().pts);
+                }
+                decoder.reset().unwrap();
+                drop(decoder);
+                assert!(observed.dropped.load(Ordering::SeqCst));
+                assert_eq!(seen.len(), inputs.len());
+                // Re-encode the original native owners, after their decoder is gone.
+                let (_, approved) = encode(s.clone(), &outputs);
+                oracle(
+                    root,
+                    &format!(
+                        "{bits}-{sub:?}-identity-{identity}-bounded-{}",
+                        picture_bytes.is_some()
+                    ),
+                    &s,
+                    &approved,
+                    &inputs,
+                );
+                drop(outputs);
+                assert!(
+                    observed
+                        .pictures
+                        .lock()
+                        .unwrap()
+                        .iter()
+                        .all(|p| p.upgrade().is_none())
+                );
+            }
         }
     }
 }
@@ -454,4 +463,45 @@ fn guide_default_and_midstream_preview_rule_execute_on_native_frames() {
     };
     assert_eq!(facts.config_epoch, 1);
     assert_eq!(facts.color.resolved, Some(colors[1]));
+}
+
+#[test]
+fn guide_native_storage_refusal_precedes_publication_and_keeps_native_cause() {
+    let s = settings(10, Subsampling::Yuv420, false);
+    let inputs: Vec<_> = (0..3).map(|i| frame(&s, i)).collect();
+    let (config, packets) = encode(s, &inputs);
+    let mut decoder = crate::checked_video::open_video_with_picture_limit(0).unwrap();
+    let error = decode(&mut decoder, &config, &packets, &Unstoppable).unwrap_err();
+    let trace = cause::<At<rav1d_safe::Error>>(&error);
+    assert!(matches!(trace.error(), rav1d_safe::Error::Other(message)
+        if message == "native picture storage limit exceeded"));
+    assert!(trace.frame_count() > 0);
+    let error = cause::<zencodec_media::policy::Error>(&error);
+    assert_eq!(error.stage(), Stage::Decode);
+    assert_eq!(error.report().decisions().count(), 0);
+    assert_eq!(decoder.report().decisions().count(), 0);
+    assert!(decoder.is_failed());
+
+    let mut decoder = crate::checked_video::open_video_with_picture_limit(1024 * 1024).unwrap();
+    let frames = decode(&mut decoder, &config, &packets, &Unstoppable).unwrap();
+    assert_eq!(decoder.report().decisions().count(), inputs.len());
+    drop(decoder);
+    assert_eq!(
+        frames.iter().map(samples).collect::<Vec<_>>(),
+        inputs.iter().map(samples).collect::<Vec<_>>()
+    );
+
+    for threads in [1, 4] {
+        let (native, observed) = watched_with_limit(threads, Some(0));
+        let mut decoder = PolicyDecoder::new(
+            native,
+            |_question: Question<'_>| -> Result<Decision, At<Infallible>> {
+                panic!("publication policy ran despite native storage refusal")
+            },
+        );
+        assert!(decode(&mut decoder, &config, &packets, &Unstoppable).is_err());
+        assert!(decoder.is_failed());
+        assert!(observed.dropped.load(Ordering::SeqCst));
+        assert!(observed.pictures.lock().unwrap().is_empty());
+    }
 }

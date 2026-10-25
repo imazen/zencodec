@@ -290,9 +290,9 @@ dependencies = [
 
 [[package]]
 name = "generator"
-version = "0.8.10"
+version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54ade96dc9003043bce7c035c85a9df5a858bfb2039c5a2e6fdf00f324f6c551"
+checksum = "1be81b31c9ce4caf7f3178eeb90662bb1864d3ad363ec6bdada3201adff19c37"
 dependencies = [
  "cc",
  "cfg-if",
@@ -687,7 +687,7 @@ dependencies = [
 [[package]]
 name = "rav1d-disjoint-mut"
 version = "0.4.0"
-source = "git+https://github.com/imazen/rav1d-safe?rev=5707a2e94ac88500892c9c7ad2ec77d5ab84fd59#5707a2e94ac88500892c9c7ad2ec77d5ab84fd59"
+source = "git+https://github.com/imazen/rav1d-safe?rev=b19aec6561204ff310250bf2bc1b2c6faa42c3b5#b19aec6561204ff310250bf2bc1b2c6faa42c3b5"
 dependencies = [
  "aligned",
  "loom",
@@ -698,7 +698,7 @@ dependencies = [
 [[package]]
 name = "rav1d-safe"
 version = "0.7.0"
-source = "git+https://github.com/imazen/rav1d-safe?rev=5707a2e94ac88500892c9c7ad2ec77d5ab84fd59#5707a2e94ac88500892c9c7ad2ec77d5ab84fd59"
+source = "git+https://github.com/imazen/rav1d-safe?rev=b19aec6561204ff310250bf2bc1b2c6faa42c3b5#b19aec6561204ff310250bf2bc1b2c6faa42c3b5"
 dependencies = [
  "aligned",
  "archmage",
@@ -830,9 +830,9 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.16.3"
+version = "1.16.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b3dc8af474f516a851ff4bd12db780f948b9250ad37211e4eec0bccea54e01b"
+checksum = "d0d5d4b1981b8bbbb7aed204cae5726d683d5d6ac7e74ec54122ea28f315e7c8"
 
 [[package]]
 name = "spin"
@@ -1119,7 +1119,7 @@ dependencies = [
 [[package]]
 name = "zenavif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=ea055f7de6a34d2b9a9942b39a3166801d6972e3#ea055f7de6a34d2b9a9942b39a3166801d6972e3"
+source = "git+https://github.com/imazen/zenavif?rev=feadc4c94b19acdcd82ee545a02263bc67c45d7d#feadc4c94b19acdcd82ee545a02263bc67c45d7d"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -1148,7 +1148,7 @@ dependencies = [
 [[package]]
 name = "zenavif-parse"
 version = "0.7.0"
-source = "git+https://github.com/imazen/zenavif?rev=ea055f7de6a34d2b9a9942b39a3166801d6972e3#ea055f7de6a34d2b9a9942b39a3166801d6972e3"
+source = "git+https://github.com/imazen/zenavif?rev=feadc4c94b19acdcd82ee545a02263bc67c45d7d#feadc4c94b19acdcd82ee545a02263bc67c45d7d"
 dependencies = [
  "arrayvec",
  "bitreader",

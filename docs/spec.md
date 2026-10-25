@@ -421,6 +421,11 @@ to that canonical pixel type remains a 0.3 task.
 
 [Native AV1 qualification](../perf/av1-policy-validation/README.md) exercises
 the publication guard, native ownership and independent re-encode readback.
+The guide separately sets the native `rav1d_safe::Settings::max_picture_bytes`
+before constructing the decoder. That optional allowance admits requested
+picture-plane bytes before allocation and follows retained native ownership.
+It does not supply whole-decoder workspace evidence to a `FrameOffer`; native
+refusal remains a decode-stage error with its original trace.
 
 ## Encode traits
 

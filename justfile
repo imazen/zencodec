@@ -271,7 +271,7 @@ av1-policy-check artifacts:
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
 
 av1-policy-guide-check:
-    cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked guide_default_and_midstream_preview_rule -- --nocapture
+    cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked guide_ -- --nocapture
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
 
 # Native TIFF spatial candidates and the positional-to-seek bridge.
