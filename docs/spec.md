@@ -136,7 +136,7 @@ trait Encoder: Sized {
 
     // Row-level push (mutually exclusive with encode)
     fn begin(&mut self, width: u32, height: u32, descriptor: PixelDescriptor)
-        -> Result<OutputTiming, Self::Error>;                                   // default: Ok(AT_FINISH)
+        -> Result<OutputTiming, Self::Error>;                                   // default: Err(RowLevelEncode)
     fn push_rows(&mut self, rows: PixelSlice<'_>) -> Result<(), Self::Error>;  // default: Err
     fn pending_output(&self) -> &[u8];                                          // default: empty
     fn consume_output(&mut self, n: usize);                                     // default: no-op

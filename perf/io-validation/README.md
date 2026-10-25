@@ -3,8 +3,9 @@
 Private harnesses for the [2026-10-24 investigation](../../benchmarks/io_validation_2026-10-24.md).
 They add no library API. Run builds and benchmarks serially under your host's
 resource limiter. The disk probe uses Linux/Unix positional file I/O; the
-batching script uses Linux `taskset`. These are opt-in experiments outside
-the normal workspace and CI build.
+batching script uses Linux `taskset`. These are experiments outside the normal workspace build. The Documentation
+workflow runs the guide examples, encoder retention control, and transport model;
+the larger performance and container sweeps remain opt-in.
 
 `setup.py` fetches text sources from pinned public commits, checks previously
 downloaded files before writing, and records each source URL and SHA-256 in

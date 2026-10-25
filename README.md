@@ -7,6 +7,8 @@ zencodec contains no pixel encoding or decoding logic — that lives in the indi
 Import as `zencodec` — `zencodec::encode`, `zencodec::decode`, and the shared
 types (metadata, limits, format detection, color emission) at the root.
 
+[Visual guide](https://imazen.github.io/zencodec/) — consumer, adapter, and implementor journeys, with tested examples and an interactive transport lab. [Guide source and checks](docs/SITE.md).
+
 ## Quick start
 
 ```toml

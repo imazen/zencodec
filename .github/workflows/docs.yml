@@ -1,0 +1,90 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  examples:
+    name: Execute guide examples
+    runs-on: ubuntu-latest
+    env:
+      CARGO_BUILD_JOBS: 4
+      CARGO_INCREMENTAL: 0
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: perf/io-validation
+      - name: Fetch pinned public codec sources
+        run: |
+          python3 perf/io-validation/setup.py
+          cp perf/io-validation/locks/harness.lock perf/io-validation/Cargo.lock
+      - name: Execute the exact Rust displayed in the guide
+        run: |
+          cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test encoder_retention --bin transport_contracts --locked
+          cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --bin transport_contracts --locked -- -D warnings
+      - name: Verify committed simulation results
+        run: |
+          cargo run --quiet --manifest-path perf/io-validation/Cargo.toml -p io-validation --bin transport_contracts --locked > "$RUNNER_TEMP/transport.csv"
+          diff -u benchmarks/io_transport_model_2026-10-25.csv "$RUNNER_TEMP/transport.csv"
+
+  build:
+    name: Build and exercise guide
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+      - run: npm ci --prefix docs --ignore-scripts
+      - run: npm run build --prefix docs
+      - run: npm test --prefix docs
+      - name: Install browser
+        working-directory: docs
+        run: npx playwright install --with-deps chromium
+      - name: Check navigation, diagrams, examples and mobile layout
+        run: |
+          python3 -m http.server 3537 --bind 127.0.0.1 --directory docs/_site > "$RUNNER_TEMP/docs-server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3537/ > /dev/null; then break; fi
+            sleep 1
+          done
+          npm run test:browser --prefix docs
+      - name: Configure Pages
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/configure-pages@v6
+      - name: Upload explicit site artifact
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/_site
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [examples, build]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy checked documentation
+        id: deployment
+        uses: actions/deploy-pages@v5

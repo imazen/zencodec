@@ -241,3 +241,19 @@ io-encoder-retention-check:
 io-transport-model:
     cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --bin transport_contracts --locked
     cargo run --manifest-path perf/io-validation/Cargo.toml -p io-validation --bin transport_contracts --locked
+
+# Documentation source stays under docs/ on main; only its artifact is deployed.
+docs-site-check:
+    node docs/build-site.mjs
+    node --test docs/site/site.test.mjs
+
+docs-site-serve:
+    python3 -m http.server 3537 --bind 0.0.0.0 --directory docs/_site
+
+docs-site-browser:
+    node docs/site/browser.test.mjs
+
+# Run in the prepared standalone harness (see perf/io-validation/README.md).
+docs-site-examples:
+    cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test encoder_retention --bin transport_contracts --locked
+    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --bin transport_contracts --locked -- -D warnings
