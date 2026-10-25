@@ -12,12 +12,79 @@ use std::{
 use zencodec::decode::*;
 use zencodec::operation::{Decision, DecisionCode, Decline, PolicySet, Question};
 use zencodec::source::{AccessPattern, SliceReadAt};
+use zencodec::storage::{StorageBudget, StorageError};
 use zencodec::{At, ImageFormat, ImageInfo};
 use zencodec_coroutine::{CoroutineDecoder, CoroutineError};
 use zencodec_io::{CollectSink, DriveOptions, PolicyDecoder, drive_from_read_at, drive_from_slice};
 use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 
 const RGBA: PixelDescriptor = PixelDescriptor::RGBA8_SRGB;
+
+#[test]
+fn storage_admission_precedes_initialization_and_row_publication() {
+    let initialized = Arc::new(AtomicUsize::new(0));
+    let seen = initialized.clone();
+    let budget = StorageBudget::new(4096, 1); // payload fits, index object does not
+    let result = CoroutineDecoder::controlled_with_storage(
+        32,
+        AccessPattern::RandomAccess,
+        budget.clone(),
+        move |_ctx| {
+            seen.fetch_add(1, Ordering::SeqCst);
+            async { Ok::<_, CoroutineError>(OutputInfo::full_decode(2, 2, RGBA)) }
+        },
+    );
+    assert!(matches!(
+        result,
+        Err(CoroutineError::Storage(StorageError::Objects { limit: 1 }))
+    ));
+    assert_eq!(initialized.load(Ordering::SeqCst), 0);
+    assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+
+    for objects in [2, 3] {
+        let budget = StorageBudget::new(4096, objects);
+        let native = CoroutineDecoder::controlled_with_storage(
+            32,
+            AccessPattern::RandomAccess,
+            budget.clone(),
+            |mut ctx| async move {
+                ctx.set_info(ImageInfo::new(2, 2, ImageFormat::Qoi));
+                ctx.set_output_descriptor(RGBA);
+                ctx.interpretation(InterpretationFacts::new(
+                    2,
+                    2,
+                    Some(RGBA),
+                    InterpretationState::Final,
+                ))
+                .await?;
+                let mut pixels = [0; 24];
+                ctx.read_exact_at(0, &mut pixels).await?;
+                ctx.write_rows(
+                    BatchMeta::final_rows(0),
+                    &PixelSlice::new(&pixels, 2, 2, 12, RGBA).unwrap(),
+                )
+                .await?;
+                Ok::<_, CoroutineError>(OutputInfo::full_decode(2, 2, RGBA))
+            },
+        )
+        .unwrap();
+        assert_eq!(budget.reserved_objects(), 2);
+        let mut decoder = PolicyDecoder::new(native, PolicySet::new());
+        let mut sink = Sink::default();
+        let input: Vec<u8> = (0..24).collect();
+        let result = drive_from_slice(&mut decoder, &input, &mut sink, None, 1);
+        if objects == 2 {
+            let error = result.unwrap_err();
+            assert!(zencodec::find_cause::<StorageError>(&error).is_some());
+            assert_eq!((sink.began, sink.rows, sink.ended), (0, 0, 0));
+        } else {
+            result.unwrap();
+            assert_eq!(sink.pixels.bytes(), &[&input[..8], &input[12..20]].concat());
+            assert_eq!((sink.began, sink.rows, sink.ended), (1, 1, 1));
+        }
+        assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+    }
+}
 
 #[derive(Default)]
 struct Sink {

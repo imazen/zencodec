@@ -118,18 +118,21 @@ impl StorageBudget {
 
     /// Allocate zeroed bytes after admission. Mutation cannot resize the buffer.
     pub fn bytes(&self, len: usize) -> Result<OwnedStorage<u8>, StorageError> {
-        self.allocate(len)
+        self.filled(len, 0)
     }
     /// Allocate zeroed 16-bit words, charging two bytes per word.
     pub fn words(&self, len: usize) -> Result<OwnedStorage<u16>, StorageError> {
-        self.allocate(len)
+        self.filled(len, 0)
     }
     /// Allocate zeroed 32-bit floating-point samples, charging four bytes each.
     pub fn floats(&self, len: usize) -> Result<OwnedStorage<f32>, StorageError> {
-        self.allocate(len)
+        self.filled(len, 0.0)
     }
 
-    fn allocate<T: Copy + Default>(&self, len: usize) -> Result<OwnedStorage<T>, StorageError> {
+    /// Allocate a fixed array of copyable values after byte/object admission.
+    /// This also admits bounded codec tables and range indexes. Any storage
+    /// referenced by a value is separate; only this array's capacity is charged.
+    pub fn filled<T: Copy>(&self, len: usize, value: T) -> Result<OwnedStorage<T>, StorageError> {
         let bytes = len
             .checked_mul(size_of::<T>())
             .filter(|n| *n <= isize::MAX as usize)
@@ -148,7 +151,7 @@ impl StorageBudget {
                 actual,
             });
         }
-        data.resize(len, T::default());
+        data.resize(len, value);
         Ok(OwnedStorage {
             allocation: Allocation { data, reservation },
         })

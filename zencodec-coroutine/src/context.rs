@@ -14,6 +14,7 @@ use zencodec::decode::{
     InterpretationFacts, MetadataUpdate, Request, SinkError,
 };
 use zencodec::source::SourceError;
+use zencodec::storage::{OwnedStorage, StorageBudget, StorageError};
 use zenpixels::{PixelDescriptor, PixelSlice};
 
 use crate::input::InputStore;
@@ -22,6 +23,15 @@ use crate::input::InputStore;
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum CoroutineError {
+    /// Input payload, range index or row staging could not be admitted.
+    Storage(StorageError),
+    /// An absolute byte range overflowed the source address space.
+    InputRangeOverflow,
+    /// The admitted input range index cannot represent another disjoint span.
+    InputSpanLimit {
+        /// Maximum number of independently retained spans.
+        limit: usize,
+    },
     /// A required interpretation boundary was violated.
     Control(ControlError),
     /// A row buffer size overflowed or its allocation failed.
@@ -52,6 +62,11 @@ pub enum CoroutineError {
 impl fmt::Display for CoroutineError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Storage(e) => e.fmt(f),
+            Self::InputRangeOverflow => f.write_str("coroutine input range overflow"),
+            Self::InputSpanLimit { limit } => {
+                write!(f, "coroutine input exceeds its {limit}-span index")
+            }
             Self::Control(e) => e.fmt(f),
             Self::RowAllocation => f.write_str("coroutine row allocation failed"),
             Self::Source(e) => write!(f, "coroutine decode: {e}"),
@@ -74,10 +89,65 @@ impl fmt::Display for CoroutineError {
 impl core::error::Error for CoroutineError {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
+            Self::Storage(e) => Some(e),
             Self::Control(e) => Some(e),
             Self::Source(e) => Some(e),
             Self::Sink(e) => Some(e.as_ref()),
             _ => None,
+        }
+    }
+}
+
+impl From<StorageError> for CoroutineError {
+    fn from(e: StorageError) -> Self {
+        Self::Storage(e)
+    }
+}
+
+pub(crate) enum RowStorage {
+    Legacy(Vec<u8>),
+    Admitted(OwnedStorage<u8>),
+}
+impl Default for RowStorage {
+    fn default() -> Self {
+        Self::Legacy(Vec::new())
+    }
+}
+impl RowStorage {
+    fn prepare(
+        &mut self,
+        len: usize,
+        budget: Option<&StorageBudget>,
+    ) -> Result<(), CoroutineError> {
+        if let Some(budget) = budget {
+            if matches!(self, Self::Admitted(data) if data.len() >= len) {
+                return Ok(());
+            }
+            // An unused spare is not live output. Release it before growing so
+            // growth does not require two simultaneous staging allocations.
+            *self = Self::default();
+            *self = Self::Admitted(budget.bytes(len)?);
+        } else {
+            let Self::Legacy(data) = self else {
+                unreachable!("storage mode is fixed at construction")
+            };
+            data.clear();
+            data.try_reserve_exact(len)
+                .map_err(|_| CoroutineError::RowAllocation)?;
+            data.resize(len, 0);
+        }
+        Ok(())
+    }
+    pub(crate) fn as_slice(&self) -> &[u8] {
+        match self {
+            Self::Legacy(data) => data,
+            Self::Admitted(data) => data.as_slice(),
+        }
+    }
+    fn as_mut_slice(&mut self) -> &mut [u8] {
+        match self {
+            Self::Legacy(data) => data,
+            Self::Admitted(data) => data.as_mut_slice(),
         }
     }
 }
@@ -109,7 +179,7 @@ impl From<StopReason> for CoroutineError {
 /// into the sink.
 pub(crate) struct PendingRows {
     pub(crate) meta: BatchMeta,
-    pub(crate) data: Vec<u8>,
+    pub(crate) data: RowStorage,
     pub(crate) width: u32,
     pub(crate) rows: u32,
     pub(crate) stride: usize,
@@ -132,7 +202,8 @@ pub(crate) struct Shared {
     pub(crate) rows: Option<PendingRows>,
     /// Strip buffer handed back after each `Rows` step, so steady state
     /// allocates nothing.
-    pub(crate) spare: Vec<u8>,
+    pub(crate) spare: RowStorage,
+    pub(crate) storage: Option<StorageBudget>,
     pub(crate) metadata: Option<MetadataUpdate>,
     pub(crate) info: Option<ImageInfo>,
     /// Bumped on every `set_info`, so the decoder refreshes its cached copy.
@@ -155,7 +226,8 @@ impl Shared {
             satisfied: Vec::new(),
             gaps: Vec::new(),
             rows: None,
-            spare: Vec::new(),
+            spare: RowStorage::default(),
+            storage: None,
             metadata: None,
             info: None,
             info_generation: 0,
@@ -163,6 +235,15 @@ impl Shared {
             accepts_provisional: false,
             cancelled: None,
         }
+    }
+
+    pub(crate) fn with_storage(cap: usize, budget: StorageBudget) -> Result<Self, CoroutineError> {
+        let input = InputStore::with_storage(cap, &budget)?;
+        Ok(Self {
+            input,
+            storage: Some(budget),
+            ..Self::new(cap)
+        })
     }
 }
 
@@ -285,17 +366,22 @@ impl CoroutineContext {
                 error: Some(CoroutineError::RowAllocation),
             };
         };
-        let mut data = core::mem::take(&mut self.shared.lock().spare);
-        data.clear();
-        if data.try_reserve_exact(len).is_err() {
+        let (mut data, prepared) = {
+            let mut shared = self.shared.lock();
+            let mut data = core::mem::take(&mut shared.spare);
+            let prepared = data.prepare(len, shared.storage.as_ref());
+            (data, prepared)
+        };
+        if let Err(error) = prepared {
             return WriteRows {
                 shared: &self.shared,
                 pending: None,
-                error: Some(CoroutineError::RowAllocation),
+                error: Some(error),
             };
         }
         for r in 0..count {
-            data.extend_from_slice(&rows.row(r)[..stride]);
+            let at = r as usize * stride;
+            data.as_mut_slice()[at..at + stride].copy_from_slice(&rows.row(r)[..stride]);
         }
         WriteRows {
             shared: &self.shared,
@@ -466,6 +552,9 @@ impl Future for ReadMany<'_, '_> {
         satisfied.clear();
         gaps.clear();
         let mut check = |shared: &Shared, offset: u64, out: &mut [u8], sequential: bool| {
+            offset
+                .checked_add(out.len() as u64)
+                .ok_or(CoroutineError::InputRangeOverflow)?;
             if out.len() > shared.input.cap() {
                 return Err(CoroutineError::ReadExceedsInputCap {
                     len: out.len(),
@@ -520,7 +609,11 @@ impl Future for ReadMany<'_, '_> {
         let ready = missing.is_empty();
         if ready && this.release {
             for (offset, len) in &satisfied {
-                shared.input.release(*offset, *len);
+                if let Err(error) = shared.input.release(*offset, *len) {
+                    shared.need = missing;
+                    shared.satisfied = satisfied;
+                    return Poll::Ready(Err(error));
+                }
             }
         }
         shared.need = missing;

@@ -103,3 +103,7 @@ release storage the finishing producer actually owns.
 authors can participate without depending on an I/O driver. The existing
 `zencodec_io::storage` path re-exports those same types. An owner created through
 either path participates in the same budget and preserves the same lifetime.
+
+`StorageBudget::filled` admits fixed arrays of copyable values, including codec
+range indexes. It charges array capacity, not storage indirectly referenced by
+array elements. The coroutine admitted path now uses it for its range index.

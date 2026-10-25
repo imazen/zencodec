@@ -204,6 +204,9 @@ impl<D, R> PolicyDecoder<D, R> {
 
 Codec authors can implement the protocol directly or use
 `zencodec_coroutine::CoroutineDecoder::controlled(input_cap, access, init)`.
+`controlled_with_storage(input_cap, access, StorageBudget, init)` additionally
+admits input payload, its bounded range index and row staging. It returns
+`Result<Self, CoroutineError>` and admits initial storage before calling `init`.
 The coroutine awaits `ctx.interpretation(facts)` before affected work. It
 refuses output before final adoption and refuses changed final interpretation.
 See [the authoring contract](controlled-decoding.md#coroutine-authoring-and-transport-execution)

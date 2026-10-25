@@ -100,59 +100,70 @@ impl DecodeRowSink for Sink {
 }
 
 fn decoder(budget: StorageBudget, work: Arc<Work>) -> Box<DynControlledDecoder> {
-    erase_controlled(CoroutineDecoder::controlled(
-        4096,
-        AccessPattern::RandomAccess,
-        move |mut ctx| async move {
-            let len = usize::try_from(ctx.len().await?).map_err(|_| StorageError::SizeOverflow)?;
-            let mut input = budget.bytes(len)?;
-            for (i, chunk) in input.as_mut_slice().chunks_mut(4096).enumerate() {
-                ctx.read_exact_at((i * 4096) as u64, chunk).await?;
-            }
-            let bytes = input.as_slice();
-            let config = JpegDecoderConfig::new();
-            let job = config.job().with_orientation(OrientationHint::Preserve);
-            let header = job.probe(bytes)?;
-            ctx.set_info(header.clone());
-            ctx.announce(MetadataUpdate::HeaderReady).await?;
-            ctx.interpretation(InterpretationFacts::new(
-                header.width,
-                header.height,
-                None,
-                InterpretationState::Provisional,
-            ))
-            .await?;
-            let full = job.probe_full(bytes)?;
-            let output = job.output_info(bytes)?;
-            // This is an adapter qualification, not a JPEG validity rule. Inventory
-            // scope alone does not prove that a late profile governed pixel work.
-            let complete_header_profile =
-                JpegMetadata::parse(bytes).is_ok_and(|m| m.icc_profile().is_ok());
-            let qualified = complete_header_profile && header.source_color == full.source_color;
-            ctx.set_info(full);
-            ctx.set_output_descriptor(output.native_format);
-            ctx.interpretation(InterpretationFacts::new(
-                output.width,
-                output.height,
-                Some(output.native_format),
-                if qualified {
-                    InterpretationState::Final
-                } else {
-                    InterpretationState::Unavailable
-                },
-            ))
-            .await?;
-            // In progressive JPEG even construction can decode coefficients. Keep
-            // it on the far side of the actual await, not just ahead of row delivery.
-            work.constructors.fetch_add(1, Ordering::SeqCst);
-            let mut native = job.streaming_decoder(Cow::Borrowed(bytes), &[])?;
-            while let Some((y, rows)) = native.next_batch()? {
-                work.batches.fetch_add(1, Ordering::SeqCst);
-                ctx.write_rows(BatchMeta::final_rows(y), &rows).await?;
-            }
-            Ok::<_, Error>(output)
-        },
-    ))
+    configured_decoder(budget, work, false)
+}
+
+fn configured_decoder(
+    budget: StorageBudget,
+    work: Arc<Work>,
+    admitted: bool,
+) -> Box<DynControlledDecoder> {
+    let storage = budget.clone();
+    let init = move |mut ctx: zencodec_coroutine::CoroutineContext| async move {
+        let len = usize::try_from(ctx.len().await?).map_err(|_| StorageError::SizeOverflow)?;
+        let mut input = budget.bytes(len)?;
+        for (i, chunk) in input.as_mut_slice().chunks_mut(4096).enumerate() {
+            ctx.read_exact_at((i * 4096) as u64, chunk).await?;
+        }
+        let bytes = input.as_slice();
+        let config = JpegDecoderConfig::new();
+        let job = config.job().with_orientation(OrientationHint::Preserve);
+        let header = job.probe(bytes)?;
+        ctx.set_info(header.clone());
+        ctx.announce(MetadataUpdate::HeaderReady).await?;
+        ctx.interpretation(InterpretationFacts::new(
+            header.width,
+            header.height,
+            None,
+            InterpretationState::Provisional,
+        ))
+        .await?;
+        let full = job.probe_full(bytes)?;
+        let output = job.output_info(bytes)?;
+        // This is an adapter qualification, not a JPEG validity rule. Inventory
+        // scope alone does not prove that a late profile governed pixel work.
+        let complete_header_profile =
+            JpegMetadata::parse(bytes).is_ok_and(|m| m.icc_profile().is_ok());
+        let qualified = complete_header_profile && header.source_color == full.source_color;
+        ctx.set_info(full);
+        ctx.set_output_descriptor(output.native_format);
+        ctx.interpretation(InterpretationFacts::new(
+            output.width,
+            output.height,
+            Some(output.native_format),
+            if qualified {
+                InterpretationState::Final
+            } else {
+                InterpretationState::Unavailable
+            },
+        ))
+        .await?;
+        // In progressive JPEG even construction can decode coefficients. Keep
+        // it on the far side of the actual await, not just ahead of row delivery.
+        work.constructors.fetch_add(1, Ordering::SeqCst);
+        let mut native = job.streaming_decoder(Cow::Borrowed(bytes), &[])?;
+        while let Some((y, rows)) = native.next_batch()? {
+            work.batches.fetch_add(1, Ordering::SeqCst);
+            ctx.write_rows(BatchMeta::final_rows(y), &rows).await?;
+        }
+        Ok::<_, Error>(output)
+    };
+    erase_controlled(if admitted {
+        CoroutineDecoder::controlled_with_storage(4096, AccessPattern::RandomAccess, storage, init)
+            .unwrap()
+    } else {
+        CoroutineDecoder::controlled(4096, AccessPattern::RandomAccess, init)
+    })
 }
 
 #[test]
@@ -223,6 +234,63 @@ fn native_jpeg_only_starts_after_final_policy_and_matches_direct_pixels() {
                 drop(decoder);
                 assert_eq!(calls, 2);
             }
+        }
+    }
+}
+
+#[test]
+fn native_jpeg_runs_with_shared_input_and_row_admission() {
+    for progressive in [false, true] {
+        let bytes = fixtures::fixture(progressive, fixtures::Placement::Header);
+        let direct = JpegDecoderConfig::new()
+            .job()
+            .with_orientation(OrientationHint::Preserve)
+            .decoder(Cow::Borrowed(&bytes), &[])
+            .unwrap()
+            .decode()
+            .unwrap();
+        for decline in [false, true] {
+            let budget = StorageBudget::new(64 * 1024, 4);
+            let work = Arc::new(Work::default());
+            let native = configured_decoder(budget.clone(), work.clone(), true);
+            let initial = budget.reserved_bytes();
+            assert_eq!(
+                budget.reserved_objects(),
+                2,
+                "input payload and index are separate admitted allocations"
+            );
+            let mut resolver = |_q: Question<'_>| -> Result<Decision, At<Infallible>> {
+                assert_eq!(budget.reserved_bytes(), initial + bytes.len());
+                assert_eq!(budget.reserved_objects(), 3);
+                assert_eq!(work.constructors.load(Ordering::SeqCst), 0);
+                Ok(if decline {
+                    Decision::decline(Decline::ApplicationRule)
+                } else {
+                    Decision::UsePreset
+                })
+            };
+            let mut session = PolicyDecoder::new(native, &mut resolver);
+            let mut sink = Sink::default();
+            let result = drive_from_read_at(
+                &mut session,
+                &mut SliceReadAt::new(&bytes),
+                &mut sink,
+                None,
+                DriveOptions::new(0, 37),
+            );
+            if decline {
+                assert!(result.is_err());
+                assert_eq!((sink.begin, sink.rows, sink.finish), (0, 0, 0));
+            } else {
+                result.unwrap();
+                for y in 0..fixtures::HEIGHT {
+                    assert_eq!(
+                        sink.pixels.as_pixel_slice().unwrap().row(y),
+                        direct.pixels().row(y)
+                    );
+                }
+            }
+            assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
         }
     }
 }

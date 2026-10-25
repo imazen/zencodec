@@ -87,6 +87,23 @@ where
         decoder
     }
 
+    /// Controlled decoding with admitted input payload, range index and row
+    /// staging. Admission runs before `init` is called. The input index holds at
+    /// most 64 disjoint spans; excess fragmentation is an error, never eviction.
+    /// Native workspace, image metadata, request bookkeeping and sink allocations
+    /// are outside this scoped allowance. Reuse the same budget in native code
+    /// to admit its additional owned buffers.
+    pub fn controlled_with_storage(
+        input_cap: usize,
+        access: AccessPattern,
+        storage: zencodec::storage::StorageBudget,
+        init: impl FnOnce(CoroutineContext) -> F,
+    ) -> Result<Self, CoroutineError> {
+        let mut shared = Shared::with_storage(input_cap, storage)?;
+        shared.controlled = true;
+        Ok(Self::from_shared(shared, access, init))
+    }
+
     /// Create a decoder that keeps at most `input_cap` unread bytes and
     /// declares `access` to drivers.
     pub fn with_options(
@@ -94,7 +111,15 @@ where
         access: AccessPattern,
         init: impl FnOnce(CoroutineContext) -> F,
     ) -> Self {
-        let shared = Arc::new(spin::Mutex::new(Shared::new(input_cap)));
+        Self::from_shared(Shared::new(input_cap), access, init)
+    }
+
+    fn from_shared(
+        state: Shared,
+        access: AccessPattern,
+        init: impl FnOnce(CoroutineContext) -> F,
+    ) -> Self {
+        let shared = Arc::new(spin::Mutex::new(state));
         let future = Box::pin(init(CoroutineContext::new(Arc::clone(&shared))));
         Self {
             shared,
@@ -150,14 +175,25 @@ where
     /// Copy into the store the bytes of `input[from..]` that the
     /// outstanding reads need, and report how far into `input` that took
     /// (a prefix: needed bytes plus any unneeded bytes before them).
-    fn absorb(shared: &mut Shared, input: &Input<'_>, from: usize) -> usize {
+    fn absorb(
+        shared: &mut Shared,
+        input: &Input<'_>,
+        from: usize,
+    ) -> Result<usize, CoroutineError> {
         if let Some(t) = input.total_len {
             shared.input.set_total(t);
         }
-        let front = input.offset + from as u64;
+        let front = input
+            .offset
+            .checked_add(from as u64)
+            .ok_or(CoroutineError::InputRangeOverflow)?;
+        input
+            .offset
+            .checked_add(input.bytes.len() as u64)
+            .ok_or(CoroutineError::InputRangeOverflow)?;
         let end = input.end();
         if front >= end {
-            return from;
+            return Ok(from);
         }
         let mut taken_to = front;
         let needs = core::mem::take(&mut shared.need);
@@ -173,7 +209,7 @@ where
                 continue;
             }
             let slice = &input.bytes[(lo - input.offset) as usize..(hi - input.offset) as usize];
-            let stored = shared.input.feed(lo, slice, false);
+            let stored = shared.input.feed(lo, slice, false)?;
             let reached = lo + stored as u64;
             if stored == slice.len() || sequential {
                 taken_to = taken_to.max(reached);
@@ -184,7 +220,7 @@ where
             }
         }
         shared.need = needs;
-        (taken_to - input.offset) as usize
+        Ok((taken_to - input.offset) as usize)
     }
 
     fn begin_if_ready(&mut self, sink: &mut dyn DecodeRowSink) -> Result<(), StepError<E>> {
@@ -252,7 +288,10 @@ where
                 boundary,
             });
         }
-        let mut consumed = Self::absorb(&mut self.shared.lock(), &input, 0);
+        self.state = State::Failed;
+        let mut consumed = Self::absorb(&mut self.shared.lock(), &input, 0)
+            .map_err(|e| StepError::Codec(E::from(e)))?;
+        self.state = State::Running;
         let waker = Waker::noop();
         let mut cx = Context::from_waker(waker);
         loop {
@@ -373,7 +412,10 @@ where
                     // for: take it and poll again rather than send the
                     // driver back for bytes it already offered.
                     let mut shared = self.shared.lock();
-                    let more = Self::absorb(&mut shared, &input, consumed);
+                    self.state = State::Failed;
+                    let more = Self::absorb(&mut shared, &input, consumed)
+                        .map_err(|e| StepError::Codec(E::from(e)))?;
+                    self.state = State::Running;
                     if more > consumed {
                         consumed = more;
                         continue;
@@ -532,7 +574,7 @@ fn copy_rows(
     for r in 0..rows.rows {
         let start = r as usize * rows.stride;
         dst.row_mut(r)
-            .copy_from_slice(&rows.data[start..start + rows.stride]);
+            .copy_from_slice(&rows.data.as_slice()[start..start + rows.stride]);
     }
     Ok(())
 }
@@ -575,6 +617,9 @@ where
         }
         self.state = State::Done(info.clone());
         self.need.clear();
+        let mut shared = self.shared.lock();
+        shared.input.clear();
+        shared.spare = Default::default();
         Ok(Progress::new(consumed, Event::Done(info)))
     }
 }

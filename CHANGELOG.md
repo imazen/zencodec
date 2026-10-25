@@ -292,6 +292,8 @@ None.
 
 #### Added
 
+- `controlled_with_storage` admits input payload, a bounded range index and reusable row staging through the shared `StorageBudget`. Input/index admission precedes codec initialization; row admission precedes sink effects. Completion and failed policy sessions release owned buffers.
+
 - Controlled construction and awaited interpretation boundaries block affected output until final adoption, reject changed final facts, and poison failed/unwound sessions. Legacy execution refuses controlled sessions. Row copying now reserves fallibly and refuses unapproved output before allocation. This does not add a native or whole-operation memory bound.
 
 ## Workspace

@@ -458,7 +458,7 @@ control-sync export:
     just operation-sync "{{export}}"
     just io-core-sync "{{export}}"
     cp src/traits/control.rs src/traits/incremental.rs src/traits/mod.rs "{{export}}/src/traits/"
-    cp zencodec-coroutine/src/context.rs zencodec-coroutine/src/decoder.rs "{{export}}/zencodec-coroutine/src/"
+    cp zencodec-coroutine/src/*.rs "{{export}}/zencodec-coroutine/src/"
     cp zencodec-coroutine/tests/control.rs "{{export}}/zencodec-coroutine/tests/"
 
 control-check:

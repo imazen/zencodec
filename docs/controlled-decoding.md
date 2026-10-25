@@ -68,9 +68,13 @@ adopted, and the runner checks the row descriptor and width before calling the
 sink. Updates to source color, orientation, dimensions or output descriptor after
 adoption are terminal. Descriptive-only metadata may still be announced.
 
-The coroutine's input cap remains scoped to its input store. Its existing row
-copy, native parser storage and native workspace are not covered by the managed
-`StorageBudget` yet. This authoring path adds no whole-operation memory claim.
+`CoroutineDecoder::controlled_with_storage(input_cap, access, budget, init)`
+admits input payload and a 64-span range index before calling `init`, then admits
+row staging before sink effects. It reuses staging and releases its input/index
+and spare rows at completion. The same budget can admit codec-owned buffers.
+`controlled` retains its legacy input-store behavior when admission is not needed.
+Neither constructor certifies native parser/workspace, image metadata, request
+bookkeeping or sink allocations; this is no whole-operation memory claim.
 
 `zencodec_io::PolicyDecoder::new(decoder, resolver)` serves these suspensions
 through the shared `PolicyResolver`. It implements the existing
@@ -143,3 +147,16 @@ This receipt measures the validation process. Native workspace, source caches,
 coroutine row copies and sink allocations are outside the input-owner allowance.
 The qualification adapter is private; a production codec entry point must carry
 these restrictions and use the same checked operation boundary.
+
+The admitted range store uses fixed payload and index allocations. Sequential
+append/read/release does not reallocate them; out-of-order insertion and hole
+release compact within the same storage. A 64-span limit makes index exhaustion
+a typed error without eviction. An independent byte map checks insertion,
+duplicate feeds, holes and refills; overflow and index exhaustion leave retained
+bytes intact. Object exhaustion before construction does not invoke the codec
+initializer. Row admission failure occurs before sink begin.
+
+Native baseline/progressive JPEG also runs with one shared allowance for the
+coroutine input/index, whole encoded source and row staging. Pixel parity and
+release after successful completion or policy decline pass. Native workspace
+and the output sink remain outside that allowance.
