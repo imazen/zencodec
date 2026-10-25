@@ -59,7 +59,7 @@ try {
   await page.goto(`${url}#policy`);
   assert.ok((await page.locator('#policy .api-panel[data-api="policyResolver"][open]').textContent()).includes('At<Self::Error>'));
   for(const [name,id] of [['policy_default','policy-default'],['policy_custom','policy-custom'],['jpeg_rewrite','policy-jpeg'],['jpeg_icc_refusal','policy-jpeg-checked'],['jpeg_icc_admission','policy-jpeg-icc']]) {
-    if(name==='jpeg_icc_admission') await page.locator('.policy-deep-dive>summary').click();
+    if(name==='jpeg_icc_admission' && !await page.locator('.policy-deep-dive').evaluate(el=>el.open)) await page.locator('.policy-deep-dive>summary').click();
     const panel=page.locator(`#${id}-example`);
     for(const summary of await panel.locator('.code-context summary').all()) await summary.click();
     assert.ok(await panel.locator('[data-example-part="above"]').isVisible());
@@ -117,7 +117,7 @@ try {
     assert.ok(await page.locator('#entry-registry [data-example-part="above"]').isVisible());
     if(output) await page.locator('#entry-registry').screenshot({path:`${output}/registry-expanded-${width}.png`});
     await page.goto(`${url}#policy`);
-    await page.locator('.policy-deep-dive>summary').click();
+    if(!await page.locator('.policy-deep-dive').evaluate(el=>el.open)) await page.locator('.policy-deep-dive>summary').click();
     for(const context of await page.locator('#policy-jpeg-icc-example .code-context').all()) {
       if(!await context.evaluate(el=>el.open)) await context.locator('summary').click();
     }
