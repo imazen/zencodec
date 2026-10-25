@@ -400,3 +400,8 @@ receipts should not become mandatory caller ceremony. A fixed ICC refusal still
 has a simpler current public-plan implementation. Retire old coordination paths
 only when the checked request replaces their enforcement across real routes.
 Production streaming barriers and ownership qualification remain the gates above.
+
+The [comparison with established codec interfaces](api-review-2026-10-25.md)
+checks this boundary against explicit progress, buffer ownership, metadata
+ordering and image-region contracts, and records the accounting-scope regression
+found while reviewing the private resolver.
