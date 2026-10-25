@@ -531,6 +531,17 @@ docs-site-serve:
 docs-site-browser:
     node docs/site/browser.test.mjs
 
+# Parse the documentation workflow and check every embedded shell script.
+docs-ci-shell-check:
+    #!/usr/bin/env python3
+    from pathlib import Path
+    import subprocess, yaml
+    workflow = yaml.safe_load(Path('.github/workflows/docs.yml').read_text())
+    for job in workflow['jobs'].values():
+        for step in job.get('steps', []):
+            if 'run' in step:
+                subprocess.run(['bash', '-n'], input=step['run'], text=True, check=True)
+
 # Start and stop an isolated server for the browser checks.
 docs-site-browser-check port="3547": docs-site-check
     #!/usr/bin/env bash
