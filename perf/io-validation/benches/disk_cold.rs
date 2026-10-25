@@ -6,7 +6,8 @@ mod disk_support;
 use disk_support::*;
 use std::path::PathBuf;
 use zenbench::prelude::*;
-use zencodec::source::{ReadAt, SourceError};
+use zencodec::source::ReadAt;
+use zencodec_io::StdSourceError;
 
 fn read_bytes() -> u64 {
     std::fs::read_to_string("/proc/self/io")
@@ -19,7 +20,7 @@ fn read_bytes() -> u64 {
 }
 
 struct Sample {
-    source: Box<dyn ReadAt<Error = SourceError> + Send>,
+    source: Box<dyn ReadAt<Error = StdSourceError> + Send>,
     output: Vec<u8>,
     offsets: Vec<u64>,
     before: u64,
@@ -68,11 +69,11 @@ fn cold(suite: &mut Suite) {
                                 let file = std::fs::File::open(&path).unwrap();
                                 rustix::fs::fadvise(&file, 0, None, rustix::fs::Advice::DontNeed)
                                     .unwrap();
-                                let source: Box<dyn ReadAt<Error = SourceError> + Send> =
+                                let source: Box<dyn ReadAt<Error = StdSourceError> + Send> =
                                     if positional {
                                         Box::new(zencodec_io::FileReadAt::new(file).unwrap())
                                     } else {
-                                        Box::new(SeekRead::open(&path).unwrap())
+                                        Box::new(NativeErrors(SeekRead::open(&path).unwrap()))
                                     };
                                 let output = vec![0; size];
                                 let offsets = offsets(size, random);

@@ -231,6 +231,12 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Ideal API PR integration (2026-10-25): changing the standard source error
+  type exposed fixed `ReadAt<Error = SourceError>` assumptions in the disk
+  comparison harness. The controls now use a common lossless error adapter;
+  their read algorithms and parity assertions remain unchanged. The guide gate
+  and `just io-disk-compile-check` cover these consumers.
+
 - Fixed during independent API review (2026-10-25): generic `find_cause::<E>`
   skipped the native error inside `At<E>` because the wrapper's source link
   delegates past it. Lookup now inspects `At<E>` at each link. The regression

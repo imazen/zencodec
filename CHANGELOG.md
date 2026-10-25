@@ -200,7 +200,7 @@ removes that whole class).
 
 - `FileReadAt` and `BufferedReadAt` return `StdSourceError`, preserving native
   I/O errors alongside structured `SourceError` refusals. Their old concrete
-  error signatures discarded kind, OS code and custom payloads.
+  error signatures discarded kind, OS code and custom payloads (`728b7f02`).
 
 #### Fixed
 

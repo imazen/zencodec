@@ -65,7 +65,7 @@ pub fn offsets(size: usize, random: bool) -> Vec<u64> {
         })
         .collect()
 }
-pub fn verify(source: &mut dyn ReadAt<Error = SourceError>, size: usize, offsets: &[u64]) {
+pub fn verify<S: ReadAt + ?Sized>(source: &mut S, size: usize, offsets: &[u64]) {
     let mut out = vec![0; size];
     for &offset in offsets {
         source.read_exact_at(offset, &mut out).unwrap();
@@ -74,6 +74,22 @@ pub fn verify(source: &mut dyn ReadAt<Error = SourceError>, size: usize, offsets
                 .enumerate()
                 .all(|(i, &b)| b == byte_at(offset as usize + i))
         );
+    }
+}
+
+/// Keep the frozen controls' read algorithms while giving every comparison arm
+/// the same lossless error envelope as the current file source.
+pub struct NativeErrors<S>(pub S);
+impl<S: ReadAt> ReadAt for NativeErrors<S>
+where
+    S::Error: Into<zencodec_io::StdSourceError>,
+{
+    type Error = zencodec_io::StdSourceError;
+    fn len(&mut self) -> Result<u64, Self::Error> {
+        self.0.len().map_err(Into::into)
+    }
+    fn read_exact_at(&mut self, offset: u64, out: &mut [u8]) -> Result<(), Self::Error> {
+        self.0.read_exact_at(offset, out).map_err(Into::into)
     }
 }
 
