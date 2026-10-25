@@ -1,0 +1,345 @@
+//! Immutable native-frame interpretation and timing facts.
+//!
+//! These values describe planar samples without mapping, converting or owning
+//! a native picture. Shared policy questions use the same facts as media
+//! sessions; storage and codec execution remain in `zencodec-media`.
+
+use crate::time::Timestamp;
+use alloc::vec::Vec;
+use core::fmt;
+use zenpixels::{ChannelType, Cicp};
+
+/// Storage word, significant code bits and their placement within the word.
+///
+/// Compatibility encoding from the existing unpublished media API. It mirrors
+/// `zenpixels::sample::SampleEncoding`; removing this duplicate requires the
+/// coordinated media migration to that type and its published dependency floor.
+/// A 10-bit sample in a
+/// 16-bit word is `new(U16, 10, 0)` (LSB-aligned) or `new(U16, 10, 6)`
+/// (MSB-aligned); it is never relabelled as a full-range 16-bit value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct SampleEncoding {
+    storage: ChannelType,
+    code_bits: u8,
+    bit_shift: u8,
+}
+
+/// An impossible [`SampleEncoding`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum SampleEncodingError {
+    /// Only 8- and 16-bit unsigned words are supported.
+    UnsupportedStorage,
+    /// Code bits are zero or wider than the word.
+    InvalidBitDepth,
+    /// The code does not fit the word at that shift.
+    InvalidBitShift,
+}
+
+impl fmt::Display for SampleEncodingError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::UnsupportedStorage => "sample storage must be an 8- or 16-bit word",
+            Self::InvalidBitDepth => "code bits must be between 1 and the word width",
+            Self::InvalidBitShift => "code bits do not fit the word at that shift",
+        })
+    }
+}
+
+impl core::error::Error for SampleEncodingError {}
+
+impl SampleEncoding {
+    /// Eight-bit codes in 8-bit words.
+    pub const U8: Self = Self {
+        storage: ChannelType::U8,
+        code_bits: 8,
+        bit_shift: 0,
+    };
+
+    /// `code_bits` significant bits, shifted left by `bit_shift`, in a
+    /// `storage` word.
+    ///
+    /// # Errors
+    ///
+    /// A [`SampleEncodingError`] for an unsupported word or a code that does
+    /// not fit.
+    pub const fn new(
+        storage: ChannelType,
+        code_bits: u8,
+        bit_shift: u8,
+    ) -> Result<Self, SampleEncodingError> {
+        let width = match storage {
+            ChannelType::U8 => 8,
+            ChannelType::U16 => 16,
+            _ => return Err(SampleEncodingError::UnsupportedStorage),
+        };
+        if code_bits == 0 || code_bits > width {
+            return Err(SampleEncodingError::InvalidBitDepth);
+        }
+        if bit_shift > width - code_bits {
+            return Err(SampleEncodingError::InvalidBitShift);
+        }
+        Ok(Self {
+            storage,
+            code_bits,
+            bit_shift,
+        })
+    }
+
+    /// The storage word.
+    pub const fn storage(self) -> ChannelType {
+        self.storage
+    }
+
+    /// Significant bits per code.
+    pub const fn code_bits(self) -> u8 {
+        self.code_bits
+    }
+
+    /// Left shift of the code within the word.
+    pub const fn bit_shift(self) -> u8 {
+        self.bit_shift
+    }
+
+    /// Bytes per stored sample.
+    pub const fn bytes_per_sample(self) -> usize {
+        match self.storage {
+            ChannelType::U8 => 1,
+            _ => 2,
+        }
+    }
+}
+
+/// Chroma subsampling of a planar picture.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum Subsampling {
+    /// One plane, no chroma.
+    Mono,
+    /// Chroma halved both ways.
+    Yuv420,
+    /// Chroma halved horizontally.
+    Yuv422,
+    /// Full-resolution chroma.
+    Yuv444,
+}
+
+impl Subsampling {
+    /// Chroma plane size for a luma size, rounded up; `None` for mono.
+    pub const fn chroma_size(self, width: u32, height: u32) -> Option<(u32, u32)> {
+        match self {
+            Self::Mono => None,
+            Self::Yuv420 => Some((width.div_ceil(2), height.div_ceil(2))),
+            Self::Yuv422 => Some((width.div_ceil(2), height)),
+            Self::Yuv444 => Some((width, height)),
+        }
+    }
+}
+
+/// Where chroma samples sit relative to luma. An axis of its own:
+/// `Unknown` is kept, never defaulted to `Center`; a conversion that needs
+/// siting refuses `Unknown` on a subsampled axis or takes it from the
+/// caller.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+#[non_exhaustive]
+pub enum ChromaSiting {
+    /// The stream does not say.
+    #[default]
+    Unknown,
+    /// Co-sited with the left luma sample, vertically between rows (MPEG-2
+    /// style 4:2:0).
+    Left,
+    /// Co-sited with the top-left luma sample.
+    TopLeft,
+    /// Centred between luma samples (JPEG style).
+    Center,
+}
+
+/// What a plane holds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum PlaneRole {
+    /// Y.
+    Luma,
+    /// Cb (U).
+    Cb,
+    /// Cr (V).
+    Cr,
+    /// G (planar RGB, AV1 identity matrix).
+    Green,
+    /// B.
+    Blue,
+    /// R.
+    Red,
+    /// Alpha.
+    Alpha,
+}
+
+/// A rectangle in coded coordinates.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Crop {
+    /// Left edge.
+    pub x: u32,
+    /// Top edge.
+    pub y: u32,
+    /// Width.
+    pub width: u32,
+    /// Height.
+    pub height: u32,
+}
+
+/// The shape of a decoded picture.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct FrameGeometry {
+    /// Coded (stored) width.
+    pub coded_width: u32,
+    /// Coded (stored) height.
+    pub coded_height: u32,
+    /// Visible region in coded coordinates. Odd origins are kept, so the
+    /// chroma phase of a cropped 4:2:0 picture stays known.
+    pub crop: Crop,
+    /// Intended display size, when the stream says so; pixels are not
+    /// resized.
+    pub render: Option<(u32, u32)>,
+}
+
+impl FrameGeometry {
+    /// A `width` x `height` picture, all of it visible.
+    pub const fn full(width: u32, height: u32) -> Self {
+        Self {
+            coded_width: width,
+            coded_height: height,
+            crop: Crop {
+                x: 0,
+                y: 0,
+                width,
+                height,
+            },
+            render: None,
+        }
+    }
+}
+
+/// Colour claims with their provenance. The bitstream and the container may
+/// disagree; `resolved` is what the adapter's format rule chose (AV1 in
+/// ISOBMFF: fill and agree rules). Unknown stays unknown.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub struct ColorClaim {
+    /// What the bitstream signals.
+    pub bitstream: Option<Cicp>,
+    /// What the container signals.
+    pub container: Option<Cicp>,
+    /// The claim the adapter resolved.
+    pub resolved: Option<Cicp>,
+}
+
+impl ColorClaim {
+    /// Claims from both carriers and the resolved one.
+    pub const fn new(
+        bitstream: Option<Cicp>,
+        container: Option<Cicp>,
+        resolved: Option<Cicp>,
+    ) -> Self {
+        Self {
+            bitstream,
+            container,
+            resolved,
+        }
+    }
+}
+
+/// Everything needed to interpret the samples of one frame. Immutable and
+/// shared through `Arc`: a configuration change makes a new one, and a frame
+/// keeps the one it was decoded under.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct FrameInterpretation {
+    /// Picture shape.
+    pub geometry: FrameGeometry,
+    /// Chroma subsampling.
+    pub subsampling: Subsampling,
+    /// Chroma siting.
+    pub siting: ChromaSiting,
+    /// Sample storage and code depth.
+    pub encoding: SampleEncoding,
+    /// What each plane holds, in plane order.
+    pub roles: Vec<PlaneRole>,
+    /// Colour claims.
+    pub color: ColorClaim,
+    /// The codec configuration epoch it was decoded under.
+    pub config_epoch: u32,
+}
+
+impl FrameInterpretation {
+    /// An interpretation with no colour claims, at epoch 0.
+    pub fn new(
+        geometry: FrameGeometry,
+        subsampling: Subsampling,
+        siting: ChromaSiting,
+        encoding: SampleEncoding,
+        roles: Vec<PlaneRole>,
+    ) -> Self {
+        Self {
+            geometry,
+            subsampling,
+            siting,
+            encoding,
+            roles,
+            color: ColorClaim::default(),
+            config_epoch: 0,
+        }
+    }
+
+    /// The colour claims.
+    pub fn with_color(mut self, color: ColorClaim) -> Self {
+        self.color = color;
+        self
+    }
+
+    /// The configuration epoch.
+    pub fn with_config_epoch(mut self, epoch: u32) -> Self {
+        self.config_epoch = epoch;
+        self
+    }
+}
+
+/// Timing of one presentation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub struct FrameTiming {
+    /// Presentation timestamp, when known. Missing stays missing.
+    pub pts: Option<Timestamp>,
+    /// Duration in ticks of `pts`'s base, when the container carried one.
+    pub duration_ticks: Option<u64>,
+    /// Ordinal of the packet this presentation came from.
+    pub packet_ordinal: Option<u64>,
+    /// File offset of that packet.
+    pub input_offset: Option<u64>,
+}
+
+impl FrameTiming {
+    /// Timing with only a presentation timestamp.
+    pub const fn at(pts: Timestamp) -> Self {
+        Self {
+            pts: Some(pts),
+            duration_ticks: None,
+            packet_ordinal: None,
+            input_offset: None,
+        }
+    }
+
+    /// The recorded duration.
+    pub const fn with_duration_ticks(mut self, ticks: u64) -> Self {
+        self.duration_ticks = Some(ticks);
+        self
+    }
+
+    /// The originating packet's ordinal and offset.
+    pub const fn with_packet(mut self, ordinal: Option<u64>, offset: Option<u64>) -> Self {
+        self.packet_ordinal = ordinal;
+        self.input_offset = offset;
+        self
+    }
+}

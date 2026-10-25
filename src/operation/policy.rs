@@ -1,7 +1,8 @@
 //! Application decisions over immutable, prepared alternatives.
 
-use super::{MetadataTransfer, TranscodeOffer};
+use super::{FrameFacts, FrameOffer, MetadataTransfer, TranscodeOffer};
 use crate::decode::{BoundaryAction, DecodeBoundary, InterpretationFacts, InterpretationState};
+use crate::frame::{FrameInterpretation, FrameTiming};
 use crate::{At, ImageFormat, encode::Fidelity};
 use alloc::boxed::Box;
 use core::{
@@ -106,6 +107,13 @@ pub struct EncodeOffer {
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum Selection {
+    /// Publication of the original held native presentation.
+    Frame {
+        /// Prepared publication mechanism.
+        offer: FrameOffer,
+        /// Immutable interpretation and timing of the held frame.
+        facts: FrameFacts,
+    },
     /// Selected conversion, metadata, encoder and storage route.
     Transcode(TranscodeOffer),
     /// The selected prepared encoder configuration.
@@ -124,6 +132,8 @@ pub enum Selection {
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum DecisionContext {
+    /// Native presentation before it reaches conversion or application output.
+    Frame(FrameFacts),
     /// Final interpretation for a coupled pixel-transcode route.
     Transcode(InterpretationFacts),
     /// Facts about the pixels awaiting an encoder configuration.
@@ -160,6 +170,16 @@ pub struct EncodeFacts {
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum Question<'a> {
+    /// Decide before one native frame reaches conversion or application output.
+    /// The adapter retains this exact frame while the callback runs.
+    Frame {
+        /// Full planar interpretation, including component roles and raw claims.
+        interpretation: &'a FrameInterpretation,
+        /// This presentation's timing and packet provenance.
+        timing: FrameTiming,
+        /// Prepared native publication mechanism, with no conversion or privacy claim.
+        choices: Choices<'a, FrameOffer>,
+    },
     /// Select one complete route while the source decoder is suspended.
     Transcode {
         /// Final source interpretation; no pixel bytes or metadata payloads.
@@ -310,6 +330,20 @@ impl PolicyResolver for PolicySet {
     type Error = Infallible;
     fn resolve(&mut self, question: Question<'_>) -> Result<Decision, At<Infallible>> {
         let choices = match question {
+            Question::Frame { choices, .. } => {
+                // Native publication has no evidence for these transcode-only
+                // obligations. A preset must not silently ignore them.
+                if self.metadata.is_some()
+                    || !self.allow_opaque_profiles
+                    || self.workspace_limit.is_some()
+                {
+                    return Ok(Decision::decline(Decline::UnsupportedQuestion));
+                }
+                return Ok(choices
+                    .first()
+                    .map(Decision::choose)
+                    .unwrap_or_else(|| Decision::decline(Decline::NoPreferredChoice)));
+            }
             Question::Transcode { choices, .. } => {
                 let permitted = || choices.iter().filter(|c| self.permits_transcode(c.value()));
                 let choice = if self.prefer_lossless {

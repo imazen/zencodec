@@ -16,8 +16,10 @@ use core::fmt;
 use zenpixels::{PixelDescriptor, PixelSlice};
 
 mod decoding;
+mod frame;
 mod policy;
 mod transcode;
+pub use frame::{FrameFacts, FrameOffer, resolve_frame};
 pub use policy::{
     BoundaryOffer, Choice, ChoiceId, Choices, Decision, DecisionCode, DecisionContext,
     DecisionRecord, Decline, EncodeFacts, EncodeOffer, OperationReport, PolicyFailure,
