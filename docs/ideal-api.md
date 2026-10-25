@@ -8,10 +8,9 @@ precedents and the conclusions retained from Argon's review.
 
 ## What still needs production implementation
 
-- Extend the fallible resolver beyond prepared encoder configuration and
-  controlled interpretation to metadata, coupled transcode and resource choices.
-- Coherent transcode routes that couple metadata obligations, explicit
-  zenpixels-convert work, encoder signaling and resource admission.
+- Extend coupled routes beyond the qualified JPEG source and JPEG/PNG targets.
+  Add encoded rewrite choices, whole-container disclosure guarantees and
+  qualified native workspace/staging bounds to the existing typed resolver.
 - Extend native controlled-suspension qualification beyond the whole-source JPEG
   route to a second codec, native byte resumption and video epochs.
 - Metadata exclusion/retention with explicit inspection scope, including opaque
@@ -35,6 +34,7 @@ precedents and the conclusions retained from Argon's review.
 | Initial stored requests | Required policy, fidelity configuration and output descriptors checked at execution; controlled sessions use the same registry templates and reject required-descriptor mismatch before adoption; inherited defaults, rejection and strided pixels tested; native baseline/progressive JPEG encoding bytes and decoding pixels match direct calls |
 | Shared resolver domains | Typed prepared encoder and coupled transcode offers, configurable built-in policy, fallible application callback, scoped choices and bounded reports; stale/nested tokens, cancellation, unwind cleanup and native error traces tested. Metadata treatment, opaque-profile retention and qualified workspace bounds can filter complete transcode choices; unknown evidence refuses |
 | Controlled interpretation protocol | Explicit suspensions and scoped replies; fused enforcement, coroutine await, and a shared policy adapter for existing transports. Authored controls cover early output, stale replies, finality changes, cancellation and unwind. [Native JPEG PR 240](https://github.com/imazen/zenjpeg/pull/240) supplies generic, erased and registered factories for the qualified whole-source byte-output route. Unqualified late ICC and float reconstruction refuse before native construction. Failed sessions release admitted storage while retaining typed refusal reports |
+| Coupled native pixel transcode | `zencodecs::checked_transcode::TranscodeRequest` on the [integration PR 105](https://github.com/imazen/zenpipe/pull/105) retains the actual OutputPlan, checked encoder jobs and admitted row buffers during the shared callback. JPEG→sRGB PNG matches independent CMS/pixel inspection; JPEG preservation checks ICC/EXIF/XMP. File/range input matches slice output. Callback/source failures and cancellation retain causes and release managed owners. Lost reported DPI refuses; positive preservation is [169](https://github.com/imazen/zencodec/issues/169). Native workspace and encoded staging remain unqualified |
 | Managed storage owners | Byte/object admission follows allocations through subviews, packets, side data and old-epoch frames; exact strided 8/10-bit samples and concurrent contention checked. [Scope](storage-admission.md) excludes native workspace and explicit unaccounted copies |
 
 Driver input capacity is a scoped allowance. It excludes source caches,
@@ -65,7 +65,8 @@ let encoded = EncodeRequest::new(ImageFormat::Jpeg)
 The request remains reusable. A failed requirement is an error, not a successful
 result with a warning that callers must discover. `preferring_output` explicitly
 allows the decoder's native fallback. Conversion remains an explicit operation;
-the next layer must qualify its interpretation and destination signaling together.
+the coupled transcode adapter qualifies its interpretation and destination
+signaling together for the native configurations listed above.
 
 The resolver now selects prepared encoder jobs. A caller can use
 `preferring_fidelity(...)` and `with_policy_set(PolicySet::new().prefer_lossless(true))`,
@@ -78,8 +79,9 @@ The extension to other domains must preserve that execution link. The resolver
 chooses only offered, permitted routes or returns a traced refusal/error. It
 cannot invent support or authorize stale facts. Adapters construct and admit
 executable routes; codecs expose facts and mechanisms without depending on an
-application policy. Native late-metadata suspensions now execute through that
-same resolver; coherent transcode and resource choices remain open work.
+application policy. Native late-metadata suspensions and coupled pixel transcodes
+now execute through that same resolver. Complete-container disclosure, native
+resource bounds, sequential publication and other codec routes remain open work.
 
 ## Compatibility plan
 
