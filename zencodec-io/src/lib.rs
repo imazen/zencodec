@@ -53,6 +53,8 @@ mod encode_write;
 mod file;
 #[cfg(feature = "std")]
 mod pump;
+#[cfg(feature = "std")]
+mod std_source_error;
 #[cfg(feature = "tokio")]
 pub mod tokio_io;
 
@@ -77,3 +79,5 @@ pub use encode_write::{
 pub use file::FileReadAt;
 #[cfg(feature = "std")]
 pub use pump::{PumpError, pump_read_to_sink};
+#[cfg(feature = "std")]
+pub use std_source_error::StdSourceError;

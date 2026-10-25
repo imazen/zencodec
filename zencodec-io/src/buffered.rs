@@ -1,8 +1,8 @@
 //! Random access over a sequential stream, by buffering under a policy.
 
-use alloc::string::ToString;
 use alloc::vec::Vec;
 
+use crate::StdSourceError;
 use zencodec::source::{AccessPattern, ReadAt, SourceError};
 
 /// How a [`BufferedReadAt`] retains bytes from a sequential stream.
@@ -90,16 +90,11 @@ impl<R: std::io::Read> BufferedReadAt<R> {
 
     /// Consume the stream until `watermark >= end` or EOF. Bytes at or
     /// after `protect_from` survive window eviction during the fill.
-    fn fill_to(&mut self, end: u64, protect_from: u64) -> Result<(), SourceError> {
+    fn fill_to(&mut self, end: u64, protect_from: u64) -> Result<(), StdSourceError> {
         let mut chunk = [0u8; 16 * 1024];
         while self.watermark < end && !self.eof {
             let want = ((end - self.watermark).min(chunk.len() as u64)) as usize;
-            let n = self
-                .reader
-                .read(&mut chunk[..want.max(1)])
-                .map_err(|e| SourceError::Io {
-                    message: e.to_string(),
-                })?;
+            let n = self.reader.read(&mut chunk[..want.max(1)])?;
             if n == 0 {
                 self.eof = true;
                 break;
@@ -140,7 +135,7 @@ impl<R: std::io::Read> BufferedReadAt<R> {
 }
 
 impl<R: std::io::Read> ReadAt for BufferedReadAt<R> {
-    type Error = SourceError;
+    type Error = StdSourceError;
 
     /// Consumes the stream to EOF. Under a window policy the bytes are
     /// evicted as they pass, so the length is known but early bytes are
@@ -158,7 +153,8 @@ impl<R: std::io::Read> ReadAt for BufferedReadAt<R> {
             return Err(SourceError::BeyondWindow {
                 offset,
                 oldest_retained: self.buf_start,
-            });
+            }
+            .into());
         }
         let end = offset
             .checked_add(out.len() as u64)
@@ -173,7 +169,8 @@ impl<R: std::io::Read> ReadAt for BufferedReadAt<R> {
                 offset,
                 len: out.len() as u64,
                 total: self.eof.then_some(self.watermark),
-            });
+            }
+            .into());
         }
         let start = (offset - self.buf_start) as usize;
         out.copy_from_slice(&self.buf[start..start + out.len()]);
@@ -191,7 +188,8 @@ impl<R: std::io::Read> ReadAt for BufferedReadAt<R> {
             return Err(SourceError::BeyondWindow {
                 offset,
                 oldest_retained: self.buf_start,
-            });
+            }
+            .into());
         }
         let end = offset.saturating_add(out.len() as u64);
         self.fill_to(end, offset)?;

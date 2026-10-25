@@ -425,6 +425,10 @@ struct SliceReadAt<'a>;  struct ReadAtShim<S>(pub S);
 enum AccessPattern { Sequential, BoundedBacktrack { window_bytes: u64 }, RandomAccess }
 enum SourceError { BeyondWindow {..}, BeyondLimit {..}, UnexpectedEof {..}, Io {..} }
 
+// zencodec-io, feature std: filesystem/reader errors retain their native cause.
+enum StdSourceError { Source(SourceError), Io(std::io::Error) }
+// FileReadAt and BufferedReadAt implement ReadAt<Error = StdSourceError>.
+
 // DecodeJob<'a> — default Err(UnsupportedOperation::SeekableDecode)
 fn push_decoder_from_source(self, source: &mut dyn DynReadAt,
     sink: &mut dyn DecodeRowSink, preferred: &[PixelDescriptor])

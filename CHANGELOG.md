@@ -198,7 +198,9 @@ removes that whole class).
 
 #### QUEUED BREAKING CHANGES
 
-- None.
+- `FileReadAt` and `BufferedReadAt` return `StdSourceError`, preserving native
+  I/O errors alongside structured `SourceError` refusals. Their old concrete
+  error signatures discarded kind, OS code and custom payloads.
 
 #### Fixed
 

@@ -18,7 +18,7 @@ use zencodec_coroutine::{
 };
 use zencodec_io::{
     BufferPolicy, BufferedReadAt, CollectSink, DriveError, DriveOptions, ProtocolViolation,
-    PumpError, drive_from_read_at, drive_from_slice, pump_read_to_sink,
+    PumpError, StdSourceError, drive_from_read_at, drive_from_slice, pump_read_to_sink,
 };
 use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 
@@ -359,17 +359,29 @@ fn buffered_window_serves_forward_and_refuses_far_back() {
     assert_eq!(buf, [96, 97, 98, 99], "within the window");
     let err = src.read_exact_at(0, &mut buf).unwrap_err();
     assert!(
-        matches!(err, SourceError::BeyondWindow { offset: 0, .. }),
+        matches!(
+            err,
+            StdSourceError::Source(SourceError::BeyondWindow { offset: 0, .. })
+        ),
         "{err:?}"
     );
     let mut past = [0u8; 2];
     let err = src.read_exact_at(255, &mut past).unwrap_err();
-    assert!(matches!(err, SourceError::UnexpectedEof { .. }), "{err:?}");
+    assert!(
+        matches!(
+            err,
+            StdSourceError::Source(SourceError::UnexpectedEof { .. })
+        ),
+        "{err:?}"
+    );
 
     let mut spool = BufferedReadAt::new(Cursor::new(&data), BufferPolicy::Spool { max_bytes: 32 });
     let err = spool.read_exact_at(40, &mut buf).unwrap_err();
     assert!(
-        matches!(err, SourceError::BeyondLimit { limit: 32, .. }),
+        matches!(
+            err,
+            StdSourceError::Source(SourceError::BeyondLimit { limit: 32, .. })
+        ),
         "{err:?}"
     );
 

@@ -1,9 +1,9 @@
 //! File-backed random-access source.
 
-use alloc::string::ToString;
 #[cfg(not(any(unix, windows)))]
 use std::io::{Read, Seek, SeekFrom};
 
+use crate::StdSourceError;
 use zencodec::source::{ReadAt, SourceError};
 
 /// [`ReadAt`] over a file, using positional reads on Unix and Windows and
@@ -16,25 +16,19 @@ pub struct FileReadAt {
 
 impl FileReadAt {
     /// Create a source over an already-open file.
-    pub fn new(file: std::fs::File) -> Result<Self, SourceError> {
-        let len = file.metadata().map_err(io_err)?.len();
+    pub fn new(file: std::fs::File) -> Result<Self, StdSourceError> {
+        let len = file.metadata()?.len();
         Ok(Self { file, len })
     }
 
     /// Open `path` and create a source over it.
-    pub fn open(path: impl AsRef<std::path::Path>) -> Result<Self, SourceError> {
-        Self::new(std::fs::File::open(path).map_err(io_err)?)
-    }
-}
-
-fn io_err(e: std::io::Error) -> SourceError {
-    SourceError::Io {
-        message: e.to_string(),
+    pub fn open(path: impl AsRef<std::path::Path>) -> Result<Self, StdSourceError> {
+        Self::new(std::fs::File::open(path)?)
     }
 }
 
 impl ReadAt for FileReadAt {
-    type Error = SourceError;
+    type Error = StdSourceError;
 
     fn len(&mut self) -> Result<u64, Self::Error> {
         Ok(self.len)
@@ -53,12 +47,13 @@ impl ReadAt for FileReadAt {
                 offset,
                 len: out.len() as u64,
                 total: Some(self.len),
-            });
+            }
+            .into());
         }
         #[cfg(unix)]
         {
             use std::os::unix::fs::FileExt;
-            self.file.read_exact_at(out, offset).map_err(io_err)
+            self.file.read_exact_at(out, offset).map_err(Into::into)
         }
         #[cfg(windows)]
         {
@@ -70,21 +65,19 @@ impl ReadAt for FileReadAt {
                     .seek_read(&mut out[filled..], offset + filled as u64)
                 {
                     Ok(0) => {
-                        return Err(io_err(std::io::Error::from(
-                            std::io::ErrorKind::UnexpectedEof,
-                        )));
+                        return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof).into());
                     }
                     Ok(n) => filled += n,
                     Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
-                    Err(e) => return Err(io_err(e)),
+                    Err(e) => return Err(e.into()),
                 }
             }
             Ok(())
         }
         #[cfg(not(any(unix, windows)))]
         {
-            self.file.seek(SeekFrom::Start(offset)).map_err(io_err)?;
-            self.file.read_exact(out).map_err(io_err)
+            self.file.seek(SeekFrom::Start(offset))?;
+            self.file.read_exact(out).map_err(Into::into)
         }
     }
 }
@@ -144,11 +137,34 @@ mod tests {
         for at in [250, u64::MAX] {
             assert!(matches!(
                 source.read_exact_at(at, &mut out),
-                Err(SourceError::UnexpectedEof { .. })
+                Err(StdSourceError::Source(SourceError::UnexpectedEof { .. }))
             ));
         }
         file.set_len(2).unwrap();
         assert!(source.read_exact_at(0, &mut out).is_err());
+    }
+
+    #[test]
+    fn native_file_errors_retain_kind_and_os_code() {
+        let (fixture, file) = Fixture::new("errors");
+        let missing = fixture.0.with_extension("missing");
+        assert!(!missing.exists());
+        let error = FileReadAt::open(&missing).err().expect("missing file");
+        let native = zencodec::find_cause::<std::io::Error>(&error).unwrap();
+        assert_eq!(native.kind(), std::io::ErrorKind::NotFound);
+        assert!(native.raw_os_error().is_some());
+
+        // The source's length snapshot cannot hide a later native read failure.
+        file.set_len(8).unwrap();
+        let mut source = FileReadAt::new(file.try_clone().unwrap()).unwrap();
+        file.set_len(0).unwrap();
+        let error = source.read_exact_at(0, &mut [0; 8]).unwrap_err();
+        assert_eq!(
+            zencodec::find_cause::<std::io::Error>(&error)
+                .unwrap()
+                .kind(),
+            std::io::ErrorKind::UnexpectedEof
+        );
     }
 
     #[cfg(unix)]

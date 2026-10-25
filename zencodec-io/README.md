@@ -17,6 +17,12 @@ past a known end (`ProtocolViolation`) instead of looping, and takes
 `Option<&dyn how_far::Pulse>` for cancellation and progress (`Pulse: Stop`; a
 plain stop passes as `how_far::StopOnly::borrowed`).
 
+`FileReadAt` and `BufferedReadAt` return `StdSourceError`: structural bounds and
+window failures retain their `SourceError`, and native I/O failures retain the
+original `std::io::Error`, including its kind, OS code and custom payload. Typed
+causes survive the normal erased source and driver paths. Retry still requires
+checking whether input was consumed and whether output has been committed.
+
 The async drivers keep the decoder in the task between batches and run each
 batch on a `Compute` (`spawn_blocking`, a rayon pool, or `Inline`), so no
 thread is held while bytes are in flight and codecs stay synchronous.
