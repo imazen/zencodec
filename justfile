@@ -265,6 +265,12 @@ io-policy-cost-build:
 io-policy-bench cpus="2,3":
     taskset -c "{{cpus}}" cargo bench --manifest-path perf/io-validation/Cargo.toml -p io-validation --bench policy --locked -- --cpu-policy=unrestricted --median-of-passes=3
 
+io-policy-allocations output:
+    python3 perf/io-validation/profile-policy.py "${CARGO_TARGET_DIR:-target}/release/policy_probe" "{{output}}"
+
+io-policy-reanalyze output:
+    python3 perf/io-validation/profile-policy.py "${CARGO_TARGET_DIR:-target}/release/policy_probe" "{{output}}" --reanalyze
+
 # Isolated no_std check; invoke in the prepared export to exclude path overrides.
 io-policy-portability target="wasm32-unknown-unknown":
     cp perf/policy-check/dependencies.lock perf/policy-check/Cargo.lock
@@ -295,6 +301,7 @@ io-policy-sync export:
     cp perf/io-validation/src/bin/policy_media.rs "{{export}}/perf/io-validation/src/bin/"
     cp perf/io-validation/src/bin/policy_probe.rs "{{export}}/perf/io-validation/src/bin/"
     cp perf/io-validation/benches/policy.rs "{{export}}/perf/io-validation/benches/"
+    cp perf/io-validation/profile-policy.py "{{export}}/perf/io-validation/"
     cp perf/io-validation/Cargo.toml "{{export}}/perf/io-validation/"
     cp perf/io-validation/tests/policy*.rs "{{export}}/perf/io-validation/tests/"
     cp perf/policy-check/Cargo.toml "{{export}}/perf/policy-check/"
@@ -321,4 +328,4 @@ docs-site-browser:
 # Run in the prepared standalone harness (see perf/io-validation/README.md).
 docs-site-examples:
     cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test encoder_retention --test policy_resolution --test policy_engine --test policy_execution --test policy_native --bin policy_media --bin transport_contracts --locked
-    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test policy_resolution --test policy_engine --test policy_execution --test policy_native --bin policy_media --bin transport_contracts --locked -- -D warnings
+    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test site_examples --test encoder_retention --test policy_resolution --test policy_engine --test policy_execution --test policy_native --bin policy_media --bin transport_contracts --locked -- -D warnings
