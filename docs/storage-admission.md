@@ -67,3 +67,32 @@ mechanism when they claim a managed payload allowance. A hard whole-operation
 limit additionally needs qualified native codec and service bounds. The ordinary
 policy resolver must refuse an unavailable bound rather than treating this
 allocator's narrower accounting as proof of total memory use.
+
+## Measured allocation cost
+
+[Recorded output](../benchmarks/storage_admission_2026-10-25.txt) at
+`42c93a27`, `just storage-cost-bench 4`, Ryzen 9 7900X, Rust 1.99.1,
+thin LTO, no target-cpu override. Zenbench reports the median of three passes;
+the ± value is inter-pass MAD. The effective benchmark thread set was CPU 4;
+frequency was unverified. These are exploratory allocation measurements.
+
+| Payload | Ordinary Vec + Arc | Private admission prototype | Production StorageBudget |
+|---|---:|---:|---:|
+| 1,024 bytes | 15.4 ±0.5 ns | 55.4 ±0.7 ns | 52.3 ±2.7 ns |
+| 65,536 bytes | 852 ±61 ns | 1,228 ±1 ns | 1,239 ±16 ns |
+
+Each case allocates, fills, shares, clones an owner and drops it. The ordinary
+case clones an existing vector directly; both admitted cases initialize to zero
+before copying the payload. The full difference therefore includes that extra
+initialization as well as bookkeeping. It does not isolate the cost of atomics,
+and it is not a codec-throughput measurement.
+
+```text
+run-heavy: done rc=0 97s | peak-RSS 0.43GiB | min-avail 17430MiB | peak-load 3.10
+```
+
+The receipt includes compilation. Native JPEG validation also confirms that an
+encode from admitted strided storage produces the same bytes and independent
+decoded output as the ordinary raster. Finishing the encode leaves that raster
+charged while either caller-owned view remains alive. Encoded staging can only
+release storage the finishing producer actually owns.
