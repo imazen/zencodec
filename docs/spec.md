@@ -88,6 +88,7 @@ impl EncodeRequest {
     const fn with_policy(self, policy: EncodePolicy) -> Self;
     const fn with_policy_defaults(self, defaults: EncodePolicy) -> Self;
     const fn with_policy_set(self, preset: PolicySet) -> Self;
+    const fn with_resolution(self, resolution: Resolution) -> Self;
     fn prepare(&self, codecs: &CodecSet) -> Result<Vec<PreparedEncode>, At<OperationError>>;
     fn prepare_send(&self, codecs: &CodecSet) -> Result<Vec<PreparedSendEncode>, At<OperationError>>;
     fn encode(&self, codecs: &CodecSet, pixels: PixelSlice<'_>) -> Result<Outcome<EncodeOutput>, At<OperationError>>;
@@ -154,7 +155,10 @@ enum Question<'a> { // non_exhaustive
 }
 struct BoundaryOffer { action: BoundaryAction }
 struct EncodeFacts { width: u32, height: u32, descriptor: PixelDescriptor }
-struct EncodeOffer { format: ImageFormat, fidelity: Option<Fidelity>, preference_index: usize }
+struct EncodeOffer {
+    format: ImageFormat, fidelity: Option<Fidelity>, preference_index: usize,
+    resolution: Option<Resolution>,
+}
 struct ChoiceId { /* opaque, scoped to one question */ }
 struct Choice<'a, T> { /* private */ }
 impl<'a, T> Choice<'a, T> {

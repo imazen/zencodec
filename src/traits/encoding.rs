@@ -381,6 +381,27 @@ pub trait EncodeJob: Sized {
         Ok(self)
     }
 
+    /// Require exact physical density, or an equivalent unknown-unit aspect
+    /// ratio. Unsupported/rounded substitutions refuse and leave this job intact.
+    /// A later conflicting configuration must refuse before publishing output.
+    /// This does not resize pixels or change video sample aspect.
+    fn try_set_resolution(
+        &mut self,
+        resolution: crate::Resolution,
+    ) -> Result<(), crate::ResolutionError> {
+        resolution.validate()?;
+        Err(crate::ResolutionError::Unsupported)
+    }
+
+    /// Builder form of [`Self::try_set_resolution`]. A rejection consumes it.
+    fn try_with_resolution(
+        mut self,
+        resolution: crate::Resolution,
+    ) -> Result<Self, crate::ResolutionError> {
+        self.try_set_resolution(resolution)?;
+        Ok(self)
+    }
+
     /// Set metadata to embed, **filtered by an explicit retention policy** — the
     /// blessed path. Metadata retention is a privacy decision, so the policy is
     /// required: [`MetadataPolicy::Web`](crate::MetadataPolicy::Web) is the

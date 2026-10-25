@@ -401,6 +401,13 @@ pub trait DynEncodeJob {
         Ok(())
     }
 
+    /// Require exact physical density or unknown-unit aspect. Refusal leaves
+    /// the job unchanged. Generated shims call the concrete checked setter.
+    fn try_set_resolution(&mut self, resolution: crate::Resolution) -> Result<(), BoxedError> {
+        resolution.validate()?;
+        Err(Box::new(crate::ResolutionError::Unsupported))
+    }
+
     /// Set metadata to embed, filtered by an explicit retention policy (blessed
     /// path; mirrors [`EncodeJob::with_metadata_policy`](crate::encode::EncodeJob::with_metadata_policy)).
     ///
@@ -530,6 +537,14 @@ where
 
     fn set_metadata_policy(&mut self, meta: Metadata, policy: crate::MetadataPolicy) {
         self.try_apply(|job| job.with_metadata_policy(meta, policy));
+    }
+
+    fn try_set_resolution(&mut self, resolution: crate::Resolution) -> Result<(), BoxedError> {
+        let Some(job) = self.0.as_mut() else {
+            return Err("EncodeJobShim: job already consumed (double take)".into());
+        };
+        job.try_set_resolution(resolution)
+            .map_err(|error| Box::new(error) as BoxedError)
     }
 
     #[allow(deprecated)]

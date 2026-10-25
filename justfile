@@ -229,9 +229,9 @@ operation-sync export:
     test ! -e "{{export}}/.git"
     test ! -e "{{export}}/.jj"
     mkdir -p "{{export}}/src/operation"
-    cp src/operation.rs src/lib.rs src/set.rs src/info.rs src/frame.rs "{{export}}/src/"
+    cp src/operation.rs src/lib.rs src/set.rs src/info.rs src/frame.rs src/resolution.rs "{{export}}/src/"
     cp src/operation/*.rs "{{export}}/src/operation/"
-    cp src/traits/dyn_encoding.rs src/traits/mod.rs "{{export}}/src/traits/"
+    cp src/traits/encoding.rs src/traits/dyn_encoding.rs src/traits/mod.rs "{{export}}/src/traits/"
     cp zencodec-testkit/tests/operation_*.rs "{{export}}/zencodec-testkit/tests/"
     cp justfile "{{export}}/justfile"
 
@@ -304,6 +304,14 @@ spatial-validation-check artifacts python:
 operation-policy-check:
     cargo test -p zencodec-testkit --test operation_policy --test operation_requests --locked
     cargo test -p zencodec --lib operation:: --locked
+
+resolution-core-check:
+    cargo test -p zencodec --lib resolution:: --locked
+    cargo test -p zencodec-testkit --test operation_resolution --locked
+    just operation-policy-check
+    cargo clippy -p zencodec --all-targets --locked -- -D warnings
+    cargo clippy -p zencodec-testkit --test operation_resolution --locked -- -D warnings
+    cargo check -p zencodec --no-default-features --locked
 
 storage-sync export:
     just io-core-sync "{{export}}"

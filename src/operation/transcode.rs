@@ -123,6 +123,7 @@ mod tests {
                 format: ImageFormat::Png,
                 fidelity: Some(Fidelity::Lossless),
                 preference_index: 0,
+                resolution: None,
             },
             PixelDescriptor::RGB8_SRGB,
             MetadataTransfer::DiscardDescriptive,

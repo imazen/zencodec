@@ -100,6 +100,9 @@ pub struct EncodeOffer {
     pub fidelity: Option<Fidelity>,
     /// Index in the request's original preference list, before filtering.
     pub preference_index: usize,
+    /// Required physical density or unknown-unit aspect, confirmed on this job.
+    /// Carrier units may differ, but the represented density must be equivalent.
+    pub resolution: Option<crate::Resolution>,
 }
 
 /// The qualified contract chosen at a policy boundary. Contains facts, never
@@ -716,6 +719,7 @@ mod tests {
                 format: ImageFormat::Jpeg,
                 fidelity: None,
                 preference_index: 0,
+                resolution: None,
             }],
             &mut |question: Question<'_>| -> Result<Decision, At<Infallible>> {
                 let Question::Encode { choices, .. } = question else {

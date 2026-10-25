@@ -375,6 +375,11 @@ None.
 
 ### Added
 
+- Required physical resolution on checked encode requests and generic/erased
+  jobs, with exact cross-unit and unknown-unit aspect comparison. Unsupported
+  jobs refuse before encoding; no implicit rounding or physical-unit loss.
+  [Contract and qualification scope](docs/resolution-contract.md).
+
 - `DecodeRowSink::max_buffer_rows` exposes admitted strip capacity. Shared copy
   helpers and coroutine delivery divide native batches without growing sink
   storage or changing samples, stride, coordinates or progress-event counts.

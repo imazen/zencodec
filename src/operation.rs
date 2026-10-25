@@ -363,6 +363,7 @@ pub struct EncodeRequest {
     policy: Option<EncodePolicy>,
     policy_defaults: EncodePolicy,
     preset: PolicySet,
+    resolution: Option<crate::Resolution>,
 }
 
 #[derive(Clone, Debug)]
@@ -381,6 +382,7 @@ impl EncodeRequest {
             policy: None,
             policy_defaults: EncodePolicy::none(),
             preset: PolicySet::new(),
+            resolution: None,
         }
     }
 
@@ -402,6 +404,14 @@ impl EncodeRequest {
     /// Configure the built-in policy used by ordinary execution and delegation.
     pub const fn with_policy_set(mut self, preset: PolicySet) -> Self {
         self.preset = preset;
+        self
+    }
+
+    /// Require exact physical density, or an equivalent unknown-unit aspect.
+    /// No implicit rounding, unit loss, resize or orientation transform is allowed.
+    /// Validation occurs during preparation, before the callback or pixel encoding.
+    pub const fn with_resolution(mut self, resolution: crate::Resolution) -> Self {
+        self.resolution = Some(resolution);
         self
     }
 
@@ -445,9 +455,15 @@ impl EncodeRequest {
     #[track_caller]
     pub fn prepare(&self, codecs: &CodecSet) -> Result<Vec<PreparedEncode>, At<OperationError>> {
         self.prepare_with(codecs, |offer| {
-            codecs
-                .checked_encode_job(self.format, offer.fidelity, self.effective_policy(codecs))
-                .map(|job| PreparedEncode { offer, job })
+            let mut job = codecs.checked_encode_job(
+                self.format,
+                offer.fidelity,
+                self.effective_policy(codecs),
+            )?;
+            if let Some(resolution) = offer.resolution {
+                job.try_set_resolution(resolution)?;
+            }
+            Ok(PreparedEncode { offer, job })
         })
     }
 
@@ -460,9 +476,15 @@ impl EncodeRequest {
         codecs: &CodecSet,
     ) -> Result<Vec<PreparedSendEncode>, At<OperationError>> {
         self.prepare_with(codecs, |offer| {
-            codecs
-                .checked_send_encode_job(self.format, offer.fidelity, self.effective_policy(codecs))
-                .map(|job| PreparedSendEncode { offer, job })
+            let mut job = codecs.checked_send_encode_job(
+                self.format,
+                offer.fidelity,
+                self.effective_policy(codecs),
+            )?;
+            if let Some(resolution) = offer.resolution {
+                job.try_set_resolution(resolution)?;
+            }
+            Ok(PreparedSendEncode { offer, job })
         })
     }
 
@@ -471,13 +493,18 @@ impl EncodeRequest {
         codecs: &CodecSet,
         mut create: impl FnMut(EncodeOffer) -> Result<T, CodecSetError>,
     ) -> Result<Vec<T>, At<OperationError>> {
+        let failure = |error| At::wrap(error).at_named("prepare encode routes");
+        if let Some(resolution) = self.resolution {
+            resolution.validate().map_err(|error| {
+                failure(OperationError::Codec(CodecSetError::Codec(Box::new(error))))
+            })?;
+        }
         let targets = match &self.fidelity {
             FidelityRequest::Template => None,
             FidelityRequest::Required(target) => Some(core::slice::from_ref(target)),
             FidelityRequest::Alternatives(targets) => Some(targets.as_slice()),
         };
         let count = targets.map_or(1, <[_]>::len);
-        let failure = |error| At::wrap(error).at_named("prepare encode routes");
         codecs
             .operation_stop()
             .check()
@@ -515,6 +542,7 @@ impl EncodeRequest {
                 format: self.format,
                 fidelity,
                 preference_index: index,
+                resolution: self.resolution,
             }) {
                 Ok(job) => jobs.push(job),
                 Err(cause) => rejections.push(RouteRejection {
