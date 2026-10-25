@@ -340,6 +340,10 @@ None.
 
 ## [Unreleased]
 
+### Added
+
+- Shared `storage` module for allocation admission in codecs and authoring helpers; `zencodec_io::storage` re-exports the identical types for compatibility.
+
 ### Fixed
 
 - `find_cause::<E>` inspects traced `At<E>` values before following their source

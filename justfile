@@ -260,6 +260,7 @@ io-core-sync export:
     test ! -e "{{export}}/.git"
     test ! -e "{{export}}/.jj"
     test -f "{{export}}/zencodec-io/Cargo.toml"
+    cp src/lib.rs src/storage.rs "{{export}}/src/"
     cp zencodec-io/src/*.rs "{{export}}/zencodec-io/src/"
     cp zencodec-io/tests/*.rs "{{export}}/zencodec-io/tests/"
     cp justfile "{{export}}/justfile"

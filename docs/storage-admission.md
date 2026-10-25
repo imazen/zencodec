@@ -96,3 +96,10 @@ encode from admitted strided storage produces the same bytes and independent
 decoded output as the ordinary raster. Finishing the encode leaves that raster
 charged while either caller-owned view remains alive. Encoded staging can only
 release storage the finishing producer actually owns.
+
+## Shared ownership location
+
+`zencodec::storage` owns the allocation types so native codecs and coroutine
+authors can participate without depending on an I/O driver. The existing
+`zencodec_io::storage` path re-exports those same types. An owner created through
+either path participates in the same budget and preserves the same lifetime.
