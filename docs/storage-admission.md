@@ -107,3 +107,30 @@ either path participates in the same budget and preserves the same lifetime.
 `StorageBudget::filled` admits fixed arrays of copyable values, including codec
 range indexes. It charges array capacity, not storage indirectly referenced by
 array elements. The coroutine admitted path now uses it for its range index.
+
+## Coroutine storage cost
+
+The [recorded run](../benchmarks/coroutine_admission_2026-10-25.txt) compares the
+same authored memcpy/control operation with legacy and admitted input/row storage.
+It includes construction, sink output and cleanup. Both paths produce the exact
+source bytes before timing. These are medians of three passes, with inter-pass
+MAD, on CPU thread 4 of a Ryzen 9 7900X. Frequency was unverified and several
+cases had high within-pass variation; treat this as exploratory evidence.
+
+| Image | Rows per strip | Input window | Legacy µs | Admitted µs |
+|---|---:|---:|---:|---:|
+| 1024×1024 | 16 | 1024 | 338.4 ±20.0 | 295.3 ±11.8 |
+| 1024×1024 | 16 | 65536 | 381.6 ±3.9 | 361.0 ±15.4 |
+| 1024×1024 | 1 | 1024 | 535.9 ±12.7 | 460.0 ±3.3 |
+| 1024×1024 | 1 | 65536 | 530.4 ±82.2 | 444.0 ±31.4 |
+| 256×256 | 4 | 1024 | 43.1 ±1.3 | 38.1 ±9.0 |
+| 256×256 | 4 | 65536 | 58.4 ±17.6 | 40.4 ±5.9 |
+
+The admitted implementation replaces growing input segments with fixed payload
+and range-index allocations. These measurements do not isolate accounting cost
+or establish a native codec speedup. The path remains opt-in; its fixed input
+allocation and 64-span limit are meaningful tradeoffs.
+
+`run-heavy: done rc=0 89s | peak-RSS 0.42GiB | min-avail 17396MiB | peak-load 2.68`
+
+That receipt includes the build and benchmark process, not codec working memory.
