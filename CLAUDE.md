@@ -231,6 +231,14 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Freestanding policy qualification (2026-10-25): the root zenpixels dependency
+  enables its default `std` feature. Disabling that edge in an export exposes
+  12 `powf`/`floor`/`round` calls in `src/gainmap.rs` that fail on
+  `thumbv7em-none-eabihf`. WASM compilation with std available does not certify
+  a std-free graph. Tracked in [issue 165](https://github.com/imazen/zencodec/issues/165).
+  `perf/policy-check` distinguishes full-crate WASM integration from the isolated
+  freestanding resolver check. Root production code is unchanged.
+
 - Fixed during IO contract qualification (2026-10-24): cursors refetched ranges
   already held in their active window and discarded batched ranges on sequential
   requests. Forward-only regressions cover full/partial overlap and suffix reuse;
