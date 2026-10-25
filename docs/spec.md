@@ -66,6 +66,9 @@ impl DecodeRequest {
     const fn with_policy(self, policy: DecodePolicy) -> Self;
     fn with_output(self, descriptor: PixelDescriptor) -> Self;
     fn preferring_output(self, descriptors: impl Into<Vec<PixelDescriptor>>) -> Self;
+    fn start_controlled(
+        &self, codecs: &CodecSet, storage: storage::StorageBudget,
+    ) -> Result<Box<decode::DynControlledDecoder>, At<operation::OperationError>>;
     fn decode(&self, codecs: &CodecSet, input: &[u8]) -> Result<Outcome<DecodeOutput>, At<OperationError>>;
 }
 struct EncodeRequest { /* private */ }

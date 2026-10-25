@@ -344,6 +344,8 @@ None.
 
 ### Added
 
+- `DecodeRequest::start_controlled` binds required policy/output and inherited context to registered controlled jobs. Generic/erased job creation share one primitive; default refusal prevents silent fallback, and required output mismatch fails before adoption or sink effects (`fd132f55`).
+
 - Shared `storage` module for allocation admission in codecs and authoring helpers; `zencodec_io::storage` re-exports the identical types for compatibility.
 
 ### Fixed

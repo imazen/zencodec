@@ -160,3 +160,24 @@ Native baseline/progressive JPEG also runs with one shared allowance for the
 coroutine input/index, whole encoded source and row staging. Pixel parity and
 release after successful completion or policy decline pass. Native workspace
 and the output sink remain outside that allowance.
+
+## Stored requests and registered codec jobs
+
+`DecodeRequest::start_controlled(&codecs, budget)` detects the source format and
+uses the registered template, inherited limits/stop context and checked decode
+policy. A supplied format is prepared before any input is read; detection takes
+no prefix bytes and passes that same input to the selected session. A required
+output descriptor is checked at final interpretation before policy adoption and
+pixel effects. An explicit preference may accept the native fallback.
+
+The codec implements `DecodeJob::dyn_controlled_decoder(preferred, storage)`;
+`DynDecodeJob::into_controlled_decoder` delegates to that same primitive.
+The default returns `ControlError::NotControlled`. Ordinary incremental support
+never becomes implicit evidence of controlled execution. The request exposes the
+existing controlled protocol, so `PolicyDecoder` and the established slice,
+positional-read and async drivers remain the transport layer.
+
+Registration controls cover detection, inherited-policy rejection, limits,
+required-versus-preferred output, pre-effect refusal and reuse of a request over
+two drivers. These authored tests establish facade behavior; the native JPEG
+qualification currently supplies its own adapter until the codec entry point lands.
