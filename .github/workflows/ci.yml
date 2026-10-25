@@ -52,6 +52,13 @@ jobs:
       - name: Test
         run: cargo test --workspace --all-features
 
+      - name: Compare density helpers with exact rational arithmetic
+        if: matrix.name == 'Linux x64'
+        timeout-minutes: 2
+        run: |
+          cargo build -p zencodec --example resolution_probe --locked
+          python3 scripts/check-resolution-oracle.py target/debug/examples/resolution_probe
+
       - name: Check no_std (no codec feature)
         run: cargo check --no-default-features
 

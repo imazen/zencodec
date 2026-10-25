@@ -661,3 +661,14 @@ sink-capacity-check:
     cargo clippy -p zencodec -p zencodec-coroutine --all-targets --all-features --locked -- -D warnings
     cargo check -p zencodec-coroutine --no-default-features --locked
     just api-doc
+
+# Independent exact-arithmetic oracle; the child probe has a 30-second deadline.
+resolution-oracle-check:
+    cargo build -p zencodec --example resolution_probe --locked
+    python3 scripts/check-resolution-oracle.py "${CARGO_TARGET_DIR:-target}/debug/examples/resolution_probe"
+    cargo clippy -p zencodec --example resolution_probe --locked -- -D warnings
+
+resolution-oracle-sync export:
+    just operation-sync "{{export}}"
+    cp examples/resolution_probe.rs "{{export}}/examples/"
+    cp scripts/check-resolution-oracle.py "{{export}}/scripts/"

@@ -16,6 +16,9 @@
   still-image policy adapter. Native AV1 examples and independent re-encode
   qualification accompany the source-extracted guide signatures.
 
+The required-resolution helpers also have an independent exact-rational oracle;
+see [the density contract](docs/resolution-contract.md#independent-arithmetic-oracle).
+
 Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELOG.md).
 
 ## zencodec-testkit

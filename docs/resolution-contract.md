@@ -73,3 +73,19 @@ The resource-wrapper receipt is for the tests, not image storage:
 ```text
 run-heavy: done rc=0 6s | peak-RSS 0.37GiB | min-avail 15972MiB | peak-load 0.40
 ```
+
+## Independent arithmetic oracle
+
+`just resolution-oracle-check` sends binary64 bit patterns through the public
+helpers and compares both equivalence and integer-carriage results with Python's
+`fractions.Fraction`. Its implementation uses rational arithmetic, independently
+of the Rust significand normalization. The deterministic matrix includes invalid
+axes, subnormals, floating neighbours, every unit pair, asymmetric axes, exact
+conversions, carrier limits and seeded arbitrary bit patterns. All 29,040 cases
+passed on 2026-10-25. This tests arithmetic; native metadata carriage has separate
+format and decoder obligations. CI runs the same oracle with a 30-second child
+deadline.
+
+```text
+run-heavy: done rc=0 2s | peak-RSS 0.33GiB | min-avail 16158MiB | peak-load 0.54
+```
