@@ -257,6 +257,14 @@ io-policy-media-check +fixtures:
     cargo run --manifest-path perf/io-validation/Cargo.toml -p io-validation --bin policy_media --locked -- {{fixtures}}
     cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --bin policy_media --locked -- -D warnings
 
+io-policy-cost-build:
+    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --bench policy --bin policy_probe --locked -- -D warnings
+    cargo build --manifest-path perf/io-validation/Cargo.toml -p io-validation --release --bin policy_probe --locked
+    cargo bench --manifest-path perf/io-validation/Cargo.toml -p io-validation --bench policy --locked --no-run
+
+io-policy-bench cpus="2,3":
+    taskset -c "{{cpus}}" cargo bench --manifest-path perf/io-validation/Cargo.toml -p io-validation --bench policy --locked -- --cpu-policy=unrestricted --median-of-passes=3
+
 # Isolated no_std check; invoke in the prepared export to exclude path overrides.
 io-policy-portability target="wasm32-unknown-unknown":
     cp perf/policy-check/dependencies.lock perf/policy-check/Cargo.lock
@@ -283,7 +291,10 @@ io-policy-sync export:
     cp perf/io-validation/src/policy_execution.rs "{{export}}/perf/io-validation/src/"
     cp perf/io-validation/src/policy_native.rs "{{export}}/perf/io-validation/src/"
     cp perf/io-validation/src/policy_media.rs "{{export}}/perf/io-validation/src/"
+    cp perf/io-validation/src/policy_benchmark.rs "{{export}}/perf/io-validation/src/"
     cp perf/io-validation/src/bin/policy_media.rs "{{export}}/perf/io-validation/src/bin/"
+    cp perf/io-validation/src/bin/policy_probe.rs "{{export}}/perf/io-validation/src/bin/"
+    cp perf/io-validation/benches/policy.rs "{{export}}/perf/io-validation/benches/"
     cp perf/io-validation/Cargo.toml "{{export}}/perf/io-validation/"
     cp perf/io-validation/tests/policy*.rs "{{export}}/perf/io-validation/tests/"
     cp perf/policy-check/Cargo.toml "{{export}}/perf/policy-check/"

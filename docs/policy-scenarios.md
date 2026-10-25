@@ -258,3 +258,14 @@ That view's length is not a claim about the caller's entire backing allocation.
 ```text
 run-heavy: done rc=0 1s | peak-RSS 0.20GiB | min-avail 18479MiB | peak-load 0.14
 ```
+
+## Reproducible cost workload
+
+`just io-policy-cost-build` builds the shared policy workload for zenbench and
+heaptrack. Successful arms all execute the same validation and select the same
+alternative: direct configured preset, callback delegation, a borrowed trait
+object, and the error-erasing callback adapter. Separate refusal arms exercise
+expected decline, an erased application error carrying data, and no admissible
+alternative. Each iteration includes operation creation, identity issuance and
+the bounded diagnostic journal; none includes codec work or real I/O. These
+controls can measure dispatch/report costs without changing the enforced contract.

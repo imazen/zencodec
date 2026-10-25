@@ -57,3 +57,7 @@ harness = false
 [[bench]]
 name = "disk_cold"
 harness = false
+
+[[bench]]
+name = "policy"
+harness = false
