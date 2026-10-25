@@ -923,7 +923,9 @@ impl CodecErrorExt for dyn core::error::Error + 'static {
 /// a cause of type `T`.
 ///
 /// Starts with the error itself, then follows `source()` links. Returns
-/// the first match.
+/// the first match. At each link, also inspects [`At<T>`], whose `source()`
+/// delegates past its inner `T`. This preserves access to a traced native error
+/// without requiring it to use the shared [`CodecError`] envelope.
 ///
 /// Prefer [`CodecErrorExt`] methods for common types. Use this for
 /// codec-specific error types not covered by the extension trait.
@@ -933,6 +935,9 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(
     loop {
         if let Some(t) = err.downcast_ref::<T>() {
             return Some(t);
+        }
+        if let Some(at) = err.downcast_ref::<At<T>>() {
+            return Some(at.error());
         }
         err = err.source()?;
     }
@@ -1062,6 +1067,42 @@ mod tests {
         let err = TestCodecError::Unsupported(UnsupportedOperation::DecodeInto);
         let found: Option<&UnsupportedOperation> = err.find_cause();
         assert_eq!(found, Some(&UnsupportedOperation::DecodeInto));
+    }
+
+    #[test]
+    fn find_native_cause_inside_trace_before_and_after_erasure() {
+        let located = At::wrap(TestCodecError::Unsupported(
+            UnsupportedOperation::DecodeInto,
+        ));
+        let native = find_cause::<TestCodecError>(&located)
+            .expect("the traced codec error must remain inspectable");
+        assert!(core::ptr::eq(native, located.error()));
+        assert_eq!(
+            located.unsupported_operation(),
+            Some(&UnsupportedOperation::DecodeInto)
+        );
+
+        let erased: Box<dyn core::error::Error + Send + Sync> = Box::new(located);
+        let trace = erased
+            .find_cause::<At<TestCodecError>>()
+            .expect("erasure must preserve the trace wrapper");
+        let native = erased
+            .find_cause::<TestCodecError>()
+            .expect("erasure must preserve the concrete native cause");
+        assert!(core::ptr::eq(native, trace.error()));
+        assert_eq!(
+            erased.unsupported_operation(),
+            Some(&UnsupportedOperation::DecodeInto)
+        );
+        assert!(erased.find_cause::<LimitExceeded>().is_none());
+
+        // A native leaf has no source link for a generic chain walker to use.
+        let leaf: Box<dyn core::error::Error + Send + Sync> =
+            Box::new(At::wrap(TestCodecError::Malformed("native detail".into())));
+        assert!(matches!(
+            leaf.find_cause::<TestCodecError>(),
+            Some(TestCodecError::Malformed(message)) if message == "native detail"
+        ));
     }
 
     // find_cause free function still works

@@ -224,6 +224,10 @@ io-contract-check:
 encoder-begin-check:
     cargo test -p zencodec --all-features --locked --lib begin_dispatch_tests
 
+# Concrete codec causes, trace wrappers and nested causes survive erasure.
+error-cause-check:
+    cargo test -p zencodec --all-features --locked --lib error::tests
+
 # Rerun the exact existing fixture set without regenerating containers.
 io-validation-media mp4 webm ivf:
     cargo run --locked --manifest-path perf/io-validation/Cargo.toml --bin media_transport -- "{{mp4}}"/*.mp4 "{{webm}}"/*.webm "{{webm}}"/*.mkv "{{ivf}}"/*.ivf

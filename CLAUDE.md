@@ -231,6 +231,12 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed during independent API review (2026-10-25): generic `find_cause::<E>`
+  skipped the native error inside `At<E>` because the wrapper's source link
+  delegates past it. Lookup now inspects `At<E>` at each link. The regression
+  covers native and nested causes, trace access and erased native leaf errors;
+  `just error-cause-check` retains the existing category/envelope checks.
+
 - Fixed during independent API review (2026-10-25): handwritten `DynEncoder`
   implementations inherited a successful `begin` despite unsupported row input.
   The default now returns `RowLevelEncode`, matching the typed default. The

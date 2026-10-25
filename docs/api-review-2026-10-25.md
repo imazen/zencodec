@@ -151,6 +151,13 @@ resolver, native controls, guide and primary sources above. The review was
 read-only: its signature sketches were not compiled. This is the coordinator's
 audited synthesis, separating design advice from reproduced defects.
 
+A focused follow-up accepted the late-decision boundary and retracted the
+post-consumption job defect, parallel memory-estimate type, mandatory shared
+codec error, generic relabeling escape hatch and unmeasured ratios. Its revised
+sketches remain uncompiled. In particular, domain typing must retain the existing
+opaque operation/question identity; a typed array index alone does not reject
+stale answers.
+
 The strongest useful change is to **type the offers within each question and
 offer complete routes when choices interact**. The current private `Question`
 already distinguishes domains, but its `Choices` all expose an `Alternative`
@@ -251,6 +258,30 @@ Other assertions were qualified instead of being promoted to defects:
 The released comparison remains crates.io **0.1.26**, with root **0.1.27**
 unpublished. The review does not change the frozen migration baseline or imply
 that every crate in this workspace is unpublished.
+
+### Traced native error lookup
+
+The follow-up suggested a smaller debugging fix than changing every codec's
+error type. The existing `find_cause::<E>` walked `source()` links, but `At<E>`
+delegates its source to `E::source()`: the original native `E` could be skipped.
+The new `find_native_cause_inside_trace_before_and_after_erasure` regression
+failed on that lookup before the fix. `find_cause` now also probes `At<E>` at
+each link and borrows its stored error. No error is remapped or stringified.
+
+The regression covers the native value and nested unsupported cause, access to
+the trace wrapper after boxing, a native leaf with no source, and an absent
+cause. Existing category/envelope checks still pass. This does not reconstruct
+causes already discarded by FileReadAt/BufferedReadAt; [167](https://github.com/imazen/zencodec/issues/167)
+remains open for that separate loss.
+
+```text
+just error-cause-check io-contract-check
+run-heavy: done rc=0 10s | peak-RSS 0.39GiB | min-avail 17958MiB | peak-load 0.69
+```
+
+The same isolated export ran workspace all-feature tests and all-target Clippy.
+This is a validation-process receipt, not a codec memory bound. Associated
+native error types and public signatures remain unchanged.
 
 ### Experiments that decide the remaining shape
 

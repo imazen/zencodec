@@ -269,6 +269,9 @@ removes that whole class).
 
 ### Fixed
 
+- `find_cause::<E>` inspects traced `At<E>` values before following their source
+  links, preserving concrete native error lookup before and after erasure.
+  Codec traits retain their associated error types.
 - The default `DynEncoder::begin` now refuses unsupported row encoding, matching
   `Encoder::begin`. This fixes handwritten dyn implementations; the ordinary
   typed-to-dyn shim already delegated correctly. Rejection preserves the
