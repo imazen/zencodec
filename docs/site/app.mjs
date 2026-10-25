@@ -1,7 +1,10 @@
 const $ = (q,el=document) => el.querySelector(q);
 const $$ = q => [...document.querySelectorAll(q)];
-function activate() {
+function activate({scroll=true}={}) {
   const hash=location.hash.slice(1);
+  const entry=$$('.entry-panel').find(el=>el.id===hash) || $('.entry-panel:not([hidden])') || $('.entry-panel');
+  $$('.entry-panel').forEach(el=>{el.hidden=el!==entry;});
+  $('#entry-select').value=entry.dataset.entry;
   const selected=$$('.chapter').find(el=>el.id===hash) || $('.chapter:not([hidden])') || $('.chapter');
   $$('.chapter').forEach(el=>{el.hidden=el!==selected;});
   $$('.steps-group').forEach(el=>{el.hidden=el.dataset.lane!==selected.dataset.lane;});
@@ -14,24 +17,37 @@ function activate() {
     const active=el.hash===`#${selected.id}`;
     if(active) el.setAttribute('aria-current','step'); else el.removeAttribute('aria-current');
   });
-  if(hash===selected.id) selected.scrollIntoView({block:'start'});
+  if(scroll&&hash===selected.id) selected.scrollIntoView({block:'start'});
+  if(scroll&&hash===entry.id) entry.scrollIntoView({block:'start'});
 }
 activate();
 window.addEventListener('hashchange',activate);
+$('#entry-select').addEventListener('change',event=>{
+  history.replaceState(null,'',`#entry-${event.target.value}`);
+  activate({scroll:false});
+});
 document.addEventListener('click', async event=>{
-  const button=event.target.closest('[data-copy]');
+  const button=event.target.closest('[data-copy], [data-copy-full]');
   if(!button) return;
-  const text=document.getElementById(button.dataset.copy).textContent;
+  const panel=button.closest('.code-panel');
+  const text=button.dataset.copyFull
+    ? [...panel.querySelectorAll('[data-example-part]')].map(el=>el.textContent).join('')
+    : document.getElementById(button.dataset.copy).textContent;
+  const original=button.dataset.copyLabel || button.textContent;
+  button.dataset.copyLabel=original;
+  const status=$('.copy-status',panel);
   try {
     if(navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
     else throw Error('Clipboard unavailable');
     button.textContent='Copied';
+    status.textContent=button.dataset.copyFull?'Full example copied.':'Focus copied.';
   } catch {
-    const selection=window.getSelection();
-    const range=document.createRange(); range.selectNodeContents(document.getElementById(button.dataset.copy));
-    selection.removeAllRanges(); selection.addRange(range);button.textContent='Selected — copy';
+    let field=$('.copy-fallback',panel);
+    if(!field) {field=document.createElement('textarea');field.className='copy-fallback';field.readOnly=true;field.setAttribute('aria-label','Code selected for manual copy');panel.append(field);}
+    field.value=text;field.focus();field.select();
+    button.textContent='Selected — copy';status.textContent='Use your system copy command.';
   }
-  setTimeout(()=>{button.textContent='Copy';},2000);
+  setTimeout(()=>{button.textContent=original;},2000);
 });
 const names={serial:'Serial reads',batch:'Batched ranges',coalesced:'Merge gaps',budgeted:'Budgeted plan'};
 try {

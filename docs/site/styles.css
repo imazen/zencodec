@@ -1331,3 +1331,211 @@ footer p {
 .mobile-decision .adapter {
   margin-top:14px
 }
+
+/* Complete examples stay in reading order: setup, focus, continuation. */
+.hero-context {
+  display:block;
+  font-size:12px;
+  margin:0 0 18px
+}
+.entrypoints {
+  color:var(--ink);
+  padding-block:28px 60px;
+  border-bottom:1px solid var(--line);
+  scroll-margin-top:90px
+}
+.entry-orientation,.entry-footnote {
+  max-width:860px;
+  font-size:14px;
+  line-height:1.8;
+  color:var(--muted);
+  margin-bottom:24px
+}
+.entry-footnote {
+  font-size:12px;
+  margin:24px 0 0
+}
+.entry-controls {
+  display:flex;
+  gap:18px;
+  align-items:center;
+  margin:30px 0 20px
+}
+.entry-controls label {
+  font:12px var(--mono);
+  color:var(--role)
+}
+.entry-controls select {
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:6px;
+  padding:12px 16px;
+  font:14px var(--sans);
+  min-width:280px;
+  max-width:100%
+}
+.entry-panel {
+  color:var(--ink);
+  padding:28px;
+  border:1px solid var(--line);
+  border-top:3px solid var(--role);
+  border-radius:9px;
+  background:#fff;
+  scroll-margin-top:98px;
+  min-width:0
+}
+.entry-panel h3 {
+  font-size:24px;
+  margin-bottom:14px
+}
+.entry-summary,.example-context {
+  font-size:14px;
+  line-height:1.8;
+  margin-bottom:18px
+}
+.example-context {
+  color:var(--muted);
+  font-size:13px
+}
+.example-context b {
+  color:var(--ink)
+}
+.entry-issue {
+  font-size:13px;
+  margin-top:16px
+}
+.code-actions {
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap
+}
+.code-toolbar {
+  gap:10px;
+  flex-wrap:wrap
+}
+.code-panel .code-context {
+  padding:0;
+  background:#1c333e;
+  border-top:1px solid #30454e
+}
+.code-context summary {
+  padding:12px 16px;
+  min-height:44px;
+  font:11px/1.7 var(--mono)
+}
+.code-context summary span {
+  float:right;
+  color:#b1c5cb;
+  margin-left:12px
+}
+.code-context[open] summary {
+  border-bottom:1px dashed #52616b
+}
+.code-panel .code-focus {
+  border-left:3px solid var(--role);
+  padding-block:20px;
+  background:#102731
+}
+.code-panel .code-context pre {
+  padding-block:12px;
+  color:#dce8e9
+}
+.code-provenance {
+  display:flex;
+  gap:10px 18px;
+  flex-wrap:wrap;
+  border-top:1px solid #30454e;
+  padding:12px 16px;
+  font:10px/1.7 var(--mono);
+  color:#bed0d2
+}
+.copy-status {
+  width:100%
+}
+.copy-status:empty {
+  display:none
+}
+.copy-fallback {
+  display:block;
+  width:100%;
+  min-height:140px;
+  font:12px/1.8 var(--mono)
+}
+.supplemental-example h4,.api-section h4 {
+  font-size:17px;
+  font-weight:600;
+  margin:0 0 12px
+}
+.api-section {
+  margin:28px 0;
+  min-width:0
+}
+.api-section>p {
+  font-size:12px;
+  line-height:1.8;
+  color:var(--muted);
+  margin:0 0 14px
+}
+.api-panel {
+  border:1px solid var(--line);
+  border-left:3px solid var(--role);
+  border-radius:5px;
+  margin-bottom:10px;
+  overflow:hidden;
+  background:#f7f9f8
+}
+.api-panel summary {
+  cursor:pointer;
+  padding:13px 16px;
+  line-height:1.8;
+  overflow-wrap:anywhere;
+  font-size:12px
+}
+.api-panel summary>span {
+  font:10px var(--mono);
+  color:var(--role);
+  margin-right:12px
+}
+.api-panel summary code {
+  font-weight:600
+}
+.api-panel pre {
+  margin:0;
+  padding:18px;
+  border-top:1px solid var(--line);
+  overflow:auto;
+  font:12px/1.8 var(--mono);
+  background:#f0f4f2;
+  color:#233d40
+}
+.api-panel .syntax-keyword {
+  color:#155d49
+}
+.api-panel .syntax-string {
+  color:#7b4e12
+}
+.api-source {
+  display:block;
+  padding:10px 16px;
+  font-size:11px
+}
+@media(max-width:720px) {
+  .entrypoints {padding-block:22px 38px}
+  .entry-controls {display:block}
+  .entry-controls label {display:block;margin-bottom:12px}
+  .entry-controls select {width:100%;min-width:0}
+  .entry-panel {padding:18px 14px}
+  .entry-panel h3 {font-size:21px}
+  .entry-orientation {font-size:12px}
+  .entry-summary,.example-context {font-size:12px}
+  .code-toolbar {padding:10px 12px}
+  .code-actions {width:100%}
+  .code-actions button {min-height:36px}
+  .code-context summary {font-size:10px;padding:12px}
+  .code-context summary span {float:none;display:block;margin-left:15px}
+  .code-panel pre,.api-panel pre {font-size:11px;padding-inline:12px}
+  .api-panel summary {padding:12px}
+  .api-panel summary>span {display:block;font-size:9px}
+  .api-panel summary code {font-size:10px}
+  .code-provenance {padding:12px}
+}

@@ -4,6 +4,8 @@ The guide lives in `docs/` on main. GitHub Actions builds and checks it, then
 publishes an allowlisted artifact to GitHub Pages. There is no publishing branch.
 The source is `site/index.html`, `site/content.mjs`, `site/styles.css`, and
 `site/app.mjs`; `build-site.mjs` produces ignored `docs/_site/`.
+`site/api.mjs` selects the source declarations used by each chapter and entry
+point. `site/source.mjs` extracts those signatures and complete example scopes.
 
 ```sh
 npm ci --prefix docs --ignore-scripts
@@ -30,6 +32,23 @@ finish-first paths. The limit rejects just below the fixture's pixel count.
 The returned pixel descriptor is checked as RGBA8 with unknown transfer; a
 preference for sRGB does not relabel the native result.
 
+Each `EXAMPLE` region encloses a standalone import/function scope compiled in
+its own Rust module. Its `ANCHOR` region is the initial focus. Native details
+controls expand the preceding imports and setup above, and the return path or
+continuation below. The two controls are independent and remain in source
+order. Copy-full includes both regions even when collapsed. Source tests check
+that the three rendered pieces reconstruct the compiled scope exactly.
+
+The entry selector covers config decode, probe and encode; configured job
+encode; and `CodecSet` registration/decode, encode and transcode. The journeys
+also show registry jobs and registry incremental dispatch. Every chapter has
+signature panels, with the primary interface open initially. These include
+receiver ownership, associated types, lifetimes and where bounds. They are
+declaration excerpts with bodies omitted, not complete trait implementations.
+Links point to the built revision's source. A missing or ambiguous declaration
+fails the build. The extractor is a scanner for these selected source forms,
+not a general Rust parser.
+
 These are shared-interface examples with a small lossless codec fixture, not a
 browser-format recommendation or proof that QOI retains EXIF/ICC metadata.
 Media and implementor chapters link the current contracts and separately
@@ -46,6 +65,9 @@ The Documentation workflow runs these examples and the ownership control,
 regenerates the transport CSV and requires an exact match, checks all site
 anchors/local assets, and exercises all 15 chapters, deep links, copy controls,
 keyboard navigation, the eight lab settings, and 390/768/1440px viewports.
+It also checks all seven entry points, actual clipboard contents against the
+compiled source, independent above/below expansion, and the expanded mobile
+layout. The entry selector keeps its position while switching examples.
 Deployment depends on both the browser/build job and Rust example job. Pull
 requests validate without deployment. The build publishes only seven explicit
 files; it does not upload the documentation directory or repository wholesale.
@@ -67,6 +89,15 @@ linked to their open issues; no public library API was introduced by this site.
 ```
 examples and clippy: rc=0 0s | peak-RSS 0.20GiB | min-avail 16109MiB | peak-load 0.33
 browser: rc=0 5s | peak-RSS 0.22GiB | min-avail 15855MiB | peak-load 1.16
+```
+
+Context revision qualification (2026-10-25): the two native guide tests and
+all-target harness clippy passed. Source reconstruction/signature tests and
+the browser interactions described above passed. Wrapper observations:
+
+```
+examples and clippy: rc=0 0s | peak-RSS 0.20GiB | min-avail 18196MiB | peak-load 0.26
+browser: rc=0 6s | peak-RSS 0.24GiB | min-avail 17780MiB | peak-load 1.02
 ```
 
 ## CodecSet fixture coverage

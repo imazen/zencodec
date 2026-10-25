@@ -5,7 +5,7 @@ export const lanes = [
       body: 'Start with a configured codec and one call. The returned image owns its pixels. Clone a reusable configuration when you need another job; the convenience call consumes this one.',
       why: 'A job builder adds no value until this operation needs settings. The one-line call already creates the job and decoder.',
       nodes: [['consumer','Encoded bytes','already resident'],['implementor','config.decode','one operation'],['consumer','Owned pixels','preview uses a view']],
-      note: 'The executable examples use native QOI as a lossless fixture. For browser delivery, select a browser-supported codec; for multi-format routing, use zencodecs. This guide describes repository main, including unpublished workspace code.', source: 'src/traits/decoding.rs' },
+      note: 'The executable examples use native QOI as a lossless fixture. For browser delivery, select a browser-supported codec; for registration, format detection and dispatch, use CodecSet in zencodec. The higher-level zencodecs facade is optional. This guide describes repository main, including unpublished workspace code.', source: 'src/traits/decoding.rs' },
     { title: 'Accept a user upload', trigger: 'An upload can be much larger than the preview surface.', snippet: 'limits',
       body: 'Move just this operation into a job and set a pixel limit before constructing the decoder. The config still describes the codec. The job now describes what this request may spend.',
       why: 'Admission is a requirement of the service. Adding it here keeps unrelated preview calls simple.',
