@@ -81,3 +81,7 @@ moxcms = { version = ">=0.8.1, <0.10", features = ["options"] }
 name = "exif_filter"
 harness = false
 
+[[bench]]
+name = "frame_policy"
+harness = false
+

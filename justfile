@@ -362,6 +362,31 @@ io-reader-check:
     cargo clippy -p zencodec-io --all-targets --all-features --locked -- -D warnings
     cargo check -p zencodec-io --no-default-features --locked
 
+# Profile the actual per-presentation resolver and bounded diagnostic report.
+frame-cost-sync export:
+    just frame-policy-sync "{{export}}"
+    cp Cargo.toml "{{export}}/Cargo.toml"
+    cp perf/frame-policy-cost.rs "{{export}}/perf/"
+    cp benches/frame_policy.rs "{{export}}/benches/"
+    cp examples/frame_policy_probe.rs "{{export}}/examples/"
+
+frame-cost-check:
+    cargo run --example frame_policy_probe --locked -- record 1000
+    cargo run --example frame_policy_probe --locked -- resolve 1000
+    cargo run --example frame_policy_probe --locked -- combined 1000
+    cargo clippy -p zencodec --bench frame_policy --example frame_policy_probe --locked -- -D warnings
+
+frame-cost-build:
+    CARGO_PROFILE_RELEASE_DEBUG=1 CARGO_PROFILE_RELEASE_LTO=thin cargo build --release --example frame_policy_probe --locked
+    CARGO_PROFILE_BENCH_DEBUG=1 CARGO_PROFILE_BENCH_LTO=thin cargo bench --bench frame_policy --no-run --locked
+
+frame-cost-bench cpus="2,3":
+    CARGO_PROFILE_BENCH_DEBUG=1 CARGO_PROFILE_BENCH_LTO=thin taskset -c "{{cpus}}" cargo bench --bench frame_policy --locked -- --cpu-policy=unrestricted --median-of-passes=3
+
+frame-cost-profile output mode="record" count="1000000" cpus="2,3":
+    test ! -e "{{output}}"
+    taskset -c "{{cpus}}" perf stat -x, -o "{{output}}" -e instructions,cycles,cache-misses,context-switches "${CARGO_TARGET_DIR:-target}/release/examples/frame_policy_probe" "{{mode}}" "{{count}}"
+
 # Rerun the exact existing fixture set without regenerating containers.
 io-validation-media mp4 webm ivf:
     cargo run --locked --manifest-path perf/io-validation/Cargo.toml --bin media_transport -- "{{mp4}}"/*.mp4 "{{webm}}"/*.webm "{{webm}}"/*.mkv "{{ivf}}"/*.ivf
