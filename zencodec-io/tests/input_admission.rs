@@ -330,6 +330,47 @@ mod asynchronous {
         }
     }
 
+    #[tokio::test]
+    async fn ready_cursor_outputs_still_yield_after_the_work_quota() {
+        use core::{
+            future::{Future, poll_fn},
+            task::Poll,
+        };
+        struct Ready;
+        impl ByteStepper for Ready {
+            type Output = ();
+            type Error = Infallible;
+            fn requested(&self) -> &[Request] {
+                &[]
+            }
+            fn step(&mut self, _: Input<'_>, _: &dyn Stop) -> Result<Stepped<()>, Infallible> {
+                Ok(Stepped {
+                    consumed: 0,
+                    step: Step::Output(()),
+                })
+            }
+        }
+        let mut source = Source::default();
+        let mut cursor = AsyncCursor::new(
+            options(16, 2, 2).with_work_quota(zencodec_io::WorkQuota::new(3).unwrap()),
+        );
+        let mut stage = Ready;
+        for _ in 0..3 {
+            cursor
+                .next(&mut source, &mut stage, &Unstoppable)
+                .await
+                .unwrap();
+        }
+        let future = cursor.next(&mut source, &mut stage, &Unstoppable);
+        let mut future = core::pin::pin!(future);
+        poll_fn(|cx| {
+            assert!(future.as_mut().poll(cx).is_pending());
+            Poll::Ready(())
+        })
+        .await;
+        future.await.unwrap();
+    }
+
     struct InterruptedBatch {
         source: Source,
         started: usize,

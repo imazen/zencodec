@@ -224,6 +224,20 @@ io-contract-check:
     cargo test --workspace --all-features --locked
     cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
+# Refresh an owned validation export without inheriting parent workspace patches.
+io-core-sync export:
+    test ! -e "{{export}}/.git"
+    test ! -e "{{export}}/.jj"
+    test -f "{{export}}/zencodec-io/Cargo.toml"
+    cp zencodec-io/src/*.rs "{{export}}/zencodec-io/src/"
+    cp zencodec-io/tests/*.rs "{{export}}/zencodec-io/tests/"
+    cp justfile "{{export}}/justfile"
+
+# Native output parity under independently configured compute quotas.
+io-quota-native-check:
+    cargo test --manifest-path perf/io-validation/Cargo.toml -p io-validation --test encoder_retention --locked
+    cargo clippy --manifest-path perf/io-validation/Cargo.toml -p io-validation --test encoder_retention --locked -- -D warnings
+
 # Default row admission agrees for typed, shimmed and handwritten dyn encoders.
 encoder-begin-check:
     cargo test -p zencodec --all-features --locked --lib begin_dispatch_tests

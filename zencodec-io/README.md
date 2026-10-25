@@ -47,6 +47,11 @@ to prefetch and skipping as well as the decoder's minimum request.
 The async drivers keep the decoder in the task between batches and run each
 batch on a `Compute` (`spawn_blocking`, a rayon pool, or `Inline`), so no
 thread is held while bytes are in flight and codecs stay synchronous.
+`DriveOptions::with_work_quota(WorkQuota::new(64).unwrap())` limits each async
+compute turn to 64 complete codec steps. It also yields between ready packet
+outputs in `AsyncCursor`. A quota yield does not drain encoder output; it gives
+other tasks a turn without tying CPU fairness to a slow destination. One codec
+step remains indivisible, so this is neither a wall-time nor a memory bound.
 When both codec paths stream, `transcode_async` streams rows into an encoder
 and its output to an `AsyncWrite`. A whole-file decoder or an `AT_FINISH`
 encoder can retain a complete input or output. Driver measurements:

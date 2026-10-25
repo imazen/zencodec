@@ -231,6 +231,12 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed on the ideal API PR (2026-10-25): async image drivers copied every
+  borrowed request before input admission, and transcode drained newly pending
+  output even after a batch failed. Request copies are now bounded and failed
+  batches do not publish new pending bytes. Earlier successful writes remain
+  irrevocable. Work-quota controls preserve scheduling independently of writes.
+
 - Fixed on the ideal API PR (2026-10-25): the sequential pump limited the
   requested minimum but could prefetch/skip into a larger allocation than its
   `max_window`. The existing cap now covers these paths; random-access and async

@@ -435,7 +435,10 @@ enum StdSourceError { Source(SourceError), Io(std::io::Error), Allocation { requ
 struct IoLimits { /* private; new(input_bytes, ranges, in_flight), unlimited() */ }
 impl DriveOptions {
     fn with_limits(self, limits: IoLimits) -> Self;
+    fn with_work_quota(self, quota: WorkQuota) -> Self;
 }
+struct WorkQuota { /* private; new(nonzero_steps) -> Option<Self>, unlimited() */ }
+// Async compute/packet scheduling only: yielding does not drain output.
 enum InputError {
     Limit { needed: u64, limit: usize }, RangesDisabled, ReadsDisabled,
     Allocation { bytes: usize, source: TryReserveError },

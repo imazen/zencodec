@@ -221,6 +221,37 @@ pub(crate) fn capacity(fetched: &[(u64, Vec<u8>)]) -> usize {
         .fold(0usize, |sum, (_, b)| sum.saturating_add(b.capacity()))
 }
 
+/// Async image drivers cannot borrow a non-Sync decoder across an await. Copy
+/// only the selected request and a bounded number of affordable alternatives.
+#[cfg(feature = "tokio")]
+pub(crate) fn copy_requests(
+    requests: &[Request],
+    limits: IoLimits,
+    out: &mut Vec<Request>,
+) -> Result<(), InputError> {
+    let first = select(requests, limits)?;
+    out.clear();
+    let count = if matches!(first, Request::Range(_)) {
+        requests.len().min(limits.ranges)
+    } else {
+        1
+    };
+    reserve(out, count)?;
+    out.push(first);
+    if matches!(first, Request::Range(_)) {
+        for &r in requests {
+            if out.len() == count {
+                break;
+            }
+            if r != first && matches!(r, Request::Range(b) if b.length <= limits.input_bytes as u64)
+            {
+                out.push(r);
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn make_room(
     window: &crate::window::Window,
     fetched: &mut Vec<(u64, Vec<u8>)>,
@@ -263,4 +294,27 @@ pub(crate) fn allocate_ranges(
         buf.resize(len, 0);
     }
     Ok(())
+}
+
+#[cfg(all(test, feature = "tokio"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn async_request_copy_does_not_copy_an_unbounded_alternative_list() {
+        let requests: Vec<_> = (0..10000)
+            .map(|offset| Request::range(offset * 8, 8))
+            .collect();
+        let mut copied = Vec::new();
+        copy_requests(&requests, IoLimits::new(16, 2, 1), &mut copied).unwrap();
+        assert_eq!(copied, requests[..2]);
+        assert!(copied.capacity() <= 2);
+        copy_requests(
+            &[Request::range(0, 17), Request::at_least(32, 8)],
+            IoLimits::new(16, 0, 1),
+            &mut copied,
+        )
+        .unwrap();
+        assert_eq!(copied, [Request::at_least(32, 8)]);
+    }
 }

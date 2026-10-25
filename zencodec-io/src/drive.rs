@@ -24,6 +24,8 @@ pub struct DriveOptions {
     pub read_size: usize,
     /// Admission for driver-owned input. Defaults to historical unlimited behavior.
     pub limits: crate::IoLimits,
+    /// Scheduling quota for async cursors and compute batches, independent of output draining.
+    pub work_quota: crate::WorkQuota,
 }
 
 impl Default for DriveOptions {
@@ -32,6 +34,7 @@ impl Default for DriveOptions {
             max_gap: 0,
             read_size: 64 * 1024,
             limits: crate::IoLimits::unlimited(),
+            work_quota: crate::WorkQuota::unlimited(),
         }
     }
 }
@@ -43,12 +46,19 @@ impl DriveOptions {
             max_gap,
             read_size,
             limits: crate::IoLimits::unlimited(),
+            work_quota: crate::WorkQuota::unlimited(),
         }
     }
 
     /// Apply input admission to synchronous and asynchronous drivers alike.
     pub const fn with_limits(mut self, limits: crate::IoLimits) -> Self {
         self.limits = limits;
+        self
+    }
+
+    /// Bound uninterrupted async work without coupling it to destination reads.
+    pub const fn with_work_quota(mut self, quota: crate::WorkQuota) -> Self {
+        self.work_quota = quota;
         self
     }
 }

@@ -204,6 +204,9 @@ removes that whole class).
 
 #### Fixed
 
+- Async image drivers bound their copied request alternatives before allocation.
+  Failed compute batches no longer drain newly pending output after the failure.
+
 - Check request address overflow before serving bytes. `ReadCursor::max_window`
   now bounds prefetch and skipped-input buffering as well as contiguous requests.
 - Publish fetched ranges only after the complete batch succeeds; partial source
@@ -224,6 +227,10 @@ removes that whole class).
 - Default-feature rustdoc renders gated driver names with their required features instead of unresolved links (`7e3c8666`).
 
 #### Added
+
+- `WorkQuota` and `DriveOptions::with_work_quota` bound async compute turns and
+  ready packet loops by complete codec steps. Quota yields do not drain encoded
+  output; CPU fairness remains separate from destination backpressure.
 
 - `IoLimits`, `InputError` and `DriveOptions::with_limits` provide retained-input
   admission across synchronous and async incremental drivers. Optional range

@@ -364,6 +364,7 @@ struct Batch<D: IncrementalDecode, S> {
 enum BatchEnd {
     /// The decoder's `requested()` holds what it needs.
     Need,
+    Yield,
     Done(OutputInfo),
 }
 
@@ -378,6 +379,7 @@ fn run_batch<D, S>(
     mut sink: S,
     mut window: Window,
     pulse: Option<SharedPulse>,
+    quota: crate::WorkQuota,
 ) -> Batch<D, S>
 where
     D: IncrementalDecode,
@@ -386,12 +388,17 @@ where
     let pulse_ref: Option<&dyn Pulse> = pulse.as_ref().map(|p| p as &dyn Pulse);
     let mut progress = Progressor::new(pulse_ref);
     let stop = progress.stop();
+    let mut steps = 0usize;
     let outcome = loop {
+        if steps == quota.max_steps() {
+            break Ok(BatchEnd::Yield);
+        }
         let input = window.input();
         let p = match decoder.step(input, &mut sink, stop) {
             Ok(p) => p,
             Err(e) => break Err(BatchFail::Step(e)),
         };
+        steps += 1;
         progress.observe(&decoder, &p.event);
         if p.event == Event::Need
             && let Err(v) = check_need(decoder.requested(), &input, p.consumed)
@@ -548,6 +555,7 @@ pub struct AsyncCursor {
     window: Window,
     fetched: Vec<(u64, Vec<u8>)>,
     started: bool,
+    steps_since_yield: usize,
 }
 
 impl AsyncCursor {
@@ -558,6 +566,7 @@ impl AsyncCursor {
             window: Window::new(),
             fetched: Vec::new(),
             started: false,
+            steps_since_yield: 0,
         }
     }
 
@@ -586,8 +595,13 @@ impl AsyncCursor {
             self.window.total = source.len_hint();
         }
         loop {
+            if self.steps_since_yield == self.opts.work_quota.max_steps() {
+                crate::work_quota::yield_once().await;
+                self.steps_since_yield = 0;
+            }
             let input = self.window.input();
             let p = stage.step(input, stop).map_err(DriveFailure::Step)?;
+            self.steps_since_yield += 1;
             if matches!(p.step, Step::Need) {
                 check_need(stage.requested(), &input, p.consumed)
                     .map_err(DriveFailure::Protocol)?;
@@ -683,7 +697,7 @@ where
             let (decoder, sink, window) = state.take().expect("restored after every batch");
             let pulse_for_batch = pulse.clone();
             let batch = run_on(&compute, move || {
-                run_batch(decoder, sink, window, pulse_for_batch)
+                run_batch(decoder, sink, window, pulse_for_batch, opts.work_quota)
             })
             .await
             .map_err(widen)?;
@@ -695,11 +709,12 @@ where
             } = batch;
             match outcome {
                 Ok(BatchEnd::Done(info)) => return Ok((info, sink)),
+                Ok(BatchEnd::Yield) => crate::work_quota::yield_once().await,
                 Ok(BatchEnd::Need) => {
                     // Copied into a reused list: the decoder is not `Sync`, so it
                     // cannot be borrowed across the reads.
-                    requests.clear();
-                    requests.extend_from_slice(decoder.requested());
+                    admission::copy_requests(decoder.requested(), opts.limits, &mut requests)
+                        .map_err(AsyncDriveError::Input)?;
                     fill(source, &mut window, &mut fetched, &requests, opts).await?;
                 }
                 Err(BatchFail::Step(e)) => return Err(AsyncDriveError::Step(e)),
@@ -762,7 +777,7 @@ where
             let (decoder, sink, window) = state.take().expect("restored after every batch");
             let pulse_for_batch = pulse.clone();
             let batch = run_on(&compute, move || {
-                run_batch(decoder, sink, window, pulse_for_batch)
+                run_batch(decoder, sink, window, pulse_for_batch, opts.work_quota)
             })
             .await
             .map_err(widen)?;
@@ -773,7 +788,7 @@ where
                 outcome,
             } = batch;
             let pending = sink.pending_output().len();
-            if pending > 0 {
+            if pending > 0 && matches!(outcome, Ok(BatchEnd::Need | BatchEnd::Done(_))) {
                 out.write_all(sink.pending_output())
                     .await
                     .map_err(AsyncDriveError::Write)?;
@@ -781,6 +796,7 @@ where
                 written += pending as u64;
             }
             match outcome {
+                Ok(BatchEnd::Yield) => crate::work_quota::yield_once().await,
                 Ok(BatchEnd::Done(_)) => {
                     let rest = sink
                         .finish()
@@ -794,8 +810,8 @@ where
                 Ok(BatchEnd::Need) => {
                     // Copied into a reused list: the decoder is not `Sync`, so it
                     // cannot be borrowed across the reads.
-                    requests.clear();
-                    requests.extend_from_slice(decoder.requested());
+                    admission::copy_requests(decoder.requested(), opts.limits, &mut requests)
+                        .map_err(AsyncDriveError::Input)?;
                     fill(source, &mut window, &mut fetched, &requests, opts).await?;
                 }
                 Err(BatchFail::Step(e)) => return Err(AsyncDriveError::Step(e)),
