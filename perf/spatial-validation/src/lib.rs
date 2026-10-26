@@ -23,6 +23,7 @@ mod http_source;
 pub mod image_items;
 pub mod image_output;
 mod jxl_admission_tests;
+mod jxl_conversion_tests;
 mod jxl_items;
 mod jxl_layer_tests;
 mod jxl_layers;

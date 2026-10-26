@@ -81,6 +81,13 @@ subviews, empty views, packet side data, old-epoch frame retention and exact
 strided 8/10-bit samples. These establish ownership and admission mechanics;
 they do not measure native codec memory. Run `just io-contract-check`.
 
+The current profile-aware `zenpixels-convert` finalizer is not an admitted
+conversion path. Native CMYK controls prove identity preserves pixels and ICC,
+but its `&PixelBuffer` input requires an owned copy from a mapped native image,
+and its owned result creates another allocation. Both survive after the decode
+pool returns to zero. See the [executing controls](../perf/spatial-validation/README.md#cmyk-output-finalization)
+and [existing ownership issue](https://github.com/imazen/zenpixels/issues/69).
+
 Policy waiting, conversion scratch and encoded staging must use this ownership
 mechanism when they claim a managed payload allowance. A hard whole-operation
 limit additionally needs qualified native codec and service bounds. The ordinary

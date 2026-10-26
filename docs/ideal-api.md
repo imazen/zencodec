@@ -83,6 +83,14 @@ codec/output allocations, allocator bookkeeping and transient reallocation.
 Existing codec memory estimates and capability flags are not whole-operation
 memory guarantees. The new request layer does not strengthen those old claims.
 
+Profile-aware output finalization has a separate qualification: native raw CMYK
+identity preserves exact samples and ICC, while CMYK-to-RGB still refuses with
+moxcms attached. The current finalizer requires an owned input copy and creates
+an owned result outside the decode output pool. The [executing controls and next
+contract](../perf/spatial-validation/README.md#cmyk-output-finalization) distinguish
+this from descriptor-only row conversion. Finalization ownership remains open in
+[zenpixels issue 69](https://github.com/imazen/zenpixels/issues/69).
+
 ## The consumer shape
 
 ### Selection beyond animation and pages

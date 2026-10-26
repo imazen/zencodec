@@ -157,6 +157,40 @@ encoded staging and caller copies are outside this payload allowance. It is not
 a total-memory bound or a performance measurement. The mechanism adds no policy
 callback; policy still decides at the existing admission/publication boundaries.
 
+## CMYK output finalization
+
+`just spatial-conversion-check` runs the real first raw layer of the pinned
+CMYK JXL fixture through `zenpixels-convert::finalize_for_output_with`.
+This exercises the current-profile entry point separately from the
+descriptor-only `RowConverter` control above. Four controls establish:
+
+- `SameAsOrigin` and an explicit identical ICC target preserve every active
+  inverted-CMYK F32 bit and the exact ICC bytes. A padded input stays unchanged.
+- A requested sRGB F32 transform returns `NeedsCms`, both without a backend
+  and with moxcms 0.9.1 attached. This does not qualify CMYK color conversion.
+- Removing the current ICC context still refuses even when `ColorOrigin`
+  contains that ICC. Provenance cannot stand in for current interpretation.
+- The current finalizer requires `&PixelBuffer`, forcing the mapped native
+  output to be copied into an ordinary owned buffer first. Even identity then
+  produces a distinct output allocation. Both copies remain readable after
+  dropping the admitted image releases the pool's final charge.
+
+The composited view of this fixture supplies RGBA, while the raw view supplies
+inverted CMYK. The CMYK controls explicitly request the raw view. They do not
+infer a conversion contract from the filename or from composited output.
+
+These are ownership and exact-sample controls, not an RSS or throughput
+measurement. The existing
+[zenpixels issue 69](https://github.com/imazen/zenpixels/issues/69) already tracks
+the remaining finalization ownership gap. Its descriptor-only conversion and
+in-place paths do not replace this profile-aware pixels-plus-metadata contract.
+The next candidate must accept a borrowed source, preserve the selected color
+authority, and write only into caller-admitted destination storage; an identity
+path should retain the original owner. A result must couple matching metadata
+with successful pixels and must not publish a partially converted destination.
+
+[Execution receipt](../../benchmarks/cmyk_finalization_2026-10-26.json).
+
 ## Packaged retained output storage
 
 The shared `OpenRequest::with_output_storage` path now runs beside the

@@ -2,6 +2,13 @@
 
 ## Native image selection (unreleased experiment)
 
+- Qualify profile-aware CMYK identity finalization with native JXL samples:
+  preserve exact samples and ICC, refuse unsupported RGB conversion and missing
+  current color context, and demonstrate that the required owned input and
+  final output copies remain outside the decode output pool. Keep this separate
+  from the descriptor-only row-converter refusal; track finalization ownership
+  in zenpixels issue 69.
+
 - Add operation-scoped output storage to `OpenRequest` and group resolved
   factory requirements in `CollectionOpenContext`. JXL honors the shared request;
   the private TIFF adapter refuses before source work. Remove the temporary
