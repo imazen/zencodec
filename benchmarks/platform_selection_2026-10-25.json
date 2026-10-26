@@ -1,0 +1,467 @@
+{
+  "validation-evidence": {
+    "review_pin": "da8dc02ff59de149b94dafde69537122dad3818b",
+    "no_builds": true,
+    "no_live_checkout_edits": true,
+    "macos_runtime": "excluded by user",
+    "fresh_selection_checks": "38/40 passed across targeted runs; initial disk test failed because output parent directory was unavailable, then passed after creating the task-owned directory",
+    "existing_full_selection_receipt": {
+      "path": "zencodec-native-samples-full-2026-10-25.log",
+      "sha256": "fe3aad56b7da3dc3673abc6ecd17861e892712a8e9b1f60585694f74cb5322ad",
+      "results": [
+        "test result: ok. 40 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 101.14s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "resource_receipts": [
+        "run-heavy: done rc=0 103s | peak-RSS 0.34GiB | min-avail 11325MiB | peak-load 1.52"
+      ],
+      "native_jxl_presentations": 147,
+      "native_jxl_presentations_with_dependency_replay": 35
+    },
+    "fresh_checked_codec_checks": "27/27 passed",
+    "logs": {
+      "native-selection-rerun.log": {
+        "sha256": "63d1e755982cd4681d92ec49910ef5678e80d29448ed8f025283cd9e8767e3cd",
+        "results": [
+          "test result: FAILED. 35 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.71s"
+        ],
+        "resource_receipts": [
+          "run-heavy: done rc=101 1s | peak-RSS 0.04GiB | min-avail 13165MiB | peak-load 0.31"
+        ]
+      },
+      "native-selection-disk-rerun.log": {
+        "sha256": "0fed4d33848c9f5539ea56455a0fdcf1681a733726841d7cfb33115a66cf17fa",
+        "results": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 39 filtered out; finished in 0.21s"
+        ],
+        "resource_receipts": [
+          "run-heavy: done rc=0 0s | peak-RSS 0.02GiB | min-avail 13186MiB | peak-load 0.17"
+        ]
+      },
+      "native-selection-jxl-rerun.log": {
+        "sha256": "ace47cac45fc4bf414498dbcfa2fd98d58b3fe1d7c8de809f77e552f28611efb",
+        "results": [
+          "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 38 filtered out; finished in 0.03s"
+        ],
+        "resource_receipts": [
+          "run-heavy: done rc=0 0s | peak-RSS 0.01GiB | min-avail 13170MiB | peak-load 0.21"
+        ]
+      },
+      "native-checked-rerun.log": {
+        "sha256": "4e3c7066885f6e1c3d6db509e51a80a990e759832ad87839f46c4174d9970197",
+        "results": [
+          "test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.93s"
+        ],
+        "resource_receipts": [
+          "run-heavy: done rc=0 2s | peak-RSS 0.03GiB | min-avail 13337MiB | peak-load 1.60"
+        ]
+      }
+    },
+    "independent_readback": "independent-selection.json, orientation-verification.json, thumbnail-verification.json",
+    "remaining_public_promotion_gates": [
+      "One qualified output representation and per-image interpretation across TIFF/JXL",
+      "Per-selection region and returned geometry mapping",
+      "Explicit discovery accounting scope and cancellation propagation",
+      "Actual remote source revision binding",
+      "Qualified thumbnail/pyramid/auxiliary roles rather than containment inference"
+    ],
+    "observed_adapter_limitations": [
+      "OIIO 3.2.1.3 does not expose the native TIFF reduced SubIFD as mip 1 in these fixtures",
+      "WPF exposes the Windows TIFF thumbnail while OIIO get_thumbnail returns empty; tifffile/imagecodecs reads its exact pixels",
+      "Windows TIFF thumbnail NewSubfileType is 0; containment does not establish reduced-level status"
+    ],
+    "performance_concerns": [
+      "BufReader(4096) changes classic chunky page0 from 68 calls/3020 returned bytes to 9 calls/34390 returned bytes, including rereads",
+      "Cycle checking scans accumulated graph edges; large graph cost unmeasured",
+      "Whole-source input retention and backend workspace bounds remain unqualified; process receipts are not codec memory bounds"
+    ],
+    "sources": {
+      "selection_prototype": "https://github.com/imazen/zencodec/tree/da8dc02ff59de149b94dafde69537122dad3818b/perf/spatial-validation",
+      "oiio": "https://openimageio.readthedocs.io/en/stable/imageinput.html",
+      "wic_thumbnail": "https://learn.microsoft.com/en-us/windows/win32/api/wincodec/nf-wincodec-iwicbitmapframeencode-setthumbnail",
+      "iiif_geometry": "https://iiif.io/api/image/3.0/implementation/"
+    }
+  },
+  "independent-selection": {
+    "versions": {
+      "OpenImageIO": "3.2.1.3",
+      "tifffile": "2026.10.15",
+      "Pillow": "13.0.0",
+      "numpy": "2.5.4"
+    },
+    "checks": [
+      {
+        "name": "oiio_native_planarFalse_page1",
+        "passed": true
+      },
+      {
+        "name": "oiio_native_planarFalse_page0",
+        "passed": true
+      },
+      {
+        "name": "oiio_native_planarFalse_page1",
+        "passed": true
+      },
+      {
+        "name": "oiio_concurrent_planarFalse_0",
+        "passed": true
+      },
+      {
+        "name": "oiio_concurrent_planarFalse_1",
+        "passed": true
+      },
+      {
+        "name": "oiio_concurrent_planarFalse_2",
+        "passed": true
+      },
+      {
+        "name": "oiio_concurrent_planarFalse_3",
+        "passed": true
+      },
+      {
+        "name": "oiio_concurrent_planarFalse_4",
+        "passed": true
+      },
+      {
+        "name": "oiio_concurrent_planarFalse_5",
+        "passed": true
+      },
+      {
+        "name": "oiio_concurrent_planarFalse_6",
+        "passed": true
+      },
+      {
+        "name": "oiio_concurrent_planarFalse_7",
+        "passed": true
+      },
+      {
+        "name": "oiio_absent_page_planarFalse",
+        "passed": true
+      },
+      {
+        "name": "oiio_reselect_after_absence_planarFalse",
+        "passed": true
+      },
+      {
+        "name": "oiio_channel_subset_planarFalse",
+        "passed": true
+      },
+      {
+        "name": "oiio_cross_tile_roi_planarFalse",
+        "passed": true
+      },
+      {
+        "name": "oiio_partial_edge_tile_planarFalse",
+        "passed": true
+      },
+      {
+        "name": "tifffile_main_page_count_planarFalse",
+        "passed": true
+      },
+      {
+        "name": "tifffile_page0_planarFalse",
+        "passed": true
+      },
+      {
+        "name": "tifffile_page1_planarFalse",
+        "passed": true
+      },
+      {
+        "name": "tifffile_subifd_planarFalse",
+        "passed": true
+      },
+      {
+        "name": "tifffile_subifd_roi_planarFalse",
+        "passed": true
+      },
+      {
+        "name": "oiio_native_planarTrue_page1",
+        "passed": true
+      },
+      {
+        "name": "oiio_native_planarTrue_page0",
+        "passed": true
+      },
+      {
+        "name": "oiio_native_planarTrue_page1",
+        "passed": true
+      },
+      {
+        "name": "oiio_concurrent_planarTrue_0",
+        "passed": true
+      },
+      {
+        "name": "oiio_concurrent_planarTrue_1",
+        "passed": true
+      },
+      {
+        "name": "oiio_concurrent_planarTrue_2",
+        "passed": true
+      },
+      {
+        "name": "oiio_concurrent_planarTrue_3",
+        "passed": true
+      },
+      {
+        "name": "oiio_concurrent_planarTrue_4",
+        "passed": true
+      },
+      {
+        "name": "oiio_concurrent_planarTrue_5",
+        "passed": true
+      },
+      {
+        "name": "oiio_concurrent_planarTrue_6",
+        "passed": true
+      },
+      {
+        "name": "oiio_concurrent_planarTrue_7",
+        "passed": true
+      },
+      {
+        "name": "oiio_absent_page_planarTrue",
+        "passed": true
+      },
+      {
+        "name": "oiio_reselect_after_absence_planarTrue",
+        "passed": true
+      },
+      {
+        "name": "oiio_channel_subset_planarTrue",
+        "passed": true
+      },
+      {
+        "name": "oiio_cross_tile_roi_planarTrue",
+        "passed": true
+      },
+      {
+        "name": "oiio_partial_edge_tile_planarTrue",
+        "passed": true
+      },
+      {
+        "name": "tifffile_main_page_count_planarTrue",
+        "passed": true
+      },
+      {
+        "name": "tifffile_page0_planarTrue",
+        "passed": true
+      },
+      {
+        "name": "tifffile_page1_planarTrue",
+        "passed": true
+      },
+      {
+        "name": "tifffile_subifd_planarTrue",
+        "passed": true
+      },
+      {
+        "name": "tifffile_subifd_roi_planarTrue",
+        "passed": true
+      },
+      {
+        "name": "windows_jpeg_geometry_0",
+        "passed": true
+      },
+      {
+        "name": "windows_jpeg_orientation_0",
+        "passed": true
+      },
+      {
+        "name": "windows_tiff_geometry_0",
+        "passed": true
+      },
+      {
+        "name": "windows_tiff_orientation_0",
+        "passed": true
+      },
+      {
+        "name": "windows_tiff_pixels_0",
+        "passed": true
+      },
+      {
+        "name": "windows_tiff_geometry_1",
+        "passed": true
+      },
+      {
+        "name": "windows_tiff_orientation_1",
+        "passed": true
+      },
+      {
+        "name": "windows_tiff_pixels_1",
+        "passed": true
+      },
+      {
+        "name": "windows_tiff_geometry_2",
+        "passed": true
+      },
+      {
+        "name": "windows_tiff_orientation_2",
+        "passed": true
+      },
+      {
+        "name": "windows_tiff_pixels_2",
+        "passed": true
+      },
+      {
+        "name": "windows_tiff_equal_geometry_two_pages",
+        "passed": true
+      }
+    ],
+    "observations": [
+      {
+        "case": "native_subifd_catalog",
+        "planar": false,
+        "oiio_exposes_subifd_as_mip1": false,
+        "oiio_error": ""
+      },
+      {
+        "case": "native_subifd_role",
+        "planar": false,
+        "child_offset": 3118,
+        "is_reduced": true
+      },
+      {
+        "case": "native_subifd_catalog",
+        "planar": true,
+        "oiio_exposes_subifd_as_mip1": false,
+        "oiio_error": ""
+      },
+      {
+        "case": "native_subifd_role",
+        "planar": true,
+        "child_offset": 3182,
+        "is_reduced": true
+      },
+      {
+        "case": "windows_jpeg_primary_decoder_comparison",
+        "exact": true,
+        "differing_samples": 0
+      },
+      {
+        "case": "windows_thumbnail_catalog",
+        "kind": "jpeg",
+        "page": 0,
+        "wpf_has_thumbnail": true,
+        "oiio_has_thumbnail": true,
+        "oiio_size": [
+          2,
+          2
+        ]
+      },
+      {
+        "case": "windows_thumbnail_catalog",
+        "kind": "tiff",
+        "page": 1,
+        "wpf_has_thumbnail": false,
+        "oiio_has_thumbnail": false
+      },
+      {
+        "case": "windows_thumbnail_catalog",
+        "kind": "tiff",
+        "page": 0,
+        "wpf_has_thumbnail": true,
+        "oiio_has_thumbnail": false
+      },
+      {
+        "case": "windows_thumbnail_catalog",
+        "kind": "tiff",
+        "page": 1,
+        "wpf_has_thumbnail": false,
+        "oiio_has_thumbnail": false
+      },
+      {
+        "case": "windows_tiff_page_facts",
+        "page": 0,
+        "sample_dtype": "uint8",
+        "orientation": 6,
+        "subifd_count": 1,
+        "child_shape": [
+          2,
+          2,
+          3
+        ],
+        "child_reduced": false
+      },
+      {
+        "case": "windows_tiff_page_facts",
+        "page": 1,
+        "sample_dtype": "uint16",
+        "orientation": 3,
+        "subifd_count": 0
+      }
+    ],
+    "passed": 54
+  },
+  "orientation-verification": [
+    {
+      "orientation": 1,
+      "full_pixels_exact": true,
+      "region_pixels_exact": true,
+      "padding_untouched": true,
+      "out_of_bounds_refused": true
+    },
+    {
+      "orientation": 2,
+      "full_pixels_exact": true,
+      "region_pixels_exact": true,
+      "padding_untouched": true,
+      "out_of_bounds_refused": true
+    },
+    {
+      "orientation": 3,
+      "full_pixels_exact": true,
+      "region_pixels_exact": true,
+      "padding_untouched": true,
+      "out_of_bounds_refused": true
+    },
+    {
+      "orientation": 4,
+      "full_pixels_exact": true,
+      "region_pixels_exact": true,
+      "padding_untouched": true,
+      "out_of_bounds_refused": true
+    },
+    {
+      "orientation": 5,
+      "full_pixels_exact": true,
+      "region_pixels_exact": true,
+      "padding_untouched": true,
+      "out_of_bounds_refused": true
+    },
+    {
+      "orientation": 6,
+      "full_pixels_exact": true,
+      "region_pixels_exact": true,
+      "padding_untouched": true,
+      "out_of_bounds_refused": true
+    },
+    {
+      "orientation": 7,
+      "full_pixels_exact": true,
+      "region_pixels_exact": true,
+      "padding_untouched": true,
+      "out_of_bounds_refused": true
+    },
+    {
+      "orientation": 8,
+      "full_pixels_exact": true,
+      "region_pixels_exact": true,
+      "padding_untouched": true,
+      "out_of_bounds_refused": true
+    }
+  ],
+  "thumbnail-verification": {
+    "orientation_verification": "All eight EXIF transform variants passed independent Pillow full-image, ROI, padding and out-of-bounds checks",
+    "jpeg_thumbnail_matches_wpf": true,
+    "jpeg_primary_matches_wpf": true,
+    "jpeg_oiio_thumbnail_orientation": 0,
+    "tiff_thumbnail_matches_wpf": true,
+    "tiff_thumbnail_tags": {
+      "NewSubfileType": 0,
+      "Orientation": "absent"
+    },
+    "imagecodecs_version": "2026.10.10"
+  },
+  "artifact_directory": "/mnt/v/output/zencodec/platform-selection-20261025/",
+  "review_log_directory": "platform review task export; log SHA-256 values below"
+}

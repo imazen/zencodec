@@ -1,0 +1,13 @@
+{
+  "implementation": "483f46301356f88474e6ccb9a877317d86c90b3e",
+  "command": "TMPDIR=$HOME/tmp CARGO_TARGET_DIR=<isolated-target> run-heavy --mem 12G --jobs 4 -- timeout --kill-after=15s 6m just spatial-validation-check /mnt/v/output/zencodec/platform-regions-20261026-run/native <oracle-python>",
+  "log": "zencodec-platform-regions-full2-2026-10-26.log",
+  "sha256": "748c4ac8919244f46219588abd21c8dadcbbb816cae894ec0eaa13fde49e2b49",
+  "results": [
+    "test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 100.60s",
+    "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "run-heavy: done rc=0 101s | peak-RSS 0.22GiB | min-avail 13083MiB | peak-load 1.35"
+  ],
+  "artifact_directory": "/mnt/v/output/zencodec/platform-regions-20261026-run/native",
+  "scope": "Native TIFF/JXL selected-image and sample tests, independent TIFF pixel and JXL discovery oracles, strict Clippy. Process RSS is not a native workspace bound."
+}

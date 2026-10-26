@@ -2,6 +2,11 @@
 
 ## Native image selection (unreleased experiment)
 
+- Apply the WIC/OpenImageIO review to the private collection: attach region
+  requirements to each selected image, return TIFF canvas/region geometry,
+  and reject unsupported JXL regions explicitly. Preserve request-local
+  failures and test differently sized pages and shared SubIFDs.
+
 - Adopt native TIFF regions into the shared pixel owner with exact signed/wide
   sample bytes, explicit stride and original allocation ownership. Retain each
   selected directory's ICC and unapplied orientation; refuse unresolved alpha
