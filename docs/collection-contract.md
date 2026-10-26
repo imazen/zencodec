@@ -66,6 +66,38 @@ overflowing requests refuse without clipping. TIFF qualifies native regions;
 the current JXL adapters explicitly refuse them. Returned geometry belongs to
 the selected image, so differently sized pages use the same call.
 
+## Inspect geometry before allocating samples
+
+A viewer can lay out a page or choose a tile before decoding it:
+
+```rust
+let description = images.describe(&child)?;
+```
+
+`Collection::describe` and `CheckedCollection::describe` return the same
+`ImageDescription`: nonempty local stored dimensions, optional established
+orientation and optional separate placement. `None` orientation does not mean
+identity. Raw layers describe their full local size; their presentation canvas
+belongs to placement. Describing an issued ID must not reconstruct pixels or
+advance a discovery cursor. Unsupported inspection refuses explicitly.
+
+The [executing example](../perf/spatial-validation/src/collection.rs) keeps the
+opened operation with the caller, so its returned identity remains useful for
+later decoding. The checked wrapper validates geometry and placement, preserves
+typed causes under `CollectionStage::Describe`, and checks cancellation through
+the final return. There is no separate inspection capability negotiation or
+second resolver protocol. Pixel publication policy still runs on each decode.
+The [shared-description receipt](../benchmarks/public_description_2026-10-26.json)
+records the native, checked-consumer, workspace and guide validation.
+
+These facts establish no output pixel format, supported compression, complete
+metadata inventory or workspace bound. TIFF can describe a directory whose
+compression cannot be decoded. Discovery can traverse preceding compressed
+frames, and transport buffering can read ahead; this is not a promise of zero
+payload I/O. A successful description cannot authorize decoding a replaced
+HTTP object. Native qualification and the initial experiment are recorded in
+the [description receipt](../benchmarks/selected_description_2026-10-26.json).
+
 ## Place a layer without losing its local samples
 
 `image.interpretation().placement` now exposes an established presentation
@@ -92,10 +124,11 @@ retry an unsupported query. `Discovery::new(collection, attempts)` wraps the
 adapter with one allowance for the whole opened operation. Put it inside the
 `CheckedCollection` factory when that bound is required.
 
-Each `images`, `children` or `next` call charges before delegation, including
+Each `images`, `children`, `next` or `describe` call charges before delegation, including
 errors and successful exhaustion. Reopening a cursor cannot reset the count.
 `DiscoveryExhausted` retains the method, allowance and usage as a typed cause.
-Existing IDs remain decodable after discovery exhaustion.
+Successful descriptions have a separate counter; repeating a cached description
+still charges. Existing IDs remain decodable after discovery exhaustion.
 
 This bounds delegated calls. It excludes opening, native parse work inside a
 call, selected-image reconstruction, source bytes and memory. Native JXL header
@@ -140,7 +173,7 @@ the full native/disk/HTTP run, workspace and AV1 checks, API snapshots and brows
 qualification, including failures found and corrected during promotion.
 
 Concrete adapter packaging and registry convenience remain necessary for a
-normal application to open collections without this harness. Header-only description,
+normal application to open collections without this harness. Broader header facts,
 all native layer configurations, reduced-level selection, broader snapshots,
 full workspace admission and complete carrier privacy remain separate work.
 

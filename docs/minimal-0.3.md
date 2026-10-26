@@ -372,7 +372,8 @@ its types are published.
 
 The input-admission review remains independently mergeable. Native retention
 and collection experiments now exercise a shared collection and checked
-consumer on PR 168; concrete adapter factories and registry integration remain
+consumer on PR 168, including selected source geometry before reconstruction;
+concrete adapter factories and registry integration remain
 open. [The collection contract](collection-contract.md) records that boundary.
 Freeze the broader breaking signatures after their consumer paths exercise them.
 A smaller driver repair release can ship independently; do not present it as

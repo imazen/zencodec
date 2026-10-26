@@ -2,8 +2,11 @@
 
 ## Inspect a selected image before reconstructing it
 
-The candidate in [`src/description.rs`](src/description.rs) describes only the
+The shared [`ImageDescription`](../../src/collection/description.rs) describes only the
 selected image's stored dimensions, stored orientation and separate placement.
+`Collection::describe` is the one adapter method; the candidate inspection trait
+has been removed. `CheckedCollection::describe` validates the returned facts,
+and the shared discovery allowance also charges cached descriptions and errors.
 It does not use `ImageInfo`: this query establishes neither a complete metadata
 inventory nor the rendered output format, supported compression or workspace.
 TIFF reads the selected directory's tags without initializing its raster decoder.

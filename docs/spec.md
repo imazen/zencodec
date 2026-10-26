@@ -142,6 +142,7 @@ trait Collection {
     fn images(&mut self) -> Result<Self::Cursor, At<CollectionError>>;
     fn children(&mut self, image: &ImageId) -> Result<Self::Cursor, At<CollectionError>>;
     fn next(&mut self, cursor: &mut Self::Cursor) -> Result<Option<ImageId>, At<CollectionError>>;
+    fn describe(&mut self, image: &ImageId) -> Result<ImageDescription, At<CollectionError>>;
     fn decode(&mut self, image: &ImageId, request: &ImageRequest)
         -> Result<ImageOutput, At<CollectionError>>;
 }
@@ -154,10 +155,17 @@ empty discovery or a clipped region. Backend failures retain their original
 concrete error and location trace; default formatting omits backend payloads.
 
 `Discovery<C>::new(collection, attempts)` applies one immutable call allowance
-across all cursors. It charges before delegating `images`, `children` and `next`,
+across all cursors. It charges before delegating `images`, `children`, `next` and `describe`,
 including cached results, exhaustion and errors. It does not count native parser
 work, source bytes, allocation or CPU time. Issued IDs remain decodable after
 discovery exhaustion.
+
+`ImageDescription` contains local stored dimensions, optional established
+orientation and separate placement. Description does not reconstruct pixels or
+advance a cursor. `CheckedCollection::describe` validates these facts and checks
+the operation's stop token before returning them; errors identify the `Describe`
+stage. This query establishes no rendered format, supported compression,
+complete metadata or resource admission. A later decode can still fail.
 
 `operation::CheckedCollection<C, R>::open(stop, resolver, factory)` passes one
 latched stop token to the factory and checks it before and after requests. Its
@@ -170,7 +178,7 @@ identifies the failure stage and retains the original cause through `Error::sour
 
 This is publication after reconstruction, not native allocation admission or a
 whole-container privacy guarantee. Concrete adapter packaging, `CodecSet`
-registration, header-only image description and broader source/workspace bounds
+registration and broader source/workspace bounds
 remain open. See [the collection contract](collection-contract.md) for executing
 native coverage, caller examples and the full failure boundaries.
 
