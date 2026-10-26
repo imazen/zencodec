@@ -6,27 +6,27 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2890 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 197 lines (197 hidden + 0 excluded-feature)
+# files: zencodec.txt 2905 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 196 lines (196 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                19
-#   pub types (struct/enum/trait/alias)       338
+#   pub types (struct/enum/trait/alias)       339
 #   pub consts/statics                        302
 #   free functions                             83
-#   inherent methods                         1052
-#   struct fields                             414
-#   enum variants                             474
+#   inherent methods                         1055
+#   struct fields                             421
+#   enum variants                             476
 #   re-exports                                 15
-#   trait roster entries (type × trait)       974
+#   trait roster entries (type × trait)       975
 #   conditional trait impls (verbatim)          8
 #   auto-trait-complete types                 176
-#   auto-trait exceptions                      40
+#   auto-trait exceptions                      41
 #
 # per-module pub lines:
 #   (root)                          960
 #   animation                        11
-#   collection                       89
+#   collection                      102
 #   decode                          283
 #   encode                          189
 #   estimate                         48
@@ -44,7 +44,7 @@
 #   storage                          34
 #   time                             22
 
-## items (2617 lines)
+## items (2630 lines)
 
 pub mod zencodec
 pub use At
@@ -83,8 +83,10 @@ pub collection::CollectionOpenError::NotRegistered(ImageFormat)
 pub collection::CollectionOpenError::ResidentInputRequired
 pub collection::CollectionOpenError::UnsupportedDecodePolicy
 pub collection::CollectionOpenError::UnsupportedDecodePolicy::unsupported: decode::DecodePolicy
+pub collection::CollectionOpenError::UnsupportedFactoryContract(ImageFormat)
 pub collection::CollectionOpenError::UnsupportedLimits
 pub collection::CollectionOpenError::UnsupportedLimits::unsupported: ResourceLimits
+pub collection::CollectionOpenError::UnsupportedOutputStorage
 #[non_exhaustive] pub enum collection::Composition
 pub collection::Composition::Composited
 pub collection::Composition::Uncomposited
@@ -110,6 +112,14 @@ pub collection::SelectionError::UnsupportedChildren
 pub collection::SelectionError::UnsupportedComposition
 pub collection::SelectionError::UnsupportedDescription
 pub collection::SelectionError::UnsupportedRegion
+#[non_exhaustive] pub struct collection::CollectionOpenContext
+pub collection::CollectionOpenContext::format: ImageFormat
+pub collection::CollectionOpenContext::limits: core::option::Option<ResourceLimits>
+pub collection::CollectionOpenContext::output_storage: core::option::Option<storage::StorageBudget>
+pub collection::CollectionOpenContext::policy: core::option::Option<decode::DecodePolicy>
+pub collection::CollectionOpenContext::stop: almost_enough::stop_token::StopToken
+pub collection::CollectionOpenContext::view: collection::Composition
+pub fn collection::CollectionOpenContext::new(ImageFormat, collection::Composition, almost_enough::stop_token::StopToken) -> Self
 pub struct collection::Discovery<C>
 pub fn collection::Discovery<C>::new(C, u64) -> Self
 pub fn collection::Discovery<C>::usage(&self) -> collection::DiscoveryUsage
@@ -145,8 +155,10 @@ pub const fn collection::ImageRequest::new() -> Self
 pub fn collection::ImageRequest::with_region(self, impl core::convert::Into<collection::RegionRequest>) -> Self
 #[non_exhaustive] pub struct collection::OpenRequest
 pub collection::OpenRequest::discovery_attempts: u64
+pub collection::OpenRequest::output_storage: core::option::Option<storage::StorageBudget>
 pub collection::OpenRequest::view: collection::Composition
 pub const fn collection::OpenRequest::new(collection::Composition, u64) -> Self
+pub fn collection::OpenRequest::with_output_storage(self, storage::StorageBudget) -> Self
 pub struct collection::Origin(_)
 pub fn collection::Origin::image(&self, u64) -> collection::ImageId
 pub fn collection::Origin::key(&self, &collection::ImageId) -> core::result::Result<u64, collection::SelectionError>
@@ -166,6 +178,7 @@ pub fn collection::Collection::view(&self) -> collection::Composition
 pub trait collection::CollectionFactory: core::marker::Send + core::marker::Sync
 pub fn collection::CollectionFactory::formats(&self) -> &[ImageFormat]
 pub fn collection::CollectionFactory::open<'a>(&self, &'a mut dyn source::DynReadAt, ImageFormat, collection::Composition, core::option::Option<ResourceLimits>, core::option::Option<decode::DecodePolicy>, almost_enough::stop_token::StopToken) -> core::result::Result<collection::ErasedCollection<'a>, collection::Cause>
+pub fn collection::CollectionFactory::open_with<'a>(&self, &'a mut dyn source::DynReadAt, collection::CollectionOpenContext) -> core::result::Result<collection::ErasedCollection<'a>, collection::Cause>
 pub type collection::Cause = alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)>
 pub mod decode
 #[non_exhaustive] pub enum decode::BoundaryAction
@@ -2664,7 +2677,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (224 types)
+## trait impls (225 types)
 
 &mut D: decode::ControlledIncrementalDecode, decode::IncrementalDecode
 &mut S: source::DynReadAt
@@ -2724,6 +2737,7 @@ animation::FrameDuration: Clone, Copy, Debug, Eq, Hash, PartialEq
 animation::TimingError: Clone, Copy, Debug, Display, Eq, Error, PartialEq
 animation::TimingQuantizer: Clone, Copy, Debug
 collection::CollectionError: Debug, Display, Error
+collection::CollectionOpenContext: Clone, Debug
 collection::CollectionOpenError: Clone, Copy, Debug, Display, Eq, Error, PartialEq
 collection::Composition: Clone, Copy, Debug, Eq, PartialEq
 collection::Discovery<C>: collection::Collection
@@ -2734,7 +2748,7 @@ collection::ErasedCollection<'_>: collection::Collection
 collection::ImageDescription: Clone, Copy, Debug, Eq, PartialEq
 collection::ImageId: Clone, Debug, Eq, Hash, PartialEq
 collection::ImageRequest: Clone, Copy, Debug, Default
-collection::OpenRequest: Clone, Copy, Debug
+collection::OpenRequest: Clone, Debug
 collection::Origin: Default
 collection::RegionRequest: Clone, Copy, Debug, Default, Eq, From<image::Rect>, PartialEq
 collection::SelectionError: Clone, Copy, Debug, Display, Eq, Error, PartialEq
@@ -2911,6 +2925,7 @@ ImageInfo: !RefUnwindSafe !UnwindSafe
 OwnedAnimationFrame: !RefUnwindSafe !UnwindSafe
 Unsupported<E>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 collection::CollectionError: !RefUnwindSafe !UnwindSafe
+collection::CollectionOpenContext: !RefUnwindSafe !UnwindSafe
 collection::Discovery<C>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 collection::ErasedCollection<'a>: !RefUnwindSafe !Send !Sync !UnwindSafe
 collection::ErasedCursor: !RefUnwindSafe !Send !Sync !UnwindSafe

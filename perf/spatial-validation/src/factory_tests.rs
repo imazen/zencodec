@@ -27,6 +27,30 @@ fn stop() -> StopToken {
     StopToken::new(Unstoppable)
 }
 
+#[test]
+fn collection_factory_unqualified_output_storage_refuses_before_source_or_policy() {
+    for (bytes, objects) in [(0, 0), (0, 1), (65536, 4)] {
+        let storage = zencodec::storage::StorageBudget::new(bytes, objects);
+        let mut source = ReadAtShim(Positional::new(&[]));
+        let reads = source.0.reads.clone();
+        let lengths = source.0.lengths.clone();
+        let callbacks = Cell::new(0);
+        let resolver = |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+            callbacks.set(callbacks.get() + 1);
+            Ok(Decision::UsePreset)
+        };
+        let error = registered().open_collection(
+            ImageFormat::Tiff, &mut source,
+            request(Composition::Composited).with_output_storage(storage.clone()),
+            resolver, stop(),
+        ).err().expect("unqualified TIFF output admission was accepted");
+        assert_eq!(zencodec::find_cause::<FactoryError>(&error),
+            Some(&FactoryError::UnsupportedOutputStorage));
+        assert_eq!((reads.get(), lengths.get(), callbacks.get()), (0, 0, 0));
+        assert_eq!((storage.reserved_bytes(), storage.reserved_objects()), (0, 0));
+    }
+}
+
 // A local source cannot be sent to another thread and cannot expose a resident
 // slice. It also records length queries to detect accidental full-source scans.
 struct Positional<'a> {

@@ -489,6 +489,16 @@ image-owner-integration:
     just doc-default
     just api-doc
 
+# Core requirement forwarding, ownership and every workspace contract.
+collection-context-integration:
+    cargo fmt -p zencodec
+    just image-owner-integration
+
+collection-context-native artifacts:
+    cargo fmt --manifest-path perf/spatial-validation/Cargo.toml -p spatial-validation
+    SPATIAL_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked collection_factory_ -- --nocapture --test-threads=1
+    just spatial-validation-lint
+
 # Same complete native suite and test timeout as the documentation workflow.
 spatial-ci-check artifacts:
     #!/usr/bin/env bash

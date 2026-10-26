@@ -62,6 +62,19 @@ set's pulse cancellation, set stop and per-call stop. Dropping the registry does
 not disable any of these cancellation sources. This does not add native progress
 reporting or an implicit format probe.
 
+`OpenRequest::with_output_storage(pool)` requires a shared output payload
+allowance for this opening. It makes no capability query. An adapter must admit
+all returned color and auxiliary payloads before native writes, or return
+`CollectionOpenError::UnsupportedOutputStorage`. Retained images keep the pool
+charge after the operation ends. Native workspace and metadata need separate
+bounds; selecting this pool does not satisfy `max_memory_bytes`.
+
+Factories receive these resolved requirements through `CollectionOpenContext`.
+The temporary `open_with` bridge rejects a pool before entering an older adapter;
+native request-level integration is being qualified before the compatibility
+method is removed. Codec-configured JXL storage remains the qualified positive
+path in the [current matrix](../benchmarks/packaged_output_storage_2026-10-26.json).
+
 Configured `ResourceLimits` and `decode::DecodePolicy` are requirements on this
 path. An adapter must enforce them or return a typed refusal before affected
 work. The private TIFF factory enforces `max_width`, `max_height` and

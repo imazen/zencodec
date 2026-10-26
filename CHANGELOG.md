@@ -2,6 +2,11 @@
 
 ## Native image selection (unreleased experiment)
 
+- Add operation-scoped output storage to `OpenRequest` and group resolved
+  factory requirements in `CollectionOpenContext`. The compatibility path
+  refuses unqualified storage before native opening; no capability query or
+  implicit fallback is required. Native request-level integration is next.
+
 - Qualify the packaged JXL output allowance across 147 presentations and nine
   raw layers alongside ordinary allocation. Preserve exact samples, stride and
   existing independent-reader gates; check shared charges through concurrent
@@ -16,6 +21,10 @@
   inverted-CMYK conversion still refuses with `NeedsCms`.
 
 ### QUEUED BREAKING CHANGES
+
+- Review-only `OpenRequest` is now `Clone` instead of `Copy`: cloned requests
+  share the same retained-output storage allowance. The factory compatibility
+  entry will be removed once pinned adapters use the context contract.
 
 - Review-only `Samples::Values` now carries `ValueSlice` by value instead of
   borrowing the `Values` allocation container. This allows admitted auxiliary

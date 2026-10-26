@@ -3,8 +3,8 @@ use super::CodecSet;
 use crate::{
     At, ImageFormat, StopToken,
     collection::{
-        Collection, CollectionFactory, CollectionOpenError, Discovery, ErasedCollection,
-        OpenRequest, SelectionError,
+        Collection, CollectionFactory, CollectionOpenContext, CollectionOpenError, Discovery,
+        ErasedCollection, OpenRequest, SelectionError,
     },
     operation::{CheckedCollection, CollectionOperationError, PolicyResolver},
     source::DynReadAt,
@@ -49,14 +49,11 @@ impl CodecSet {
                 .iter()
                 .find(|factory| factory.formats().contains(&format))
                 .ok_or(CollectionOpenError::NotRegistered(format))?;
-            let collection = factory.open(
-                source,
-                format,
-                request.view,
-                self.limits,
-                self.decode_policy,
-                stop,
-            )?;
+            let mut context = CollectionOpenContext::new(format, request.view, stop);
+            context.limits = self.limits;
+            context.policy = self.decode_policy;
+            context.output_storage = request.output_storage;
+            let collection = factory.open_with(source, context)?;
             if collection.view() != request.view {
                 return Err(Box::new(SelectionError::UnsupportedComposition));
             }

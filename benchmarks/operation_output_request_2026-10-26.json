@@ -1,0 +1,59 @@
+{
+  "kind": "operation output storage requirement and migration bridge; no timing claim",
+  "base_commit": "daff4704551c8366a9fa7430c1839b563eabfb71",
+  "native_package": "7fc162650b9d104d51ca2ae04fa9c292a2b4e941",
+  "source_sha256": {
+    "src/collection/factory.rs": "67c8a74962bd3d2288805a4ab80643e9f2877a57950bb75f62a170bae2ed4700",
+    "src/set/collection.rs": "72534269aec2082fc035c009f860e43951586c45d8fbc95ded295f27da70146e",
+    "perf/spatial-validation/src/factory_tests.rs": "21932c596c80e869ea2effd95262266341da5d97243541a03ed2f4b3b47a1e79"
+  },
+  "checks": {
+    "workspace": "all-feature tests/doctests, strict all-target lint, WASM, strict Rustdoc and API snapshots passed; existing ignored doctests unchanged",
+    "native_factory": "17 passed, none ignored; strict all-target lint passed",
+    "guide": "source and browser gates passed",
+    "new_requirement": "unsupported pool refused before legacy opening, source queries or publication; cloned requests share pool; existing limit/policy/cancellation/selection controls unchanged"
+  },
+  "initial_failures": [
+    "Removed a nonexistent codec feature guard from the new test, without suppressing its lint.",
+    "Completed the new source sentinel with the required read_exact_at method.",
+    "Made the native recipe require its persistent artifact directory instead of omitting SPATIAL_ARTIFACTS."
+  ],
+  "runs": [
+    {
+      "name": "core",
+      "resource_result": "run-heavy: done rc=101 12s | peak-RSS 0.50GiB | min-avail 12835MiB | peak-load 0.61",
+      "sha256": "d826ea389affc1c4d4e547ac90ca9c5104092019dd5b0657c03d80377ba80cfb"
+    },
+    {
+      "name": "core-2",
+      "resource_result": "run-heavy: done rc=101 1s | peak-RSS 0.30GiB | min-avail 13532MiB | peak-load 0.65",
+      "sha256": "7cb058d4b627d7cd0bb9d91c6dfa1fe40bf82bb23bc18f498c862d59db93ce43"
+    },
+    {
+      "name": "core-3",
+      "resource_result": "run-heavy: done rc=0 18s | peak-RSS 0.40GiB | min-avail 12922MiB | peak-load 1.08",
+      "sha256": "8a04719b55ca57e7e01071e9a747001c128cb710f8461761e5c4a53afba6cf6c"
+    },
+    {
+      "name": "native",
+      "resource_result": "run-heavy: done rc=101 13s | peak-RSS 0.55GiB | min-avail 12927MiB | peak-load 1.10",
+      "sha256": "45fdf3cf2272ca4822a5aecd63926419778efe3fc27a0be85230f3156304f81b"
+    },
+    {
+      "name": "native-2",
+      "resource_result": "run-heavy: done rc=0 10s | peak-RSS 0.43GiB | min-avail 13184MiB | peak-load 1.11",
+      "sha256": "534f3ec4e9f779d89dde0a9efc5c9cedfb602d06af734d20185fa2d162cbfccb"
+    },
+    {
+      "name": "browser",
+      "resource_result": "run-heavy: done rc=0 10s | peak-RSS 0.17GiB | min-avail 13091MiB | peak-load 0.69",
+      "sha256": "e5ccd29c8a9381a1311e1cd06db85aabc5fa0fa2c53f3def53efb2e862dcc095"
+    }
+  ],
+  "artifact_directory": "/mnt/v/output/zencodec/platform-regions-20261026-run/operation-context-1",
+  "remaining": [
+    "Request-level native admission pending package migration; codec-configured path already qualified.",
+    "Compatibility opening method remains only for the staged pinned-adapter update.",
+    "No native workspace, total memory or throughput claim."
+  ]
+}

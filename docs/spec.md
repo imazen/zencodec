@@ -218,14 +218,28 @@ native progress reporting is not supplied by this opening contract.
 ```rust
 trait CollectionFactory: Send + Sync {
     fn formats(&self) -> &[ImageFormat];
+    fn open_with<'a>(&self, source: &'a mut dyn DynReadAt,
+        context: CollectionOpenContext) -> Result<ErasedCollection<'a>, Cause>;
+    // Temporary compatibility entry while pinned adapters migrate:
     fn open<'a>(&self, source: &'a mut dyn DynReadAt, format: ImageFormat,
         view: Composition, limits: Option<ResourceLimits>, policy: Option<DecodePolicy>,
         stop: StopToken) -> Result<ErasedCollection<'a>, Cause>;
 }
 impl OpenRequest {
     fn new(view: Composition, discovery_attempts: u64) -> Self;
+    fn with_output_storage(self, storage: storage::StorageBudget) -> Self;
 }
 ```
+
+`CollectionOpenContext` groups matched format, view, inherited limits/decode
+policy, the latched stop token and optional required output storage. The
+operation pool is shared by request clones; admission must precede native output
+allocation, and charges remain with the last retained image owner. This does not
+cover native workspace or metadata. Adapters that cannot enforce the pool return
+`CollectionOpenError::UnsupportedOutputStorage` before affected work. The default
+context bridge refuses storage before calling the compatibility opening method.
+This bridge keeps independently pinned adapters buildable while they migrate;
+it is scheduled for removal before the reviewed collection API lands.
 
 `ErasedCollection::new` erases the native collection once and its owned cursor
 state once per cursor. Foreign cursors fail before native work. The small box
