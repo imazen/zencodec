@@ -11,10 +11,28 @@ import json
 import os
 import re
 import subprocess
+import signal
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
+
+
+def run_command(command, environment, timeout=240):
+    """Keep the existing deadline and terminate this command's whole process group."""
+    child = subprocess.Popen(command, env=environment, start_new_session=True)
+    try:
+        return subprocess.CompletedProcess(command, child.wait(timeout=timeout))
+    except BaseException:
+        # Killing only `just` leaves cargo and its test process running after
+        # the simulator and resource wrapper have exited. This group belongs
+        # exclusively to the command started above, never to the caller.
+        try:
+            os.killpg(child.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        child.wait()
+        raise
 
 
 def main():
@@ -125,7 +143,7 @@ def main():
     environment = dict(os.environ, SPATIAL_HTTP_URL=f"http://127.0.0.1:{args.port}",
                        SPATIAL_HTTP_ARTIFACTS=str(root))
     try:
-        completed = subprocess.run(command, env=environment, timeout=240, check=False)
+        completed = run_command(command, environment)
     finally:
         server.shutdown()
         worker.join(timeout=5)

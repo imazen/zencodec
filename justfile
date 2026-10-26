@@ -306,6 +306,16 @@ image-output-check:
     cargo clippy -p zencodec -p zencodec-media-testkit --all-targets --locked -- -D warnings
     cargo check -p zencodec --no-default-features --target wasm32-unknown-unknown --locked
 
+# Resolve the local workspace graph before its locked API gates.
+image-output-api-setup:
+    cargo metadata --format-version 1 > /dev/null
+
+# Validate shared image output and refresh its canonical API documentation.
+image-output-api-check:
+    just image-output-check
+    just doc-default
+    just api-doc
+
 # Empty geometries must remain safe through the borrowed native-plane API.
 frame-storage-edge-check:
     cargo test -p zencodec --locked frame_storage::tests::empty_width_rows_remain_empty_with_any_stride
@@ -327,7 +337,7 @@ spatial-validation-sync export:
     cp perf/spatial-validation/Cargo.toml "{{export}}/perf/spatial-validation/"
     cp perf/spatial-validation/oracle.py "{{export}}/perf/spatial-validation/"
     cp perf/spatial-validation/jxl_oracle.c perf/spatial-validation/layer_oracle.c "{{export}}/perf/spatial-validation/"
-    cp perf/spatial-validation/http_snapshot.py "{{export}}/perf/spatial-validation/"
+    cp perf/spatial-validation/http_snapshot.py perf/spatial-validation/http_snapshot_test.py "{{export}}/perf/spatial-validation/"
     cp perf/spatial-validation/src/*.rs "{{export}}/perf/spatial-validation/src/"
     mkdir -p "{{export}}/docs/examples"
     cp docs/examples/checked_source.rs "{{export}}/docs/examples/"
@@ -350,8 +360,14 @@ spatial-validation-check artifacts python features="":
     mkdir -p "{{artifacts}}-oracle"
     cc -std=c11 -Wall -Wextra -Werror perf/spatial-validation/layer_oracle.c -ljxl -o "{{artifacts}}-oracle/layer-oracle"
     cc -std=c11 -Wall -Wextra -Werror perf/spatial-validation/jxl_oracle.c -ljxl -o "{{artifacts}}-oracle/jxl-oracle"
-    JXL_LAYER_ORACLE="{{artifacts}}-oracle/layer-oracle" SPATIAL_ARTIFACTS="{{artifacts}}" SPATIAL_GENERATED_ARTIFACTS="{{artifacts}}-generated" SPATIAL_ORACLE_PYTHON="{{python}}" JXL_SELECTION_ORACLE="{{artifacts}}-oracle/jxl-oracle" cargo test --manifest-path perf/spatial-validation/Cargo.toml --features "{{features}}" --locked -- --nocapture --test-threads=1
+    JXL_LAYER_ORACLE="{{artifacts}}-oracle/layer-oracle" SPATIAL_LAYER_ARTIFACTS="{{artifacts}}-layers" SPATIAL_ARTIFACTS="{{artifacts}}" SPATIAL_GENERATED_ARTIFACTS="{{artifacts}}-generated" SPATIAL_ORACLE_PYTHON="{{python}}" JXL_SELECTION_ORACLE="{{artifacts}}-oracle/jxl-oracle" cargo test --manifest-path perf/spatial-validation/Cargo.toml --features "{{features}}" --locked -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --features "{{features}}" --all-targets --locked -- -D warnings
+
+# Start the real HTTP simulator and keep each fixture family in its own namespace.
+spatial-validation-all artifacts python port="3568":
+    just spatial-http-lifetime-check
+    just spatial-validation-check "{{artifacts}}" "{{python}}" file_snapshot
+    just spatial-http-check "{{artifacts}}-http" "{{port}}"
 
 spatial-consumer-check:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked common_ -- --nocapture
@@ -384,15 +400,23 @@ spatial-http-check artifacts port="3568":
     python3 perf/spatial-validation/http_snapshot.py "{{artifacts}}" "{{port}}" -- cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked --features http http_snapshot_ -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --features http --locked -- -D warnings
 
+spatial-http-lifetime-check:
+    python3 perf/spatial-validation/http_snapshot_test.py
+
 spatial-http-resolve:
     cargo update --manifest-path perf/spatial-validation/Cargo.toml -p ureq
 
 spatial-layer-check artifacts:
     mkdir -p "{{artifacts}}-oracle"
     cc -std=c11 -Wall -Wextra -Werror perf/spatial-validation/layer_oracle.c -ljxl -o "{{artifacts}}-oracle/layer-oracle"
-    SPATIAL_ARTIFACTS="{{artifacts}}" JXL_LAYER_ORACLE="{{artifacts}}-oracle/layer-oracle" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked raw_collection_ -- --nocapture --test-threads=1
+    SPATIAL_LAYER_ARTIFACTS="{{artifacts}}-layers" JXL_LAYER_ORACLE="{{artifacts}}-oracle/layer-oracle" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked raw_collection_ -- --nocapture --test-threads=1
     cc -std=c11 -Wall -Wextra -Werror perf/spatial-validation/jxl_oracle.c -ljxl -o "{{artifacts}}-oracle/jxl-oracle"
     JXL_SELECTION_ORACLE="{{artifacts}}-oracle/jxl-oracle" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked jxl_native_coalescing_ -- --nocapture
+    cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# Compile the source-extracted layer guide and execute it with a real CMYK file.
+spatial-layer-guide-check:
+    cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked raw_collection_guide_ -- --nocapture
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
 
 spatial-placement-check artifacts:
