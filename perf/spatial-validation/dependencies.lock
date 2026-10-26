@@ -161,7 +161,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -197,7 +197,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -208,7 +208,7 @@ checksum = "0ce92ff622d6dadf7349484f42c93271a0d49b7cc4d466a936405bacbe10aa78"
 dependencies = [
  "cfg-if",
  "rustix",
- "windows-sys",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -283,6 +283,12 @@ name = "httparse"
 version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
+
+[[package]]
+name = "imgref"
+version = "1.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e44b0a4eaa4c82f441d50a963f2d5f05a787240aeee097597033e72accfd22f"
 
 [[package]]
 name = "itoa"
@@ -485,6 +491,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rgb"
+version = "0.8.53"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47b34b781b31e5d73e9fbc8689c70551fd1ade9a19e3e28cfec8580a79290cc4"
+dependencies = [
+ "bytemuck",
+]
+
+[[package]]
 name = "rustix"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -494,7 +509,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -577,6 +592,7 @@ dependencies = [
  "zencodec",
  "zencodec-io",
  "zencodec-media",
+ "zenjxl",
  "zenjxl-decoder",
  "zenpixels",
  "zenpixels-convert",
@@ -697,12 +713,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d107c80dd656e1a2c254dfb1d57ece73b7f515b8a8684c270c23cab68f4a440d"
 
 [[package]]
+name = "windows-link"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
+
+[[package]]
 name = "windows-sys"
 version = "0.59.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets",
+]
+
+[[package]]
+name = "windows-sys"
+version = "0.61.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
+dependencies = [
+ "windows-link",
 ]
 
 [[package]]
@@ -802,6 +833,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenjxl"
+version = "0.3.0"
+source = "git+https://github.com/imazen/zenjxl?rev=e85000f44160f625c0c19091e62376657e67f52a#e85000f44160f625c0c19091e62376657e67f52a"
+dependencies = [
+ "enough",
+ "imgref",
+ "linear-srgb",
+ "rgb",
+ "thiserror",
+ "whereat",
+ "zencodec",
+ "zenjxl-decoder",
+ "zenpixels",
+ "zenpixels-convert",
+]
+
+[[package]]
 name = "zenjxl-decoder"
 version = "0.4.0"
 source = "git+https://github.com/imazen/zenjxl-decoder?rev=fe819360581acb3796ea2925f2a81f44f0a430e6#fe819360581acb3796ea2925f2a81f44f0a430e6"
@@ -847,6 +895,7 @@ version = "0.2.17"
 source = "git+https://github.com/imazen/zenpixels?rev=284a0598abf441dc886755b1e65c34dbdf6ce94d#284a0598abf441dc886755b1e65c34dbdf6ce94d"
 dependencies = [
  "bytemuck",
+ "rgb",
  "whereat",
 ]
 
@@ -864,6 +913,7 @@ dependencies = [
  "magetypes",
  "once_cell",
  "paste",
+ "rgb",
  "whereat",
  "zenpixels",
 ]

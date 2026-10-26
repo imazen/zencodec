@@ -338,6 +338,7 @@ spatial-validation-sync export:
     test ! -e "{{export}}/.jj"
     mkdir -p "{{export}}/perf/spatial-validation/src"
     cp perf/spatial-validation/Cargo.toml "{{export}}/perf/spatial-validation/"
+    cp perf/spatial-validation/dependencies.lock "{{export}}/perf/spatial-validation/Cargo.lock"
     cp perf/spatial-validation/oracle.py "{{export}}/perf/spatial-validation/"
     cp perf/spatial-validation/jxl_oracle.c perf/spatial-validation/layer_oracle.c "{{export}}/perf/spatial-validation/"
     cp perf/spatial-validation/build_jxl_oracles.py "{{export}}/perf/spatial-validation/"
@@ -454,6 +455,7 @@ spatial-factories-check artifacts:
 # Exact native pins are in the manifest; callers supply pinned independent readers.
 spatial-packaged-resolve:
     cargo update --manifest-path perf/spatial-validation/Cargo.toml
+    cp perf/spatial-validation/Cargo.lock perf/spatial-validation/dependencies.lock
 
 spatial-packaged-check artifacts:
     #!/usr/bin/env bash

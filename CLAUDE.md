@@ -232,9 +232,10 @@ CHANGELOGs. Full design context:
 ## Known Bugs
 
 - Packaged-JXL qualification (2026-10-26): the first harness promotion omitted
-  the regenerated standalone `perf/spatial-validation/Cargo.lock`; the locked
-  native documentation job failed before compilation. Keep the exported,
-  tested standalone lock with dependency-pin changes, including new packages.
+  the regenerated tracked `perf/spatial-validation/dependencies.lock`; CI copies
+  it to the ignored `Cargo.lock` before its locked build. Updating only
+  `Cargo.lock` cannot repair CI. Keep the tested `dependencies.lock` with
+  dependency-pin changes, including new packages.
 
 - Fixed source-guide regression (2026-10-26): a duplicate `collectionOpen`
   key silently replaced the TIFF opening signatures with `OpenRequest`.
