@@ -47,7 +47,7 @@ compressed input, native workspace or retained uncompressed samples.
 
 ## Native implementation following the review
 
-The private [`Collection`](../perf/spatial-validation/src/collection.rs) now
+The shared [`Collection`](../src/collection.rs) now
 takes an `ImageRequest` on each `decode`. Opening TIFF fixes composition and
 resource allowances; it no longer fixes one rectangle for all pages and
 children. A request selects the full image or an explicit stored-coordinate
@@ -128,7 +128,8 @@ The [public-output receipt](../benchmarks/public_image_output_2026-10-26.json)
 records the full native matrix, workspace tests, strict lint, no_std WebAssembly,
 rustdoc and guide checks. Its integration process reports
 `run-heavy: done rc=0 138s | peak-RSS 0.54GiB | min-avail 13374MiB | peak-load 1.50`.
-This is not a codec workspace bound. The collection remains private: policy
+This is not a codec workspace bound. The shared collection is now implemented
+on the API review PR; native adapter factories remain private. Policy
 preallocation admission, native work/latency bounds and broader source snapshots
 remain separate qualification gates.
 

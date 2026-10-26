@@ -6,26 +6,27 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2722 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 177 lines (177 hidden + 0 excluded-feature)
+# files: zencodec.txt 2824 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 187 lines (187 hidden + 0 excluded-feature)
 
 ## summary
 #
-#   pub modules                                18
-#   pub types (struct/enum/trait/alias)       308
-#   pub consts/statics                        296
+#   pub modules                                19
+#   pub types (struct/enum/trait/alias)       327
+#   pub consts/statics                        297
 #   free functions                             83
-#   inherent methods                         1014
-#   struct fields                             380
-#   enum variants                             440
+#   inherent methods                         1037
+#   struct fields                             400
+#   enum variants                             463
 #   re-exports                                 15
-#   trait roster entries (type × trait)       887
+#   trait roster entries (type × trait)       942
 #   conditional trait impls (verbatim)          8
-#   auto-trait-complete types                 159
-#   auto-trait exceptions                      34
+#   auto-trait-complete types                 169
+#   auto-trait exceptions                      38
 #
 # per-module pub lines:
-#   (root)                          951
+#   (root)                          953
 #   animation                        11
+#   collection                       64
 #   decode                          283
 #   encode                          189
 #   estimate                         48
@@ -34,16 +35,16 @@
 #   gainmap                         126
 #   helpers                          17
 #   icc                               1
-#   image                            92
+#   image                            93
 #   inventory                       103
 #   metadata_rewrite                 58
-#   operation                       159
+#   operation                       179
 #   prelude                         233
 #   source                           37
 #   storage                          34
 #   time                             22
 
-## items (2476 lines)
+## items (2561 lines)
 
 pub mod zencodec
 pub use At
@@ -72,6 +73,71 @@ pub const fn animation::FrameDuration::numerator(self) -> u64 [also: (root)]
 pub fn animation::FrameDuration::ticks_at(self, u32) -> core::result::Result<u64, animation::TimingError>
 pub const fn animation::TimingQuantizer::new(u32, u64) -> core::result::Result<Self, animation::TimingError> [also: (root)]
 pub fn animation::TimingQuantizer::quantize(&mut self, animation::FrameDuration) -> core::result::Result<animation::FrameDuration, animation::TimingError>
+pub mod collection
+#[non_exhaustive] pub enum collection::CollectionError
+pub collection::CollectionError::Backend(collection::Cause)
+pub collection::CollectionError::Requirement(collection::SelectionError)
+pub fn collection::CollectionError::located(collection::Cause) -> whereat::at::At<Self>
+#[non_exhaustive] pub enum collection::Composition
+pub collection::Composition::Composited
+pub collection::Composition::Uncomposited
+#[non_exhaustive] pub enum collection::DiscoveryMethod
+pub collection::DiscoveryMethod::Children
+pub collection::DiscoveryMethod::Images
+pub collection::DiscoveryMethod::Next
+#[non_exhaustive] pub enum collection::RegionRequest
+pub collection::RegionRequest::Full
+pub collection::RegionRequest::Stored(image::Rect)
+pub fn collection::RegionRequest::resolve(self, u32, u32) -> core::result::Result<image::Rect, collection::SelectionError>
+#[non_exhaustive] pub enum collection::SelectionError
+pub collection::SelectionError::Cycle
+pub collection::SelectionError::DiscoveryLimit
+pub collection::SelectionError::ForeignCursor
+pub collection::SelectionError::ForeignImage
+pub collection::SelectionError::InvalidRegion
+pub collection::SelectionError::InvalidRegion::height: u32
+pub collection::SelectionError::InvalidRegion::requested: image::Rect
+pub collection::SelectionError::InvalidRegion::width: u32
+pub collection::SelectionError::UnsupportedChildren
+pub collection::SelectionError::UnsupportedComposition
+pub collection::SelectionError::UnsupportedRegion
+pub struct collection::Discovery<C>
+pub fn collection::Discovery<C>::new(C, u64) -> Self
+pub fn collection::Discovery<C>::usage(&self) -> collection::DiscoveryUsage
+#[non_exhaustive] pub struct collection::DiscoveryExhausted
+pub collection::DiscoveryExhausted::limit: u64
+pub collection::DiscoveryExhausted::method: collection::DiscoveryMethod
+pub collection::DiscoveryExhausted::used: collection::DiscoveryUsage
+#[non_exhaustive] pub struct collection::DiscoveryUsage
+pub collection::DiscoveryUsage::attempts: u64
+pub collection::DiscoveryUsage::backend_errors: u64
+pub collection::DiscoveryUsage::exhausted_cursors: u64
+pub collection::DiscoveryUsage::returned_ids: u64
+pub collection::ImageGeometry::canvas_height: u32
+pub collection::ImageGeometry::canvas_width: u32
+pub collection::ImageGeometry::region: image::Rect
+pub fn image::ImageGeometry::validate(self) -> core::result::Result<(), image::GeometryError>
+pub struct collection::ImageId
+#[non_exhaustive] pub struct collection::ImageRequest
+pub collection::ImageRequest::region: collection::RegionRequest
+pub const fn collection::ImageRequest::new() -> Self
+pub fn collection::ImageRequest::with_region(self, impl core::convert::Into<collection::RegionRequest>) -> Self
+pub struct collection::Origin(_)
+pub fn collection::Origin::image(&self, u64) -> collection::ImageId
+pub fn collection::Origin::key(&self, &collection::ImageId) -> core::result::Result<u64, collection::SelectionError>
+pub fn collection::Origin::new() -> Self
+pub collection::Rect::height: u32
+pub collection::Rect::width: u32
+pub collection::Rect::x: u32
+pub collection::Rect::y: u32
+pub trait collection::Collection
+pub type collection::Collection::Cursor
+pub fn collection::Collection::children(&mut self, &collection::ImageId) -> core::result::Result<Self::Cursor, whereat::at::At<collection::CollectionError>>
+pub fn collection::Collection::decode(&mut self, &collection::ImageId, &collection::ImageRequest) -> core::result::Result<image::ImageOutput, whereat::at::At<collection::CollectionError>>
+pub fn collection::Collection::images(&mut self) -> core::result::Result<Self::Cursor, whereat::at::At<collection::CollectionError>>
+pub fn collection::Collection::next(&mut self, &mut Self::Cursor) -> core::result::Result<core::option::Option<collection::ImageId>, whereat::at::At<collection::CollectionError>>
+pub fn collection::Collection::view(&self) -> collection::Composition
+pub type collection::Cause = alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)>
 pub mod decode
 #[non_exhaustive] pub enum decode::BoundaryAction
 pub decode::BoundaryAction::AdoptInterpretation
@@ -1178,7 +1244,7 @@ pub image::Auxiliary::source_dim_shift: u32
 pub image::Auxiliary::source_precision: image::SourcePrecision
 pub struct image::GeometryError
 pub image::GeometryError::geometry: image::ImageGeometry
-pub struct image::ImageGeometry
+pub struct image::ImageGeometry [also: collection]
 pub image::ImageGeometry::canvas_height: u32
 pub image::ImageGeometry::canvas_width: u32
 pub image::ImageGeometry::region: image::Rect
@@ -1200,7 +1266,7 @@ pub fn image::ImageOutput::with_pixels<T>(&self, impl core::ops::function::FnOnc
 pub struct image::Plane<'a>
 pub image::Plane::meaning: &'a image::Meaning
 pub image::Plane::samples: image::Samples<'a>
-pub struct image::Rect
+pub struct image::Rect [also: collection]
 pub image::Rect::height: u32
 pub image::Rect::width: u32
 pub image::Rect::x: u32
@@ -1380,6 +1446,13 @@ pub fn metadata_rewrite::Services::merge_xmp(&self, &[u8], &[u8], usize, &dyn en
 pub fn metadata_rewrite::Services::normalize_icc(&self, &[u8], usize, &dyn enough::Stop) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, metadata_rewrite::Error>
 pub fn metadata_rewrite::Services::rewrite_xmp(&self, &[u8], usize, &dyn enough::Stop) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, metadata_rewrite::Error>
 pub mod operation
+#[non_exhaustive] pub enum operation::CollectionStage
+pub operation::CollectionStage::Decode
+pub operation::CollectionStage::Discovery
+pub operation::CollectionStage::Finished
+pub operation::CollectionStage::Open
+pub operation::CollectionStage::Policy
+pub operation::CollectionStage::Stopped
 #[non_exhaustive] pub enum operation::Decision
 pub operation::Decision::Choose(operation::ChoiceId)
 pub operation::Decision::Decline(whereat::at::At<operation::Decline>)
@@ -1452,6 +1525,16 @@ pub operation::Selection::Image(operation::PublicationOffer)
 pub operation::Selection::Transcode(operation::TranscodeOffer)
 #[non_exhaustive] pub struct operation::BoundaryOffer
 pub operation::BoundaryOffer::action: decode::BoundaryAction
+pub struct operation::CheckedCollection<C, R>
+pub fn operation::CheckedCollection<C, R>::children(&mut self, &collection::ImageId) -> core::result::Result<<C as collection::Collection>::Cursor, whereat::at::At<operation::CollectionOperationError>>
+pub fn operation::CheckedCollection<C, R>::decode(&mut self, &collection::ImageId, &collection::ImageRequest) -> core::result::Result<operation::Outcome<image::ImageOutput>, whereat::at::At<operation::CollectionOperationError>>
+pub fn operation::CheckedCollection<C, R>::first_image(&mut self, &collection::ImageRequest) -> core::result::Result<core::option::Option<operation::Outcome<image::ImageOutput>>, whereat::at::At<operation::CollectionOperationError>>
+pub fn operation::CheckedCollection<C, R>::images(&mut self) -> core::result::Result<<C as collection::Collection>::Cursor, whereat::at::At<operation::CollectionOperationError>>
+pub fn operation::CheckedCollection<C, R>::is_finished(&self) -> bool
+pub fn operation::CheckedCollection<C, R>::next(&mut self, &mut <C as collection::Collection>::Cursor) -> core::result::Result<core::option::Option<collection::ImageId>, whereat::at::At<operation::CollectionOperationError>>
+pub fn operation::CheckedCollection<C, R>::open(almost_enough::stop_token::StopToken, R, impl core::ops::function::FnOnce(almost_enough::stop_token::StopToken) -> core::result::Result<C, collection::Cause>) -> core::result::Result<Self, whereat::at::At<operation::CollectionOperationError>>
+pub fn operation::CheckedCollection<C, R>::report(&self) -> &operation::OperationReport
+pub fn operation::CheckedCollection<C, R>::with_policy_set(self, operation::PolicySet) -> Self
 pub struct operation::Choice<'a, T>
 pub const fn operation::Choice<'a, T>::id(self) -> operation::ChoiceId
 pub const fn operation::Choice<'a, T>::value(self) -> &'a T
@@ -1461,6 +1544,9 @@ pub fn operation::Choices<'a, T>::first(self) -> core::option::Option<operation:
 pub const fn operation::Choices<'a, T>::is_empty(self) -> bool
 pub fn operation::Choices<'a, T>::iter(self) -> impl core::iter::traits::exact_size::ExactSizeIterator<Item = operation::Choice<'a, T>>
 pub const fn operation::Choices<'a, T>::len(self) -> usize
+#[non_exhaustive] pub struct operation::CollectionOperationError
+pub operation::CollectionOperationError::report: alloc::boxed::Box<operation::OperationReport>
+pub operation::CollectionOperationError::stage: operation::CollectionStage
 #[non_exhaustive] pub struct operation::DecisionRecord
 pub operation::DecisionRecord::code: operation::DecisionCode
 pub operation::DecisionRecord::context: operation::DecisionContext
@@ -2522,7 +2608,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (203 types)
+## trait impls (216 types)
 
 &mut D: decode::ControlledIncrementalDecode, decode::IncrementalDecode
 &mut S: source::DynReadAt
@@ -2581,6 +2667,17 @@ alloc::boxed::Box<S>: source::DynReadAt
 animation::FrameDuration: Clone, Copy, Debug, Eq, Hash, PartialEq
 animation::TimingError: Clone, Copy, Debug, Display, Eq, Error, PartialEq
 animation::TimingQuantizer: Clone, Copy, Debug
+collection::CollectionError: Debug, Display, Error
+collection::Composition: Clone, Copy, Debug, Eq, PartialEq
+collection::Discovery<C>: collection::Collection
+collection::DiscoveryExhausted: Debug, Display, Error
+collection::DiscoveryMethod: Clone, Copy, Debug, Eq, PartialEq
+collection::DiscoveryUsage: Clone, Copy, Debug, Default, Eq, PartialEq
+collection::ImageId: Clone, Debug, Eq, Hash, PartialEq
+collection::ImageRequest: Clone, Copy, Debug, Default
+collection::Origin: Default
+collection::RegionRequest: Clone, Copy, Debug, Default, Eq, From<image::Rect>, PartialEq
+collection::SelectionError: Clone, Copy, Debug, Display, Eq, Error, PartialEq
 decode::BatchMeta: Clone, Copy, Debug, Eq, Hash, PartialEq
 decode::BoundaryAction: Clone, Copy, Debug, Eq, PartialEq
 decode::BoundaryId: Clone, Copy, Debug, Eq, PartialEq
@@ -2690,6 +2787,8 @@ operation::Choice<'a, T>: Debug
 operation::ChoiceId: Clone, Copy, Debug, Eq, PartialEq
 operation::Choices<'_, T>: Clone, Copy
 operation::Choices<'a, T>: Debug
+operation::CollectionOperationError: Debug, Display, Error
+operation::CollectionStage: Clone, Copy, Debug, Eq, PartialEq
 operation::Decision: Debug
 operation::DecisionCode: Clone, Copy, Debug, Eq, PartialEq
 operation::DecisionContext: Clone, Copy, Debug
@@ -2738,7 +2837,7 @@ impl<J, E> decode::IncrementalDecode for helpers::WholeFileIncremental<J> where 
 
 ## auto traits
 
-159 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+169 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
 CodecSet: !RefUnwindSafe !UnwindSafe
 CodecSetError: !RefUnwindSafe !UnwindSafe
@@ -2747,6 +2846,8 @@ Extensions: !RefUnwindSafe !UnwindSafe
 ImageInfo: !RefUnwindSafe !UnwindSafe
 OwnedAnimationFrame: !RefUnwindSafe !UnwindSafe
 Unsupported<E>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+collection::CollectionError: !RefUnwindSafe !UnwindSafe
+collection::Discovery<C>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 decode::DecodeOutput: !RefUnwindSafe !UnwindSafe
 decode::ErasedError: !RefUnwindSafe !UnwindSafe
 decode::Fused<D>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
@@ -2760,8 +2861,10 @@ image::ImageInterpretation: !RefUnwindSafe !UnwindSafe
 image::ImageOutput: !RefUnwindSafe !UnwindSafe
 image::OutputError: !RefUnwindSafe !UnwindSafe
 metadata_rewrite::Request<'a>: !RefUnwindSafe !Send !Sync !UnwindSafe
+operation::CheckedCollection<C, R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 operation::Choice<'a, T>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 operation::Choices<'a, T>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+operation::CollectionOperationError: !RefUnwindSafe !UnwindSafe
 operation::Decision: !RefUnwindSafe !UnwindSafe
 operation::OperationError: !RefUnwindSafe !UnwindSafe
 operation::Outcome<T>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe

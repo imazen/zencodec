@@ -30,9 +30,9 @@ minimum available 15998 MiB and peak load 1.45; this measures the guide check.
 
 ## What still needs production implementation
 
-The current priority is the API/native-codec validation loop. The spatial
-candidate now exercises real TIFF directory graphs and JXL presentations before
-adding a shared public selector. Performance tuning and additional platform
+The current priority is the API/native-codec validation loop. The shared collection
+now executes against real TIFF directory graphs, JXL presentations and local
+layers. Concrete adapter packaging and CodecSet registration remain open. Performance tuning and additional platform
 work do not gate that loop. See [the executable selection evidence](../perf/spatial-validation/README.md).
 
 - Extend coupled routes beyond the qualified JPEG/PNG sources and JPEG/PNG targets.
@@ -53,11 +53,14 @@ work do not gate that loop. See [the executable selection evidence](../perf/spat
 - Extend the source-extracted consumer/adapter/implementor guide as each remaining
   contract is implemented; keep executable examples and migration diagrams current.
 
+The [collection contract](collection-contract.md) documents the implemented
+selection methods, error scope, discovery accounting and remaining adapter work.
+
 ## Implemented on the PR
 
 | Contract | Implementation and verification |
 |---|---|
-| Synchronous parser bridge | `zencodec_io::ReadAtReader` supplies `Read + Seek` over a positional source, preserving native errors and its independent cursor. [Native TIFF experiments](../perf/spatial-validation/README.md) cover pages, reduced SubIFDs, planar edge tiles and wide strips. Shared selected output is implemented; the common selector remains private. Conditional single-object HTTP and Linux/XFS clone sources have native qualification; broader source contracts remain open |
+| Synchronous parser bridge | `zencodec_io::ReadAtReader` supplies `Read + Seek` over a positional source, preserving native errors and its independent cursor. [Native TIFF experiments](../perf/spatial-validation/README.md) cover pages, reduced SubIFDs, planar edge tiles and wide strips. Shared selected output and the collection contract are implemented; native factory packaging and registry registration remain open. Conditional single-object HTTP and Linux/XFS clone sources have native qualification; broader source contracts remain open |
 | Native video policy and accepted packet provenance | `Question::Frame` shares core interpretation/timing facts with media sessions. `zencodec_media::policy::PolicyDecoder` retains the native picture through every callback. Native AV1 queued clocks/epochs/colors and repeated ordinals preserve accepted context; refusal, stale decisions, cancellation, errors and caught unwinds release unpublished owners. 15 depth/layout configurations re-encode sample-exact under independent FFmpeg/libdav1d in both pooled and bounded native-plane modes. The native setting admits picture planes before allocation and keeps charges with native owners. Publication policy still follows reconstruction; complete workspace bounds and coupled conversion remain open. [Qualification and limits](../perf/av1-policy-validation/README.md) |
 | Native batches fit admitted sink strips | `DecodeRowSink::max_buffer_rows` and shared copying split delivery automatically. Native PNG RGB8/RGBA16 at 97x65/257 preserve exact independent samples with 1/3/64-row transcode buffers. Native batch/workspace storage remains separate |
 | Native standard-source errors survive erasure | `StdSourceError` retains I/O kind, OS code and custom payload; source, truncation and erased-driver tests |
@@ -97,7 +100,7 @@ The native loop has established three constraints for the next shared selector:
 The actual private candidates are `TiffItems::{images,children,next,decode}`
 and `JxlItems::{open,next,decode}` under `perf/spatial-validation/src`. They
 execute against the native codecs and share the opaque operation-bound identity.
-The private `Collection` trait now executes the same `first_image` consumer
+The shared `zencodec::collection::Collection` trait now executes the same `first_image` consumer
 against both, returning traced errors and preserving source-replacement causes.
 Unsupported child discovery refuses instead of reporting an empty collection.
 The TIFF adapter now adopts native samples into a strided `PixelBuffer`,
@@ -156,7 +159,7 @@ latency remains unqualified. Both cancellation and timeout retain their exact
 reasons through native errors and collection traces in these operations.
 
 Raw JXL output now uses a qualified public native F32 path and a private
-`JxlLayers` collection. The same `Checked<C, R>::first_image` call selects a
+`JxlLayers` adapter. The same `CheckedCollection<C, R>::first_image` call selects a
 layer or presentation; the factory fixes the view before discovery. Nine layers
 retain their complete local samples, signed canvas placement, color/auxiliary
 blend instructions and scoped reference slots with the same `ImageOutput` owner.
@@ -176,7 +179,8 @@ polarity. The adapter now uses a fallible format lookup, `CmykF32Inverted`, and
 explicit polarity on the separate black plane. An ICC profile alone does not
 establish polarity. Unqualified color and polarity conversions refuse.
 
-The collection remains private. The native path requires stored orientation,
+The collection contract is shared; this native adapter remains in the harness.
+The native path requires stored orientation,
 skipped previews, unrendered spots, retained black, and F32 output. Remaining
 blend configurations, native negative-origin fixtures, preview/progressive
 publication, reference-only export, random raw seeking, conversion and whole
@@ -187,16 +191,17 @@ Source blend facts are not a lossless re-encoding contract.
 owns the shared-selector discussion. The [public-output receipt](../benchmarks/public_image_output_2026-10-26.json)
 records the executing core/native qualification.
 
-A private `Checked<C, R>` consumer now binds the same resolver and stop token
+The shared `operation::CheckedCollection<C, R>` now binds the same resolver and stop token
 to native selection and automatic output publication. Its first-image/decode
 methods return `Outcome<ImageOutput>` without a separate caller authorization
 step. Repeated selections are rechecked; accepted output keeps the same native
 allocation. Corrected region requests can reuse their image identity, while an
 observed stop or caught unwind finishes the opened operation. Native failures
 retain their original cause and their native terminal state. The bounded report
-keeps prior decisions without default logging of callback payloads. This is
-still a std-based driver experiment, not another public resolver interface or
-preallocation/privacy guarantee. [Execution and failure scope](../perf/spatial-validation/README.md#selected-output-executes-the-configured-policy-automatically).
+keeps prior decisions without default logging of callback payloads. The shared wrapper uses alloc and a portable once cell; its native adapters
+currently use std. The full crate still has the freestanding build blocker in
+[issue 165](https://github.com/imazen/zencodec/issues/165). Publication does not
+establish preallocation admission or whole-container privacy. [Execution and failure scope](../perf/spatial-validation/README.md#selected-output-executes-the-configured-policy-automatically).
 
 ### Ordinary checked operations
 

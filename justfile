@@ -228,8 +228,10 @@ io-contract-check:
 operation-sync export:
     test ! -e "{{export}}/.git"
     test ! -e "{{export}}/.jj"
-    mkdir -p "{{export}}/src/operation"
-    cp src/operation.rs src/lib.rs src/set.rs src/info.rs src/frame.rs src/frame_storage.rs src/image.rs src/resolution.rs "{{export}}/src/"
+    mkdir -p "{{export}}/src/operation" "{{export}}/src/collection"
+    cp Cargo.toml "{{export}}/Cargo.toml"
+    cp src/operation.rs src/lib.rs src/set.rs src/info.rs src/frame.rs src/frame_storage.rs src/image.rs src/resolution.rs src/collection.rs "{{export}}/src/"
+    cp src/collection/*.rs "{{export}}/src/collection/"
     cp src/operation/*.rs "{{export}}/src/operation/"
     cp src/traits/encoding.rs src/traits/dyn_encoding.rs src/traits/mod.rs "{{export}}/src/traits/"
     cp zencodec-testkit/tests/operation_*.rs "{{export}}/zencodec-testkit/tests/"
@@ -353,6 +355,40 @@ spatial-validation-resolve:
 
 spatial-validation-setup:
     cp perf/spatial-validation/dependencies.lock perf/spatial-validation/Cargo.lock
+
+collection-api-check:
+    cargo test -p zencodec --lib collection_ --locked
+    cargo clippy -p zencodec --lib --locked -- -D warnings
+    cargo check -p zencodec --no-default-features --target wasm32-unknown-unknown --locked
+
+# Reproducer for the existing full-crate portability gap: zenpixels defaults
+# enable std, and disabling those exposes gain-map floating-point methods.
+collection-api-bare-metal:
+    cargo check -p zencodec --no-default-features --target thumbv7em-none-eabihf --locked
+
+collection-api-resolve:
+    cargo update -p zencodec
+    cargo update --manifest-path perf/spatial-validation/Cargo.toml -p zencodec
+
+# Run in a standalone source export so workspace path overrides cannot hide
+# dependency splits. Retain every committed codec pin while updating core edges.
+collection-validation-resolve:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    test ! -e .git
+    test ! -e .jj
+    cp perf/io-validation/locks/workspace.lock Cargo.lock
+    cargo update -p zencodec
+    for package in policy-check jpeg-policy-validation av1-policy-validation spatial-validation; do
+      cp "perf/$package/dependencies.lock" "perf/$package/Cargo.lock"
+      cargo update --manifest-path "perf/$package/Cargo.toml" -p zencodec
+    done
+    cp perf/io-validation/locks/harness.lock perf/io-validation/Cargo.lock
+    cargo update --manifest-path perf/io-validation/Cargo.toml -p zencodec
+
+collection-guide-check:
+    cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked guide_ -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
 
 spatial-oracle-install python:
     uv pip install --python "{{python}}" --only-binary :all: Pillow==13.0.0
@@ -510,7 +546,11 @@ io-core-sync export:
     test ! -e "{{export}}/.git"
     test ! -e "{{export}}/.jj"
     test -f "{{export}}/zencodec-io/Cargo.toml"
-    cp src/lib.rs src/storage.rs src/frame.rs src/frame_storage.rs src/image.rs "{{export}}/src/"
+    cp Cargo.toml "{{export}}/Cargo.toml"
+    cp src/lib.rs src/storage.rs src/frame.rs src/frame_storage.rs src/image.rs src/collection.rs src/operation.rs "{{export}}/src/"
+    mkdir -p "{{export}}/src/collection" "{{export}}/src/operation"
+    cp src/collection/*.rs "{{export}}/src/collection/"
+    cp src/operation/*.rs "{{export}}/src/operation/"
     cp zencodec-io/src/*.rs "{{export}}/zencodec-io/src/"
     cp zencodec-io/tests/*.rs "{{export}}/zencodec-io/tests/"
     cp justfile "{{export}}/justfile"
