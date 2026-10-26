@@ -2,6 +2,13 @@
 
 ## Native image selection (unreleased experiment)
 
+- Qualify selected raw JXL F32 layers through the same checked consumer as TIFF
+  and presentations. Freeze complete local samples with signed placement and
+  source blend/reference facts; preserve native bits and allocation through
+  policy. Require explicit inverted CMYK and black-plane polarity, and use
+  fallible format lookup instead of panicking for unsupported representations.
+  The collection remains private; source facts do not promise lossless editing.
+
 - Qualify one operation stop token across private TIFF/JXL collection discovery
   and selected decode. Check source I/O, graph traversal, cached/exhausted cursors
   and final publication; pass the token into native JXL work. Inject cancellation

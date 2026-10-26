@@ -26,8 +26,8 @@ rustix = { version = "1.1.5", features = ["fs"], optional = true }
 
 [patch.crates-io]
 # Native TIFF/IMIJ sample carriage under review in zenpixels PR 93.
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "9dad0cb609bbc07ed329696902ed5a1a3d3951b6" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "9dad0cb609bbc07ed329696902ed5a1a3d3951b6" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "284a0598abf441dc886755b1e65c34dbdf6ce94d" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "284a0598abf441dc886755b1e65c34dbdf6ce94d" }
 
 [profile.release]
 debug = 1

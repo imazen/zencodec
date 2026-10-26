@@ -35,7 +35,9 @@ fn ids(collection: &mut JxlLayers<'_>) -> Vec<super::image_items::ImageId> {
 }
 
 fn oracle(name: &str, bytes: &[u8]) -> (PathBuf, serde_json::Value) {
-    let root = PathBuf::from(std::env::var_os("SPATIAL_ARTIFACTS").expect("set SPATIAL_ARTIFACTS"));
+    let root = PathBuf::from(
+        std::env::var_os("SPATIAL_LAYER_ARTIFACTS").expect("set SPATIAL_LAYER_ARTIFACTS"),
+    );
     std::fs::create_dir_all(&root).unwrap();
     let output = root.join(format!("layers-{}", name.replace('/', "_")));
     std::fs::create_dir(&output).expect("fresh layer evidence directory");
@@ -204,8 +206,33 @@ fn raw_collection_native_samples_and_owner_bound_policy_match_independent_layers
                         }
                     );
                     assert!(pixels.color_context().is_some());
+                    if black.is_some() {
+                        assert_eq!(
+                            pixels.descriptor().format,
+                            zenpixels::PixelFormat::CmykF32Inverted
+                        );
+                        assert!(
+                            zenpixels_convert::RowConverter::new(
+                                pixels.descriptor(),
+                                zenpixels::PixelFormat::CmykF32.descriptor()
+                            )
+                            .is_err(),
+                            "no silent polarity conversion"
+                        );
+                    }
                 })
                 .unwrap();
+            if let Some(black) = black {
+                let mapping = image.map().unwrap();
+                let plane = mapping.plane(black + 1).unwrap().unwrap();
+                assert!(matches!(
+                    plane.meaning,
+                    zencodec::image::Meaning::Auxiliary(zencodec::image::Auxiliary {
+                        kind: zencodec::image::AuxiliaryKind::Black { inverted: true },
+                        ..
+                    })
+                ));
+            }
             let mapped = mapped_planes(&image);
             let mut samples = 0u64;
             let mut different = 0u64;

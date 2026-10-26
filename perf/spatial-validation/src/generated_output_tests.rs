@@ -137,7 +137,7 @@ fn output_generated_all_seven_auxiliary_roles_preserve_parameters_and_source_hdr
                     contribution: ColorContribution::Applied
                 },
                 3 => AuxiliaryKind::SelectionMask,
-                4 => AuxiliaryKind::Black,
+                4 => AuxiliaryKind::Black { inverted: true },
                 5 => AuxiliaryKind::Cfa { channel: 2 },
                 6 => AuxiliaryKind::Thermal,
                 _ => unreachable!(),

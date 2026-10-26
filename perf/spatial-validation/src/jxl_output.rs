@@ -15,7 +15,7 @@ use zenjxl_decoder::api::{
 };
 use zenpixels::{
     AlphaMode, ChannelLayout, ChannelType, ColorContext, ColorPrimaries, Orientation, PixelBuffer,
-    PixelBufferParts, PixelDescriptor, TransferFunction,
+    PixelBufferParts, PixelDescriptor, PixelFormat, TransferFunction,
 };
 
 /// Retain native source facts without treating them as an output profile or
@@ -79,9 +79,22 @@ pub fn adopt(
         .next()
         .ok_or_else(|| Error::other("missing native color plane"))?;
     let (width, height) = (u32::try_from(color.width)?, u32::try_from(color.height)?);
-    let descriptor =
-        PixelDescriptor::new(ChannelType::F32, layout, alpha, TransferFunction::Unknown)
-            .with_primaries(ColorPrimaries::Unknown);
+    let physical_format = if layout == ChannelLayout::Cmyk {
+        // Native JXL values have reversed ink polarity. An ICC profile alone
+        // does not declare this; preserve it in the converter's format input.
+        PixelFormat::CmykF32Inverted
+    } else {
+        PixelFormat::from_parts(ChannelType::F32, layout, alpha).ok_or_else(|| {
+            Error::new(
+                std::io::ErrorKind::Unsupported,
+                "native output layout has no pixel format",
+            )
+        })?
+    };
+    let descriptor = PixelDescriptor::from_pixel_format(physical_format)
+        .with_alpha(alpha)
+        .with_transfer(TransferFunction::Unknown)
+        .with_primaries(ColorPrimaries::Unknown);
     let mut parts = PixelBufferParts::new(color.bytes, width, height, color.stride, descriptor);
     parts.color_context = Some(Arc::new(ColorContext::from_icc(Arc::<[u8]>::from(icc))));
     let pixels = PixelBuffer::try_from_parts(parts).map_err(|e| e.without_buffer())?;
@@ -111,7 +124,7 @@ pub fn adopt(
                 },
             },
             ExtraChannel::SelectionMask => AuxiliaryKind::SelectionMask,
-            ExtraChannel::Black => AuxiliaryKind::Black,
+            ExtraChannel::Black => AuxiliaryKind::Black { inverted: true },
             ExtraChannel::CFA => AuxiliaryKind::Cfa {
                 channel: details
                     .cfa_channel

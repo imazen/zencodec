@@ -392,10 +392,11 @@ typed and erased pumps, mapping adapters and fused terminal states.
 
 ## Known Bugs: F32 CMYK selected-output carriage (2026-10-26)
 
-The raw JXL collection experiment reproduces a descriptor-construction panic:
-native CMYK layers emit F32 samples, while the pinned zenpixels `PixelFormat`
-only carries CMYK8. This is an output representation gap, not permission to
-label CMY/K as RGB or quantize samples. The failing native/independent gate is
-`just spatial-layer-check <fresh-artifacts>`; receipt
-`benchmarks/raw_collection_2026-10-26.json`. Extend the pixel representation and
-make unsupported adapter construction return a typed cause before publication.
+The raw-layer integration reproduced a descriptor-construction panic for native
+F32 CMYK, then exposed a second hazard: native JPEG XL reverses ink polarity.
+The follow-through uses zenpixels PR 93's conventional/inverted formats, fallible
+adapter lookup, and explicit polarity on separate black. The selected-layer gate
+passes without changing sample bits or the native conformance threshold; the
+receipt retains the initial failure (`benchmarks/raw_collection_2026-10-26.json`).
+F32 CMYK color conversion is still unqualified and refuses at runtime. Source ICC
+bytes alone must never imply conventional polarity for inverted samples.

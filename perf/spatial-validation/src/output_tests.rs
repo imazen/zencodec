@@ -236,7 +236,7 @@ fn output_jxl_color_and_extra_planes_keep_native_bytes_roles_and_geometry() {
                         2
                     }
                     AuxiliaryKind::SelectionMask => 3,
-                    AuxiliaryKind::Black => 4,
+                    AuxiliaryKind::Black { inverted: true } => 4,
                     AuxiliaryKind::Cfa { channel } => {
                         assert_eq!(channel, independent_details[index - 1][9]);
                         5
