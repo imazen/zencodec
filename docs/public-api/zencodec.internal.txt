@@ -9,8 +9,8 @@
 
 ## summary
 #
-#   inherent methods                           62
-#   trait roster entries (type × trait)       101
+#   inherent methods                           63
+#   trait roster entries (type × trait)       105
 #
 # per-module pub lines:
 #   (root)                           18
@@ -19,7 +19,7 @@
 #   encode                            4
 #   estimate                          2
 #   exif                              3
-#   frame                             6
+#   frame                             7
 #   gainmap                           2
 #   inventory                         6
 #   metadata_rewrite                  2
@@ -27,7 +27,7 @@
 #   source                            2
 #   time                              2
 
-## items (62 lines)
+## items (63 lines)
 
 pub fn CodecIoKind::assert_fields_are_eq(&self)
 pub fn ColorEmitFields::assert_fields_are_eq(&self)
@@ -74,6 +74,7 @@ pub fn frame::Crop::assert_fields_are_eq(&self)
 pub fn frame::FrameGeometry::assert_fields_are_eq(&self)
 pub fn frame::FrameInterpretation::assert_fields_are_eq(&self)
 pub fn frame::FrameTiming::assert_fields_are_eq(&self)
+pub fn frame::Presentation::assert_fields_are_eq(&self)
 pub fn frame::SampleEncoding::assert_fields_are_eq(&self)
 pub fn gainmap::Fraction::assert_fields_are_eq(&self)
 pub fn gainmap::UFraction::assert_fields_are_eq(&self)
@@ -92,7 +93,7 @@ pub fn source::SourceError::assert_fields_are_eq(&self)
 pub fn time::TimeBase::assert_fields_are_eq(&self)
 pub fn time::Timestamp::assert_fields_are_eq(&self)
 
-## trait impls (101 types)
+## trait impls (105 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -159,7 +160,11 @@ frame::ColorClaim: TrivialClone
 frame::Crop: TrivialClone
 frame::FrameGeometry: TrivialClone
 frame::FrameTiming: TrivialClone
+frame::PlaneError: TrivialClone
 frame::PlaneRole: TrivialClone
+frame::PlaneSamples<'a>: TrivialClone
+frame::PlaneView<'a>: TrivialClone
+frame::Presentation: TrivialClone
 frame::SampleEncoding: TrivialClone
 frame::SampleEncodingError: TrivialClone
 frame::Subsampling: TrivialClone

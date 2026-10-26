@@ -2,6 +2,11 @@
 
 ## Native image selection (unreleased experiment)
 
+- Move native frame ownership and borrowed component-plane mappings into
+  `zencodec::frame`, retaining the existing media import paths as re-exports.
+  Core gains no media/I/O dependency; native selected-image and AV1 consumers
+  use one mapping contract. Accounted software allocations remain in media.
+
 - Disclose whether retained spot-color samples already contributed to the
   returned color. Both native routes preserve identity and auxiliary bytes; an
   exactly representable fixture matches independent libjxl F32 output.

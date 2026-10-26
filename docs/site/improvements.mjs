@@ -2,6 +2,19 @@
 // Signatures come from Rust through apiPanels; examples remain executable files.
 export const improvements = [
   {
+    id:'mapping', title:'Still images and video share the native mapping contract',
+    state:'Implemented · review PR', date:'2026-10-26',
+    summary:'Frame owners and borrowed component-plane mappings now live in zencodec::frame. Existing media imports name the same types.',
+    why:'A selected still image can expose native component planes just like a video frame. Its output must retain the backend owner without depending on video sessions or copying pixels to cross an API boundary.',
+    consumer:'Keep the returned frame owner and borrow its mapped rows. Retain significant code depth, bit placement, crop and timing; converting ten-bit component codes to display RGB is a separate checked operation.',
+    adapter:'Use the shared Frame, Picture and MappedPlanes types. Native TIFF/JXL selected output and AV1 exercise the same implementation; media import paths remain compatible.',
+    implementor:'Implement Picture::map with a guard that keeps native storage borrowed. Core mapping has no dependency on media sessions or I/O drivers. Accounted software allocations remain in media.',
+    open:'The combined selected-image output and collection remain private candidates. This move establishes module placement and type identity, not publication policy, color conversion or a workspace bound.',
+    signatures:['nativePicture','nativePlanes'],
+    flow:[['implementor','Retain native owner','storage survives decoder'],['adapter','Map through core','borrow the backend guard'],['consumer','Read native rows','retain interpretation']],
+    evidence:[['Shared ownership contract','docs/media-contract.md#frames'],['Native output qualification','perf/spatial-validation/README.md']],
+  },
+  {
     id:'images', title:'Image identity, containment and composition stay distinct',
     state:'Private candidate · native validation', date:'2026-10-26',
     summary:'Native TIFF tests select nested and shared SubIFDs. Native JXL tests select 147 presentations, including 35 with visible dependency replay. Required raw layers currently refuse.',

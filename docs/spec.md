@@ -48,6 +48,33 @@ metadata. The caller handles CMS transforms.
 
 ---
 
+## Shared native mapping and ownership
+
+`zencodec::frame` owns the existing `Frame`, `Picture`, `MappedPlanes`,
+`PlaneView`, `PlaneSamples`, `MapError`, `PlaneError` and `Presentation`
+contracts. `zencodec_media::frame` re-exports those exact types. Frames retain
+immutable interpretation and an owned picture after decoder reset/drop; another
+presentation can share that picture with different timing. Mapped rows borrow
+the native guard and preserve word stride, significant code bits and bit shift.
+A native ten-bit word remains a component code, not a normalized RGB U16 sample.
+
+```rust
+trait Picture: Send + Sync {
+    fn map(&self) -> Result<Box<dyn MappedPlanes + '_>, MapError>;
+}
+trait MappedPlanes {
+    fn plane_count(&self) -> usize;
+    fn plane(&self, index: usize) -> Option<PlaneView<'_>>;
+}
+```
+
+The core has no media or I/O-driver dependency. Accounted software `OwnedPlanes`
+remain in media, while packed image interchange remains `zenpixels::PixelSlice`.
+The selected-image collection and its combined output remain private native
+experiments pending policy and discovery qualification. Sharing the mapping
+contract does not certify display conversion, whole-container metadata treatment
+or a native workspace bound. See [the media contract](media-contract.md#frames).
+
 ## Stored operation requests
 
 `DecodeRowSink::max_buffer_rows() -> core::num::NonZeroU32` reports the sink's
