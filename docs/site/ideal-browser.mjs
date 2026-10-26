@@ -40,6 +40,8 @@ export async function checkIdeal(browser,url,output) {
     assert.ok((await factories.textContent()).includes('refuse unqualified legacy'));
     assert.ok((await factories.textContent()).includes('stored width, height and pixel caps'));
     assert.ok((await factories.textContent()).includes('OpenRequest'));
+    assert.ok((await factories.textContent()).includes('CollectionOpenError'));
+    assert.ok((await factories.textContent()).includes('unsupported: ResourceLimits'));
     const placement=page.locator('#change-placement');
     await placement.locator(':scope>summary').focus();
     await page.keyboard.press('Enter');

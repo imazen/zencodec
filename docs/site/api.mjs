@@ -18,6 +18,7 @@ export const api = {
   tiffSelection: {path:'candidate::TiffItems (private native experiment)',file:'perf/spatial-validation/src/tiff_items.rs',scope:'impl<R: Read + Seek> TiffItems<R>',methods:['open','images','children','next','decode']},
   collectionOpen: {path:'candidate::TiffCollection (private native experiment)',file:'perf/spatial-validation/src/tiff_items.rs',scope:'impl<R: Read + Seek> TiffCollection<R>',methods:['open','open_with_stop']},
   collectionOpenRequest: {path:'zencodec::collection::OpenRequest',file:'src/collection/factory.rs',scope:'impl OpenRequest',methods:['new']},
+  collectionRefusal: {path:'zencodec::collection::CollectionOpenError',file:'src/collection/factory.rs',scope:'#[non_exhaustive]\npub enum CollectionOpenError',methods:[],item:true},
   collectionFactory: {path:'zencodec::collection::CollectionFactory',file:'src/collection/factory.rs',scope:'pub trait CollectionFactory',methods:['formats','open']},
   collectionFactories: {path:'zencodec::CodecSet',file:'src/set/collection.rs',scope:'impl CodecSet',methods:['with_collection','open_collection']},
   collectionStop: {path:'zencodec::operation::CollectionOperationError',file:'src/operation/collection.rs',scope:'impl CollectionOperationError',methods:['stop_reason']},

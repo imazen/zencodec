@@ -1,0 +1,53 @@
+{
+  "base_revision": "f9c32e54b1301d396da8ebac9ef200b3167b9e54",
+  "scope": "Typed, bounded unhandled collection settings and retained native refusal location. Reuse ResourceLimits/DecodePolicy data; no additional diagnostics protocol or capability negotiation.",
+  "sources": {
+    "src/collection/factory.rs": "bb5e08c128b4c44e75b423828261f3e8b1727d08c9904d77a40d5efed4cbace1",
+    "perf/spatial-validation/src/collection_factories.rs": "643a1a4322b51f4de97a40894a6ce7710c1b892ea98fd684190dcb3db138691b",
+    "perf/spatial-validation/src/factory_tests.rs": "1954c321e94685ec5978f49b7dd86ddb35c3caab8db515c81253a7d575d231b1",
+    "docs/site/source.mjs": "f690a54f825e4a1aafb1c0874b3be8e96a0f20d6cfa3aece1a194804eb0cd1cd",
+    "docs/site/source.test.mjs": "6821d2deef7757abeb516ab1031b28adbaf9845467507cacfe67bf13e8ddc6b1",
+    "docs/site/api.mjs": "42b344d5f0572e0a2e27d4dbeea5e0332fbf80f2df618385a80db7ae7ae9a87d",
+    "docs/site/ideal-browser.mjs": "712ef4c41ced795ca712608360433510f416effbdf088e0c083aec6d7e99477f"
+  },
+  "runs": [
+    {
+      "log": "zencodec-registry-refusal-2026-10-26.log",
+      "sha256": "907629da885dd9d23a3b58250798b9190f4724325af44140188f5f54c6879652",
+      "scope": "Native per-field and mixed-configuration controls, core checks, WASM, Rustdoc and API snapshots.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13463MiB :: timeout --kill-after=10s 240s bash -eu -c just spatial-factories-check /mnt/v/output/zencodec/platform-regions-20261026-run/registry-refusal-1; just collection-api-check; just doc-default; just api-doc",
+        "run-heavy: done rc=0 11s | peak-RSS 0.58GiB | min-avail 13057MiB | peak-load 0.33"
+      ]
+    },
+    {
+      "log": "zencodec-registry-refusal-trace-2026-10-26.log",
+      "sha256": "00052f4efff479ec4a90356983d3589c24fa6009836803b16f9a22aeb8656b5c",
+      "scope": "Native factory checks additionally require the original At<CollectionOpenError> trace.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13501MiB :: timeout --kill-after=10s 120s just spatial-factories-check /mnt/v/output/zencodec/platform-regions-20261026-run/registry-refusal-trace-1",
+        "run-heavy: done rc=0 3s | peak-RSS 0.58GiB | min-avail 13367MiB | peak-load 0.16"
+      ]
+    },
+    {
+      "log": "zencodec-registry-refusal-site-2026-10-26.log",
+      "sha256": "ceed5471b01142199a80e716b1c0c5b3dbc338c93ca54e880b70c4d563fd4bb3",
+      "scope": "Complete source error declarations, catalog uniqueness, exact signatures and browser gates.",
+      "results": [
+        "run-heavy: mem-cap=4G (cgroup, hard) jobs=2/24 avail=13495MiB :: timeout --kill-after=10s 120s just docs-site-browser-check 3547",
+        "run-heavy: done rc=0 9s | peak-RSS 0.17GiB | min-avail 12990MiB | peak-load 0.29"
+      ]
+    }
+  ],
+  "qualified": [
+    "Each unhandled configuration field remains available through CollectionOpenError in the checked error cause chain.",
+    "Mixed TIFF width/memory requests identify only memory as unsupported; JXL retains both. The encode-only output cap and qualified fields are excluded.",
+    "At<CollectionOpenError> is preserved from the factory refusal site. Existing source/application trace and safe outer-formatting controls still pass.",
+    "The guide extracts the complete non-exhaustive error enum and its data fields from source, and rejects duplicate API catalog keys."
+  ],
+  "remaining": [
+    "These diagnostics do not authorize weaker retries or make unimplemented native mappings supported.",
+    "Formatting arbitrary backend/source errors remains explicit; bounded settings are not a universal PII certificate."
+  ],
+  "memory_note": "run-heavy receipts describe the test processes, not native workspace admission or a speed comparison."
+}

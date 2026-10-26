@@ -35,13 +35,15 @@ function closeBrace(mask,open) {
   for(let i=open+1;i<mask.length;i++){if(mask[i]==='{')depth++;if(mask[i]==='}'&&!--depth)return i;}
   throw Error('Unclosed source scope');
 }
-export function declarations(source,{scope,methods,associated=true}) {
+export function declarations(source,{scope,methods,associated=true,item=false}) {
+  if(item&&(!scope||methods.length))throw Error('A complete source item needs a scope and no method selection');
   const mask=maskRust(source);
   let start=0,end=source.length,header='';
   if(scope) {
     const at=mask.indexOf(scope);
     if(at<0||mask.indexOf(scope,at+scope.length)>=0)throw Error(`Scope must match once: ${scope}`);
     const open=mask.indexOf('{',at);end=closeBrace(mask,open);start=open+1;
+    if(item)return {code:deindent(source.slice(at,end+1)),line:source.slice(0,at).split('\n').length};
     header=source.slice(at,open).trim();
   }
   const part=mask.slice(start,end);

@@ -53,6 +53,22 @@ test('the flat API catalog cannot silently overwrite a source contract',async()=
   assert.match(api.collectionOpenRequest.path,/OpenRequest/);
 });
 
+test('complete error declarations retain named fields and non-exhaustive context',()=>{
+  const rust=`// pub enum Refusal { Wrong }
+#[non_exhaustive]
+pub enum Refusal {
+    Limits { unsupported: Limits },
+    Policy { unsupported: Policy },
+}
+fn hidden() {}`;
+  const spec={scope:'#[non_exhaustive]\npub enum Refusal',methods:[],item:true};
+  const found=declarations(rust,spec);
+  assert.equal(found.line,2);
+  assert.equal(found.code,rust.slice(rust.indexOf('#['),rust.indexOf('\nfn hidden')));
+  assert.throws(()=>declarations(rust,{...spec,methods:['hidden']}),/no method selection/);
+  assert.throws(()=>declarations(rust+rust,spec),/match once/);
+});
+
 test('every displayed contract is extracted from a unique current source declaration',async()=>{
   for(const spec of Object.values(api)) {
     const declaration=declarations(await readFile(new URL(spec.file,root),'utf8'),spec);
