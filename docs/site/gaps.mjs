@@ -2,7 +2,7 @@
 // behavior is not presented as an implemented method or a released promise.
 const gaps = [
   ['Display rendering', 'CodecSet::open_collection · OpenRequest · ImageRequest · Placement::visible',
-    'Explicit native composited/raw selection, checked placement intersection and retained source geometry.',
+    'Explicit native composited/raw selection retained in ImageInterpretation::composition before policy, contradiction checks, checked placement intersection and retained source geometry.',
     'No shared render convenience guaranteeing the presentation canvas, applied orientation, requested color and aligned auxiliaries. Composited and packed do not mean display-ready.',
     'Shared request/result contract; codec composition; consumer adapter.', 'https://github.com/imazen/zencodec/issues/170'],
   ['Planar video conversion', 'Frame · PlaneView::as_strided_samples · ImageOutput::from_frame · Question::Frame',
@@ -63,7 +63,7 @@ export function gapsPage({sha, apiPanels, flow, compile}) {
 ${flow('gaps-canvas',[['implementor','Decode required state','keep reference / off-canvas data'],['adapter','Compose visible contribution','respect blend and disposal'],['adapter','Apply requested rendering','canvas, orientation, color'],['consumer','Receive rendered canvas','raw layers require explicit access']])}
 <p>The current <code>OpenRequest::new(view, discovery_attempts)</code> requires a view. <code>ImageRequest::new()</code> asks for the whole selected image; in a raw view that may exceed the presentation canvas. <code>Placement::visible()</code> returns matching sample and canvas rectangles but does not change pixels. Native tests include a 1024×576 JXL layer with only a 188×202 visible intersection.</p><p>Clipping must happen at the appropriate composition stage, without destroying data required by later references. A smaller layer still renders onto the complete canvas; a fully off-canvas layer is valid, not EOF. Orientation can change the final width and height. Video crop and display resize are separate operations. An output crop must not evade admission of larger coded dependencies.</p>
 <p>The naming concern is concrete: <code>ImageGeometry::canvas_width</code> describes the selected image’s local full width, while <code>Placement::canvas</code> is its presentation canvas. Also, <code>with_pixels</code> means packed access; it does not establish display readiness. <a href="https://github.com/imazen/zencodec/issues/170">Track default rendering and its adversarial tests in issue 170</a>.</p>
-${apiPanels('gaps-placement',['layerPlacement'])}</section>
+${apiPanels('gaps-placement',['layerPlacement','imageInterpretation'])}</section>
 <section id="listing" class="ideal-role"><h2>Remaining contracts by API</h2><p>Names below exist today. The final column describes missing behavior, not proposed methods disguised as an implemented API.</p><table class="gap-table"><thead><tr><th>Concern / owner</th><th>Existing API</th><th>Missing or unqualified</th></tr></thead><tbody>${rows}</tbody></table></section>
 <section id="compile-time" class="ideal-role"><h2>Compile time</h2>${compile}</section>
 </main><footer class="wrap"><p>Audit source in docs/site/gaps.mjs · revision <a href="https://github.com/imazen/zencodec/commit/${sha}">${sha.slice(0,8)}</a> · <a href="${gh('docs/spec.md')}">Specification</a> · <a href="ideal.html">Current API</a></p></footer></body></html>`;
