@@ -104,27 +104,39 @@ fn http_snapshot_change_after_native_discovery_refuses_selected_pixels_and_retry
             attempts.get() >= fault_at,
             "decode must perform another range request"
         );
-
-        let source = HttpSource::open(url("change", &name, fault_at), 65536).unwrap();
-        let attempts = source.attempts.clone();
-        let mut collection = TiffCollection::open(
-            ReadAtReader::new(source),
-            Composition::Composited,
-            Allowances::default(),
-        )
-        .unwrap();
-        let id = child(&mut collection);
-        assert_eq!(attempts.get(), fault_at - 1);
-        let error = collection
-            .decode(&id, &ImageRequest::default())
-            .unwrap_err();
-        assert_cause(&error, FailureKind::Status(412));
-        assert_eq!(attempts.get(), fault_at);
-        let error = collection
-            .decode(&id, &ImageRequest::default())
-            .unwrap_err();
-        assert_cause(&error, FailureKind::Status(412));
-        assert_eq!(attempts.get(), fault_at, "failed source silently reopened");
+        let last_read = attempts.get();
+        assert!(
+            last_read > fault_at,
+            "fixture must distinguish first and last decode read"
+        );
+        for (mode, at, kind) in [
+            ("change", fault_at, FailureKind::Status(412)),
+            ("change", last_read, FailureKind::Status(412)),
+            ("changed_tag", last_read, FailureKind::Validator),
+            ("wrong_total", last_read, FailureKind::ContentRange),
+            ("short_body", last_read, FailureKind::Body),
+        ] {
+            let source = HttpSource::open(url(mode, &name, at), 65536).unwrap();
+            let attempts = source.attempts.clone();
+            let mut collection = TiffCollection::open(
+                ReadAtReader::new(source),
+                Composition::Composited,
+                Allowances::default(),
+            )
+            .unwrap();
+            let id = child(&mut collection);
+            assert_eq!(attempts.get(), fault_at - 1);
+            let error = collection
+                .decode(&id, &ImageRequest::default())
+                .unwrap_err();
+            assert_cause(&error, kind);
+            assert_eq!(attempts.get(), at);
+            let error = collection
+                .decode(&id, &ImageRequest::default())
+                .unwrap_err();
+            assert_cause(&error, kind);
+            assert_eq!(attempts.get(), at, "failed source silently reopened");
+        }
     }
 }
 

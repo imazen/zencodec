@@ -583,3 +583,14 @@ Rules learned on the way, each recorded where it was measured:
 
 `check_all` runs every codec check above against an encoder and decoder
 pair; `check_read_at_contract` takes a source and runs on its own.
+
+### Coherent input across selected reads
+
+The source/driver must preserve one coherent representation for an opened
+operation. Conditional HTTP reads can fail when the object is replaced; an
+existing image identity cannot authorize mixing old directory bytes with a new
+payload. The [native HTTP qualification](../perf/spatial-validation/README.md#source-identity-is-established-by-the-transport)
+executes this through TIFF/SubIFDs, including faults at the last required range.
+A positional file handle does not supply a disk snapshot by itself. These
+obligations stay in the existing `ReadAt` source contract and its adapters;
+codec trait signatures do not gain transport-specific validators.

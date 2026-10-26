@@ -124,6 +124,18 @@ impl core::error::Error for SourceError {}
 /// `read_many_at` exists so a source that can serve ranges concurrently
 /// (HTTP Range, object stores, parallel `pread`) overlaps their round
 /// trips. Codecs pass every range they can ask for at once.
+///
+/// One decoder operation must observe one coherent byte representation. Bytes
+/// already supplied and any known final length must remain consistent across
+/// reads. A source over a growing stream may discover more bytes while keeping
+/// the supplied prefix unchanged. Replacing an object requires a new operation;
+/// it cannot silently change the meaning of an existing offset or image ID.
+///
+/// Establish this in the source/driver: immutable owned bytes, an immutable
+/// object version, conditional reads that fail on replacement, or a stable-file
+/// ownership/locking contract. Positional filesystem I/O alone is not snapshot
+/// isolation. Transport validators stay outside this trait; source-specific
+/// errors retain the cause when that contract cannot be maintained.
 pub trait ReadAt {
     /// The source-specific error type.
     type Error: core::error::Error + Send + Sync + 'static;

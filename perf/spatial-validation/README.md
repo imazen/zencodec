@@ -113,7 +113,12 @@ Replacement immediately after discovery refuses selected decode with a retained
 cases refuse through native open. Initial validator and range-admission cases
 also run. The server independently verifies every request after opening is
 conditional. The [receipt](../../benchmarks/http_snapshot_2026-10-26.json)
-records 32 URL cases, 2186 requests and the complete external trace pointer.
+records the initial 32 URL cases / 2186 requests and a subsequent 40-case / 4918-request
+run. The latter also injects replacement, changed validators/total length and
+truncated bodies on the final required range of selected decode, after earlier
+ranges have succeeded. No selected pixels escape and retry preserves the cause
+without another request. That gate and strict lint report `run-heavy: done rc=0
+8s | peak-RSS 0.58GiB | min-avail 13236MiB | peak-load 0.31` (test process).
 
 The same trace makes the buffering tradeoff visible without timing a busy host:
 

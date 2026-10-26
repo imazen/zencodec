@@ -9,6 +9,11 @@ use zencodec::source::{ReadAt, SourceError};
 /// [`ReadAt`] over a file, using positional reads on Unix and Windows and
 /// seek + read elsewhere. Unix reads leave a shared file cursor unchanged;
 /// Windows `seek_read` can update it. No implementation uses `unsafe`.
+///
+/// The caller must keep the opened file's bytes stable for the decoder operation.
+/// This adapter captures its length but neither locks the file nor detects every
+/// in-place replacement. An open handle and positional reads do not establish
+/// the coherent-representation contract of [`ReadAt`].
 pub struct FileReadAt {
     file: std::fs::File,
     len: u64,

@@ -94,5 +94,31 @@
     "No atomic multi-object manifest or disk-file snapshot guarantee",
     "No performance, total-memory or cancellation-latency conclusion",
     "Private optional http feature in validation crate; no shipped HTTP dependency or new public API"
-  ]
+  ],
+  "late_fault_followthrough": {
+    "base": "5f8a2c47025cd1ec6c07e7e4214b14f34154b7e9",
+    "scope": "Four additional failures at the last range observed in a successful selected decode, on classic and BigTIFF: HTTP 412, changed returned validator, changed total length, truncated body. No output; retry preserves cause without another request.",
+    "summary": {
+      "scope": "Native TIFF selection over local HTTP/1.1; no WAN/TLS/performance claim",
+      "requests": 4918,
+      "cases": 40,
+      "statuses": {
+        "200": 1,
+        "206": 4911,
+        "302": 1,
+        "412": 5
+      },
+      "conditional_after_open": true
+    },
+    "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/http-snapshot2",
+    "requests_sha256": "763936c8310b4e9779987c765a78cd3fa828ce1d229e2058619228766bf859bc",
+    "receipt": {
+      "log": "zencodec-http-snapshot2-2026-10-26.log",
+      "sha256": "70c95308117567a071d4a2638b06031d590dddd3d8fffd628a4174b3695cf08d",
+      "results": [
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 65 filtered out; finished in 4.79s",
+        "run-heavy: done rc=0 8s | peak-RSS 0.58GiB | min-avail 13236MiB | peak-load 0.31"
+      ]
+    }
+  }
 }
