@@ -4,9 +4,10 @@ Implemented on [API review PR 168](https://github.com/imazen/zencodec/pull/168),
 not released. The generic mechanism lives in
 [`zencodec::collection`](../src/collection.rs); the consumer wrapper lives in
 [`operation::CheckedCollection`](../src/operation/collection.rs).
-Native TIFF, JXL presentation and JXL raw-layer adapters still live in the
-[validation harness](../perf/spatial-validation/README.md). They implement these
-shared contracts and register through `CodecSet::with_collection`.
+The JXL adapter is packaged behind `zenjxl`’s optional `collections` feature in
+[PR31](https://github.com/imazen/zenjxl/pull/31). Native TIFF remains in the
+[validation harness](../perf/spatial-validation/README.md). Both register through
+`CodecSet::with_collection`; neither collection API is released.
 
 ## Start with the selected output
 
@@ -17,22 +18,19 @@ resolver, the consumer requests the first image:
 let image = images.first_image(&ImageRequest::new())?;
 ```
 
-The complete, executing [JXL example](../perf/spatial-validation/src/collection.rs)
-imports `ImageRequest` from `zencodec::collection` and `CheckedCollection`,
-`CollectionOperationError`, `Outcome` and `PolicyResolver` from
-`zencodec::operation`. Native setup is explicit:
+The complete, executing [registered example](../perf/spatial-validation/src/collection.rs)
+uses the real `zenjxl::collection::JxlCollectionConfig`. Register the factory once:
 
 ```rust
-let mut images = CheckedCollection::open(stop, resolver, |stop| {
-    JxlItems::open_with_stop(bytes, Composition::Composited, limits, stop)
-})?;
+let codecs = CodecSet::new()
+    .with_collection(JxlCollectionConfig::new(64, 256));
 ```
 
-`JxlItems` and `limits` are private adapter types in this example, not promised
-published conveniences. Opening fixes the view and passes the same stop token
-to native discovery, replay and publication. A raw-layer factory fixes the
-uncomposited view before any IDs exist. Changing the view under retained IDs
-would make their meaning ambiguous.
+The two native allowances bound retained image identities and processed frame
+headers. Hidden frames count toward the second allowance. They do not bound
+native workspace bytes or total replay cost. Opening chooses one composition
+view and passes the shared stop token to discovery, replay and publication.
+Changing the view under retained IDs would make their meaning ambiguous.
 
 The checked result owns its pixels after the collection drops. Policy runs
 before that result returns; consumers need no separate authorization call.
@@ -42,7 +40,7 @@ It does not introduce a parallel callback protocol.
 ## Register once; open a checked operation
 
 The same [executing example](../perf/spatial-validation/src/collection.rs) now
-builds a `CodecSet` with private native TIFF and JXL factories. The caller uses:
+builds a `CodecSet` with the packaged JXL factory and a private TIFF candidate. The caller uses:
 
 ```rust
 let request = OpenRequest::new(Composition::Composited, 64);
@@ -97,8 +95,12 @@ records the per-field, mixed-configuration and original-trace controls.
 output ownership, checks cursor origin before native work and avoids boxing each
 returned ID. It allocates at opening and per cursor; those small allocations are
 still infallible. It does not promise a transferable job or native workspace
-admission. Concrete adapter packaging, automatic detection, full native limit
+admission. TIFF adapter packaging, automatic detection, full native limit
 mappings and progress integration remain open.
+
+The [packaged JXL receipt](../benchmarks/packaged_jxl_2026-10-26.json) records
+registry controls, 147 presentation selections and nine raw layers through the
+codec package, with the independent-reader and native sample gates unchanged.
 
 The [registration receipt](../benchmarks/collection_registry_2026-10-26.json) records native, HTTP, workspace, WASM, documentation and browser validation, including failed initial attempts.
 

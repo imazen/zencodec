@@ -32,7 +32,8 @@ minimum available 15998 MiB and peak load 1.45; this measures the guide check.
 
 The current priority is the API/native-codec validation loop. The shared collection
 now executes against real TIFF directory graphs, JXL presentations and local
-layers. CodecSet collection registration is implemented; concrete adapter packaging and full native configuration mappings remain open. Performance tuning and additional platform
+layers. CodecSet registration and the JXL factory in [zenjxl PR31](https://github.com/imazen/zenjxl/pull/31)
+are implemented. TIFF packaging and full native configuration mappings remain open. Performance tuning and additional platform
 work do not gate that loop. See [the executable selection evidence](../perf/spatial-validation/README.md).
 
 - Extend coupled routes beyond the qualified JPEG/PNG sources and JPEG/PNG targets.
@@ -60,8 +61,9 @@ selection methods, error scope, discovery accounting and remaining adapter work.
 
 | Contract | Implementation and verification |
 |---|---|
+| Packaged JXL collections | `zenjxl::collection::JxlCollectionConfig` registers with `CodecSet`. The packaged path passes the existing registry controls, 147 reverse presentation selections and nine raw layers, with native bit-exact and independent-reader checks. Resident input, separate discovery allowances and typed configuration refusals remain explicit. [Receipt](../benchmarks/packaged_jxl_2026-10-26.json). |
 | Selected geometry before reconstruction | `Collection::describe` and `CheckedCollection::describe` return `ImageDescription` without reconstructing pixels. Native TIFF describes nested/shared directories with payload reads forbidden; JXL retains descriptions across discovery exhaustion and distinguishes local layers from their presentation canvas. All eight orientations, cancellation seams, malformed geometry, bounded repeated inspection and HTTP source replacement are checked. Descriptions do not promise a rendered format, supported compression, complete metadata or workspace admission. [Contract](collection-contract.md#inspect-geometry-before-allocating-samples) |
-| Synchronous parser bridge | `zencodec_io::ReadAtReader` supplies `Read + Seek` over a positional source, preserving native errors and its independent cursor. [Native TIFF experiments](../perf/spatial-validation/README.md) cover pages, reduced SubIFDs, planar edge tiles and wide strips. Shared selected output and the collection contract are implemented; CodecSet collection registration is implemented; native adapter packaging and full configuration mapping remain open. Conditional single-object HTTP and Linux/XFS clone sources have native qualification; broader source contracts remain open |
+| Synchronous parser bridge | `zencodec_io::ReadAtReader` supplies `Read + Seek` over a positional source, preserving native errors and its independent cursor. [Native TIFF experiments](../perf/spatial-validation/README.md) cover pages, reduced SubIFDs, planar edge tiles and wide strips. Shared selected output and the collection contract are implemented; CodecSet collection registration is implemented; JXL is packaged in its codec review PR; TIFF packaging and full configuration mapping remain open. Conditional single-object HTTP and Linux/XFS clone sources have native qualification; broader source contracts remain open |
 | Native video policy and accepted packet provenance | `Question::Frame` shares core interpretation/timing facts with media sessions. `zencodec_media::policy::PolicyDecoder` retains the native picture through every callback. Native AV1 queued clocks/epochs/colors and repeated ordinals preserve accepted context; refusal, stale decisions, cancellation, errors and caught unwinds release unpublished owners. 15 depth/layout configurations re-encode sample-exact under independent FFmpeg/libdav1d in both pooled and bounded native-plane modes. The native setting admits picture planes before allocation and keeps charges with native owners. Publication policy still follows reconstruction; complete workspace bounds and coupled conversion remain open. [Qualification and limits](../perf/av1-policy-validation/README.md) |
 | Native batches fit admitted sink strips | `DecodeRowSink::max_buffer_rows` and shared copying split delivery automatically. Native PNG RGB8/RGBA16 at 97x65/257 preserve exact independent samples with 1/3/64-row transcode buffers. Native batch/workspace storage remains separate |
 | Native standard-source errors survive erasure | `StdSourceError` retains I/O kind, OS code and custom payload; source, truncation and erased-driver tests |
@@ -98,9 +100,9 @@ The native loop has established three constraints for the next shared selector:
   a JXL presentation can require earlier invisible or visible work. The backend
   supplies the restart target; a page ordinal or byte offset is insufficient.
 
-The actual private candidates are `TiffItems::{images,children,next,decode}`
-and `JxlItems::{open,next,decode}` under `perf/spatial-validation/src`. They
-execute against the native codecs and share the opaque operation-bound identity.
+The native reference mechanisms remain under `perf/spatial-validation/src`.
+The consumer now registers the packaged `zenjxl::collection::JxlCollectionConfig`
+and the private TIFF candidate. Both use the opaque operation-bound identity.
 The shared `zencodec::collection::Collection` trait now executes the same `first_image` consumer
 against both, returning traced errors and preserving source-replacement causes.
 Unsupported child discovery refuses instead of reporting an empty collection.
@@ -111,8 +113,8 @@ orientation. Signed and wider samples require
 matrix checks exact bytes and original allocation ownership. Unknown color
 stays unknown, and unresolved alpha refuses. This is raw sample carriage, not
 an approved display conversion or privacy decision.
-The collection is not yet a public `CodecSet` API. Its mapped output is now the
-implemented `zencodec::image::ImageOutput`, also used by native AV1 validation.
+`CodecSet::with_collection` and `open_collection` now expose this checked path.
+Its mapped output is the implemented `zencodec::image::ImageOutput`, also used by native AV1 validation.
 Packed color, auxiliary values and component codes stay distinct. The output
 has typed traced failures for invalid regions, missing planes and disagreement
 between native mappings and held dimensions/code encoding.
@@ -136,18 +138,18 @@ regions refuse. The [platform review](platform-review-2026-10-25.md) records
 WIC/OpenImageIO evidence and the distinction between containment and roles. The owned output now has `operation::resolve_image`, using the existing resolver
 and a shared `PublicationOffer`. It returns the same owner only on acceptance;
 failed decisions drop unpublished output. This is post-reconstruction publication,
-not pre-allocation admission or a privacy certificate. Collection promotion still
-needs native discovery-work accounting and broader source-revision qualification.
+not pre-allocation admission or a privacy certificate. Broader native discovery-work accounting and source-revision qualification
+remain open.
 A private HTTP source now qualifies conditional single-object reads through native
 TIFF/SubIFD selection, including replacement and malformed-response refusal.
 A private atomic-clone source now preserves native TIFF/SubIFD samples after
 in-place writes and truncation on Linux/XFS, through the existing `ReadAt`
 contract. Plain file handles are qualified across atomic path replacement but
 do not prevent in-place mutation. Multi-object manifests, browser transports
-and other filesystems/platforms remain open. [Disk source evidence](../perf/spatial-validation/README.md#disk-snapshots-use-the-existing-positional-source-contract). A private
-common wrapper now bounds discovery calls consistently across cached/repeated
+and other filesystems/platforms remain open. [Disk source evidence](../perf/spatial-validation/README.md#disk-snapshots-use-the-existing-positional-source-contract). The shared
+`CheckedCollection` bounds discovery calls consistently across cached/repeated
 TIFF and JXL browsing; it does not bound work inside a native call. The native
-JXL adapter also applies an opt-in frame-header allowance to discovery and each
+JXL factory requires a frame-header allowance for discovery and each
 fresh selected decoder. Hidden headers count, partial-input retries do not
 double-charge, and seek/rewind preserve the native count. Terminal discovery
 errors retain their original typed cause on retries. This is not shared
@@ -159,8 +161,8 @@ polls in classic TIFF/BigTIFF SubIFD and JXL presentation operations; native-cal
 latency remains unqualified. Both cancellation and timeout retain their exact
 reasons through native errors and collection traces in these operations.
 
-Raw JXL output now uses a qualified public native F32 path and a private
-`JxlLayers` adapter. The same `CheckedCollection<C, R>::first_image` call selects a
+Raw JXL output uses the qualified native F32 path through the packaged
+`JxlCollectionConfig` with `Composition::Uncomposited`. The same `CheckedCollection<C, R>::first_image` call selects a
 layer or presentation; the factory fixes the view before discovery. Nine layers
 retain their complete local samples, signed canvas placement, color/auxiliary
 blend instructions and scoped reference slots with the same `ImageOutput` owner.

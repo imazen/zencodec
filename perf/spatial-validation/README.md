@@ -2,8 +2,9 @@
 
 ## Open native collections through registered factories
 
-The shared [`CodecSet`](../../src/set/collection.rs) registers private native
-[TIFF and JXL factories](src/collection_factories.rs) once. Opening chooses an explicit format and composition,
+The shared [`CodecSet`](../../src/set/collection.rs) registers the packaged
+[JXL factory](https://github.com/imazen/zenjxl/pull/31) and the private native
+[TIFF candidate](src/collection_factories.rs) once. Opening chooses an explicit format and composition,
 binds the source and stop token, and returns the existing checked consumer.
 Native limits stay on each registered configuration; the request also sets one
 discovery-call allowance. The first registered implementation wins. An error
@@ -43,10 +44,10 @@ also drives the registry over actual conditional HTTP requests. An opened file
 in the disk control stays unchanged under test ownership; positional reads are
 not a snapshot guarantee.
 
-Registration now uses `CodecSet`; the concrete native adapters remain private
-to this validation harness. Automatic format detection, transferable opened jobs, broader native
-configuration coverage, fallible cursor-erasure allocation and adapter
-packaging remain open. It establishes no latency or allocation-cost
+Registration now uses `CodecSet`; JXL is packaged in its codec crate and TIFF
+remains private to this validation harness. Automatic format detection, transferable
+opened jobs, broader native configuration coverage, fallible cursor-erasure
+allocation and TIFF packaging remain open. It establishes no latency or allocation-cost
 comparison and no whole-workspace/privacy guarantee. Cancellation can surface
 as a native, policy or wrapper error. The shared outer error now also exposes
 `stop_reason()`: callers can inspect the observed operation stop without choosing
@@ -89,6 +90,33 @@ The [CodecSet integration receipt](../../benchmarks/collection_registry_2026-10-
 
 The [native dimension receipt](../../benchmarks/collection_dimensions_2026-10-26.json) records source hashes and each gate; three of eight decode-relevant optional caps are qualified for TIFF.
 
+## Packaged JXL validation
+
+The harness pins [zenjxl PR31](https://github.com/imazen/zenjxl/pull/31) at
+`e85000f44160f625c0c19091e62376657e67f52a`. Registry controls and the compiled
+consumer example use `JxlCollectionConfig`, rather than duplicating its factory.
+The private native mechanisms remain as reference paths. The presentation loop
+checks both paths in reverse order against native samples and independent libjxl
+counts, dimensions and duration ticks. The raw-layer loop compares both paths
+bit for bit and checks packaged samples against the independent layer reader.
+Existing RGB float, exact CMYK/alpha and padding expectations remain unchanged.
+The [packaged validation receipt](../../benchmarks/packaged_jxl_2026-10-26.json)
+records all 147 presentations, nine raw layers, 16 factory controls, oracle
+identity, per-layer measurements and the initial harness/lint failures.
+
+`just spatial-packaged-check <fresh-parent-directory>` runs the factory,
+presentation and raw-layer controls plus strict lint. Supply `JXL_SELECTION_ORACLE`
+and `JXL_LAYER_ORACLE` from `build_jxl_oracles.py`; use pinned readers, not whichever
+libjxl happens to be installed. A failed control fails the run. No timing result
+from this test run is a performance benchmark.
+
+The three discovery controls remain distinct: shared method-call allowance,
+retained identity count, and native frame-header work. The first also charges
+cached operations; the last includes hidden frames. Converging these knobs needs
+a test proving that shared admission bounds native retained identity allocation
+before it happens. A callback at pixel publication is too late to prove that.
+This remains API simplification work, not a whole-operation RAM guarantee.
+
 ## Inspect a selected image before reconstructing it
 
 The shared [`ImageDescription`](../../src/collection/description.rs) describes only the
@@ -125,7 +153,7 @@ The native TIFF loop now also exercises a separate candidate in
 [`src/image_items.rs`](src/image_items.rs) and
 [`src/tiff_items.rs`](src/tiff_items.rs). It discovers main directories lazily,
 follows arbitrary SubIFDs, and decodes the selected directory through the same
-native region path. Native adapters remain private to this experiment;
+native region path. The TIFF adapter remains private to this experiment;
 identity, request and collection contracts now come from `zencodec::collection`.
 The [shared contract](../../docs/collection-contract.md) records their scope.
 
@@ -218,7 +246,7 @@ workspace/privacy refusal and cancellation injected at every observed checkpoint
 of a small native JXL request. The guide fixture compares active rows and untouched
 padding separately; equal pixels do not require equal strides.
 
-The wrapper now lives in core and the native factories remain private std-based
+The wrapper now lives in core; the TIFF factory and native reference mechanisms remain private std-based
 adapters. It uses the existing resolver and does not prove preallocation
 admission, whole-container privacy, cheap ROI, native workspace bounds or callback
 overhead. Full-crate freestanding compilation remains blocked by
@@ -587,7 +615,7 @@ Collection discovery and render/transform policy admission still need
 qualification. Auxiliary rendering, whole-container
 metadata/privacy, native memory bounds, HTTP revision binding and raw JXL layers
 remain open. The output and collection are implemented on the API review PR; concrete
-factory packaging remains open and neither surface has been released.
+JXL factory packaging is in PR31; neither surface has been released.
 
 The immutable-interpretation gate passed the full 46-test native suite and strict
 Clippy: run-heavy rc=0, 116 s, peak RSS 0.22 GiB, minimum available 13502 MiB,
@@ -819,7 +847,7 @@ fixtures, preview/progressive publication, reference-only export, representation
 other than F32, qualified CMYK conversion, raw random seeking and native workspace
 bounds. Publication happens after reconstruction; it does not prove preallocation
 admission or whole-container privacy. The collection contract is now shared;
-concrete native adapter factories remain private; placement is now shared.
+the concrete TIFF adapter remains private; JXL has a packaged factory and placement is shared.
 
 ### Independent oracle qualification
 

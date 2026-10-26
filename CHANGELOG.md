@@ -2,6 +2,12 @@
 
 ## Native image selection (unreleased experiment)
 
+- Replace the duplicate JXL factory with the real optional `zenjxl::collection`
+  package from its API review PR. Qualify all 147 presentation selections and
+  nine raw layers through that package, retaining native bit-exact and pinned
+  independent-reader gates. Keep TIFF private and unqualified resource/policy
+  requirements explicit; update the source-extracted guide and receipt.
+
 - Retain unhandled limit and decode-policy fields in typed collection-opening
   refusals. Callers can inspect bounded settings without knowing adapter-specific
   causes or parsing text; handled fields are excluded and refusals never authorize
