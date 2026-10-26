@@ -362,6 +362,10 @@ fn selected_jxl_presentations_match_native_sequential_with_dependencies() {
                 "packaged description: {name}"
             );
             let output = packaged.decode(id, &ImageRequest::new()).unwrap();
+            assert_eq!(
+                output.interpretation().composition,
+                Some(Composition::Composited)
+            );
             exact_rows(
                 &expected_owned[item.native.index],
                 &super::output_tests::mapped_planes(&output),

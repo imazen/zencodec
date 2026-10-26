@@ -129,7 +129,9 @@ fn collection_factory_borrowed_positional_tiff_keeps_regions_children_and_output
             let lengths = source.0.lengths.clone();
             let decisions = Cell::new(0);
             let resolver = |q: Question<'_>| -> Result<Decision, At<Infallible>> {
-                assert!(matches!(q, Question::Image { .. }));
+                let Question::Image { image, facts, .. } = q else { panic!("wrong question") };
+                assert_eq!(facts.composition, Some(Composition::Composited));
+                assert_eq!(image.interpretation().composition, facts.composition);
                 decisions.set(decisions.get() + 1);
                 Ok(Decision::UsePreset)
             };
@@ -170,6 +172,7 @@ fn collection_factory_borrowed_positional_tiff_keeps_regions_children_and_output
             drop(images);
             drop(source);
             drop(bytes);
+            assert_eq!(output.interpretation().composition, Some(Composition::Composited));
             assert_eq!(
                 output
                     .with_pixels(|p| p.as_strided_bytes().to_vec())

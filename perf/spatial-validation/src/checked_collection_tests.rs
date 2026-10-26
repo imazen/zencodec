@@ -64,6 +64,11 @@ fn checked_collection_repeated_native_output_is_rechecked_without_copying() {
             panic!("wrong question")
         };
         assert_eq!(facts.source_details, 1);
+        assert_eq!(facts.composition, Some(Composition::Composited));
+        assert_eq!(
+            image.interpretation().composition,
+            Some(Composition::Composited)
+        );
         seen.set(seen.get() + 1);
         address.set(image.with_pixels(|p| p.row(0).as_ptr() as usize).unwrap());
         Ok(Decision::UsePreset)
@@ -75,6 +80,10 @@ fn checked_collection_repeated_native_output_is_rechecked_without_copying() {
     for i in 0..20 {
         let output = collection.decode(&id, &ImageRequest::default()).unwrap();
         let pixels = mapped_planes(&output);
+        assert_eq!(
+            output.interpretation().composition,
+            Some(Composition::Composited)
+        );
         if let Some(expected) = &expected {
             assert_eq!(&pixels, expected);
         } else {

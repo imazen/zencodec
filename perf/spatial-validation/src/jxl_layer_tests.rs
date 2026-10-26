@@ -154,6 +154,7 @@ fn raw_collection_native_samples_and_owner_bound_policy_match_independent_layers
                 .unwrap();
             assert_eq!(facts.geometry.canvas_width as usize, layer.native.size.0);
             assert_eq!(facts.placement, image.interpretation().placement);
+            assert_eq!(facts.composition, Some(Composition::Uncomposited));
             assert_eq!(
                 facts.placement.unwrap().origin,
                 (
@@ -195,6 +196,12 @@ fn raw_collection_native_samples_and_owner_bound_policy_match_independent_layers
                 .decode(&admitted_ids[index], &ImageRequest::new())
                 .unwrap()
                 .into_output();
+            for output in [&*image, &*package_image, &admitted_image] {
+                assert_eq!(
+                    output.interpretation().composition,
+                    Some(Composition::Uncomposited)
+                );
+            }
             assert_eq!(
                 mapped_planes(&admitted_image),
                 mapped_planes(&package_image)

@@ -37,6 +37,19 @@ before that result returns; consumers need no separate authorization call.
 The wrapper uses the existing fallible `PolicyResolver` and `PolicySet`.
 It does not introduce a parallel callback protocol.
 
+The detached owner retains `interpretation().composition`. The wrapper binds the
+view fixed at open before `Question::Image`; `ImageFacts::composition` gives the
+callback the same fact. A native claim that contradicts this view, or a view that
+changes across reconstruction, refuses with `OutputError::Composition` before
+publication. Binding shares pixel storage and leaves previously retained clones
+unchanged. Standalone packed/frame construction does not infer a view from shape
+or storage. Composited output can still need orientation and color conversion;
+this is not a complete display-rendering contract.
+The [native qualification receipt](../benchmarks/native_composition_2026-10-26.json)
+records TIFF SubIFD regions, reverse-selected JXL presentations and raw layers
+through both ordinary and admitted storage. Existing independent sample and
+color gates remain unchanged.
+
 ## Register once; open a checked operation
 
 The same [executing example](../perf/spatial-validation/src/collection.rs) now
