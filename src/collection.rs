@@ -12,7 +12,9 @@ use crate::{At, image::ImageOutput};
 use alloc::{boxed::Box, sync::Arc};
 use core::{error::Error, fmt};
 
+mod description;
 mod discovery;
+pub use description::ImageDescription;
 pub use discovery::{Discovery, DiscoveryExhausted, DiscoveryMethod, DiscoveryUsage};
 
 /// Retained concrete backend cause, including an existing location trace.
@@ -148,6 +150,8 @@ pub enum SelectionError {
         /// Height of the selected stored image.
         height: u32,
     },
+    /// The adapter cannot establish source geometry without reconstructing pixels.
+    UnsupportedDescription,
 }
 impl fmt::Display for SelectionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -171,6 +175,9 @@ impl fmt::Display for SelectionError {
             Self::UnsupportedChildren => "child-image discovery is not implemented",
             Self::UnsupportedRegion => "required stored region is not implemented",
             Self::InvalidRegion { .. } => unreachable!(),
+            Self::UnsupportedDescription => {
+                "selected description without pixel reconstruction is not implemented"
+            }
         })
     }
 }
@@ -264,6 +271,13 @@ pub trait Collection {
     fn children(&mut self, image: &ImageId) -> Result<Self::Cursor, At<CollectionError>>;
     /// Return the next stable identity, or successful exhaustion.
     fn next(&mut self, cursor: &mut Self::Cursor) -> Result<Option<ImageId>, At<CollectionError>>;
+    /// Establish selected source geometry without reconstructing pixel samples.
+    /// Discovery may have parsed earlier headers or traversed compressed data.
+    /// This call must validate its facts, honor the source revision and stop
+    /// token, and reject foreign identities. It neither advances a cursor nor
+    /// promises that a later decode succeeds. Unsupported inspection refuses;
+    /// it must never fall back to decoding a full raster for these facts.
+    fn describe(&mut self, image: &ImageId) -> Result<ImageDescription, At<CollectionError>>;
     /// Decode the required selected extent and retain immutable interpretation with its owner.
     /// This mechanism does not perform application publication policy; use
     /// [`crate::operation::CheckedCollection`] for the ordinary checked path.

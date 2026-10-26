@@ -2,7 +2,7 @@
 use super::{OperationReport, Outcome, PolicyResolver, PolicySet, resolve_image};
 use crate::{
     At, StopToken,
-    collection::{Cause, Collection, ImageId, ImageRequest},
+    collection::{Cause, Collection, ImageDescription, ImageId, ImageRequest},
     image::ImageOutput,
 };
 use alloc::boxed::Box;
@@ -34,6 +34,8 @@ pub enum CollectionStage {
     Stopped,
     /// A call after terminal cancellation or unwind.
     Finished,
+    /// Establishing and validating selected geometry before reconstruction.
+    Describe,
 }
 
 /// Safe default formatting; concrete causes and prior decisions remain available.
@@ -217,6 +219,23 @@ impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
         self.run(|c, _, _, _, report| {
             c.next(cursor)
                 .map_err(|e| failure(CollectionStage::Discovery, report, e))
+        })
+    }
+    /// Inspect source geometry without pixel reconstruction. This does not run
+    /// publication policy or establish complete metadata/resource admission.
+    /// Source failures retain their cause; cancellation finishes the operation.
+    pub fn describe(
+        &mut self,
+        image: &ImageId,
+    ) -> Result<ImageDescription, At<CollectionOperationError>> {
+        self.run(|c, _, _, _, report| {
+            let description = c
+                .describe(image)
+                .map_err(|e| failure(CollectionStage::Describe, report, e))?;
+            description
+                .validate()
+                .map_err(|e| failure(CollectionStage::Describe, report, e))?;
+            Ok(description)
         })
     }
     /// Reconstruct the required extent, resolve policy on that exact owner,

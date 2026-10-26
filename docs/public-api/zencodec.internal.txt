@@ -9,13 +9,13 @@
 
 ## summary
 #
-#   inherent methods                           72
-#   trait roster entries (type × trait)       119
+#   inherent methods                           73
+#   trait roster entries (type × trait)       120
 #
 # per-module pub lines:
 #   (root)                           18
 #   animation                         1
-#   collection                        3
+#   collection                        4
 #   decode                           12
 #   encode                            4
 #   estimate                          2
@@ -29,7 +29,7 @@
 #   source                            2
 #   time                              2
 
-## items (72 lines)
+## items (73 lines)
 
 pub fn CodecIoKind::assert_fields_are_eq(&self)
 pub fn ColorEmitFields::assert_fields_are_eq(&self)
@@ -51,6 +51,7 @@ pub fn Supplements::assert_fields_are_eq(&self)
 pub fn ThreadingPolicy::assert_fields_are_eq(&self)
 pub fn animation::FrameDuration::assert_fields_are_eq(&self)
 pub fn collection::DiscoveryUsage::assert_fields_are_eq(&self)
+pub fn collection::ImageDescription::assert_fields_are_eq(&self)
 pub fn collection::RegionRequest::assert_fields_are_eq(&self)
 pub fn collection::SelectionError::assert_fields_are_eq(&self)
 pub fn decode::BatchMeta::assert_fields_are_eq(&self)
@@ -104,7 +105,7 @@ pub fn source::SourceError::assert_fields_are_eq(&self)
 pub fn time::TimeBase::assert_fields_are_eq(&self)
 pub fn time::Timestamp::assert_fields_are_eq(&self)
 
-## trait impls (119 types)
+## trait impls (120 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -139,6 +140,7 @@ animation::TimingQuantizer: TrivialClone
 collection::Composition: TrivialClone
 collection::DiscoveryMethod: TrivialClone
 collection::DiscoveryUsage: TrivialClone
+collection::ImageDescription: TrivialClone
 collection::ImageRequest: TrivialClone
 collection::RegionRequest: TrivialClone
 collection::SelectionError: TrivialClone

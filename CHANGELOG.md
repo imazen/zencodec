@@ -2,6 +2,12 @@
 
 ## Native image selection (unreleased experiment)
 
+- Add selected `ImageDescription` and `describe` to the shared collection and
+  checked consumer after native TIFF/JXL/HTTP qualification (`76edcca8`). Keep
+  source geometry distinct from rendered output and metadata completeness.
+  Validate returned geometry, preserve cancellation and source-replacement
+  failures, and charge repeated inspection against the discovery allowance.
+
 - Expose signed presentation placement in the immutable shared output and
   publication facts. Validate it with the packed owner without clipping hidden
   samples; preserve typed overflow/geometry causes. Native JXL layers use that
@@ -13,7 +19,7 @@
   JXL presentation/layer and conditional HTTP adapters now import those shared
   contracts. Preserve source-scoped identity, exact regions, operation-wide
   discovery-call accounting, traced errors and the first cancellation reason.
-  Adapter factories and placement remain private; CodecSet registration and
+  Adapter factories remain private; CodecSet registration and
   native workspace admission are still separate work.
 
 - Update the native JXL validation dependency after CMS callback failures were

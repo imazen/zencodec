@@ -1,5 +1,5 @@
 //! Operation-wide accounting of calls into native collection discovery.
-use super::{Collection, CollectionError, Composition, ImageId, ImageRequest};
+use super::{Collection, CollectionError, Composition, ImageDescription, ImageId, ImageRequest};
 use crate::{At, image::ImageOutput};
 use alloc::boxed::Box;
 
@@ -13,6 +13,8 @@ pub enum DiscoveryMethod {
     Children,
     /// Advancing a cursor, including cached or exhausted cursors.
     Next,
+    /// Inspecting an issued identity, including cached descriptions.
+    Describe,
 }
 
 /// Counts from delegated discovery calls, not native parse work or source bytes.
@@ -27,6 +29,8 @@ pub struct DiscoveryUsage {
     pub exhausted_cursors: u64,
     /// Errors returned by delegated discovery, including request refusals.
     pub backend_errors: u64,
+    /// Successful descriptions returned by the adapter, including repeats.
+    pub returned_descriptions: u64,
 }
 
 /// A refused discovery call. The adapter was not called and no work was refunded.
@@ -54,7 +58,7 @@ impl core::error::Error for DiscoveryExhausted {}
 /// One immutable allowance per opened collection. Charge before delegating,
 /// including cached results, exhaustion, unsupported requests and native errors.
 /// Starting another cursor does not reset it; failures do not refund work.
-/// Decode of an already returned identity does not consume discovery attempts.
+/// Describing an identity consumes an attempt even when cached; decoding it does not.
 /// Native parsing limits, cancellation and source I/O limits remain necessary.
 pub struct Discovery<C> {
     collection: C,
@@ -127,5 +131,14 @@ impl<C: Collection> Collection for Discovery<C> {
         request: &ImageRequest,
     ) -> Result<ImageOutput, At<CollectionError>> {
         self.collection.decode(image, request)
+    }
+    fn describe(&mut self, image: &ImageId) -> Result<ImageDescription, At<CollectionError>> {
+        self.charge(DiscoveryMethod::Describe)?;
+        let result = self.collection.describe(image);
+        if result.is_ok() {
+            self.used.returned_descriptions += 1;
+        }
+        self.record(&result);
+        result
     }
 }

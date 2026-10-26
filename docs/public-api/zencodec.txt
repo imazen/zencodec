@@ -6,27 +6,27 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2841 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 191 lines (191 hidden + 0 excluded-feature)
+# files: zencodec.txt 2856 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 193 lines (193 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                19
-#   pub types (struct/enum/trait/alias)       330
-#   pub consts/statics                        297
+#   pub types (struct/enum/trait/alias)       331
+#   pub consts/statics                        300
 #   free functions                             83
-#   inherent methods                         1038
-#   struct fields                             406
-#   enum variants                             467
+#   inherent methods                         1041
+#   struct fields                             410
+#   enum variants                             470
 #   re-exports                                 15
-#   trait roster entries (type × trait)       955
+#   trait roster entries (type × trait)       960
 #   conditional trait impls (verbatim)          8
-#   auto-trait-complete types                 172
+#   auto-trait-complete types                 173
 #   auto-trait exceptions                      38
 #
 # per-module pub lines:
-#   (root)                          953
+#   (root)                          956
 #   animation                        11
-#   collection                       64
+#   collection                       73
 #   decode                          283
 #   encode                          189
 #   estimate                         48
@@ -38,13 +38,13 @@
 #   image                           106
 #   inventory                       103
 #   metadata_rewrite                 58
-#   operation                       180
+#   operation                       182
 #   prelude                         233
 #   source                           37
 #   storage                          34
 #   time                             22
 
-## items (2575 lines)
+## items (2589 lines)
 
 pub mod zencodec
 pub use At
@@ -83,6 +83,7 @@ pub collection::Composition::Composited
 pub collection::Composition::Uncomposited
 #[non_exhaustive] pub enum collection::DiscoveryMethod
 pub collection::DiscoveryMethod::Children
+pub collection::DiscoveryMethod::Describe
 pub collection::DiscoveryMethod::Images
 pub collection::DiscoveryMethod::Next
 #[non_exhaustive] pub enum collection::RegionRequest
@@ -100,6 +101,7 @@ pub collection::SelectionError::InvalidRegion::requested: image::Rect
 pub collection::SelectionError::InvalidRegion::width: u32
 pub collection::SelectionError::UnsupportedChildren
 pub collection::SelectionError::UnsupportedComposition
+pub collection::SelectionError::UnsupportedDescription
 pub collection::SelectionError::UnsupportedRegion
 pub struct collection::Discovery<C>
 pub fn collection::Discovery<C>::new(C, u64) -> Self
@@ -112,7 +114,16 @@ pub collection::DiscoveryExhausted::used: collection::DiscoveryUsage
 pub collection::DiscoveryUsage::attempts: u64
 pub collection::DiscoveryUsage::backend_errors: u64
 pub collection::DiscoveryUsage::exhausted_cursors: u64
+pub collection::DiscoveryUsage::returned_descriptions: u64
 pub collection::DiscoveryUsage::returned_ids: u64
+#[non_exhaustive] pub struct collection::ImageDescription
+pub collection::ImageDescription::placement: core::option::Option<image::Placement>
+pub collection::ImageDescription::stored_orientation: core::option::Option<zenpixels::orientation::Orientation>
+pub collection::ImageDescription::stored_size: (u32, u32)
+pub const fn collection::ImageDescription::new((u32, u32)) -> Self
+pub fn collection::ImageDescription::validate(&self) -> core::result::Result<(), whereat::at::At<collection::CollectionError>>
+pub const fn collection::ImageDescription::with_orientation(self, zenpixels::orientation::Orientation) -> Self
+pub const fn collection::ImageDescription::with_placement(self, image::Placement) -> Self
 pub collection::ImageGeometry::canvas_height: u32
 pub collection::ImageGeometry::canvas_width: u32
 pub collection::ImageGeometry::region: image::Rect
@@ -134,6 +145,7 @@ pub trait collection::Collection
 pub type collection::Collection::Cursor
 pub fn collection::Collection::children(&mut self, &collection::ImageId) -> core::result::Result<Self::Cursor, whereat::at::At<collection::CollectionError>>
 pub fn collection::Collection::decode(&mut self, &collection::ImageId, &collection::ImageRequest) -> core::result::Result<image::ImageOutput, whereat::at::At<collection::CollectionError>>
+pub fn collection::Collection::describe(&mut self, &collection::ImageId) -> core::result::Result<collection::ImageDescription, whereat::at::At<collection::CollectionError>>
 pub fn collection::Collection::images(&mut self) -> core::result::Result<Self::Cursor, whereat::at::At<collection::CollectionError>>
 pub fn collection::Collection::next(&mut self, &mut Self::Cursor) -> core::result::Result<core::option::Option<collection::ImageId>, whereat::at::At<collection::CollectionError>>
 pub fn collection::Collection::view(&self) -> collection::Composition
@@ -1461,6 +1473,7 @@ pub fn metadata_rewrite::Services::rewrite_xmp(&self, &[u8], usize, &dyn enough:
 pub mod operation
 #[non_exhaustive] pub enum operation::CollectionStage
 pub operation::CollectionStage::Decode
+pub operation::CollectionStage::Describe
 pub operation::CollectionStage::Discovery
 pub operation::CollectionStage::Finished
 pub operation::CollectionStage::Open
@@ -1541,6 +1554,7 @@ pub operation::BoundaryOffer::action: decode::BoundaryAction
 pub struct operation::CheckedCollection<C, R>
 pub fn operation::CheckedCollection<C, R>::children(&mut self, &collection::ImageId) -> core::result::Result<<C as collection::Collection>::Cursor, whereat::at::At<operation::CollectionOperationError>>
 pub fn operation::CheckedCollection<C, R>::decode(&mut self, &collection::ImageId, &collection::ImageRequest) -> core::result::Result<operation::Outcome<image::ImageOutput>, whereat::at::At<operation::CollectionOperationError>>
+pub fn operation::CheckedCollection<C, R>::describe(&mut self, &collection::ImageId) -> core::result::Result<collection::ImageDescription, whereat::at::At<operation::CollectionOperationError>>
 pub fn operation::CheckedCollection<C, R>::first_image(&mut self, &collection::ImageRequest) -> core::result::Result<core::option::Option<operation::Outcome<image::ImageOutput>>, whereat::at::At<operation::CollectionOperationError>>
 pub fn operation::CheckedCollection<C, R>::images(&mut self) -> core::result::Result<<C as collection::Collection>::Cursor, whereat::at::At<operation::CollectionOperationError>>
 pub fn operation::CheckedCollection<C, R>::is_finished(&self) -> bool
@@ -2622,7 +2636,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (219 types)
+## trait impls (220 types)
 
 &mut D: decode::ControlledIncrementalDecode, decode::IncrementalDecode
 &mut S: source::DynReadAt
@@ -2687,6 +2701,7 @@ collection::Discovery<C>: collection::Collection
 collection::DiscoveryExhausted: Debug, Display, Error
 collection::DiscoveryMethod: Clone, Copy, Debug, Eq, PartialEq
 collection::DiscoveryUsage: Clone, Copy, Debug, Default, Eq, PartialEq
+collection::ImageDescription: Clone, Copy, Debug, Eq, PartialEq
 collection::ImageId: Clone, Debug, Eq, Hash, PartialEq
 collection::ImageRequest: Clone, Copy, Debug, Default
 collection::Origin: Default
@@ -2854,7 +2869,7 @@ impl<J, E> decode::IncrementalDecode for helpers::WholeFileIncremental<J> where 
 
 ## auto traits
 
-172 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+173 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
 CodecSet: !RefUnwindSafe !UnwindSafe
 CodecSetError: !RefUnwindSafe !UnwindSafe
