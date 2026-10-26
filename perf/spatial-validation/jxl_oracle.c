@@ -3,6 +3,14 @@
 #include <jxl/decode.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+
+static uint32_t float_bits(float value) {
+  uint32_t bits;
+  _Static_assert(sizeof(bits) == sizeof(value), "requires binary32 float");
+  memcpy(&bits, &value, sizeof(bits));
+  return bits;
+}
 
 int main(int argc, char **argv) {
   if (argc != 3) return 2;
@@ -30,6 +38,16 @@ int main(int argc, char **argv) {
       if (JxlDecoderGetBasicInfo(decoder, &info) != JXL_DEC_SUCCESS) break;
       printf("canvas %" PRIu32 " %" PRIu32 "\n", info.xsize, info.ysize);
       printf("orientation %u\n", (unsigned)info.orientation);
+      printf("source_samples %" PRIu32 " %" PRIu32 "\n",
+             info.bits_per_sample, info.exponent_bits_per_sample);
+      printf("source_tone %" PRIu32 " %" PRIu32 " %u %" PRIu32 "\n",
+             float_bits(info.intensity_target), float_bits(info.min_nits),
+             (unsigned)info.relative_to_max_display, float_bits(info.linear_below));
+      printf("source_display %" PRIu32 " %" PRIu32 "\n",
+             info.intrinsic_xsize, info.intrinsic_ysize);
+      printf("original_profile %u\n", (unsigned)info.uses_original_profile);
+      printf("preview %u %" PRIu32 " %" PRIu32 "\n",
+             (unsigned)info.have_preview, info.preview.xsize, info.preview.ysize);
       if (info.have_animation) {
         printf("animation %" PRIu32 " %" PRIu32 " %" PRIu32 " %u\n",
                info.animation.tps_numerator, info.animation.tps_denominator,
