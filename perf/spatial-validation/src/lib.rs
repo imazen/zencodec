@@ -6,6 +6,7 @@
 mod checked_source;
 mod collection;
 mod control;
+mod discovery;
 mod generated_output_tests;
 pub mod image_items;
 pub mod image_output;

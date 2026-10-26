@@ -59,6 +59,35 @@ function, `just spatial-consumer-check` reruns its native cases and strict
 Clippy without repeating the full matrix. These are process receipts, not
 native resource bounds.
 
+### Repeated browsing has one operation allowance
+
+A viewport can revisit an image, create another cursor or ask an unsupported
+child query. Native TIFF currently counts returned relationships while JXL
+limits its cached presentations. Those are different native limits, so neither
+is presented as a universal discovery-work bound.
+
+The private [`Discovery<C>` experiment](src/discovery.rs) wraps either adapter
+without changing `Collection` or its consumer loop. It charges each `images`,
+`children` and `next` attempt before delegation. Cached results, exhaustion and
+errors consume attempts; opening another cursor and retrying cannot reset or
+refund them. A refusal retains the method, allowance and usage through the
+existing traced error. Already returned identities remain decodable after
+exhausting discovery. `first_image` uses two attempts; `first_child` uses four.
+
+`just spatial-discovery-check` executes the same repeated-cursor/exhaustion
+consumer on real TIFF and JXL. Further cases check exact SubIFD samples in
+classic/BigTIFF, typed unsupported-child and injected source failures, zero
+allowance and refusal before further native polling or source I/O. The gate and
+strict lint pass: `run-heavy: done rc=0 8s | peak-RSS 0.54GiB | min-avail 12793MiB |
+peak-load 0.25` (test process). [Receipt](../../benchmarks/spatial_discovery_2026-10-26.json).
+
+This is a bound on calls, not on parser bytes, retained graph memory or CPU
+inside one call. It excludes opening the native decoder. Native limits and
+source admission remain required. Keep accounting in an operation/driver layer;
+there is no evidence here for another public codec trait, a callback per item,
+or requiring every caller to coordinate capability flags. Promotion still needs
+native work accounting and integration with the existing operation context.
+
 ### Cancellation belongs to the opened operation
 
 `TiffCollection::open_with_stop` and `JxlItems::open_with_stop` accept the existing

@@ -154,6 +154,45 @@ fn cancellation_native_timeout_preserves_reason() {
     );
 }
 
+#[test]
+fn discovery_budget_native_jxl_counts_cached_results_and_exhaustion() {
+    let data = fixture("conformance_test_images/blendmodes.jxl");
+    let open = || JxlItems::open(&data, Composition::Composited, 4096).unwrap();
+    super::discovery::verify_repeated_discovery(open());
+    super::discovery::verify_exhaustion_is_charged(open());
+}
+
+#[test]
+fn discovery_budget_native_jxl_counts_refusals_before_blocking_native_work() {
+    use super::discovery::{Discovery, Exhausted, Method};
+    let data = fixture("conformance_test_images/blendmodes.jxl");
+    let stop = CheckStop::default();
+    let native =
+        JxlItems::open_with_stop(&data, Composition::Composited, 4096, stop.token()).unwrap();
+    let mut collection = Discovery::new(native, 4);
+    let mut cursor = collection.images().unwrap();
+    let id = collection.next(&mut cursor).unwrap().unwrap();
+    for _ in 0..2 {
+        let error = collection.children(&id).err().unwrap();
+        assert_eq!(
+            zencodec::find_cause::<SelectionError>(&error),
+            Some(&SelectionError::UnsupportedChildren)
+        );
+    }
+    assert_eq!(collection.usage().backend_errors, 2);
+    let before = stop.calls();
+    let error = collection.next(&mut cursor).unwrap_err();
+    assert_eq!(
+        zencodec::find_cause::<Exhausted>(&error).unwrap().method,
+        Method::Next
+    );
+    assert_eq!(
+        stop.calls(),
+        before,
+        "budget refusal reached native collection"
+    );
+}
+
 pub(crate) fn independent_metadata(name: &str, coalescing: bool) -> String {
     independent_metadata_at(&fixture_path(name), coalescing)
 }

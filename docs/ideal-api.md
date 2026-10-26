@@ -123,7 +123,9 @@ WIC/OpenImageIO evidence and the distinction between containment and roles. The 
 and a shared `PublicationOffer`. It returns the same owner only on acceptance;
 failed decisions drop unpublished output. This is post-reconstruction publication,
 not pre-allocation admission or a privacy certificate. Collection promotion still
-needs explicit discovery accounting and source-revision validation. The native
+needs native discovery-work accounting and source-revision validation. A private
+common wrapper now bounds discovery calls consistently across cached/repeated
+TIFF and JXL browsing; it does not bound work inside a native call. The native
 collection adapters now carry one existing `StopToken` through discovery,
 selected replay and final output checks. Cancellation injection covers observed
 polls in classic TIFF/BigTIFF SubIFD and JXL presentation operations; native-call

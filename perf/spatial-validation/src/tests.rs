@@ -517,6 +517,89 @@ mod image_selection {
     }
 
     #[test]
+    fn discovery_budget_native_tiff_counts_repeated_roots_children_and_exhaustion() {
+        use crate::discovery::{
+            Discovery, verify_exhaustion_is_charged, verify_repeated_discovery,
+        };
+        for big in [false, true] {
+            let (bytes, refs) = nested_fixture(big, true, false);
+            let open = || {
+                TiffCollection::open(
+                    Cursor::new(&bytes),
+                    Composition::Composited,
+                    Allowances::default(),
+                )
+                .unwrap()
+            };
+            verify_repeated_discovery(open());
+            verify_exhaustion_is_charged(open());
+            let mut collection = Discovery::new(open(), 8);
+            for _ in 0..2 {
+                let output = first_child(&mut collection, &ImageRequest::default())
+                    .unwrap()
+                    .unwrap();
+                output
+                    .with_pixels(|p| assert_eq!(p.as_contiguous_bytes().unwrap(), refs[1].bytes))
+                    .unwrap();
+            }
+            assert_eq!(collection.usage().attempts, 8);
+            assert_eq!(collection.usage().returned_ids, 4);
+            assert!(first_child(&mut collection, &ImageRequest::default()).is_err());
+        }
+    }
+
+    #[test]
+    fn discovery_budget_native_tiff_failure_is_charged_and_denial_performs_no_io() {
+        use crate::discovery::{Discovery, Exhausted, Method};
+        let (bytes, _) = nested_fixture(false, true, false);
+        let source = Source::new(bytes);
+        let native = TiffCollection::open(
+            ReadAtReader::new(source.clone()),
+            Composition::Composited,
+            Allowances::default(),
+        )
+        .unwrap();
+        let mut collection = Discovery::new(native, 2);
+        let mut cursor = collection.images().unwrap();
+        let next_read = source.ledger.borrow().calls + 1;
+        source.ledger.borrow_mut().fail = Some(next_read);
+        let error = collection.next(&mut cursor).unwrap_err();
+        assert!(matches!(
+            zencodec::find_cause::<SourceFault>(&error),
+            Some(SourceFault::Injected)
+        ));
+        assert_eq!(collection.usage().backend_errors, 1);
+        let before = source.ledger.borrow().calls;
+        let error = collection.next(&mut cursor).unwrap_err();
+        assert_eq!(
+            zencodec::find_cause::<Exhausted>(&error).unwrap().method,
+            Method::Next
+        );
+        assert_eq!(source.ledger.borrow().calls, before);
+    }
+
+    #[test]
+    fn discovery_budget_zero_native_tiff_is_not_successful_empty_discovery() {
+        use crate::discovery::{Discovery, Exhausted, Method};
+        let (bytes, _) = nested_fixture(false, false, false);
+        let source = Source::new(bytes);
+        let native = TiffCollection::open(
+            ReadAtReader::new(source.clone()),
+            Composition::Composited,
+            Allowances::default(),
+        )
+        .unwrap();
+        let mut collection = Discovery::new(native, 0);
+        let before = source.ledger.borrow().calls;
+        let error = collection.images().err().unwrap();
+        let cause = zencodec::find_cause::<Exhausted>(&error).unwrap();
+        assert_eq!(cause.method, Method::Images);
+        assert_eq!(cause.limit, 0);
+        assert_eq!(cause.used.attempts, 0);
+        assert_eq!(source.ledger.borrow().calls, before);
+    }
+
+    #[test]
     fn common_consumer_selects_native_tiff_root_and_subifd() {
         for big in [false, true] {
             for planar in [false, true] {
