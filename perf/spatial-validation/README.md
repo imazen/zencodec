@@ -48,8 +48,9 @@ executed `first_image` function with its enclosing imports and return type.
 The later loop below replaces the associated native sample type with a shared
 mapped output and moves region requests to each decode. Public promotion still
 requires complete interpretation, immutable admission and discovery allowances
-whose scope is explicit. Network revision binding, cancellation across discovery,
-and pixel/privacy policy remain separate gates.
+whose scope is explicit. Network revision binding and pixel/privacy policy remain
+separate gates. The cancellation loop below qualifies mechanical stop checks;
+it does not establish a hard latency bound for native calls.
 
 The full combined gate passed after adding the common path: run-heavy rc=0,
 104 s, peak RSS 0.37 GiB, minimum available 15919 MiB, peak load 0.92; log
@@ -57,6 +58,41 @@ The full combined gate passed after adding the common path: run-heavy rc=0,
 function, `just spatial-consumer-check` reruns its native cases and strict
 Clippy without repeating the full matrix. These are process receipts, not
 native resource bounds.
+
+### Cancellation belongs to the opened operation
+
+`TiffCollection::open_with_stop` and `JxlItems::open_with_stop` accept the existing
+`zencodec::StopToken` once. The common `Collection` methods and `first_image`
+consumer need no additional cancellation argument or capability coordination.
+Default opening remains available when the caller does not need cancellation.
+
+The TIFF adapter checks before opening, around every source read/seek, during
+known graph traversal, between native coding units and before returning output.
+The JXL adapter passes the same token into native options for discovery and
+selected-frame replay, with checks before publishing IDs or mapped output.
+Cached presentations and exhausted cursors still check cancellation: neither
+an item nor successful exhaustion substitutes for a cancelled request.
+
+`just spatial-cancellation-check` injects cancellation at every stop poll observed
+in the successful classic-TIFF and BigTIFF planar SubIFD operations, and one
+native JXL presentation operation. Each cancelled run must return an error and
+no output. Separate controls cover cancellation before any source I/O, known
+graph traversal without I/O, cached/exhausted JXL cursors and a failed native
+scan that must not appear exhausted. Successful controls compare real samples.
+
+These tests do not measure cancellation latency or promise interruption of a
+blocking source call. TIFF compute checks remain at coding-unit seams; JXL uses
+its native cooperative checks. Source deadlines, native workspace bounds and
+broader codec configurations remain separate obligations. Stop reasons produced
+by the adapter use the existing `CodecError` category; native causes remain
+inspectable through the traced collection error. The native JXL conversion
+currently collapses `TimedOut` into `Cancelled`, tracked in [decoder issue 70](https://github.com/imazen/zenjxl-decoder/issues/70).
+
+The full native gate passed with these adapter changes: `run-heavy: done rc=0
+154s | peak-RSS 0.23GiB | min-avail 13419MiB | peak-load 1.10`. This is test-process
+usage, not a decoder memory bound. The additional graph/failed-scan controls run
+in the targeted cancellation gate. Evidence is recorded in
+[`spatial_cancellation_2026-10-26.json`](../../benchmarks/spatial_cancellation_2026-10-26.json).
 
 ### Region requests belong to the selected image
 

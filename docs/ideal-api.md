@@ -123,7 +123,11 @@ WIC/OpenImageIO evidence and the distinction between containment and roles. The 
 and a shared `PublicationOffer`. It returns the same owner only on acceptance;
 failed decisions drop unpublished output. This is post-reconstruction publication,
 not pre-allocation admission or a privacy certificate. Collection promotion still
-needs explicit discovery allowances, cancellation and source-revision validation. Raw JXL layer implementation is
+needs explicit discovery accounting and source-revision validation. The native
+collection adapters now carry one existing `StopToken` through discovery,
+selected replay and final output checks. Cancellation injection covers observed
+polls in classic TIFF/BigTIFF SubIFD and JXL presentation operations; native-call
+latency and timeout-reason fidelity remain separate qualification work. Raw JXL layer implementation is
 still [decoder issue 57](https://github.com/imazen/zenjxl-decoder/issues/57);
 the existing [paged-decoder issue](https://github.com/imazen/zencodec/issues/1)
 owns the shared-selector discussion. The [public-output receipt](../benchmarks/public_image_output_2026-10-26.json)
