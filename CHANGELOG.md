@@ -2,6 +2,10 @@
 
 ## Native image selection (unreleased experiment)
 
+- Update the native JXL validation dependency after CMS callback failures were
+  changed to return their original traced error. Recheck selected layers, TIFF
+  regions and conditional HTTP source identity against that implementation.
+
 - Qualify selected raw JXL F32 layers through the same checked consumer as TIFF
   and presentations. Freeze complete local samples with signed placement and
   source blend/reference facts; preserve native bits and allocation through
