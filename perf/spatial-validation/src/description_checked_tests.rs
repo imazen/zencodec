@@ -133,6 +133,7 @@ fn description_checked_cancellation_includes_the_final_return_seam() {
         for at in 0..checks {
             let (result, _) = run(&CheckStop::with_reason(reason), Some(at));
             let error = result.expect_err("description escaped a stopped operation");
+            assert_eq!(error.error().stop_reason(), Some(reason));
             let wrapped =
                 zencodec::find_cause::<zencodec::CodecError>(&error).map(|e| e.category());
             assert_eq!(

@@ -46,12 +46,28 @@ pub struct CollectionOperationError {
     /// Bounded prior decisions, excluding arbitrary input or callback payloads.
     pub report: Box<OperationReport>,
     cause: Cause,
+    observed_stop: Option<StopReason>,
+}
+impl CollectionOperationError {
+    /// First stop reason observed through this operation's shared token.
+    ///
+    /// The original native, source or application failure remains the cause,
+    /// even when it coincides with a stop. `None` means the token has not
+    /// reported a stop; it does not classify arbitrary backend errors.
+    pub const fn stop_reason(&self) -> Option<StopReason> {
+        self.observed_stop
+    }
+    fn with_stop(mut self, reason: Option<StopReason>) -> Self {
+        self.observed_stop = reason;
+        self
+    }
 }
 impl fmt::Debug for CollectionOperationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CollectionOperationError")
             .field("stage", &self.stage)
             .field("report", &self.report)
+            .field("observed_stop", &self.observed_stop)
             .finish_non_exhaustive()
     }
 }
@@ -74,6 +90,7 @@ fn failure(
         stage,
         report: Box::new(report.clone()),
         cause: cause.into(),
+        observed_stop: None,
     }
 }
 
@@ -114,6 +131,7 @@ pub struct CheckedCollection<C, R> {
     preset: PolicySet,
     stop: StopToken,
     report: OperationReport,
+    observed_stop: Option<StopReason>,
 }
 impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
     /// Bind the same token to the native adapter and publication checks. The
@@ -131,14 +149,23 @@ impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
         let run = || {
             check(&stop, &report)?;
             let collection =
-                open(stop.clone()).map_err(|e| failure(CollectionStage::Open, &report, e))?;
-            check(&stop, &report)?;
+                open(stop.clone()).map_err(|e| failure(CollectionStage::Open, &report, e));
+            // Observe the final seam on failed opening too. Preserve the native
+            // cause while making a coincident stop available without downcasts.
+            let stopped = check(&stop, &report);
+            let collection = match (collection, stopped) {
+                (Ok(collection), Ok(())) => collection,
+                (Err(error), Ok(())) => return Err(error),
+                (Ok(_), Err(stopped)) => return Err(stopped),
+                (Err(error), Err(stopped)) => return Err(error.with_stop(stopped.stop_reason())),
+            };
             Ok(Self {
                 collection: Some(collection),
                 resolver,
                 preset: PolicySet::new(),
                 stop,
                 report,
+                observed_stop: None,
             })
         };
         run().map_err(At::wrap)
@@ -171,13 +198,15 @@ impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
         // callable after catch_unwind. Ordinary errors remain request-local;
         // the native adapter retains responsibility for its own terminal state.
         let Some(mut collection) = self.collection.take() else {
-            return Err(At::wrap(failure(
-                CollectionStage::Finished,
-                &self.report,
-                Finished,
-            )));
+            return Err(At::wrap(
+                failure(CollectionStage::Finished, &self.report, Finished)
+                    .with_stop(self.observed_stop),
+            ));
         };
-        check(&self.stop, &self.report).map_err(At::wrap)?;
+        if let Err(stopped) = check(&self.stop, &self.report) {
+            self.observed_stop = stopped.stop_reason();
+            return Err(At::wrap(stopped));
+        }
         let result = operation(
             &mut collection,
             &mut self.resolver,
@@ -193,7 +222,11 @@ impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
             Err(stopped) => {
                 // Preserve the first native/policy cause; drop a successful
                 // unpublished owner if cancellation arrived at the final seam.
-                result.and_then(|_| Err(stopped)).map_err(At::wrap)
+                self.observed_stop = stopped.stop_reason();
+                match result {
+                    Ok(_) => Err(At::wrap(stopped)),
+                    Err(error) => Err(At::wrap(error.with_stop(self.observed_stop))),
+                }
             }
         }
     }
@@ -283,6 +316,7 @@ fn check(stop: &StopToken, report: &OperationReport) -> Result<(), CollectionOpe
             report,
             crate::CodecError::new(None, reason.into()),
         )
+        .with_stop(Some(reason))
     })
 }
 

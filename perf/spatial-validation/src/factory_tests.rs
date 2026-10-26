@@ -233,6 +233,7 @@ fn collection_factory_refuses_resident_input_requirement_before_reading() {
             expected
         );
         assert_eq!(error.error().stage, CollectionStage::Open);
+        assert_eq!(error.error().stop_reason(), None);
         assert_eq!(source.reads.get(), 0);
         assert_eq!(source.lengths.get(), 0);
     }
@@ -303,6 +304,7 @@ fn collection_factory_source_failures_keep_trace_and_safe_default_formatting() {
     assert!(zencodec::find_cause::<At<Replaced>>(&error).is_some());
     assert!(!format!("{error:?} {error}").contains("private-source-payload"));
     assert_eq!(error.error().stage, CollectionStage::Describe);
+    assert_eq!(error.error().stop_reason(), None);
 }
 
 #[test]
@@ -463,6 +465,7 @@ fn collection_factory_cancellation_survives_opening_and_erasure_at_every_observe
             let control = CheckStop::with_reason(reason);
             control.after(at);
             let error = run(&control).expect_err("stopped factory operation returned pixels");
+            assert_eq!(error.error().stop_reason(), Some(reason), "poll {at}");
             if let Some(policy) = zencodec::find_cause::<zencodec::operation::PolicyFailure>(&error)
             {
                 assert_eq!(policy.stop_reason(), Some(reason));
@@ -479,5 +482,78 @@ fn collection_factory_cancellation_survives_opening_and_erasure_at_every_observe
                 );
             }
         }
+    }
+}
+
+struct StopDuringOpen(CheckStop);
+impl Factory for StopDuringOpen {
+    fn formats(&self) -> &[ImageFormat] {
+        &[ImageFormat::Jxl]
+    }
+    fn open<'a>(
+        &self,
+        _source: &'a mut dyn LocalSource,
+        _view: Composition,
+        _stop: StopToken,
+    ) -> Result<ErasedCollection<'a>, Cause> {
+        self.0.after(0);
+        Err(Box::new(At::wrap(Replaced(123))))
+    }
+}
+
+#[test]
+fn collection_factory_stop_accessor_retains_coincident_native_and_application_causes() {
+    for reason in [
+        zencodec::enough::StopReason::Cancelled,
+        zencodec::enough::StopReason::TimedOut,
+    ] {
+        let bytes = crate::jxl_tests::fixture("named_frame_test.jxl");
+        let mut source = SliceReadAt::new(&bytes);
+        let control = CheckStop::with_reason(reason);
+        let set = Factories::default().with(StopDuringOpen(control.clone()));
+        let error = set
+            .open(
+                ImageFormat::Jxl,
+                &mut source,
+                request(Composition::Composited),
+                PolicySet::new(),
+                control.token(),
+            )
+            .err()
+            .unwrap();
+        assert_eq!(error.error().stage, CollectionStage::Open);
+        assert_eq!(error.error().stop_reason(), Some(reason));
+        assert_eq!(zencodec::find_cause::<Replaced>(&error).unwrap().0, 123);
+        assert!(zencodec::find_cause::<At<Replaced>>(&error).is_some());
+
+        let control = CheckStop::with_reason(reason);
+        let resolver = |_: Question<'_>| -> Result<Decision, At<Replaced>> {
+            control.after(0);
+            Err(At::wrap(Replaced(456)))
+        };
+        let mut images = registered()
+            .open(
+                ImageFormat::Jxl,
+                &mut source,
+                request(Composition::Composited),
+                resolver,
+                control.token(),
+            )
+            .unwrap();
+        let error = images.first_image(&ImageRequest::new()).err().unwrap();
+        assert_eq!(error.error().stage, CollectionStage::Policy);
+        assert_eq!(error.error().stop_reason(), Some(reason));
+        assert_eq!(zencodec::find_cause::<Replaced>(&error).unwrap().0, 456);
+        assert!(zencodec::find_cause::<At<Replaced>>(&error).is_some());
+        assert!(images.is_finished());
+        let before = control.calls();
+        let finished = images.images().err().unwrap();
+        assert_eq!(finished.error().stage, CollectionStage::Finished);
+        assert_eq!(finished.error().stop_reason(), Some(reason));
+        assert_eq!(
+            control.calls(),
+            before,
+            "finished operation entered the stop callback"
+        );
     }
 }

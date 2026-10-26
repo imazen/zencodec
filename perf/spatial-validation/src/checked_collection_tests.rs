@@ -321,6 +321,7 @@ fn checked_collection_native_stop_latches_every_observed_poll_and_keeps_exact_re
             };
             // Native JXL, policy, and wrapper observations retain their own
             // existing error types, all with the exact reason.
+            assert_eq!(error.error().stop_reason(), Some(reason), "poll {at}");
             if let Some(native) = zencodec::find_cause::<zenjxl_decoder::api::Error>(&error) {
                 assert_eq!(native.stop_reason(), Some(reason));
             } else if let Some(policy) =

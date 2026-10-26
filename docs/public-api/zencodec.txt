@@ -6,13 +6,13 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2856 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 193 lines (193 hidden + 0 excluded-feature)
+# files: zencodec.txt 2857 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 193 lines (193 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                19
 #   pub types (struct/enum/trait/alias)       331
-#   pub consts/statics                        300
+#   pub consts/statics                        301
 #   free functions                             83
 #   inherent methods                         1041
 #   struct fields                             410
@@ -24,7 +24,7 @@
 #   auto-trait exceptions                      38
 #
 # per-module pub lines:
-#   (root)                          956
+#   (root)                          957
 #   animation                        11
 #   collection                       73
 #   decode                          283
@@ -44,7 +44,7 @@
 #   storage                          34
 #   time                             22
 
-## items (2589 lines)
+## items (2590 lines)
 
 pub mod zencodec
 pub use At
@@ -1574,6 +1574,7 @@ pub const fn operation::Choices<'a, T>::len(self) -> usize
 #[non_exhaustive] pub struct operation::CollectionOperationError
 pub operation::CollectionOperationError::report: alloc::boxed::Box<operation::OperationReport>
 pub operation::CollectionOperationError::stage: operation::CollectionStage
+pub const fn operation::CollectionOperationError::stop_reason(&self) -> core::option::Option<enough::reason::StopReason>
 #[non_exhaustive] pub struct operation::DecisionRecord
 pub operation::DecisionRecord::code: operation::DecisionCode
 pub operation::DecisionRecord::context: operation::DecisionContext
