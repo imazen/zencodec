@@ -17,7 +17,7 @@ export const improvements = [
   {
     id:'images', title:'Image identity, containment and composition stay distinct',
     state:'Private candidate · native validation', date:'2026-10-26',
-    summary:'Native TIFF tests select nested and shared SubIFDs. Native JXL tests select 147 presentations, including 35 with visible dependency replay. Required raw layers currently refuse.',
+    summary:'Native TIFF tests select nested and shared SubIFDs. Native JXL tests select 147 presentations, including 35 with visible dependency replay. Required raw layers refuse, including the native decoder setting, before input is consumed.',
     why:'A SubIFD is not always a reduced image, and a shared child makes a graph rather than a tree. A JXL file can expose one composited presentation or five layers, so a page index cannot describe every selection.',
     consumer:'Choose the view before discovery, retain the returned image identity, then request full pixels or a stored region for that image. TIFF returns the selected canvas and region origin. The operation owns the source; the identity is not a portable index or timestamp.',
     adapter:'Keep IDs scoped to the opened operation and bound discovery. TIFF/JXL return one mapped ImageOutput; native AV1 uses the same output without copying planes. Packed color uses zenpixels. JXL retains all seven named auxiliary roles, source integer/float precision, spot/CFA parameters and selected timecodes. Output storage precision and presentation timestamps remain separate facts. Retained spot planes disclose whether they already contributed to output color.',

@@ -445,10 +445,16 @@ It also demonstrates why view selection belongs before discovery:
 | `blendmodes.jxl` | 1 | 5 |
 | `multiple_layers_noise_spline.jxl` | 1 | 5 |
 
-The latter includes cropped 1024×576 layers at nonzero origins inside a
-2048×1152 canvas. Native `coalescing=false` still returns the composited output,
-so the candidate refuses required `Uncomposited` before parsing. This is tracked
-in [zenjxl-decoder issue 57](https://github.com/imazen/zenjxl-decoder/issues/57).
+The latter includes 1024×576 layers with nonzero origins on a 2048×1152
+canvas. One starts at (1860,950), extending beyond the canvas: layer placement
+is distinct from a bounded decoded region. Native `coalescing=false` now returns
+the typed `UncoalescedOutputUnsupported` error before consuming input, including
+scan-only processing. The candidate also refuses required `Uncomposited` before
+parsing. This fixes the previously ignored requirement; raw-layer decoding is
+still tracked in [zenjxl-decoder issue 57](https://github.com/imazen/zenjxl-decoder/issues/57).
+The [downstream receipt](../../benchmarks/spatial_layer_refusal_2026-10-26.json)
+qualifies the new native pin against both independent libjxl views. It does not
+claim layer reconstruction or compositing support.
 The independent library is libjxl 0.11.1 locally; CI records the installed
 library's exact numeric version in the test log. Install its development headers
 and library before running the gate (`libjxl-dev` on Ubuntu). Its executable is

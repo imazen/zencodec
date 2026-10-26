@@ -322,20 +322,23 @@ fn selected_jxl_presentations_match_native_sequential_with_dependencies() {
 }
 
 #[test]
-fn jxl_native_coalescing_flag_is_not_a_layer_contract() {
+fn jxl_native_coalescing_requirement_refuses() {
     let mut distinct_views = 0;
     for name in [
         "conformance_test_images/blendmodes.jxl",
         "multiple_layers_noise_spline.jxl",
     ] {
         let data = fixture(name);
-        // A control documenting the pinned backend's currently ignored option.
-        // If the backend implements it, this assertion forces adapter review.
-        assert_eq!(
-            sequential(&data, true).unwrap(),
-            sequential(&data, false).unwrap()
-        );
+        let native = sequential(&data, true).unwrap();
+        // The old probe reproduced silently substituted composited output.
+        // Native request validation now refuses until raw layers are implemented.
+        let error = sequential(&data, false).unwrap_err();
+        assert!(matches!(
+            zencodec::find_cause::<zenjxl_decoder::api::Error>(error.as_ref()),
+            Some(zenjxl_decoder::api::Error::UncoalescedOutputUnsupported)
+        ));
         let composited = independent_frames(name, true);
+        assert_eq!(native.len(), composited.len());
         let layers = independent_frames(name, false);
         distinct_views += usize::from(composited != layers);
         let err = JxlItems::open(&data, Composition::Uncomposited, 4096)

@@ -134,8 +134,11 @@ selected replay and final output checks. Cancellation injection covers observed
 polls in classic TIFF/BigTIFF SubIFD and JXL presentation operations; native-call
 latency remains unqualified. Both cancellation and timeout retain their exact
 reasons through native errors and collection traces in these operations. Raw JXL layer implementation is
-still [decoder issue 57](https://github.com/imazen/zenjxl-decoder/issues/57);
-the existing [paged-decoder issue](https://github.com/imazen/zencodec/issues/1)
+still [decoder issue 57](https://github.com/imazen/zenjxl-decoder/issues/57).
+The native decoder now refuses `coalescing=false` with a typed error before
+consuming input, instead of silently returning composited pixels. Independent
+libjxl discovery includes a layer extending beyond the presentation canvas;
+its placement cannot be represented as a bounded crop. The existing [paged-decoder issue](https://github.com/imazen/zencodec/issues/1)
 owns the shared-selector discussion. The [public-output receipt](../benchmarks/public_image_output_2026-10-26.json)
 records the executing core/native qualification.
 

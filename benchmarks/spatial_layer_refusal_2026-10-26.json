@@ -1,0 +1,24 @@
+{
+  "base": "c205c23f296ecb9ff05586649c1fbe45094f4fa6",
+  "native_decoder": "654e3c1cdd7e2601f536da91f69360b5337dc34f",
+  "command": "just spatial-layer-check <fresh-artifacts>",
+  "scope": "Native uncoalesced requirement returns its typed unsupported cause; independent libjxl views establish that raw layers and composited presentations differ. No raw layer implementation claim.",
+  "log": "zencodec-layer-refusal-2026-10-26.log",
+  "sha256": "4d4520986549ce239530ff2d6cc614fab71a2ced9ce4ab5cf69c0ce48d293a44",
+  "results": [
+    "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 64 filtered out; finished in 9.10s",
+    "run-heavy: done rc=0 20s | peak-RSS 0.60GiB | min-avail 13279MiB | peak-load 0.57"
+  ],
+  "geometry_finding": "multiple_layers_noise_spline.jxl includes a 1024x576 raw layer at (1860,950) on a 2048x1152 canvas. Presentation placement is not a contained decoded region.",
+  "limits": [
+    "No raw-layer reconstruction, blend semantics or negative-origin qualification",
+    "No performance or total native memory bound"
+  ],
+  "guide": {
+    "log": "zencodec-layer-refusal-guide-2026-10-26.log",
+    "sha256": "240b32148ffae21892bebfe7336d1a5ee43223af3940e6584c7e95c7e7de52d5",
+    "result": [
+      "run-heavy: done rc=0 8s | peak-RSS 0.17GiB | min-avail 13388MiB | peak-load 0.34"
+    ]
+  }
+}

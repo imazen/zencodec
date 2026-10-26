@@ -810,7 +810,7 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder"
 version = "0.4.0"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=b25516b5a7ccf8204c6e1f9bd4d252b0f6ecc68a#b25516b5a7ccf8204c6e1f9bd4d252b0f6ecc68a"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=654e3c1cdd7e2601f536da91f69360b5337dc34f#654e3c1cdd7e2601f536da91f69360b5337dc34f"
 dependencies = [
  "aligned-vec",
  "array-init",
@@ -831,7 +831,7 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder-macros"
 version = "0.3.9"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=b25516b5a7ccf8204c6e1f9bd4d252b0f6ecc68a#b25516b5a7ccf8204c6e1f9bd4d252b0f6ecc68a"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=654e3c1cdd7e2601f536da91f69360b5337dc34f#654e3c1cdd7e2601f536da91f69360b5337dc34f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -841,7 +841,7 @@ dependencies = [
 [[package]]
 name = "zenjxl-decoder-simd"
 version = "0.3.9"
-source = "git+https://github.com/imazen/zenjxl-decoder?rev=b25516b5a7ccf8204c6e1f9bd4d252b0f6ecc68a#b25516b5a7ccf8204c6e1f9bd4d252b0f6ecc68a"
+source = "git+https://github.com/imazen/zenjxl-decoder?rev=654e3c1cdd7e2601f536da91f69360b5337dc34f#654e3c1cdd7e2601f536da91f69360b5337dc34f"
 dependencies = [
  "archmage",
  "paste",
