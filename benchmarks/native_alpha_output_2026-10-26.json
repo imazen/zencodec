@@ -1,0 +1,82 @@
+{
+  "kind": "native profile-preserving alpha addition; no performance claim",
+  "base_commit": "d08e01c38da814b4e2135662e715d53b28c1337f",
+  "pixels_commit": "8b68ef07621b93bcafeac4fafdfcaf59bbd23208",
+  "package_commit": "3660d49318e4d234ec2eb8e531a3e3a1d40a2215",
+  "native_commit": "fe819360581acb3796ea2925f2a81f44f0a430e6",
+  "host": "r7900x",
+  "source_sha256": {
+    "perf/spatial-validation/Cargo.toml": "149d552695ebe8c94cc2a4f29e93f9644d1d749c6d8e99d917313cad5d34124c",
+    "perf/spatial-validation/dependencies.lock": "c0fa524ab913d1d61445e9ab05c3cfbeaf2332084bbbaa04c51ecc1828267900",
+    "perf/spatial-validation/src/jxl_planned_color_tests.rs": "8a72557dd7c4f74e9e664ea4ce9dccfbf2ce65421064b8c27e60f5ecccf25955"
+  },
+  "commands": [
+    "just spatial-packaged-resolve",
+    "just spatial-output-plan-check",
+    "just spatial-ci-check <fresh-artifact-directory>"
+  ],
+  "checks": {
+    "native_suite": {
+      "passed": 126,
+      "failed": 0,
+      "ignored": 0
+    },
+    "targeted": {
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0
+    },
+    "strict_all_target_lint": "passed",
+    "reproduction": "e44cf054 refused native ICC-bearing RgbF32 to RgbaF32 SameAsOrigin without a CMS",
+    "fixed": "same native frame now converts with and without moxcms; all RGB bits and ICC unchanged, opaque alpha exactly 1, destination admitted and charge released",
+    "existing": "independent-reader gates, 147 presentations, nine raw layers, identity owners and late backend failure cleanup unchanged",
+    "guide": "all prior source extraction and responsive browser gates pass"
+  },
+  "initial_failures": [
+    "Initial harness omitted the Option unwrap from first_image; fixed before observing the native NeedsCms refusal.",
+    "After the fix all seven controls passed, but strict lint required as_chunks for constant-size chunks. Changed iteration spelling without relaxing sample assertions."
+  ],
+  "runs": [
+    {
+      "log": "zencodec-native-alpha-layout-1-20261026.log",
+      "result": "run-heavy: done rc=101 0s | peak-RSS 0.28GiB | min-avail 11625MiB | peak-load 0.33",
+      "sha256": "0ef511b35bf52661e5264e54d0bbc6826180c6cc351c77bad97dcf1e2aded050"
+    },
+    {
+      "log": "zencodec-native-alpha-layout-2-20261026.log",
+      "result": "run-heavy: done rc=101 4s | peak-RSS 0.40GiB | min-avail 11475MiB | peak-load 0.28",
+      "sha256": "520b3f86bdd6248d1e9c8ed97aa1d30d84795f61b3b147c1c9bf144f98abc781"
+    },
+    {
+      "log": "zencodec-native-alpha-resolve-20261026.log",
+      "result": "run-heavy: done rc=0 1s | peak-RSS 0.06GiB | min-avail 11633MiB | peak-load 0.68",
+      "sha256": "a3da2318d3cee3dafafdba9905fae36ab5ecb6553ed7ee7cfb86eaec1290149b"
+    },
+    {
+      "log": "zencodec-native-alpha-layout-3-20261026.log",
+      "result": "run-heavy: done rc=101 41s | peak-RSS 0.86GiB | min-avail 10872MiB | peak-load 1.22",
+      "sha256": "840f00b5f82f7e5aa2d42007dacb9e27b5ecc2910f1f051ed6e8c585e51505bd"
+    },
+    {
+      "log": "zencodec-native-alpha-layout-4-20261026.log",
+      "result": "run-heavy: done rc=0 5s | peak-RSS 0.40GiB | min-avail 11298MiB | peak-load 0.77",
+      "sha256": "81fc5f0697cf309af791c520b50e673b0c96a8b1394ed7be27eb3460a2b79998"
+    },
+    {
+      "log": "zencodec-native-alpha-suite-20261026.log",
+      "result": "run-heavy: done rc=0 31s | peak-RSS 0.49GiB | min-avail 11098MiB | peak-load 0.60",
+      "sha256": "0e65051e14a6810f1f11c2d247a2730318fcc58e313eb1a8ec831de1dc38be29"
+    },
+    {
+      "log": "zencodec-native-alpha-browser-20261026.log",
+      "sha256": "a248737bc87470f51de88ebbbc2f55e4150a2089637535ec20680eed5dfe304f",
+      "result": "run-heavy: done rc=0 10s | peak-RSS 0.17GiB | min-avail 11133MiB | peak-load 0.58"
+    }
+  ],
+  "artifact_directory": "/mnt/v/output/zencodec/platform-regions-20261026-run/native-alpha-1",
+  "remaining": [
+    "This color-stage helper does not yet publish a complete converted ImageOutput with auxiliary planes.",
+    "No new CMS numerical conversion, native workspace bound or universal backpressure claim.",
+    "Wrapper RSS covers the full build/test process tree."
+  ]
+}

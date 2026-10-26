@@ -440,6 +440,75 @@ fn native_output_plan_owner_retention_requires_matching_signaling_too() {
     }
 }
 
+#[test]
+fn native_output_plan_adding_alpha_preserves_native_color_bits_with_or_without_cms() {
+    use zenpixels::PixelFormat;
+    use zenpixels_convert::{cms::PluggableCms, cms_moxcms::MoxCms};
+    let bytes = fixture("conformance_test_images/animation_spline.jxl");
+    let mut source = ReadAtShim(SliceReadAt::new(&bytes));
+    let (codecs, pool) = jxl_packaged_storage::factories(64, 64);
+    let mut images = jxl_packaged_storage::open_admitted(
+        &codecs,
+        &mut source,
+        Composition::Composited,
+        64,
+        &pool,
+    )
+    .unwrap();
+    let image = images
+        .first_image(&ImageRequest::new())
+        .unwrap()
+        .unwrap()
+        .into_output();
+    image
+        .with_pixels(|pixels| {
+            assert_eq!(pixels.descriptor().pixel_format(), PixelFormat::RgbF32);
+            let profile = pixels.color_context().unwrap().icc.clone().unwrap();
+            for cms in [None, Some(&MoxCms as &dyn PluggableCms)] {
+                let mut plan = OutputPlan::new(
+                    pixels.descriptor(),
+                    pixels.color_context().cloned(),
+                    &ColorOrigin::from_icc(profile.clone()),
+                    OutputProfile::SameAsOrigin,
+                    PixelFormat::RgbaF32,
+                    &ConvertOptions::forbid_lossy(),
+                    cms,
+                )
+                .unwrap();
+                assert!(plan.borrow_rows(pixels.clone()).unwrap().is_none());
+                let destination_pool = StorageBudget::new(256 * 1024 * 1024, 1);
+                let color = convert(pixels.clone(), &mut plan, &destination_pool).unwrap();
+                let view = color.pixels();
+                assert_eq!(view.color_context().unwrap().icc, Some(profile.clone()));
+                for y in 0..pixels.rows() {
+                    for (source, destination) in pixels
+                        .row(y)
+                        .as_chunks::<12>()
+                        .0
+                        .iter()
+                        .zip(view.row(y).as_chunks::<16>().0.iter())
+                    {
+                        assert_eq!(
+                            &destination[..12],
+                            source,
+                            "format-only conversion changed native RGB bits"
+                        );
+                        assert_eq!(&destination[12..], &1.0f32.to_ne_bytes());
+                    }
+                }
+                drop(color);
+                assert_eq!(
+                    (
+                        destination_pool.reserved_bytes(),
+                        destination_pool.reserved_objects()
+                    ),
+                    (0, 0)
+                );
+            }
+        })
+        .unwrap();
+}
+
 #[derive(Debug)]
 struct InjectedRow(usize);
 impl std::fmt::Display for InjectedRow {

@@ -98,6 +98,9 @@ retains all nine layers' original color and auxiliary planes, their frozen facts
 and their storage charges without another sample allocation. Reuse requires
 matching current signaling as well as unchanged samples; converted
 auxiliary-plane publication and CMS workspace are still unqualified.
+Native ICC-tagged RGB F32 can now add opaque alpha into admitted storage without
+a CMS, retaining exact color bits. This fixes a real `NeedsCms` refusal; it does
+not add numerical CMYK conversion.
 [Implementation and evidence](../perf/spatial-validation/README.md#existing-outputplan-with-admitted-destination-storage).
 
 

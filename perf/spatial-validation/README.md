@@ -196,7 +196,8 @@ with successful pixels and must not publish a partially converted destination.
 The next integration uses the existing `OutputPlan` from
 [zenpixels PR 92](https://github.com/imazen/zenpixels/pull/92), combined with
 [native sample carriage in PR 93](https://github.com/imazen/zenpixels/pull/93)
-at `e44cf054`, including checked identity borrowing. No second planning
+at `8b68ef07`, including checked identity borrowing and same-profile opaque
+alpha addition. No second planning
 abstraction is added.
 
 `just spatial-output-plan-check` prepares a plan from the actual mapped
@@ -233,6 +234,16 @@ prototype therefore retains the entire image only when descriptor and context
 also match. Otherwise it leaves the source with its caller for an explicit
 conversion or interpretation adapter. Required RGB-to-RGBA conversion also
 declines reuse without weakening the request.
+
+A native RGB F32 presentation from `animation_spline.jxl` exposed a separate
+failure: adding opaque alpha under its unchanged ICC returned `NeedsCms` without
+a backend at `e44cf054`. The planner now uses the existing format kernel for
+this operation. The unchanged native test passes with and without moxcms:
+every RGB bit stays identical, alpha is exactly one, current ICC is preserved,
+and the destination stays admitted. No profile conversion or CMYK arithmetic is
+implied. The narrower converter tests also cover gray and U8/U16 storage,
+padding, unusual F32 bits and retained changed-profile/depth refusal.
+[Native regression receipt](../../benchmarks/native_alpha_output_2026-10-26.json).
 
 The allocating path remains a color-stage prototype. Complete derivative
 publication must also account for
