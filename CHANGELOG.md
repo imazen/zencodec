@@ -2,6 +2,21 @@
 
 ## Native image selection (unreleased experiment)
 
+- Add `PackedImageOwner`, `ImageOutput::from_packed_owner` and borrowed
+  `ValueSlice` for native/admitted packed storage. Preserve charges through
+  mapping, policy waiting and clones without copying samples. Validate immutable
+  layout/color facts and keep original backend causes behind bounded diagnostics.
+  Native RGB/CMYK controls cover strided exact samples and rollback; identical
+  inverted-CMYK conversion still refuses with `NeedsCms`.
+
+### QUEUED BREAKING CHANGES
+
+- Review-only `Samples::Values` now carries `ValueSlice` by value instead of
+  borrowing the `Values` allocation container. This allows admitted auxiliary
+  storage to keep its owner and charge. No released API is removed.
+
+### Other changes
+
 - Qualify packaged JXL input-size limits through the registry: actual resident
   length controls admission, both composition views retain exact native samples,
   and mixed refusals exclude the handled field. This is not workspace admission.

@@ -108,6 +108,9 @@ facts for the callback instead of embedding another full copy in the question.
 impl ImageOutput {
     fn packed(pixels: zenpixels::PixelBuffer, extras: Vec<(Auxiliary, Values)>,
         interpretation: ImageInterpretation) -> Result<Self, At<OutputError>>;
+    fn from_packed_owner<P: PackedImageOwner + 'static>(owner: P,
+        auxiliaries: Vec<Auxiliary>, interpretation: ImageInterpretation)
+        -> Result<Self, At<OutputError>>;
     fn from_frame(frame: frame::Frame) -> Self;
     fn interpretation(&self) -> &ImageInterpretation;
     fn map(&self) -> Result<Box<dyn MappedImage + '_>, At<OutputError>>;
@@ -118,7 +121,23 @@ trait MappedImage {
     fn plane_count(&self) -> usize;
     fn plane(&self, index: usize) -> Result<Option<Plane<'_>>, At<OutputError>>;
 }
+trait PackedImageOwner: Send + Sync {
+    fn pixels(&self) -> Result<zenpixels::PixelSlice<'_>, At<OutputError>>;
+    fn auxiliary(&self, index: usize)
+        -> Result<Option<ValueSlice<'_>>, At<OutputError>>;
+}
 ```
+
+`PackedImageOwner` retains an immutable native or admitted allocation through the
+last `ImageOutput` clone. `ValueSlice` borrows strided auxiliary storage, so an
+adapter can publish already-admitted buffers without converting them to `Vec`.
+`Samples::Values` holds that view by value. Construction checks every declared
+plane; mapping refuses changes to dimensions, stride, descriptor or color context.
+The implementor must also preserve sample contents. This is an ownership
+mechanism; it adds no policy callback and does not admit existing allocations
+retroactively. Native workspace and small owner/metadata allocations are outside
+a managed payload allowance. [Native qualification](../perf/spatial-validation/README.md#packed-output-admission)
+exercises release on refusal/cancellation and retention through clones.
 
 Packed construction checks region bounds, pixel dimensions and compatible
 interpretation. Frame mapping checks the stored/crop extent, role count and
@@ -126,6 +145,8 @@ mapped per-plane dimensions/encoding. It retains native mapping errors in the
 source chain. It does not scan sample codes, validate ICC profiles or establish
 metadata privacy. Names, opaque profiles and typed source details remain
 unfiltered data; policy admission is a separate boundary.
+Mapping-error `Display` and `Debug` stay bounded; explicit cause inspection
+retains the original backend error and trace, which may contain private data.
 
 ## Image collections (`zencodec::collection`)
 

@@ -2,6 +2,19 @@
 // Signatures come from Rust through apiPanels; examples remain executable files.
 export const improvements = [
   {
+    id:'packed-owner', title:'Keep the output charge with the last image owner',
+    state:'Shared contract implemented · native allocation experiment', date:'2026-10-26',
+    summary:'Native reconstruction can write directly into admitted packed storage. ImageOutput retains that owner, its color facts and auxiliary values without copying samples.',
+    why:'A decoder can finish while a viewer or publication callback still holds its image. A fresh decoder budget does not account for those retained outputs. Turning admitted storage into an ordinary Vec would lose the charge or require a copy.',
+    consumer:'Keep using ImageOutput, with_pixels and map. Clones share the allocation charge until the last image drops. An allocation refusal is a runtime result; it does not authorize a retry with weaker requirements.',
+    adapter:'Implement PackedImageOwner over the admitted storage and call from_packed_owner with frozen roles and interpretation. ValueSlice borrows strided auxiliary values. Construction and later mappings check layout and color agreement.',
+    implementor:'Admit the output buffers before native reconstruction writes them. Preserve their immutable samples and original error causes. Native workspace needs its own enforced allowance; publication policy still runs on the held result.',
+    open:'Two native first-frame RGB/CMYK outputs qualify retention, refusal, cancellation and exact strided samples. Packaged JXL integration remains open. Native workspace, input, metadata and encoded staging are outside this payload budget. RGB row-copy conversion passes; identical inverted-CMYK conversion still returns NeedsCms.',
+    signatures:['packedImageOwner','adoptPackedOwner','auxiliarySlice','imageMapping'],
+    flow:[['adapter','Admit output storage','shared byte/object allowance'],['implementor','Reconstruct into it','preserve native samples'],['adapter','Resolve publication','same held owner'],['consumer','Retain or drop','charge follows last clone']],
+    evidence:[['Native scope and controls','perf/spatial-validation/README.md#packed-output-admission'],['Current signatures and ownership','docs/spec.md#mapped-image-output-zencodecimage']],
+  },
+  {
     id:'mapping', title:'Still images and video share the native mapping contract',
     state:'Implemented · review PR', date:'2026-10-26',
     summary:'Frame owners and borrowed component-plane mappings now live in zencodec::frame. Existing media imports name the same types.',

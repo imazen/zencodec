@@ -17,11 +17,16 @@ export async function checkIdeal(browser,url,output) {
     assert.ok((await page.locator('h1').textContent()).includes('executes today'));
     assert.equal(await page.locator('.ideal-step').count(),5);
     const changes=page.locator('.api-change');
-    assert.equal(await changes.count(),11);
+    assert.equal(await changes.count(),12);
     assert.equal(await page.locator('#change-mapping').count(),1);
     assert.ok((await page.locator('#change-images .code-toolbar').textContent()).includes('Private prototype'));
     assert.equal(await page.locator('#change-images [data-example="checked_jxl_first"]').count(),1);
     for(const change of await changes.all()) assert.ok(!await change.evaluate(el=>el.open));
+    const owner=page.locator('#change-packed-owner');
+    await owner.locator(':scope>summary').focus();
+    await page.keyboard.press('Enter');
+    assert.ok(await owner.evaluate(el=>el.open));
+    for(const required of ['PackedImageOwner','from_packed_owner','ValueSlice','last image drops','Native workspace','NeedsCms']) assert.ok((await owner.textContent()).includes(required),required);
     const inspection=page.locator('#change-inspection');
     await inspection.locator(':scope>summary').focus();
     await page.keyboard.press('Enter');

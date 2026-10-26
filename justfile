@@ -475,6 +475,20 @@ spatial-admission-check artifacts:
     SPATIAL_LAYER_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked native_jxl_admission_ -- --nocapture --test-threads=1
     just spatial-validation-lint
 
+spatial-owned-check:
+    cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked owned_jxl_output_ -- --nocapture --test-threads=1
+    just spatial-validation-lint
+
+image-owner-check:
+    cargo test -p zencodec --all-features --lib packed_owner_ --locked
+    cargo clippy -p zencodec --all-features --lib --locked -- -D warnings
+
+image-owner-integration:
+    just io-contract-check
+    cargo check -p zencodec --no-default-features --target wasm32-unknown-unknown --locked
+    just doc-default
+    just api-doc
+
 # Same complete native suite and test timeout as the documentation workflow.
 spatial-ci-check artifacts:
     #!/usr/bin/env bash

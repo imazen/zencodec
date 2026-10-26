@@ -121,8 +121,41 @@ that follows their last owner. Native workspace, discovery, caller-owned input
 and encoded staging need their own qualified scope. The current packed
 `ImageOutput` constructor adopts `PixelBuffer` and auxiliary `Vec` storage;
 integrating already-admitted packed storage without copying remains an adapter
-boundary to resolve. No new policy decision can supply a missing allocator
-mechanism. Keep the existing typed refusal until that mechanism is qualified.
+boundary to resolve. The packed-owner experiment below now supplies that
+mechanism; packaged integration remains separate. Keep the existing typed
+whole-memory refusal until its complete scope is qualified.
+
+## Packed output admission
+
+[Validation receipt](../../benchmarks/packed_owner_2026-10-26.json) records
+the executed gates, source hashes, failed attempts and resource-wrapper results.
+
+`just spatial-owned-check` reconstructs the first raw image in the CMYK-layer
+and named-frame fixtures directly into `StorageBudget` allocations. The new
+`PackedImageOwner` implementation publishes those buffers through `ImageOutput`
+without copying them. Auxiliary values borrow `ValueSlice` instead of requiring
+an ordinary `Vec`. Interpretation comes from the already-qualified native path;
+this experiment does not invent a separate color or layer interpretation.
+
+Exact strided samples and original allocation addresses survive mapping and
+cloning. A held clone keeps the output charge and blocks another allocation at
+the same allowance. Dropping the last image releases it. Partial byte/object
+admission, cancellation after allocation and publication-policy refusal all
+release unpublished storage while retaining their original typed cause.
+RGB `RowConverter` copying preserves samples and padding. Identical inverted-CMYK
+descriptors currently return `NeedsCms`; this experiment records that refusal,
+without treating it as a qualified conversion route.
+
+The core also refuses changed pixel dimensions, stride, descriptor, color
+context, missing auxiliaries and changed auxiliary layout. Its outer mapping
+diagnostics are bounded; explicit source inspection preserves the backend error
+and `whereat` trace. Sample immutability remains the owner's contract.
+
+This covers two first-frame outputs, not the full presentation/layer matrix
+through admitted storage. Native workspace, input, metadata/owner allocations,
+encoded staging and caller copies are outside this payload allowance. It is not
+a total-memory bound or a performance measurement. The mechanism adds no policy
+callback; policy still decides at the existing admission/publication boundaries.
 
 ## Packaged JXL validation
 

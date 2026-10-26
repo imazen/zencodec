@@ -16,6 +16,8 @@ type Failure = At<OutputError>;
 
 mod placement;
 pub use placement::{Placement, PlacementError, PlacementOverlap};
+mod owner;
+pub use owner::PackedImageOwner;
 
 /// A rectangle in the selected image's stored coordinates, before orientation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -178,16 +180,22 @@ pub struct Values {
     stride: usize,
     channel: ChannelType,
 }
-impl Values {
-    /// Borrow storage including inter-row padding.
-    pub fn as_strided_bytes(&self) -> &[u8] {
-        &self.bytes
-    }
-    /// Adopt one nonempty scalar plane, checking stride and active extent.
-    /// Bytes retain their native numerical representation. No sample conversion
-    /// or allocation is performed.
+
+/// Borrowed strided scalar values, without implied color or normalization.
+/// The backing owner may be native, ordinary or admitted storage.
+#[derive(Clone, Copy, Debug)]
+pub struct ValueSlice<'a> {
+    bytes: &'a [u8],
+    width: u32,
+    height: u32,
+    stride: usize,
+    channel: ChannelType,
+}
+impl<'a> ValueSlice<'a> {
+    /// Check a nonempty scalar plane's active extent. Padding is preserved;
+    /// samples remain in their native numerical representation.
     pub fn new(
-        bytes: Vec<u8>,
+        bytes: &'a [u8],
         width: u32,
         height: u32,
         stride: usize,
@@ -212,6 +220,45 @@ impl Values {
             channel,
         })
     }
+    /// Borrow storage including inter-row padding, without copying it.
+    pub fn as_strided_bytes(&self) -> &'a [u8] {
+        self.bytes
+    }
+}
+impl Values {
+    /// Borrow storage including inter-row padding.
+    pub fn as_strided_bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+    /// Borrow the values with their validated layout.
+    pub fn as_slice(&self) -> ValueSlice<'_> {
+        ValueSlice {
+            bytes: &self.bytes,
+            width: self.width,
+            height: self.height,
+            stride: self.stride,
+            channel: self.channel,
+        }
+    }
+    /// Adopt one nonempty scalar plane, checking stride and active extent.
+    /// Bytes retain their native numerical representation. No sample conversion
+    /// or allocation is performed.
+    pub fn new(
+        bytes: Vec<u8>,
+        width: u32,
+        height: u32,
+        stride: usize,
+        channel: ChannelType,
+    ) -> Result<Self, At<OutputError>> {
+        ValueSlice::new(&bytes, width, height, stride, channel)?;
+        Ok(Self {
+            bytes,
+            width,
+            height,
+            stride,
+            channel,
+        })
+    }
 }
 
 /// Borrowed samples tied to the mapping and their declared interpretation.
@@ -219,7 +266,7 @@ pub enum Samples<'a> {
     /// Packed color with native stride and color metadata.
     Pixels(PixelSlice<'a>),
     /// Strided auxiliary scalar values.
-    Values(&'a Values),
+    Values(ValueSlice<'a>),
     /// Native component words with significant code depth and placement.
     Codes(CodePlane<'a>),
 }
@@ -461,7 +508,7 @@ impl ImageOutput {
 
 /// Output storage and declared interpretation cannot satisfy the operation.
 /// Backend mapping causes remain available through `Error::source`.
-#[derive(Debug)]
+/// Default formatting does not print arbitrary backend payloads.
 #[non_exhaustive]
 pub enum OutputError {
     /// The returned region is empty or outside the selected canvas.
@@ -492,11 +539,41 @@ pub enum OutputError {
     /// Separate presentation placement is invalid for these local samples.
     Placement(PlacementError),
 }
+impl fmt::Debug for OutputError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Region(e) => f.debug_tuple("Region").field(e).finish(),
+            Self::Mapping(_) => f
+                .debug_tuple("Mapping")
+                .field(&"backend error; inspect source")
+                .finish(),
+            Self::Geometry => f.write_str("Geometry"),
+            Self::Interpretation => f.write_str("Interpretation"),
+            Self::MissingPlane => f.write_str("MissingPlane"),
+            Self::Component {
+                index,
+                expected_dimensions,
+                actual_dimensions,
+                expected_encoding,
+                actual_encoding,
+            } => f
+                .debug_struct("Component")
+                .field("index", index)
+                .field("expected_dimensions", expected_dimensions)
+                .field("actual_dimensions", actual_dimensions)
+                .field("expected_encoding", expected_encoding)
+                .field("actual_encoding", actual_encoding)
+                .finish(),
+            Self::NotPackedColor => f.write_str("NotPackedColor"),
+            Self::Placement(e) => f.debug_tuple("Placement").field(e).finish(),
+        }
+    }
+}
 impl fmt::Display for OutputError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Region(e) => return e.fmt(f),
-            Self::Mapping(e) => return e.fmt(f),
+            Self::Mapping(_) => return f.write_str("native image mapping failed"),
             Self::Placement(e) => return e.fmt(f),
             _ => {}
         }
@@ -571,7 +648,7 @@ impl MappedImage for PackedMap<'_> {
             .get(index - 1)
             .map(|(meaning, samples)| Plane {
                 meaning,
-                samples: Samples::Values(samples),
+                samples: Samples::Values(samples.as_slice()),
             }))
     }
 }

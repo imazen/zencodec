@@ -231,6 +231,11 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed during packed-owner qualification (2026-10-26): direct `OutputError`
+  mapping diagnostics printed arbitrary backend text. Its default Display and
+  Debug are now bounded while `source()` retains the original typed cause and
+  trace. The control uses a payload in both backend formatting paths.
+
 - Native spatial CI (2026-10-26): packaged JXL comparisons made the full
   unoptimized suite exceed its existing ten-minute command timeout. The
   standalone harness now uses test optimization level 1 with debug assertions
