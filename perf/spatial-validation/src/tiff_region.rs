@@ -1,3 +1,5 @@
+pub use super::image_items::Rect;
+use super::image_items::{ImageGeometry, RegionRequest};
 use std::io::{self, Read, Seek, SeekFrom};
 use tiff::{
     ColorType,
@@ -14,13 +16,6 @@ fn zeros(n: usize) -> Result<Vec<u8>, Failure> {
     v.try_reserve_exact(n)?;
     v.resize(n, 0);
     Ok(v)
-}
-#[derive(Clone, Copy)]
-pub struct Rect {
-    pub x: u32,
-    pub y: u32,
-    pub width: u32,
-    pub height: u32,
 }
 pub struct Selection<'a> {
     /// Main IFD ordinal, not animation time or a spatial coding unit.
@@ -55,6 +50,7 @@ impl Default for Allowances {
 }
 #[derive(Debug)]
 pub struct Region {
+    pub geometry: ImageGeometry,
     pub bytes: Vec<u8>,
     pub stride: usize,
     pub width: u32,
@@ -115,7 +111,7 @@ pub fn decode<R: Read + Seek>(
             return Err(invalid("SubIFD is not a reduced image"));
         }
     }
-    decode_current(decoder, r, limits, check)
+    decode_current(decoder, r.into(), limits, check)
 }
 
 /// Candidate adapter seam: the caller has already validated an operation-bound
@@ -123,14 +119,11 @@ pub fn decode<R: Read + Seek>(
 pub(super) fn decode_directory<R: Read + Seek>(
     mut input: R,
     directory: tiff::tags::IfdPointer,
-    region: Rect,
+    region: RegionRequest,
     limits: Allowances,
     mut check: impl FnMut() -> Result<(), Failure>,
 ) -> Result<Region, Failure> {
     check()?;
-    if region.width == 0 || region.height == 0 {
-        return Err(invalid("empty region"));
-    }
     input.seek(SeekFrom::Start(0))?;
     let mut header = TiffHeader::parse(&mut input)?;
     header.first_ifd = directory;
@@ -145,19 +138,14 @@ pub(super) fn decode_directory<R: Read + Seek>(
 
 fn decode_current<R: Read + Seek>(
     mut decoder: Decoder<R>,
-    r: Rect,
+    region: RegionRequest,
     limits: Allowances,
     mut check: impl FnMut() -> Result<(), Failure>,
 ) -> Result<Region, Failure> {
     let (width, height) = decoder.dimensions()?;
-    let right =
-        r.x.checked_add(r.width)
-            .filter(|&n| n <= width)
-            .ok_or_else(|| invalid("region outside image"))?;
-    let bottom =
-        r.y.checked_add(r.height)
-            .filter(|&n| n <= height)
-            .ok_or_else(|| invalid("region outside image"))?;
+    let r = region.resolve(width, height)?;
+    let right = r.x + r.width;
+    let bottom = r.y + r.height;
     let color = decoder.colortype()?;
     if !matches!(
         color,
@@ -216,6 +204,11 @@ fn decode_current<R: Read + Seek>(
         .map(|v| v.into_u8_vec())
         .transpose()?;
     let mut out = Region {
+        geometry: ImageGeometry {
+            canvas_width: width,
+            canvas_height: height,
+            region: r,
+        },
         bytes: zeros(length)?,
         stride,
         width: r.width,

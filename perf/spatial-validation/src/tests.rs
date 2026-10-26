@@ -241,6 +241,7 @@ mod image_selection {
     use super::*;
     use crate::{
         collection::{Collection, first_child, first_image},
+        image_items::{ImageRequest, RegionRequest},
         tiff_items::TiffCollection,
     };
     use crate::{
@@ -364,23 +365,27 @@ mod image_selection {
                 let mut collection = TiffCollection::open(
                     Cursor::new(bytes),
                     Composition::Composited,
-                    roi,
                     Allowances::default(),
                 )
                 .unwrap();
                 assert_eq!(collection.view(), Composition::Composited);
                 assert_eq!(
-                    first_image(&mut collection)
-                        .unwrap()
-                        .unwrap()
-                        .pixels
-                        .as_slice()
-                        .as_contiguous_bytes()
-                        .unwrap(),
+                    first_image(
+                        &mut collection,
+                        &ImageRequest {
+                            region: selected(&[]).region.into()
+                        }
+                    )
+                    .unwrap()
+                    .unwrap()
+                    .pixels
+                    .as_slice()
+                    .as_contiguous_bytes()
+                    .unwrap(),
                     crop(&refs[0], roi)
                 );
                 assert_eq!(
-                    first_child(&mut collection)
+                    first_child(&mut collection, &ImageRequest { region: roi.into() })
                         .unwrap()
                         .unwrap()
                         .pixels
@@ -394,13 +399,116 @@ mod image_selection {
     }
 
     #[test]
+    fn common_regions_follow_each_selected_canvas_and_keep_their_origin() {
+        for big in [false, true] {
+            for planar in [false, true] {
+                let (bytes, refs) = nested_fixture(big, planar, false);
+                let mut images = TiffCollection::open(
+                    Cursor::new(bytes),
+                    Composition::Composited,
+                    Allowances::default(),
+                )
+                .unwrap();
+                let mut roots = images.images().unwrap();
+                let first = images.next(&mut roots).unwrap().unwrap();
+                let second = images.next(&mut roots).unwrap().unwrap();
+                let mut children = images.children(&second).unwrap();
+                let child = images.next(&mut children).unwrap().unwrap();
+                for (id, reference) in [
+                    (&second, &refs[1]),
+                    (&child, &refs[2]),
+                    (&first, &refs[0]),
+                    (&child, &refs[2]),
+                ] {
+                    let full = Rect {
+                        x: 0,
+                        y: 0,
+                        width: reference.width,
+                        height: reference.height,
+                    };
+                    let edge = Rect {
+                        x: reference.width - 2,
+                        y: reference.height - 3,
+                        width: 2,
+                        height: 3,
+                    };
+                    for (region, expected) in [
+                        (RegionRequest::Full, full),
+                        (edge.into(), edge),
+                        (selected(&[]).region.into(), selected(&[]).region),
+                    ] {
+                        let output = images.decode(id, &ImageRequest { region }).unwrap();
+                        assert_eq!(
+                            (output.geometry.canvas_width, output.geometry.canvas_height),
+                            (reference.width, reference.height)
+                        );
+                        assert_eq!(output.geometry.region, expected);
+                        assert_eq!(
+                            (output.pixels.width(), output.pixels.height()),
+                            (expected.width, expected.height)
+                        );
+                        assert_eq!(
+                            output.pixels.as_slice().as_contiguous_bytes().unwrap(),
+                            crop(reference, expected)
+                        );
+                    }
+                }
+                // A region valid on the first page must not be clipped to fit a
+                // smaller child. Empty and overflowing extents refuse as well.
+                for invalid in [
+                    Rect {
+                        x: 30,
+                        y: 20,
+                        width: 5,
+                        height: 9,
+                    },
+                    Rect {
+                        x: 0,
+                        y: 0,
+                        width: 0,
+                        height: 1,
+                    },
+                    Rect {
+                        x: u32::MAX,
+                        y: 0,
+                        width: 1,
+                        height: 1,
+                    },
+                ] {
+                    let error = images
+                        .decode(
+                            &child,
+                            &ImageRequest {
+                                region: invalid.into(),
+                            },
+                        )
+                        .unwrap_err();
+                    assert_eq!(
+                        zencodec::find_cause::<SelectionError>(&error),
+                        Some(&SelectionError::InvalidRegion {
+                            requested: invalid,
+                            width: refs[2].width,
+                            height: refs[2].height
+                        })
+                    );
+                }
+                // A rejected request does not consume or replace the image ID.
+                let output = images.decode(&child, &ImageRequest::default()).unwrap();
+                assert_eq!(
+                    output.pixels.as_slice().as_contiguous_bytes().unwrap(),
+                    refs[2].bytes
+                );
+            }
+        }
+    }
+
+    #[test]
     fn common_selection_preserves_source_failure_and_refuses_view_before_read() {
         let (bytes, _) = nested_fixture(false, false, false);
         let source = Source::new(bytes);
         let err = TiffCollection::open(
             ReadAtReader::new(source.clone()),
             Composition::Uncomposited,
-            selected(&[]).region,
             Allowances::default(),
         )
         .err()
@@ -414,12 +522,17 @@ mod image_selection {
         let mut collection = TiffCollection::open(
             ReadAtReader::new(source.clone()),
             Composition::Composited,
-            selected(&[]).region,
             Allowances::default(),
         )
         .unwrap();
         source.ledger.borrow_mut().changed = true;
-        let err = first_image(&mut collection).unwrap_err();
+        let err = first_image(
+            &mut collection,
+            &ImageRequest {
+                region: selected(&[]).region.into(),
+            },
+        )
+        .unwrap_err();
         assert!(matches!(
             zencodec::find_cause::<SourceFault>(&err),
             Some(SourceFault::VersionChanged)

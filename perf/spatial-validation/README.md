@@ -60,6 +60,27 @@ function, `just spatial-consumer-check` reruns its native cases and strict
 Clippy without repeating the full matrix. These are process receipts, not
 native resource bounds.
 
+### Region requests belong to the selected image
+
+The [platform review](../../docs/platform-review-2026-10-25.md) exercised WIC-backed
+Windows selection and independent OpenImageIO/TIFF readback. Its immediate API
+consequence is `Collection::decode(image, &ImageRequest)`: each request chooses
+full pixels or a stored region. TIFF opening no longer fixes a shared rectangle.
+Returned `StoredRaster::geometry` preserves the selected canvas dimensions and
+region origin; orientation remains unapplied. A region cannot silently clip to
+fit a smaller page or child. Invalid extents retain request/dimension context.
+
+The common native tests alternate full/interior/edge requests on differently
+sized pages and shared SubIFDs, select out of order, and recover after rejected
+empty/overflowing/out-of-bounds requests. JXL currently refuses required regions
+and still permits a subsequent explicit full-image decode. This does not qualify
+JXL region implementation or efficient partial reconstruction.
+
+The full native matrix and strict Clippy passed after this change: 42/42 tests;
+`run-heavy: done rc=0 101s | peak-RSS 0.22GiB | min-avail 13083MiB |
+peak-load 1.35`. The log is `~/tmp/zencodec-platform-regions-full2-2026-10-26.log`;
+this measures the test process, not a native workspace bound.
+
 ### Native TIFF pixels through the shared owner
 
 The TIFF collection now returns `StoredRaster`: a `zenpixels::PixelBuffer`
@@ -92,7 +113,7 @@ The targeted gate passed with run-heavy rc=0, 5 s, peak RSS 0.45 GiB,
 minimum available 12273 MiB, peak load 0.92; log
 `~/tmp/zencodec-native-samples3-2026-10-25.log`. This is a test-process receipt,
 not a decoder memory bound. The shared collection is still private: JXL
-extra-plane roles, one common output interpretation, ROI geometry, unknown-color
+extra-plane roles, one common output interpretation, oriented display geometry, unknown-color
 policy and the distinction between raw sample carriage and display conversion
 must be qualified before promotion. Media's unsigned component-code encoding
 also remains distinct from signed/floating image samples.

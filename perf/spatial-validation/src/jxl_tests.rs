@@ -1,6 +1,6 @@
 use super::{
     collection::{Collection, first_child, first_image},
-    image_items::{Composition, SelectionError},
+    image_items::{Composition, ImageRequest, Rect, SelectionError},
     jxl_items::{JxlItems, Plane, sequential},
 };
 use std::{path::PathBuf, sync::OnceLock};
@@ -195,13 +195,17 @@ fn common_consumer_selects_jxl_and_refuses_unknown_child_support() {
     assert_eq!(Collection::view(&collection), Composition::Composited);
     exact_rows(
         &expected[0],
-        &first_image(&mut collection).unwrap().unwrap(),
+        &first_image(&mut collection, &Default::default())
+            .unwrap()
+            .unwrap(),
     );
     // A second consumer pass must yield the same operation-bound identity and
     // pixels, even though the native scanner has already visited this frame.
     exact_rows(
         &expected[0],
-        &first_image(&mut collection).unwrap().unwrap(),
+        &first_image(&mut collection, &Default::default())
+            .unwrap()
+            .unwrap(),
     );
     let mut a = Collection::images(&mut collection).unwrap();
     let mut b = Collection::images(&mut collection).unwrap();
@@ -210,7 +214,7 @@ fn common_consumer_selects_jxl_and_refuses_unknown_child_support() {
         Collection::next(&mut collection, &mut b).unwrap().unwrap(),
         id
     );
-    let err = first_child(&mut collection).unwrap_err();
+    let err = first_child(&mut collection, &Default::default()).unwrap_err();
     assert_eq!(
         zencodec::find_cause::<SelectionError>(&err),
         Some(&SelectionError::UnsupportedChildren)
@@ -221,5 +225,39 @@ fn common_consumer_selects_jxl_and_refuses_unknown_child_support() {
     assert_eq!(
         zencodec::find_cause::<SelectionError>(&err),
         Some(&SelectionError::ForeignCursor)
+    );
+}
+
+#[test]
+fn common_jxl_region_requirement_refuses_without_substituting_full_output() {
+    let data = fixture("named_frame_test.jxl");
+    let mut collection = JxlItems::open(&data, Composition::Composited, 4096).unwrap();
+    let mut cursor = Collection::images(&mut collection).unwrap();
+    let id = Collection::next(&mut collection, &mut cursor)
+        .unwrap()
+        .unwrap();
+    let request = ImageRequest {
+        region: Rect {
+            x: 1,
+            y: 1,
+            width: 1,
+            height: 1,
+        }
+        .into(),
+    };
+    let error = Collection::decode(&mut collection, &id, &request).unwrap_err();
+    assert_eq!(
+        zencodec::find_cause::<SelectionError>(&error),
+        Some(&SelectionError::UnsupportedRegion)
+    );
+    // The failure is local to the request; the same selected presentation still
+    // decodes exactly when the caller explicitly asks for the full image.
+    let output = Collection::decode(&mut collection, &id, &ImageRequest::default()).unwrap();
+    exact_rows(&sequential(&data, true).unwrap()[0], &output);
+    let mut other = JxlItems::open(&data, Composition::Composited, 4096).unwrap();
+    let error = Collection::decode(&mut other, &id, &request).unwrap_err();
+    assert_eq!(
+        zencodec::find_cause::<SelectionError>(&error),
+        Some(&SelectionError::ForeignImage)
     );
 }

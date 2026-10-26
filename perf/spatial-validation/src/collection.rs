@@ -1,7 +1,7 @@
 //! One consumer path for the candidate; metadata/pixel unification is not yet
 //! qualified, so the decoded output remains an associated native sample type.
 use super::{
-    image_items::{Composition, ImageId, SelectionError},
+    image_items::{Composition, ImageId, ImageRequest, SelectionError},
     tiff_region::Failure,
 };
 use std::{error::Error, fmt};
@@ -45,26 +45,31 @@ pub trait Collection {
     fn images(&mut self) -> Result<Self::Cursor, At<CollectionError>>;
     fn children(&mut self, image: &ImageId) -> Result<Self::Cursor, At<CollectionError>>;
     fn next(&mut self, cursor: &mut Self::Cursor) -> Result<Option<ImageId>, At<CollectionError>>;
-    fn decode(&mut self, image: &ImageId) -> Result<Self::Samples, At<CollectionError>>;
+    fn decode(
+        &mut self,
+        image: &ImageId,
+        request: &ImageRequest,
+    ) -> Result<Self::Samples, At<CollectionError>>;
 }
 
 pub use consumer::first_image;
 mod consumer {
     // EXAMPLE: selected_first_image
-    use super::{Collection, CollectionError};
+    use super::{Collection, CollectionError, ImageRequest};
     use zencodec::At;
 
     // This private experiment keeps native Samples until interpretation and
     // zenpixels output are qualified. It is not a public CodecSet entry point.
     pub fn first_image<C: Collection>(
         collection: &mut C,
+        request: &ImageRequest,
     ) -> Result<Option<C::Samples>, At<CollectionError>> {
         // ANCHOR: selected_first_image
         let mut cursor = collection.images()?;
         let Some(image) = collection.next(&mut cursor)? else {
             return Ok(None);
         };
-        let samples = collection.decode(&image)?;
+        let samples = collection.decode(&image, request)?;
         // END: selected_first_image
         Ok(Some(samples))
     }
@@ -75,6 +80,7 @@ mod consumer {
 /// A flat-only adapter must refuse child discovery, rather than report zero.
 pub fn first_child<C: Collection>(
     collection: &mut C,
+    request: &ImageRequest,
 ) -> Result<Option<C::Samples>, At<CollectionError>> {
     let mut roots = collection.images()?;
     let Some(parent) = collection.next(&mut roots)? else {
@@ -83,6 +89,6 @@ pub fn first_child<C: Collection>(
     let mut children = collection.children(&parent)?;
     collection
         .next(&mut children)?
-        .map(|id| collection.decode(&id))
+        .map(|id| collection.decode(&id, request))
         .transpose()
 }

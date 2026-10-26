@@ -28,6 +28,7 @@ impl std::error::Error for InterpretationError {}
 #[derive(Debug)]
 pub struct StoredRaster {
     pub pixels: PixelBuffer,
+    pub geometry: super::image_items::ImageGeometry,
     /// Still unapplied: the buffer is in stored coordinates.
     pub orientation: Orientation,
 }
@@ -82,6 +83,7 @@ impl Region {
         let pixels = PixelBuffer::try_from_parts(parts).map_err(|e| e.without_buffer())?;
         Ok(StoredRaster {
             pixels,
+            geometry: self.geometry,
             orientation,
         })
     }
@@ -92,7 +94,7 @@ mod tests {
     use super::*;
     use crate::{
         collection::Collection,
-        image_items::Composition,
+        image_items::{Composition, ImageRequest},
         tiff_items::TiffCollection,
         tiff_region::{self, Allowances, Rect, Selection},
     };
@@ -183,7 +185,6 @@ mod tests {
         let mut images = TiffCollection::open(
             Cursor::new(bytes.into_inner()),
             Composition::Composited,
-            region(),
             Allowances::default(),
         )
         .unwrap();
@@ -192,7 +193,7 @@ mod tests {
         let second = images.next(&mut cursor).unwrap().unwrap();
         assert!(images.next(&mut cursor).unwrap().is_none());
         for (id, index) in [(&second, 1), (&first, 0), (&second, 1)] {
-            let output = images.decode(id).unwrap();
+            let output = images.decode(id, &ImageRequest::default()).unwrap();
             assert_eq!(
                 output
                     .pixels

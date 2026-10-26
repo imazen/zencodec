@@ -1,8 +1,11 @@
 //! A real TIFF directory graph over the candidate operation-bound identities.
 use super::{
     collection::{Collection, CollectionError, located},
-    image_items::{Composition, ImageId, Origin, Relation, RelationKind, SelectionError},
-    tiff_region::{self, Allowances, Failure, Rect, Region},
+    image_items::{
+        Composition, ImageId, ImageRequest, Origin, RegionRequest, Relation, RelationKind,
+        SelectionError,
+    },
+    tiff_region::{self, Allowances, Failure, Region},
 };
 use std::io::{Read, Seek};
 use tiff::{
@@ -183,7 +186,7 @@ impl<R: Read + Seek> TiffItems<R> {
     pub fn decode(
         &mut self,
         image: &ImageId,
-        region: Rect,
+        region: impl Into<RegionRequest>,
         composition: Composition,
         check: impl FnMut() -> Result<(), Failure>,
     ) -> Result<Region, Failure> {
@@ -191,21 +194,25 @@ impl<R: Read + Seek> TiffItems<R> {
         if composition != Composition::Composited {
             return Err(SelectionError::UnsupportedComposition.into());
         }
-        tiff_region::decode_directory(&mut self.input, IfdPointer(key), region, self.limits, check)
+        tiff_region::decode_directory(
+            &mut self.input,
+            IfdPointer(key),
+            region.into(),
+            self.limits,
+            check,
+        )
     }
 }
 
-/// The candidate common path fixes a required view and stored-coordinate region
-/// when opened. Per-directory color interpretation is a separate promotion gate.
+/// Composition fixes the discovered view. Geometry belongs to each decode so
+/// differently sized pages and children can share one opened source operation.
 pub struct TiffCollection<R> {
     items: TiffItems<R>,
-    region: Rect,
 }
 impl<R: Read + Seek> TiffCollection<R> {
     pub fn open(
         input: R,
         view: Composition,
-        region: Rect,
         limits: Allowances,
     ) -> Result<Self, zencodec::At<CollectionError>> {
         if view != Composition::Composited {
@@ -213,7 +220,6 @@ impl<R: Read + Seek> TiffCollection<R> {
         }
         Ok(Self {
             items: TiffItems::open(input, limits).map_err(located)?,
-            region,
         })
     }
 }
@@ -238,9 +244,13 @@ impl<R: Read + Seek> Collection for TiffCollection<R> {
             .map(|item| item.map(|v| v.image))
             .map_err(located)
     }
-    fn decode(&mut self, image: &ImageId) -> Result<Self::Samples, zencodec::At<CollectionError>> {
+    fn decode(
+        &mut self,
+        image: &ImageId,
+        request: &ImageRequest,
+    ) -> Result<Self::Samples, zencodec::At<CollectionError>> {
         self.items
-            .decode(image, self.region, Composition::Composited, || Ok(()))
+            .decode(image, request.region, Composition::Composited, || Ok(()))
             .and_then(Region::into_pixels)
             .map_err(located)
     }

@@ -2,7 +2,7 @@
 //! This path retains the input and scans visible presentations, not raw layers.
 use super::{
     collection::{Collection, CollectionError, located},
-    image_items::{Composition, ImageId, Origin, SelectionError},
+    image_items::{Composition, ImageId, ImageRequest, Origin, RegionRequest, SelectionError},
     tiff_region::Failure,
 };
 use std::io::{Error, ErrorKind};
@@ -267,7 +267,15 @@ impl Collection for JxlItems<'_> {
         }
         Ok(image)
     }
-    fn decode(&mut self, image: &ImageId) -> Result<Vec<Plane>, zencodec::At<CollectionError>> {
+    fn decode(
+        &mut self,
+        image: &ImageId,
+        request: &ImageRequest,
+    ) -> Result<Vec<Plane>, zencodec::At<CollectionError>> {
+        self.origin.key(image).map_err(|e| located(e.into()))?;
+        if request.region != RegionRequest::Full {
+            return Err(located(SelectionError::UnsupportedRegion.into()));
+        }
         JxlItems::decode(self, image, 13).map_err(located)
     }
 }

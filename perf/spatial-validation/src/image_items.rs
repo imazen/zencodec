@@ -66,9 +66,26 @@ pub enum SelectionError {
     Cycle,
     UnsupportedComposition,
     UnsupportedChildren,
+    UnsupportedRegion,
+    InvalidRegion {
+        requested: Rect,
+        width: u32,
+        height: u32,
+    },
 }
 impl fmt::Display for SelectionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Self::InvalidRegion {
+            requested,
+            width,
+            height,
+        } = self
+        {
+            return write!(
+                f,
+                "region {requested:?} is empty or outside the selected {width}x{height} image"
+            );
+        }
         f.write_str(match self {
             Self::ForeignImage => "image belongs to another source operation",
             Self::ForeignCursor => "discovery cursor belongs to another source operation",
@@ -76,7 +93,77 @@ impl fmt::Display for SelectionError {
             Self::Cycle => "cyclic image containment",
             Self::UnsupportedComposition => "requested composition is not implemented",
             Self::UnsupportedChildren => "child-image discovery is not implemented",
+            Self::UnsupportedRegion => "required stored region is not implemented",
+            Self::InvalidRegion { .. } => unreachable!(),
         })
     }
 }
 impl Error for SelectionError {}
+
+/// Coordinates before applying orientation. The origin belongs to the selected
+/// image's canvas, not to its parent or to another page of the same file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Rect {
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RegionRequest {
+    #[default]
+    Full,
+    Stored(Rect),
+}
+
+impl From<Rect> for RegionRequest {
+    fn from(rect: Rect) -> Self {
+        Self::Stored(rect)
+    }
+}
+
+impl RegionRequest {
+    pub fn resolve(self, width: u32, height: u32) -> Result<Rect, SelectionError> {
+        let rect = match self {
+            Self::Full => Rect {
+                x: 0,
+                y: 0,
+                width,
+                height,
+            },
+            Self::Stored(rect) => rect,
+        };
+        if rect.width == 0
+            || rect.height == 0
+            || rect.x.checked_add(rect.width).is_none_or(|end| end > width)
+            || rect
+                .y
+                .checked_add(rect.height)
+                .is_none_or(|end| end > height)
+        {
+            return Err(SelectionError::InvalidRegion {
+                requested: rect,
+                width,
+                height,
+            });
+        }
+        Ok(rect)
+    }
+}
+
+/// Intent belongs to one decode, allowing independent requests for pages and
+/// contained images with different geometry. Composition fixes discovery instead.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ImageRequest {
+    pub region: RegionRequest,
+}
+
+/// Where returned pixels belong. This does not claim that the native decoder
+/// avoided reconstructing pixels outside the region.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ImageGeometry {
+    pub canvas_width: u32,
+    pub canvas_height: u32,
+    pub region: Rect,
+}
