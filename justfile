@@ -342,6 +342,7 @@ spatial-validation-sync export:
     cp perf/spatial-validation/oracle.py "{{export}}/perf/spatial-validation/"
     cp perf/spatial-validation/jxl_oracle.c perf/spatial-validation/layer_oracle.c "{{export}}/perf/spatial-validation/"
     cp perf/spatial-validation/build_jxl_oracles.py "{{export}}/perf/spatial-validation/"
+    cp perf/spatial-validation/color_oracle.c perf/spatial-validation/build_color_oracle.py perf/spatial-validation/inspect_color_difference.py "{{export}}/perf/spatial-validation/"
     cp perf/spatial-validation/http_snapshot.py perf/spatial-validation/http_snapshot_test.py "{{export}}/perf/spatial-validation/"
     cp perf/spatial-validation/src/*.rs "{{export}}/perf/spatial-validation/src/"
     mkdir -p "{{export}}/docs/examples"
@@ -490,6 +491,23 @@ spatial-output-plan-check:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked native_output_plan_ -- --nocapture --test-threads=1
     just spatial-validation-lint
 
+# Test-only independent F32 ICC math. All oracle inputs/outputs stay in artifacts.
+spatial-color-oracle output:
+    python3 perf/spatial-validation/build_color_oracle.py "{{output}}"
+
+# Inspect one saved worst sample against matrix/type-3 ICC math.
+spatial-color-inspect selection:
+    python3 perf/spatial-validation/inspect_color_difference.py "{{selection}}"
+
+spatial-color-check artifacts:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    : "${SPATIAL_COLOR_ORACLE:?supply compiled independent Little CMS reader}"
+    export SPATIAL_COLOR_ARTIFACTS="{{artifacts}}"
+    cargo fmt --manifest-path perf/spatial-validation/Cargo.toml -p spatial-validation
+    cargo test --manifest-path perf/spatial-validation/Cargo.toml --features cms_oracle --locked native_color_ -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --features cms_oracle --all-targets --locked -- -D warnings
+
 image-owner-check:
     cargo test -p zencodec --all-features --lib packed_owner_ --locked
     cargo clippy -p zencodec --all-features --lib --locked -- -D warnings
@@ -511,7 +529,7 @@ collection-context-native artifacts:
     just spatial-validation-lint
 
 # Same complete native suite and test timeout as the documentation workflow.
-spatial-ci-check artifacts:
+spatial-ci-check artifacts features="":
     #!/usr/bin/env bash
     set -euo pipefail
     : "${SPATIAL_ORACLE_PYTHON:?supply pinned Pillow/libtiff reader}"
@@ -520,9 +538,10 @@ spatial-ci-check artifacts:
     export SPATIAL_ARTIFACTS="{{artifacts}}/native"
     export SPATIAL_GENERATED_ARTIFACTS="{{artifacts}}/generated"
     export SPATIAL_LAYER_ARTIFACTS="{{artifacts}}/layers"
+    export SPATIAL_COLOR_ARTIFACTS="{{artifacts}}/color"
     mkdir -p "{{artifacts}}"
-    timeout --kill-after=15s 10m cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked -- --nocapture --test-threads=1
-    timeout --kill-after=15s 5m cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
+    timeout --kill-after=15s 10m cargo test --manifest-path perf/spatial-validation/Cargo.toml --features "{{features}}" --locked -- --nocapture --test-threads=1
+    timeout --kill-after=15s 5m cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --features "{{features}}" --all-targets --locked -- -D warnings
 
 # Automatic selected-image publication policy, including native failure seams.
 spatial-checked-collection-check:

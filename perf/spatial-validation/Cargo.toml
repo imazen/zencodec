@@ -9,6 +9,7 @@ publish = false
 [features]
 http = ["dep:ureq"]
 file_snapshot = ["dep:rustix"]
+cms_oracle = []
 
 [dependencies]
 zencodec = { path = "../..", features = ["std"] }
@@ -30,8 +31,8 @@ rustix = { version = "1.1.5", features = ["fs"], optional = true }
 zencodec = { path = "../.." }
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "fe819360581acb3796ea2925f2a81f44f0a430e6" }
 # Combined output planning and native sample carriage from zenpixels PRs 92/93.
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "8b68ef07621b93bcafeac4fafdfcaf59bbd23208" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "8b68ef07621b93bcafeac4fafdfcaf59bbd23208" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "d79acec203ad6781b0c85373b7202c512fbbf3c8" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "d79acec203ad6781b0c85373b7202c512fbbf3c8" }
 
 [profile.release]
 debug = 1

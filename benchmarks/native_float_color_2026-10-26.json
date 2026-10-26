@@ -1,0 +1,522 @@
+{
+  "date": "2026-10-26",
+  "scope": "Independent native float color correctness, not general ICC conformance or a performance benchmark",
+  "source_base_zencodec": "20a16043b63e72d9c6d1c3f974b6df319e03604c",
+  "source_sha256": {
+    "perf/spatial-validation/src/jxl_color_oracle_tests.rs": "a5e1c9adf03549c992d0ee65782ff49c20d0fb1de67f9723d042a8226a019def",
+    "perf/spatial-validation/color_oracle.c": "6798aae04146e4aa4aa45bcdc31051587528f168b74390f8fa02495d44502dd6",
+    "perf/spatial-validation/inspect_color_difference.py": "1afda02896534efca2619f99b98318e84e11ada00753ebec887801865113c280"
+  },
+  "dependency_pins": {
+    "zenpixels": "d79acec203ad6781b0c85373b7202c512fbbf3c8",
+    "zenpixels_convert": "d79acec203ad6781b0c85373b7202c512fbbf3c8",
+    "zenjxl": "3660d49318e4d234ec2eb8e531a3e3a1d40a2215",
+    "zenjxl_decoder": "fe819360581acb3796ea2925f2a81f44f0a430e6",
+    "moxcms": "0.9.1"
+  },
+  "oracle": {
+    "runtime": "header 2170 runtime 2170",
+    "pkg_config_version": "2.17",
+    "source_sha256": "6798aae04146e4aa4aa45bcdc31051587528f168b74390f8fa02495d44502dd6",
+    "binary_sha256": "6c7e944a50f65b56773587059aec6a27a649a803e4f659e5f00f4bb2a7934db3"
+  },
+  "command": "just spatial-ci-check <fresh-artifacts> cms_oracle; SPATIAL_COLOR_ORACLE=<compiled color-oracle>; pinned Pillow and libjxl readers also required",
+  "resource_wrapper": "run-heavy --mem 12G --jobs 2; unchanged internal 10-minute test and 5-minute lint deadlines",
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/native-color-final-1",
+  "baseline_pixels": "8b68ef07621b93bcafeac4fafdfcaf59bbd23208",
+  "baseline_same_unclipped_request": [
+    {
+      "admitted_destination_bytes": 1236480,
+      "alpha_mismatch": 0,
+      "changed_color_samples": 307200,
+      "channels": 3,
+      "clip_out_of_gamut": false,
+      "color_error_limit": 0.0001,
+      "fixture": "conformance_test_images/animation_spline.jxl",
+      "height": 320,
+      "intent": "relative-colorimetric",
+      "lcms_flags": "NOOPTIMIZE|COPY_ALPHA",
+      "max_absolute_color_error": 0.0004351772367954254,
+      "nonfinite": 0,
+      "oracle_identity": "header 2170 runtime 2170 pixels 102400",
+      "selection": 0,
+      "width": 320,
+      "worst": [
+        223,
+        400,
+        0.03548692166805267,
+        0.0359220989048481
+      ]
+    },
+    {
+      "admitted_destination_bytes": 37785600,
+      "alpha_mismatch": 0,
+      "changed_color_samples": 7077887,
+      "channels": 4,
+      "clip_out_of_gamut": false,
+      "color_error_limit": 0.0001,
+      "fixture": "multiple_layers_noise_spline.jxl",
+      "height": 1152,
+      "intent": "relative-colorimetric",
+      "lcms_flags": "NOOPTIMIZE|COPY_ALPHA",
+      "max_absolute_color_error": 2.7187345027923584,
+      "nonfinite": 0,
+      "oracle_identity": "header 2170 runtime 2170 pixels 2359296",
+      "selection": 1,
+      "width": 2048,
+      "worst": [
+        791,
+        4592,
+        0.0,
+        -2.7187345027923584
+      ]
+    },
+    {
+      "admitted_destination_bytes": 9455616,
+      "alpha_mismatch": 0,
+      "changed_color_samples": 457173,
+      "channels": 4,
+      "clip_out_of_gamut": false,
+      "color_error_limit": 0.0001,
+      "fixture": "multiple_layers_noise_spline.jxl",
+      "height": 576,
+      "intent": "relative-colorimetric",
+      "lcms_flags": "NOOPTIMIZE|COPY_ALPHA",
+      "max_absolute_color_error": 0.06446413323283195,
+      "nonfinite": 0,
+      "oracle_identity": "header 2170 runtime 2170 pixels 589824",
+      "selection": 2,
+      "width": 1024,
+      "worst": [
+        45,
+        132,
+        0.08287303894758224,
+        0.01840890571475029
+      ]
+    },
+    {
+      "admitted_destination_bytes": 9455616,
+      "alpha_mismatch": 0,
+      "changed_color_samples": 1768961,
+      "channels": 4,
+      "clip_out_of_gamut": false,
+      "color_error_limit": 0.0001,
+      "fixture": "multiple_layers_noise_spline.jxl",
+      "height": 576,
+      "intent": "relative-colorimetric",
+      "lcms_flags": "NOOPTIMIZE|COPY_ALPHA",
+      "max_absolute_color_error": 2.1296069622039795,
+      "nonfinite": 0,
+      "oracle_identity": "header 2170 runtime 2170 pixels 589824",
+      "selection": 3,
+      "width": 1024,
+      "worst": [
+        575,
+        4094,
+        1.0,
+        3.1296069622039795
+      ]
+    },
+    {
+      "admitted_destination_bytes": 9455616,
+      "alpha_mismatch": 0,
+      "changed_color_samples": 1768944,
+      "channels": 4,
+      "clip_out_of_gamut": false,
+      "color_error_limit": 0.0001,
+      "fixture": "multiple_layers_noise_spline.jxl",
+      "height": 576,
+      "intent": "relative-colorimetric",
+      "lcms_flags": "NOOPTIMIZE|COPY_ALPHA",
+      "max_absolute_color_error": 2.7416446208953857,
+      "nonfinite": 0,
+      "oracle_identity": "header 2170 runtime 2170 pixels 589824",
+      "selection": 4,
+      "width": 1024,
+      "worst": [
+        0,
+        4092,
+        0.0,
+        -2.7416446208953857
+      ]
+    },
+    {
+      "admitted_destination_bytes": 9455616,
+      "alpha_mismatch": 0,
+      "changed_color_samples": 17325,
+      "channels": 4,
+      "clip_out_of_gamut": false,
+      "color_error_limit": 0.0001,
+      "fixture": "multiple_layers_noise_spline.jxl",
+      "height": 576,
+      "intent": "relative-colorimetric",
+      "lcms_flags": "NOOPTIMIZE|COPY_ALPHA",
+      "max_absolute_color_error": 2.1330705285072327,
+      "nonfinite": 0,
+      "oracle_identity": "header 2170 runtime 2170 pixels 589824",
+      "selection": 5,
+      "width": 1024,
+      "worst": [
+        132,
+        248,
+        0.9998926520347595,
+        3.132963180541992
+      ]
+    }
+  ],
+  "fixed_point_disabled_only_max_abs": [
+    0.0002529509365558624,
+    2.7187345027923584,
+    0.06446413323283195,
+    2.1296069622039795,
+    2.7416446208953857,
+    2.1330034136772156
+  ],
+  "final_cases": [
+    {
+      "admitted_destination_bytes": 1236480,
+      "alpha_mismatch": 0,
+      "changed_color_samples": 307200,
+      "channels": 3,
+      "clip_out_of_gamut": false,
+      "color_error_limit": 0.0001,
+      "fixture": "conformance_test_images/animation_spline.jxl",
+      "height": 320,
+      "intent": "relative-colorimetric",
+      "lcms_flags": "NOOPTIMIZE|COPY_ALPHA",
+      "max_absolute_color_error": 8.165836334228516e-06,
+      "nonfinite": 0,
+      "oracle_identity": "header 2170 runtime 2170 pixels 102400",
+      "selection": 0,
+      "width": 320,
+      "worst": [
+        29,
+        186,
+        0.04027518257498741,
+        0.04028334841132164
+      ],
+      "sha256": {
+        "source.icc": "72c4e9508ec4c8136b3cb708443e0557d0cb827f96bfd14b4255cbead1c0cf49",
+        "target.icc": "231752984cd4a5278e1b8d2390fe496767d4511fc81f54e1a5c69ae9ab4c42b5",
+        "source.f32": "5a553f05fd8ac51d12c6564b1f2b19fd2f9cc6c1e18c64b4c1334bc988281f6d",
+        "converted.f32": "3f1c4f552da66f1d33cad3142972a17517ca99f88a33019f3fb6849426678aac",
+        "oracle.f32": "4a07cb830814da061d526df38d1e0d8f64baddd9683550cce8f40cab4e684439"
+      }
+    },
+    {
+      "admitted_destination_bytes": 37785600,
+      "alpha_mismatch": 0,
+      "changed_color_samples": 7077881,
+      "channels": 4,
+      "clip_out_of_gamut": false,
+      "color_error_limit": 0.0001,
+      "fixture": "multiple_layers_noise_spline.jxl",
+      "height": 1152,
+      "intent": "relative-colorimetric",
+      "lcms_flags": "NOOPTIMIZE|COPY_ALPHA",
+      "max_absolute_color_error": 7.697194814682007e-05,
+      "nonfinite": 0,
+      "oracle_identity": "header 2170 runtime 2170 pixels 2359296",
+      "selection": 1,
+      "width": 2048,
+      "worst": [
+        2,
+        7682,
+        0.040141936391592026,
+        0.040218908339738846
+      ],
+      "sha256": {
+        "source.icc": "72c4e9508ec4c8136b3cb708443e0557d0cb827f96bfd14b4255cbead1c0cf49",
+        "target.icc": "231752984cd4a5278e1b8d2390fe496767d4511fc81f54e1a5c69ae9ab4c42b5",
+        "source.f32": "b5ab06c2c18f5e9652dab09f16f67cd3057fd60f560784a8a541fb42812aa5b0",
+        "converted.f32": "11664c93e9b8a2f13df8299c0d80bbbfa4e38d4f7d5b07a28256d7ae8a1fc844",
+        "oracle.f32": "5024844801a7b9d89c23f41797cebef2cf4e1f311499aa9b01ffce248b1e419a"
+      }
+    },
+    {
+      "admitted_destination_bytes": 9455616,
+      "alpha_mismatch": 0,
+      "changed_color_samples": 457173,
+      "channels": 4,
+      "clip_out_of_gamut": false,
+      "color_error_limit": 0.0001,
+      "fixture": "multiple_layers_noise_spline.jxl",
+      "height": 576,
+      "intent": "relative-colorimetric",
+      "lcms_flags": "NOOPTIMIZE|COPY_ALPHA",
+      "max_absolute_color_error": 1.86040997505188e-05,
+      "nonfinite": 0,
+      "oracle_identity": "header 2170 runtime 2170 pixels 589824",
+      "selection": 2,
+      "width": 1024,
+      "worst": [
+        88,
+        2264,
+        0.04038267955183983,
+        0.04040128365159035
+      ],
+      "sha256": {
+        "source.icc": "72c4e9508ec4c8136b3cb708443e0557d0cb827f96bfd14b4255cbead1c0cf49",
+        "target.icc": "231752984cd4a5278e1b8d2390fe496767d4511fc81f54e1a5c69ae9ab4c42b5",
+        "source.f32": "c3bbe47ddc393a13860625ff24348c99ceb60b1feb8bbf2e9b9acde8719fbe5c",
+        "converted.f32": "a6a99da9acde8e819df25353e2524995edb7244a1d808bd6f15f945daae9e614",
+        "oracle.f32": "7d888685d7ef6272bb889f88e0268cd3e207832ae029784098d88c76330cd1e8"
+      }
+    },
+    {
+      "admitted_destination_bytes": 9455616,
+      "alpha_mismatch": 0,
+      "changed_color_samples": 1769472,
+      "channels": 4,
+      "clip_out_of_gamut": false,
+      "color_error_limit": 0.0001,
+      "fixture": "multiple_layers_noise_spline.jxl",
+      "height": 576,
+      "intent": "relative-colorimetric",
+      "lcms_flags": "NOOPTIMIZE|COPY_ALPHA",
+      "max_absolute_color_error": 6.747245788574219e-05,
+      "nonfinite": 0,
+      "oracle_identity": "header 2170 runtime 2170 pixels 589824",
+      "selection": 3,
+      "width": 1024,
+      "worst": [
+        572,
+        4094,
+        3.123802900314331,
+        3.1237354278564453
+      ],
+      "sha256": {
+        "source.icc": "72c4e9508ec4c8136b3cb708443e0557d0cb827f96bfd14b4255cbead1c0cf49",
+        "target.icc": "231752984cd4a5278e1b8d2390fe496767d4511fc81f54e1a5c69ae9ab4c42b5",
+        "source.f32": "5beeed40165e0d12ba335c851e8cf0f7b958acae194670ddb0e7e02831172212",
+        "converted.f32": "e96bc4f270c8154f0b5b1a7abe0b202ced9d38d19c910b74efa3870a6f843695",
+        "oracle.f32": "a0442e01a7b5e4a59ad3c86bc3b6a6754c0c69c472b260f797477077990fb9f7"
+      }
+    },
+    {
+      "admitted_destination_bytes": 9455616,
+      "alpha_mismatch": 0,
+      "changed_color_samples": 1769472,
+      "channels": 4,
+      "clip_out_of_gamut": false,
+      "color_error_limit": 0.0001,
+      "fixture": "multiple_layers_noise_spline.jxl",
+      "height": 576,
+      "intent": "relative-colorimetric",
+      "lcms_flags": "NOOPTIMIZE|COPY_ALPHA",
+      "max_absolute_color_error": 7.224082946777344e-05,
+      "nonfinite": 0,
+      "oracle_identity": "header 2170 runtime 2170 pixels 589824",
+      "selection": 4,
+      "width": 1024,
+      "worst": [
+        574,
+        12,
+        3.2328057289123535,
+        3.2327334880828857
+      ],
+      "sha256": {
+        "source.icc": "72c4e9508ec4c8136b3cb708443e0557d0cb827f96bfd14b4255cbead1c0cf49",
+        "target.icc": "231752984cd4a5278e1b8d2390fe496767d4511fc81f54e1a5c69ae9ab4c42b5",
+        "source.f32": "51d306d30cc55a00e8d986f905efa73ce2c2b300141379835de2d94129c31479",
+        "converted.f32": "8dff8cff345ef9f15f2fd1ba2841349958a08adcd13997de17c81e6e9d6a9956",
+        "oracle.f32": "7a3d7c8f759c2cd6f71be0a61873a109931e4d50bda25c7e349f1a981b6e6539"
+      }
+    },
+    {
+      "admitted_destination_bytes": 9455616,
+      "alpha_mismatch": 0,
+      "changed_color_samples": 17325,
+      "channels": 4,
+      "clip_out_of_gamut": false,
+      "color_error_limit": 0.0001,
+      "fixture": "multiple_layers_noise_spline.jxl",
+      "height": 576,
+      "intent": "relative-colorimetric",
+      "lcms_flags": "NOOPTIMIZE|COPY_ALPHA",
+      "max_absolute_color_error": 6.723403930664062e-05,
+      "nonfinite": 0,
+      "oracle_identity": "header 2170 runtime 2170 pixels 589824",
+      "selection": 5,
+      "width": 1024,
+      "worst": [
+        132,
+        248,
+        3.133030414581299,
+        3.132963180541992
+      ],
+      "sha256": {
+        "source.icc": "72c4e9508ec4c8136b3cb708443e0557d0cb827f96bfd14b4255cbead1c0cf49",
+        "target.icc": "231752984cd4a5278e1b8d2390fe496767d4511fc81f54e1a5c69ae9ab4c42b5",
+        "source.f32": "f1d4ea7c0d0f3e7491a4b16dd686a47143c7e75a256790bab44886ecd7d3ba0f",
+        "converted.f32": "a72fdf05149e33b068e3d7d671ccf37069ef72b6847f354347e6f263d347c883",
+        "oracle.f32": "1ebc68fe4fa66e34a08d1d52ed99c72be4909ae785dd1896c9cb5caa784d92ff"
+      }
+    }
+  ],
+  "first_baseline_worst_sample_direct_math": {
+    "source.f32": [
+      0.11256907135248184,
+      0.03179183602333069,
+      0.06409061700105667
+    ],
+    "converted.f32": [
+      0.10224548727273941,
+      0.03548692166805267,
+      0.06308658421039581
+    ],
+    "oracle.f32": [
+      0.10227017849683762,
+      0.0359220989048481,
+      0.06318631023168564
+    ],
+    "direct_f64_matrix_and_curves": [
+      0.1022701820032874,
+      0.03592209630845408,
+      0.06318631240704504
+    ],
+    "position": [
+      133,
+      223
+    ],
+    "moxcms_error": [
+      -2.4694730547988875e-05,
+      -0.00043517464040140896,
+      -9.972819664923194e-05
+    ],
+    "lcms_error": [
+      -3.506449783308163e-09,
+      2.5963940164519528e-09,
+      -2.175359406497712e-09
+    ]
+  },
+  "final_first_selection_worst_sample_direct_math": {
+    "source.f32": [
+      0.04418318346142769,
+      0.02136365696787834,
+      0.023680241778492928
+    ],
+    "converted.f32": [
+      0.04027518257498741,
+      0.02212759666144848,
+      0.023852702230215073
+    ],
+    "oracle.f32": [
+      0.04028334841132164,
+      0.022127637639641762,
+      0.023852720856666565
+    ],
+    "direct_f64_matrix_and_curves": [
+      0.040283346502331376,
+      0.02212763750722385,
+      0.023852721310826518
+    ],
+    "position": [
+      62,
+      29
+    ],
+    "moxcms_error": [
+      -8.16392734396404e-06,
+      -4.084577536964118e-08,
+      -1.9080611445010387e-08
+    ],
+    "lcms_error": [
+      1.90899026447644e-09,
+      1.3241791343987508e-10,
+      -4.5415995270081666e-10
+    ]
+  },
+  "gates": [
+    "Color absolute error <=0.0001, set before the first run and unchanged.",
+    "Exact alpha bits, active extent, untouched strided padding, matching target ICC context.",
+    "Admitted color destination remains charged until its last owner and releases after use.",
+    "Full native suite: 127 passed, 0 failed, 0 ignored; strict all-target lint passes.",
+    "CI feature requires its independent oracle; missing input is an error."
+  ],
+  "api_findings": [
+    "The existing OutputPlan and fallible CMS plugin suffice for the qualified color stage; no new capability query or color trait.",
+    "forbid_lossy() still enables clipping; the preservation example explicitly sets with_clip_out_of_gamut(false). Its name and hard range requirements need revision.",
+    "Backend construction can return a traced concrete error for unqualified per-channel curves instead of accepting the request incorrectly.",
+    "Current interpretation and target metadata must stay coupled to successful converted rows."
+  ],
+  "limits": [
+    "Six native RGB/RGBA selections only, not arbitrary ICC/LUT or CMYK arithmetic.",
+    "Converted color plus retained auxiliary-plane publication remains open.",
+    "CMS workspace, input, codec scratch and profile allocations are outside the output payload allowance.",
+    "No speed, allocation-count or isolated CMS-memory claim; wrapper RSS covers the full build/test command tree.",
+    "Pixel dependency CI first exposed a generator feature-unification compile error; corrected at d79acec2 and verified with whole-workspace tests/lint."
+  ],
+  "runs": [
+    {
+      "log_name": "zencodec-native-color-1-20261026.log",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=11665MiB :: just spatial-color-check /mnt/v/output/zencodec/platform-regions-20261026-run/native-color-1",
+        "test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 125 filtered out; finished in 0.12s",
+        "run-heavy: done rc=101 14s | peak-RSS 0.54GiB | min-avail 11195MiB | peak-load 0.71"
+      ]
+    },
+    {
+      "log_name": "zencodec-native-color-2-20261026.log",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=11617MiB :: just spatial-color-check /mnt/v/output/zencodec/platform-regions-20261026-run/native-color-2",
+        "test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 125 filtered out; finished in 1.88s",
+        "run-heavy: done rc=101 3s | peak-RSS 0.40GiB | min-avail 11305MiB | peak-load 0.12"
+      ]
+    },
+    {
+      "log_name": "zencodec-native-color-float-1-20261026.log",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=11640MiB :: bash -c timeout 60s cargo update --offline --manifest-path perf/spatial-validation/Cargo.toml && timeout 170s just spatial-color-check /mnt/v/output/zencodec/platform-regions-20261026-run/native-color-float-1",
+        "test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 125 filtered out; finished in 1.91s",
+        "run-heavy: done rc=101 38s | peak-RSS 0.84GiB | min-avail 10810MiB | peak-load 0.88"
+      ]
+    },
+    {
+      "log_name": "zencodec-native-color-extended-1-20261026.log",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=11634MiB :: just spatial-color-check /mnt/v/output/zencodec/platform-regions-20261026-run/native-color-extended-1",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 125 filtered out; finished in 2.02s",
+        "run-heavy: done rc=0 45s | peak-RSS 0.85GiB | min-avail 10725MiB | peak-load 1.44"
+      ]
+    },
+    {
+      "log_name": "zencodec-native-color-unclipped-baseline-1-20261026.log",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=11650MiB :: just spatial-color-check /mnt/v/output/zencodec/platform-regions-20261026-run/native-color-unclipped-baseline-1",
+        "test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 125 filtered out; finished in 1.89s",
+        "run-heavy: done rc=101 22s | peak-RSS 0.86GiB | min-avail 10805MiB | peak-load 1.30"
+      ]
+    },
+    {
+      "log_name": "zencodec-native-color-qualified-local-1-20261026.log",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=11619MiB :: just spatial-color-check /mnt/v/output/zencodec/platform-regions-20261026-run/native-color-qualified-local-1",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 125 filtered out; finished in 2.05s",
+        "run-heavy: done rc=0 25s | peak-RSS 0.85GiB | min-avail 10832MiB | peak-load 1.35"
+      ]
+    },
+    {
+      "log_name": "zencodec-native-color-resolve-final-20261026.log",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=11621MiB :: just spatial-packaged-resolve",
+        "run-heavy: done rc=0 2s | peak-RSS 0.06GiB | min-avail 11620MiB | peak-load 0.21"
+      ]
+    },
+    {
+      "log_name": "zencodec-native-color-suite-20261026.log",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=11637MiB :: bash -c timeout 30s cargo fmt --manifest-path perf/spatial-validation/Cargo.toml -p spatial-validation && just spatial-ci-check /mnt/v/output/zencodec/platform-regions-20261026-run/native-color-final-1 cms_oracle",
+        "test result: ok. 127 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 33.41s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "run-heavy: done rc=0 74s | peak-RSS 0.85GiB | min-avail 10659MiB | peak-load 1.21"
+      ]
+    }
+  ],
+  "site_validation": {
+    "command": "just docs-site-browser-check 3547",
+    "exit_code": 0,
+    "log": "/home/lilith/tmp/zencodec-float-site-20261026.log",
+    "resource_line": "run-heavy: done rc=0 10s | peak-RSS 0.17GiB | min-avail 11098MiB | peak-load 0.39",
+    "scope": "Source extraction, exact examples and clipboard, keyboard, responsive layouts; not a performance benchmark"
+  }
+}

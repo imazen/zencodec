@@ -11,6 +11,10 @@ use zencodec::{
 use zenpixels::{ColorContext, ColorOrigin, PixelDescriptor, PixelSlice, PixelSliceMut};
 use zenpixels_convert::{ConvertOptions, OutputPlan, OutputProfile};
 
+#[cfg(feature = "cms_oracle")]
+#[path = "jxl_color_oracle_tests.rs"]
+mod oracle;
+
 /// Retain the complete native image only when samples AND current signaling
 /// already satisfy the plan. Otherwise the caller still owns the source.
 fn retain_identity(
