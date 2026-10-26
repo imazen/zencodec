@@ -2,6 +2,16 @@
 // current signatures come from the source selectors used by the main guide.
 export const migrations = [
   {
+    id:'output-storage', title:'Move retained-output admission into the request.', audience:'consumer adapter implementor',
+    trigger:'One codec registry serves viewers with different budgets, while old images remain on screen.',
+    released:[['consumer','Resource limit values','The caller requests limits on codec work.'],['implementor','Ordinary output owners','Retained images can outlive their decoder.']],
+    current:[['consumer','OpenRequest + StorageBudget','Shared or separate pools across openings; no codec-specific storage setter.'],['adapter','CollectionOpenContext','One required native opening method carries resolved requirements.'],['implementor','Admit or refuse','JXL retains admitted payloads; TIFF refuses the requirement before source queries.']],
+    proposed:[['adapter','Qualify the other allocations','Native workspace, conversion destinations and encoded staging need their own enforced bounds.'],['consumer','Resolve viable routes','Choose among proven storage and streaming routes without treating a payload pool as total RAM.']],
+    action:'The review-only JXL configuration setter and positional-argument factory opening have been replaced. Storage admission does not add another policy callback; decisions still use the shared resolver.',
+    gate:'Keep exact samples, padding, last-owner charges, independent request pools and typed refusal for combined unsupported workspace limits. Do not infer safe encoder backpressure from successful output admission.',
+    api:['collectionOpenRequest','collectionOpenContext','collectionFactory','imageStorageBudget'], source:'docs/storage-admission.md', issues:[160,159],
+  },
+  {
     id:'calls', title:'Keep the easy call. Put the work behind it.', audience:'consumer',
     trigger:'A gallery accepts more than one image format.',
     released:[['consumer','Config → job → executor','Choose a concrete codec; carry settings on its job.'],['implementor','Generic + dyn traits','DecodeOutput and PixelSlice already carry the interchange.']],

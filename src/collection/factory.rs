@@ -1,8 +1,7 @@
 //! Registered factories keep configuration separate from an opened source.
 use super::{Cause, Composition, ErasedCollection};
 use crate::{
-    At, DecodePolicy, ImageFormat, ResourceLimits, StopToken, source::DynReadAt,
-    storage::StorageBudget,
+    DecodePolicy, ImageFormat, ResourceLimits, StopToken, source::DynReadAt, storage::StorageBudget,
 };
 
 /// Resolved requirements for one native collection opening.
@@ -56,49 +55,21 @@ pub trait CollectionFactory: Send + Sync {
 
     /// Open with all resolved requirements and one shared cancellation token.
     ///
-    /// Required output storage must cover every returned color and auxiliary
-    /// payload. Never copy into ordinary storage to evade a refusal. Parsing and
-    /// workspace remain separate admission responsibilities. Unsupported storage
-    /// receives a typed refusal before entering the legacy opening path.
+    /// Honor applicable limits and decode policy or refuse before affected work;
+    /// `ResourceLimits::max_output_bytes` is encode-only. Required output storage
+    /// covers every returned color and auxiliary payload, including padding.
+    /// Admit before native writes; never evade refusal with ordinary allocation.
+    /// Unsupported storage returns `CollectionOpenError::UnsupportedOutputStorage`.
+    ///
+    /// Do not implicitly buffer the source or substitute another view. Native
+    /// parsing and workspace remain separate admission responsibilities;
+    /// publication policy cannot retroactively bound reconstruction. Preserve
+    /// concrete causes and location traces.
     fn open_with<'a>(
         &self,
         source: &'a mut dyn DynReadAt,
         context: CollectionOpenContext,
-    ) -> Result<ErasedCollection<'a>, Cause> {
-        if context.output_storage.is_some() {
-            return Err(At::wrap(CollectionOpenError::UnsupportedOutputStorage).into());
-        }
-        self.open(
-            source,
-            context.format,
-            context.view,
-            context.limits,
-            context.policy,
-            context.stop,
-        )
-    }
-
-    /// Compatibility entry for adapters migrating to [`Self::open_with`].
-    ///
-    /// `format` is the matched registration, not a fresh format-detection result.
-    /// Supplied limits and decode policy are requirements: honor them throughout
-    /// the collection or refuse before the affected work. Do not ignore applicable
-    /// fields; `ResourceLimits::max_output_bytes` is encode-only. Do not
-    /// buffer the complete source implicitly, or substitute another view.
-    /// `None` keeps the native template's configuration. Native parsing/workspace
-    /// admission remains this adapter's responsibility; publication policy cannot
-    /// retroactively bound reconstruction. Preserve concrete causes and traces.
-    fn open<'a>(
-        &self,
-        _source: &'a mut dyn DynReadAt,
-        format: ImageFormat,
-        _view: Composition,
-        _limits: Option<ResourceLimits>,
-        _policy: Option<DecodePolicy>,
-        _stop: StopToken,
-    ) -> Result<ErasedCollection<'a>, Cause> {
-        Err(At::wrap(CollectionOpenError::UnsupportedFactoryContract(format)).into())
-    }
+    ) -> Result<ErasedCollection<'a>, Cause>;
 }
 
 /// A fixed view and allowance for one opened collection.
@@ -160,8 +131,6 @@ pub enum CollectionOpenError {
     },
     /// The adapter cannot admit returned output payloads to the required pool.
     UnsupportedOutputStorage,
-    /// A migration-only factory implements the context opening path, not legacy.
-    UnsupportedFactoryContract(ImageFormat),
 }
 impl core::fmt::Display for CollectionOpenError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -177,89 +146,7 @@ impl core::fmt::Display for CollectionOpenError {
             Self::UnsupportedOutputStorage => {
                 "collection factory cannot enforce required output storage"
             }
-            Self::UnsupportedFactoryContract(_) => {
-                "collection factory requires the context opening contract"
-            }
         })
     }
 }
 impl core::error::Error for CollectionOpenError {}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{CodecSet, Unstoppable, operation::PolicySet, source::ReadAtShim};
-    use alloc::sync::Arc;
-    use core::{
-        convert::Infallible,
-        sync::atomic::{AtomicUsize, Ordering},
-    };
-
-    struct Untouched;
-    impl crate::source::ReadAt for Untouched {
-        type Error = Infallible;
-        fn len(&mut self) -> Result<u64, Infallible> {
-            panic!("source was queried")
-        }
-        fn read_at(&mut self, _: u64, _: &mut [u8]) -> Result<usize, Infallible> {
-            panic!("source was read")
-        }
-        fn read_exact_at(&mut self, _: u64, _: &mut [u8]) -> Result<(), Infallible> {
-            panic!("source was read exactly")
-        }
-    }
-    struct Legacy(Arc<AtomicUsize>);
-    impl CollectionFactory for Legacy {
-        fn formats(&self) -> &[ImageFormat] {
-            &[ImageFormat::Jxl]
-        }
-        fn open<'a>(
-            &self,
-            _: &'a mut dyn DynReadAt,
-            _: ImageFormat,
-            _: Composition,
-            _: Option<ResourceLimits>,
-            _: Option<DecodePolicy>,
-            _: StopToken,
-        ) -> Result<ErasedCollection<'a>, Cause> {
-            self.0.fetch_add(1, Ordering::SeqCst);
-            Err(At::wrap(CollectionOpenError::ResidentInputRequired).into())
-        }
-    }
-    #[test]
-    fn collection_output_storage_refuses_before_legacy_work_or_fallback() {
-        let calls = Arc::new(AtomicUsize::new(0));
-        let codecs = CodecSet::new()
-            .with_collection(Legacy(calls.clone()))
-            .with_collection(Legacy(calls.clone()));
-        let storage = StorageBudget::new(7, 1);
-        let request =
-            OpenRequest::new(Composition::Uncomposited, 8).with_output_storage(storage.clone());
-        let mut source = ReadAtShim(Untouched);
-        let error = codecs
-            .open_collection(
-                ImageFormat::Jxl,
-                &mut source,
-                request.clone(),
-                PolicySet::new(),
-                StopToken::new(Unstoppable),
-            )
-            .err()
-            .expect("unsupported storage was accepted");
-        assert_eq!(
-            crate::find_cause::<CollectionOpenError>(&error),
-            Some(&CollectionOpenError::UnsupportedOutputStorage)
-        );
-        assert_eq!(calls.load(Ordering::SeqCst), 0);
-        assert_eq!(
-            (storage.reserved_bytes(), storage.reserved_objects()),
-            (0, 0)
-        );
-        // Cloning a request shares the pool rather than multiplying its allowance.
-        let held = request.output_storage.as_ref().unwrap().bytes(7).unwrap();
-        assert_eq!(storage.reserved_bytes(), 7);
-        assert!(storage.bytes(1).is_err());
-        drop(held);
-        assert_eq!(storage.reserved_bytes(), 0);
-    }
-}

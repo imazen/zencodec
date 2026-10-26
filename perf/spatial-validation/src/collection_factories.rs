@@ -5,8 +5,8 @@ use std::{error::Error, fmt};
 pub use zencodec::collection::{CollectionFactory as Factory, CollectionOpenError as FactoryError};
 use zencodec::decode::DecodePolicy;
 use zencodec::{
-    At, ImageFormat, ResourceLimits, StopToken,
-    collection::{Cause, Composition, ErasedCollection},
+    At, ImageFormat, ResourceLimits,
+    collection::{Cause, CollectionOpenContext, ErasedCollection},
     source::{DynReadAt, ReadAt},
 };
 use zencodec_io::ReadAtReader;
@@ -57,15 +57,23 @@ impl Factory for TiffFactory {
     fn formats(&self) -> &[ImageFormat] {
         &[ImageFormat::Tiff]
     }
-    fn open<'a>(
+    fn open_with<'a>(
         &self,
         source: &'a mut dyn DynReadAt,
-        format: ImageFormat,
-        view: Composition,
-        limits: Option<ResourceLimits>,
-        policy: Option<DecodePolicy>,
-        stop: StopToken,
+        context: CollectionOpenContext,
     ) -> Result<ErasedCollection<'a>, Cause> {
+        let CollectionOpenContext {
+            format,
+            view,
+            limits,
+            policy,
+            stop,
+            output_storage,
+            ..
+        } = context;
+        if output_storage.is_some() {
+            return Err(At::wrap(FactoryError::UnsupportedOutputStorage).into());
+        }
         require_configuration(format, ImageFormat::Tiff, limits, policy)?;
         Ok(ErasedCollection::new(
             TiffCollection::open_with_stop(

@@ -28,7 +28,12 @@ export async function checkIdeal(browser,url,output) {
     await page.keyboard.press('Enter');
     assert.ok(await owner.evaluate(el=>el.open));
     for(const required of ['PackedImageOwner','from_packed_owner','ValueSlice','last image drops','Native workspace','NeedsCms']) assert.ok((await owner.textContent()).includes(required),required);
-    assert.equal(await owner.locator('[data-example="checked_output_storage"]').count(),1);
+    const storage=page.locator('#change-operation-storage');
+    await storage.locator(':scope>summary').focus();
+    await page.keyboard.press('Enter');
+    assert.ok(await storage.evaluate(el=>el.open));
+    assert.equal(await storage.locator('[data-example="checked_output_storage"]').count(),1);
+    for(const required of ['with_output_storage','CollectionOpenContext','open_with','UnsupportedOutputStorage','max_memory_bytes']) assert.ok((await storage.textContent()).includes(required),required);
     const inspection=page.locator('#change-inspection');
     await inspection.locator(':scope>summary').focus();
     await page.keyboard.press('Enter');

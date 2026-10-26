@@ -9,7 +9,7 @@ use std::{cell::Cell, convert::Infallible, sync::Arc};
 use zencodec::decode::DecodePolicy;
 use zencodec::{
     At, CodecSet, ImageFormat, ResourceLimits, StopToken, Unstoppable,
-    collection::{Cause, DiscoveryExhausted, ErasedCollection, OpenRequest},
+    collection::{Cause, CollectionOpenContext, DiscoveryExhausted, ErasedCollection, OpenRequest},
     operation::{CollectionStage, Decision, PolicySet, Question},
     source::{DynReadAt, ReadAtShim, SliceReadAt, SourceError},
 };
@@ -379,14 +379,10 @@ impl Factory for Refusing {
     fn formats(&self) -> &[ImageFormat] {
         &[ImageFormat::Jxl]
     }
-    fn open<'a>(
+    fn open_with<'a>(
         &self,
         _source: &'a mut dyn DynReadAt,
-        _format: ImageFormat,
-        _view: Composition,
-        _limits: Option<ResourceLimits>,
-        _policy: Option<DecodePolicy>,
-        _stop: StopToken,
+        _context: CollectionOpenContext,
     ) -> Result<ErasedCollection<'a>, Cause> {
         self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Err(Box::new(At::wrap(Replaced(99))))
@@ -532,14 +528,10 @@ impl Factory for StopDuringOpen {
     fn formats(&self) -> &[ImageFormat] {
         &[ImageFormat::Jxl]
     }
-    fn open<'a>(
+    fn open_with<'a>(
         &self,
         _source: &'a mut dyn DynReadAt,
-        _format: ImageFormat,
-        _view: Composition,
-        _limits: Option<ResourceLimits>,
-        _policy: Option<DecodePolicy>,
-        _stop: StopToken,
+        _context: CollectionOpenContext,
     ) -> Result<ErasedCollection<'a>, Cause> {
         self.0.after(0);
         Err(Box::new(At::wrap(Replaced(123))))
@@ -706,23 +698,14 @@ impl Factory for WrongView {
     fn formats(&self) -> &[ImageFormat] {
         &[ImageFormat::Tiff]
     }
-    fn open<'a>(
+    fn open_with<'a>(
         &self,
         source: &'a mut dyn DynReadAt,
-        format: ImageFormat,
-        _view: Composition,
-        limits: Option<ResourceLimits>,
-        policy: Option<DecodePolicy>,
-        stop: StopToken,
+        mut context: CollectionOpenContext,
     ) -> Result<ErasedCollection<'a>, Cause> {
-        crate::collection_factories::TiffFactory(Allowances::default()).open(
-            source,
-            format,
-            Composition::Composited,
-            limits,
-            policy,
-            stop,
-        )
+        context.view = Composition::Composited;
+        crate::collection_factories::TiffFactory(Allowances::default())
+            .open_with(source, context)
     }
 }
 

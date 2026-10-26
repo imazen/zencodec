@@ -70,10 +70,12 @@ charge after the operation ends. Native workspace and metadata need separate
 bounds; selecting this pool does not satisfy `max_memory_bytes`.
 
 Factories receive these resolved requirements through `CollectionOpenContext`.
-The temporary `open_with` bridge rejects a pool before entering an older adapter;
-native request-level integration is being qualified before the compatibility
-method is removed. Codec-configured JXL storage remains the qualified positive
-path in the [current matrix](../benchmarks/packaged_output_storage_2026-10-26.json).
+The single required `open_with` method handles the native opening. JXL consumes
+the request pool; TIFF refuses this requirement before source reads. There is no
+second codec-specific storage setter. Requests can share one pool across jobs or
+use independent pools through the same immutable registry. The
+[request-level matrix](../benchmarks/operation_output_storage_2026-10-26.json)
+keeps the ordinary/admitted native sample and independent-reader gates.
 
 Configured `ResourceLimits` and `decode::DecodePolicy` are requirements on this
 path. An adapter must enforce them or return a typed refusal before affected

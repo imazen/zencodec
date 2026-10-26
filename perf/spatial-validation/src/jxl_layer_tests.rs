@@ -94,7 +94,9 @@ fn compare_independent(actual: u32, expected: u32, exact: bool) -> Result<f32, &
 
 #[test]
 fn raw_collection_native_samples_and_owner_bound_policy_match_independent_layers() {
-    use super::jxl_packaged_storage::{assert_charges, factories as admitted_factories};
+    use super::jxl_packaged_storage::{
+        assert_charges, factories as admitted_factories, open_admitted,
+    };
     for (name, count) in [
         ("multiple_layers_noise_spline.jxl", 5),
         ("conformance_test_images/cmyk_layers.jxl", 4),
@@ -124,15 +126,14 @@ fn raw_collection_native_samples_and_owner_bound_policy_match_independent_layers
         let (factories, storage) = admitted_factories(64, 64);
         let mut admitted_source =
             zencodec::source::ReadAtShim(zencodec::source::SliceReadAt::new(&bytes));
-        let mut admitted = factories
-            .open_collection(
-                zencodec::ImageFormat::Jxl,
-                &mut admitted_source,
-                zencodec::collection::OpenRequest::new(Composition::Uncomposited, 128),
-                PolicySet::new(),
-                StopToken::new(Unstoppable),
-            )
-            .unwrap();
+        let mut admitted = open_admitted(
+            &factories,
+            &mut admitted_source,
+            Composition::Uncomposited,
+            128,
+            &storage,
+        )
+        .unwrap();
         let mut cursor = admitted.images().unwrap();
         let mut admitted_ids = Vec::new();
         while let Some(id) = admitted.next(&mut cursor).unwrap() {

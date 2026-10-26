@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2905 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 196 lines (196 hidden + 0 excluded-feature)
+# files: zencodec.txt 2903 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 196 lines (196 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -14,9 +14,9 @@
 #   pub types (struct/enum/trait/alias)       339
 #   pub consts/statics                        302
 #   free functions                             83
-#   inherent methods                         1055
+#   inherent methods                         1054
 #   struct fields                             421
-#   enum variants                             476
+#   enum variants                             475
 #   re-exports                                 15
 #   trait roster entries (type × trait)       975
 #   conditional trait impls (verbatim)          8
@@ -26,7 +26,7 @@
 # per-module pub lines:
 #   (root)                          960
 #   animation                        11
-#   collection                      102
+#   collection                      100
 #   decode                          283
 #   encode                          189
 #   estimate                         48
@@ -44,7 +44,7 @@
 #   storage                          34
 #   time                             22
 
-## items (2630 lines)
+## items (2628 lines)
 
 pub mod zencodec
 pub use At
@@ -83,7 +83,6 @@ pub collection::CollectionOpenError::NotRegistered(ImageFormat)
 pub collection::CollectionOpenError::ResidentInputRequired
 pub collection::CollectionOpenError::UnsupportedDecodePolicy
 pub collection::CollectionOpenError::UnsupportedDecodePolicy::unsupported: decode::DecodePolicy
-pub collection::CollectionOpenError::UnsupportedFactoryContract(ImageFormat)
 pub collection::CollectionOpenError::UnsupportedLimits
 pub collection::CollectionOpenError::UnsupportedLimits::unsupported: ResourceLimits
 pub collection::CollectionOpenError::UnsupportedOutputStorage
@@ -177,7 +176,6 @@ pub fn collection::Collection::next(&mut self, &mut Self::Cursor) -> core::resul
 pub fn collection::Collection::view(&self) -> collection::Composition
 pub trait collection::CollectionFactory: core::marker::Send + core::marker::Sync
 pub fn collection::CollectionFactory::formats(&self) -> &[ImageFormat]
-pub fn collection::CollectionFactory::open<'a>(&self, &'a mut dyn source::DynReadAt, ImageFormat, collection::Composition, core::option::Option<ResourceLimits>, core::option::Option<decode::DecodePolicy>, almost_enough::stop_token::StopToken) -> core::result::Result<collection::ErasedCollection<'a>, collection::Cause>
 pub fn collection::CollectionFactory::open_with<'a>(&self, &'a mut dyn source::DynReadAt, collection::CollectionOpenContext) -> core::result::Result<collection::ErasedCollection<'a>, collection::Cause>
 pub type collection::Cause = alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)>
 pub mod decode

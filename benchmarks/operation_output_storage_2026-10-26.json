@@ -1,0 +1,81 @@
+{
+  "kind": "common operation output pool; native sample, refusal and retention qualification; no timing claim",
+  "base_commit": "27cc94e395458e33d13888e728d9e6701ca3f4e9",
+  "package_commit": "3660d49318e4d234ec2eb8e531a3e3a1d40a2215",
+  "native_commit": "fe819360581acb3796ea2925f2a81f44f0a430e6",
+  "host": "r7900x",
+  "source_sha256": {
+    "src/collection/factory.rs": "e936949152c14ac36d7e8eaaa76be58f4577380f1821c3feabf4ecc49f80ddfc",
+    "src/set/collection.rs": "72534269aec2082fc035c009f860e43951586c45d8fbc95ded295f27da70146e",
+    "perf/spatial-validation/Cargo.toml": "83872a95f7cb94526f8f4c4f3fe47f2ebd278bb8c3c4a557c9de89f1cf76ae1b",
+    "perf/spatial-validation/dependencies.lock": "f37d98bc2bf229259ae3047b9c91066067bf8b93823676969802d68c341c5d24",
+    "perf/spatial-validation/src/collection_factories.rs": "8d49266b5cbf4204900c02db6705c969deb06d20bc8ed0683026d321433983ad",
+    "perf/spatial-validation/src/factory_tests.rs": "e154edd0e8bd0b0e290ed3dfb0d414889661d2c40b4ad0b51aae247ef1a1b989",
+    "perf/spatial-validation/src/jxl_packaged_storage.rs": "dcd503c0060edb661f0dac6f2faa5ea4a4038899b8e6f4ae935ca8f4fc3481ed",
+    "perf/spatial-validation/src/jxl_layer_tests.rs": "f5ebe71fad15f0ba4936f8964c70ce17049f7f693d09454199c819a413864415",
+    "perf/spatial-validation/src/jxl_tests.rs": "13c2012d2703caaad4c2327991466a43f7eb245a0dc44358fa271e2858f521d9"
+  },
+  "commands": [
+    "just collection-context-integration",
+    "just spatial-ci-check <fresh-artifact-directory>",
+    "just docs-site-browser-check 3547"
+  ],
+  "checks": {
+    "workspace": "all-feature tests/doctests, strict all-target lint, WASM, strict Rustdoc and API snapshots pass; existing ignored doctests unchanged",
+    "native_suite": {
+      "passed": 115,
+      "failed": 0,
+      "ignored": 0
+    },
+    "strict_native_all_target_lint": "passed",
+    "presentations": 147,
+    "visible_dependency_replay": 35,
+    "raw_layers": 9,
+    "raw_comparison_rows": 11,
+    "output": "ordinary/admitted bit-exact samples, strides/padding and unchanged independent-reader gates; charges follow old/new retained results through operation/input destruction",
+    "requirements": "TIFF pool refusal before source/policy work; existing inherited limits, decode policy, stop and no-fallback controls unchanged",
+    "example": "the guide opening function executes for every admitted presentation/layer setup",
+    "guide": "pending final browser gate"
+  },
+  "native_consumer": {
+    "passed": 14,
+    "failed": 0,
+    "ignored": 0,
+    "new": "independent operation pools through one immutable registry; cloned-request contention; ordinary requests do not inherit another pool; payload pool does not satisfy unsupported workspace limits",
+    "platforms": "Linux, Windows ARM, macOS ARM and i686 cross collection jobs pass at package revision; remaining full-feature/coverage CI still running",
+    "i686_job": 121816378963
+  },
+  "initial_failures": [
+    "An opaque impl Collection return hid the concrete owned-cursor lifetime, preventing the source-drop control from compiling. The example now names the existing concrete return type; the lifetime assertion is unchanged.",
+    "The site link gate refused the not-yet-written matrix receipt. Receipt generation precedes the final browser gate."
+  ],
+  "runs": [
+    {
+      "name": "core",
+      "result": "run-heavy: done rc=0 17s | peak-RSS 0.39GiB | min-avail 13076MiB | peak-load 1.17",
+      "sha256": "225b2c7d05d9b67c0b80a3bc0e5e7085f9d612de1ff392633ef30b384e1cc07b"
+    },
+    {
+      "name": "native",
+      "result": "run-heavy: done rc=101 2s | peak-RSS 0.29GiB | min-avail 13304MiB | peak-load 0.75",
+      "sha256": "1693cd0a620956a5ba20cfbbcde1650ead35b1a057fc11a7af5a28ba6bb0891b"
+    },
+    {
+      "name": "native-2",
+      "result": "run-heavy: done rc=0 43s | peak-RSS 0.51GiB | min-avail 13052MiB | peak-load 0.73",
+      "sha256": "6502b43c8bf76fa879c2d0be5e80b2f966918fb7d51161ebea0f53018cf36212"
+    },
+    {
+      "name": "browser",
+      "result": "run-heavy: done rc=1 0s | peak-RSS 0.13GiB | min-avail 13488MiB | peak-load 0.35",
+      "sha256": "c99976605d015a7dd993d3aed4b75f524dfb077e1e4c3e043051d4a3c1bb8b94"
+    }
+  ],
+  "artifact_directory": "/mnt/v/output/zencodec/platform-regions-20261026-run/operation-storage-matrix-2",
+  "limits": [
+    "native workspace/reference buffers, input, discovery, metadata/profile/owner headers and encoded staging excluded",
+    "resource wrapper covers whole validation/build process tree",
+    "no throughput or whole-codec memory claim"
+  ],
+  "api_cleanup": "remove migration-only positional opening and error variant; the package removes its codec-specific output-storage setter; single required open_with context remains"
+}

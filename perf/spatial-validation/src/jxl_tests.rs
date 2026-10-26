@@ -265,7 +265,9 @@ pub(crate) fn exact_rows(expected: &[Plane], got: &[Plane]) {
 
 #[test]
 fn selected_jxl_presentations_match_native_sequential_with_dependencies() {
-    use super::jxl_packaged_storage::{assert_charges, factories as admitted_factories};
+    use super::jxl_packaged_storage::{
+        assert_charges, factories as admitted_factories, open_admitted,
+    };
     let mut dependencies = 0;
     let mut count = 0;
     for name in [
@@ -299,15 +301,14 @@ fn selected_jxl_presentations_match_native_sequential_with_dependencies() {
         let (factories, storage) = admitted_factories(4096, 4096);
         let mut admitted_source =
             zencodec::source::ReadAtShim(zencodec::source::SliceReadAt::new(&data));
-        let mut admitted = factories
-            .open_collection(
-                zencodec::ImageFormat::Jxl,
-                &mut admitted_source,
-                zencodec::collection::OpenRequest::new(Composition::Composited, 16384),
-                zencodec::operation::PolicySet::new(),
-                zencodec::StopToken::new(zencodec::Unstoppable),
-            )
-            .unwrap();
+        let mut admitted = open_admitted(
+            &factories,
+            &mut admitted_source,
+            Composition::Composited,
+            16384,
+            &storage,
+        )
+        .unwrap();
         let mut cursor = admitted.images().unwrap();
         let mut admitted_ids = Vec::new();
         while let Some(id) = admitted.next(&mut cursor).unwrap() {

@@ -220,10 +220,6 @@ trait CollectionFactory: Send + Sync {
     fn formats(&self) -> &[ImageFormat];
     fn open_with<'a>(&self, source: &'a mut dyn DynReadAt,
         context: CollectionOpenContext) -> Result<ErasedCollection<'a>, Cause>;
-    // Temporary compatibility entry while pinned adapters migrate:
-    fn open<'a>(&self, source: &'a mut dyn DynReadAt, format: ImageFormat,
-        view: Composition, limits: Option<ResourceLimits>, policy: Option<DecodePolicy>,
-        stop: StopToken) -> Result<ErasedCollection<'a>, Cause>;
 }
 impl OpenRequest {
     fn new(view: Composition, discovery_attempts: u64) -> Self;
@@ -236,10 +232,11 @@ policy, the latched stop token and optional required output storage. The
 operation pool is shared by request clones; admission must precede native output
 allocation, and charges remain with the last retained image owner. This does not
 cover native workspace or metadata. Adapters that cannot enforce the pool return
-`CollectionOpenError::UnsupportedOutputStorage` before affected work. The default
-context bridge refuses storage before calling the compatibility opening method.
-This bridge keeps independently pinned adapters buildable while they migrate;
-it is scheduled for removal before the reviewed collection API lands.
+`CollectionOpenError::UnsupportedOutputStorage` before affected work. There is
+one required native opening method; no alternate compatibility entry remains.
+The packaged JXL factory consumes the request pool without a codec-specific
+storage setter. The private TIFF factory refuses this requirement before source
+queries. A pool never satisfies an unqualified native workspace limit.
 
 `ErasedCollection::new` erases the native collection once and its owned cursor
 state once per cursor. Foreign cursors fail before native work. The small box

@@ -3,9 +3,10 @@
 ## Native image selection (unreleased experiment)
 
 - Add operation-scoped output storage to `OpenRequest` and group resolved
-  factory requirements in `CollectionOpenContext`. The compatibility path
-  refuses unqualified storage before native opening; no capability query or
-  implicit fallback is required. Native request-level integration is next.
+  factory requirements in `CollectionOpenContext`. JXL honors the shared request;
+  the private TIFF adapter refuses before source work. Remove the temporary
+  compatibility method after qualifying the native adapter; no capability query,
+  codec-specific storage setter or implicit fallback is required.
 
 - Qualify the packaged JXL output allowance across 147 presentations and nine
   raw layers alongside ordinary allocation. Preserve exact samples, stride and
@@ -23,8 +24,9 @@
 ### QUEUED BREAKING CHANGES
 
 - Review-only `OpenRequest` is now `Clone` instead of `Copy`: cloned requests
-  share the same retained-output storage allowance. The factory compatibility
-  entry will be removed once pinned adapters use the context contract.
+  share the same retained-output storage allowance (`27cc94e3`). Native factories
+  now implement only `open_with(source, CollectionOpenContext)`, replacing the
+  review-only positional-argument opening method.
 
 - Review-only `Samples::Values` now carries `ValueSlice` by value instead of
   borrowing the `Values` allocation container. This allows admitted auxiliary
