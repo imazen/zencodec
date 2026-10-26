@@ -6,7 +6,7 @@ use super::{
 use crate::{
     At,
     frame::{FrameTiming, Presentation},
-    image::{ImageGeometry, ImageOutput},
+    image::{ImageGeometry, ImageOutput, Placement},
 };
 use zenpixels::{Orientation, PixelDescriptor};
 
@@ -18,6 +18,8 @@ use zenpixels::{Orientation, PixelDescriptor};
 pub struct ImageFacts {
     /// Stored output extent within the selected canvas.
     pub geometry: ImageGeometry,
+    /// Separate presentation placement, when established by the adapter.
+    pub placement: Option<Placement>,
     /// Residual orientation, if the adapter establishes one.
     pub orientation: Option<Orientation>,
     /// Actual packed pixel descriptor, absent for native component codes.
@@ -44,6 +46,7 @@ impl ImageFacts {
         let samples = image.sample_facts();
         Self {
             geometry: interpretation.geometry,
+            placement: interpretation.placement,
             orientation: interpretation.orientation,
             packed: samples.packed,
             planes: samples.planes,
@@ -80,7 +83,7 @@ pub fn resolve_image<R: PolicyResolver + ?Sized>(
         DecisionContext::Image(facts),
         |choices| Question::Image {
             image: &image,
-            facts,
+            facts: &facts,
             choices,
         },
         Selection::Image,

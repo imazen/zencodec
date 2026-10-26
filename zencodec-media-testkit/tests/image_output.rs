@@ -45,6 +45,71 @@ fn words() -> Arc<dyn Picture> {
 }
 
 #[test]
+fn placement_is_validated_with_owner_without_clipping_hidden_samples() {
+    use zencodec::image::{ImageGeometry, ImageInterpretation, Placement, PlacementError, Rect};
+    use zenpixels::{Orientation, PixelBuffer, PixelDescriptor};
+
+    let geometry = ImageGeometry {
+        canvas_width: 3,
+        canvas_height: 2,
+        region: Rect {
+            x: 0,
+            y: 0,
+            width: 3,
+            height: 2,
+        },
+    };
+    let open = |placement| {
+        let pixels =
+            PixelBuffer::from_vec(vec![1, 2, 3, 4, 5, 6], 3, 2, PixelDescriptor::GRAY8).unwrap();
+        let mut interpretation = ImageInterpretation::packed(geometry, Orientation::Identity);
+        interpretation.placement = Some(placement);
+        ImageOutput::packed(pixels, vec![], interpretation)
+    };
+    let invalid = open(Placement {
+        canvas: (0, 2),
+        origin: (0, 0),
+    })
+    .unwrap_err();
+    assert!(matches!(
+        invalid.error(),
+        OutputError::Placement(PlacementError::EmptyCanvas)
+    ));
+    assert!(zencodec::find_cause::<PlacementError>(&invalid).is_some());
+    let overflow = open(Placement {
+        canvas: (2, 2),
+        origin: (i64::MAX, 0),
+    })
+    .unwrap_err();
+    assert!(matches!(
+        overflow.error(),
+        OutputError::Placement(PlacementError::CoordinateOverflow)
+    ));
+
+    let placement = Placement {
+        canvas: (2, 2),
+        origin: (-10, 0),
+    };
+    let image = open(placement).unwrap();
+    assert_eq!(placement.visible(geometry).unwrap(), None);
+    assert_eq!(image.interpretation().placement, Some(placement));
+    assert_eq!(
+        zencodec::operation::ImageFacts::new(&image).placement,
+        Some(placement)
+    );
+    image
+        .with_pixels(|pixels| {
+            assert_eq!(pixels.row(0), &[1, 2, 3]);
+            assert_eq!(pixels.row(1), &[4, 5, 6]);
+            assert_eq!(pixels.stride(), 3);
+        })
+        .unwrap();
+    let mut detached = image.interpretation().clone();
+    detached.placement = None;
+    assert_eq!(image.interpretation().placement, Some(placement));
+}
+
+#[test]
 fn native_codes_keep_active_rows_and_refuse_conflicting_claims() {
     let native = words();
     let correct = frame(native.clone(), 3, 10);

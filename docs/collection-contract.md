@@ -66,6 +66,25 @@ overflowing requests refuse without clipping. TIFF qualifies native regions;
 the current JXL adapters explicitly refuse them. Returned geometry belongs to
 the selected image, so differently sized pages use the same call.
 
+## Place a layer without losing its local samples
+
+`image.interpretation().placement` now exposes an established presentation
+placement to generic consumers. A `None` field means the adapter establishes no
+separate placement; it must not be inferred from a page number or timestamp.
+Given a placement, `placement.visible(interpretation.geometry)` returns matching
+sample-buffer and canvas rectangles. Its `Ok(None)` means a valid image lies
+wholly outside the canvas. Those samples remain in the owner.
+
+The owner validates the placement before policy publication. Invalid canvases
+and signed overflow return a traced `OutputError::Placement`; valid negative
+origins and partial intersections keep the complete local buffer. The policy
+question and bounded report include the same placement. Native blend/reference
+instructions stay in their source extension and do not become generic rendering
+instructions merely because the placement is known.
+The [placement receipt](../benchmarks/public_placement_2026-10-26.json) preserves
+the native comparisons, synthetic signed-coordinate controls, invalid-owner
+refusals, HTTP/AV1 regression checks and the borrowed-question lint fix.
+
 ## Bound repeated discovery
 
 An interactive caller can repeatedly create cursors, revisit cached results or
@@ -121,7 +140,7 @@ the full native/disk/HTTP run, workspace and AV1 checks, API snapshots and brows
 qualification, including failures found and corrected during promotion.
 
 Concrete adapter packaging and registry convenience remain necessary for a
-normal application to open collections without this harness. Generic placement,
+normal application to open collections without this harness. Header-only description,
 all native layer configurations, reduced-level selection, broader snapshots,
 full workspace admission and complete carrier privacy remain separate work.
 

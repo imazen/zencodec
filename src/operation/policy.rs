@@ -176,8 +176,8 @@ pub enum Question<'a> {
     Image {
         /// The owned output remains held throughout the callback.
         image: &'a crate::image::ImageOutput,
-        /// Bounded facts also retained in failure reports.
-        facts: ImageFacts,
+        /// Borrowed diagnostic facts also copied into the bounded report.
+        facts: &'a ImageFacts,
         /// Prepared publication only; no transformation or privacy proof.
         choices: Choices<'a, PublicationOffer>,
     },

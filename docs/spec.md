@@ -94,6 +94,16 @@ an attached ICC profile establishes it. Native JXL uses inverted black and the
 use `CmykF32`. These are different interpretations of the same physical layout,
 and an unqualified conversion must refuse.
 
+`ImageInterpretation::placement: Option<Placement>` describes the selected
+image's signed origin on a separate presentation canvas, before orientation.
+`Placement::visible(geometry)` returns matching sample-buffer and canvas
+rectangles, or `None` for valid fully off-canvas samples. It never clips the
+owner. `ImageOutput::packed` rejects an empty presentation canvas or signed
+overflow as `OutputError::Placement`, retaining `PlacementError` as its cause.
+Placement does not establish blend instructions or authorize discarding samples.
+`ImageFacts` retains it for bounded diagnostics; `Question::Image` borrows those
+facts for the callback instead of embedding another full copy in the question.
+
 ```rust
 impl ImageOutput {
     fn packed(pixels: zenpixels::PixelBuffer, extras: Vec<(Auxiliary, Values)>,
@@ -160,7 +170,7 @@ identifies the failure stage and retains the original cause through `Error::sour
 
 This is publication after reconstruction, not native allocation admission or a
 whole-container privacy guarantee. Concrete adapter packaging, `CodecSet`
-registration, generic layer-placement facts and broader source/workspace bounds
+registration, header-only image description and broader source/workspace bounds
 remain open. See [the collection contract](collection-contract.md) for executing
 native coverage, caller examples and the full failure boundaries.
 

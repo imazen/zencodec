@@ -2,6 +2,12 @@
 
 ## Native image selection (unreleased experiment)
 
+- Expose signed presentation placement in the immutable shared output and
+  publication facts. Validate it with the packed owner without clipping hidden
+  samples; preserve typed overflow/geometry causes. Native JXL layers use that
+  field, while blend/reference facts remain codec-specific. The image policy
+  question borrows its diagnostic facts instead of embedding another copy.
+
 - Promote the native-qualified collection mechanism to `zencodec::collection`
   and its checked consumer to `operation::CheckedCollection`. TIFF/SubIFD,
   JXL presentation/layer and conditional HTTP adapters now import those shared

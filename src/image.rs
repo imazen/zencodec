@@ -14,6 +14,9 @@ use core::fmt;
 use zenpixels::{AlphaMode, ChannelType, Orientation, PixelBuffer, PixelSlice};
 type Failure = At<OutputError>;
 
+mod placement;
+pub use placement::{Placement, PlacementError, PlacementOverlap};
+
 /// A rectangle in the selected image's stored coordinates, before orientation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Rect {
@@ -310,6 +313,10 @@ trait ImageStorage: Send + Sync {
 pub struct ImageInterpretation {
     /// Returned stored extent within the selected canvas.
     pub geometry: ImageGeometry,
+    /// Placement on a separate presentation canvas, before orientation.
+    /// None means this adapter establishes no separate placement contract.
+    /// This does not describe blending or permit discarding off-canvas samples.
+    pub placement: Option<Placement>,
     /// None means that this adapter does not establish an orientation contract.
     pub orientation: Option<Orientation>,
     /// Retains native component roles, code depth, siting, crop, color and epoch.
@@ -327,6 +334,7 @@ impl ImageInterpretation {
     pub fn packed(geometry: ImageGeometry, orientation: Orientation) -> Self {
         Self {
             geometry,
+            placement: None,
             orientation: Some(orientation),
             signal: None,
             timing: None,
@@ -363,6 +371,11 @@ impl ImageOutput {
     ) -> Result<Self, At<OutputError>> {
         let g = interpretation.geometry;
         g.validate().map_err(|e| fail(OutputError::Region(e)))?;
+        if let Some(placement) = interpretation.placement {
+            placement
+                .visible(g)
+                .map_err(|e| fail(OutputError::Placement(e)))?;
+        }
         if (pixels.width(), pixels.height()) != (g.region.width, g.region.height) {
             return Err(fail(OutputError::Geometry));
         }
@@ -402,6 +415,7 @@ impl ImageOutput {
                 },
             },
             orientation: None,
+            placement: None,
             timing: Some(frame.timing()),
             presentation: Some(frame.presentation()),
             signal: Some(signal.clone()),
@@ -475,16 +489,19 @@ pub enum OutputError {
     },
     /// The packed-color convenience was requested for component codes.
     NotPackedColor,
+    /// Separate presentation placement is invalid for these local samples.
+    Placement(PlacementError),
 }
 impl fmt::Display for OutputError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Region(e) => return e.fmt(f),
             Self::Mapping(e) => return e.fmt(f),
+            Self::Placement(e) => return e.fmt(f),
             _ => {}
         }
         f.write_str(match self {
-            Self::Region(_) | Self::Mapping(_) => unreachable!(),
+            Self::Region(_) | Self::Mapping(_) | Self::Placement(_) => unreachable!(),
             Self::Geometry => "invalid sample plane geometry",
             Self::Interpretation => "packed samples have an incompatible interpretation",
             Self::MissingPlane => "mapped storage does not supply a declared plane",
@@ -498,6 +515,7 @@ impl core::error::Error for OutputError {
         match self {
             Self::Region(error) => Some(error),
             Self::Mapping(error) => Some(error),
+            Self::Placement(error) => Some(error),
             _ => None,
         }
     }
