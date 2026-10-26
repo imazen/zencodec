@@ -5,6 +5,7 @@
 #[path = "../../../docs/examples/checked_source.rs"]
 mod checked_source;
 mod collection;
+mod generated_output_tests;
 pub mod image_items;
 pub mod image_output;
 mod jxl_items;

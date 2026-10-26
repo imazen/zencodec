@@ -319,7 +319,7 @@ spatial-oracle-install python:
 spatial-validation-check artifacts python:
     mkdir -p "{{artifacts}}-oracle"
     cc -std=c11 -Wall -Wextra -Werror perf/spatial-validation/jxl_oracle.c -ljxl -o "{{artifacts}}-oracle/jxl-oracle"
-    SPATIAL_ARTIFACTS="{{artifacts}}" SPATIAL_ORACLE_PYTHON="{{python}}" JXL_SELECTION_ORACLE="{{artifacts}}-oracle/jxl-oracle" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked -- --nocapture --test-threads=1
+    SPATIAL_ARTIFACTS="{{artifacts}}" SPATIAL_GENERATED_ARTIFACTS="{{artifacts}}-generated" SPATIAL_ORACLE_PYTHON="{{python}}" JXL_SELECTION_ORACLE="{{artifacts}}-oracle/jxl-oracle" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
 
 spatial-consumer-check:
@@ -329,7 +329,7 @@ spatial-consumer-check:
 spatial-output-check artifacts:
     mkdir -p "{{artifacts}}-oracle"
     cc -std=c11 -Wall -Wextra -Werror perf/spatial-validation/jxl_oracle.c -ljxl -o "{{artifacts}}-oracle/jxl-oracle"
-    JXL_SELECTION_ORACLE="{{artifacts}}-oracle/jxl-oracle" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked output_ -- --nocapture
+    SPATIAL_GENERATED_ARTIFACTS="{{artifacts}}-generated" JXL_SELECTION_ORACLE="{{artifacts}}-oracle/jxl-oracle" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked output_ -- --nocapture
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked strip_tests -- --nocapture
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
 
