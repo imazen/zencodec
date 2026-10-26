@@ -35,6 +35,9 @@ export async function checkIdeal(browser,url,output) {
     assert.ok(await factories.evaluate(el=>el.open));
     assert.ok((await factories.textContent()).includes('requires an already-resident slice'));
     assert.equal(await factories.locator('[data-example="checked_registered_first"]').count(),1);
+    assert.ok((await factories.textContent()).includes('open_collection'));
+    assert.ok((await factories.textContent()).includes('CollectionFactory'));
+    assert.ok((await factories.textContent()).includes('refuse unqualified legacy'));
     const placement=page.locator('#change-placement');
     await placement.locator(':scope>summary').focus();
     await page.keyboard.press('Enter');

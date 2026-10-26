@@ -5,8 +5,8 @@ not released. The generic mechanism lives in
 [`zencodec::collection`](../src/collection.rs); the consumer wrapper lives in
 [`operation::CheckedCollection`](../src/operation/collection.rs).
 Native TIFF, JXL presentation and JXL raw-layer adapters still live in the
-[validation harness](../perf/spatial-validation/README.md). They import these
-shared contracts. There is no `CodecSet` collection registration yet.
+[validation harness](../perf/spatial-validation/README.md). They implement these
+shared contracts and register through `CodecSet::with_collection`.
 
 ## Start with the selected output
 
@@ -38,6 +38,48 @@ The checked result owns its pixels after the collection drops. Policy runs
 before that result returns; consumers need no separate authorization call.
 The wrapper uses the existing fallible `PolicyResolver` and `PolicySet`.
 It does not introduce a parallel callback protocol.
+
+## Register once; open a checked operation
+
+The same [executing example](../perf/spatial-validation/src/collection.rs) now
+builds a `CodecSet` with private native TIFF and JXL factories. The caller uses:
+
+```rust
+let request = OpenRequest::new(Composition::Composited, 64);
+let mut images = codecs.open_collection(format, source, request, resolver, stop)?;
+let image = images.first_image(&ImageRequest::new())?;
+```
+
+Import `CodecSet`, `ImageFormat` and `StopToken` from `zencodec`; import
+`OpenRequest`, `Composition` and `ImageRequest` from `zencodec::collection`.
+`source` is a borrowed `&mut dyn zencodec::source::DynReadAt`; `ReadAtShim` erases
+an existing typed source once. The returned operation can outlive the registry,
+and a returned image can outlive both the operation and source. Immutable
+factory templates are shared across cloned sets. Opened jobs remain local.
+
+Opening selects the first matching factory and never retries another after a
+failure. Its view is checked before discovery. `CodecSet` supplies one discovery
+call allowance, one publication resolver and one latched stop combining the
+set's pulse cancellation, set stop and per-call stop. Dropping the registry does
+not disable any of these cancellation sources. This does not add native progress
+reporting or an implicit format probe.
+
+Configured `ResourceLimits` and `decode::DecodePolicy` are requirements on this
+path. An adapter must enforce them or return a typed refusal before affected
+work. The private TIFF/JXL factories currently refuse either supplied legacy
+configuration before source I/O; their codec-specific templates still apply.
+That qualification gap must not be hidden by a capability query or by applying
+only the fields that happen to be convenient. It also does not make the legacy
+still-image `with_decode_policy` setter a checked operation.
+
+[`ErasedCollection`](../src/collection/erased.rs) retains native identities and
+output ownership, checks cursor origin before native work and avoids boxing each
+returned ID. It allocates at opening and per cursor; those small allocations are
+still infallible. It does not promise a transferable job or native workspace
+admission. Concrete adapter packaging, automatic detection, full native limit
+mappings and progress integration remain open.
+
+The [registration receipt](../benchmarks/collection_registry_2026-10-26.json) records native, HTTP, workspace, WASM, documentation and browser validation, including failed initial attempts.
 
 ## Browse, retain an identity, request a region
 
