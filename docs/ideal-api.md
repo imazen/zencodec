@@ -151,6 +151,17 @@ raw samples and blend/dependency semantics must qualify together before promotio
 owns the shared-selector discussion. The [public-output receipt](../benchmarks/public_image_output_2026-10-26.json)
 records the executing core/native qualification.
 
+A private `Checked<C, R>` consumer now binds the same resolver and stop token
+to native selection and automatic output publication. Its first-image/decode
+methods return `Outcome<ImageOutput>` without a separate caller authorization
+step. Repeated selections are rechecked; accepted output keeps the same native
+allocation. Corrected region requests can reuse their image identity, while an
+observed stop or caught unwind finishes the opened operation. Native failures
+retain their original cause and their native terminal state. The bounded report
+keeps prior decisions without default logging of callback payloads. This is
+still a std-based driver experiment, not another public resolver interface or
+preallocation/privacy guarantee. [Execution and failure scope](../perf/spatial-validation/README.md#selected-output-executes-the-configured-policy-automatically).
+
 ### Ordinary checked operations
 
 Keep the small conveniences and registered codec templates. A stored request

@@ -34,6 +34,86 @@ fn assert_cause(error: &(dyn std::error::Error + 'static), kind: FailureKind) {
 }
 
 #[test]
+fn http_snapshot_checked_collection_publishes_only_after_last_range_and_policy() {
+    use crate::checked_collection::{Checked, Stage};
+    use std::{cell::Cell, convert::Infallible};
+    use zencodec::{
+        At, StopToken, Unstoppable,
+        operation::{Decision, Question},
+    };
+    for big in [false, true] {
+        let (bytes, refs) = nested_fixture(big, true, false);
+        let name = format!("checked-publication-{big}");
+        write_fixture(&name, &bytes);
+        let mut last_read = 0;
+        for (mode, expected_error) in [
+            ("stable", None),
+            ("change", Some(FailureKind::Status(412))),
+            ("changed_tag", Some(FailureKind::Validator)),
+            ("short_body", Some(FailureKind::Body)),
+        ] {
+            let seen = Cell::new(0);
+            let resolver = |question: Question<'_>| -> Result<Decision, At<Infallible>> {
+                let Question::Image { image, .. } = question else {
+                    panic!("wrong domain")
+                };
+                image
+                    .with_pixels(|p| assert_eq!(p.as_contiguous_bytes().unwrap(), refs[1].bytes))
+                    .unwrap();
+                seen.set(seen.get() + 1);
+                Ok(Decision::UsePreset)
+            };
+            let mut attempts = None;
+            let mut collection = Checked::open(StopToken::new(Unstoppable), resolver, |stop| {
+                let source = HttpSource::open(url(mode, &name, last_read), 65536)?;
+                attempts = Some(source.attempts.clone());
+                TiffCollection::open_with_stop(
+                    ReadAtReader::new(source),
+                    Composition::Composited,
+                    Allowances::default(),
+                    stop,
+                )
+                .map_err(Into::into)
+            })
+            .unwrap();
+            let attempts = attempts.unwrap();
+            let mut roots = collection.images().unwrap();
+            let parent = collection.next(&mut roots).unwrap().unwrap();
+            let mut children = collection.children(&parent).unwrap();
+            let id = collection.next(&mut children).unwrap().unwrap();
+            let discovered = attempts.get();
+            if let Some(kind) = expected_error {
+                assert!(last_read > discovered);
+                let error = collection
+                    .decode(&id, &ImageRequest::default())
+                    .unwrap_err();
+                assert_eq!(error.error().stage, Stage::Decode);
+                assert_cause(&error, kind);
+                assert_eq!(attempts.get(), last_read);
+                assert_eq!(seen.get(), 0, "policy saw a partial or replaced image");
+                assert_eq!(error.error().report.decisions().count(), 0);
+                let retry = collection
+                    .decode(&id, &ImageRequest::default())
+                    .unwrap_err();
+                assert_cause(&retry, kind);
+                assert_eq!(attempts.get(), last_read, "retry reopened a failed source");
+                assert_eq!(seen.get(), 0);
+            } else {
+                let image = collection.decode(&id, &ImageRequest::default()).unwrap();
+                last_read = attempts.get();
+                assert!(last_read > discovered);
+                assert_eq!(seen.get(), 1);
+                assert_eq!(image.report().decisions().count(), 1);
+                drop(collection);
+                image
+                    .with_pixels(|p| assert_eq!(p.as_contiguous_bytes().unwrap(), refs[1].bytes))
+                    .unwrap();
+            }
+        }
+    }
+}
+
+#[test]
 fn http_snapshot_native_tiff_matches_slice_with_direct_and_buffered_io() {
     for big in [false, true] {
         for planar in [false, true] {

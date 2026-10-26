@@ -105,6 +105,15 @@ The initial two-code atomic stop encoding was rejected by the compiler because
 A large-error lint was fixed by owning the bounded report behind a box, matching
 the existing media error approach. [Receipts](../../benchmarks/checked_collection_2026-10-26.json).
 
+The same checked consumer now runs over the reused IMI HTTP source. In
+classic/BigTIFF SubIFD selection, object replacement, changed validators and a
+short body on the final required range all prevent the policy callback as well
+as publication. Retries retain the original transport cause and send no further
+requests. The combined HTTP gate covers 48 URL cases and 7650 actual requests;
+these are protocol counts, not latency measurements. The full test matrix passed;
+strict lint passed after removing an unnecessary clone in the new test.
+[HTTP and guide receipt](../../benchmarks/checked_collection_http_2026-10-26.json).
+
 ### Repeated browsing has one operation allowance
 
 A viewport can revisit an image, create another cursor or ask an unsupported

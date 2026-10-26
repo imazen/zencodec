@@ -21,6 +21,7 @@ export const api = {
   sourceSnapshot: {path:'candidate::HttpSource (private HTTP qualification)',file:'perf/spatial-validation/src/http_source.rs',scope:'impl HttpSource',methods:['open']},
   layerPlacement: {path:'candidate::Placement (private geometry experiment)',file:'perf/spatial-validation/src/placement.rs',scope:'impl Placement {',methods:['visible']},
   collectionDiscovery: {path:'candidate::Discovery<C> (private call allowance)',file:'perf/spatial-validation/src/discovery.rs',scope:'impl<C> Discovery<C>',methods:['new','usage']},
+  checkedCollection: {path:'candidate::Checked<C, R> (private consumer operation)',file:'perf/spatial-validation/src/checked_collection.rs',scope:'impl<C: Collection, R: PolicyResolver> Checked<C, R>',methods:['open','with_policy_set','first_image','decode','report','is_finished']},
   collectionSelection: {path:'candidate::Collection (private common contract)',file:'perf/spatial-validation/src/collection.rs',scope:'pub trait Collection',methods:['view','images','children','next','decode']},
   tiffPixels: {path:'candidate::Region (private TIFF sample handoff)',file:'perf/spatial-validation/src/tiff_pixels.rs',scope:'impl Region {',methods:['into_pixels']},
   imageOutput: {path:'zencodec::image::ImageOutput',file:'src/image.rs',scope:'impl ImageOutput {',methods:['interpretation','map','with_pixels']},

@@ -20,6 +20,7 @@ export async function checkIdeal(browser,url,output) {
     assert.equal(await changes.count(),8);
     assert.equal(await page.locator('#change-mapping').count(),1);
     assert.ok((await page.locator('#change-images .code-toolbar').textContent()).includes('Private prototype'));
+    assert.equal(await page.locator('#change-images [data-example="checked_jxl_first"]').count(),1);
     for(const change of await changes.all()) assert.ok(!await change.evaluate(el=>el.open));
     const placement=page.locator('#change-placement');
     await placement.locator(':scope>summary').focus();
