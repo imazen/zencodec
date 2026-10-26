@@ -8,6 +8,8 @@ mod checked_collection_tests;
 mod checked_source;
 mod collection;
 mod control;
+mod description;
+mod description_jxl_tests;
 mod discovery;
 mod generated_output_tests;
 #[cfg(all(feature = "file_snapshot", not(target_os = "linux")))]

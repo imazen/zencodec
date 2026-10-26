@@ -1,0 +1,53 @@
+{
+  "base_revision": "8cb698ecc271a517b601005df981199d5a4e5950",
+  "scope": "Private selected-image description before raster reconstruction, validated against TIFF and JXL and conditional HTTP source replacement.",
+  "sources": {
+    "perf/spatial-validation/src/description.rs": "b8c7e1745771b4f82e8c5e929002f6f7caf43a466424dcdf16d941b085572e78",
+    "perf/spatial-validation/src/description_jxl_tests.rs": "2b64602ee0a858def724c22858a619b38d1a868dfc1148e7f03006ee96526360",
+    "perf/spatial-validation/src/description_tiff_tests.rs": "15cca9e97a736c27f24dc1384067501108b19fe4370f6261a07edff9458d30b0",
+    "perf/spatial-validation/src/tiff_items.rs": "bb9c2252a032ab4729d2258c49d771660d65a909539ea63f7b3851e5a60f1216",
+    "perf/spatial-validation/src/jxl_items.rs": "4bc6f237dd9a1385856077a1f234d21a943f0ede319c0516c614537811aaec67",
+    "perf/spatial-validation/src/jxl_layers.rs": "0bdbd85e9e56e5e0559b4da8e5378efa5d6f9c6df488db4a5525b8a72b60c891",
+    "perf/spatial-validation/src/http_tests.rs": "23ef367b1bfc6f0652a5bb117f29fee3003b93bd8341d406059cf802120dc150"
+  },
+  "runs": [
+    {
+      "log": "zencodec-description-native-1-2026-10-26.log",
+      "sha256": "77236eedef9149b707530285d745e94f37bbde30998748ec255de51dafaafe0d",
+      "scope": "Seven native cases pass. The new terminal-state test used a single-presentation multilayer fixture; replaced only that fixture with a native animation.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13454MiB :: timeout --kill-after=10s 600s just spatial-description-check",
+        "test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 83 filtered out; finished in 32.73s",
+        "run-heavy: done rc=101 36s | peak-RSS 0.57GiB | min-avail 12976MiB | peak-load 0.71"
+      ]
+    },
+    {
+      "log": "zencodec-description-native-2-2026-10-26.log",
+      "sha256": "14e78cacbe2d326bc7629aa5cd17ce265d9563062321a0ab704c50bf28783aa0",
+      "scope": "All eight native cases and strict lint pass. HTTP launch refuses an unwritable artifact parent; no test was skipped.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13423MiB :: timeout --kill-after=10s 600s bash -eu -c just spatial-description-check; just spatial-http-check /mnt/v/output/zencodec/description-20261026-http 3568",
+        "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 83 filtered out; finished in 32.91s",
+        "run-heavy: done rc=1 35s | peak-RSS 0.57GiB | min-avail 13239MiB | peak-load 0.70"
+      ]
+    },
+    {
+      "log": "zencodec-description-http-2026-10-26.log",
+      "sha256": "7e104c0dc926904cc331af6e8824bdab85c2f9082a90cddff7e8b90e52300228",
+      "scope": "Six HTTP tests and strict lint pass using the existing writable experiment artifact directory.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13480MiB :: timeout --kill-after=10s 300s just spatial-http-check /mnt/v/output/zencodec/platform-regions-20261026-run/description-http-1 3568",
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 9.21s",
+        "{\"scope\": \"Native TIFF selection over local HTTP/1.1; no WAN/TLS/performance claim\", \"requests\": 9442, \"cases\": 58, \"statuses\": {\"200\": 1, \"206\": 9429, \"302\": 1, \"412\": 11}, \"conditional_after_open\": true}",
+        "run-heavy: done rc=0 14s | peak-RSS 0.61GiB | min-avail 13093MiB | peak-load 0.74"
+      ]
+    }
+  ],
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/description-http-1",
+  "limits": [
+    "Does not establish complete metadata, pixel-format support, conversion or whole-workspace admission.",
+    "JXL discovery still scans prior compressed frame payloads; transport read-ahead may read payload bytes.",
+    "Native selected output was already qualified against independent oracles; these checks compare source descriptions with that output.",
+    "No timing conclusion. Resource receipts measure test/build processes only."
+  ]
+}

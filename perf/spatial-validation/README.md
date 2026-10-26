@@ -1,5 +1,32 @@
 # Native spatial contract experiments
 
+## Inspect a selected image before reconstructing it
+
+The candidate in [`src/description.rs`](src/description.rs) describes only the
+selected image's stored dimensions, stored orientation and separate placement.
+It does not use `ImageInfo`: this query establishes neither a complete metadata
+inventory nor the rendered output format, supported compression or workspace.
+TIFF reads the selected directory's tags without initializing its raster decoder.
+JXL retains basic-header facts and uses its scanned native layer headers.
+
+`just spatial-description-check` exercises both native implementations. A TIFF
+reader refuses every read intersecting native tile payloads; nested/shared
+SubIFD descriptions still succeed in classic/BigTIFF and chunky/planar storage.
+The positive control actually rejects pixel decoding. All eight JXL orientations,
+presentation versus raw-layer geometry, discovery exhaustion, out-of-order reuse,
+foreign IDs, native terminal errors and every observed inspection cancellation
+seam are checked. One initial fixture wrongly assumed five layers meant multiple
+presentations; the failure test now uses an actual animation, without changing
+the required refusal.
+
+The HTTP gate additionally changes or truncates the final description read and
+replaces a source after a successful description but before decode. Typed source
+causes survive and failed sources remain closed. These are correctness tests,
+not WAN timing or native allocation measurements. Transport buffering may read
+ahead into compressed bytes; the mechanism promises no pixel reconstruction,
+not universally zero payload I/O. The [receipt](../../benchmarks/selected_description_2026-10-26.json)
+records the commands, source hashes, failed attempts and successful gates.
+
 ## Image selection and shared contracts
 
 The native TIFF loop now also exercises a separate candidate in

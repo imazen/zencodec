@@ -34,6 +34,56 @@ fn assert_cause(error: &(dyn std::error::Error + 'static), kind: FailureKind) {
 }
 
 #[test]
+fn http_snapshot_description_and_later_decode_keep_the_source_revision() {
+    use crate::description::Describe;
+    for big in [false, true] {
+        let (bytes, refs) = nested_fixture(big, true, false);
+        let name = format!("selected-description-{big}");
+        write_fixture(&name, &bytes);
+        let mut final_description_read = 0;
+        for (mode, expected) in [
+            ("stable", None),
+            ("change", Some(FailureKind::Status(412))),
+            ("changed_tag", Some(FailureKind::Validator)),
+            ("short_body", Some(FailureKind::Body)),
+        ] {
+            let source = HttpSource::open(url(mode, &name, final_description_read), 65536).unwrap();
+            let attempts = source.attempts.clone();
+            let mut collection = TiffCollection::open(ReadAtReader::new(source), Composition::Composited, Allowances::default()).unwrap();
+            let id = child(&mut collection);
+            let discovered = attempts.get();
+            match expected {
+                None => {
+                    let description = collection.describe(&id).unwrap();
+                    assert_eq!(description.stored_size, (refs[1].width, refs[1].height));
+                    final_description_read = attempts.get();
+                    assert!(final_description_read > discovered);
+                }
+                Some(kind) => {
+                    let error = collection.describe(&id).expect_err("partial or replaced description escaped");
+                    assert_cause(&error, kind);
+                    assert_eq!(attempts.get(), final_description_read);
+                    let error = collection.describe(&id).expect_err("failed source reopened");
+                    assert_cause(&error, kind);
+                    assert_eq!(attempts.get(), final_description_read);
+                }
+            }
+        }
+        // A successful description is a fact about the retained representation,
+        // not permission to decode a different revision under the same ID.
+        let source = HttpSource::open(url("change", &name, final_description_read + 1), 65536).unwrap();
+        let attempts = source.attempts.clone();
+        let mut collection = TiffCollection::open(ReadAtReader::new(source), Composition::Composited, Allowances::default()).unwrap();
+        let id = child(&mut collection);
+        collection.describe(&id).unwrap();
+        assert_eq!(attempts.get(), final_description_read);
+        let error = collection.decode(&id, &ImageRequest::new()).expect_err("new revision decoded after old description");
+        assert_cause(&error, FailureKind::Status(412));
+        assert_eq!(attempts.get(), final_description_read + 1);
+    }
+}
+
+#[test]
 fn http_snapshot_checked_collection_publishes_only_after_last_range_and_policy() {
     use crate::checked_collection::{Checked, Stage};
     use std::{cell::Cell, convert::Infallible};

@@ -3,9 +3,12 @@
 use super::{
     collection::{Collection, CollectionError, located},
     control::Control,
+    description::{Describe, Description},
     image_items::{Composition, ImageId, ImageRequest, Origin, RegionRequest, SelectionError},
     image_output::ImageOutput,
-    jxl_items::{Limits, complete, controlled_options, decode_next_details, pixel_decoder},
+    jxl_items::{
+        Limits, complete, controlled_options, decode_next_details, describe_header, pixel_decoder,
+    },
     jxl_output::{JxlRawLayer, JxlSourceFacts, adopt},
     tiff_region::Failure,
 };
@@ -17,6 +20,7 @@ pub struct JxlLayers<'a> {
     bytes: &'a [u8],
     remaining: &'a [u8],
     scanner: Option<JxlDecoder<states::WithImageInfo>>,
+    description: Description,
     layers: Vec<JxlLayerInfo>,
     origin: Origin,
     limits: Limits,
@@ -52,11 +56,13 @@ impl<'a> JxlLayers<'a> {
             .with_scan_frames_only(true);
         let mut remaining = bytes;
         let scanner = complete(JxlDecoder::new(options).process(&mut remaining)?)?;
+        let description = describe_header(scanner.basic_info())?;
         control.check()?;
         Ok(Self {
             bytes,
             remaining,
             scanner: Some(scanner),
+            description,
             layers: Vec::new(),
             origin: Origin::default(),
             limits,
@@ -195,6 +201,31 @@ impl<'a> JxlLayers<'a> {
         )?;
         self.control.check()?;
         Ok(result)
+    }
+}
+
+impl Describe for JxlLayers<'_> {
+    fn describe(&mut self, image: &ImageId) -> Result<Description, At<CollectionError>> {
+        let describe = || -> Result<Description, Failure> {
+            let index = usize::try_from(self.origin.key(image)?)?;
+            self.check()?;
+            let layer = self
+                .layers
+                .get(index)
+                .ok_or_else(|| Error::other("unknown raw layer"))?;
+            let description = Description {
+                stored_size: (u32::try_from(layer.size.0)?, u32::try_from(layer.size.1)?),
+                stored_orientation: self.description.stored_orientation,
+                placement: Some(zencodec::image::Placement {
+                    canvas: self.description.stored_size,
+                    origin: (i64::from(layer.origin.0), i64::from(layer.origin.1)),
+                }),
+            }
+            .validate()?;
+            self.check()?;
+            Ok(description)
+        };
+        describe().map_err(located)
     }
 }
 

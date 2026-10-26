@@ -257,6 +257,10 @@ mod image_selection {
         tiff_items::TiffItems,
     };
 
+    mod description_checks {
+        include!("description_tiff_tests.rs");
+    }
+
     #[cfg(feature = "http")]
     mod http_snapshot {
         include!("http_tests.rs");

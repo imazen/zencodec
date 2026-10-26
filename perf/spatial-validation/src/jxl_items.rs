@@ -3,6 +3,7 @@
 use super::{
     collection::{Collection, CollectionError, located},
     control::Control,
+    description::{Describe, Description},
     image_items::{Composition, ImageId, ImageRequest, Origin, RegionRequest, SelectionError},
     tiff_region::Failure,
 };
@@ -19,6 +20,7 @@ pub struct JxlItems<'a> {
     data: &'a [u8],
     remaining: &'a [u8],
     scanner: Option<JxlDecoder<states::WithImageInfo>>,
+    description: Description,
     origin: Origin,
     visible: Vec<VisibleFrameInfo>,
     limits: Limits,
@@ -80,6 +82,23 @@ pub(super) fn controlled_options(control: &Control, limits: Limits) -> JxlDecode
     }
 }
 
+pub(super) fn describe_header(
+    info: &zenjxl_decoder::api::JxlBasicInfo,
+) -> Result<Description, Failure> {
+    Description {
+        stored_size: (
+            u32::try_from(info.coded_size.0)?,
+            u32::try_from(info.coded_size.1)?,
+        ),
+        stored_orientation: Some(
+            zenpixels::Orientation::from_exif(info.intrinsic_orientation as u8)
+                .ok_or_else(|| Error::other("invalid stored JXL orientation"))?,
+        ),
+        placement: None,
+    }
+    .validate()
+}
+
 pub struct Presentation {
     pub image: ImageId,
     pub native: VisibleFrameInfo,
@@ -128,11 +147,13 @@ impl<'a> JxlItems<'a> {
         let decoder =
             JxlDecoder::new(controlled_options(&control, limits).with_scan_frames_only(true));
         let scanner = complete(decoder.process(&mut remaining)?)?;
+        let description = describe_header(scanner.basic_info())?;
         control.check()?;
         Ok(Self {
             data,
             remaining,
             scanner: Some(scanner),
+            description,
             origin: Origin::default(),
             visible: Vec::new(),
             limits,
@@ -432,6 +453,22 @@ pub fn sequential(data: &[u8], coalescing: bool) -> Result<Vec<Vec<Plane>>, Fail
 pub struct JxlCursor {
     owner: ImageId,
     index: usize,
+}
+
+impl Describe for JxlItems<'_> {
+    fn describe(&mut self, image: &ImageId) -> Result<Description, zencodec::At<CollectionError>> {
+        let describe = || -> Result<Description, Failure> {
+            let index = usize::try_from(self.origin.key(image)?)?;
+            self.check_failed()?;
+            self.control.check()?;
+            self.visible
+                .get(index)
+                .ok_or_else(|| Error::other("unknown presentation"))?;
+            self.control.check()?;
+            Ok(self.description)
+        };
+        describe().map_err(located)
+    }
 }
 
 impl Collection for JxlItems<'_> {

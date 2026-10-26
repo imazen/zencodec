@@ -2,6 +2,7 @@
 use super::{
     collection::{Collection, CollectionError, located},
     control::{CheckedReader, Control},
+    description::{Describe, Description},
     image_items::{
         Composition, ImageId, ImageRequest, Origin, RegionRequest, Relation, RelationKind,
         SelectionError,
@@ -222,12 +223,48 @@ impl<R: Read + Seek> TiffItems<R> {
             },
         )
     }
+
+    fn describe(&mut self, image: &ImageId) -> Result<Description, Failure> {
+        let key = self.origin.key(image)?;
+        self.control.check()?;
+        let limits = self.native_limits();
+        let mut decoder = self.header.open(&mut self.input).with_limits(limits);
+        let directory = decoder.read_directory(IfdPointer(key))?;
+        let mut tags = decoder.read_directory_tags(&directory);
+        // Inspect directory facts without initializing the raster decoder. A
+        // successful description does not promise support for its compression.
+        let stored_size = (
+            tags.get_tag(Tag::ImageWidth)?.into_u32()?,
+            tags.get_tag(Tag::ImageLength)?.into_u32()?,
+        );
+        let orientation = tags
+            .find_tag(Tag::Orientation)?
+            .map(|value| value.into_u32())
+            .transpose()?
+            .unwrap_or(1);
+        let stored_orientation = u8::try_from(orientation)
+            .ok()
+            .and_then(zenpixels::Orientation::from_exif)
+            .ok_or_else(|| std::io::Error::other("invalid stored TIFF orientation"))?;
+        self.control.check()?;
+        Description {
+            stored_size,
+            stored_orientation: Some(stored_orientation),
+            placement: None,
+        }
+        .validate()
+    }
 }
 
 /// Composition fixes the discovered view. Geometry belongs to each decode so
 /// differently sized pages and children can share one opened source operation.
 pub struct TiffCollection<R> {
     items: TiffItems<R>,
+}
+impl<R: Read + Seek> Describe for TiffCollection<R> {
+    fn describe(&mut self, image: &ImageId) -> Result<Description, zencodec::At<CollectionError>> {
+        self.items.describe(image).map_err(located)
+    }
 }
 impl<R: Read + Seek> TiffCollection<R> {
     pub fn open(

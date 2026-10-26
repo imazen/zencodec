@@ -441,6 +441,11 @@ spatial-discovery-check:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked discovery_budget_ -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
 
+# Candidate descriptions must not reconstruct pixels or bypass cancellation.
+spatial-description-check:
+    cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked description_ -- --nocapture --test-threads=1
+    just spatial-validation-lint
+
 # Automatic selected-image publication policy, including native failure seams.
 spatial-checked-collection-check:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked checked_collection_ -- --nocapture --test-threads=1
