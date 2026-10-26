@@ -3,10 +3,10 @@
 use crate::{
     collection::{Collection, first_image},
     image_items::{Composition, ImageRequest},
-    image_output::{AuxiliaryKind, ImageOutput, Meaning, Row, SourcePrecision},
+    image_output::{AuxiliaryKind, ColorContribution, ImageOutput, Meaning, Row, SourcePrecision},
     jxl_items::{JxlItems, Plane},
     jxl_output::JxlSourceFacts,
-    jxl_tests::independent_inspect_at,
+    jxl_tests::independent_inspect_mode,
     output_tests::expected_output,
 };
 use jxl_encoder::{
@@ -16,6 +16,10 @@ use std::{fs::OpenOptions, io::Write, path::PathBuf};
 use zenpixels::{AlphaMode, ChannelType};
 
 fn inspect(name: &str, encoded: &[u8]) -> String {
+    inspect_mode(name, encoded, "full")
+}
+
+fn inspect_mode(name: &str, encoded: &[u8], mode: &str) -> String {
     let root = PathBuf::from(
         std::env::var_os("SPATIAL_GENERATED_ARTIFACTS")
             .expect("persistent generated artifact directory required"),
@@ -29,7 +33,7 @@ fn inspect(name: &str, encoded: &[u8]) -> String {
         .unwrap()
         .write_all(encoded)
         .unwrap();
-    independent_inspect_at(&path, true, true)
+    independent_inspect_mode(&path, true, Some(mode))
 }
 
 fn rows(text: &str, prefix: &str) -> Vec<Vec<u32>> {
@@ -128,7 +132,10 @@ fn output_generated_all_seven_auxiliary_roles_preserve_parameters_and_source_hdr
             match role {
                 0 => AuxiliaryKind::Alpha(AlphaMode::Straight),
                 1 => AuxiliaryKind::Depth,
-                2 => AuxiliaryKind::SpotColor { linear_rgba: spot },
+                2 => AuxiliaryKind::SpotColor {
+                    linear_rgba: spot,
+                    contribution: ColorContribution::Applied
+                },
                 3 => AuxiliaryKind::SelectionMask,
                 4 => AuxiliaryKind::Black,
                 5 => AuxiliaryKind::Cfa { channel: 2 },
@@ -395,4 +402,106 @@ fn output_generated_subsampled_auxiliary_geometry_is_distinct_from_source_shift(
             }
         }
     }
+}
+
+#[test]
+fn output_generated_spot_contribution_discloses_applied_color_without_losing_auxiliary() {
+    let (width, height) = (9usize, 7usize);
+    let color = vec![0; width * height * 3];
+    let masks: Vec<u8> = (0..width * height)
+        .map(|i| if i % 3 == 1 { 0 } else { 255 })
+        .collect();
+    let rgba = [0.25, 0.5, 0.75, 1.0];
+    let extras = [ExtraChannel::spot_color(&masks, rgba)];
+    let encoded = LosslessConfig::new()
+        .with_effort(3)
+        .encode_request(
+            width.try_into().unwrap(),
+            height.try_into().unwrap(),
+            PixelLayout::Rgb8,
+        )
+        .with_extra_channels(&extras)
+        .encode(&color)
+        .unwrap();
+    let independent: Vec<_> = [false, true]
+        .into_iter()
+        .map(|render| {
+            inspect_mode(
+                &format!("spot-render-{render}"),
+                &encoded,
+                if render {
+                    "samples"
+                } else {
+                    "samples-unrendered"
+                },
+            )
+        })
+        .collect();
+    let mut items = JxlItems::open(&encoded, Composition::Composited, 8).unwrap();
+    let id = items.next().unwrap().unwrap().image;
+    let outputs: Vec<_> = [false, true, false]
+        .into_iter()
+        .map(|render| (render, items.decode_with_spot_colors(&id, render).unwrap()))
+        .collect();
+    drop(items);
+    drop(encoded);
+    for (render, image) in &outputs {
+        let mapped = image.map().unwrap();
+        let extra = mapped.plane(1).unwrap().unwrap();
+        let Meaning::Auxiliary(auxiliary) = extra.meaning else {
+            panic!("missing auxiliary role")
+        };
+        assert_eq!(
+            auxiliary.kind,
+            AuxiliaryKind::SpotColor {
+                linear_rgba: rgba,
+                contribution: if *render {
+                    ColorContribution::Applied
+                } else {
+                    ColorContribution::Separate
+                }
+            }
+        );
+        let expected = rows(&independent[usize::from(*render)], "pixels ");
+        assert_eq!(expected.len(), 2);
+        for (index, codes) in expected.iter().enumerate() {
+            assert_eq!(codes[0] as usize, index);
+            let plane = mapped.plane(index).unwrap().unwrap();
+            let channels = if index == 0 { 3 } else { 1 };
+            let expected_bytes: Vec<u8> = codes[1..].iter().flat_map(|v| v.to_ne_bytes()).collect();
+            assert_eq!(expected_bytes.len(), width * height * channels * 4);
+            for y in 0..height {
+                let Row::Bytes(bytes) = plane.samples.row(y).unwrap() else {
+                    panic!("F32 storage lost")
+                };
+                assert_eq!(
+                    bytes,
+                    &expected_bytes[y * width * channels * 4..(y + 1) * width * channels * 4]
+                );
+            }
+        }
+        image
+            .with_pixels(|pixels| {
+                for y in 0..height {
+                    let expected: Vec<u8> = (0..width)
+                        .flat_map(|x| {
+                            let values = if *render && masks[y * width + x] != 0 {
+                                [0.25f32, 0.5, 0.75]
+                            } else {
+                                [0.0; 3]
+                            };
+                            values.into_iter().flat_map(f32::to_ne_bytes)
+                        })
+                        .collect();
+                    assert_eq!(pixels.row(y.try_into().unwrap()), expected.as_slice());
+                }
+            })
+            .unwrap();
+    }
+    let first = crate::output_tests::mapped_planes(&outputs[0].1);
+    let rendered = crate::output_tests::mapped_planes(&outputs[1].1);
+    let repeated = crate::output_tests::mapped_planes(&outputs[2].1);
+    assert_eq!(first, repeated);
+    assert_eq!(first[1], rendered[1]);
+    assert_ne!(first[0], rendered[0]);
 }

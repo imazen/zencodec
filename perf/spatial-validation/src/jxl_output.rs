@@ -2,7 +2,8 @@
 use super::{
     image_items::{ImageGeometry, Rect},
     image_output::{
-        Auxiliary, AuxiliaryKind, ImageInterpretation, ImageOutput, SourcePrecision, Values,
+        Auxiliary, AuxiliaryKind, ColorContribution, ImageInterpretation, ImageOutput,
+        SourcePrecision, Values,
     },
     jxl_items::Plane,
     tiff_region::Failure,
@@ -35,6 +36,7 @@ pub fn adopt(
     format: &JxlPixelFormat,
     profile: &JxlColorProfile,
     timing: Option<zencodec::frame::FrameTiming>,
+    spot_colors_rendered: bool,
 ) -> Result<ImageOutput, Failure> {
     let info = &source.header;
     let layout = match format.color_type {
@@ -92,6 +94,11 @@ pub fn adopt(
                 linear_rgba: details
                     .spot_color
                     .ok_or_else(|| Error::other("spot channel is missing source RGBA"))?,
+                contribution: if spot_colors_rendered {
+                    ColorContribution::Applied
+                } else {
+                    ColorContribution::Separate
+                },
             },
             ExtraChannel::SelectionMask => AuxiliaryKind::SelectionMask,
             ExtraChannel::Black => AuxiliaryKind::Black,

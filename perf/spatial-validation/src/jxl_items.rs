@@ -115,7 +115,7 @@ impl<'a> JxlItems<'a> {
     }
 
     pub fn decode(&self, image: &ImageId, padding: usize) -> Result<Vec<Plane>, Failure> {
-        let (decoder, mut input) = self.selected_decoder(image)?;
+        let (decoder, mut input) = self.selected_decoder(image, options())?;
         let (_, planes) = decode_next(decoder, &mut input, padding)?;
         Ok(planes)
     }
@@ -124,7 +124,18 @@ impl<'a> JxlItems<'a> {
         &self,
         image: &ImageId,
     ) -> Result<super::image_output::ImageOutput, Failure> {
-        let (mut decoder, mut input) = self.selected_decoder(image)?;
+        self.decode_with_spot_colors(image, true)
+    }
+
+    /// Native adapter mechanism used to qualify two routes. This is not a
+    /// proposed shared boolean setting or permission to rerender retained output.
+    pub fn decode_with_spot_colors(
+        &self,
+        image: &ImageId,
+        render: bool,
+    ) -> Result<super::image_output::ImageOutput, Failure> {
+        let native_options = options().with_render_spot_colors(render);
+        let (mut decoder, mut input) = self.selected_decoder(image, native_options)?;
         let index = usize::try_from(self.origin.key(image)?)?;
         let selected = &self.visible[index];
         let info = decoder.basic_info().clone();
@@ -185,12 +196,14 @@ impl<'a> JxlItems<'a> {
             &format,
             &profile,
             timing,
+            render,
         )
     }
 
     fn selected_decoder(
         &self,
         image: &ImageId,
+        native_options: JxlDecoderOptions,
     ) -> Result<(JxlDecoder<states::WithImageInfo>, &[u8]), Failure> {
         let key = self.origin.key(image)?;
         if self.failed {
@@ -207,7 +220,7 @@ impl<'a> JxlItems<'a> {
                 "native source has no direct seek target",
             )
         })?;
-        let (mut decoder, _) = pixel_decoder(self.data, options())?;
+        let (mut decoder, _) = pixel_decoder(self.data, native_options)?;
         decoder.start_new_frame(target);
         let start = usize::try_from(target.decode_start_file_offset)?;
         let input = self

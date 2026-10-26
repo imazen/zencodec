@@ -1,6 +1,8 @@
 use crate::{
     image_items::Composition,
-    image_output::{AuxiliaryKind, ImageOutput, Meaning, Row, Samples, SourcePrecision},
+    image_output::{
+        AuxiliaryKind, ColorContribution, ImageOutput, Meaning, Row, Samples, SourcePrecision,
+    },
     jxl_items::{JxlItems, sequential},
     jxl_tests::fixture,
 };
@@ -222,7 +224,11 @@ fn output_jxl_color_and_extra_planes_keep_native_bytes_roles_and_geometry() {
                         0
                     }
                     AuxiliaryKind::Depth => 1,
-                    AuxiliaryKind::SpotColor { linear_rgba } => {
+                    AuxiliaryKind::SpotColor {
+                        linear_rgba,
+                        contribution,
+                    } => {
+                        assert_eq!(contribution, ColorContribution::Applied);
                         assert_eq!(
                             linear_rgba.map(f32::to_bits).as_slice(),
                             &independent_details[index - 1][5..9]

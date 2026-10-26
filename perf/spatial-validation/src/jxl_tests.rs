@@ -35,12 +35,20 @@ pub(crate) fn independent_metadata_at(path: &Path, coalescing: bool) -> String {
 }
 
 pub(crate) fn independent_inspect_at(path: &Path, coalescing: bool, full: bool) -> String {
+    independent_inspect_mode(path, coalescing, full.then_some("full"))
+}
+
+pub(crate) fn independent_inspect_mode(
+    path: &Path,
+    coalescing: bool,
+    mode: Option<&str>,
+) -> String {
     let tool = std::env::var("JXL_SELECTION_ORACLE").expect("JXL_SELECTION_ORACLE is required");
     let output = std::process::Command::new("timeout")
         .args(["--kill-after=5s", "30s", &tool])
         .arg(path)
         .arg(if coalescing { "1" } else { "0" })
-        .args(if full { vec!["full"] } else { Vec::new() })
+        .args(mode)
         .output()
         .expect("run independent libjxl oracle");
     assert!(

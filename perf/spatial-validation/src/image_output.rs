@@ -9,6 +9,14 @@ use zencodec_media::frame::{
 use zenpixels::{AlphaMode, ChannelType, Orientation, PixelBuffer, PixelSlice};
 type Failure = Box<dyn std::error::Error + Send + Sync>;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ColorContribution {
+    /// The retained auxiliary samples have not been composited into color.
+    Separate,
+    /// The retained auxiliary samples already contributed to output color.
+    Applied,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum AuxiliaryKind {
     Alpha(AlphaMode),
@@ -16,6 +24,7 @@ pub enum AuxiliaryKind {
     /// Source linear RGBA parameters; not transformed to the output profile.
     SpotColor {
         linear_rgba: [f32; 4],
+        contribution: ColorContribution,
     },
     SelectionMask,
     Black,
