@@ -1,7 +1,8 @@
 # Selected-image facts and existing frame-policy cost
 
-The selected-image policy addition increases the cost of the existing frame-only
-history workload. This experiment compares the immediate pre-change revision
+The exploratory runs below observed higher times after the selected-image policy
+addition. The machine was shared with other work, so they do not establish a
+regression or quantify its size. This experiment compares the immediate pre-change revision
 `7d72a8c740d28ed2d112dcb3e3758114a9c3ddb7` with
 `419d5c19c715a412b54a811523081c718295c24d`, using the same locked dependencies and
 unchanged `perf/frame-policy-cost.rs`. It measures no pixel decode or conversion.
@@ -37,13 +38,48 @@ including process and workload setup:
 A separate ten-million-operation combined capture collected 562 samples with
 none lost. `memmove` accounts for 28.20% of sampled cycles. Its callers include
 record construction/return, the harness's `black_box`, and report insertion.
-This supports investigating record copies; it does not attribute the whole
-regression to one field or establish an end-to-end codec cost.
+This supports investigating record copies; it does not establish a regression,
+attribute a difference to one field or establish an end-to-end codec cost.
 
 The candidate stores selected-image facts once, but the older frame and boundary
-selections repeat facts already present in `DecisionContext`. The next experiment
-can retain those facts in the context and keep only the selected effect in
-`Selection`, matching selected images. No diagnostic fact needs to be dropped.
+selections repeat facts already present in `DecisionContext`. Follow-up
+`fe5f52051f1f995052a62e77b7eb19eeb831150a` retains those facts in the context and
+keeps only the selected effect in `Selection`, matching selected images. This
+gives callers one source of diagnostic facts; its performance remains unconfirmed.
+
+## Confirmation refused by the busy-machine gate
+
+After the other foreground work was stopped, a fresh plan fixed five processes,
+30 rounds per group, a 1% margin and 95% family confidence. CPU policy changed
+from exploratory `unrestricted` to `auto`: zenbench accepted the homogeneous
+hardware class. The coordinator used CPUs 2,3 and the measured thread used CPU 2.
+This did not reserve those CPUs from other processes. The strict busy gate stayed
+enabled with unchanged thresholds.
+
+Zenbench 0.1.11 returned **exit 2, invalid confirmation** for the baseline:
+164 of 450 rounds had `HeavyProcesses(1)` observations. A separate diagnostic
+trace identified intermittent CPU activity from two foreign background agent
+processes. The candidate runs were not started. No interval or non-inferiority
+claim can be made from this attempt, and it does not validate the earlier table.
+Retained `confirm/plan.json`, `confirm/baseline.json.gz` and `confirm/verdict.json`
+bind the frozen plan, raw observations and refusal. The diagnostic-only run is
+excluded from performance comparisons.
+
+```text
+run-heavy: done rc=2 25s | peak-RSS 0.08GiB | min-avail 13743MiB | peak-load 0.41
+```
+
+The follow-up's whole-workspace tests, strict Clippy, native TIFF/JXL/AV1 output
+checks, no-std WASM check, rustdoc and public API snapshots pass. Existing native
+ownership, timing, pixel-equivalence and failure controls remain in place.
+
+```text
+run-heavy: done rc=0 39s | peak-RSS 0.53GiB | min-avail 13134MiB | peak-load 1.08
+```
+
+This is a correctness gate, not evidence of a speedup. The confirmation recipe
+is `frame-cost-saved-confirm`; `zenbench data compare` must accept fresh matching
+populations before a later report makes a performance claim.
 
 ## Evidence and reproduction
 

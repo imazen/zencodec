@@ -15,6 +15,7 @@
   "date": "2026-10-26",
   "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/image-policy-cost",
   "files": {
+    "SHA256SUMS.exploratory": "0ff9ddba31a81eb8d8392a4bb9d0d89621b5c69502516d4badad9f8c27d8e366",
     "baseline-bench": "5082e4814efc0a642f04bb8fe7494d6c40400f4a686b80be33e68cfeb1176175",
     "baseline-benchmark.log": "dab428545ef689d6c4eccee518a3928286e73adebedb765d4b714153399855b6",
     "baseline-probe": "bbbd8ef5afabac6642d1c66c4691c23141fef7af4fee2ad981ec327d5b70f9ad",
@@ -28,6 +29,37 @@
     "baseline-run/benchmark.log": "4bbea40c212caa8cd8b1d4130af06eb7b26905c5e75f513fd1585cfe557cb3a9",
     "baseline-run/profile.log": "90fd67c76f7c633440e6a40e5973833346c77431cf49d9bc0fee410bec38150d",
     "baseline-run/record.perf.csv": "3603d89d2ef1c6476471013bfca7d82df8018182e577e33c52c626cf1b72b0d4",
+    "confirm/.zenbench/data/.gitignore": "2dbb795c1ac7380537df5a1c5f6a1a1a1a47441f7706b919d9bdf4d00b37b812",
+    "confirm/.zenbench/data/objects/24f0564da1ce76c3f968d0243e0eac49b79ab1e7f4fa46f297b75baa3668573f.json.gz": "24f0564da1ce76c3f968d0243e0eac49b79ab1e7f4fa46f297b75baa3668573f",
+    "confirm/.zenbench/data/objects/372182aa06b51f4f9228daef5085cb1e819b701950a648706683caa724e203e6.json.gz": "372182aa06b51f4f9228daef5085cb1e819b701950a648706683caa724e203e6",
+    "confirm/.zenbench/data/objects/9347e9072fd6a6636ae7956d4fad44df0ef680286ce96d157bc7c75f7c213ace.json.gz": "9347e9072fd6a6636ae7956d4fad44df0ef680286ce96d157bc7c75f7c213ace",
+    "confirm/.zenbench/data/objects/d4c51dad7cb191fe8fc9c01a6f2f19685be24b582322b86e24305724c416811e.json.gz": "d4c51dad7cb191fe8fc9c01a6f2f19685be24b582322b86e24305724c416811e",
+    "confirm/.zenbench/data/objects/e0312fc9d0132b18a814eb22d7a7629da06825f671654d80266dca8d4c6cab5f.json.gz": "e0312fc9d0132b18a814eb22d7a7629da06825f671654d80266dca8d4c6cab5f",
+    "confirm/.zenbench/data/objects/ec53ea000e8f5f9e650e023eea16ef856fd016a13ac03a818d7e5e93ea154fe8.json.gz": "ec53ea000e8f5f9e650e023eea16ef856fd016a13ac03a818d7e5e93ea154fe8",
+    "confirm/.zenbench/data/objects/f3562fa74eb40b5ae8c0889850684edf6f08260a718e1f5a07ad8fe008a5d8e0.json.gz": "f3562fa74eb40b5ae8c0889850684edf6f08260a718e1f5a07ad8fe008a5d8e0",
+    "confirm/.zenbench/data/processes/18e20024fcd7d16e-d873a/0.json.gz": "372182aa06b51f4f9228daef5085cb1e819b701950a648706683caa724e203e6",
+    "confirm/.zenbench/data/processes/18e20024fcd7d16e-d873a/0.stderr.txt": "184ee0951e47e8b849803539f3a741ad49691ae53510f3df427e148baf217e28",
+    "confirm/.zenbench/data/processes/18e20024fcd7d16e-d873a/1.json.gz": "e0312fc9d0132b18a814eb22d7a7629da06825f671654d80266dca8d4c6cab5f",
+    "confirm/.zenbench/data/processes/18e20024fcd7d16e-d873a/1.stderr.txt": "36c9c9260648f6c81e6778902a82746cf1e0667ad5d907c49f250f27aead5bb6",
+    "confirm/.zenbench/data/processes/18e20024fcd7d16e-d873a/2.json.gz": "9347e9072fd6a6636ae7956d4fad44df0ef680286ce96d157bc7c75f7c213ace",
+    "confirm/.zenbench/data/processes/18e20024fcd7d16e-d873a/2.stderr.txt": "9b58f94184d18413c6cab418853578e0866ea46b57460e5c7a85642246c0aed6",
+    "confirm/.zenbench/data/processes/18e20024fcd7d16e-d873a/3.json.gz": "d4c51dad7cb191fe8fc9c01a6f2f19685be24b582322b86e24305724c416811e",
+    "confirm/.zenbench/data/processes/18e20024fcd7d16e-d873a/3.stderr.txt": "8b04bd45b9f2ea309873937a9341d901f30fc836b6907ff38669857d9603c191",
+    "confirm/.zenbench/data/processes/18e20024fcd7d16e-d873a/4.json.gz": "24f0564da1ce76c3f968d0243e0eac49b79ab1e7f4fa46f297b75baa3668573f",
+    "confirm/.zenbench/data/processes/18e20024fcd7d16e-d873a/4.stderr.txt": "c79f0877ecba59f824370652eece9016e9ca62e2155d12d6fa16323fddf2e3f6",
+    "confirm/.zenbench/data/processes/18e20024fcd7d16e-d873a/experiment.json": "0cf352819394e035b3a08fc5aa26af21c5daa273c0cf31bee47742c8da474b0b",
+    "confirm/.zenbench/data/runs/18e2002629c8194a-d873b-2eacd6e6b8543bcf.json": "e4ee7a42722a117cea1cfd6131fb271512d49bcdddf2c9d6d23ce1bba1ea06a7",
+    "confirm/.zenbench/data/runs/18e200274e96d500-d8771-90b06f66a75b6e28.json": "7259b610263b0f80de6385752ca7e0ac56e926ba943d633ec06d92ed1ba0eb0f",
+    "confirm/.zenbench/data/runs/18e200287c49164b-d87f7-547611c01b6bcb47.json": "66fed1a2de83517c603a6075e883b9400b1fd72b6c8f910233d052472d3695ff",
+    "confirm/.zenbench/data/runs/18e20029ac693fe2-d883c-efd68f9bdb1c652c.json": "e8be077dc45f75c48460efbcbedca7007e25aeab040475223088bdb0c179eb3a",
+    "confirm/.zenbench/data/runs/18e2002ad32f6b7a-d885e-9474351666ad6d34.json": "3cf180d933a5ccea75d2be942b7206ccb811efc6023455331a7fc979d41cfc00",
+    "confirm/.zenbench/data/runs/18e2002ad5a7f3e4-d873a-3e26589beffd5c53.json": "327f37706dc41aabbd87a407a66161de3edf521247cab6d13436cbe63282cb2c",
+    "confirm/.zenbench/data/runs/18e20040246f76d0-d8f1f-a3eb64c7796e33da.json": "515342d1541c46e722fa8da3e4bbff81586c4d7199c51c8fa80aceb5bd5f317c",
+    "confirm/baseline.json.gz": "f3562fa74eb40b5ae8c0889850684edf6f08260a718e1f5a07ad8fe008a5d8e0",
+    "confirm/baseline.log": "db15ea7d63921857b2249bfa1290e4a0597026be3bf398726f9ba1d6152613cb",
+    "confirm/diagnostic-only.log": "04f4aec5a23118856ae0dbeb7f7761bf57d4caccefc4bcf56b5943db28a44bbe",
+    "confirm/plan.json": "1a2bae7d8830c5adaa0352898b7a7946efb51a13ee075a8857cfebe23292fefa",
+    "confirm/verdict.json": "66f1188e9ef06063489aa032e9de2eef176181fec9870bd6adc47bfe78d6f537",
     "image-bench": "30b702531ec25d4a6894576fd7fe67eee5c3e544481fee6ef7c24170471bd545",
     "image-probe": "2fa97d5c0aa3f065243723b409c6d05cc21a657d3dd77e8bea2cebc5bc9b07bd",
     "image-run/.zenbench/data/.gitignore": "2dbb795c1ac7380537df5a1c5f6a1a1a1a47441f7706b919d9bdf4d00b37b812",
@@ -43,10 +75,47 @@
     "image-run/profile.log": "9b4e7fccbd920375862e563119a521d5b3911dedf084adfcbc197ed0934b673e",
     "image-run/record.perf.csv": "37774d3472d6a5e315a0f0c689010abef09b5e3c24b4336af318452ee9e8955d",
     "image-run/sample.log": "aed56e04391aeebe4bb977f2aa549575baa44b4ffe579b0bab041b46452c8fda",
-    "provenance.json": "a51a54293553b228ea608f72ba24dae84d3c25123eff8e2b611c9fb6e714fd1b"
+    "provenance.json": "a51a54293553b228ea608f72ba24dae84d3c25123eff8e2b611c9fb6e714fd1b",
+    "single-facts-bench": "ef07604186d4eb2b5aae7309e1cc5093e138f2d298ead8b289820e1beba9f54d",
+    "single-facts-probe": "bf17f53a98e6cc0698f2571a56447bb41e8599054ccf5ef4d457e13b578d9490",
+    "single-facts-source.patch": "e7d7d7bfdb27c89c76df72bb3c2eddd53f7a70269853701a5df38dc8f4cc62da",
+    "zenbench-cli": "a2d63af8433b71723191830c05d8da91898da196d165100178a89792bac16553"
   },
   "excluded": [
     "baseline-benchmark.log: initial run used candidate checkout metadata; repeated from baseline-run"
   ],
-  "inference": "exploratory; unverified CPU frequency; no end-to-end codec or per-record memory claim"
+  "inference": "Initial timing comparisons are inconclusive on the shared machine. Fresh confirmation was invalid; no performance conclusion.",
+  "confirmation": {
+    "verdict": "invalid",
+    "exit_code": 2,
+    "reason": "incomplete or unreliable aggregate; incomplete, noisy or nested replicate; missing, stale or flagged resource observations",
+    "processes": 5,
+    "flagged_rounds": 164,
+    "total_rounds": 450,
+    "gate_reasons": [
+      "reason=Some(HeavyProcesses(1))"
+    ],
+    "followup": "Diagnostic-only tracing observed two foreign background agent processes over the 10-percent-of-one-core threshold. No thresholds changed; candidate timing runs not started. Source and executable artifacts retained."
+  },
+  "cleanup_revision": "fe5f52051f1f995052a62e77b7eb19eeb831150a",
+  "validation": {
+    "zencodec-single-facts-build-2026-10-26.log": {
+      "sha256": "0f0f7f476b1c4adb531e51b1849847dd02587b60254f9acc12bdf1acbec37518",
+      "resource_receipt": [
+        "run-heavy: done rc=0 9s | peak-RSS 0.34GiB | min-avail 13541MiB | peak-load 0.72"
+      ]
+    },
+    "zencodec-single-facts-validation-2026-10-26.log": {
+      "sha256": "f5ae769a120cf7f5917c42ebe55e5a1e50a82258ceb1dfb15ebf9ae1084943dc",
+      "resource_receipt": [
+        "run-heavy: done rc=0 39s | peak-RSS 0.53GiB | min-avail 13134MiB | peak-load 1.08"
+      ]
+    },
+    "zencodec-single-facts-guide-2026-10-26.log": {
+      "sha256": "620fdf99752f452d18041b091cfe8b07ced05f19a947c76d56813f6a7f74432e",
+      "resource_receipt": [
+        "run-heavy: done rc=0 8s | peak-RSS 0.17GiB | min-avail 13244MiB | peak-load 0.26"
+      ]
+    }
+  }
 }

@@ -473,6 +473,13 @@ frame-cost-saved-profile executable output mode="record" count="1000000" cpus="2
     test ! -e "{{output}}"
     taskset -c "{{cpus}}" perf stat -x, -o "{{output}}" -e instructions,cycles,cache-misses,context-switches "{{executable}}" "{{mode}}" "{{count}}"
 
+# Fixed confirmation plan. Native hardware classification and busy gates stay on.
+# PIN selects the measured thread; the OS process boundary must be a known class.
+frame-cost-saved-confirm executable output cpus="2,3" pin="2":
+    test -x "{{executable}}"
+    test ! -e "{{output}}"
+    ZENBENCH_PIN="{{pin}}" ZENBENCH_RESULT_PATH="{{output}}" taskset -c "{{cpus}}" "{{executable}}" --mode=confirm --cpu-policy=auto --workload-id=zencodec-policy-history-v1 --scope=zen4-policy-history --processes=5 --rounds=30 --margin=1 --confidence=0.95 --timeout=120
+
 frame-cost-profile output mode="record" count="1000000" cpus="2,3":
     test ! -e "{{output}}"
     taskset -c "{{cpus}}" perf stat -x, -o "{{output}}" -e instructions,cycles,cache-misses,context-switches "${CARGO_TARGET_DIR:-target}/release/examples/frame_policy_probe" "{{mode}}" "{{count}}"

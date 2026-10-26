@@ -73,11 +73,11 @@ export const improvements = [
     summary:'Typed questions cover encoding, interpretation boundaries, selected-image/native-frame publication and coupled pixel transcodes. Configured presets and application code use the same interface.',
     why:'Separate color, metadata and encoder choices can each appear supported but fail in combination. The adapter must prepare a coherent combination before asking the application.',
     consumer:'Start with a preset. Add if/then logic only for a situational rule; return a predefined decision or a traced application error.',
-    adapter:'Retain the selected conversion plan, encoder job and admitted row buffers across the callback. Scope tokens to this question and preserve typed causes and bounded decision history.',
+    adapter:'Retain the selected conversion plan, encoder job and admitted row buffers across the callback. Scope tokens to this question and preserve typed causes and bounded decision history. DecisionContext retains input facts on success and refusal; Selection records the chosen effect without repeating frame or boundary facts.',
     implementor:'Suspend before affected effects when interpretation changes. Metadata notifications alone do not authorize conversion, encoder initialization or output publication.',
     open:'Encoded rewrite choices, whole-container privacy and qualified native workspace or encoded staging bounds remain separate qualification work. Unknown evidence refuses a requirement that needs it.',
     signatures:['operationResolver','operationPreset','operationControl'],
-    evidence:[['Current contract and implementation record','docs/ideal-api.md'],['Policy history performance and limitations','benchmarks/frame_policy_2026-10-25.md']],
+    evidence:[['Current contract and implementation record','docs/ideal-api.md'],['Policy history performance and limitations','benchmarks/frame_policy_2026-10-25.md'],['Selected-image policy cost: confirmation refused','benchmarks/image_policy_cost_2026-10-26.md']],
   },
   {
     id:'io', title:'Disk and network share positional demand',
