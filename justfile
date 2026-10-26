@@ -352,8 +352,8 @@ spatial-consumer-check:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked common_ -- --nocapture
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
 
-spatial-cancellation-check:
-    cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked cancellation_ -- --nocapture --test-threads=1
+spatial-cancellation-check filter="cancellation_":
+    cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked "{{filter}}" -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
 
 spatial-output-check artifacts:

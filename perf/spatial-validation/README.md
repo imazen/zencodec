@@ -73,7 +73,7 @@ selected-frame replay, with checks before publishing IDs or mapped output.
 Cached presentations and exhausted cursors still check cancellation: neither
 an item nor successful exhaustion substitutes for a cancelled request.
 
-`just spatial-cancellation-check` injects cancellation at every stop poll observed
+`just spatial-cancellation-check` injects both `Cancelled` and `TimedOut` at every stop poll observed
 in the successful classic-TIFF and BigTIFF planar SubIFD operations, and one
 native JXL presentation operation. Each cancelled run must return an error and
 no output. Separate controls cover cancellation before any source I/O, known
@@ -85,8 +85,13 @@ blocking source call. TIFF compute checks remain at coding-unit seams; JXL uses
 its native cooperative checks. Source deadlines, native workspace bounds and
 broader codec configurations remain separate obligations. Stop reasons produced
 by the adapter use the existing `CodecError` category; native causes remain
-inspectable through the traced collection error. The native JXL conversion
-currently collapses `TimedOut` into `Cancelled`, tracked in [decoder issue 70](https://github.com/imazen/zenjxl-decoder/issues/70).
+inspectable through the traced collection error. Native JXL now preserves both reasons through `Error::stop_reason()` while keeping
+its existing coarse `ErrorClass::Cancelled`. The consumer reproduced the deadline
+collapse before pinning the [issue 70 fix](https://github.com/imazen/zenjxl-decoder/issues/70).
+The exact-reason gate passed: `run-heavy: done rc=0 67s | peak-RSS 0.59GiB |
+min-avail 12535MiB | peak-load 0.83`. This is test-process usage, not a native
+workspace or latency bound. The [receipt](../../benchmarks/spatial_stop_reasons_2026-10-26.json)
+records the pinned implementation and before/after logs.
 
 The full native gate passed with these adapter changes: `run-heavy: done rc=0
 154s | peak-RSS 0.23GiB | min-avail 13419MiB | peak-load 1.10`. This is test-process

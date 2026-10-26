@@ -424,17 +424,20 @@ mod image_selection {
             );
             // Every observed seam in this real open -> root -> SubIFD -> decode
             // operation is independently cancelled. No partial output may escape.
-            for at in 0..checkpoints {
-                let stop = CheckStop::default();
-                stop.after(at);
-                let error = run(&stop).expect_err("cancelled TIFF output escaped");
-                assert_eq!(
-                    zencodec::find_cause::<zencodec::CodecError>(&error).map(|e| e.category()),
-                    Some(zencodec::ErrorCategory::Stopped(
-                        zencodec::enough::StopReason::Cancelled
-                    )),
-                    "checkpoint {at}/{checkpoints}: {error:?}"
-                );
+            for reason in [
+                zencodec::enough::StopReason::Cancelled,
+                zencodec::enough::StopReason::TimedOut,
+            ] {
+                for at in 0..checkpoints {
+                    let stop = CheckStop::with_reason(reason);
+                    stop.after(at);
+                    let error = run(&stop).expect_err("stopped TIFF output escaped");
+                    assert_eq!(
+                        zencodec::find_cause::<zencodec::CodecError>(&error).map(|e| e.category()),
+                        Some(zencodec::ErrorCategory::Stopped(reason)),
+                        "checkpoint {at}/{checkpoints}: {error:?}"
+                    );
+                }
             }
         }
     }

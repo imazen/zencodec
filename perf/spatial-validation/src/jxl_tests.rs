@@ -28,15 +28,19 @@ pub(crate) fn fixture(name: &str) -> Vec<u8> {
 }
 
 fn assert_cancelled(error: &(dyn std::error::Error + 'static)) {
-    if let Some(reason) = zencodec::find_cause::<zencodec::CodecError>(error) {
-        assert_eq!(
-            reason.category(),
-            zencodec::ErrorCategory::Stopped(zencodec::enough::StopReason::Cancelled)
-        );
+    assert_stopped(error, zencodec::enough::StopReason::Cancelled);
+}
+
+fn assert_stopped(
+    error: &(dyn std::error::Error + 'static),
+    expected: zencodec::enough::StopReason,
+) {
+    if let Some(cause) = zencodec::find_cause::<zencodec::CodecError>(error) {
+        assert_eq!(cause.category(), zencodec::ErrorCategory::Stopped(expected));
     } else {
         let native = zencodec::find_cause::<zenjxl_decoder::api::Error>(error)
             .unwrap_or_else(|| panic!("not a cancellation cause: {error:?}"));
-        assert!(matches!(native, zenjxl_decoder::api::Error::Cancelled));
+        assert_eq!(native.stop_reason(), Some(expected));
     }
 }
 
@@ -74,11 +78,16 @@ fn cancellation_covers_native_jxl_open_discovery_and_selected_decode() {
         checkpoints > 5 && checkpoints < 2048,
         "unexpected fixture checkpoints: {checkpoints}"
     );
-    for at in 0..checkpoints {
-        let stop = CheckStop::default();
-        stop.after(at);
-        let error = run(&stop).expect_err("cancelled JXL output escaped");
-        assert_cancelled(error.as_ref());
+    for reason in [
+        zencodec::enough::StopReason::Cancelled,
+        zencodec::enough::StopReason::TimedOut,
+    ] {
+        for at in 0..checkpoints {
+            let stop = CheckStop::with_reason(reason);
+            stop.after(at);
+            let error = run(&stop).expect_err("stopped JXL output escaped");
+            assert_stopped(error.as_ref(), reason);
+        }
     }
 }
 
@@ -112,6 +121,37 @@ fn cancellation_during_native_jxl_scan_cannot_appear_exhausted() {
     let error = collection.next().err().unwrap();
     assert_cancelled(error.as_ref());
     assert!(collection.next().is_err());
+}
+
+#[test]
+fn cancellation_native_timeout_preserves_reason() {
+    struct Deadline;
+    impl zencodec::enough::Stop for Deadline {
+        fn check(&self) -> Result<(), zencodec::enough::StopReason> {
+            Err(zencodec::enough::StopReason::TimedOut)
+        }
+    }
+    let data = fixture("conformance_test_images/blendmodes.jxl");
+    let error = zenjxl_decoder::decode_with(
+        &data,
+        zenjxl_decoder::api::JxlDecoderOptions::default().with_stop(std::sync::Arc::new(Deadline)),
+    )
+    .err()
+    .expect("native deadline must stop work");
+    assert_eq!(
+        error.error().kind(),
+        zenjxl_decoder::api::ErrorClass::Cancelled
+    );
+    assert_eq!(
+        error.error().stop_reason(),
+        Some(zencodec::enough::StopReason::TimedOut)
+    );
+    assert!(
+        error
+            .to_string()
+            .contains(&zencodec::enough::StopReason::TimedOut.to_string()),
+        "native error lost the deadline reason: {error}"
+    );
 }
 
 pub(crate) fn independent_metadata(name: &str, coalescing: bool) -> String {

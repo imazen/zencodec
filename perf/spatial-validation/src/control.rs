@@ -63,16 +63,24 @@ pub struct CheckStop(std::sync::Arc<CheckState>);
 struct CheckState {
     calls: std::sync::atomic::AtomicUsize,
     fail_at: std::sync::atomic::AtomicUsize,
+    reason: zencodec::enough::StopReason,
 }
 impl Default for CheckState {
     fn default() -> Self {
         Self {
             calls: std::sync::atomic::AtomicUsize::new(0),
             fail_at: std::sync::atomic::AtomicUsize::new(usize::MAX),
+            reason: zencodec::enough::StopReason::Cancelled,
         }
     }
 }
 impl CheckStop {
+    pub fn with_reason(reason: zencodec::enough::StopReason) -> Self {
+        Self(std::sync::Arc::new(CheckState {
+            reason,
+            ..CheckState::default()
+        }))
+    }
     pub fn calls(&self) -> usize {
         self.0.calls.load(std::sync::atomic::Ordering::SeqCst)
     }
@@ -91,7 +99,7 @@ impl Stop for CheckStop {
         use std::sync::atomic::Ordering;
         let call = self.0.calls.fetch_add(1, Ordering::SeqCst);
         if call >= self.0.fail_at.load(Ordering::SeqCst) {
-            Err(zencodec::enough::StopReason::Cancelled)
+            Err(self.0.reason)
         } else {
             Ok(())
         }

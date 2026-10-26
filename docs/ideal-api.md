@@ -127,7 +127,8 @@ needs explicit discovery accounting and source-revision validation. The native
 collection adapters now carry one existing `StopToken` through discovery,
 selected replay and final output checks. Cancellation injection covers observed
 polls in classic TIFF/BigTIFF SubIFD and JXL presentation operations; native-call
-latency and timeout-reason fidelity remain separate qualification work. Raw JXL layer implementation is
+latency remains unqualified. Both cancellation and timeout retain their exact
+reasons through native errors and collection traces in these operations. Raw JXL layer implementation is
 still [decoder issue 57](https://github.com/imazen/zenjxl-decoder/issues/57);
 the existing [paged-decoder issue](https://github.com/imazen/zencodec/issues/1)
 owns the shared-selector discussion. The [public-output receipt](../benchmarks/public_image_output_2026-10-26.json)
