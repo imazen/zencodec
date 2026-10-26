@@ -2,6 +2,11 @@
 
 ## Native image selection (unreleased experiment)
 
+- Add `CollectionOperationError::stop_reason()` (`2cdadc3c`) so callers can
+  inspect the operation token's first observed stop across native, policy and
+  wrapper failures. Preserve coincident source/application causes and traces,
+  including failed opening and later calls on a finished operation.
+
 - Add selected `ImageDescription` and `describe` to the shared collection and
   checked consumer after native TIFF/JXL/HTTP qualification (`76edcca8`). Keep
   source geometry distinct from rendered output and metadata completeness.

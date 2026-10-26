@@ -153,6 +153,16 @@ an existing `whereat` trace. The portable latch stores `StopReason` intact;
 it does not encode today's variants into a closed integer table. No application
 callback executes while the once cell is being initialized.
 
+Use `error.error().stop_reason()` to inspect the first reason observed by the
+operation's shared token. This works across native, policy and wrapper failures,
+including opening and later calls on a cancelled operation. If a native or
+application failure coincides with cancellation, its original cause and trace
+remain available; the accessor also reports the observed stop. `None` means the
+shared token did not report a stop. It does not infer cancellation from arbitrary
+backend error text or replace source-specific error classification.
+The [stop-observation receipt](../benchmarks/collection_stop_2026-10-26.json)
+records native seam injection and coincident-failure checks.
+
 Publication follows reconstruction. It cannot retroactively admit native
 allocation, certify all opaque/nested carriers for a PII policy or impose a
 hard latency bound inside a native call. Conditional HTTP and disk snapshot

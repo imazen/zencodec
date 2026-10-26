@@ -1,0 +1,55 @@
+{
+  "implementation_revision": "2cdadc3c4cf65588dbc5db28d617b99d808d9038",
+  "scope": "Common first-observed stop reason on checked collection errors, preserving original native/source/application causes and location traces.",
+  "sources": {
+    "src/operation/collection.rs": "bdbda35ccda359a14683918a83f3cc120963acd3eceb4b29a58979be54458080",
+    "perf/spatial-validation/src/factory_tests.rs": "200f36f47adce1b027392d17e39529440c137715ddb0d49ac1b7651fbf411eee",
+    "perf/spatial-validation/src/checked_collection_tests.rs": "3bc690a96a22cdf4982423bdbb17545792aef37f380e7c9cbd91ba9ddb2bfdff",
+    "perf/spatial-validation/src/description_checked_tests.rs": "3d7755a02a0aa6b352932d37d15d30b7ef838a084ea778acc7aaebf1fe2bcabf",
+    "perf/spatial-validation/src/http_tests.rs": "ae8dc7318285e8e6530d71612cfbbacb142fb584332eaff4772ccbaf415f29ed"
+  },
+  "runs": [
+    {
+      "log": "zencodec-observed-stop-1-2026-10-26.log",
+      "sha256": "0e20d36f67b5b3b516bcaaf1819063f85f8ad9e354841222e86af03477cb056d",
+      "scope": "Native factory, checked operation and description controls; core identity/race tests, strict lint, WASM and public API snapshots.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13206MiB :: timeout --kill-after=10s 300s bash -eu -c just spatial-factories-check /mnt/v/output/zencodec/platform-regions-20261026-run/observed-stop-disk-1; just spatial-checked-collection-check; just spatial-description-check; just collection-api-check; just api-doc",
+        "run-heavy: done rc=0 48s | peak-RSS 0.58GiB | min-avail 12879MiB | peak-load 0.63"
+      ]
+    },
+    {
+      "log": "zencodec-observed-stop-integration-2026-10-26.log",
+      "sha256": "df65d814a826e837b14f9d9e5292aabb04c1a703ea57bfa7b42323054458a681",
+      "scope": "Full workspace all-feature tests and strict lint, Rustdoc, seven conditional HTTP controls; source failures have no observed stop.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13251MiB :: timeout --kill-after=10s 300s bash -eu -c just io-contract-check; just doc-default; just spatial-http-check /mnt/v/output/zencodec/platform-regions-20261026-run/observed-stop-http-1 3568",
+        "{\"scope\": \"Native TIFF selection over local HTTP/1.1; no WAN/TLS/performance claim\", \"requests\": 10934, \"cases\": 62, \"statuses\": {\"200\": 1, \"206\": 10920, \"302\": 1, \"412\": 12}, \"conditional_after_open\": true}",
+        "run-heavy: done rc=0 32s | peak-RSS 0.62GiB | min-avail 12590MiB | peak-load 0.63"
+      ]
+    },
+    {
+      "log": "zencodec-observed-stop-site-2026-10-26.log",
+      "sha256": "5bf953b14dd34433e4e281a99c9711195078eaf6757130a1a7919cf323f6adce",
+      "scope": "Source extraction and full browser controls including the common stop accessor.",
+      "results": [
+        "run-heavy: mem-cap=4G (cgroup, hard) jobs=2/24 avail=13256MiB :: timeout --kill-after=5s 120s bash -eu -c just docs-site-check; just docs-site-browser",
+        "Migration browser checks passed: release-state diagrams, audience filters, deep links, exact full-example copy, independent inline expansion, signatures, keyboard and responsive layouts.",
+        "Checked API browser checks passed: exact examples, independent expansion, signatures, clipboard, keyboard and responsive roles.",
+        "Browser checks passed: 15 chapters with signatures, 7 entry points, exact full-example clipboard contents, independent inline context, deep links, 8 lab combinations, keyboard, 390/768/1440px layouts.",
+        "run-heavy: done rc=0 8s | peak-RSS 0.17GiB | min-avail 12763MiB | peak-load 0.32"
+      ]
+    }
+  ],
+  "qualified": [
+    "Both cancellation and timeout at every observed TIFF/JXL checked/native seam, including opening, inspection and publication.",
+    "Coincident native-open failure or traced application failure retains its original cause and also exposes the observed stop.",
+    "Later calls on a stopped operation retain the reason and do not re-enter native code or the stop callback.",
+    "Ordinary source faults and missing-factory refusals report no observed stop."
+  ],
+  "limits": [
+    "None classifies only the shared token observation, not every possible backend-specific cancellation.",
+    "No hard bound on latency within native or transport calls.",
+    "Test/build resource receipts are not native codec workspace bounds or performance comparisons."
+  ]
+}

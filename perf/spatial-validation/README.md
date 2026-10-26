@@ -37,9 +37,11 @@ This is an opening experiment, not `CodecSet` registration or released native
 adapters. Automatic format detection, transferable opened jobs, broader native
 configuration coverage, fallible cursor-erasure allocation and a stable public
 packaging decision remain open. It establishes no latency or allocation-cost
-comparison and no whole-workspace/privacy guarantee. Cancellation can currently
-surface as a native, policy or wrapper error; all carry their original reason,
-but a common outer stop accessor would reduce caller error-family coordination.
+comparison and no whole-workspace/privacy guarantee. Cancellation can surface
+as a native, policy or wrapper error. The shared outer error now also exposes
+`stop_reason()`: callers can inspect the observed operation stop without choosing
+an error family, while coincident source/application causes and traces remain
+intact. Native seam controls and coincident-error controls qualify this accessor.
 
 The [factory receipt](../../benchmarks/collection_factories_2026-10-26.json) records
 source hashes, commands, initial failures and successful gates.

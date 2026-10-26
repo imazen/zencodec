@@ -175,6 +175,11 @@ decisions; `report` retains bounded diagnostics. Region/policy refusals are
 request-local; cancellation or unwind drops the native collection permanently.
 Native terminal errors remain the adapter's duty. `CollectionOperationError`
 identifies the failure stage and retains the original cause through `Error::source`.
+Its `stop_reason()` accessor reports the first stop observed by the operation's
+shared token across opening, native and policy failures, and subsequent finished
+calls. Coincident cancellation does not replace the original failure. `None`
+means no stop was observed through that token, rather than classifying all native
+or application errors as non-cancellation.
 
 This is publication after reconstruction, not native allocation admission or a
 whole-container privacy guarantee. Concrete adapter packaging, `CodecSet`

@@ -32,7 +32,9 @@ fn http_snapshot_collection_factory_preserves_positional_selection() {
                 "changed_tag" => FailureKind::Validator,
                 _ => FailureKind::Body,
             };
-            assert_cause(&output.err().unwrap(), expected);
+            let error = output.err().unwrap();
+            assert_cause(&error, expected);
+            assert_eq!(error.error().stop_reason(), None);
             let before = attempts.get();
             assert_cause(&images.decode(&root, &ImageRequest::new()).err().unwrap(), expected);
             assert_eq!(attempts.get(), before, "terminal source retried transport I/O");
