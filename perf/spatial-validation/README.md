@@ -45,13 +45,11 @@ still inspectable as the original `SourceFault::VersionChanged`, and a required
 unsupported view refuses before any source read. The guide displays the exact
 executed `first_image` function with its enclosing imports and return type.
 
-This trial also identifies why the trait is not ready for public promotion:
-`Samples` is still an associated native type, TIFF's region is fixed at open,
-and per-item interpretation is not unified. Publishing that shape would move
-format-specific pixel/metadata coordination back to consumers. The next loop
-must return qualified zenpixels/interpretation through one consumer request,
-with discovery allowances whose scope is explicit. Network revision binding,
-cancellation across discovery, and pixel/privacy policy remain separate gates.
+The later loop below replaces the associated native sample type with a shared
+mapped output and moves region requests to each decode. Public promotion still
+requires complete interpretation, immutable admission and discovery allowances
+whose scope is explicit. Network revision binding, cancellation across discovery,
+and pixel/privacy policy remain separate gates.
 
 The full combined gate passed after adding the common path: run-heavy rc=0,
 104 s, peak RSS 0.37 GiB, minimum available 15919 MiB, peak load 0.92; log
@@ -83,8 +81,9 @@ this measures the test process, not a native workspace bound.
 
 ### Native TIFF pixels through the shared owner
 
-The TIFF collection now returns `StoredRaster`: a `zenpixels::PixelBuffer`
-and unapplied orientation. [`tiff_pixels.rs`](src/tiff_pixels.rs) adopts the
+The TIFF adapter first creates `StoredRaster`: a `zenpixels::PixelBuffer`
+and unapplied orientation, then moves it into the common `ImageOutput`.
+[`tiff_pixels.rs`](src/tiff_pixels.rs) adopts the
 native region allocation with its explicit dimensions and byte stride. It
 does not normalize signed values, narrow wide integers or canonicalize NaNs.
 The integration exposed a missing external constructor for `PixelBufferParts`;
@@ -112,11 +111,70 @@ Opaque ICC carriage does not establish profile validity or a PII policy.
 The targeted gate passed with run-heavy rc=0, 5 s, peak RSS 0.45 GiB,
 minimum available 12273 MiB, peak load 0.92; log
 `~/tmp/zencodec-native-samples3-2026-10-25.log`. This is a test-process receipt,
-not a decoder memory bound. The shared collection is still private: JXL
-extra-plane roles, one common output interpretation, oriented display geometry, unknown-color
-policy and the distinction between raw sample carriage and display conversion
-must be qualified before promotion. Media's unsigned component-code encoding
-also remains distinct from signed/floating image samples.
+not a decoder memory bound. The shared collection is still private. Oriented
+display geometry, unknown-color policy, full auxiliary rendering details and
+the distinction between raw sample carriage and approved display conversion
+remain promotion gates. Media's unsigned component-code encoding remains
+distinct from signed/floating image samples.
+
+### One mapped output for TIFF, JXL and video
+
+[`ImageOutput`](src/image_output.rs) replaces the collection's associated
+native sample type. It owns storage through a reference-counted handle and
+returns borrowed planes through a mapping guard. `with_pixels` is the small
+packed-color convenience; planar component codes require an explicit conversion
+and refuse that convenience. The video bridge retains the native mapping guard,
+sample encoding, roles, geometry/crop, color, epoch, timing and presentation
+facts. It makes no pixel copy. Orientation remains unknown where the video
+interface does not establish one.
+
+TIFF moves its existing allocation into the owner. JXL explicitly requests
+interleaved alpha when present, preserves all requested extra planes separately,
+and attaches the profile of the **actual output** after format selection.
+Opaque ICC and unknown transfer/primaries remain distinguishable. This is not
+a privacy approval or proof of a display conversion. A source alpha plane must
+not silently disappear from the ordinary packed-color view.
+
+Auxiliary samples carry their declared role, name, source bit depth and source
+dimensional shift without pretending to be grayscale. Emitted plane dimensions
+are recorded independently of source subsampling. Spot-color/CFA parameters
+not exposed by the pinned decoder are explicitly marked incomplete. The eight
+native fixtures cover straight/associated alpha, extra channels, spot color,
+gray-alpha, upsampled alpha, rotated geometry and an embedded grayscale ICC.
+Native role coverage is 2/7 named roles: alpha and spot color. Depth, selection
+mask, black, CFA and thermal roles, plus unknown/reserved roles, still need native
+fixtures. The upsampled-alpha fixture declares source `dim_shift = 0`; a nonzero
+source shift is not yet qualified. Independent libjxl checks orientation, role
+codes, source bit depth and source
+dimensional shift; pixel checks compare native sequential color/alpha/extra
+samples with the selected path. A separate selected-animation test checks exact
+PTS and duration ticks against libjxl, including variable durations and reverse
+selection. This is not independent JXL pixel parity.
+
+The initial trial exposed the existing whole-pixel stride restriction in
+`PixelSlice`: a sample-aligned padded RGB-f32 row can still be rejected. The
+adapter controls its allocations and now requests a whole pixel of padding.
+The native 13-byte-padding regression remains in place. Arbitrary external byte
+strides remain [zenpixels issue 91](https://github.com/imazen/zenpixels/issues/91);
+the constructor's established rejection tests have not been changed.
+
+[`image_output_tests.rs`](../av1-policy-validation/src/image_output_tests.rs)
+compiles the **same** output implementation against native AV1. It checks 8/10/12
+bits with mono, 4:2:0, 4:2:2, 4:4:4 and planar RGB, three frames each. It verifies
+native plane addresses, exact active samples, interpretation/timing, survival
+after decoder reset/drop and release after the last output owner drops.
+Required FFmpeg readback checks the native encoded packets independently.
+`just av1-output-check <fresh-artifacts>` passed with run-heavy rc=0, 9 s,
+peak RSS 0.54 GiB, minimum available 13206 MiB and peak load 0.36; these are
+test-process measurements.
+
+This candidate still does not establish complete JXL source precision,
+HDR/intrinsic-size, loop/timecode/name facts,
+auxiliary rendering, whole-container metadata/privacy, native memory bounds,
+HTTP revision binding or codec-independent layers. Its public field/constructor
+shape is experimental. The production module location and immutable admission
+boundary need review before promotion; the standalone experiment is not a new
+published dependency or an assertion that these remaining gates are complete.
 
 The subsequent full native TIFF/JXL gate passed with the pinned pixel change:
 run-heavy rc=0, 103 s, peak RSS 0.34 GiB, minimum available 11325 MiB,
@@ -305,3 +363,14 @@ The guide/native gate passed with `run7` (log
 390/768/1440 px pass with signatures expanded and exact full-example copying
 (`just docs-site-browser-check 3567`; rc=0, 8 s, peak RSS 0.17 GiB, minimum
 available 16227 MiB, peak load 0.35). These are test-process receipts.
+
+The common-output full gate passed on 2026-10-26: 43/43 native spatial tests
+and strict Clippy; `run-heavy: done rc=0 112s | peak-RSS 0.37GiB |
+min-avail 13386MiB | peak-load 0.91`. Log:
+`~/tmp/zencodec-common-output-full-2026-10-26.log`. This is a test-process
+receipt, not a decoder workspace bound.
+
+The added exact-timing case and auxiliary-output cases passed with the 22 TIFF
+sample cases and strict Clippy: `run-heavy: done rc=0 12s | peak-RSS 0.45GiB |
+min-avail 13431MiB | peak-load 0.61`; log
+`~/tmp/zencodec-common-output-timing-2026-10-26.log`.

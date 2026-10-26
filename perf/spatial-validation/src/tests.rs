@@ -378,9 +378,7 @@ mod image_selection {
                     )
                     .unwrap()
                     .unwrap()
-                    .pixels
-                    .as_slice()
-                    .as_contiguous_bytes()
+                    .with_pixels(|p| p.as_contiguous_bytes().unwrap().to_vec())
                     .unwrap(),
                     crop(&refs[0], roi)
                 );
@@ -388,9 +386,7 @@ mod image_selection {
                     first_child(&mut collection, &ImageRequest { region: roi.into() })
                         .unwrap()
                         .unwrap()
-                        .pixels
-                        .as_slice()
-                        .as_contiguous_bytes()
+                        .with_pixels(|p| p.as_contiguous_bytes().unwrap().to_vec())
                         .unwrap(),
                     crop(&refs[1], roi)
                 );
@@ -444,11 +440,13 @@ mod image_selection {
                         );
                         assert_eq!(output.geometry.region, expected);
                         assert_eq!(
-                            (output.pixels.width(), output.pixels.height()),
+                            output.with_pixels(|p| (p.width(), p.rows())).unwrap(),
                             (expected.width, expected.height)
                         );
                         assert_eq!(
-                            output.pixels.as_slice().as_contiguous_bytes().unwrap(),
+                            output
+                                .with_pixels(|p| p.as_contiguous_bytes().unwrap().to_vec())
+                                .unwrap(),
                             crop(reference, expected)
                         );
                     }
@@ -495,7 +493,9 @@ mod image_selection {
                 // A rejected request does not consume or replace the image ID.
                 let output = images.decode(&child, &ImageRequest::default()).unwrap();
                 assert_eq!(
-                    output.pixels.as_slice().as_contiguous_bytes().unwrap(),
+                    output
+                        .with_pixels(|p| p.as_contiguous_bytes().unwrap().to_vec())
+                        .unwrap(),
                     refs[2].bytes
                 );
             }

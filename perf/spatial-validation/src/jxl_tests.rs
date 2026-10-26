@@ -18,12 +18,12 @@ fn fixture_path(name: &str) -> PathBuf {
     root.join(name)
 }
 
-fn fixture(name: &str) -> Vec<u8> {
+pub(crate) fn fixture(name: &str) -> Vec<u8> {
     let path = fixture_path(name);
     std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
 }
 
-fn independent_frames(name: &str, coalescing: bool) -> Vec<Vec<i64>> {
+pub(crate) fn independent_metadata(name: &str, coalescing: bool) -> String {
     let tool = std::env::var("JXL_SELECTION_ORACLE").expect("JXL_SELECTION_ORACLE is required");
     let output = std::process::Command::new("timeout")
         .args(["--kill-after=5s", "30s", &tool])
@@ -39,7 +39,12 @@ fn independent_frames(name: &str, coalescing: bool) -> Vec<Vec<i64>> {
     let text = String::from_utf8(output.stdout).unwrap();
     assert!(text.starts_with("version "));
     eprintln!("libjxl {name} coalescing={coalescing}: {text}");
-    text.lines()
+    text
+}
+
+fn independent_frames(name: &str, coalescing: bool) -> Vec<Vec<i64>> {
+    independent_metadata(name, coalescing)
+        .lines()
         .filter_map(|line| line.strip_prefix("frame "))
         .map(|line| {
             line.split_whitespace()
@@ -190,22 +195,26 @@ fn jxl_selection_rejects_foreign_identity_and_fuses_discovery_refusal() {
 #[test]
 fn common_consumer_selects_jxl_and_refuses_unknown_child_support() {
     let data = fixture("named_frame_test.jxl");
-    let expected = sequential(&data, true).unwrap();
+    let expected = crate::output_tests::expected_output(&data);
     let mut collection = JxlItems::open(&data, Composition::Composited, 4096).unwrap();
     assert_eq!(Collection::view(&collection), Composition::Composited);
     exact_rows(
         &expected[0],
-        &first_image(&mut collection, &Default::default())
-            .unwrap()
-            .unwrap(),
+        &crate::output_tests::mapped_planes(
+            &first_image(&mut collection, &Default::default())
+                .unwrap()
+                .unwrap(),
+        ),
     );
     // A second consumer pass must yield the same operation-bound identity and
     // pixels, even though the native scanner has already visited this frame.
     exact_rows(
         &expected[0],
-        &first_image(&mut collection, &Default::default())
-            .unwrap()
-            .unwrap(),
+        &crate::output_tests::mapped_planes(
+            &first_image(&mut collection, &Default::default())
+                .unwrap()
+                .unwrap(),
+        ),
     );
     let mut a = Collection::images(&mut collection).unwrap();
     let mut b = Collection::images(&mut collection).unwrap();
@@ -253,7 +262,10 @@ fn common_jxl_region_requirement_refuses_without_substituting_full_output() {
     // The failure is local to the request; the same selected presentation still
     // decodes exactly when the caller explicitly asks for the full image.
     let output = Collection::decode(&mut collection, &id, &ImageRequest::default()).unwrap();
-    exact_rows(&sequential(&data, true).unwrap()[0], &output);
+    exact_rows(
+        &crate::output_tests::expected_output(&data)[0],
+        &crate::output_tests::mapped_planes(&output),
+    );
     let mut other = JxlItems::open(&data, Composition::Composited, 4096).unwrap();
     let error = Collection::decode(&mut other, &id, &request).unwrap_err();
     assert_eq!(

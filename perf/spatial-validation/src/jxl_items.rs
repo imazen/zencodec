@@ -115,6 +115,57 @@ impl<'a> JxlItems<'a> {
     }
 
     pub fn decode(&self, image: &ImageId, padding: usize) -> Result<Vec<Plane>, Failure> {
+        let (decoder, mut input) = self.selected_decoder(image)?;
+        let (_, planes) = decode_next(decoder, &mut input, padding)?;
+        Ok(planes)
+    }
+
+    pub fn decode_image(
+        &self,
+        image: &ImageId,
+    ) -> Result<super::image_output::ImageOutput, Failure> {
+        let (mut decoder, mut input) = self.selected_decoder(image)?;
+        let info = decoder.basic_info().clone();
+        let mut format = decoder.current_pixel_format().clone();
+        if info
+            .extra_channels
+            .iter()
+            .any(|ec| ec.ec_type == zenjxl_decoder::api::ExtraChannel::Alpha)
+            && !format.color_type.has_alpha()
+        {
+            format.color_type = format
+                .color_type
+                .add_alpha()
+                .ok_or_else(|| Error::other("packed color cannot carry required alpha"))?;
+            decoder.set_pixel_format(format.clone());
+        }
+        let profile = decoder.output_color_profile().clone();
+        // PixelSlice requires whole-pixel strides, not just sample alignment.
+        // We own these buffers, so request one pixel of padding. The native
+        // 13-byte padding stress path above remains a separate regression test.
+        let padding = format.color_type.samples_per_pixel() * 4;
+        let (_, planes) = decode_next(decoder, &mut input, padding)?;
+        let mut output = super::jxl_output::adopt(planes, &info, &format, &profile)?;
+        if let Some(animation) = &info.animation {
+            let index = usize::try_from(self.origin.key(image)?)?;
+            let ticks = self.visible[..index].iter().try_fold(0i64, |sum, frame| {
+                sum.checked_add(i64::from(frame.duration_ticks))
+                    .ok_or_else(|| Error::other("JXL timestamp overflow"))
+            })?;
+            let base =
+                zencodec::time::TimeBase::new(animation.tps_denominator, animation.tps_numerator)?;
+            output.timing = Some(
+                zencodec::frame::FrameTiming::at(zencodec::time::Timestamp::new(ticks, base))
+                    .with_duration_ticks(u64::from(self.visible[index].duration_ticks)),
+            );
+        }
+        Ok(output)
+    }
+
+    fn selected_decoder(
+        &self,
+        image: &ImageId,
+    ) -> Result<(JxlDecoder<states::WithImageInfo>, &[u8]), Failure> {
         let key = self.origin.key(image)?;
         if self.failed {
             return Err(Error::other("JXL operation failed").into());
@@ -133,12 +184,11 @@ impl<'a> JxlItems<'a> {
         let (mut decoder, _) = pixel_decoder(self.data, options())?;
         decoder.start_new_frame(target);
         let start = usize::try_from(target.decode_start_file_offset)?;
-        let mut input = self
+        let input = self
             .data
             .get(start..)
             .ok_or_else(|| Error::other("native seek outside input"))?;
-        let (_, planes) = decode_next(decoder, &mut input, padding)?;
-        Ok(planes)
+        Ok((decoder, input))
     }
 }
 
@@ -231,7 +281,6 @@ pub struct JxlCursor {
 
 impl Collection for JxlItems<'_> {
     type Cursor = JxlCursor;
-    type Samples = Vec<Plane>;
     fn view(&self) -> Composition {
         Composition::Composited
     }
@@ -271,11 +320,11 @@ impl Collection for JxlItems<'_> {
         &mut self,
         image: &ImageId,
         request: &ImageRequest,
-    ) -> Result<Vec<Plane>, zencodec::At<CollectionError>> {
+    ) -> Result<super::image_output::ImageOutput, zencodec::At<CollectionError>> {
         self.origin.key(image).map_err(|e| located(e.into()))?;
         if request.region != RegionRequest::Full {
             return Err(located(SelectionError::UnsupportedRegion.into()));
         }
-        JxlItems::decode(self, image, 13).map_err(located)
+        self.decode_image(image).map_err(located)
     }
 }

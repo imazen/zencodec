@@ -1,7 +1,8 @@
-//! One consumer path for the candidate; metadata/pixel unification is not yet
-//! qualified, so the decoded output remains an associated native sample type.
+//! One consumer path for selected images with mapped samples and interpretation.
+//! This remains a private native-codec experiment, not a public CodecSet API.
 use super::{
     image_items::{Composition, ImageId, ImageRequest, SelectionError},
+    image_output::ImageOutput,
     tiff_region::Failure,
 };
 use std::{error::Error, fmt};
@@ -40,7 +41,6 @@ pub fn located(error: Failure) -> At<CollectionError> {
 /// selection IDs remain stable while the source operation lives.
 pub trait Collection {
     type Cursor;
-    type Samples;
     fn view(&self) -> Composition;
     fn images(&mut self) -> Result<Self::Cursor, At<CollectionError>>;
     fn children(&mut self, image: &ImageId) -> Result<Self::Cursor, At<CollectionError>>;
@@ -49,21 +49,21 @@ pub trait Collection {
         &mut self,
         image: &ImageId,
         request: &ImageRequest,
-    ) -> Result<Self::Samples, At<CollectionError>>;
+    ) -> Result<ImageOutput, At<CollectionError>>;
 }
 
 pub use consumer::first_image;
 mod consumer {
     // EXAMPLE: selected_first_image
-    use super::{Collection, CollectionError, ImageRequest};
+    use super::{Collection, CollectionError, ImageOutput, ImageRequest};
     use zencodec::At;
 
-    // This private experiment keeps native Samples until interpretation and
-    // zenpixels output are qualified. It is not a public CodecSet entry point.
+    // This private experiment returns a common mapped image. Native layers,
+    // metadata coverage and resource bounds remain public promotion gates.
     pub fn first_image<C: Collection>(
         collection: &mut C,
         request: &ImageRequest,
-    ) -> Result<Option<C::Samples>, At<CollectionError>> {
+    ) -> Result<Option<ImageOutput>, At<CollectionError>> {
         // ANCHOR: selected_first_image
         let mut cursor = collection.images()?;
         let Some(image) = collection.next(&mut cursor)? else {
@@ -81,7 +81,7 @@ mod consumer {
 pub fn first_child<C: Collection>(
     collection: &mut C,
     request: &ImageRequest,
-) -> Result<Option<C::Samples>, At<CollectionError>> {
+) -> Result<Option<ImageOutput>, At<CollectionError>> {
     let mut roots = collection.images()?;
     let Some(parent) = collection.next(&mut roots)? else {
         return Ok(None);

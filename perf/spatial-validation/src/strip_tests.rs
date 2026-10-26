@@ -171,6 +171,20 @@ fn qualify<C: colortype::ColorType>(
                         assert_eq!(&row[..pixels.row(y).len()], pixels.row(y));
                         assert_eq!(&row[pixels.row(y).len()..], &[0xa5; 13]);
                     }
+                    let image = raster.into_image();
+                    image
+                        .with_pixels(|pixels| {
+                            assert_eq!(pixels.as_strided_bytes().as_ptr(), allocation);
+                            assert_eq!(pixels.as_contiguous_bytes().unwrap(), expected);
+                        })
+                        .unwrap();
+                    let mapped = image.map().unwrap();
+                    assert_eq!(mapped.plane_count(), 1);
+                    let plane = mapped.plane(0).unwrap().unwrap();
+                    assert_eq!(plane.meaning, &crate::image_output::Meaning::Color);
+                    assert!(plane.samples.code_encoding().is_none());
+                    assert_eq!(plane.samples.stride_bytes(), region.width as usize * bpp);
+                    assert!(mapped.plane(1).unwrap().is_none());
                 }
             }
         }

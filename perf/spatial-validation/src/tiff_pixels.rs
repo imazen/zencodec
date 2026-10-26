@@ -32,6 +32,16 @@ pub struct StoredRaster {
     /// Still unapplied: the buffer is in stored coordinates.
     pub orientation: Orientation,
 }
+impl StoredRaster {
+    pub fn into_image(self) -> super::image_output::ImageOutput {
+        super::image_output::ImageOutput::packed(
+            self.pixels,
+            Vec::new(),
+            self.geometry,
+            self.orientation,
+        )
+    }
+}
 
 impl Region {
     /// Move the native allocation into the common pixel owner. Interpretation
@@ -194,28 +204,20 @@ mod tests {
         assert!(images.next(&mut cursor).unwrap().is_none());
         for (id, index) in [(&second, 1), (&first, 0), (&second, 1)] {
             let output = images.decode(id, &ImageRequest::default()).unwrap();
-            assert_eq!(
-                output
-                    .pixels
-                    .as_slice()
-                    .color_context()
-                    .unwrap()
-                    .icc
-                    .as_deref(),
-                Some(profiles[index])
-            );
+            output
+                .with_pixels(|pixels| {
+                    assert_eq!(
+                        pixels.color_context().unwrap().icc.as_deref(),
+                        Some(profiles[index])
+                    );
+                    assert_eq!(pixels.row(0), &[8, 17, 29, 47, 89, 131]);
+                    assert_eq!(pixels.descriptor().primaries, ColorPrimaries::Unknown);
+                    assert_eq!(pixels.descriptor().transfer(), TransferFunction::Unknown);
+                })
+                .unwrap();
             assert_eq!(
                 output.orientation,
-                Orientation::from_exif(if index == 0 { 6 } else { 1 }).unwrap()
-            );
-            assert_eq!(output.pixels.as_slice().row(0), &[8, 17, 29, 47, 89, 131]);
-            assert_eq!(
-                output.pixels.descriptor().primaries,
-                ColorPrimaries::Unknown
-            );
-            assert_eq!(
-                output.pixels.descriptor().transfer(),
-                TransferFunction::Unknown
+                Orientation::from_exif(if index == 0 { 6 } else { 1 })
             );
         }
     }
