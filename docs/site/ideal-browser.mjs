@@ -28,6 +28,8 @@ export async function checkIdeal(browser,url,output) {
     assert.ok(await placement.evaluate(el=>el.open));
     assert.ok((await placement.textContent()).includes('188×202'));
     assert.ok((await placement.textContent()).includes('no new public type'));
+    assert.ok((await placement.textContent()).includes('test-only'));
+    assert.ok((await placement.textContent()).includes('public raw-layer output remains unsupported'));
     const videoChange=page.locator('#change-video');
     await videoChange.locator(':scope>summary').focus();
     await page.keyboard.press('Enter');

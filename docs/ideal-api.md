@@ -151,7 +151,13 @@ libjxl discovery includes a layer extending beyond the presentation canvas;
 its placement cannot be represented as a bounded crop. A private `Placement::visible`
 experiment now preserves local pixel bounds and computes an explicit signed
 placement intersection, with typed coordinate errors. It adds no public API:
-raw samples and blend/dependency semantics must qualify together before promotion. The existing [paged-decoder issue](https://github.com/imazen/zencodec/issues/1)
+raw samples and blend/dependency semantics must qualify together before promotion.
+A [test-only native tap](https://github.com/imazen/zenjxl-decoder/blob/9a4442e9bf1554bdd1b191e546547ec04a83bea4/docs/source-interpretation.md#independent-layer-samples-and-composition-facts)
+now captures nine complete local layers before blending without changing composed
+output. Independent libjxl agrees on placement and blend facts, with bit-exact
+CMYK/alpha samples and recorded lossy RGB float-conformance differences. Public
+raw-output selection, frozen owner-bound placement, representation conversion and
+remaining configurations still need qualification. The existing [paged-decoder issue](https://github.com/imazen/zencodec/issues/1)
 owns the shared-selector discussion. The [public-output receipt](../benchmarks/public_image_output_2026-10-26.json)
 records the executing core/native qualification.
 

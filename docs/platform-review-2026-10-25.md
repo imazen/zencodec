@@ -130,4 +130,8 @@ rustdoc and guide checks. Its integration process reports
 `run-heavy: done rc=0 138s | peak-RSS 0.54GiB | min-avail 13374MiB | peak-load 1.50`.
 This is not a codec workspace bound. The collection remains private: policy
 preallocation admission, native discovery-work/latency bounds, broader source snapshots and
-native raw layers remain separate qualification gates.
+public native raw-layer output remains a separate qualification gate. The
+[native layer probe](https://github.com/imazen/zenjxl-decoder/blob/9a4442e9bf1554bdd1b191e546547ec04a83bea4/docs/source-interpretation.md#independent-layer-samples-and-composition-facts)
+now retains complete local samples before composition and independently qualifies
+nine layers' placement and blend facts. Its exact CMYK/alpha evidence and lossy
+RGB conformance evidence remain distinct; it does not enable the public factory.

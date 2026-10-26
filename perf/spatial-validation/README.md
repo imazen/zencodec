@@ -625,6 +625,24 @@ this candidate separate until the native layer-output path can exercise that
 whole contract. [Qualification receipt](../../benchmarks/spatial_placement_2026-10-26.json).
 Run `just spatial-placement-check /path/to/artifacts`.
 
+The next native experiment now captures complete F32 local planes before
+composition, while retaining the composed references and display output.
+[Native probe and independent oracle](https://github.com/imazen/zenjxl-decoder/blob/9a4442e9bf1554bdd1b191e546547ec04a83bea4/docs/source-interpretation.md#independent-layer-samples-and-composition-facts)
+qualify five RGB/alpha layers and four CMYK/alpha layers, including off-canvas
+samples. Both native renderers and complete/chunked input agree exactly, with
+unchanged composed output. libjxl independently agrees on placement, color and
+extra-channel blend instructions, saved-reference slots and timing. CMYK/alpha
+samples are bit-exact; lossy RGB uses the unchanged native float-conformance
+bound, with every differing float count and maximum error recorded. A single
+changed CMYK mantissa bit fails the independent gate.
+
+This is a test-only native tap, not a public raw-output factory. The collection
+still refuses uncomposited requests. The result supports keeping sample extent,
+signed placement and composition facts distinct. Frozen owner-bound placement,
+publication, conversion, preview state and the other blend configurations remain
+promotion gates. The native oracle receipt is linked from its owning document;
+no binary captures are copied into this repository.
+
 ## Reduced-level region candidate
 
 This is an executable candidate, not a public spatial API. It selects a main
