@@ -97,12 +97,14 @@ orientation. Signed and wider samples require
 matrix checks exact bytes and original allocation ownership. Unknown color
 stays unknown, and unresolved alpha refuses. This is raw sample carriage, not
 an approved display conversion or privacy decision.
-They are not a public `CodecSet` collection API: the associated native sample
-types still expose adapter differences. Each decode now carries its own region
+They are not a public `CodecSet` collection API. The private collection now
+returns one mapped `ImageOutput` for TIFF/JXL, also qualified against native AV1
+storage, with packed color, auxiliary values and component codes distinguished.
+Each decode carries its own region
 request; TIFF returns the selected canvas and region origin, while required JXL
 regions refuse. The [platform review](platform-review-2026-10-25.md) records
 WIC/OpenImageIO evidence and the distinction between containment and roles. The next
-promotion gate is qualified zenpixels output with per-item interpretation,
+promotion gate is complete interpretation and immutable admission,
 explicit discovery allowances and source-revision validation. Raw JXL layer implementation is
 still [decoder issue 57](https://github.com/imazen/zenjxl-decoder/issues/57);
 the existing [paged-decoder issue](https://github.com/imazen/zencodec/issues/1)

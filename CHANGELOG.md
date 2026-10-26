@@ -2,6 +2,12 @@
 
 ## Native image selection (unreleased experiment)
 
+- Replace associated native samples in the private collection with one mapped
+  image output, exercised by TIFF, JXL and AV1. Preserve packed alpha, auxiliary
+  roles and native video code-depth/ownership; keep rendering and resource gates
+  explicit. Cross-check extra-channel facts with libjxl and AV1 samples with
+  FFmpeg. Published crates do not gain this experimental API.
+
 - Apply the WIC/OpenImageIO review to the private collection: attach region
   requirements to each selected image, return TIFF canvas/region geometry,
   and reject unsupported JXL regions explicitly. Preserve request-local

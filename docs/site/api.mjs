@@ -18,6 +18,8 @@ export const api = {
   jxlSelection: {path:'candidate::JxlItems (private native experiment)',file:'perf/spatial-validation/src/jxl_items.rs',scope:"impl<'a> JxlItems<'a>",methods:['open','next','decode']},
   collectionSelection: {path:'candidate::Collection (private common contract)',file:'perf/spatial-validation/src/collection.rs',scope:'pub trait Collection',methods:['view','images','children','next','decode']},
   tiffPixels: {path:'candidate::Region (private TIFF sample handoff)',file:'perf/spatial-validation/src/tiff_pixels.rs',scope:'impl Region {',methods:['into_pixels']},
+  imageOutput: {path:'candidate::ImageOutput (private mapped output)',file:'perf/spatial-validation/src/image_output.rs',scope:'impl ImageOutput {',methods:['map','with_pixels']},
+  imageMapping: {path:'candidate::MappedImage (private borrowed planes)',file:'perf/spatial-validation/src/image_output.rs',scope:'pub trait MappedImage',methods:['plane_count','plane']},
 
   checkedDecodePolicy: {path:"zencodec::decode::DecodeJob<'a>",file:'src/traits/decoding.rs',scope:"pub trait DecodeJob<'a>",methods:['try_set_policy','try_with_policy'],associated:false},
   checkedEncodePolicy: {path:'zencodec::encode::EncodeJob',file:'src/traits/encoding.rs',scope:'pub trait EncodeJob: Sized',methods:['try_set_policy','try_with_policy'],associated:false},
