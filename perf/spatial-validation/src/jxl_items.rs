@@ -125,7 +125,10 @@ impl<'a> JxlItems<'a> {
         image: &ImageId,
     ) -> Result<super::image_output::ImageOutput, Failure> {
         let (mut decoder, mut input) = self.selected_decoder(image)?;
+        let index = usize::try_from(self.origin.key(image)?)?;
+        let selected = &self.visible[index];
         let info = decoder.basic_info().clone();
+        let embedded_color = decoder.embedded_color_profile().clone();
         let mut format = decoder.current_pixel_format().clone();
         if info
             .extra_channels
@@ -145,21 +148,33 @@ impl<'a> JxlItems<'a> {
         // 13-byte padding stress path above remains a separate regression test.
         let padding = format.color_type.samples_per_pixel() * 4;
         let (_, planes) = decode_next(decoder, &mut input, padding)?;
-        let mut output = super::jxl_output::adopt(planes, &info, &format, &profile)?;
-        if let Some(animation) = &info.animation {
-            let index = usize::try_from(self.origin.key(image)?)?;
+        let timing = if let Some(animation) = &info.animation {
             let ticks = self.visible[..index].iter().try_fold(0i64, |sum, frame| {
                 sum.checked_add(i64::from(frame.duration_ticks))
                     .ok_or_else(|| Error::other("JXL timestamp overflow"))
             })?;
             let base =
                 zencodec::time::TimeBase::new(animation.tps_denominator, animation.tps_numerator)?;
-            output.timing = Some(
+            Some(
                 zencodec::frame::FrameTiming::at(zencodec::time::Timestamp::new(ticks, base))
                     .with_duration_ticks(u64::from(self.visible[index].duration_ticks)),
-            );
-        }
-        Ok(output)
+            )
+        } else {
+            None
+        };
+        super::jxl_output::adopt(
+            planes,
+            super::jxl_output::JxlSourceFacts {
+                header: info,
+                embedded_color,
+                frame_index: index,
+                frame_name: selected.name.clone(),
+                is_last: selected.is_last,
+            },
+            &format,
+            &profile,
+            timing,
+        )
     }
 
     fn selected_decoder(

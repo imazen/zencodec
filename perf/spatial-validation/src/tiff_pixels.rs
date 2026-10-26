@@ -33,12 +33,11 @@ pub struct StoredRaster {
     pub orientation: Orientation,
 }
 impl StoredRaster {
-    pub fn into_image(self) -> super::image_output::ImageOutput {
+    pub fn into_image(self) -> Result<super::image_output::ImageOutput, Failure> {
         super::image_output::ImageOutput::packed(
             self.pixels,
             Vec::new(),
-            self.geometry,
-            self.orientation,
+            super::image_output::ImageInterpretation::packed(self.geometry, self.orientation),
         )
     }
 }
@@ -216,7 +215,7 @@ mod tests {
                 })
                 .unwrap();
             assert_eq!(
-                output.orientation,
+                output.interpretation().orientation,
                 Orientation::from_exif(if index == 0 { 6 } else { 1 })
             );
         }

@@ -435,10 +435,13 @@ mod image_selection {
                     ] {
                         let output = images.decode(id, &ImageRequest { region }).unwrap();
                         assert_eq!(
-                            (output.geometry.canvas_width, output.geometry.canvas_height),
+                            (
+                                output.interpretation().geometry.canvas_width,
+                                output.interpretation().geometry.canvas_height
+                            ),
                             (reference.width, reference.height)
                         );
-                        assert_eq!(output.geometry.region, expected);
+                        assert_eq!(output.interpretation().geometry.region, expected);
                         assert_eq!(
                             output.with_pixels(|p| (p.width(), p.rows())).unwrap(),
                             (expected.width, expected.height)

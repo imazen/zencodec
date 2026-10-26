@@ -125,16 +125,25 @@ fn output_jxl_color_and_extra_planes_keep_native_bytes_roles_and_geometry() {
             .unwrap_or_else(|e| panic!("{name}: {e:?}"));
         drop(items);
         drop(data);
+        let interpretation_address = output.interpretation() as *const _;
         let retained = output.clone();
         drop(output);
         assert_eq!(
-            retained.orientation,
+            retained.interpretation() as *const _,
+            interpretation_address
+        );
+        let mut detached_facts = retained.interpretation().clone();
+        detached_facts.orientation = Some(Orientation::Identity);
+        detached_facts.geometry.region.width = 0;
+        assert_ne!(retained.interpretation().geometry.region.width, 0);
+        assert_eq!(
+            retained.interpretation().orientation,
             Orientation::from_exif(info.orientation as u8)
         );
         assert_eq!(
             (
-                retained.geometry.canvas_width as usize,
-                retained.geometry.canvas_height as usize
+                retained.interpretation().geometry.canvas_width as usize,
+                retained.interpretation().geometry.canvas_height as usize
             ),
             info.coded_size
         );
@@ -289,10 +298,201 @@ fn output_jxl_selected_timing_keeps_exact_independent_ticks() {
             i64::try_from(durations[..index].iter().sum::<u64>()).unwrap(),
             base,
         );
-        let timing = output.timing.unwrap();
+        let timing = output.interpretation().timing.unwrap();
         assert_eq!(timing.pts, Some(expected_pts));
         assert_eq!(timing.duration_ticks, Some(durations[index]));
         assert_eq!(timing.packet_ordinal, None);
         assert_eq!(timing.input_offset, None);
+        let source = output
+            .interpretation()
+            .source_details
+            .get::<crate::jxl_output::JxlSourceFacts>()
+            .unwrap();
+        let actual = source.header.animation.as_ref().unwrap();
+        assert_eq!(
+            [
+                actual.tps_numerator,
+                actual.tps_denominator,
+                actual.num_loops,
+                u32::from(actual.have_timecodes),
+            ]
+            .as_slice(),
+            animation.as_slice()
+        );
+        assert_eq!(source.frame_index, index);
+        assert_eq!(source.is_last, index + 1 == ids.len());
     }
+}
+
+#[test]
+fn output_jxl_source_facts_survive_with_independent_hdr_precision_and_display() {
+    use zenjxl_decoder::api::JxlBitDepth;
+    for name in [
+        "hdr_hlg_test.jxl",
+        "hdr_pq_test.jxl",
+        "pq_gradient.jxl",
+        "conformance_test_images/lossless_pfm.jxl",
+        "with_preview.jxl",
+        "small_grayscale_patches_modular_with_icc.jxl",
+    ] {
+        let data = fixture(name);
+        let independent = crate::jxl_tests::independent_metadata(name, true);
+        let fields = |prefix: &str| -> Vec<u32> {
+            independent
+                .lines()
+                .find_map(|line| line.strip_prefix(prefix))
+                .unwrap()
+                .split_whitespace()
+                .map(|v| v.parse().unwrap())
+                .collect()
+        };
+        let mut input = data.as_slice();
+        let ProcessingResult::Complete {
+            result: native_header,
+        } = JxlDecoder::new(JxlDecoderOptions::default().with_adjust_orientation(false))
+            .process(&mut input)
+            .unwrap()
+        else {
+            panic!("incomplete fixture header {name}")
+        };
+        let mut images = JxlItems::open(&data, Composition::Composited, 4096).unwrap();
+        let selected = images.next().unwrap().unwrap();
+        let image = images.decode_image(&selected.image).unwrap();
+        drop(images);
+        drop(data);
+        let source = image
+            .interpretation()
+            .source_details
+            .get::<crate::jxl_output::JxlSourceFacts>()
+            .unwrap();
+        let info = &source.header;
+        let (bits, exponent) = match info.bit_depth {
+            JxlBitDepth::Int { bits_per_sample } => (bits_per_sample, 0),
+            JxlBitDepth::Float {
+                bits_per_sample,
+                exponent_bits_per_sample,
+            } => (bits_per_sample, exponent_bits_per_sample),
+        };
+        assert_eq!(vec![bits, exponent], fields("source_samples "), "{name}");
+        assert_eq!(info.bit_depth, native_header.basic_info().bit_depth);
+        let tone = &info.tone_mapping;
+        assert_eq!(
+            vec![
+                tone.intensity_target.to_bits(),
+                tone.min_nits.to_bits(),
+                u32::from(tone.relative_to_max_display),
+                tone.linear_below.to_bits(),
+            ],
+            fields("source_tone "),
+            "{name}"
+        );
+        let display = info.intrinsic_size.unwrap_or(info.coded_size);
+        assert_eq!(
+            vec![display.0 as u32, display.1 as u32],
+            fields("source_display "),
+            "{name}"
+        );
+        assert_eq!(
+            vec![u32::from(info.uses_original_profile)],
+            fields("original_profile ")
+        );
+        let preview = fields("preview ");
+        assert_eq!(
+            info.preview_size,
+            (preview[0] != 0).then_some((preview[1] as usize, preview[2] as usize))
+        );
+        assert_eq!(source.frame_name, selected.native.name);
+        assert_eq!(source.frame_index, selected.native.index);
+        assert_eq!(source.is_last, selected.native.is_last);
+        assert_eq!(
+            source.embedded_color,
+            *native_header.embedded_color_profile()
+        );
+        image
+            .with_pixels(|pixels| {
+                assert_eq!(pixels.descriptor().channel_type(), ChannelType::F32);
+                assert!(pixels.color_context().unwrap().icc.is_some());
+            })
+            .unwrap();
+        // A consumer's mutable copy cannot strip facts from the owned output.
+        let mut detached = image.interpretation().clone();
+        assert!(
+            detached
+                .source_details
+                .remove::<crate::jxl_output::JxlSourceFacts>()
+                .is_none()
+        );
+        assert!(detached.source_details.is_empty());
+        assert!(
+            image
+                .interpretation()
+                .source_details
+                .contains::<crate::jxl_output::JxlSourceFacts>()
+        );
+    }
+}
+
+#[test]
+fn output_rejects_geometry_and_interpretation_that_disagree_with_packed_samples() {
+    use crate::{
+        image_items::{ImageGeometry, Rect, SelectionError},
+        image_output::{ImageInterpretation, OutputError},
+    };
+    use zenpixels::{PixelBuffer, PixelDescriptor};
+    let pixels = || PixelBuffer::from_vec(vec![17; 6], 2, 1, PixelDescriptor::RGB8).unwrap();
+    let geometry = ImageGeometry {
+        canvas_width: 10,
+        canvas_height: 8,
+        region: Rect {
+            x: 3,
+            y: 4,
+            width: 2,
+            height: 1,
+        },
+    };
+    let facts = ImageInterpretation::packed(geometry, Orientation::Identity);
+    let mut mismatch = facts.clone();
+    mismatch.geometry.region.width = 3;
+    let error = ImageOutput::packed(pixels(), vec![], mismatch).unwrap_err();
+    assert_eq!(
+        error.downcast_ref::<OutputError>(),
+        Some(&OutputError::Geometry)
+    );
+    for region in [
+        Rect {
+            x: 9,
+            ..geometry.region
+        },
+        Rect {
+            width: 0,
+            ..geometry.region
+        },
+        Rect {
+            x: u32::MAX,
+            ..geometry.region
+        },
+    ] {
+        let mut outside = facts.clone();
+        outside.geometry.region = region;
+        assert!(
+            ImageOutput::packed(pixels(), vec![], outside)
+                .unwrap_err()
+                .downcast_ref::<SelectionError>()
+                .is_some()
+        );
+    }
+    let mut unspecified = facts.clone();
+    unspecified.orientation = None;
+    assert_eq!(
+        ImageOutput::packed(pixels(), vec![], unspecified)
+            .unwrap_err()
+            .downcast_ref::<OutputError>(),
+        Some(&OutputError::Interpretation)
+    );
+    let accepted = ImageOutput::packed(pixels(), vec![], facts).unwrap();
+    assert_eq!(accepted.interpretation().geometry, geometry);
+    assert_eq!(
+        accepted.with_pixels(|p| p.row(0).to_vec()).unwrap(),
+        vec![17; 6]
+    );
 }

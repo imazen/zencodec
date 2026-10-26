@@ -146,9 +146,10 @@ pub trait ImageStorage: Send + Sync {
     fn map(&self) -> Result<Box<dyn MappedImage + '_>, Failure>;
 }
 
-#[derive(Clone)]
-pub struct ImageOutput {
-    storage: Arc<dyn ImageStorage>,
+/// Frozen together with the storage. Callers can inspect or clone these facts,
+/// but cannot relabel an existing image by editing the clone.
+#[derive(Clone, Debug)]
+pub struct ImageInterpretation {
     pub geometry: ImageGeometry,
     /// None means that this adapter does not establish an orientation contract.
     pub orientation: Option<Orientation>,
@@ -156,12 +157,32 @@ pub struct ImageOutput {
     pub signal: Option<Arc<FrameInterpretation>>,
     pub timing: Option<FrameTiming>,
     pub presentation: Option<Presentation>,
+    /// Unmodified source facts, not instructions for interpreting transformed
+    /// output and not permission to copy opaque metadata into a derivative.
+    pub source_details: zencodec::Extensions,
+}
+impl ImageInterpretation {
+    pub fn packed(geometry: ImageGeometry, orientation: Orientation) -> Self {
+        Self {
+            geometry,
+            orientation: Some(orientation),
+            signal: None,
+            timing: None,
+            presentation: None,
+            source_details: zencodec::Extensions::new(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct ImageOutput {
+    storage: Arc<dyn ImageStorage>,
+    interpretation: Arc<ImageInterpretation>,
 }
 impl fmt::Debug for ImageOutput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ImageOutput")
-            .field("geometry", &self.geometry)
-            .field("orientation", &self.orientation)
+            .field("interpretation", &self.interpretation)
             .finish_non_exhaustive()
     }
 }
@@ -169,10 +190,21 @@ impl ImageOutput {
     pub fn packed(
         pixels: PixelBuffer,
         extras: Vec<(Auxiliary, Values)>,
-        geometry: ImageGeometry,
-        orientation: Orientation,
-    ) -> Self {
-        Self {
+        interpretation: ImageInterpretation,
+    ) -> Result<Self, Failure> {
+        let g = interpretation.geometry;
+        super::image_items::RegionRequest::Stored(g.region)
+            .resolve(g.canvas_width, g.canvas_height)?;
+        if (pixels.width(), pixels.height()) != (g.region.width, g.region.height) {
+            return Err(OutputError::Geometry.into());
+        }
+        if interpretation.orientation.is_none()
+            || interpretation.signal.is_some()
+            || interpretation.presentation.is_some()
+        {
+            return Err(OutputError::Interpretation.into());
+        }
+        Ok(Self {
             storage: Arc::new(Packed {
                 pixels,
                 extras: extras
@@ -180,17 +212,13 @@ impl ImageOutput {
                     .map(|(role, plane)| (Meaning::Auxiliary(role), plane))
                     .collect(),
             }),
-            geometry,
-            orientation: Some(orientation),
-            signal: None,
-            timing: None,
-            presentation: None,
-        }
+            interpretation: Arc::new(interpretation),
+        })
     }
     pub fn from_frame(frame: Frame) -> Self {
         let signal = frame.interpretation().clone();
         let g = signal.geometry;
-        Self {
+        let interpretation = ImageInterpretation {
             geometry: ImageGeometry {
                 canvas_width: g.coded_width,
                 canvas_height: g.coded_height,
@@ -204,6 +232,10 @@ impl ImageOutput {
             orientation: None,
             timing: Some(frame.timing()),
             presentation: Some(frame.presentation()),
+            signal: Some(signal.clone()),
+            source_details: zencodec::Extensions::new(),
+        };
+        Self {
             storage: Arc::new(Components {
                 roles: signal
                     .roles
@@ -213,8 +245,11 @@ impl ImageOutput {
                     .collect(),
                 frame,
             }),
-            signal: Some(signal),
+            interpretation: Arc::new(interpretation),
         }
+    }
+    pub fn interpretation(&self) -> &ImageInterpretation {
+        &self.interpretation
     }
     pub fn map(&self) -> Result<Box<dyn MappedImage + '_>, Failure> {
         self.storage.map()
@@ -232,6 +267,7 @@ impl ImageOutput {
 #[derive(Debug, PartialEq, Eq)]
 pub enum OutputError {
     Geometry,
+    Interpretation,
     MissingPlane,
     NotPackedColor,
 }
@@ -239,6 +275,7 @@ impl fmt::Display for OutputError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             Self::Geometry => "invalid sample plane geometry",
+            Self::Interpretation => "packed samples have an incompatible interpretation",
             Self::MissingPlane => "mapped storage does not supply a declared plane",
             Self::NotPackedColor => "samples are not qualified packed color pixels",
         })

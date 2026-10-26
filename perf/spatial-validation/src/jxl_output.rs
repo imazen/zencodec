@@ -1,7 +1,7 @@
 //! Interpret actual requested output, not merely the embedded source profile.
 use super::{
     image_items::{ImageGeometry, Rect},
-    image_output::{Auxiliary, AuxiliaryKind, ImageOutput, Values},
+    image_output::{Auxiliary, AuxiliaryKind, ImageInterpretation, ImageOutput, Values},
     jxl_items::Plane,
     tiff_region::Failure,
 };
@@ -14,12 +14,25 @@ use zenpixels::{
     PixelBufferParts, PixelDescriptor, TransferFunction,
 };
 
+/// Retain native source facts without treating them as an output profile or
+/// as metadata approved for passthrough. The pinned backend does not expose
+/// per-frame timecodes or the full extra-channel rendering parameters.
+pub struct JxlSourceFacts {
+    pub header: JxlBasicInfo,
+    pub embedded_color: JxlColorProfile,
+    pub frame_index: usize,
+    pub frame_name: String,
+    pub is_last: bool,
+}
+
 pub fn adopt(
     planes: Vec<Plane>,
-    info: &JxlBasicInfo,
+    source: JxlSourceFacts,
     format: &JxlPixelFormat,
     profile: &JxlColorProfile,
+    timing: Option<zencodec::frame::FrameTiming>,
 ) -> Result<ImageOutput, Failure> {
+    let info = &source.header;
     let layout = match format.color_type {
         JxlColorType::Grayscale => ChannelLayout::Gray,
         JxlColorType::GrayscaleAlpha => ChannelLayout::GrayAlpha,
@@ -110,7 +123,10 @@ pub fn adopt(
     };
     let orientation = Orientation::from_exif(info.orientation as u8)
         .ok_or_else(|| Error::other("invalid JXL orientation"))?;
-    Ok(ImageOutput::packed(pixels, extras, geometry, orientation))
+    let mut interpretation = ImageInterpretation::packed(geometry, orientation);
+    interpretation.timing = timing;
+    interpretation.source_details.insert(source);
+    ImageOutput::packed(pixels, extras, interpretation)
 }
 
 fn alpha_mode(associated: bool) -> AlphaMode {

@@ -168,13 +168,43 @@ Required FFmpeg readback checks the native encoded packets independently.
 peak RSS 0.54 GiB, minimum available 13206 MiB and peak load 0.36; these are
 test-process measurements.
 
-This candidate still does not establish complete JXL source precision,
-HDR/intrinsic-size, loop/timecode/name facts,
-auxiliary rendering, whole-container metadata/privacy, native memory bounds,
-HTTP revision binding or codec-independent layers. Its public field/constructor
-shape is experimental. The production module location and immutable admission
-boundary need review before promotion; the standalone experiment is not a new
-published dependency or an assertion that these remaining gates are complete.
+`ImageOutput::interpretation()` now borrows a frozen snapshot. Its checked packed
+constructor rejects sample/region size disagreement, empty or out-of-canvas
+regions, and incompatible component interpretation. A cloned interpretation is
+an editable detached value; it cannot relabel an existing output. Native TIFF
+adoption, JXL owner-drop tests and the same AV1 matrix exercise this boundary.
+
+JXL stores the native header, embedded source profile, selected frame index/name
+and last-frame marker in `source_details`, using the existing `Extensions` type.
+This retains original integer/float precision, exponent bits, tone-mapping facts,
+intrinsic/preview sizes and animation loop/timecode-presence declarations. The
+actual output profile remains attached to the pixels. These source details are
+neither output color instructions nor permission to copy metadata to a derivative;
+names and opaque profiles still require retention policy.
+
+Independent libjxl metadata checks cover HLG, PQ, a PQ gradient, a 32-bit float
+source with 8 exponent bits, an embedded ICC and a preview. Animation checks
+retain exact tick rates, loop count and timecode-presence declarations. The
+fixtures exercise default intrinsic size, zero minimum luminance and zero
+`linear_below`; non-default values still need native fixtures. Per-frame timecodes
+and complete extra-channel precision/spot/CFA parameters are not exposed by the
+pinned native API. Preserving its header does not recover those missing facts.
+That native surface is tracked in
+[zenjxl-decoder issue 67](https://github.com/imazen/zenjxl-decoder/issues/67).
+The tone-mapping source fields are kept verbatim; no unqualified conversion to
+`SourceColor::diffuse_white` is made. The
+[libjxl metadata contract](https://libjxl.readthedocs.io/en/latest/api_metadata.html)
+distinguishes source precision, intensity bounds and display-tone-map behavior.
+
+The production module location, render/transform interpretation and policy
+admission still need qualification. Auxiliary rendering, whole-container
+metadata/privacy, native memory bounds, HTTP revision binding and raw JXL layers
+remain open. This standalone experiment is not a published API.
+
+The immutable-interpretation gate passed the full 46-test native suite and strict
+Clippy: run-heavy rc=0, 116 s, peak RSS 0.22 GiB, minimum available 13502 MiB,
+peak load 0.95. Log: `~/tmp/zencodec-interpretation-full-2026-10-26.log`.
+This is test-process usage, not a native decoder resource bound.
 
 The subsequent full native TIFF/JXL gate passed with the pinned pixel change:
 run-heavy rc=0, 103 s, peak RSS 0.34 GiB, minimum available 11325 MiB,

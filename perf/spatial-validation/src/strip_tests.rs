@@ -171,7 +171,7 @@ fn qualify<C: colortype::ColorType>(
                         assert_eq!(&row[..pixels.row(y).len()], pixels.row(y));
                         assert_eq!(&row[pixels.row(y).len()..], &[0xa5; 13]);
                     }
-                    let image = raster.into_image();
+                    let image = raster.into_image().unwrap();
                     image
                         .with_pixels(|pixels| {
                             assert_eq!(pixels.as_strided_bytes().as_ptr(), allocation);
