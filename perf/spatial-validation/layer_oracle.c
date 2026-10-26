@@ -3,6 +3,7 @@
  * No codec implementation or encoded fixture is authored here. */
 #include <inttypes.h>
 #include <jxl/decode.h>
+#include <jxl/version.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,7 +31,29 @@ static void blend(const JxlBlendInfo *info) {
          info->blendmode, info->source, info->alpha, info->clamp);
 }
 
+static void color_profile(const JxlDecoder *decoder, JxlColorProfileTarget target) {
+  JxlColorEncoding color = {0};
+#if JPEGXL_NUMERIC_VERSION < JPEGXL_COMPUTE_NUMERIC_VERSION(0, 9, 0)
+  JxlDecoderStatus status = JxlDecoderGetColorAsEncodedProfile(decoder, NULL, target, &color);
+#else
+  JxlDecoderStatus status = JxlDecoderGetColorAsEncodedProfile(decoder, target, &color);
+#endif
+  if (status != JXL_DEC_SUCCESS) { printf("null"); return; }
+  printf("{\"space\":%u,\"white\":%u,\"primaries\":%u,\"transfer\":%u,"
+         "\"gamma\":%.17g,\"intent\":%u,\"white_xy\":[%.17g,%.17g],"
+         "\"red_xy\":[%.17g,%.17g],\"green_xy\":[%.17g,%.17g],\"blue_xy\":[%.17g,%.17g]}",
+         color.color_space, color.white_point, color.primaries, color.transfer_function,
+         color.gamma, color.rendering_intent, color.white_point_xy[0], color.white_point_xy[1],
+         color.primaries_red_xy[0], color.primaries_red_xy[1],
+         color.primaries_green_xy[0], color.primaries_green_xy[1],
+         color.primaries_blue_xy[0], color.primaries_blue_xy[1]);
+}
+
 int main(int argc, char **argv) {
+  if (argc == 2 && strcmp(argv[1], "--version") == 0) {
+    printf("%u\n", JxlDecoderVersion());
+    return 0;
+  }
   if (argc != 3) return 2;
   FILE *file = fopen(argv[1], "rb");
   if (!file || fseek(file, 0, SEEK_END)) return 3;
@@ -50,17 +73,24 @@ int main(int argc, char **argv) {
   if (JxlDecoderSetCoalescing(decoder, JXL_FALSE) != JXL_DEC_SUCCESS ||
       JxlDecoderSetKeepOrientation(decoder, JXL_TRUE) != JXL_DEC_SUCCESS ||
       JxlDecoderSetRenderSpotcolors(decoder, JXL_FALSE) != JXL_DEC_SUCCESS ||
-      JxlDecoderSubscribeEvents(decoder, JXL_DEC_BASIC_INFO | JXL_DEC_FRAME |
+      JxlDecoderSubscribeEvents(decoder, JXL_DEC_BASIC_INFO | JXL_DEC_COLOR_ENCODING | JXL_DEC_FRAME |
                                 JXL_DEC_FULL_IMAGE) != JXL_DEC_SUCCESS ||
       JxlDecoderSetInput(decoder, bytes, (size_t)length) != JXL_DEC_SUCCESS) goto end;
   JxlDecoderCloseInput(decoder);
-  printf("{\"libjxl\":%u,\"layers\":[", JxlDecoderVersion());
+  printf("{\"libjxl\":%u", JxlDecoderVersion());
   for (unsigned events = 0; events < 4096; ++events) {
     JxlDecoderStatus status = JxlDecoderProcessInput(decoder);
     if (status == JXL_DEC_SUCCESS) { if (count) { printf("]}\n"); rc = 0; } break; }
     if (status == JXL_DEC_BASIC_INFO) {
       if (JxlDecoderGetBasicInfo(decoder, &basic) != JXL_DEC_SUCCESS ||
           basic.num_color_channels != 3 || basic.num_extra_channels > 16) goto end;
+      printf(",\"uses_original_profile\":%u", basic.uses_original_profile);
+    } else if (status == JXL_DEC_COLOR_ENCODING) {
+      printf(",\"original_color\":");
+      color_profile(decoder, JXL_COLOR_PROFILE_TARGET_ORIGINAL);
+      printf(",\"output_color\":");
+      color_profile(decoder, JXL_COLOR_PROFILE_TARGET_DATA);
+      printf(",\"layers\":[");
     } else if (status == JXL_DEC_FRAME) {
       if (JxlDecoderGetFrameHeader(decoder, &header) != JXL_DEC_SUCCESS) goto end;
       printf("%s{\"origin\":[%d,%d],\"size\":[%u,%u],\"blend\":",

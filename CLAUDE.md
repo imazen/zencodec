@@ -231,6 +231,12 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Independent raw-layer CI oracle (2026-10-26): libjxl 0.7 disagreed on the
+  noise/spline fixture. A source-controlled experiment isolated the difference
+  to two existing upstream noise fixes, without changing native output or the
+  pixel gates. CI now uses checksum-pinned unmodified 0.11.1 and preserves
+  comparison/profile evidence. See `benchmarks/layer_oracle_2026-10-26.json`.
+
 - Fixed in the shared mapping review (2026-10-26): a zero-width `PlaneView`
   with nonzero stride accepted empty storage but `row(1)` indexed beyond it.
   Empty rows now avoid unused offset arithmetic. The regression covers extreme

@@ -696,6 +696,46 @@ other than F32, qualified CMYK conversion, raw random seeking and native workspa
 bounds. Publication happens after reconstruction; it does not prove preallocation
 admission or whole-container privacy. The shared collection remains private.
 
+### Independent oracle qualification
+
+The first CI pixel comparison used Ubuntu's libjxl 0.7.0 package. It disagreed
+on the first noise/spline layer despite reporting the same source and output
+sRGB profile as 0.11.1. CMYK and alpha still matched exactly. A source build of
+0.7.0 reproduced the same first failures. Holding the native captures and gates
+fixed isolated the disagreement to two existing upstream noise fixes:
+
+| Oracle | RGB samples beyond 1/256 | Maximum absolute RGB error |
+|---|---:|---:|
+| Ubuntu 0.7.0 and unmodified 0.7.0 source | 5,883,321 | 0.2081114798784256 |
+| 0.7.0 with the random-batch fix | 62,021 | 0.02619302272796631 |
+| 0.7.0 with both noise fixes | 0 | 0.00036650896072387695 |
+| Unmodified 0.11.1 | 0 | 0.00036650896072387695 |
+
+The changes are upstream's [random-batch fix](https://github.com/libjxl/libjxl/commit/b6e5dfd5b588e41da14fa29ee42ec5e7ea1bdc7c)
+and [noise-strength interpolation fix](https://github.com/libjxl/libjxl/commit/a3ac910f231915a84bf4b8d387d348e252b51919).
+The latter experiment applies both patches to 0.7.0; it is not an official
+release or the CI oracle. No native samples, tolerances or exactness assertions
+changed. [Receipts](../../benchmarks/layer_oracle_2026-10-26.json) retain the
+failures, fixture/source hashes, output profiles, full artifact paths and
+resource-wrapper results. These are correctness experiments, not benchmarks.
+
+CI now builds unmodified libjxl 0.11.1 from its checksum-pinned source archive.
+The builder checks the linked runtime version and records its commands and
+provenance. The C helper also records source/output color profiles; a Rust
+comparison failure names the fixture, layer, plane, channel, coordinates,
+oracle version and both sample values/bits. CI retains JSON evidence on failure.
+
+```sh
+just spatial-jxl-oracle-build /path/to/fresh-oracles
+just spatial-validation-with-oracles /path/to/fresh-evidence /path/to/oracle-python /path/to/fresh-oracles
+```
+
+The builder requires Linux, Python 3.12+, CMake, Ninja and development packages
+for Highway 1.0.7+, Brotli and lcms2. Local builds run under the resource wrapper.
+For an oracle investigation, `spatial-old-oracle-build` builds a supplied 0.7
+source tree; `spatial-layer-oracle-compare` accepts explicit header/library
+directories and reuses native captures. It does not regenerate native pixels.
+
 ## Reduced-level region candidate
 
 This is an executable candidate, not a public spatial API. It selects a main

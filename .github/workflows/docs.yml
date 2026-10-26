@@ -133,16 +133,28 @@ jobs:
         run: |
           timeout --kill-after=10s 30s python3 -m venv perf/spatial-validation/target/oracle-python
           timeout --kill-after=10s 2m "$SPATIAL_ORACLE_PYTHON" -m pip install --disable-pip-version-check --only-binary :all: --retries 1 --timeout 20 Pillow==13.0.0
-      - name: Execute native spatial selection and exact guide example
+      - name: Build pinned independent libjxl oracles
+        timeout-minutes: 8
         run: |
           timeout --kill-after=15s 2m sudo apt-get update -qq
-          timeout --kill-after=15s 2m sudo apt-get install -y --no-install-recommends libjxl-dev
-          mkdir -p "$(dirname "$JXL_SELECTION_ORACLE")"
-          cc -std=c11 -Wall -Wextra -Werror perf/spatial-validation/jxl_oracle.c -ljxl -o "$JXL_SELECTION_ORACLE"
-          cc -std=c11 -Wall -Wextra -Werror perf/spatial-validation/layer_oracle.c -ljxl -o "$JXL_LAYER_ORACLE"
+          timeout --kill-after=15s 2m sudo apt-get install -y --no-install-recommends cmake ninja-build libhwy-dev libbrotli-dev liblcms2-dev
+          timeout --kill-after=15s 6m python3 perf/spatial-validation/build_jxl_oracles.py "$(dirname "$JXL_SELECTION_ORACLE")"
+      - name: Execute native spatial selection and exact guide example
+        run: |
           cp perf/spatial-validation/dependencies.lock perf/spatial-validation/Cargo.lock
           timeout --kill-after=15s 10m cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked -- --nocapture --test-threads=1
           timeout --kill-after=15s 5m cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
+      - name: Retain independent layer evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: spatial-oracles-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            perf/spatial-validation/target/oracle-*-jxl/provenance.json
+            perf/spatial-validation/target/oracle-*-jxl/commands.json
+            perf/spatial-validation/target/oracle-*-layers/**/*.json
+            perf/spatial-validation/target/oracle-*-layers/**/stderr.txt
+          if-no-files-found: error
 
   build:
     name: Build and exercise guide

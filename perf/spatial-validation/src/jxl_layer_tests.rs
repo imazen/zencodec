@@ -100,6 +100,7 @@ fn raw_collection_native_samples_and_owner_bound_policy_match_independent_layers
     ] {
         let bytes = fixture(name);
         let (directory, independent) = oracle(name, &bytes);
+        let oracle_version = independent["libjxl"].as_u64().unwrap();
         let expected = sequential(&bytes, false).unwrap();
         let visits = Cell::new(0);
         let address = Cell::new(0usize);
@@ -264,7 +265,14 @@ fn raw_collection_native_samples_and_owner_bound_policy_match_independent_layers
                             let independent = u32::from_le_bytes(
                                 reference[offset..offset + 4].try_into().unwrap(),
                             );
-                            let error = compare_independent(actual, independent, exact).unwrap();
+                            let error = compare_independent(actual, independent, exact)
+                                .unwrap_or_else(|error| {
+                                    panic!(
+                                        "{error}: {name} layer {index} plane {plane_index} channel {channel} at ({x},{y}); native {} ({actual:08x}), libjxl {oracle_version} {} ({independent:08x})",
+                                        f32::from_bits(actual),
+                                        f32::from_bits(independent),
+                                    )
+                                });
                             max_error = max_error.max(error);
                             different += u64::from(actual != independent);
                             samples += 1;

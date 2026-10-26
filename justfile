@@ -337,6 +337,7 @@ spatial-validation-sync export:
     cp perf/spatial-validation/Cargo.toml "{{export}}/perf/spatial-validation/"
     cp perf/spatial-validation/oracle.py "{{export}}/perf/spatial-validation/"
     cp perf/spatial-validation/jxl_oracle.c perf/spatial-validation/layer_oracle.c "{{export}}/perf/spatial-validation/"
+    cp perf/spatial-validation/build_jxl_oracles.py "{{export}}/perf/spatial-validation/"
     cp perf/spatial-validation/http_snapshot.py perf/spatial-validation/http_snapshot_test.py "{{export}}/perf/spatial-validation/"
     cp perf/spatial-validation/src/*.rs "{{export}}/perf/spatial-validation/src/"
     mkdir -p "{{export}}/docs/examples"
@@ -356,11 +357,29 @@ spatial-validation-setup:
 spatial-oracle-install python:
     uv pip install --python "{{python}}" --only-binary :all: Pillow==13.0.0
 
+spatial-jxl-oracle-build output:
+    python3 perf/spatial-validation/build_jxl_oracles.py "{{output}}"
+
+# Reproduce a raw-layer oracle disagreement with explicit headers and libraries.
+# Native captures are reused; this does not rerun or time the Rust decoder.
+spatial-layer-oracle-compare captured native output headers="/usr/include" libdir="/usr/lib/x86_64-linux-gnu" library="jxl":
+    mkdir -p "{{output}}"
+    cc -std=c11 -Wall -Wextra -Werror -I "{{headers}}" perf/spatial-validation/layer_oracle.c -L "{{libdir}}" -Wl,-rpath,"{{libdir}}" -l"{{library}}" -o "{{output}}/layer-oracle"
+    python3 "{{native}}/perf/raw-layer-validation/compare.py" "{{captured}}" "{{native}}/zenjxl-decoder/resources/test" "{{output}}/layer-oracle" "{{output}}"
+
+# The 0.7 noise regression reproducer builds only the independent decoder.
+spatial-old-oracle-build source build:
+    cmake -S "{{source}}" -B "{{build}}" -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DJPEGXL_ENABLE_TOOLS=OFF -DJPEGXL_ENABLE_DOXYGEN=OFF -DJPEGXL_ENABLE_MANPAGES=OFF -DJPEGXL_ENABLE_BENCHMARK=OFF -DJPEGXL_ENABLE_EXAMPLES=OFF -DJPEGXL_ENABLE_JNI=OFF -DJPEGXL_ENABLE_SJPEG=OFF -DJPEGXL_ENABLE_OPENEXR=OFF -DJPEGXL_ENABLE_SKCMS=OFF -DJPEGXL_ENABLE_TCMALLOC=OFF -DJPEGXL_ENABLE_PLUGINS=OFF -DJPEGXL_FORCE_SYSTEM_HWY=ON -DJPEGXL_FORCE_SYSTEM_LCMS2=ON -DJPEGXL_FORCE_SYSTEM_BROTLI=ON
+    cmake --build "{{build}}" --target jxl_dec --parallel 2
+
 spatial-validation-check artifacts python features="":
     mkdir -p "{{artifacts}}-oracle"
     cc -std=c11 -Wall -Wextra -Werror perf/spatial-validation/layer_oracle.c -ljxl -o "{{artifacts}}-oracle/layer-oracle"
     cc -std=c11 -Wall -Wextra -Werror perf/spatial-validation/jxl_oracle.c -ljxl -o "{{artifacts}}-oracle/jxl-oracle"
-    JXL_LAYER_ORACLE="{{artifacts}}-oracle/layer-oracle" SPATIAL_LAYER_ARTIFACTS="{{artifacts}}-layers" SPATIAL_ARTIFACTS="{{artifacts}}" SPATIAL_GENERATED_ARTIFACTS="{{artifacts}}-generated" SPATIAL_ORACLE_PYTHON="{{python}}" JXL_SELECTION_ORACLE="{{artifacts}}-oracle/jxl-oracle" cargo test --manifest-path perf/spatial-validation/Cargo.toml --features "{{features}}" --locked -- --nocapture --test-threads=1
+    just spatial-validation-with-oracles "{{artifacts}}" "{{python}}" "{{artifacts}}-oracle" "{{features}}"
+
+spatial-validation-with-oracles artifacts python oracles features="":
+    JXL_LAYER_ORACLE="{{oracles}}/layer-oracle" SPATIAL_LAYER_ARTIFACTS="{{artifacts}}-layers" SPATIAL_ARTIFACTS="{{artifacts}}" SPATIAL_GENERATED_ARTIFACTS="{{artifacts}}-generated" SPATIAL_ORACLE_PYTHON="{{python}}" JXL_SELECTION_ORACLE="{{oracles}}/jxl-oracle" cargo test --manifest-path perf/spatial-validation/Cargo.toml --features "{{features}}" --locked -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --features "{{features}}" --all-targets --locked -- -D warnings
 
 # Start the real HTTP simulator and keep each fixture family in its own namespace.
