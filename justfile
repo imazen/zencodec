@@ -246,6 +246,17 @@ frame-policy-check:
     cargo clippy -p zencodec -p zencodec-media -p zencodec-media-testkit --all-targets --locked -- -D warnings
     cargo check -p zencodec -p zencodec-media --no-default-features --locked
 
+# Pump, mapping, type-erasure and fused-session debugging contracts.
+media-errors-sync export:
+    just frame-policy-sync "{{export}}"
+    cp zencodec-media-testkit/tests/error_chains.rs zencodec-media-testkit/tests/encoder_fusing.rs "{{export}}/zencodec-media-testkit/tests/"
+
+media-errors-check:
+    cargo test -p zencodec-media-testkit --locked
+    cargo clippy -p zencodec-media -p zencodec-media-testkit --all-targets --locked -- -D warnings
+    cargo check -p zencodec-media --no-default-features --target wasm32-unknown-unknown --locked
+    just api-doc
+
 frame-policy-integration:
     just frame-policy-check
     cargo test --workspace --all-features --locked

@@ -366,6 +366,10 @@ None.
 
 #### QUEUED BREAKING CHANGES
 
+- On the unpublished media API, `MapError::Backend` takes an owned
+  `Box<dyn Error + Send + Sync>` instead of `String`, retaining concrete causes
+  and location traces through mapping, adaptation and erasure (PR 168).
+
 - `PlaneData` gains accounted 8/16-bit storage variants on the unpublished media
   API. Exhaustive matches must handle the new variants (`5019a40a`).
 
@@ -374,6 +378,10 @@ None.
   validation contract can use the error-only `VideoEncoderShim` (`ffaddb6b`).
 
 #### Added
+
+- `PumpError::source()` exposes upstream and downstream failures to standard
+  error-chain inspection. Typed and erased pump regressions also retain native
+  causes and terminal-session behavior.
 
 - Accounted packet payloads and native-word planes preserve storage charges
   through packet take/clone, side data, frame clones, show-existing presentations

@@ -376,3 +376,11 @@ unexpected color and discarded descriptive metadata remain failures.
 Fixed on the checked API review branch: adding a navigation entry overflowed the
 390 px CI viewport. The header wraps its links and grows vertically. Existing
 browser no-overflow assertions remain unchanged; evidence is in docs/ideal-api.md.
+
+## Known Bugs: media error-chain gaps (2026-10-25, fixed)
+
+The unpublished media pump retained upstream/downstream failures but omitted
+`Error::source`, and mapping failures accepted only strings. Pump sources now
+forward their original errors; `MapError::Backend` owns the backend error.
+`just media-errors-check` verifies concrete causes and location traces through
+typed and erased pumps, mapping adapters and fused terminal states.

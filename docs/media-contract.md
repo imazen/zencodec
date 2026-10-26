@@ -46,6 +46,19 @@ Both fused wrappers stay failed if a backend or stop unwinds and the caller
 catches the panic; only a successful decoder reset reopens a fused decoder.
 These properties are checked by `zencodec-media-testkit/tests/encoder_fusing.rs`.
 
+### Error inspection across pumps and mappings
+
+`PumpError::source()` exposes the selected upstream or downstream error. A pump
+must not end a generic error-chain walk before the codec, policy or destination
+cause. Type erasure retains that cause and any `At<E>` location trace.
+
+`MapError::Backend` owns `Box<dyn Error + Send + Sync>` on the unpublished media
+API. Implementors pass the original backend error, including its trace, instead
+of formatting it to a string. `Unavailable` remains the cause-free refusal for
+storage without a CPU mapping. Mapping causes stay inspectable through
+`AdaptError::Map` and erasure. `just media-errors-check` exercises these paths and
+the fused-session terminal rules.
+
 ## Demuxers
 
 - `step` takes a prefix of the input it asked for and returns an event, or
@@ -197,3 +210,10 @@ these publication checks from native allocation or conversion guarantees.
   falls back silently to a full download.
 - Byte-array-only codecs say so (`AccessPattern`, capabilities); they are not
   dressed up as streaming.
+
+### Error-chain qualification, 2026-10-25
+
+`just media-errors-check` passed in an export outside workspace patches: media
+conformance and error-chain controls, strict Clippy, no_std WASM, and API capture.
+run-heavy rc=0, 10 s, peak RSS 0.33 GiB, minimum available 15907 MiB, peak load
+0.63. This is test/build-process usage, not a codec memory bound.

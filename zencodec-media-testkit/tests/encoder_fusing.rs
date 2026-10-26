@@ -9,8 +9,8 @@ use zencodec_media::{
     frame::Frame,
     packet::Packet,
     session::{
-        CodecConfig, FusedEncoder, Receive, SendStatus, SessionError, VideoDecoder, VideoEncoder,
-        erase_video_encoder,
+        CodecConfig, FusedEncoder, PumpError, Receive, SendStatus, SessionError, VideoDecoder,
+        VideoEncoder, drain_encoder, erase_video_encoder, send_frame_until_accepted,
     },
     track::{CodecId, CodecTag, VideoTrackInfo},
 };
@@ -125,6 +125,51 @@ fn every_typed_and_erased_work_method_is_terminal_after_native_failure() {
             panic: false,
         });
         let failure = invoke(&mut erased, &frame, method).unwrap_err();
+        assert_eq!(
+            zencodec::find_cause::<NativeError>(&failure).unwrap().0,
+            method
+        );
+        assert_terminal(&mut erased, &frame, &calls);
+    }
+}
+
+fn pump_failure<E: VideoEncoder + ?Sized>(
+    encoder: &mut E,
+    frame: &Frame,
+    method: u8,
+) -> PumpError<SessionError<E::Error>, core::convert::Infallible> {
+    if method == 2 {
+        drain_encoder(encoder, &Unstoppable, |_| Ok(())).unwrap_err()
+    } else {
+        send_frame_until_accepted(encoder, frame, &Unstoppable, |_| Ok(())).unwrap_err()
+    }
+}
+
+#[test]
+fn pump_keeps_native_causes_through_typed_and_erased_encoders() {
+    let frame = frame();
+    for method in 0..3 {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut typed = FusedEncoder::new(Loose {
+            fail_at: method,
+            calls: calls.clone(),
+            panic: false,
+        });
+        let failure = pump_failure(&mut typed, &frame, method);
+        assert!(matches!(failure, PumpError::Upstream(_)));
+        assert_eq!(
+            zencodec::find_cause::<NativeError>(&failure).unwrap().0,
+            method
+        );
+        assert_terminal(&mut typed, &frame, &calls);
+
+        let mut erased = erase_video_encoder(Loose {
+            fail_at: method,
+            calls: calls.clone(),
+            panic: false,
+        });
+        let failure = pump_failure(&mut erased, &frame, method);
+        assert!(matches!(failure, PumpError::Upstream(_)));
         assert_eq!(
             zencodec::find_cause::<NativeError>(&failure).unwrap().0,
             method

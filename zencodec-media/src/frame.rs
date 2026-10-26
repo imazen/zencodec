@@ -17,7 +17,6 @@
 //! frame, sharing its picture with other timing.
 
 use alloc::boxed::Box;
-use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::fmt;
@@ -241,8 +240,9 @@ pub trait MappedPlanes {
 pub enum MapError {
     /// The storage is not readable on the CPU.
     Unavailable,
-    /// The backend refused, saying why.
-    Backend(String),
+    /// The backend refused. Preserve its concrete error and any location trace
+    /// instead of formatting them into a message.
+    Backend(Box<dyn core::error::Error + Send + Sync + 'static>),
 }
 
 impl fmt::Display for MapError {
@@ -254,7 +254,14 @@ impl fmt::Display for MapError {
     }
 }
 
-impl core::error::Error for MapError {}
+impl core::error::Error for MapError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Unavailable => None,
+            Self::Backend(error) => Some(&**error),
+        }
+    }
+}
 
 /// Backend-owned pixel storage: rav1d's refcounted picture, an owned set of
 /// planes, a pool slot.

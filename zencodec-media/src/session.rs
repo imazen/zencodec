@@ -752,4 +752,10 @@ impl<U: fmt::Display, D: fmt::Display> fmt::Display for PumpError<U, D> {
 impl<U: core::error::Error + 'static, D: core::error::Error + 'static> core::error::Error
     for PumpError<U, D>
 {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Upstream(error) => Some(error),
+            Self::Downstream(error) => Some(error),
+        }
+    }
 }
