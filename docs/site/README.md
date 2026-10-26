@@ -20,3 +20,8 @@ The browser checks above/below expansion, whole-example copying, keyboard use
 and horizontal overflow at three viewport sizes. Keep rationale brief in the
 collapsed view; place details and evidence in the expansion. Do not turn a
 successful narrow test into a claim that the complete target is implemented.
+
+`gaps.html` lists existing API names against missing behavior and qualification.
+Its canvas-rendering recommendation remains proposed; the table must not imply
+that packed or composited output is display-ready. Compile observations retain
+Zenbench resource flags and distinguish the traits consumer from codec builds.
