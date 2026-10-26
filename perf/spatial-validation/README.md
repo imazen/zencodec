@@ -88,6 +88,26 @@ there is no evidence here for another public codec trait, a callback per item,
 or requiring every caller to coordinate capability flags. Promotion still needs
 native work accounting and integration with the existing operation context.
 
+JXL now also has a separate native header allowance. The private adapter accepts
+`Limits { presentations: 1, frame_headers: Some(5) }` at open and applies that
+configuration to discovery and every fresh selected decoder. The real layer
+fixture requires five headers for its one visible presentation: four refuses,
+five returns exact pixels. Failed discovery retains the typed native
+`LimitExceeded { resource: "frame_headers", actual, limit }` through every retry
+without re-entering the parser. Native tests also cover hidden preview,
+reference-only and LF frames, partial input, seek, rewind and reset.
+
+This allowance is per native decoder, not a shared total across independent
+selected decodes. It counts completed header parses; bytes, CPU and allocations
+inside a header remain separate bounds. The common call allowance still covers
+cached browsing and repeated cursors. Neither replaces source admission or
+whole-operation accounting. Native implementation and scope:
+[decoder issue 71](https://github.com/imazen/zenjxl-decoder/issues/71).
+The full default-feature native matrix and strict lint pass after integration;
+[receipt](../../benchmarks/native_discovery_2026-10-26.json):
+`run-heavy: done rc=0 196s | peak-RSS 0.54GiB | min-avail 13434MiB | peak-load 1.22`
+(test process, not a decoder resource guarantee).
+
 ### Source identity is established by the transport
 
 The [private HTTP source](src/http_source.rs) and [response harness](http_snapshot.py)

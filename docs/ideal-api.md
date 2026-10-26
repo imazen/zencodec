@@ -129,6 +129,12 @@ TIFF/SubIFD selection, including replacement and malformed-response refusal.
 Multi-object manifests, browser transports and stable disk snapshots remain open. A private
 common wrapper now bounds discovery calls consistently across cached/repeated
 TIFF and JXL browsing; it does not bound work inside a native call. The native
+JXL adapter also applies an opt-in frame-header allowance to discovery and each
+fresh selected decoder. Hidden headers count, partial-input retries do not
+double-charge, and seek/rewind preserve the native count. Terminal discovery
+errors retain their original typed cause on retries. This is not shared
+operation accounting or a byte/CPU/allocation bound within one header; see
+[native issue 71](https://github.com/imazen/zenjxl-decoder/issues/71). The
 collection adapters now carry one existing `StopToken` through discovery,
 selected replay and final output checks. Cancellation injection covers observed
 polls in classic TIFF/BigTIFF SubIFD and JXL presentation operations; native-call

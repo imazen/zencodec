@@ -373,13 +373,75 @@ fn jxl_selection_rejects_foreign_identity_and_fuses_discovery_refusal() {
     );
     let err = second.next().err().unwrap();
     assert_eq!(
-        err.downcast_ref::<SelectionError>(),
+        zencodec::find_cause::<SelectionError>(err.as_ref()),
         Some(&SelectionError::DiscoveryLimit)
     );
     assert!(
         second.next().is_err(),
         "a refused scan cannot appear exhausted"
     );
+}
+
+#[test]
+fn discovery_budget_native_headers_bound_hidden_work_and_retain_terminal_cause() {
+    use super::jxl_items::Limits;
+    let data = fixture("multiple_layers_noise_spline.jxl");
+    let assert_limit = |error: &(dyn std::error::Error + 'static), bound| {
+        let cause = zencodec::find_cause::<zenjxl_decoder::api::Error>(error)
+            .expect("lost native header allowance cause");
+        assert!(
+            matches!(cause, zenjxl_decoder::api::Error::LimitExceeded {
+            resource: "frame_headers", actual, limit,
+        } if *limit == bound && *actual == bound + 1),
+            "{cause:?}"
+        );
+    };
+    for bound in [0, 4] {
+        let stop = CheckStop::default();
+        let mut collection = JxlItems::open_with_stop(
+            &data,
+            Composition::Composited,
+            Limits {
+                presentations: 1,
+                frame_headers: Some(bound),
+            },
+            stop.token(),
+        )
+        .unwrap();
+        let mut cursor = collection.images().unwrap();
+        let error = Collection::next(&mut collection, &mut cursor).unwrap_err();
+        assert_limit(&error, bound);
+        let before = stop.calls();
+        // A terminal discovery failure cannot become EOF or a generic message,
+        // and retrying it must not execute the native parser again.
+        let error = Collection::next(&mut collection, &mut cursor).unwrap_err();
+        assert_limit(&error, bound);
+        let error = collection.images().err().unwrap();
+        assert_limit(&error, bound);
+        let error = collection.next().err().unwrap();
+        assert_limit(error.as_ref(), bound);
+        assert_eq!(stop.calls(), before, "terminal retry reached native work");
+    }
+    let mut collection = JxlItems::open(
+        &data,
+        Composition::Composited,
+        Limits {
+            presentations: 1,
+            frame_headers: Some(5),
+        },
+    )
+    .unwrap();
+    let expected = super::output_tests::expected_output(&data);
+    let image = first_image(&mut collection, &ImageRequest::default())
+        .unwrap()
+        .unwrap();
+    exact_rows(&expected[0], &super::output_tests::mapped_planes(&image));
+    // The documented bound is per native decoder, not a shared total across
+    // independent selected decodes. Cached discovery still returns the same ID.
+    let again = first_image(&mut collection, &ImageRequest::default())
+        .unwrap()
+        .unwrap();
+    exact_rows(&expected[0], &super::output_tests::mapped_planes(&again));
 }
 
 #[test]
