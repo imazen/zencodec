@@ -1,0 +1,206 @@
+{
+  "kind": "native retained-payload qualification; not RSS or throughput",
+  "source_zencodec_base": "b2d8244eb2378093c541d141a85cfabb7bbafdf5",
+  "source_zenpixels": "4e59d3c04dc74b4d78a98f0b5310363644f9ac82",
+  "source_zenjxl": "974aa0410030ca5b541fcf418a63690e51203ff7",
+  "source_sha256": {
+    "perf/spatial-validation/src/jxl_planned_color_tests.rs": "31bdd6ed60bd0315a4d07bf95bf182dddf8c8f34b0aa198372e45b21841e15ee",
+    "perf/spatial-validation/src/jxl_color_oracle_tests.rs": "285f1a3114551feec387b93c0fdf8b7a1961e84c8b26873648301968b07ce445",
+    "perf/spatial-validation/Cargo.toml": "a696ba6afa07e71d7c10b6b6d4784cbdb80b5cea0d30519e0bb0535426574f54",
+    "perf/spatial-validation/dependencies.lock": "6d88cf2c5e477d3a9aa2cc38e1ca896c0ad7c3e6c593581b9bb71b9125ad4c42",
+    "perf/spatial-validation/record_retention.py": "fc2bc08748dc28e025602672ef279110bee83be00a8a5b87fe963b6fe5eb5bfe"
+  },
+  "baseline": "/mnt/v/output/zencodec/platform-regions-20261026-run/native-color-owner-final-1",
+  "current": "/mnt/v/output/zencodec/platform-regions-20261026-run/native-separate-auxiliary-final-1",
+  "log": "/home/lilith/tmp/zencodec-native-separate-auxiliary-suite-20261026.log",
+  "log_sha256": "7c54b6ff5503f33bd6fc642764fb1ad8ed082cc81f873eb0088cf013a6d1d6b7",
+  "resource_wrapper": "run-heavy: done rc=0 52s | peak-RSS 0.54GiB | min-avail 11046MiB | peak-load 0.92",
+  "tests": {
+    "passed": 129,
+    "failed": 0,
+    "ignored": 0,
+    "strict_clippy": "passed"
+  },
+  "selections": [
+    {
+      "selection": 0,
+      "before": {
+        "auxiliary_planes_retained": 0,
+        "destination_bytes": 1236480,
+        "publication": "ReturnHeld",
+        "same_auxiliary_addresses": true,
+        "source_bytes_after": 0,
+        "source_bytes_before": 1232640
+      },
+      "after": {
+        "auxiliary_bytes": 0,
+        "auxiliary_planes_retained": 0,
+        "destination_bytes": 1236480,
+        "publication": "ReturnHeld",
+        "same_auxiliary_addresses": true,
+        "source_bytes_after": 0,
+        "source_bytes_before": 1232640,
+        "source_color_released": true
+      },
+      "max_absolute_color_error": 8.165836334228516e-06,
+      "identical_artifacts_sha256": {
+        "source.f32": "5a553f05fd8ac51d12c6564b1f2b19fd2f9cc6c1e18c64b4c1334bc988281f6d",
+        "converted.f32": "3f1c4f552da66f1d33cad3142972a17517ca99f88a33019f3fb6849426678aac",
+        "oracle.f32": "4a07cb830814da061d526df38d1e0d8f64baddd9683550cce8f40cab4e684439",
+        "source.icc": "72c4e9508ec4c8136b3cb708443e0557d0cb827f96bfd14b4255cbead1c0cf49",
+        "target.icc": "231752984cd4a5278e1b8d2390fe496767d4511fc81f54e1a5c69ae9ab4c42b5"
+      }
+    },
+    {
+      "selection": 1,
+      "before": {
+        "auxiliary_planes_retained": 1,
+        "destination_bytes": 37785600,
+        "publication": "ReturnHeld",
+        "same_auxiliary_addresses": true,
+        "source_bytes_after": 47222784,
+        "source_bytes_before": 47222784
+      },
+      "after": {
+        "auxiliary_bytes": 9455616,
+        "auxiliary_planes_retained": 1,
+        "destination_bytes": 37785600,
+        "publication": "ReturnHeld",
+        "same_auxiliary_addresses": true,
+        "source_bytes_after": 9455616,
+        "source_bytes_before": 47222784,
+        "source_color_released": true
+      },
+      "max_absolute_color_error": 7.697194814682007e-05,
+      "identical_artifacts_sha256": {
+        "source.f32": "b5ab06c2c18f5e9652dab09f16f67cd3057fd60f560784a8a541fb42812aa5b0",
+        "converted.f32": "11664c93e9b8a2f13df8299c0d80bbbfa4e38d4f7d5b07a28256d7ae8a1fc844",
+        "oracle.f32": "5024844801a7b9d89c23f41797cebef2cf4e1f311499aa9b01ffce248b1e419a",
+        "source.icc": "72c4e9508ec4c8136b3cb708443e0557d0cb827f96bfd14b4255cbead1c0cf49",
+        "target.icc": "231752984cd4a5278e1b8d2390fe496767d4511fc81f54e1a5c69ae9ab4c42b5"
+      }
+    },
+    {
+      "selection": 2,
+      "before": {
+        "auxiliary_planes_retained": 1,
+        "destination_bytes": 9455616,
+        "publication": "ReturnHeld",
+        "same_auxiliary_addresses": true,
+        "source_bytes_after": 11814912,
+        "source_bytes_before": 11814912
+      },
+      "after": {
+        "auxiliary_bytes": 2368512,
+        "auxiliary_planes_retained": 1,
+        "destination_bytes": 9455616,
+        "publication": "ReturnHeld",
+        "same_auxiliary_addresses": true,
+        "source_bytes_after": 2368512,
+        "source_bytes_before": 11814912,
+        "source_color_released": true
+      },
+      "max_absolute_color_error": 1.86040997505188e-05,
+      "identical_artifacts_sha256": {
+        "source.f32": "c3bbe47ddc393a13860625ff24348c99ceb60b1feb8bbf2e9b9acde8719fbe5c",
+        "converted.f32": "a6a99da9acde8e819df25353e2524995edb7244a1d808bd6f15f945daae9e614",
+        "oracle.f32": "7d888685d7ef6272bb889f88e0268cd3e207832ae029784098d88c76330cd1e8",
+        "source.icc": "72c4e9508ec4c8136b3cb708443e0557d0cb827f96bfd14b4255cbead1c0cf49",
+        "target.icc": "231752984cd4a5278e1b8d2390fe496767d4511fc81f54e1a5c69ae9ab4c42b5"
+      }
+    },
+    {
+      "selection": 3,
+      "before": {
+        "auxiliary_planes_retained": 1,
+        "destination_bytes": 9455616,
+        "publication": "ReturnHeld",
+        "same_auxiliary_addresses": true,
+        "source_bytes_after": 11814912,
+        "source_bytes_before": 11814912
+      },
+      "after": {
+        "auxiliary_bytes": 2368512,
+        "auxiliary_planes_retained": 1,
+        "destination_bytes": 9455616,
+        "publication": "ReturnHeld",
+        "same_auxiliary_addresses": true,
+        "source_bytes_after": 2368512,
+        "source_bytes_before": 11814912,
+        "source_color_released": true
+      },
+      "max_absolute_color_error": 6.747245788574219e-05,
+      "identical_artifacts_sha256": {
+        "source.f32": "5beeed40165e0d12ba335c851e8cf0f7b958acae194670ddb0e7e02831172212",
+        "converted.f32": "e96bc4f270c8154f0b5b1a7abe0b202ced9d38d19c910b74efa3870a6f843695",
+        "oracle.f32": "a0442e01a7b5e4a59ad3c86bc3b6a6754c0c69c472b260f797477077990fb9f7",
+        "source.icc": "72c4e9508ec4c8136b3cb708443e0557d0cb827f96bfd14b4255cbead1c0cf49",
+        "target.icc": "231752984cd4a5278e1b8d2390fe496767d4511fc81f54e1a5c69ae9ab4c42b5"
+      }
+    },
+    {
+      "selection": 4,
+      "before": {
+        "auxiliary_planes_retained": 1,
+        "destination_bytes": 9455616,
+        "publication": "ReturnHeld",
+        "same_auxiliary_addresses": true,
+        "source_bytes_after": 11814912,
+        "source_bytes_before": 11814912
+      },
+      "after": {
+        "auxiliary_bytes": 2368512,
+        "auxiliary_planes_retained": 1,
+        "destination_bytes": 9455616,
+        "publication": "ReturnHeld",
+        "same_auxiliary_addresses": true,
+        "source_bytes_after": 2368512,
+        "source_bytes_before": 11814912,
+        "source_color_released": true
+      },
+      "max_absolute_color_error": 7.224082946777344e-05,
+      "identical_artifacts_sha256": {
+        "source.f32": "51d306d30cc55a00e8d986f905efa73ce2c2b300141379835de2d94129c31479",
+        "converted.f32": "8dff8cff345ef9f15f2fd1ba2841349958a08adcd13997de17c81e6e9d6a9956",
+        "oracle.f32": "7a3d7c8f759c2cd6f71be0a61873a109931e4d50bda25c7e349f1a981b6e6539",
+        "source.icc": "72c4e9508ec4c8136b3cb708443e0557d0cb827f96bfd14b4255cbead1c0cf49",
+        "target.icc": "231752984cd4a5278e1b8d2390fe496767d4511fc81f54e1a5c69ae9ab4c42b5"
+      }
+    },
+    {
+      "selection": 5,
+      "before": {
+        "auxiliary_planes_retained": 1,
+        "destination_bytes": 9455616,
+        "publication": "ReturnHeld",
+        "same_auxiliary_addresses": true,
+        "source_bytes_after": 11814912,
+        "source_bytes_before": 11814912
+      },
+      "after": {
+        "auxiliary_bytes": 2368512,
+        "auxiliary_planes_retained": 1,
+        "destination_bytes": 9455616,
+        "publication": "ReturnHeld",
+        "same_auxiliary_addresses": true,
+        "source_bytes_after": 2368512,
+        "source_bytes_before": 11814912,
+        "source_color_released": true
+      },
+      "max_absolute_color_error": 6.723403930664062e-05,
+      "identical_artifacts_sha256": {
+        "source.f32": "f1d4ea7c0d0f3e7491a4b16dd686a47143c7e75a256790bab44886ecd7d3ba0f",
+        "converted.f32": "a72fdf05149e33b068e3d7d671ccf37069ef72b6847f354347e6f263d347c883",
+        "oracle.f32": "1ebc68fe4fa66e34a08d1d52ed99c72be4909ae785dd1896c9cb5caa784d92ff",
+        "source.icc": "72c4e9508ec4c8136b3cb708443e0557d0cb827f96bfd14b4255cbead1c0cf49",
+        "target.icc": "231752984cd4a5278e1b8d2390fe496767d4511fc81f54e1a5c69ae9ab4c42b5"
+      }
+    }
+  ],
+  "limits": [
+    "Payload charges exclude native/CMS workspace and owner bookkeeping.",
+    "Source and destination coexist during conversion.",
+    "Original clones and inseparable backends may retain original color.",
+    "This neither establishes general ICC/CMYK conversion nor safe encoder backpressure."
+  ]
+}

@@ -525,6 +525,10 @@ spatial-color-owner-check:
     cargo fmt --manifest-path perf/spatial-validation/Cargo.toml -p spatial-validation
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked native_output_owner_ -- --nocapture --test-threads=1
 
+# Compare real owner payloads while requiring identical samples/profiles/oracles.
+spatial-retention-receipt baseline current log output:
+    python3 perf/spatial-validation/record_retention.py "{{baseline}}" "{{current}}" "{{log}}" "{{output}}"
+
 image-owner-integration:
     just io-contract-check
     cargo check -p zencodec --no-default-features --target wasm32-unknown-unknown --locked

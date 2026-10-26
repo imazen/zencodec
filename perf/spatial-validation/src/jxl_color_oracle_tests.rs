@@ -190,13 +190,15 @@ fn native_color_profiles_match_independent_lcms_with_exact_alpha_and_admission()
                 original.interpretation(),
                 derived.interpretation()
             ));
-            let auxiliaries = {
+            let (auxiliaries, auxiliary_bytes) = {
                 let before = original.map().unwrap();
                 let after = derived.map().unwrap();
                 assert_eq!(before.plane_count(), after.plane_count());
+                let mut auxiliary_bytes = 0;
                 for index in 1..before.plane_count() {
                     let a = before.plane(index).unwrap().unwrap();
                     let b = after.plane(index).unwrap().unwrap();
+                    auxiliary_bytes += a.samples.stride_bytes() * a.samples.dimensions().1;
                     assert!(matches!(a.meaning, Meaning::Auxiliary(_)));
                     assert_eq!(a.meaning, b.meaning);
                     assert_eq!(a.samples.dimensions(), b.samples.dimensions());
@@ -211,16 +213,16 @@ fn native_color_profiles_match_independent_lcms_with_exact_alpha_and_admission()
                         assert_eq!(a, b);
                     }
                 }
-                before.plane_count() - 1
+                (before.plane_count() - 1, auxiliary_bytes)
             };
+            assert_eq!(
+                (pool.reserved_bytes(), pool.reserved_objects()),
+                source_charges
+            );
             drop(original);
             assert_eq!(
                 (pool.reserved_bytes(), pool.reserved_objects()),
-                if auxiliaries == 0 {
-                    (0, 0)
-                } else {
-                    source_charges
-                }
+                (auxiliary_bytes, auxiliaries)
             );
             let mut calls = 0;
             let published = resolve_image(
@@ -249,6 +251,8 @@ fn native_color_profiles_match_independent_lcms_with_exact_alpha_and_admission()
                     "auxiliary_planes_retained": auxiliaries,
                     "source_bytes_before": source_charges.0,
                     "source_bytes_after": pool.reserved_bytes(),
+                    "auxiliary_bytes": auxiliary_bytes,
+                    "source_color_released": true,
                     "destination_bytes": color_charge,
                     "publication": "ReturnHeld",
                     "same_auxiliary_addresses": true,

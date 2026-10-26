@@ -505,6 +505,15 @@ fn native_output_owner_keeps_auxiliaries_and_interpretation_through_color_replac
                 .into_output();
             let before = ImageFacts::new(&image);
             let input_charge = (pool.reserved_bytes(), pool.reserved_objects());
+            let auxiliary_bytes = {
+                let map = image.map().unwrap();
+                (1..map.plane_count())
+                    .map(|index| {
+                        let plane = map.plane(index).unwrap().unwrap();
+                        plane.samples.stride_bytes() * plane.samples.dimensions().1
+                    })
+                    .sum::<usize>()
+            };
             let color_pool = StorageBudget::new(256 * 1024 * 1024, 1);
             let color = image
                 .with_pixels(|pixels| {
@@ -551,14 +560,14 @@ fn native_output_owner_keeps_auxiliaries_and_interpretation_through_color_replac
                     }
                 }
             }
+            assert_eq!(
+                (pool.reserved_bytes(), pool.reserved_objects()),
+                input_charge
+            );
             drop(original);
             assert_eq!(
                 (pool.reserved_bytes(), pool.reserved_objects()),
-                if before.auxiliaries == 0 {
-                    (0, 0)
-                } else {
-                    input_charge
-                }
+                (auxiliary_bytes, before.auxiliaries)
             );
             let published = resolve_image(
                 replaced,

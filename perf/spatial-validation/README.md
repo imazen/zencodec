@@ -1324,11 +1324,28 @@ which describes a converted image without claiming it is the original raster.
 The independent six-case float comparison now also publishes each converted
 owner. Original auxiliary addresses and bytes remain exact; target ICC and
 admission charges survive publication. The RGB case has no auxiliary and
-releases its source payload. Each of the five raw RGBA layers keeps its original
-auxiliary owner, including that owner's old color allocation. The first layer
-retains 47,222,784 source bytes alongside 37,785,600 destination bytes. These are
-observed payload charges, not process memory measurements. Repeated replacement
-releases intermediate colors; it does not accumulate a chain of them.
+releases its source payload. Initially, each raw RGBA layer kept its complete
+original owner: the first layer retained 47,222,784 source bytes alongside
+37,785,600 destination bytes. This exposed avoidable retention of old color.
+
+The optional `PackedImageOwner::retain_auxiliaries` now supplies an independent
+`AuxiliaryImageOwner` automatically. JXL implements it over its separate native
+allocations. The same first layer now retains 9,455,616 source bytes and the
+unchanged 37,785,600 destination bytes. The other four layers each retain
+2,368,512 source bytes instead of 11,814,912. These are observed payload charges,
+not process memory measurements. Original image clones still retain old color;
+an inseparable backend keeps its full owner. Source and destination coexist
+during conversion, so this does not lower the admission required at that point.
+Repeated replacement releases intermediate colors without calling the native
+retention hook again. Errors and unwind discard unpublished owners.
+
+The [separate-owner receipt](../../benchmarks/native_separate_auxiliary_2026-10-26.json)
+records all six measured before/after cases. Source, converted and independent
+oracle samples plus source/target ICC artifacts have identical hashes across
+the ownership change. The full 129-test native suite and strict lint pass:
+`run-heavy: done rc=0 52s | peak-RSS 0.54GiB | min-avail 11046MiB | peak-load 0.92`.
+Reproduce the artifact comparison with `just spatial-retention-receipt
+<baseline-directory> <current-directory> <full-suite-log> <receipt.json>`.
 
 Core controls cover drift in either owner, original traced native failures,
 component-code refusal before mapping, retained clones, publication refusal and
