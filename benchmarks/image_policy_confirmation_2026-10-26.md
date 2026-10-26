@@ -61,3 +61,5 @@ not per-operation heap allocation or codec workspace.
 failure, timeout and parent SIGKILL using only a test-owned sleeping process.
 The guard requires explicit, already-coordinated PIDs and must not be used to
 suspend active work or bypass a live scheduling claim.
+
+The missing retained gate diagnostics are tracked in [Zenbench #42](https://github.com/imazen/zenbench/issues/42). This requests diagnostic evidence, with the acceptance gates unchanged.
