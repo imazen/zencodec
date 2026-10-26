@@ -1,0 +1,14 @@
+{
+  "native_pin": "65e3c871b7341703664039fd2ee70e0524f45db6",
+  "status": "First integration reproduced a missing F32 CMYK PixelFormat; adapter construction panicked rather than carrying native CMYK samples. Follow-through belongs in zenpixels plus typed adapter refusal for unsupported layouts.",
+  "receipts": [
+    {
+      "log": "zencodec-raw-collection-1-2026-10-26.log",
+      "sha256": "b054eed1354c0413460bc15564d8d7c41a23b14f3ff787b6180a332e7479dfba",
+      "results": [
+        "test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 79 filtered out; finished in 40.89s",
+        "run-heavy: done rc=101 49s | peak-RSS 0.59GiB | min-avail 13071MiB | peak-load 0.86"
+      ]
+    }
+  ]
+}

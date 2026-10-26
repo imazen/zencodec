@@ -389,3 +389,13 @@ The unpublished media pump retained upstream/downstream failures but omitted
 forward their original errors; `MapError::Backend` owns the backend error.
 `just media-errors-check` verifies concrete causes and location traces through
 typed and erased pumps, mapping adapters and fused terminal states.
+
+## Known Bugs: F32 CMYK selected-output carriage (2026-10-26)
+
+The raw JXL collection experiment reproduces a descriptor-construction panic:
+native CMYK layers emit F32 samples, while the pinned zenpixels `PixelFormat`
+only carries CMYK8. This is an output representation gap, not permission to
+label CMY/K as RGB or quantize samples. The failing native/independent gate is
+`just spatial-layer-check <fresh-artifacts>`; receipt
+`benchmarks/raw_collection_2026-10-26.json`. Extend the pixel representation and
+make unsupported adapter construction return a typed cause before publication.

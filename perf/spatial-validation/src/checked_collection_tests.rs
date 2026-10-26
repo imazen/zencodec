@@ -38,7 +38,7 @@ fn checked_collection_guide_runs_native_factory_and_returns_owned_checked_pixels
     let image = super::collection::checked_jxl_first(
         &data,
         super::jxl_items::Limits {
-            presentations: 1,
+            images: 1,
             frame_headers: Some(1),
         },
         PolicySet::new(),

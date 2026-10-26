@@ -30,6 +30,15 @@ pub struct JxlSourceFacts {
     pub extra_details: Vec<JxlExtraChannelDetails>,
 }
 
+/// Frozen with the actual local samples. Reference slots are scoped by image's
+/// opened-source identity; they are not collection item indices or portable IDs.
+#[derive(Clone, Debug)]
+pub struct JxlRawLayer {
+    pub image: super::image_items::ImageId,
+    pub placement: super::placement::Placement,
+    pub native: zenjxl_decoder::api::JxlLayerInfo,
+}
+
 pub fn adopt(
     planes: Vec<Plane>,
     source: JxlSourceFacts,
@@ -37,6 +46,7 @@ pub fn adopt(
     profile: &JxlColorProfile,
     timing: Option<zencodec::frame::FrameTiming>,
     spot_colors_rendered: bool,
+    layer: Option<JxlRawLayer>,
 ) -> Result<ImageOutput, Failure> {
     let info = &source.header;
     let layout = match format.color_type {
@@ -141,9 +151,12 @@ pub fn adopt(
     if planes.next().is_some() {
         return Err(Error::other("unidentified native extra plane").into());
     }
+    let canvas = layer
+        .as_ref()
+        .map_or(info.coded_size, |layer| layer.native.size);
     let geometry = ImageGeometry {
-        canvas_width: u32::try_from(info.coded_size.0)?,
-        canvas_height: u32::try_from(info.coded_size.1)?,
+        canvas_width: u32::try_from(canvas.0)?,
+        canvas_height: u32::try_from(canvas.1)?,
         region: Rect {
             x: 0,
             y: 0,
@@ -156,6 +169,11 @@ pub fn adopt(
     let mut interpretation = ImageInterpretation::packed(geometry, orientation);
     interpretation.timing = timing;
     interpretation.source_details.insert(source);
+    if let Some(layer) = layer {
+        // Validate placement without clipping or dropping off-canvas samples.
+        layer.placement.visible(geometry)?;
+        interpretation.source_details.insert(layer);
+    }
     ImageOutput::packed(pixels, extras, interpretation).map_err(Into::into)
 }
 

@@ -111,7 +111,7 @@ mod checked_consumer {
     };
 
     // Native factory setup stays in the adapter. Limits are application input:
-    // presentations bounds visible storage; frame_headers counts hidden work.
+    // images bounds selected-item storage; frame_headers counts hidden work.
     // The consumer uses the same checked operation for later selections.
     pub fn checked_jxl_first<R: PolicyResolver>(
         bytes: &[u8],

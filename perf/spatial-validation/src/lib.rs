@@ -19,6 +19,8 @@ mod http_source;
 pub mod image_items;
 pub mod image_output;
 mod jxl_items;
+mod jxl_layer_tests;
+mod jxl_layers;
 mod jxl_output;
 mod jxl_tests;
 mod output_tests;

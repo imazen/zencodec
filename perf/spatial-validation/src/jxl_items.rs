@@ -26,18 +26,18 @@ pub struct JxlItems<'a> {
     control: Control,
 }
 
-/// Separate visible-item storage from the native work needed to discover it.
+/// Separate selected-item storage from the native work needed to discover it.
 /// Each selected decode creates a fresh native decoder with this same bound;
 /// these are not shared charges across the collection's independent decodes.
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
-    pub presentations: usize,
+    pub images: usize,
     pub frame_headers: Option<u64>,
 }
 impl From<usize> for Limits {
-    fn from(presentations: usize) -> Self {
+    fn from(images: usize) -> Self {
         Self {
-            presentations,
+            images,
             frame_headers: None,
         }
     }
@@ -56,7 +56,7 @@ impl std::error::Error for DiscoveryFailure {
     }
 }
 
-fn complete<T, U>(result: ProcessingResult<T, U>) -> Result<T, Failure> {
+pub(super) fn complete<T, U>(result: ProcessingResult<T, U>) -> Result<T, Failure> {
     match result {
         ProcessingResult::Complete { result } => Ok(result),
         ProcessingResult::NeedsMoreInput { .. } => {
@@ -71,7 +71,7 @@ fn options() -> JxlDecoderOptions {
         .with_dither_u8(false)
 }
 
-fn controlled_options(control: &Control, limits: Limits) -> JxlDecoderOptions {
+pub(super) fn controlled_options(control: &Control, limits: Limits) -> JxlDecoderOptions {
     let mut options = options();
     options.limits.max_frame_headers = limits.frame_headers;
     match control.token() {
@@ -169,7 +169,7 @@ impl<'a> JxlItems<'a> {
             self.scanner = None;
             return Ok(None);
         }
-        if self.visible.len() >= self.limits.presentations {
+        if self.visible.len() >= self.limits.images {
             return Err(SelectionError::DiscoveryLimit.into());
         }
         self.visible.try_reserve_exact(1)?;
@@ -284,6 +284,7 @@ impl<'a> JxlItems<'a> {
             &profile,
             timing,
             render,
+            None,
         )?;
         self.control.check()?;
         Ok(image)
@@ -310,7 +311,7 @@ impl<'a> JxlItems<'a> {
         })?;
         let (mut decoder, _) = pixel_decoder(self.data, native_options)?;
         self.control.check()?;
-        decoder.start_new_frame(target);
+        decoder.try_start_new_frame(target)?;
         let start = usize::try_from(target.decode_start_file_offset)?;
         let input = self
             .data
@@ -320,7 +321,7 @@ impl<'a> JxlItems<'a> {
     }
 }
 
-fn pixel_decoder(
+pub(super) fn pixel_decoder(
     data: &[u8],
     options: JxlDecoderOptions,
 ) -> Result<(JxlDecoder<states::WithImageInfo>, &[u8]), Failure> {
@@ -348,19 +349,24 @@ fn decode_next(
     Ok((decoded.decoder, decoded.planes))
 }
 
-struct DecodedNext {
-    decoder: JxlDecoder<states::WithImageInfo>,
-    planes: Vec<Plane>,
-    timecode: Option<u32>,
+pub(super) struct DecodedNext {
+    pub(super) decoder: JxlDecoder<states::WithImageInfo>,
+    pub(super) planes: Vec<Plane>,
+    pub(super) timecode: Option<u32>,
+    pub(super) layer: zenjxl_decoder::api::JxlLayerInfo,
+    pub(super) name: String,
 }
 
-fn decode_next_details(
+pub(super) fn decode_next_details(
     decoder: JxlDecoder<states::WithImageInfo>,
     input: &mut &[u8],
     padding: usize,
 ) -> Result<DecodedNext, Failure> {
-    let (width, height) = decoder.basic_info().size;
-    let format = decoder.current_pixel_format();
+    let format = decoder.current_pixel_format().clone();
+    let frame = complete(decoder.process(input)?)?;
+    let header = frame.frame_header();
+    let (width, height) = header.size;
+    let layer = frame.frame_layer_info();
     let mut planes = Vec::new();
     planes.try_reserve_exact(1 + format.extra_channel_format.len())?;
     for channels in std::iter::once(format.color_type.samples_per_pixel()).chain(
@@ -389,7 +395,6 @@ fn decode_next_details(
             stride,
         });
     }
-    let frame = complete(decoder.process(input)?)?;
     let timecode = frame.frame_timecode();
     let mut buffers: Vec<_> = planes
         .iter_mut()
@@ -407,6 +412,8 @@ fn decode_next_details(
         decoder,
         planes,
         timecode,
+        layer,
+        name: header.name,
     })
 }
 

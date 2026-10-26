@@ -322,7 +322,7 @@ fn selected_jxl_presentations_match_native_sequential_with_dependencies() {
 }
 
 #[test]
-fn jxl_native_coalescing_requirement_refuses() {
+fn jxl_native_coalescing_requirement_is_honored() {
     let mut distinct_views = 0;
     for name in [
         "conformance_test_images/blendmodes.jxl",
@@ -330,16 +330,14 @@ fn jxl_native_coalescing_requirement_refuses() {
     ] {
         let data = fixture(name);
         let native = sequential(&data, true).unwrap();
-        // The old probe reproduced silently substituted composited output.
-        // Native request validation now refuses until raw layers are implemented.
-        let error = sequential(&data, false).unwrap_err();
-        assert!(matches!(
-            zencodec::find_cause::<zenjxl_decoder::api::Error>(error.as_ref()),
-            Some(zenjxl_decoder::api::Error::UncoalescedOutputUnsupported)
-        ));
+        // This session's old probe first enforced refusal of silent composition.
+        // Qualified F32 layers now execute; the cardinality must match the raw
+        // oracle rather than silently returning visible presentations.
+        let raw = sequential(&data, false).unwrap();
         let composited = independent_frames(name, true);
         assert_eq!(native.len(), composited.len());
         let layers = independent_frames(name, false);
+        assert_eq!(raw.len(), layers.len());
         distinct_views += usize::from(composited != layers);
         let err = JxlItems::open(&data, Composition::Uncomposited, 4096)
             .err()
@@ -402,7 +400,7 @@ fn discovery_budget_native_headers_bound_hidden_work_and_retain_terminal_cause()
             &data,
             Composition::Composited,
             Limits {
-                presentations: 1,
+                images: 1,
                 frame_headers: Some(bound),
             },
             stop.token(),
@@ -426,7 +424,7 @@ fn discovery_budget_native_headers_bound_hidden_work_and_retain_terminal_cause()
         &data,
         Composition::Composited,
         Limits {
-            presentations: 1,
+            images: 1,
             frame_headers: Some(5),
         },
     )

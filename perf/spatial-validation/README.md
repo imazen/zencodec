@@ -144,7 +144,7 @@ or requiring every caller to coordinate capability flags. Promotion still needs
 native work accounting and integration with the existing operation context.
 
 JXL now also has a separate native header allowance. The private adapter accepts
-`Limits { presentations: 1, frame_headers: Some(5) }` at open and applies that
+`Limits { images: 1, frame_headers: Some(5) }` at open and applies that
 configuration to discovery and every fresh selected decoder. The real layer
 fixture requires five headers for its one visible presentation: four refuses,
 five returns exact pixels. Failed discovery retains the typed native
