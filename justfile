@@ -463,6 +463,16 @@ frame-cost-build:
 frame-cost-bench cpus="2,3":
     CARGO_PROFILE_BENCH_DEBUG=1 CARGO_PROFILE_BENCH_LTO=thin taskset -c "{{cpus}}" cargo bench --bench frame_policy --locked -- --cpu-policy=unrestricted --median-of-passes=3
 
+# Run saved same-workload executables without rebuilding either side.
+frame-cost-saved-bench executable cpus="2,3":
+    test -x "{{executable}}"
+    taskset -c "{{cpus}}" "{{executable}}" --cpu-policy=unrestricted --median-of-passes=3
+
+frame-cost-saved-profile executable output mode="record" count="1000000" cpus="2,3":
+    test -x "{{executable}}"
+    test ! -e "{{output}}"
+    taskset -c "{{cpus}}" perf stat -x, -o "{{output}}" -e instructions,cycles,cache-misses,context-switches "{{executable}}" "{{mode}}" "{{count}}"
+
 frame-cost-profile output mode="record" count="1000000" cpus="2,3":
     test ! -e "{{output}}"
     taskset -c "{{cpus}}" perf stat -x, -o "{{output}}" -e instructions,cycles,cache-misses,context-switches "${CARGO_TARGET_DIR:-target}/release/examples/frame_policy_probe" "{{mode}}" "{{count}}"

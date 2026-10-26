@@ -1,0 +1,52 @@
+{
+  "baseline": "7d72a8c740d28ed2d112dcb3e3758114a9c3ddb7",
+  "candidate": "419d5c19c715a412b54a811523081c718295c24d",
+  "dependencies_sha256": "f744066970cdf57a0e2365c0b19b6dda0a92225eb2ee70fcf95e372357c1c45a",
+  "rust": "1.99.1",
+  "command": "just frame-cost-build",
+  "profile": "thin LTO, debug=1, no target-cpu=native",
+  "scope": "Unchanged resolve_frame/OperationReport workload; measures effects on existing frame-policy history, not image decode or total image publication cost.",
+  "executables": {
+    "baseline-bench": "5082e4814efc0a642f04bb8fe7494d6c40400f4a686b80be33e68cfeb1176175",
+    "baseline-probe": "bbbd8ef5afabac6642d1c66c4691c23141fef7af4fee2ad981ec327d5b70f9ad",
+    "image-bench": "30b702531ec25d4a6894576fd7fe67eee5c3e544481fee6ef7c24170471bd545",
+    "image-probe": "2fa97d5c0aa3f065243723b409c6d05cc21a657d3dd77e8bea2cebc5bc9b07bd"
+  },
+  "date": "2026-10-26",
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/image-policy-cost",
+  "files": {
+    "baseline-bench": "5082e4814efc0a642f04bb8fe7494d6c40400f4a686b80be33e68cfeb1176175",
+    "baseline-benchmark.log": "dab428545ef689d6c4eccee518a3928286e73adebedb765d4b714153399855b6",
+    "baseline-probe": "bbbd8ef5afabac6642d1c66c4691c23141fef7af4fee2ad981ec327d5b70f9ad",
+    "baseline-run/.zenbench/data/.gitignore": "2dbb795c1ac7380537df5a1c5f6a1a1a1a47441f7706b919d9bdf4d00b37b812",
+    "baseline-run/.zenbench/data/objects/37c2222d1b5d9730eb4836fc4335460afb4c695b5fdf9b0b652f14dbedcee8c2.json.gz": "37c2222d1b5d9730eb4836fc4335460afb4c695b5fdf9b0b652f14dbedcee8c2",
+    "baseline-run/.zenbench/data/objects/8f7d44c7a9c95504f8c1eeefbba2dba8ccd52271f098e19b5ed2eea4c559d084.json.gz": "8f7d44c7a9c95504f8c1eeefbba2dba8ccd52271f098e19b5ed2eea4c559d084",
+    "baseline-run/.zenbench/data/objects/dfd4d13eab0eba94ce4c8da93aca24bb3573a1ea851bea019c4a2012a5bcf1ef.json.gz": "dfd4d13eab0eba94ce4c8da93aca24bb3573a1ea851bea019c4a2012a5bcf1ef",
+    "baseline-run/.zenbench/data/runs/18e1ff5a8b6cbf44-ce286-9dc08a0e84e7dbbe.json": "ba48531c2daf961a43d83d8d168779acec1ea97f5c88733134e827a0e7f0868a",
+    "baseline-run/.zenbench/data/runs/18e1ff5b979ef3fb-ce286-722699c0c2fb70e7.json": "70a278553ce6f03a67d3242d3ec0750a984db26df04caac2aa55e3db6d509811",
+    "baseline-run/.zenbench/data/runs/18e1ff5caa73f493-ce286-9c7ee5185c5bc747.json": "372f86493c2a6d4439636aae568ad8c27bec2c247f637fef4c4f0ba41aeaba83",
+    "baseline-run/benchmark.log": "4bbea40c212caa8cd8b1d4130af06eb7b26905c5e75f513fd1585cfe557cb3a9",
+    "baseline-run/profile.log": "90fd67c76f7c633440e6a40e5973833346c77431cf49d9bc0fee410bec38150d",
+    "baseline-run/record.perf.csv": "3603d89d2ef1c6476471013bfca7d82df8018182e577e33c52c626cf1b72b0d4",
+    "image-bench": "30b702531ec25d4a6894576fd7fe67eee5c3e544481fee6ef7c24170471bd545",
+    "image-probe": "2fa97d5c0aa3f065243723b409c6d05cc21a657d3dd77e8bea2cebc5bc9b07bd",
+    "image-run/.zenbench/data/.gitignore": "2dbb795c1ac7380537df5a1c5f6a1a1a1a47441f7706b919d9bdf4d00b37b812",
+    "image-run/.zenbench/data/objects/6090ec8782e00a09ebdb715dda4254eb6095777bb248e60007bab267e33ad6fc.json.gz": "6090ec8782e00a09ebdb715dda4254eb6095777bb248e60007bab267e33ad6fc",
+    "image-run/.zenbench/data/objects/b5da9231e5162c42d8c01fafa495e0415a4094827bd552f8b5e486e46e14b3f5.json.gz": "b5da9231e5162c42d8c01fafa495e0415a4094827bd552f8b5e486e46e14b3f5",
+    "image-run/.zenbench/data/objects/c92aeb8cab235258a7730c329a06d2a55cb4f77cfb917c067554fc06d315754f.json.gz": "c92aeb8cab235258a7730c329a06d2a55cb4f77cfb917c067554fc06d315754f",
+    "image-run/.zenbench/data/runs/18e1ffa089a50ca6-d34d2-986b821b163d4e13.json": "908854e8c921fc22f24d6c1e0f7bbb48d8434db6304483d596183f9f59bfb4b2",
+    "image-run/.zenbench/data/runs/18e1ffa1aa49a50b-d34d2-e2cc1a31a0dc95cf.json": "62ad3f4123a79f4beca2f39fe58b4029d57c3efb34f35d652ba013a21e7f646c",
+    "image-run/.zenbench/data/runs/18e1ffa2bb50b1db-d34d2-3af5f27298d10020.json": "d70d92340d89792912218752a15032189f4c51f47ea5c3e72d34564f76afb74b",
+    "image-run/benchmark.log": "a719cf475f365669af031a8bda3cf87c87853ffc6ea3dea7e81b4b04600abda4",
+    "image-run/combined.perf.data": "f28e3f0438d0002ce75a4a2ac1f22fcfe391ce5e1090a6dacd409fc176309ae7",
+    "image-run/combined.perf.txt": "28fee5e1928eb98531056a9b3f5782c7cfbe0ced4ca9b10dfa0ea18b6a43cb34",
+    "image-run/profile.log": "9b4e7fccbd920375862e563119a521d5b3911dedf084adfcbc197ed0934b673e",
+    "image-run/record.perf.csv": "37774d3472d6a5e315a0f0c689010abef09b5e3c24b4336af318452ee9e8955d",
+    "image-run/sample.log": "aed56e04391aeebe4bb977f2aa549575baa44b4ffe579b0bab041b46452c8fda",
+    "provenance.json": "a51a54293553b228ea608f72ba24dae84d3c25123eff8e2b611c9fb6e714fd1b"
+  },
+  "excluded": [
+    "baseline-benchmark.log: initial run used candidate checkout metadata; repeated from baseline-run"
+  ],
+  "inference": "exploratory; unverified CPU frequency; no end-to-end codec or per-record memory claim"
+}
