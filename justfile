@@ -446,6 +446,11 @@ spatial-description-check:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked description_ -- --nocapture --test-threads=1
     just spatial-validation-lint
 
+# Real native factories share one checked consumer while preserving source modes.
+spatial-factories-check artifacts:
+    SPATIAL_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked collection_factory_ -- --nocapture --test-threads=1
+    just spatial-validation-lint
+
 # Automatic selected-image publication policy, including native failure seams.
 spatial-checked-collection-check:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked checked_collection_ -- --nocapture --test-threads=1

@@ -1,6 +1,46 @@
 use super::*;
 use crate::http_source::{Failure, FailureKind, HttpSource};
 
+#[test]
+fn http_snapshot_collection_factory_preserves_positional_selection() {
+    use crate::collection_factories::{Factories, OpenRequest, TiffFactory};
+    use zencodec::{ImageFormat, StopToken, Unstoppable, operation::PolicySet};
+    let (bytes, refs) = nested_fixture(true, true, false);
+    let name = "collection-factory";
+    write_fixture(name, &bytes);
+    let mut final_read = 0;
+    for mode in ["stable", "change", "changed_tag", "short_body"] {
+        let mut source = HttpSource::open(url(mode, name, final_read), 65536).unwrap();
+        let attempts = source.attempts.clone();
+        let factories = Factories::default().with(TiffFactory(Allowances::default()));
+        let mut images = factories.open(
+            ImageFormat::Tiff, &mut source,
+            OpenRequest { view: Composition::Composited, discovery_attempts: 32 },
+            PolicySet::new(), StopToken::new(Unstoppable),
+        ).unwrap();
+        let mut roots = images.images().unwrap();
+        let root = images.next(&mut roots).unwrap().unwrap();
+        let description = images.describe(&root).unwrap();
+        assert_eq!(description.stored_size, (refs[0].width, refs[0].height));
+        let output = images.decode(&root, &ImageRequest::new());
+        if mode == "stable" {
+            final_read = attempts.get();
+            assert_eq!(output.unwrap().with_pixels(|p| p.as_strided_bytes().to_vec()).unwrap(), refs[0].bytes);
+        } else {
+            let expected = match mode {
+                "change" => FailureKind::Status(412),
+                "changed_tag" => FailureKind::Validator,
+                _ => FailureKind::Body,
+            };
+            assert_cause(&output.err().unwrap(), expected);
+            let before = attempts.get();
+            assert_cause(&images.decode(&root, &ImageRequest::new()).err().unwrap(), expected);
+            assert_eq!(attempts.get(), before, "terminal source retried transport I/O");
+            assert_eq!(images.report().decisions().count(), 0, "failed native output reached publication policy");
+        }
+    }
+}
+
 fn write_fixture(name: &str, bytes: &[u8]) {
     use std::io::Write;
     let root =

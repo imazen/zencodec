@@ -261,6 +261,10 @@ mod image_selection {
         include!("description_tiff_tests.rs");
     }
 
+    mod factory_checks {
+        include!("factory_tests.rs");
+    }
+
     #[cfg(feature = "http")]
     mod http_snapshot {
         include!("http_tests.rs");
