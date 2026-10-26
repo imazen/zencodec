@@ -56,6 +56,22 @@ retrofit allocation enforcement into existing native codec internals.
 
 ## Verification and remaining integration
 
+The packaged JXL collection adapter accepts a shared output pool through
+`JxlCollectionConfig::with_output_storage`. It admits aligned color and auxiliary
+payloads before native writes, then gives their owner to
+`ImageOutput::from_packed_owner`. Neither publication nor cloning copies samples.
+Charges include padding and survive collection, registry and input destruction
+until the last returned image drops. This covers output payloads only; a request
+for a whole-operation memory limit still receives a typed refusal.
+
+The [ordinary/admitted native matrix](../benchmarks/packaged_output_storage_2026-10-26.json)
+checks 147 presentation selections and nine raw layers with exact samples,
+strides and padding, alongside the existing independent-reader gates. Package
+consumer controls also cover partial byte/object admission, cancellation,
+callback decline/error, unwind, alignment and cross-operation contention. The
+pool is currently supplied in codec configuration. A common operation-level
+setting still needs a contract that refuses when an adapter cannot enforce it.
+
 Workspace controls exercise allocation-count and byte-cap contention across
 threads, failed-admission rollback, arithmetic overflow, unwind cleanup, nested
 subviews, empty views, packet side data, old-epoch frame retention and exact

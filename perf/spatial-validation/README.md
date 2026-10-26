@@ -157,10 +157,35 @@ encoded staging and caller copies are outside this payload allowance. It is not
 a total-memory bound or a performance measurement. The mechanism adds no policy
 callback; policy still decides at the existing admission/publication boundaries.
 
+## Packaged retained output storage
+
+The real `JxlCollectionConfig::with_output_storage` path now runs beside the
+ordinary allocation path through all 147 presentations and nine raw layers.
+Admitted output matches ordinary output bit-for-bit, including stride/padding;
+the existing private-native and pinned independent-reader gates stay in place.
+Raw-layer checks retain an old result during the next reconstruction and verify
+that both payloads remain charged. Dropping the collection and input leaves the
+held image readable and charged; dropping that image releases its allowance.
+
+[The matrix receipt](../../benchmarks/packaged_output_storage_2026-10-26.json)
+records the exact source/package pins and full-suite result. The
+[package consumer receipt](https://github.com/imazen/zenjxl/blob/7fc162650b9d104d51ca2ae04fa9c292a2b4e941/benchmarks/collection_output_storage_2026-10-26.json)
+qualifies exact refusal boundaries, zero/partial byte/object admission,
+cross-operation contention, retry after last-clone release, policy errors,
+unwind and cancellation. Both package allocation modes use aligned words for
+F32 samples; neither converts to a different allocation at publication.
+
+The executable guide adds the shared output allowance at registration. This is
+currently a codec configuration mechanism. Moving it into the common operation
+context needs an explicit unsupported result from factories that cannot honor
+it; silently forwarding a total-memory number to a narrower native tracker is
+still forbidden. Payload admission adds no policy callback and does not close
+native workspace, metadata, input or encoded-staging bounds.
+
 ## Packaged JXL validation
 
 The harness pins [zenjxl PR31](https://github.com/imazen/zenjxl/pull/31) at
-`d5fe3e2b51259c4f644fd9071a4f3d8a56f80223`. Registry controls and the compiled
+`7fc162650b9d104d51ca2ae04fa9c292a2b4e941`. Registry controls and the compiled
 consumer example use `JxlCollectionConfig`, rather than duplicating its factory.
 The private native mechanisms remain as reference paths. The presentation loop
 checks both paths in reverse order against native samples and independent libjxl

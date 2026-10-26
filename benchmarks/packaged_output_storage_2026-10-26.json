@@ -1,0 +1,52 @@
+{
+  "kind": "ordinary/admitted native sample and ownership qualification; no timing claim",
+  "base_commit": "1f46337b9d4fae225a007dacd56a7a2298a4bf34",
+  "package_commit": "7fc162650b9d104d51ca2ae04fa9c292a2b4e941",
+  "native_commit": "fe819360581acb3796ea2925f2a81f44f0a430e6",
+  "host": "r7900x",
+  "source_sha256": {
+    "perf/spatial-validation/Cargo.toml": "375115fbbec692b102e7c3f389e0bded8f053799aca63ed7ff084c35082feb11",
+    "perf/spatial-validation/dependencies.lock": "f0e2108e8657048bb574729bb1927aefd2024a35dae374145e448340b3af1c15",
+    "perf/spatial-validation/src/jxl_tests.rs": "b5a9097bba786eee9df2660ee21b3ebd35564b1995e55f298351b813fc394cf4",
+    "perf/spatial-validation/src/jxl_layer_tests.rs": "2ca7a0ac831ea52ee1945962c464bf238eb54d23b2e478be1ddd8e6e9cec2b69",
+    "perf/spatial-validation/src/jxl_packaged_storage.rs": "26af1933b010d397b69eddd2eb3d42346aafce8225e43b5ce1ce65223e85278e"
+  },
+  "command": "just spatial-ci-check <fresh-artifact-directory>",
+  "checks": {
+    "complete_native_suite": {
+      "passed": 114,
+      "failed": 0,
+      "ignored": 0
+    },
+    "strict_all_target_lint": "passed",
+    "presentations": 147,
+    "presentations_with_visible_dependency_replay": 35,
+    "raw_layers": 9,
+    "raw_comparison_rows_including_repeated_first": 11,
+    "paths": "private native, ordinary packaged, admitted packaged",
+    "sample_gates": "bit-exact ordinary/admitted samples and stride/padding; independent native reader gates unchanged",
+    "ownership_gates": "exact live byte/object charges match distinct mapped outputs, including old/new raw layers held together; returned samples and charges survive operation/input drop; last-owner release zeros charges",
+    "guide_example": "checked_output_storage executes in each admitted factory setup"
+  },
+  "run_heavy": "run-heavy: done rc=0 44s | peak-RSS 0.52GiB | min-avail 12909MiB | peak-load 0.87",
+  "fixture_allowance": {
+    "payload_bytes": 268435456,
+    "objects": 64,
+    "scope": "finite test allowance, not measured total memory; exact refusal boundaries live in packaged consumer controls"
+  },
+  "artifact_directory": "/mnt/v/output/zencodec/platform-regions-20261026-run/packaged-owner-matrix-1",
+  "log_sha256": "3a8a12ac87eaff7f2c41d4eee1de14704e3c913c31cc7693e7d47878242d5834",
+  "limits": [
+    "payload storage only; native references/work buffers, caller input, discovery, metadata/profile/owner allocations and explicit caller copies excluded",
+    "resource wrapper observes the complete build/test process tree",
+    "no benchmark or total-memory claim"
+  ],
+  "guide_validation": {
+    "command": "just docs-site-browser-check 3547",
+    "status": "passed",
+    "coverage": "source-derived signatures and exact example copy; independent context expansion; keyboard and 390/768/1440px layouts",
+    "run_heavy": "run-heavy: done rc=0 9s | peak-RSS 0.17GiB | min-avail 12886MiB | peak-load 0.22",
+    "log_sha256": "5ca0e96a7dfce35b79886b1c9f5209cea4b1e742dab56392239b2cca967d4331",
+    "initial_failure": "The new example was not in the site builder source catalog. Added the source before rerunning all source/browser gates."
+  }
+}

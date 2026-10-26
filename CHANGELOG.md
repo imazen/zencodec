@@ -2,6 +2,12 @@
 
 ## Native image selection (unreleased experiment)
 
+- Qualify the packaged JXL output allowance across 147 presentations and nine
+  raw layers alongside ordinary allocation. Preserve exact samples, stride and
+  existing independent-reader gates; check shared charges through concurrent
+  retained outputs and after operation/input drop. Add the executing registration
+  example to the guide and record scope separately from native workspace.
+
 - Add `PackedImageOwner`, `ImageOutput::from_packed_owner` and borrowed
   `ValueSlice` for native/admitted packed storage. Preserve charges through
   mapping, policy waiting and clones without copying samples. Validate immutable
@@ -13,7 +19,7 @@
 
 - Review-only `Samples::Values` now carries `ValueSlice` by value instead of
   borrowing the `Values` allocation container. This allows admitted auxiliary
-  storage to keep its owner and charge. No released API is removed.
+  storage to keep its owner and charge. No released API is removed (`1f46337b`).
 
 ### Other changes
 

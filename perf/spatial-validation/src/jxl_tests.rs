@@ -265,6 +265,7 @@ pub(crate) fn exact_rows(expected: &[Plane], got: &[Plane]) {
 
 #[test]
 fn selected_jxl_presentations_match_native_sequential_with_dependencies() {
+    use super::jxl_packaged_storage::{assert_charges, factories as admitted_factories};
     let mut dependencies = 0;
     let mut count = 0;
     for name in [
@@ -295,6 +296,25 @@ fn selected_jxl_presentations_match_native_sequential_with_dependencies() {
         while let Some(id) = packaged.next(&mut cursor).unwrap() {
             package_ids.push(id);
         }
+        let (factories, storage) = admitted_factories(4096, 4096);
+        let mut admitted_source =
+            zencodec::source::ReadAtShim(zencodec::source::SliceReadAt::new(&data));
+        let mut admitted = factories
+            .open_collection(
+                zencodec::ImageFormat::Jxl,
+                &mut admitted_source,
+                zencodec::collection::OpenRequest::new(Composition::Composited, 16384),
+                zencodec::operation::PolicySet::new(),
+                zencodec::StopToken::new(zencodec::Unstoppable),
+            )
+            .unwrap();
+        let mut cursor = admitted.images().unwrap();
+        let mut admitted_ids = Vec::new();
+        while let Some(id) = admitted.next(&mut cursor).unwrap() {
+            admitted_ids.push(id);
+        }
+        assert_eq!(admitted_ids.len(), package_ids.len());
+        assert_charges(&storage, &[]);
         let mut items = JxlItems::open(&data, Composition::Composited, 4096).unwrap();
         let mut selected = Vec::new();
         while let Some(item) = items.next().unwrap() {
@@ -345,13 +365,28 @@ fn selected_jxl_presentations_match_native_sequential_with_dependencies() {
                 &expected_owned[item.native.index],
                 &super::output_tests::mapped_planes(&output),
             );
+            let charged = admitted
+                .decode(&admitted_ids[item.native.index], &ImageRequest::new())
+                .unwrap();
+            assert_eq!(
+                super::output_tests::mapped_planes(&charged),
+                super::output_tests::mapped_planes(&output),
+                "admitted samples/stride changed: {name}"
+            );
+            assert_eq!(
+                charged.interpretation().timing,
+                output.interpretation().timing
+            );
+            assert_charges(&storage, &[&charged]);
+            drop(charged);
+            assert_charges(&storage, &[]);
         }
         count += selected.len();
         eprintln!("JXL {name}: {} visible presentations", selected.len());
     }
     assert!(dependencies > 0, "must exercise dependent presentations");
     eprintln!(
-        "JXL selection: {count} presentations through private and packaged adapters, {dependencies} require visible dependency replay"
+        "JXL selection: {count} presentations through private, ordinary packaged and admitted packaged adapters, {dependencies} require visible dependency replay"
     );
 }
 

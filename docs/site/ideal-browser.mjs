@@ -7,6 +7,7 @@ export async function checkIdeal(browser,url,output) {
   const video=await readFile(new URL('../examples/checked_video.rs',import.meta.url),'utf8');
   const positional=await readFile(new URL('../examples/checked_source.rs',import.meta.url),'utf8');
   const selection=await readFile(new URL('../../perf/spatial-validation/src/collection.rs',import.meta.url),'utf8');
+  const storage=await readFile(new URL('../../perf/spatial-validation/src/jxl_packaged_storage.rs',import.meta.url),'utf8');
   const page=await browser.newPage({viewport:{width:1440,height:1100},reducedMotion:'reduce',permissions:['clipboard-read','clipboard-write']});
   const errors=[];
   page.on('pageerror',error=>errors.push(error.message));
@@ -27,6 +28,7 @@ export async function checkIdeal(browser,url,output) {
     await page.keyboard.press('Enter');
     assert.ok(await owner.evaluate(el=>el.open));
     for(const required of ['PackedImageOwner','from_packed_owner','ValueSlice','last image drops','Native workspace','NeedsCms']) assert.ok((await owner.textContent()).includes(required),required);
+    assert.equal(await owner.locator('[data-example="checked_output_storage"]').count(),1);
     const inspection=page.locator('#change-inspection');
     await inspection.locator(':scope>summary').focus();
     await page.keyboard.press('Enter');
@@ -67,7 +69,7 @@ export async function checkIdeal(browser,url,output) {
     }
     for(const panel of await page.locator('.code-panel').all()) {
       const exampleSource=await panel.getAttribute('data-example-source');
-      const sources={'docs/examples/checked_operations.rs':source,'docs/examples/checked_video.rs':video,'docs/examples/checked_source.rs':positional,'perf/spatial-validation/src/collection.rs':selection};
+      const sources={'docs/examples/checked_operations.rs':source,'docs/examples/checked_video.rs':video,'docs/examples/checked_source.rs':positional,'perf/spatial-validation/src/collection.rs':selection,'perf/spatial-validation/src/jxl_packaged_storage.rs':storage};
       assert.ok(exampleSource in sources);
       // An adapter example may start inside a collapsed explanation. Open that
       // container without changing the independent above/below default states.

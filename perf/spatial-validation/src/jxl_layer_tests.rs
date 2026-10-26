@@ -94,6 +94,7 @@ fn compare_independent(actual: u32, expected: u32, exact: bool) -> Result<f32, &
 
 #[test]
 fn raw_collection_native_samples_and_owner_bound_policy_match_independent_layers() {
+    use super::jxl_packaged_storage::{assert_charges, factories as admitted_factories};
     for (name, count) in [
         ("multiple_layers_noise_spline.jxl", 5),
         ("conformance_test_images/cmyk_layers.jxl", 4),
@@ -120,6 +121,25 @@ fn raw_collection_native_samples_and_owner_bound_policy_match_independent_layers
             package_ids.push(id);
         }
         assert_eq!(package_ids.len(), count);
+        let (factories, storage) = admitted_factories(64, 64);
+        let mut admitted_source =
+            zencodec::source::ReadAtShim(zencodec::source::SliceReadAt::new(&bytes));
+        let mut admitted = factories
+            .open_collection(
+                zencodec::ImageFormat::Jxl,
+                &mut admitted_source,
+                zencodec::collection::OpenRequest::new(Composition::Uncomposited, 128),
+                PolicySet::new(),
+                StopToken::new(Unstoppable),
+            )
+            .unwrap();
+        let mut cursor = admitted.images().unwrap();
+        let mut admitted_ids = Vec::new();
+        while let Some(id) = admitted.next(&mut cursor).unwrap() {
+            admitted_ids.push(id);
+        }
+        assert_eq!(admitted_ids.len(), count);
+        assert_charges(&storage, &[]);
         let visits = Cell::new(0);
         let address = Cell::new(0usize);
         let resolver = |question: Question<'_>| -> Result<Decision, At<Infallible>> {
@@ -162,6 +182,7 @@ fn raw_collection_native_samples_and_owner_bound_policy_match_independent_layers
         let mut reports = Vec::new();
         let mut held = None;
         let mut package_held = None;
+        let mut admitted_held: Option<zencodec::image::ImageOutput> = None;
         for index in (0..images.len()).rev().chain([0]) {
             let image = collection
                 .decode(&images[index], &ImageRequest::default())
@@ -169,6 +190,23 @@ fn raw_collection_native_samples_and_owner_bound_policy_match_independent_layers
             let package_image = packaged
                 .decode(&package_ids[index], &ImageRequest::new())
                 .unwrap();
+            let admitted_image = admitted
+                .decode(&admitted_ids[index], &ImageRequest::new())
+                .unwrap()
+                .into_output();
+            assert_eq!(
+                mapped_planes(&admitted_image),
+                mapped_planes(&package_image)
+            );
+            assert_eq!(
+                admitted_image.interpretation().placement,
+                package_image.interpretation().placement
+            );
+            if let Some(previous) = admitted_held.as_ref() {
+                assert_charges(&storage, &[previous, &admitted_image]);
+            } else {
+                assert_charges(&storage, &[&admitted_image]);
+            }
             assert_eq!(mapped_planes(&package_image), mapped_planes(&image));
             assert_eq!(
                 package_image.interpretation().placement,
@@ -358,11 +396,21 @@ fn raw_collection_native_samples_and_owner_bound_policy_match_independent_layers
             reports.push(serde_json::json!({"layer":index,"samples":samples,"different_float_bits":different,"max_absolute_error":max_error}));
             held = Some(image);
             package_held = Some(package_image);
+            admitted_held = Some(admitted_image);
         }
         assert_eq!(visits.get(), count + 1);
         drop(collection);
         drop(packaged);
+        drop(admitted);
         drop(bytes);
+        let admitted_held = admitted_held.unwrap();
+        assert_charges(&storage, &[&admitted_held]);
+        assert_eq!(
+            mapped_planes(&admitted_held),
+            mapped_planes(package_held.as_ref().unwrap())
+        );
+        drop(admitted_held);
+        assert_charges(&storage, &[]);
         let package_held = package_held.unwrap();
         assert!(package_held.map().unwrap().plane_count() >= 2);
         assert!(
