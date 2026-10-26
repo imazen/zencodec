@@ -92,6 +92,7 @@ test('checked API page links executable examples and actual signatures for each 
   assert.ok(page.includes('qualification gaps'));
   assert.ok(!page.includes('prototype::PolicyResolver'));
   assert.ok(page.includes('data-example="checked_resolution"'));
+  assert.ok(page.includes('data-example="checked_video_storage"'));
   assert.ok(html.includes('ideal.html#changes'));
   for(const entry of improvements) {
     assert.ok(ids.includes(`change-${entry.id}`));

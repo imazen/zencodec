@@ -58,7 +58,7 @@ export const migrations = [
     current:[['implementor','FrameDuration + video sessions','Rational timing, send/receive, drain/reset and epochs exist on main.'],['adapter','Separate zencodec-media','Packet, demux/mux and owned-frame contracts stay optional.']],
     proposed:[['implementor','Canonical rational timing','Migrate millisecond-only requirements; include timing/index in sink results.'],['adapter','Epoch-aware interpretation','Resolve conversion and signaling for each relevant configuration epoch.']],
     action:'Keep exact millisecond conveniences over rational time. Preserve packed/planar layout, sample precision, matrix/range and frame ownership; use conversion kernels through adapters rather than a second pixel vocabulary.',
-    gate:'On the checked API PR, native AV1 now retains accepted packet context and asks the shared resolver before every presentation is published. Independent decode qualifies native re-encode. Native allocation admission and coupled planar conversion remain open; do not apply newer configuration to older frames.',
+    gate:'On the checked API PR, native AV1 retains accepted packet context and asks the shared resolver before each presentation. Native picture-plane admission now precedes allocation, with charges following retained frames. Independent decode qualifies native re-encode in both allocation modes. Full workspace admission and coupled planar conversion remain open; do not apply newer configuration to older frames.',
     api:['animation','video','framePolicy','frameResolution'], source:'docs/media-contract.md', issues:[159,166],
   },
 ];

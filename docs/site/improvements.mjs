@@ -4,15 +4,16 @@ export const improvements = [
   {
     id:'video', title:'Video policy follows each actual presentation',
     state:'Partly implemented', date:'2026-10-25',
-    summary:'Native AV1 retains planar samples, color, timing and packet provenance through the shared resolver. Allocation admission and coupled conversion remain open.',
-    why:'A later frame can change color interpretation. A callback inspecting the latest configuration could authorize the wrong frame, and refusal must release unpublished reference owners.',
-    consumer:'Wrap the existing VideoDecoder in PolicyDecoder; use the same fallible PolicyResolver as still-image operations. Returned frames keep their original interpretation.',
-    adapter:'Hold the actual picture and its accepted packet context until the scoped decision succeeds. Failure drops the native decoder and queued output; already returned frames remain valid.',
-    implementor:'Keep send/receive, drain and reset semantics. Capture context when a packet is accepted and carry it through reordered and repeated presentations.',
-    open:'This callback runs after native reconstruction. rav1d already checks a pixel-count limit before reconstruction; a byte budget across native pictures, work buffers and queued output is still unqualified. Planar conversion and reconfiguration need a complete prepared route.',
+    summary:'Native AV1 retains samples, color, timing and packet provenance through the shared resolver. Optional native plane admission precedes allocation; full workspace bounds and coupled conversion remain open.',
+    why:'A later frame can change color interpretation. Publication policy must inspect that frame. A storage requirement must act earlier, before its native planes allocate; a callback after reconstruction cannot enforce it.',
+    consumer:'Set max_picture_bytes when the session needs a native plane allowance, then wrap VideoDecoder in PolicyDecoder. The same fallible resolver checks each presentation. Returned frames keep their original interpretation and storage charge.',
+    adapter:'Hold the actual picture and accepted packet context until the scoped decision succeeds. Native admission failure keeps its traced cause and drops unpublished state. Already returned frames remain valid and charged.',
+    implementor:'Admit a complete picture before its first plane allocation. Carry the charge with native references and retained frames through reset/drop. Preserve send/receive, drain and accepted-packet provenance.',
+    open:'The native plane byte budget covers requested bytes with padding and alignment. It excludes work buffers, input, metadata, allocator overhead and encoded queues; it is not a total RAM bound. C-FFI refuses this setting. Publication policy still runs after native reconstruction. Structured native refusal facts, coupled planar conversion and reconfiguration remain open.',
     signatures:['framePolicy','frameResolution','video'],
-    flow:[['implementor','Reconstruct picture','accepted packet context'],['adapter','Retain exact owner','immutable timing + color'],['consumer','Resolve publication','choose, decline or error']],
-    evidence:[['Native AV1 scope and independent FFmpeg checks','perf/av1-policy-validation/README.md'],['Executable video examples','docs/examples/checked_video.rs']],
+    example:'checked_video_storage', exampleSource:'docs/examples/checked_video.rs',
+    flow:[['implementor','Admit native planes','before first allocation'],['implementor','Reconstruct picture','accepted packet context'],['adapter','Retain exact owner','immutable timing + color'],['consumer','Resolve publication','choose, decline or error']],
+    evidence:[['Native AV1 scope and independent FFmpeg checks','perf/av1-policy-validation/README.md'],['Executable video examples','docs/examples/checked_video.rs'],['Native allocation contract','https://github.com/imazen/rav1d-safe/blob/b19aec6561204ff310250bf2bc1b2c6faa42c3b5/docs/PICTURE_STORAGE_LIMIT.md']],
   },
   {
     id:'resolution', title:'Required density survives, or encoding refuses',
@@ -64,7 +65,7 @@ export function improvementsSection({apiPanels,codePanel,flow,gh}) {
 <div class="change-body"><p><b>Why this belongs in the API.</b> ${escape(entry.why)}</p>
 <dl class="change-roles">${['consumer','adapter','implementor'].map(role=>`<div class="${role}"><dt>${role[0].toUpperCase()+role.slice(1)}</dt><dd>${escape(entry[role])}</dd></div>`).join('')}</dl>
 ${entry.flow?flow(`change-${entry.id}-flow`,entry.flow):''}
-${entry.example?codePanel(`change-${entry.id}`,entry.example,'docs/examples/checked_operations.rs'):''}
+${entry.example?codePanel(`change-${entry.id}`,entry.example,entry.exampleSource??'docs/examples/checked_operations.rs'):''}
 <details class="ideal-signatures"><summary>Exact traits and signatures</summary>${apiPanels(`change-${entry.id}`,entry.signatures)}</details>
 <p class="change-open"><b>Still open.</b> ${escape(entry.open)}</p>
 <p class="change-evidence">${entry.evidence.map(([label,target])=>`<a href="${target.startsWith('https://')?target:gh(target)}">${escape(label)} ↗</a>`).join(' · ')}</p>

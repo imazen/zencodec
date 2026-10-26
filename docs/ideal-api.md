@@ -11,6 +11,13 @@ change. It shows the problem, each role’s responsibilities, source-extracted
 signatures, evidence and remaining scope. The [maintenance contract](site/README.md)
 keeps the native examples and dependency revisions tied to that record.
 
+The native-plane update also refreshes the unlisted migration diagram and
+the guide's two admission/publication boundaries. Its exact examples execute
+in the native AV1 matrix, and browser/source checks pass at 390/768/1440 px
+with independent above/below expansion, whole-example copying and keyboard
+navigation. The browser gate reports run-heavy rc=0, 8 s, peak RSS 0.17 GiB,
+minimum available 15998 MiB and peak load 1.45; this measures the guide check.
+
 ## What still needs production implementation
 
 - Extend coupled routes beyond the qualified JPEG/PNG sources and JPEG/PNG targets.
@@ -18,9 +25,10 @@ keeps the native examples and dependency revisions tied to that record.
   qualified native workspace/staging bounds to the existing typed resolver.
 - Extend native controlled-suspension qualification beyond the whole-source JPEG/PNG
   routes to native byte resumption. Native AV1 frame publication now uses the
-  shared resolver; coupled planar conversion and admission before native
-  reconstruction remain open. The existing native pixel-count cap is separate
-  from a byte budget across pictures, workspace and queued output.
+  shared resolver. Native picture-plane admission precedes allocation, but
+  coupled planar conversion, complete workspace admission and structured native
+  storage-refusal facts remain open. The pixel-count cap and native plane-byte
+  allowance do not cover work buffers, input, metadata or queued encoded output.
 - Metadata exclusion/retention with explicit inspection scope, including opaque
   carriers, malformed XML, reconstruction data and nested content.
 - Integrate managed storage ownership into policy waiting, conversion scratch
@@ -35,7 +43,7 @@ keeps the native examples and dependency revisions tied to that record.
 | Contract | Implementation and verification |
 |---|---|
 | Synchronous parser bridge | `zencodec_io::ReadAtReader` supplies `Read + Seek` over a positional source, preserving native errors and its independent cursor. [Native TIFF experiments](../perf/spatial-validation/README.md) cover pages, reduced SubIFDs, planar edge tiles and wide strips. The shared spatial request, full interpretation and source-version binding remain open |
-| Native video policy and accepted packet provenance | `Question::Frame` shares core interpretation/timing facts with media sessions. `zencodec_media::policy::PolicyDecoder` retains the native picture through every callback. Native AV1 queued clocks/epochs/colors and repeated ordinals preserve accepted context; refusal, stale decisions, cancellation, errors and caught unwinds release unpublished owners. 15 depth/layout configurations re-encode sample-exact under independent FFmpeg/libdav1d. [Qualification and limits](../perf/av1-policy-validation/README.md); this is after reconstruction, with native allocation and coupled conversion still unqualified |
+| Native video policy and accepted packet provenance | `Question::Frame` shares core interpretation/timing facts with media sessions. `zencodec_media::policy::PolicyDecoder` retains the native picture through every callback. Native AV1 queued clocks/epochs/colors and repeated ordinals preserve accepted context; refusal, stale decisions, cancellation, errors and caught unwinds release unpublished owners. 15 depth/layout configurations re-encode sample-exact under independent FFmpeg/libdav1d in both pooled and bounded native-plane modes. The native setting admits picture planes before allocation and keeps charges with native owners. Publication policy still follows reconstruction; complete workspace bounds and coupled conversion remain open. [Qualification and limits](../perf/av1-policy-validation/README.md) |
 | Native batches fit admitted sink strips | `DecodeRowSink::max_buffer_rows` and shared copying split delivery automatically. Native PNG RGB8/RGBA16 at 97x65/257 preserve exact independent samples with 1/3/64-row transcode buffers. Native batch/workspace storage remains separate |
 | Native standard-source errors survive erasure | `StdSourceError` retains I/O kind, OS code and custom payload; source, truncation and erased-driver tests |
 | Buffered input admission precedes exact reads | Checked lookback selection, bounded retained history, exact-cap EOF probe, terminal excess and fallible retained allocation |
