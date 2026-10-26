@@ -87,9 +87,13 @@ The native loop has established three constraints for the next shared selector:
 The actual private candidates are `TiffItems::{images,children,next,decode}`
 and `JxlItems::{open,next,decode}` under `perf/spatial-validation/src`. They
 execute against the native codecs and share the opaque operation-bound identity.
-They are not a public `CodecSet` collection API. The next promotion gate is one
-consumer selection path with per-item interpretation, bounded discovery,
-source-revision validation and traced errors. Raw JXL layer implementation is
+The private `Collection` trait now executes the same `first_image` consumer
+against both, returning traced errors and preserving source-replacement causes.
+Unsupported child discovery refuses instead of reporting an empty collection.
+They are not a public `CodecSet` collection API: the associated native sample
+types and TIFF's fixed region still expose adapter differences. The next
+promotion gate is qualified zenpixels output with per-item interpretation,
+explicit discovery allowances and source-revision validation. Raw JXL layer implementation is
 still [decoder issue 57](https://github.com/imazen/zenjxl-decoder/issues/57);
 the existing [paged-decoder issue](https://github.com/imazen/zencodec/issues/1)
 owns the shared-selector discussion.

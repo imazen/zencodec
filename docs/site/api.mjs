@@ -16,6 +16,7 @@ export const api = {
   findCause: {path:'zencodec::find_cause',file:'src/error.rs',methods:['find_cause']},
   tiffSelection: {path:'candidate::TiffItems (private native experiment)',file:'perf/spatial-validation/src/tiff_items.rs',scope:'impl<R: Read + Seek> TiffItems<R>',methods:['open','images','children','next','decode']},
   jxlSelection: {path:'candidate::JxlItems (private native experiment)',file:'perf/spatial-validation/src/jxl_items.rs',scope:"impl<'a> JxlItems<'a>",methods:['open','next','decode']},
+  collectionSelection: {path:'candidate::Collection (private common contract)',file:'perf/spatial-validation/src/collection.rs',scope:'pub trait Collection',methods:['view','images','children','next','decode']},
 
   checkedDecodePolicy: {path:"zencodec::decode::DecodeJob<'a>",file:'src/traits/decoding.rs',scope:"pub trait DecodeJob<'a>",methods:['try_set_policy','try_with_policy'],associated:false},
   checkedEncodePolicy: {path:'zencodec::encode::EncodeJob',file:'src/traits/encoding.rs',scope:'pub trait EncodeJob: Sized',methods:['try_set_policy','try_with_policy'],associated:false},

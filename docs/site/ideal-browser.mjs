@@ -6,6 +6,7 @@ export async function checkIdeal(browser,url,output) {
   const source=await readFile(new URL('../examples/checked_operations.rs',import.meta.url),'utf8');
   const video=await readFile(new URL('../examples/checked_video.rs',import.meta.url),'utf8');
   const positional=await readFile(new URL('../examples/checked_source.rs',import.meta.url),'utf8');
+  const selection=await readFile(new URL('../../perf/spatial-validation/src/collection.rs',import.meta.url),'utf8');
   const page=await browser.newPage({viewport:{width:1440,height:1100},reducedMotion:'reduce',permissions:['clipboard-read','clipboard-write']});
   const errors=[];
   page.on('pageerror',error=>errors.push(error.message));
@@ -17,6 +18,7 @@ export async function checkIdeal(browser,url,output) {
     assert.equal(await page.locator('.ideal-step').count(),5);
     const changes=page.locator('.api-change');
     assert.equal(await changes.count(),6);
+    assert.ok((await page.locator('#change-images .code-toolbar').textContent()).includes('Private prototype'));
     for(const change of await changes.all()) assert.ok(!await change.evaluate(el=>el.open));
     const videoChange=page.locator('#change-video');
     await videoChange.locator(':scope>summary').focus();
@@ -29,7 +31,7 @@ export async function checkIdeal(browser,url,output) {
     }
     for(const panel of await page.locator('.code-panel').all()) {
       const exampleSource=await panel.getAttribute('data-example-source');
-      const sources={'docs/examples/checked_operations.rs':source,'docs/examples/checked_video.rs':video,'docs/examples/checked_source.rs':positional};
+      const sources={'docs/examples/checked_operations.rs':source,'docs/examples/checked_video.rs':video,'docs/examples/checked_source.rs':positional,'perf/spatial-validation/src/collection.rs':selection};
       assert.ok(exampleSource in sources);
       // An adapter example may start inside a collapsed explanation. Open that
       // container without changing the independent above/below default states.
