@@ -4,7 +4,6 @@ use crate::{
     erased_collection::ErasedCollection,
     jxl_items::{JxlItems, Limits},
     jxl_layers::JxlLayers,
-    local_source::LocalSource,
     output_tests::mapped_planes,
 };
 use std::{cell::Cell, convert::Infallible, sync::Arc};
@@ -12,7 +11,7 @@ use zencodec::{
     At, ImageFormat, StopToken, Unstoppable,
     collection::{Cause, DiscoveryExhausted},
     operation::{CollectionStage, Decision, PolicySet, Question},
-    source::{SliceReadAt, SourceError},
+    source::{DynReadAt, ReadAtShim, SliceReadAt, SourceError},
 };
 
 fn registered() -> Factories {
@@ -108,8 +107,8 @@ fn collection_factory_borrowed_positional_tiff_keeps_regions_children_and_output
     for big in [false, true] {
         for planar in [false, true] {
             let (bytes, refs) = nested_fixture(big, planar, false);
-            let mut source = Positional::new(&bytes);
-            let lengths = source.lengths.clone();
+            let mut source = ReadAtShim(Positional::new(&bytes));
+            let lengths = source.0.lengths.clone();
             let decisions = Cell::new(0);
             let resolver = |q: Question<'_>| -> Result<Decision, At<Infallible>> {
                 assert!(matches!(q, Question::Image { .. }));
@@ -187,7 +186,7 @@ fn collection_factory_resident_jxl_views_keep_native_pixels_and_inspection() {
         let id = typed.next(&mut cursor).unwrap().unwrap();
         let expected_description = typed.describe(&id).unwrap();
         let expected = typed.decode(&id, &ImageRequest::new()).unwrap();
-        let mut source = SliceReadAt::new(&bytes);
+        let mut source = ReadAtShim(SliceReadAt::new(&bytes));
         let mut images = registered()
             .open(
                 ImageFormat::Jxl,
@@ -211,7 +210,7 @@ fn collection_factory_resident_jxl_views_keep_native_pixels_and_inspection() {
 #[test]
 fn collection_factory_refuses_resident_input_requirement_before_reading() {
     let bytes = crate::jxl_tests::fixture("named_frame_test.jxl");
-    let mut source = Positional::new(&bytes);
+    let mut source = ReadAtShim(Positional::new(&bytes));
     for format in [ImageFormat::Jxl, ImageFormat::Png] {
         let error = registered()
             .open(
@@ -234,16 +233,16 @@ fn collection_factory_refuses_resident_input_requirement_before_reading() {
         );
         assert_eq!(error.error().stage, CollectionStage::Open);
         assert_eq!(error.error().stop_reason(), None);
-        assert_eq!(source.reads.get(), 0);
-        assert_eq!(source.lengths.get(), 0);
+        assert_eq!(source.0.reads.get(), 0);
+        assert_eq!(source.0.lengths.get(), 0);
     }
 }
 
 #[test]
 fn collection_factory_foreign_cursors_do_not_advance_either_operation() {
     let bytes = crate::jxl_tests::fixture("named_frame_test.jxl");
-    let mut left = SliceReadAt::new(&bytes);
-    let mut right = SliceReadAt::new(&bytes);
+    let mut left = ReadAtShim(SliceReadAt::new(&bytes));
+    let mut right = ReadAtShim(SliceReadAt::new(&bytes));
     let set = registered();
     let mut a = set
         .open(
@@ -281,9 +280,9 @@ fn collection_factory_foreign_cursors_do_not_advance_either_operation() {
 #[test]
 fn collection_factory_source_failures_keep_trace_and_safe_default_formatting() {
     let (bytes, _) = nested_fixture(false, false, false);
-    let mut source = Positional::new(&bytes);
-    let reads = source.reads.clone();
-    let fail_at = source.fail_at.clone();
+    let mut source = ReadAtShim(Positional::new(&bytes));
+    let reads = source.0.reads.clone();
+    let fail_at = source.0.fail_at.clone();
     let mut images = registered()
         .open(
             ImageFormat::Tiff,
@@ -310,7 +309,7 @@ fn collection_factory_source_failures_keep_trace_and_safe_default_formatting() {
 #[test]
 fn collection_factory_shares_discovery_allowance_without_charging_decode() {
     let bytes = crate::jxl_tests::fixture("named_frame_test.jxl");
-    let mut source = SliceReadAt::new(&bytes);
+    let mut source = ReadAtShim(SliceReadAt::new(&bytes));
     let mut request = request(Composition::Composited);
     request.discovery_attempts = 3;
     let mut images = registered()
@@ -343,7 +342,7 @@ impl Factory for Refusing {
     }
     fn open<'a>(
         &self,
-        _source: &'a mut dyn LocalSource,
+        _source: &'a mut dyn DynReadAt,
         _view: Composition,
         _stop: StopToken,
     ) -> Result<ErasedCollection<'a>, Cause> {
@@ -358,7 +357,7 @@ fn collection_factory_first_registration_failure_never_falls_back() {
         .with(Refusing(Arc::clone(&calls)))
         .with(JxlFactory(64.into()));
     let bytes = crate::jxl_tests::fixture("named_frame_test.jxl");
-    let mut source = SliceReadAt::new(&bytes);
+    let mut source = ReadAtShim(SliceReadAt::new(&bytes));
     let error = set
         .clone()
         .open(
@@ -389,7 +388,8 @@ fn collection_factory_native_disk_reads_match_the_same_stored_samples() {
         file.seek(SeekFrom::Start(7)).unwrap();
         // This test owns the file and keeps its bytes unchanged. FileReadAt
         // itself does not provide replacement detection or snapshot isolation.
-        let mut source = zencodec_io::FileReadAt::new(file.try_clone().unwrap()).unwrap();
+        let mut source =
+            ReadAtShim(zencodec_io::FileReadAt::new(file.try_clone().unwrap()).unwrap());
         let mut images = registered()
             .open(
                 ImageFormat::Tiff,
@@ -414,7 +414,7 @@ fn collection_factory_native_disk_reads_match_the_same_stored_samples() {
 #[test]
 fn collection_factory_guide_returns_native_output_after_operation_and_source_drop() {
     let (bytes, refs) = nested_fixture(false, true, false);
-    let mut source = Positional::new(&bytes);
+    let mut source = ReadAtShim(Positional::new(&bytes));
     let output = crate::collection::checked_registered_first(
         &registered(),
         ImageFormat::Tiff,
@@ -440,7 +440,7 @@ fn collection_factory_cancellation_survives_opening_and_erasure_at_every_observe
     let (bytes, _) = nested_fixture(false, false, false);
     let run =
         |control: &CheckStop| -> Result<(), At<zencodec::operation::CollectionOperationError>> {
-            let mut source = Positional::new(&bytes);
+            let mut source = ReadAtShim(Positional::new(&bytes));
             let mut images = registered().open(
                 ImageFormat::Tiff,
                 &mut source,
@@ -492,7 +492,7 @@ impl Factory for StopDuringOpen {
     }
     fn open<'a>(
         &self,
-        _source: &'a mut dyn LocalSource,
+        _source: &'a mut dyn DynReadAt,
         _view: Composition,
         _stop: StopToken,
     ) -> Result<ErasedCollection<'a>, Cause> {
@@ -508,7 +508,7 @@ fn collection_factory_stop_accessor_retains_coincident_native_and_application_ca
         zencodec::enough::StopReason::TimedOut,
     ] {
         let bytes = crate::jxl_tests::fixture("named_frame_test.jxl");
-        let mut source = SliceReadAt::new(&bytes);
+        let mut source = ReadAtShim(SliceReadAt::new(&bytes));
         let control = CheckStop::with_reason(reason);
         let set = Factories::default().with(StopDuringOpen(control.clone()));
         let error = set

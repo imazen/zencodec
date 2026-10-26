@@ -28,7 +28,6 @@ mod jxl_layer_tests;
 mod jxl_layers;
 mod jxl_output;
 mod jxl_tests;
-mod local_source;
 mod output_tests;
 mod placement;
 #[cfg(test)]

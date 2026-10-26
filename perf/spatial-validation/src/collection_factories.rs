@@ -5,7 +5,6 @@ use crate::{
     erased_collection::ErasedCollection,
     jxl_items::{JxlItems, Limits},
     jxl_layers::JxlLayers,
-    local_source::LocalSource,
     tiff_items::TiffCollection,
     tiff_region::Allowances,
 };
@@ -14,7 +13,7 @@ use zencodec::{
     At, ImageFormat, StopToken,
     collection::{Cause, Collection, Composition, Discovery, SelectionError},
     operation::{CheckedCollection, CollectionOperationError, PolicyResolver},
-    source::ReadAt,
+    source::{DynReadAt, ReadAt},
 };
 use zencodec_io::ReadAtReader;
 
@@ -22,7 +21,7 @@ pub trait Factory: Send + Sync {
     fn formats(&self) -> &[ImageFormat];
     fn open<'a>(
         &self,
-        source: &'a mut dyn LocalSource,
+        source: &'a mut dyn DynReadAt,
         view: Composition,
         stop: StopToken,
     ) -> Result<ErasedCollection<'a>, Cause>;
@@ -38,7 +37,7 @@ impl Factories {
     pub fn open<'a, R: PolicyResolver>(
         &self,
         format: ImageFormat,
-        source: &'a mut dyn LocalSource,
+        source: &'a mut dyn DynReadAt,
         request: OpenRequest,
         resolver: R,
         stop: StopToken,
@@ -89,11 +88,11 @@ impl Factory for JxlFactory {
     }
     fn open<'a>(
         &self,
-        source: &'a mut dyn LocalSource,
+        source: &'a mut dyn DynReadAt,
         view: Composition,
         stop: StopToken,
     ) -> Result<ErasedCollection<'a>, Cause> {
-        let bytes = LocalSource::as_slice(source).ok_or(FactoryError::ResidentInputRequired)?;
+        let bytes = DynReadAt::as_slice(source).ok_or(FactoryError::ResidentInputRequired)?;
         match view {
             Composition::Composited => Ok(ErasedCollection::new(JxlItems::open_with_stop(
                 bytes, view, self.0, stop,
@@ -114,7 +113,7 @@ impl Factory for TiffFactory {
     }
     fn open<'a>(
         &self,
-        source: &'a mut dyn LocalSource,
+        source: &'a mut dyn DynReadAt,
         view: Composition,
         stop: StopToken,
     ) -> Result<ErasedCollection<'a>, Cause> {
@@ -145,7 +144,7 @@ impl Error for SourceFailure {
         Some(self.0.as_ref())
     }
 }
-struct ParserSource<'a>(&'a mut dyn LocalSource);
+struct ParserSource<'a>(&'a mut dyn DynReadAt);
 impl ReadAt for ParserSource<'_> {
     type Error = SourceFailure;
     fn len(&mut self) -> Result<u64, Self::Error> {

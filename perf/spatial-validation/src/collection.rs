@@ -119,7 +119,6 @@ mod registered_consumer {
     use crate::{
         collection_factories::{Factories, JxlFactory, OpenRequest, TiffFactory},
         jxl_items::Limits,
-        local_source::LocalSource,
         tiff_region::Allowances,
     };
     use zencodec::{
@@ -127,6 +126,7 @@ mod registered_consumer {
         collection::ImageRequest,
         image::ImageOutput,
         operation::{CollectionOperationError, Outcome, PolicyResolver},
+        source::DynReadAt,
     };
 
     // Configure native limits once. These factories are private candidates;
@@ -142,7 +142,7 @@ mod registered_consumer {
     pub fn checked_registered_first<R: PolicyResolver>(
         factories: &Factories,
         format: ImageFormat,
-        source: &mut dyn LocalSource,
+        source: &mut dyn DynReadAt,
         request: OpenRequest,
         resolver: R,
         stop: StopToken,

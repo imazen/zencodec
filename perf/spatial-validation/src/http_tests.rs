@@ -4,14 +4,15 @@ use crate::http_source::{Failure, FailureKind, HttpSource};
 #[test]
 fn http_snapshot_collection_factory_preserves_positional_selection() {
     use crate::collection_factories::{Factories, OpenRequest, TiffFactory};
-    use zencodec::{ImageFormat, StopToken, Unstoppable, operation::PolicySet};
+    use zencodec::{ImageFormat, StopToken, Unstoppable, operation::PolicySet, source::ReadAtShim};
     let (bytes, refs) = nested_fixture(true, true, false);
     let name = "collection-factory";
     write_fixture(name, &bytes);
     let mut final_read = 0;
     for mode in ["stable", "change", "changed_tag", "short_body"] {
-        let mut source = HttpSource::open(url(mode, name, final_read), 65536).unwrap();
+        let source = HttpSource::open(url(mode, name, final_read), 65536).unwrap();
         let attempts = source.attempts.clone();
+        let mut source = ReadAtShim(source);
         let factories = Factories::default().with(TiffFactory(Allowances::default()));
         let mut images = factories.open(
             ImageFormat::Tiff, &mut source,
