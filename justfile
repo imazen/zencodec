@@ -1008,6 +1008,10 @@ checked-guide-integration:
 checked-guide-api checkout revision:
     node docs/capture-integration-api.mjs "{{checkout}}" "{{revision}}"
 
+# Exact conversion signatures from the same pin as the native TIFF/JXL harness.
+checked-output-api checkout revision:
+    node docs/capture-output-api.mjs "{{checkout}}" "{{revision}}"
+
 # Sink admission is independent of the native decoder's batch size.
 sink-capacity-sync export:
     just control-sync "{{export}}"
