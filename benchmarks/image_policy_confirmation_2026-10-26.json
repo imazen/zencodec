@@ -1,0 +1,141 @@
+{
+  "base_revision": "76edcca8c8b9e31dbb0a397f5b275febcac4f5bd",
+  "scope": "Two additional invalid fixed-plan Zenbench attempts, plus fixed-work instruction profiles. No performance or memory-bound claim.",
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/image-policy-cost",
+  "sha256": {
+    "confirm-coordinated/plan.json": "5b23afa8563627137022cc5c40d679a09a00233af61bb043b54e6322c961dc2c",
+    "confirm-coordinated/baseline.json.gz": "cee0cb0e5f6de2c41d69bf70847bc7a8e46f934b5eb5c5125594ef2394aba29f",
+    "confirm-coordinated/progress.json": "93eac9e80134fa8bd97c1d377905f61a255e337722b2a21ba05e8a7f46e7db35",
+    "confirm-idle-interfaces/plan.json": "0aa8b0f0229b5517b6e0c28887c9c136c788a7de55441ade2f50b31764fcdc1d",
+    "confirm-idle-interfaces/process-progress.json": "9ea1527d1d97827ef8b622ed15a75263938566d1af768cd2d34a1520ded3a147",
+    "confirm-idle-interfaces/baseline.json.gz": "dea41d27b11da447842dc021e969e1cb43524f001182737ab6d5c5a44d628f6e",
+    "confirm-idle-interfaces/progress.json": "3442bb0a3f90f2ce4d590e0e43d122e389cfc47cb860ba73978b2411035e7909",
+    "confirm-idle-interfaces/baseline-record.perf.csv": "8f4f93b67a00ccd028281f7a8a1960e4542d20f410e8123b035858828e8cae35",
+    "confirm-idle-interfaces/baseline-resolve.perf.csv": "13474737a9c3deb9088e197079bc328ebca78ff85d48ad900a9431c2fa7941fb",
+    "confirm-idle-interfaces/baseline-combined.perf.csv": "ad5846829348d24d5c2fafa342aa71bc9f20c30103b004a0d43e0d79f9a29ebc",
+    "confirm-idle-interfaces/image-record.perf.csv": "6dcd9da7d44f95350b23d9d770a5f432671073909b576858f9b9195f93cd7b7e",
+    "confirm-idle-interfaces/image-resolve.perf.csv": "ba3e93af05ab369a0d7034e018e4665bb17dccc835a03dc42f2b5d166da1ebdd",
+    "confirm-idle-interfaces/image-combined.perf.csv": "709b331b18abb27295d49ec9908b9a7389222102df6a694f45eb345d348e11b8",
+    "confirm-idle-interfaces/single-facts-record.perf.csv": "874cdf9a2223f2bcf98449594a2003b939211a22fe58949d7792ef55fa228c0f",
+    "confirm-idle-interfaces/single-facts-resolve.perf.csv": "695dd8236d6a93390420834860efffe10ba86f19a9b676a2c0ab0241e7ab3a2b",
+    "confirm-idle-interfaces/single-facts-combined.perf.csv": "ad1067aa4e316930d52b58d9b0c003f36b61f47d3a80c9d13418efb31d4074f1"
+  },
+  "executables": {
+    "baseline-bench": "5082e4814efc0a642f04bb8fe7494d6c40400f4a686b80be33e68cfeb1176175",
+    "image-bench": "30b702531ec25d4a6894576fd7fe67eee5c3e544481fee6ef7c24170471bd545",
+    "single-facts-bench": "ef07604186d4eb2b5aae7309e1cc5093e138f2d298ead8b289820e1beba9f54d",
+    "baseline-probe": "bbbd8ef5afabac6642d1c66c4691c23141fef7af4fee2ad981ec327d5b70f9ad",
+    "image-probe": "2fa97d5c0aa3f065243723b409c6d05cc21a657d3dd77e8bea2cebc5bc9b07bd",
+    "single-facts-probe": "bf17f53a98e6cc0698f2571a56447bb41e8599054ccf5ef4d457e13b578d9490",
+    "zenbench-cli": "a2d63af8433b71723191830c05d8da91898da196d165100178a89792bac16553"
+  },
+  "profiles_one_million_operations_including_setup": {
+    "baseline-record.perf.csv": {
+      "instructions": 320257047,
+      "cycles": 137220896,
+      "cache-misses": 49104,
+      "context-switches": 5
+    },
+    "baseline-resolve.perf.csv": {
+      "instructions": 440138094,
+      "cycles": 219314551,
+      "cache-misses": 34846,
+      "context-switches": 2
+    },
+    "baseline-combined.perf.csv": {
+      "instructions": 476263172,
+      "cycles": 240177595,
+      "cache-misses": 32545,
+      "context-switches": 1
+    },
+    "image-record.perf.csv": {
+      "instructions": 349379967,
+      "cycles": 174741609,
+      "cache-misses": 54600,
+      "context-switches": 5
+    },
+    "image-resolve.perf.csv": {
+      "instructions": 520377583,
+      "cycles": 273784052,
+      "cache-misses": 35531,
+      "context-switches": 3
+    },
+    "image-combined.perf.csv": {
+      "instructions": 563423678,
+      "cycles": 314556569,
+      "cache-misses": 36372,
+      "context-switches": 2
+    },
+    "single-facts-record.perf.csv": {
+      "instructions": 235222213,
+      "cycles": 127415339,
+      "cache-misses": 47054,
+      "context-switches": 4
+    },
+    "single-facts-resolve.perf.csv": {
+      "instructions": 435171489,
+      "cycles": 235702921,
+      "cache-misses": 33067,
+      "context-switches": 1
+    },
+    "single-facts-combined.perf.csv": {
+      "instructions": 477341462,
+      "cycles": 337368786,
+      "cache-misses": 32370,
+      "context-switches": 1
+    }
+  },
+  "runs": [
+    {
+      "log": "zencodec-frame-cost-coordinated-2026-10-26.log",
+      "sha256": "f945b14f6b5783d8ca55b996f4409184a3c5884f4b8df6b270fbfc54ec3a0a51",
+      "resource_receipts": [
+        "run-heavy: mem-cap=4G (cgroup, hard) jobs=2/24 avail=13295MiB :: timeout --kill-after=10s 600s bash -eu -c for variant in baseline image single-facts; do just --justfile /home/lilith/work/zen/zencodec/justfile --working-directory \"$PWD\" frame-cost-priority-confirm \"/mnt/v/output/zencodec/platform-regions-20261026-run/image-policy-cost/$variant-bench\" \"$PWD/$variant.json.gz\"; done",
+        "run-heavy: done rc=2 24s | peak-RSS 0.08GiB | min-avail 13185MiB | peak-load 0.45"
+      ]
+    },
+    {
+      "log": "zencodec-frame-cost-noise-trace-2026-10-26.log",
+      "sha256": "04ff2fc9bc1834fda06a9a0ed25c096dc53d23accc7b41a6ff1799c1df854b7a",
+      "resource_receipts": [
+        "run-heavy: mem-cap=4G (cgroup, hard) jobs=2/24 avail=13279MiB :: timeout --kill-after=5s 45s bash -eu -c sudo -n renice -n 0 -p \"$$\"; exec taskset -c 2,3 /mnt/v/output/zencodec/platform-regions-20261026-run/image-policy-cost/baseline-bench --mode=iterate --cpu-policy=auto --rounds=30 --median-of-passes=3",
+        "run-heavy: done rc=1 0s | peak-RSS 0.01GiB | min-avail 13279MiB | peak-load 0.06"
+      ]
+    },
+    {
+      "log": "zencodec-frame-cost-noise-trace-2-2026-10-26.log",
+      "sha256": "276d17db8784f572f5961f624d4d133f1b0c17009b237e4337d8d210a16b929b",
+      "resource_receipts": [
+        "run-heavy: mem-cap=4G (cgroup, hard) jobs=2/24 avail=13287MiB :: timeout --kill-after=5s 60s just --justfile /home/lilith/work/zen/zencodec/justfile --working-directory /mnt/v/output/zencodec/platform-regions-20261026-run/image-policy-cost/confirm-coordinated frame-cost-saved-diagnose /mnt/v/output/zencodec/platform-regions-20261026-run/image-policy-cost/baseline-bench",
+        "run-heavy: done rc=0 14s | peak-RSS 0.08GiB | min-avail 13178MiB | peak-load 0.22"
+      ]
+    },
+    {
+      "log": "zencodec-frame-cost-idle-interfaces-2026-10-26.log",
+      "sha256": "a18589c4bcc3620997019722701ab4e12d164e0b47d9872331c7a628e772cd95",
+      "resource_receipts": [
+        "run-heavy: mem-cap=4G (cgroup, hard) jobs=2/24 avail=13268MiB :: timeout --kill-after=5s 120s bash -eu -c for variant in baseline image single-facts; do just --justfile /home/lilith/work/zen/zencodec/justfile --working-directory \"$PWD\" frame-cost-saved-confirm \"/mnt/v/output/zencodec/platform-regions-20261026-run/image-policy-cost/$variant-bench\" \"$PWD/$variant.json.gz\"; done",
+        "run-heavy: done rc=2 25s | peak-RSS 0.08GiB | min-avail 13168MiB | peak-load 0.81"
+      ]
+    },
+    {
+      "log": "zencodec-frame-cost-instructions-2026-10-26.log",
+      "sha256": "902d3e9f5eb59b62c7f12a5d1a3aa130a96c2d7c5cdfe6b8a0f653384ee36e72",
+      "resource_receipts": [
+        "run-heavy: mem-cap=4G (cgroup, hard) jobs=2/24 avail=13256MiB :: timeout --kill-after=5s 120s bash -eu -c for variant in baseline image single-facts; do for mode in record resolve combined; do just --justfile /home/lilith/work/zen/zencodec/justfile --working-directory \"$PWD\" frame-cost-saved-profile \"/mnt/v/output/zencodec/platform-regions-20261026-run/image-policy-cost/$variant-probe\" \"$PWD/$variant-$mode.perf.csv\" \"$mode\" 1000000; done; done",
+        "run-heavy: done rc=0 0s | peak-RSS 0.02GiB | min-avail 13255MiB | peak-load 0.19"
+      ]
+    }
+  ],
+  "guard_controls": [
+    "success restores",
+    "failure restores and preserves exit 7",
+    "timeout restores and returns 124",
+    "parent SIGKILL triggers independent pidfd restoration"
+  ],
+  "guard_sources": {
+    "perf/quiet-command.py": "2b640aaee575de4f424f2d997cab6cf6d0e38faa88b956d2acd381a49ec9235b",
+    "perf/quiet-command-test.py": "a853b449b2382eff6a848239a232d96fd08d2bc346ce1c3954c0656f6a62c42f"
+  },
+  "remaining": "0 of 3 valid timing populations collected; current-head policy cost and end-to-end codec impact are not measured by these captures."
+}

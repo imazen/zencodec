@@ -622,6 +622,25 @@ frame-cost-saved-confirm executable output cpus="2,3" pin="2":
     test ! -e "{{output}}"
     ZENBENCH_PIN="{{pin}}" ZENBENCH_RESULT_PATH="{{output}}" taskset -c "{{cpus}}" "{{executable}}" --mode=confirm --cpu-policy=auto --workload-id=zencodec-policy-history-v1 --scope=zen4-policy-history --processes=5 --rounds=30 --margin=1 --confidence=0.95 --timeout=120
 
+# Explicitly coordinated benchmark window. Restore normal priority only for
+# this child; the caller still supplies run-heavy's memory cap and a deadline.
+frame-cost-priority-confirm executable output cpus="2,3" pin="2":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sudo -n renice -n 0 -p "$$"
+    exec just --justfile "{{justfile()}}" --working-directory "$PWD" frame-cost-saved-confirm "{{executable}}" "{{output}}" "{{cpus}}" "{{pin}}"
+
+# Diagnostic activity trace only; never use these timings as confirmation.
+frame-cost-saved-diagnose executable cpus="2,3":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sudo -n renice -n 0 -p "$$"
+    export ZENBENCH_GATE_TRACE=1
+    exec taskset -c "{{cpus}}" "{{executable}}" --mode=iterate --cpu-policy=auto --rounds=30 --median-of-passes=3
+
+quiet-command-controls:
+    python3 perf/quiet-command-test.py
+
 frame-cost-profile output mode="record" count="1000000" cpus="2,3":
     test ! -e "{{output}}"
     taskset -c "{{cpus}}" perf stat -x, -o "{{output}}" -e instructions,cycles,cache-misses,context-switches "${CARGO_TARGET_DIR:-target}/release/examples/frame_policy_probe" "{{mode}}" "{{count}}"

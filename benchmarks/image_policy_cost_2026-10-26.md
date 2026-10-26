@@ -83,6 +83,10 @@ populations before a later report makes a performance claim.
 
 ## Evidence and reproduction
 
+The [later coordination attempts and fixed-work instruction profiles](image_policy_confirmation_2026-10-26.md)
+retain two further invalid timing attempts and measured counts for all three
+saved revisions. They establish no confirmed elapsed-time result.
+
 Full artifacts, binaries, counters, sampled stacks and content-addressed
 zenbench objects are under
 `/mnt/v/output/zencodec/platform-regions-20261026-run/image-policy-cost/` on
