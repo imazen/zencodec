@@ -181,7 +181,28 @@ fn collection_factory_resident_jxl_views_keep_native_pixels_and_inspection() {
         let expected_description = typed.describe(&id).unwrap();
         let expected = typed.decode(&id, &ImageRequest::new()).unwrap();
         let mut source = ReadAtShim(SliceReadAt::new(&bytes));
+        let size = u64::try_from(bytes.len()).unwrap();
+        let error = registered()
+            .with_limits(ResourceLimits::none().with_max_input_bytes(size - 1))
+            .open_collection(
+                ImageFormat::Jxl,
+                &mut source,
+                request(view),
+                PolicySet::new(),
+                stop(),
+            )
+            .err()
+            .expect("oversize resident source was admitted");
+        assert_eq!(
+            zencodec::find_cause::<zencodec::LimitExceeded>(&error),
+            Some(&zencodec::LimitExceeded::InputSize {
+                actual: size,
+                max: size - 1,
+            })
+        );
+        assert_eq!(error.error().stage, CollectionStage::Open);
         let mut images = registered()
+            .with_limits(ResourceLimits::none().with_max_input_bytes(size))
             .open_collection(
                 ImageFormat::Jxl,
                 &mut source,
@@ -806,7 +827,6 @@ fn collection_factory_configuration_fields_are_enforced_or_refused_individually(
     use zencodec::AllocPreference;
     let unsupported = [
         ResourceLimits::none().with_max_memory(1),
-        ResourceLimits::none().with_max_input_bytes(1),
         ResourceLimits::none().with_max_frames(1),
         ResourceLimits::none().with_max_animation_ms(1),
         ResourceLimits::none().with_max_total_pixels(1),
@@ -819,7 +839,12 @@ fn collection_factory_configuration_fields_are_enforced_or_refused_individually(
             ResourceLimits::none().with_max_height(1),
             ResourceLimits::none().with_max_pixels(1),
         ];
-        let mixed = ResourceLimits::none().with_max_width(1).with_max_memory(1);
+        let mixed = ResourceLimits::none()
+            .with_max_width(1)
+            .with_max_memory(1)
+            .with_max_input_bytes(1);
+        let input = (format == ImageFormat::Tiff)
+            .then_some(ResourceLimits::none().with_max_input_bytes(1));
         let dimensions = if format == ImageFormat::Jxl {
             &unqualified_dimensions[..]
         } else {
@@ -828,6 +853,7 @@ fn collection_factory_configuration_fields_are_enforced_or_refused_individually(
         for limits in unsupported
             .into_iter()
             .chain(dimensions.iter().copied())
+            .chain(input)
             .chain([mixed])
         {
             let mut source = ReadAtShim(Positional::new(&[]));
@@ -846,10 +872,12 @@ fn collection_factory_configuration_fields_are_enforced_or_refused_individually(
                 zencodec::find_cause::<FactoryError>(&error),
                 Some(&FactoryError::UnsupportedLimits {
                     unsupported: {
-                        // Only the TIFF width field in the mixed request is qualified.
+                        // Only handled fields disappear from a mixed refusal.
                         let mut expected = limits;
                         if format == ImageFormat::Tiff {
                             expected.max_width = None;
+                        } else {
+                            expected.max_input_bytes = None;
                         }
                         expected
                     }

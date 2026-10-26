@@ -2,6 +2,10 @@
 
 ## Native image selection (unreleased experiment)
 
+- Qualify packaged JXL input-size limits through the registry: actual resident
+  length controls admission, both composition views retain exact native samples,
+  and mixed refusals exclude the handled field. This is not workspace admission.
+
 - Replace the duplicate JXL factory with the real optional `zenjxl::collection`
   package from its API review PR. Qualify all 147 presentation selections and
   nine raw layers through that package, retaining native bit-exact and pinned

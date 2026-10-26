@@ -62,14 +62,20 @@ A tiny ROI cannot bypass its stored-image limit. The native path is sequential;
 `ThreadingPolicy::Sequential` is accepted. Both factories accept no-op defaults;
 the explicitly encode-only output-byte cap does not apply to decoding.
 
-All other nontrivial fields refuse before source I/O, including JXL geometry,
-working memory, input size, timing, cumulative pixels, allocation-mode choices
+JXL checks `max_input_bytes` against its actual resident span before parsing.
+It accepts the exact size and refuses one byte below it in both views while
+retaining the same native samples. Missing or misleading length hints do not
+change admission. Input storage is already caller-owned; this is not a native
+workspace or storage-allocation guarantee.
+
+Other nontrivial fields refuse before source I/O, including JXL geometry, TIFF
+input size, working memory, timing, cumulative pixels, allocation-mode choices
 and each nontrivial decode-policy flag. Mixing a supported dimension field with
 an unsupported memory cap also refuses before I/O. A limit violation retains
 `LimitExceeded { actual, max }` through the checked error; an unimplemented
 mapping retains `CollectionOpenError` with the unhandled settings as typed data.
-The mixed TIFF width/memory control reports only the unqualified memory cap;
-JXL also reports the unqualified width. Every explicit policy flag is retained
+For mixed width/memory/input requirements, TIFF reports memory and input size;
+JXL reports memory and width. Handled fields are excluded. Every explicit policy flag is retained
 when refused. This is diagnostic data, not permission to weaken the request.
 No request preflight or error-text parsing is required.
 
@@ -93,7 +99,7 @@ The [native dimension receipt](../../benchmarks/collection_dimensions_2026-10-26
 ## Packaged JXL validation
 
 The harness pins [zenjxl PR31](https://github.com/imazen/zenjxl/pull/31) at
-`e85000f44160f625c0c19091e62376657e67f52a`. Registry controls and the compiled
+`d5fe3e2b51259c4f644fd9071a4f3d8a56f80223`. Registry controls and the compiled
 consumer example use `JxlCollectionConfig`, rather than duplicating its factory.
 The private native mechanisms remain as reference paths. The presentation loop
 checks both paths in reverse order against native samples and independent libjxl
@@ -102,7 +108,10 @@ bit for bit and checks packaged samples against the independent layer reader.
 Existing RGB float, exact CMYK/alpha and padding expectations remain unchanged.
 The [packaged validation receipt](../../benchmarks/packaged_jxl_2026-10-26.json)
 records all 147 presentations, nine raw layers, 16 factory controls, oracle
-identity, per-layer measurements and the initial harness/lint failures.
+identity, per-layer measurements and the initial harness/lint failures at
+`e85000f4`. The later [input-limit receipt](../../benchmarks/collection_input_limit_2026-10-26.json)
+qualifies the current pin through the same registry controls. One of eight
+decode-relevant optional caps is now qualified for JXL; TIFF qualifies three.
 
 `just spatial-packaged-check <fresh-parent-directory>` runs the factory,
 presentation and raw-layer controls plus strict lint. Supply `JXL_SELECTION_ORACLE`

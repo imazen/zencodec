@@ -835,7 +835,7 @@ dependencies = [
 [[package]]
 name = "zenjxl"
 version = "0.3.0"
-source = "git+https://github.com/imazen/zenjxl?rev=e85000f44160f625c0c19091e62376657e67f52a#e85000f44160f625c0c19091e62376657e67f52a"
+source = "git+https://github.com/imazen/zenjxl?rev=d5fe3e2b51259c4f644fd9071a4f3d8a56f80223#d5fe3e2b51259c4f644fd9071a4f3d8a56f80223"
 dependencies = [
  "enough",
  "imgref",

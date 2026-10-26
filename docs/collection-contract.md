@@ -71,6 +71,11 @@ available for over-limit images, and a smaller child can still decode. A tiny
 ROI does not redefine the stored-image limit. The pinned native path executes
 sequentially and accepts `ThreadingPolicy::Sequential`.
 
+The packaged JXL factory checks `max_input_bytes` against the actual immutable
+resident span before native parsing. Missing or misleading length hints do not
+change the decision. This bounds accepted parser input; the caller already owns
+that storage, and native workspace is not admitted by this check.
+
 Both factories accept the no-op native-default configurations. The explicitly
 encode-only `max_output_bytes` field does not constrain a decode. Other
 nontrivial resource or decode-policy requirements currently refuse before source
