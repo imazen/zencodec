@@ -65,6 +65,8 @@ almost-enough = { version = "0.4.4", default-features = false, features = ["allo
 enough = "0.4.4"
 how-far = { version = "0.1.0", default-features = false }
 whereat = { version = "0.1.5" }
+# Preserve the exact first cancellation reason without a std-only lock.
+spin = { version = "0.12.3", default-features = false, features = ["once"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "io-util", "macros"] }
