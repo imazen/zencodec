@@ -108,8 +108,10 @@ encoder fixtures now qualify all seven named auxiliary roles, spot/CFA parameter
 half/float alpha precision and per-frame timecodes through the shared consumer,
 using [native decoder PR 68](https://github.com/imazen/zenjxl-decoder/pull/68).
 Absent timecodes remain distinct from present zero, and neither substitutes for
-PTS. Unknown/reserved roles and nonzero source dimensional shifts remain
-unqualified. These source facts do not authorize metadata passthrough or rendering.
+PTS. Source shifts 1/2/3 now qualify on odd-sized canvases after the native
+fix for [subsampled channels](https://github.com/imazen/zenjxl-decoder/issues/69).
+Unknown/reserved roles remain unqualified. These source facts do not authorize
+metadata passthrough or additional rendering of an already-composited color plane.
 Each decode carries its own region
 request; TIFF returns the selected canvas and region origin, while required JXL
 regions refuse. The [platform review](platform-review-2026-10-25.md) records

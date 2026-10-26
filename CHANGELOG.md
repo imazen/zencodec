@@ -2,6 +2,11 @@
 
 ## Native image selection (unreleased experiment)
 
+- Qualify subsampled auxiliary source shifts separately from emitted plane
+  dimensions for all seven named JXL roles. The real-codec loop found and fixed
+  native decoder issue 69; full independent decoding now validates generated
+  fixtures before selected/sequential sample comparison.
+
 - Carry complete native JXL auxiliary precision, spot/CFA parameters and selected
   timecodes through the shared output. Native encoder fixtures qualify all seven
   named auxiliary roles, half/float alpha, non-default source HDR/display facts

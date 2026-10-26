@@ -145,9 +145,9 @@ native fixtures cover straight/associated alpha, extra channels, spot color,
 gray-alpha, upsampled alpha, rotated geometry and an embedded grayscale ICC.
 The generated native-encoder fixtures extend role coverage to 7/7 named roles:
 alpha, depth, spot color, selection mask, black, CFA and thermal. Unknown/reserved
-roles still need native fixtures. The upsampled-alpha fixture declares source
-`dim_shift = 0`; a nonzero
-source shift is not yet qualified. Independent libjxl checks orientation, role
+roles still need native fixtures. The generated subsampling matrix now checks
+all seven named roles at shifts 1/2/3 on an odd 17x13 canvas, retaining the source
+shift separately from full-size emitted planes. Independent libjxl checks orientation, role
 codes, source bit depth and source
 dimensional shift; pixel checks compare native sequential color/alpha/extra
 samples with the selected path. A separate selected-animation test checks exact
@@ -230,11 +230,22 @@ The subsequent full native TIFF/JXL gate passed with the pinned pixel change:
 run-heavy rc=0, 103 s, peak RSS 0.34 GiB, minimum available 11325 MiB,
 peak load 1.52; log `~/tmp/zencodec-native-samples-full-2026-10-25.log`.
 
+The source-subsampling extension found a native `SectionTooShort` failure for
+valid reduced auxiliary planes with full-resolution color. The correction in
+[decoder PR 68](https://github.com/imazen/zenjxl-decoder/pull/68) applies the
+source shift independently of color upsampling and validates the effective 8x
+ceiling. All 21 generated cases now pass common output adoption with exact
+native sequential-versus-selected F32 bytes and distinct source/output geometry.
+The independent oracle fully decodes generated fixtures. Its separate native
+qualification also checks exact no-dither u8 samples against libjxl float output
+under explicit matching quantization. That is not a claim of identical F32
+arithmetic across decoders. See the [receipt](../../benchmarks/jxl_subsampled_output_2026-10-26.json).
+
 ### Native qualification
 
 [`src/jxl_items.rs`](src/jxl_items.rs) exercises the same operation-bound image
 identities against native zenjxl-decoder at
-`064d08964de1df8181eb3d24ee52e18f70146313`. The existing test corpus remains pinned
+`4365fe97a955bcd0b9c3f30ca33678e8b1e85478`. The existing test corpus remains pinned
 at `8399f17c54c8138f65304bbc46efc80c269c7402` so changing the decoder does not
 change its regression inputs. `codec-corpus` retrieves the immutable archive; missing
 fixtures fail. The harness retains the compressed input and scans presentation
