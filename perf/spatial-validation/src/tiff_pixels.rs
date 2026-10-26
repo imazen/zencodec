@@ -39,6 +39,7 @@ impl StoredRaster {
             Vec::new(),
             super::image_output::ImageInterpretation::packed(self.geometry, self.orientation),
         )
+        .map_err(Into::into)
     }
 }
 

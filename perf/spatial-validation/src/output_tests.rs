@@ -243,6 +243,7 @@ fn output_jxl_color_and_extra_planes_keep_native_bytes_roles_and_geometry() {
                     }
                     AuxiliaryKind::Thermal => 6,
                     AuxiliaryKind::Unknown(code) => code,
+                    _ => panic!("unqualified auxiliary role in the native fixture matrix"),
                 };
                 assert_eq!(
                     role_code, facts[1],
@@ -465,8 +466,8 @@ fn output_jxl_source_facts_survive_with_independent_hdr_precision_and_display() 
 #[test]
 fn output_rejects_geometry_and_interpretation_that_disagree_with_packed_samples() {
     use crate::{
-        image_items::{ImageGeometry, Rect, SelectionError},
-        image_output::{ImageInterpretation, OutputError},
+        image_items::{ImageGeometry, Rect},
+        image_output::{GeometryError, ImageInterpretation, OutputError},
     };
     use zenpixels::{PixelBuffer, PixelDescriptor};
     let pixels = || PixelBuffer::from_vec(vec![17; 6], 2, 1, PixelDescriptor::RGB8).unwrap();
@@ -484,10 +485,7 @@ fn output_rejects_geometry_and_interpretation_that_disagree_with_packed_samples(
     let mut mismatch = facts.clone();
     mismatch.geometry.region.width = 3;
     let error = ImageOutput::packed(pixels(), vec![], mismatch).unwrap_err();
-    assert_eq!(
-        error.downcast_ref::<OutputError>(),
-        Some(&OutputError::Geometry)
-    );
+    assert!(matches!(error.error(), OutputError::Geometry));
     for region in [
         Rect {
             x: 9,
@@ -504,21 +502,23 @@ fn output_rejects_geometry_and_interpretation_that_disagree_with_packed_samples(
     ] {
         let mut outside = facts.clone();
         outside.geometry.region = region;
-        assert!(
-            ImageOutput::packed(pixels(), vec![], outside)
-                .unwrap_err()
-                .downcast_ref::<SelectionError>()
-                .is_some()
+        let rejected = outside.geometry;
+        let error = ImageOutput::packed(pixels(), vec![], outside).unwrap_err();
+        assert_eq!(
+            zencodec::find_cause::<GeometryError>(&error)
+                .unwrap()
+                .geometry,
+            rejected,
         );
     }
     let mut unspecified = facts.clone();
     unspecified.orientation = None;
-    assert_eq!(
+    assert!(matches!(
         ImageOutput::packed(pixels(), vec![], unspecified)
             .unwrap_err()
-            .downcast_ref::<OutputError>(),
-        Some(&OutputError::Interpretation)
-    );
+            .error(),
+        OutputError::Interpretation,
+    ));
     let accepted = ImageOutput::packed(pixels(), vec![], facts).unwrap();
     assert_eq!(accepted.interpretation().geometry, geometry);
     assert_eq!(

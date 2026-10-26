@@ -119,7 +119,7 @@ distinct from signed/floating image samples.
 
 ### One mapped output for TIFF, JXL and video
 
-[`ImageOutput`](src/image_output.rs) replaces the collection's associated
+[`ImageOutput`](../../src/image.rs) replaces the collection's associated
 native sample type. It owns storage through a reference-counted handle and
 returns borrowed planes through a mapping guard. `with_pixels` is the small
 packed-color convenience; planar component codes require an explicit conversion
@@ -209,10 +209,18 @@ The tone-mapping source fields are kept verbatim; no unqualified conversion to
 [libjxl metadata contract](https://libjxl.readthedocs.io/en/latest/api_metadata.html)
 distinguishes source precision, intensity bounds and display-tone-map behavior.
 
-The production module location, render/transform interpretation and policy
-admission still need qualification. Auxiliary rendering, whole-container
+The output now lives in `zencodec::image`, using the core's native frame mapping
+contracts. The standalone harness imports that implementation directly rather
+than keeping a parallel trial. Native frame mappings check region, plane count,
+role-derived dimensions and sample encoding before exposing each plane. Invalid
+regions retain their full extent/canvas; mapping failures retain typed native
+causes through `At<OutputError>`. Packed pixels remain in `zenpixels`.
+
+Collection discovery and render/transform policy admission still need
+qualification. Auxiliary rendering, whole-container
 metadata/privacy, native memory bounds, HTTP revision binding and raw JXL layers
-remain open. This standalone experiment is not a published API.
+remain open. The output is implemented on the API review PR; the collection is
+still private and neither surface has been released.
 
 The immutable-interpretation gate passed the full 46-test native suite and strict
 Clippy: run-heavy rc=0, 116 s, peak RSS 0.22 GiB, minimum available 13502 MiB,

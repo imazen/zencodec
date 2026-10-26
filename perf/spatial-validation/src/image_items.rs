@@ -100,15 +100,7 @@ impl fmt::Display for SelectionError {
 }
 impl Error for SelectionError {}
 
-/// Coordinates before applying orientation. The origin belongs to the selected
-/// image's canvas, not to its parent or to another page of the same file.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Rect {
-    pub x: u32,
-    pub y: u32,
-    pub width: u32,
-    pub height: u32,
-}
+pub use zencodec::image::{ImageGeometry, Rect};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum RegionRequest {
@@ -157,13 +149,4 @@ impl RegionRequest {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ImageRequest {
     pub region: RegionRequest,
-}
-
-/// Where returned pixels belong. This does not claim that the native decoder
-/// avoided reconstructing pixels outside the region.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ImageGeometry {
-    pub canvas_width: u32,
-    pub canvas_height: u32,
-    pub region: Rect,
 }

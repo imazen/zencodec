@@ -156,7 +156,7 @@ pub fn adopt(
     let mut interpretation = ImageInterpretation::packed(geometry, orientation);
     interpretation.timing = timing;
     interpretation.source_details.insert(source);
-    ImageOutput::packed(pixels, extras, interpretation)
+    ImageOutput::packed(pixels, extras, interpretation).map_err(Into::into)
 }
 
 fn alpha_mode(associated: bool) -> AlphaMode {

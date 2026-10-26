@@ -76,10 +76,7 @@ fn output_native_av1_keeps_mapping_ownership_codes_roles_and_timing() {
                     (settings.width, settings.height)
                 );
                 let error = retained.with_pixels(|_| ()).unwrap_err();
-                assert_eq!(
-                    error.downcast_ref::<OutputError>(),
-                    Some(&OutputError::NotPackedColor)
-                );
+                assert!(matches!(error.error(), OutputError::NotPackedColor));
                 let mapped = retained.map().unwrap();
                 assert_eq!(mapped.plane_count(), interpretation.roles.len());
                 let mut actual = Vec::new();
