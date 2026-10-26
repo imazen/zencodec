@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2908 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 196 lines (196 hidden + 0 excluded-feature)
+# files: zencodec.txt 2913 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 196 lines (196 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -15,8 +15,8 @@
 #   pub consts/statics                        302
 #   free functions                             83
 #   inherent methods                         1058
-#   struct fields                             421
-#   enum variants                             475
+#   struct fields                             425
+#   enum variants                             476
 #   re-exports                                 15
 #   trait roster entries (type × trait)       975
 #   conditional trait impls (verbatim)          8
@@ -35,16 +35,16 @@
 #   gainmap                         126
 #   helpers                          17
 #   icc                               1
-#   image                           118
+#   image                           122
 #   inventory                       103
 #   metadata_rewrite                 58
-#   operation                       182
+#   operation                       183
 #   prelude                         233
 #   source                           37
 #   storage                          34
 #   time                             22
 
-## items (2633 lines)
+## items (2638 lines)
 
 pub mod zencodec
 pub use At
@@ -1253,6 +1253,9 @@ pub image::OutputError::Component::actual_encoding: frame::SampleEncoding
 pub image::OutputError::Component::expected_dimensions: (usize, usize)
 pub image::OutputError::Component::expected_encoding: frame::SampleEncoding
 pub image::OutputError::Component::index: usize
+pub image::OutputError::Composition
+pub image::OutputError::Composition::actual: collection::Composition
+pub image::OutputError::Composition::expected: collection::Composition
 pub image::OutputError::Geometry
 pub image::OutputError::Interpretation
 pub image::OutputError::Mapping(frame::MapError)
@@ -1296,6 +1299,7 @@ pub image::ImageGeometry::canvas_width: u32
 pub image::ImageGeometry::region: image::Rect
 pub fn image::ImageGeometry::validate(self) -> core::result::Result<(), image::GeometryError>
 pub struct image::ImageInterpretation
+pub image::ImageInterpretation::composition: core::option::Option<collection::Composition>
 pub image::ImageInterpretation::geometry: image::ImageGeometry
 pub image::ImageInterpretation::orientation: core::option::Option<zenpixels::orientation::Orientation>
 pub image::ImageInterpretation::placement: core::option::Option<image::Placement>
@@ -1665,6 +1669,7 @@ pub fn operation::FrameFacts::new(&frame::FrameInterpretation, frame::FrameTimin
 #[non_exhaustive] pub struct operation::ImageFacts
 pub operation::ImageFacts::applied_spot_colors: usize
 pub operation::ImageFacts::auxiliaries: usize
+pub operation::ImageFacts::composition: core::option::Option<collection::Composition>
 pub operation::ImageFacts::frame: core::option::Option<operation::FrameFacts>
 pub operation::ImageFacts::geometry: image::ImageGeometry
 pub operation::ImageFacts::orientation: core::option::Option<zenpixels::orientation::Orientation>

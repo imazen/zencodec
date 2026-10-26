@@ -2,6 +2,11 @@
 
 ## Native image selection (unreleased experiment)
 
+- Retain the collection's selected composition view with each checked output
+  before publication policy. Preserve storage and existing clones; reject a
+  changed adapter view or conflicting owner claim with expected/actual facts.
+  Packed storage alone still does not establish display readiness.
+
 - Add `PlaneView::as_strided_samples` for existing plane kernels to borrow the
   declared storage span without a full-plane copy. Keep raw word encoding,
   mapping lifetime and inter-row padding; exclude trailing allocation space.

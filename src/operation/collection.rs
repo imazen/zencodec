@@ -2,8 +2,8 @@
 use super::{OperationReport, Outcome, PolicyResolver, PolicySet, resolve_image};
 use crate::{
     At, StopToken,
-    collection::{Cause, Collection, ImageDescription, ImageId, ImageRequest},
-    image::ImageOutput,
+    collection::{Cause, Collection, Composition, ImageDescription, ImageId, ImageRequest},
+    image::{ImageOutput, OutputError},
 };
 use alloc::boxed::Box;
 use core::fmt;
@@ -127,6 +127,7 @@ impl Stop for LatchedStop {
 /// This is post-reconstruction publication, not native allocation admission.
 pub struct CheckedCollection<C, R> {
     collection: Option<C>,
+    view: Composition,
     resolver: R,
     preset: PolicySet,
     stop: StopToken,
@@ -160,6 +161,7 @@ impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
                 (Err(error), Err(stopped)) => return Err(error.with_stop(stopped.stop_reason())),
             };
             Ok(Self {
+                view: collection.view(),
                 collection: Some(collection),
                 resolver,
                 preset: PolicySet::new(),
@@ -278,9 +280,29 @@ impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
         image: &ImageId,
         request: &ImageRequest,
     ) -> Result<Outcome<ImageOutput>, At<CollectionOperationError>> {
+        let view = self.view;
         self.run(|c, resolver, preset, stop, report| {
+            let check_view = |actual| {
+                if actual == view {
+                    Ok(())
+                } else {
+                    Err(failure(
+                        CollectionStage::Decode,
+                        report,
+                        At::wrap(OutputError::Composition {
+                            expected: view,
+                            actual,
+                        }),
+                    ))
+                }
+            };
+            check_view(c.view())?;
             let image = c
                 .decode(image, request)
+                .map_err(|e| failure(CollectionStage::Decode, report, e))?;
+            check_view(c.view())?;
+            let image = image
+                .in_collection_view(view)
                 .map_err(|e| failure(CollectionStage::Decode, report, e))?;
             match resolve_image(image, resolver, preset, stop) {
                 Ok(output) => {
@@ -319,6 +341,10 @@ fn check(stop: &StopToken, report: &OperationReport) -> Result<(), CollectionOpe
         .with_stop(Some(reason))
     })
 }
+
+#[cfg(test)]
+#[path = "collection_view_tests.rs"]
+mod view_tests;
 
 #[cfg(test)]
 mod tests {

@@ -89,7 +89,15 @@ auxiliary scalar values are not relabeled grayscale color.
 
 `ImageInterpretation` is frozen with the owner. It retains stored canvas/region,
 residual orientation, optional native signal/timing and opaque typed source
-details. `Auxiliary` separately retains source precision and source dimensional
+details. Its optional `composition` distinguishes a qualified composited view
+from a raw layer; packed storage or equal dimensions do not establish that fact.
+The checked collection binds its view before publication, preserving existing
+clones and sample storage. A contradictory native claim, or a view that changes
+during decoding, returns `OutputError::Composition { expected, actual }` before
+the policy callback. Standalone constructors leave the view unknown unless the
+adapter supplies it. This does not certify blending arithmetic, orientation,
+color conversion or display readiness. `ImageFacts::composition` exposes the
+same bounded fact to the existing resolver. `Auxiliary` separately retains source precision and source dimensional
 shift. Spot color records whether its contribution is already `Applied` or
 still `Separate`; retaining its samples does not authorize applying it again.
 `AuxiliaryKind::Black { inverted }` declares ink polarity rather than assuming

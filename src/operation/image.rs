@@ -18,6 +18,9 @@ use zenpixels::{Orientation, PixelDescriptor};
 pub struct ImageFacts {
     /// Stored output extent within the selected canvas.
     pub geometry: ImageGeometry,
+    /// Selected view established by the adapter or checked collection. This
+    /// alone does not establish oriented, color-converted display pixels.
+    pub composition: Option<crate::collection::Composition>,
     /// Separate presentation placement, when established by the adapter.
     pub placement: Option<Placement>,
     /// Residual orientation, if the adapter establishes one.
@@ -46,6 +49,7 @@ impl ImageFacts {
         let samples = image.sample_facts();
         Self {
             geometry: interpretation.geometry,
+            composition: interpretation.composition,
             placement: interpretation.placement,
             orientation: interpretation.orientation,
             packed: samples.packed,

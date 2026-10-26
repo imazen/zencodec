@@ -373,6 +373,11 @@ struct AuxiliarySource {
 pub struct ImageInterpretation {
     /// Returned stored extent within the selected canvas.
     pub geometry: ImageGeometry,
+    /// Selected composited or raw-layer view, when established by the adapter.
+    /// The checked collection binds this before publication. `None` makes no
+    /// claim; packed storage, placement and dimensions cannot establish it.
+    /// Composited samples can still require orientation and color conversion.
+    pub composition: Option<crate::collection::Composition>,
     /// Placement on a separate presentation canvas, before orientation.
     /// None means this adapter establishes no separate placement contract.
     /// This does not describe blending or permit discarding off-canvas samples.
@@ -394,6 +399,7 @@ impl ImageInterpretation {
     pub fn packed(geometry: ImageGeometry, orientation: Orientation) -> Self {
         Self {
             geometry,
+            composition: None,
             placement: None,
             orientation: Some(orientation),
             signal: None,
@@ -418,6 +424,22 @@ impl fmt::Debug for ImageOutput {
     }
 }
 impl ImageOutput {
+    /// Bind the collection's fixed semantic view without changing samples or
+    /// relabeling another retained clone. A contradictory native claim refuses.
+    pub(crate) fn in_collection_view(
+        mut self,
+        expected: crate::collection::Composition,
+    ) -> Result<Self, Failure> {
+        if let Some(actual) = self.interpretation.composition {
+            if actual != expected {
+                return Err(fail(OutputError::Composition { expected, actual }));
+            }
+        } else {
+            Arc::make_mut(&mut self.interpretation).composition = Some(expected);
+        }
+        Ok(self)
+    }
+
     pub(crate) fn sample_facts(&self) -> SampleFacts {
         self.storage.facts()
     }
@@ -464,6 +486,7 @@ impl ImageOutput {
         let signal = frame.interpretation().clone();
         let g = signal.geometry;
         let interpretation = ImageInterpretation {
+            composition: None,
             geometry: ImageGeometry {
                 canvas_width: g.coded_width,
                 canvas_height: g.coded_height,
@@ -551,6 +574,13 @@ pub enum OutputError {
     NotPackedColor,
     /// Separate presentation placement is invalid for these local samples.
     Placement(PlacementError),
+    /// The adapter's current or returned view contradicts the view fixed at open.
+    Composition {
+        /// View fixed before discovery and identity creation.
+        expected: crate::collection::Composition,
+        /// Conflicting view reported by the adapter or returned owner.
+        actual: crate::collection::Composition,
+    },
 }
 impl fmt::Debug for OutputError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -579,6 +609,11 @@ impl fmt::Debug for OutputError {
                 .finish(),
             Self::NotPackedColor => f.write_str("NotPackedColor"),
             Self::Placement(e) => f.debug_tuple("Placement").field(e).finish(),
+            Self::Composition { expected, actual } => f
+                .debug_struct("Composition")
+                .field("expected", expected)
+                .field("actual", actual)
+                .finish(),
         }
     }
 }
@@ -588,10 +623,18 @@ impl fmt::Display for OutputError {
             Self::Region(e) => return e.fmt(f),
             Self::Mapping(_) => return f.write_str("native image mapping failed"),
             Self::Placement(e) => return e.fmt(f),
+            Self::Composition { expected, actual } => {
+                return write!(
+                    f,
+                    "collection requires {expected:?}, adapter reported {actual:?}"
+                );
+            }
             _ => {}
         }
         f.write_str(match self {
-            Self::Region(_) | Self::Mapping(_) | Self::Placement(_) => unreachable!(),
+            Self::Region(_) | Self::Mapping(_) | Self::Placement(_) | Self::Composition { .. } => {
+                unreachable!()
+            }
             Self::Geometry => "invalid sample plane geometry",
             Self::Interpretation => "packed samples have an incompatible interpretation",
             Self::MissingPlane => "mapped storage does not supply a declared plane",
