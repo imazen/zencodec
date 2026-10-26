@@ -1,5 +1,34 @@
 # Native spatial contract experiments
 
+## Image selection candidate
+
+The native TIFF loop now also exercises a separate candidate in
+[`src/image_items.rs`](src/image_items.rs) and
+[`src/tiff_items.rs`](src/tiff_items.rs). It discovers main directories lazily,
+follows arbitrary SubIFDs, and decodes the selected directory through the same
+native region path. These types remain private to this experiment.
+
+The important contract is an operation-bound image identity, distinct from its
+relationship and requested composition. A SubIFD is not necessarily a reduced
+image. Two parents can point to the same image; the result is a graph, not a
+tree. A page number is not an animation timestamp. Foreign identities/cursors
+and an unsupported uncomposited-layer requirement refuse before source I/O.
+
+The native fixture matrix covers nested non-reduced SubIFDs and shared children
+in classic/BigTIFF and chunky/planar RGB8, with exact selected-region parity
+against the original rasters. Malformed cycles and discovery exhaustion return
+explicit errors. Existing reduced-level selection tests remain unchanged.
+The gate passed on 2026-10-25: run-heavy rc=0, 5 s, peak RSS 0.41 GiB, minimum
+available 15881 MiB, peak load 0.15 (test process, not a decoder memory bound;
+log `~/tmp/zencodec-spatial-items1-2026-10-25.log`).
+
+This does not qualify JXL layers, non-image metadata directories, all auxiliary
+roles, or remote revision binding. Discovery currently materializes one bounded
+SubIFD tag and charges yielded relationships; it does not eagerly load the
+whole graph. The native decoder owns TIFF parsing and compression throughout.
+
+## Reduced-level region candidate
+
 This is an executable candidate, not a public spatial API. It selects a main
 TIFF page, follows an explicit path of reduced SubIFDs, and returns a region in
 stored coordinates. Native sample bytes and orientation remain unchanged.

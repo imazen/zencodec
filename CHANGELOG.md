@@ -1,5 +1,13 @@
 # Changelog
 
+## Native image selection (unreleased experiment)
+
+- Exercise operation-bound identities, lazy directory discovery and arbitrary
+  nested/shared SubIFDs against native classic TIFF and BigTIFF. Keep image
+  containment separate from reduced-level selection and requested composition;
+  reject foreign cursors, cycles and exhausted discovery allowances explicitly.
+  This candidate is not yet part of the public API.
+
 ## API guide (unreleased)
 
 - Keep a visible Changes & why record for video, required density, the shared

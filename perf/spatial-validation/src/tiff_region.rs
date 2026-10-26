@@ -1,7 +1,7 @@
 use std::io::{self, Read, Seek, SeekFrom};
 use tiff::{
     ColorType,
-    decoder::{Limits, TiffCodingUnit, TiffHeader},
+    decoder::{Decoder, Limits, TiffCodingUnit, TiffHeader},
     tags::{SampleFormat, Tag},
 };
 
@@ -35,6 +35,7 @@ pub struct Allowances {
     pub pages: u32,
     pub levels: usize,
     pub units: u64,
+    pub discoveries: usize,
     pub output: usize,
     pub unit: usize,
     pub tag: usize,
@@ -45,6 +46,7 @@ impl Default for Allowances {
             pages: 1024,
             levels: 16,
             units: 4096,
+            discoveries: 4096,
             output: 64 * 1024 * 1024,
             unit: 16 * 1024 * 1024,
             tag: 64 * 1024,
@@ -109,6 +111,40 @@ pub fn decode<R: Read + Seek>(
             return Err(invalid("SubIFD is not a reduced image"));
         }
     }
+    decode_current(decoder, r, limits, check)
+}
+
+/// Candidate adapter seam: the caller has already validated an operation-bound
+/// item handle. An arbitrary SubIFD is not required to be a reduced image.
+pub(super) fn decode_directory<R: Read + Seek>(
+    mut input: R,
+    directory: tiff::tags::IfdPointer,
+    region: Rect,
+    limits: Allowances,
+    mut check: impl FnMut() -> Result<(), Failure>,
+) -> Result<Region, Failure> {
+    check()?;
+    if region.width == 0 || region.height == 0 {
+        return Err(invalid("empty region"));
+    }
+    input.seek(SeekFrom::Start(0))?;
+    let mut header = TiffHeader::parse(&mut input)?;
+    header.first_ifd = directory;
+    let mut native = Limits::default();
+    native.decoding_buffer_size = limits.unit;
+    native.intermediate_buffer_size = limits.unit;
+    native.ifd_value_size = limits.tag;
+    let mut decoder = header.open(input).with_limits(native);
+    decoder.next_image()?;
+    decode_current(decoder, region, limits, check)
+}
+
+fn decode_current<R: Read + Seek>(
+    mut decoder: Decoder<R>,
+    r: Rect,
+    limits: Allowances,
+    mut check: impl FnMut() -> Result<(), Failure>,
+) -> Result<Region, Failure> {
     let (width, height) = decoder.dimensions()?;
     let right =
         r.x.checked_add(r.width)

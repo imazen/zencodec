@@ -237,6 +237,201 @@ fn selected(levels: &[u32]) -> Selection<'_> {
     }
 }
 
+mod image_selection {
+    use super::*;
+    use crate::{
+        image_items::{Composition, RelationKind, SelectionError},
+        tiff_items::TiffItems,
+    };
+
+    fn nested_fixture(big: bool, planar: bool, cycle: bool) -> (Vec<u8>, [Raster; 3]) {
+        let refs = [raster(35, 29, 13), raster(21, 25, 39), raster(19, 17, 73)];
+        let mut cursor = Cursor::new(Vec::new());
+        fn write<K: TiffKind>(
+            mut encoder: TiffEncoder<&mut Cursor<Vec<u8>>, K>,
+            refs: &[Raster; 3],
+            planar: bool,
+            cycle: bool,
+        ) -> u64 {
+            // Deliberately not ReducedImage: containment alone cannot select a level.
+            let leaf = tiled(
+                encoder.extra_directory().unwrap(),
+                &refs[2],
+                planar,
+                false,
+                cycle.then_some(0x0bad_cafe),
+            );
+            let branch = tiled(
+                encoder.extra_directory().unwrap(),
+                &refs[1],
+                planar,
+                false,
+                Some(u32::try_from(leaf).unwrap()),
+            );
+            let root = tiled(
+                encoder.image_directory().unwrap(),
+                &refs[0],
+                planar,
+                false,
+                Some(u32::try_from(branch).unwrap()),
+            );
+            // The second top-level image shares the leaf: this is a graph, not a tree.
+            tiled(
+                encoder.image_directory().unwrap(),
+                &refs[1],
+                planar,
+                false,
+                Some(u32::try_from(leaf).unwrap()),
+            );
+            root
+        }
+        let root = if big {
+            write(
+                TiffEncoder::new_big(&mut cursor).unwrap(),
+                &refs,
+                planar,
+                cycle,
+            )
+        } else {
+            write(TiffEncoder::new(&mut cursor).unwrap(), &refs, planar, cycle)
+        };
+        let mut bytes = cursor.into_inner();
+        if cycle {
+            // Corrupt the native encoder's unique sentinel link, not its grammar.
+            // The encoder on this little-endian test host writes this inline LONG.
+            assert_eq!(&bytes[..2], b"II");
+            let marker = 0x0bad_cafe_u32.to_le_bytes();
+            let hits: Vec<_> = bytes
+                .windows(4)
+                .enumerate()
+                .filter_map(|(i, b)| (b == marker).then_some(i))
+                .collect();
+            assert_eq!(hits.len(), 1);
+            bytes[hits[0]..hits[0] + 4]
+                .copy_from_slice(&u32::try_from(root).unwrap().to_le_bytes());
+        }
+        (bytes, refs)
+    }
+
+    #[test]
+    fn native_catalog_preserves_nested_shared_subifd_identity_and_pixels() {
+        for big in [false, true] {
+            for planar in [false, true] {
+                let (bytes, refs) = nested_fixture(big, planar, false);
+                let mut source =
+                    TiffItems::open(Cursor::new(bytes), Allowances::default()).unwrap();
+                let mut pages = source.images();
+                let first = source.next(&mut pages).unwrap().unwrap();
+                let second = source.next(&mut pages).unwrap().unwrap();
+                assert!(source.next(&mut pages).unwrap().is_none());
+                assert_eq!(first.kind, RelationKind::TopLevel);
+                assert!(first.parent.is_none());
+                let mut children = source.children(&first.image).unwrap();
+                let branch = source.next(&mut children).unwrap().unwrap();
+                assert_eq!(branch.kind, RelationKind::SubImage);
+                assert_eq!(branch.parent.as_ref(), Some(&first.image));
+                assert!(source.next(&mut children).unwrap().is_none());
+                let mut children = source.children(&branch.image).unwrap();
+                let leaf = source.next(&mut children).unwrap().unwrap();
+                let mut shared = source.children(&second.image).unwrap();
+                assert_eq!(source.next(&mut shared).unwrap().unwrap().image, leaf.image);
+                for (image, raster) in [
+                    (&first.image, &refs[0]),
+                    (&branch.image, &refs[1]),
+                    (&leaf.image, &refs[2]),
+                ] {
+                    let roi = selected(&[]).region;
+                    let output = source
+                        .decode(image, roi, Composition::Composited, || Ok(()))
+                        .unwrap();
+                    assert_eq!(output.bytes, crop(raster, roi));
+                    assert_eq!(output.orientation, 1);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn foreign_selection_cursor_and_layer_requirement_refuse_before_io() {
+        let (bytes, _) = nested_fixture(false, false, false);
+        let observed = Source::new(bytes.clone());
+        let mut first =
+            TiffItems::open(ReadAtReader::new(observed.clone()), Allowances::default()).unwrap();
+        let mut second = TiffItems::open(Cursor::new(bytes), Allowances::default()).unwrap();
+        let mut pages = first.images();
+        let image = first.next(&mut pages).unwrap().unwrap().image;
+        let other = second.images();
+        let mut foreign = other;
+        let before = observed.ledger.borrow().calls;
+        let error = first.next(&mut foreign).unwrap_err();
+        assert_eq!(
+            zencodec::find_cause::<SelectionError>(&*error),
+            Some(&SelectionError::ForeignCursor)
+        );
+        let error = first
+            .decode(
+                &image,
+                selected(&[]).region,
+                Composition::Uncomposited,
+                || Ok(()),
+            )
+            .unwrap_err();
+        assert_eq!(
+            zencodec::find_cause::<SelectionError>(&*error),
+            Some(&SelectionError::UnsupportedComposition)
+        );
+        assert_eq!(observed.ledger.borrow().calls, before);
+        let error = second
+            .decode(
+                &image,
+                selected(&[]).region,
+                Composition::Composited,
+                || Ok(()),
+            )
+            .unwrap_err();
+        assert_eq!(
+            zencodec::find_cause::<SelectionError>(&*error),
+            Some(&SelectionError::ForeignImage)
+        );
+    }
+
+    #[test]
+    fn native_subifd_cycle_and_discovery_limit_are_explicit_failures() {
+        for big in [false, true] {
+            let (bytes, _) = nested_fixture(big, false, true);
+            let mut source = TiffItems::open(Cursor::new(bytes), Allowances::default()).unwrap();
+            let mut cursor = source.images();
+            let mut item = source.next(&mut cursor).unwrap().unwrap().image;
+            for _ in 0..2 {
+                cursor = source.children(&item).unwrap();
+                item = source.next(&mut cursor).unwrap().unwrap().image;
+            }
+            cursor = source.children(&item).unwrap();
+            let error = source.next(&mut cursor).unwrap_err();
+            assert_eq!(
+                zencodec::find_cause::<SelectionError>(&*error),
+                Some(&SelectionError::Cycle)
+            );
+        }
+        let (bytes, _) = nested_fixture(false, false, false);
+        let mut source = TiffItems::open(
+            Cursor::new(bytes),
+            Allowances {
+                discoveries: 1,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let mut cursor = source.images();
+        source.next(&mut cursor).unwrap().unwrap();
+        let error = source.next(&mut cursor).unwrap_err();
+        assert_eq!(
+            zencodec::find_cause::<SelectionError>(&*error),
+            Some(&SelectionError::DiscoveryLimit)
+        );
+    }
+}
+
 #[test]
 fn native_pages_levels_and_planar_units_match_original_samples() {
     for big in [false, true] {

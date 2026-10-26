@@ -4,7 +4,9 @@
 
 #[path = "../../../docs/examples/checked_source.rs"]
 mod checked_source;
+mod image_items;
 #[cfg(test)]
 mod strip_tests;
 mod tests;
+mod tiff_items;
 mod tiff_region;
