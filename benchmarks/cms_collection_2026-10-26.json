@@ -11,5 +11,16 @@
     "{\"scope\": \"Native TIFF selection over local HTTP/1.1; no WAN/TLS/performance claim\", \"requests\": 7650, \"cases\": 48, \"statuses\": {\"200\": 1, \"206\": 7641, \"302\": 1, \"412\": 7}, \"conditional_after_open\": true}",
     "run-heavy: done rc=0 271s | peak-RSS 0.61GiB | min-avail 13115MiB | peak-load 1.07"
   ],
-  "scope": "Downstream correctness after native CMS callback-error fixes. Uses local libjxl 0.11.1; the CI libjxl 0.7 disagreement is under investigation. No speed or complete codec memory-bound claim."
+  "scope": "Downstream correctness after native CMS callback-error fixes. Uses local libjxl 0.11.1; the CI libjxl 0.7 disagreement is under investigation. No speed or complete codec memory-bound claim.",
+  "guide_checks": {
+    "log": "zencodec-cms-oracle-site-2026-10-26.log",
+    "sha256": "31168bc3fe71e4436b5a9c594daaff7bee644f52ae2b3a1d294968db70b7d47f",
+    "results": [
+      "\u2139 pass 8",
+      "Migration browser checks passed: release-state diagrams, audience filters, deep links, exact full-example copy, independent inline expansion, signatures, keyboard and responsive layouts.",
+      "Checked API browser checks passed: exact examples, independent expansion, signatures, clipboard, keyboard and responsive roles.",
+      "Browser checks passed: 15 chapters with signatures, 7 entry points, exact full-example clipboard contents, independent inline context, deep links, 8 lab combinations, keyboard, 390/768/1440px layouts.",
+      "run-heavy: done rc=0 8s | peak-RSS 0.17GiB | min-avail 13066MiB | peak-load 0.53"
+    ]
+  }
 }

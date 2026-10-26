@@ -11,6 +11,16 @@ change. It shows the problem, each role’s responsibilities, source-extracted
 signatures, evidence and remaining scope. The [maintenance contract](site/README.md)
 keeps the native examples and dependency revisions tied to that record.
 
+The CMS validation loop now exercises failures inside the native renderer,
+including initialization, first/later row chunks and threaded execution.
+Native JXL returns the original `whereat` error instead of panicking or
+substituting CMYK pixels. The common internal color stage receives the requested
+destination profile; backend-specific ink-polarity adaptation stays inside the
+CMS adapter. [Native implementation and remaining limits](https://github.com/imazen/zenjxl-decoder/blob/fe819360581acb3796ea2925f2a81f44f0a430e6/docs/source-interpretation.md#fallible-cms-callbacks)
+and the [downstream selection/HTTP receipt](../benchmarks/cms_collection_2026-10-26.json)
+qualify this change. Arbitrary ICC transforms, callback workspace/time bounds
+and low-level mutable-decoder recovery are still separate gates.
+
 The native-plane update also refreshes the unlisted migration diagram and
 the guide's two admission/publication boundaries. Its exact examples execute
 in the native AV1 matrix, and browser/source checks pass at 390/768/1440 px
