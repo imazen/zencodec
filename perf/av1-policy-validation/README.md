@@ -1,5 +1,43 @@
 # Native AV1 policy qualification
 
+## Private planar conversion bridge
+
+`just av1-planar-check <fresh-artifacts>` separately exercises the existing
+zenavif strip kernels through `PlaneView::as_strided_samples`. This uses the
+codec's `_dev` export in this unpublished harness, not a new public conversion
+API. A complete run of `av1-policy-check` includes these controls.
+
+The 2026-10-26 run covers 18 native combinations (8/10/12-bit, 4:2:0/4:2:2/4:4:4,
+full/limited range), 54 presentations and 162 crop cases. Whole-frame, 1/2/4-row
+strips and odd-origin crops agree exactly; destination padding stays intact.
+Native component samples also match FFmpeg/libdav1d. That independent check
+does **not** establish RGB conversion accuracy. The bridge checks the active
+word encoding before writes, keeps coded coordinates through upsampling,
+and normalizes native-depth RGB into full U16 using the codec's widening rule.
+
+Unknown subsampled siting refuses unless the caller explicitly assumes center;
+actual AV1 Left/TopLeft signaling cannot be overridden by that fallback. Source
+timing, presentation and interpretation remain intact without retaining the raw
+picture. Unsupported color, geometry, word placement and active values refuse
+before destination writes. Row scratch is fallibly allocated but not admitted
+through the shared pool. Full-frame partition controls intentionally allocate
+larger scratch; the one-row route needs one coded RGB row.
+
+Missing: a public planar plan in zenpixels-convert, a prepared siting choice in
+the shared policy resolver, independent RGB accuracy, unclipped float output,
+other color matrices/transfers, mono/GBR, conversion reconfiguration, cancellation,
+complete storage admission and publication of a converted video `ImageOutput`.
+The private bridge collapses mapping failures to its test refusal; a production
+adapter must retain the original cause and trace. These limits are not hidden
+behind a generic “video solved” claim.
+
+[Receipt](../../benchmarks/native_planar_bridge_2026-10-26.json): the full native
+suite and strict lint pass. Resource wrapper: rc=0, 18 s, peak RSS 0.51 GiB,
+minimum available 11298 MiB, peak load 0.43. This covers the whole build/test
+process, not isolated codec or conversion memory.
+
+## Native publication and re-encode
+
 This standalone workspace runs the shared policy resolver over real
 `Av1VideoDecoder` presentations, then sends the approved native owners to
 `Av1VideoEncoder`. FFmpeg/libdav1d independently reads the resulting IVF files.

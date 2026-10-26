@@ -1,0 +1,35 @@
+{
+  "source_base": "471a7b3d5e735023a80c40ebe94786909a054a4d",
+  "native_zenavif": "feadc4c94b19acdcd82ee545a02263bc67c45d7d",
+  "artifact_directory": "/mnt/v/output/zencodec/platform-regions-20261026-run/native-planar-final-1",
+  "command": "just av1-policy-check /mnt/v/output/zencodec/platform-regions-20261026-run/native-planar-final-1",
+  "log": "/home/lilith/tmp/zencodec-native-planar-final-1-20261026.log",
+  "process_resources": "run-heavy: done rc=0 18s | peak-RSS 0.51GiB | min-avail 11298MiB | peak-load 0.43",
+  "resource_scope": "whole build and test process; not isolated conversion or native workspace",
+  "native_configurations": 18,
+  "native_presentations": 54,
+  "crop_cases": 162,
+  "checks": [
+    "native YUV exact against strided inputs and independent FFmpeg/libdav1d",
+    "full, 1/2/4-row strips and cropped rows agree exactly",
+    "odd crop origins, edge clipping and destination padding",
+    "explicit unknown-center assumption; signalled Left/TopLeft refuse",
+    "source code encoding/timing/presentation remain separate from full-U16 RGB",
+    "converted facts retain interpretation without retaining native pictures",
+    "invalid geometry/storage/color/active codes refuse before writes"
+  ],
+  "not_qualified": [
+    "RGB color accuracy against independent conversion",
+    "generic public planar conversion",
+    "policy offer for missing chroma siting",
+    "clipping-free conversion",
+    "mono/identity GBR, other matrices/transfers",
+    "complete allocation admission, cancellation latency, reconfiguration and converted ImageOutput adoption"
+  ],
+  "files": {
+    "perf/av1-policy-validation/src/planar_conversion_tests.rs": "7133e95cf976c490a35529e398106402ebf687d740c7ead953cee409b51d4e4d",
+    "perf/av1-policy-validation/Cargo.toml": "2368cf892c4b574d6740860c6213dd4ad13f4a4f5423f4290419d698b300bf50",
+    "/mnt/v/output/zencodec/platform-regions-20261026-run/native-planar-final-1/planar-conversion.csv": "b191efc7a57b439e3097550121b16a5375164e468b4a48a813830d038a9475b8",
+    "/home/lilith/tmp/zencodec-native-planar-final-1-20261026.log": "b5693fabfba1c5aa22bc04fcdaab141dd12e1a5c05b244edd4ff1e8e9204fb22"
+  }
+}
