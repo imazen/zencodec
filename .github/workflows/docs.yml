@@ -136,8 +136,10 @@ jobs:
       - name: Build pinned independent libjxl oracles
         timeout-minutes: 8
         run: |
-          timeout --kill-after=15s 2m sudo apt-get update -qq
-          timeout --kill-after=15s 2m sudo apt-get install -y --no-install-recommends cmake ninja-build libhwy-dev libbrotli-dev liblcms2-dev
+          # Use the same signed-package mirror and bounded downloads as AV1.
+          sudo sed -i -E 's|https?://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources /etc/apt/apt-mirrors.txt
+          sudo timeout --kill-after=15s 2m apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
+          sudo timeout --kill-after=15s 2m apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends cmake ninja-build libhwy-dev libbrotli-dev liblcms2-dev
           timeout --kill-after=15s 6m python3 perf/spatial-validation/build_jxl_oracles.py "$(dirname "$JXL_SELECTION_ORACLE")"
       - name: Execute native spatial selection and exact guide example
         run: |
@@ -171,7 +173,11 @@ jobs:
       - run: npm test --prefix docs
       - name: Install browser
         working-directory: docs
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 8
+        run: |
+          sudo sed -i -E 's|https?://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources /etc/apt/apt-mirrors.txt
+          timeout --kill-after=15s 3m npx playwright install-deps chromium
+          PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=20000 timeout --kill-after=15s 3m npx playwright install chromium
       - name: Check navigation, diagrams, examples and mobile layout
         run: |
           python3 -m http.server 3537 --bind 127.0.0.1 --directory docs/_site > "$RUNNER_TEMP/docs-server.log" 2>&1 &
