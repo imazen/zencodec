@@ -32,8 +32,14 @@ export async function checkIdeal(browser,url,output) {
     await colorChange.locator(':scope>summary').focus();
     await page.keyboard.press('Enter');
     assert.ok(await colorChange.evaluate(el=>el.open));
+    // Four-stage routes must not clip the last owner or omit its connector.
+    const route = colorChange.locator('svg');
+    assert.equal(await route.locator('.connector').count(), 3);
+    assert.ok(await route.evaluate(svg => [...svg.querySelectorAll('g > rect')].every(rect =>
+      rect.x.baseVal.value + rect.width.baseVal.value <= svg.viewBox.baseVal.width)));
     assert.equal(await colorChange.locator('[data-example="native_float_color"]').count(),1);
     for(const required of ['OutputPlan','with_clip_out_of_gamut(false)','Little CMS','auxiliary-plane','0.0001']) assert.ok((await colorChange.textContent()).includes(required),required);
+    for(const required of ['retain_auxiliaries','AuxiliaryImageOwner','9,455,616']) assert.ok((await colorChange.textContent()).includes(required),required);
     const owner=page.locator('#change-packed-owner');
     await owner.locator(':scope>summary').focus();
     await page.keyboard.press('Enter');

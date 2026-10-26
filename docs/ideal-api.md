@@ -114,8 +114,14 @@ keeps explicit ICC authority over embedded CICP, and refuses an identified
 unequal-channel-curve case before writes. All six converted selections now
 assemble complete owners and pass through the same publication resolver.
 Auxiliaries keep their original addresses, roles and samples. Their native owner
-can also retain the old color allocation, which remains charged; repeated
-replacement releases intermediate colors. General ICC conformance remains open.
+can retain the old color allocation when a backend cannot separate it; repeated
+replacement releases intermediate colors. JXL now supplies an optional
+`AuxiliaryImageOwner` automatically through `PackedImageOwner::retain_auxiliaries`.
+Its old color charge releases after original clones drop. The largest tested
+converted layer retains 9,455,616 source bytes instead of 47,222,784, with the
+same 37,785,600 destination bytes. Samples and auxiliary addresses remain exact.
+These are payload charges, not RSS or a peak-operation bound. Source and
+destination coexist during conversion. General ICC conformance remains open.
 `PublicationOffer::ReturnHeld` replaces the review-only `PreserveNative` name
 so publication does not claim that converted samples are still original.
 

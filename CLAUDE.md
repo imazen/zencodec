@@ -231,6 +231,11 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed during the output-owner guide update (2026-10-26): four-stage flow
+  diagrams used a three-stage SVG viewport and omitted the final connector.
+  Viewport and connectors now follow the stage count. Browser checks require
+  every stage to fit and retain the full four-stage conversion/publication route.
+
 - Guide regression (2026-10-26, fixed): adding the operation-storage migration diagram
   exposed a fixed six-case browser assertion. Keep the original six case/role
   checks and verify the added diagram separately; do not weaken the existing
