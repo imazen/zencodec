@@ -2,6 +2,10 @@
 
 ## Native image selection (unreleased experiment)
 
+- Disclose whether retained spot-color samples already contributed to the
+  returned color. Both native routes preserve identity and auxiliary bytes; an
+  exactly representable fixture matches independent libjxl F32 output.
+
 - Qualify subsampled auxiliary source shifts separately from emitted plane
   dimensions for all seven named JXL roles. The real-codec loop found and fixed
   native decoder issue 69; full independent decoding now validates generated

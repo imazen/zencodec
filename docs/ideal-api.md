@@ -110,7 +110,9 @@ using [native decoder PR 68](https://github.com/imazen/zenjxl-decoder/pull/68).
 Absent timecodes remain distinct from present zero, and neither substitutes for
 PTS. Source shifts 1/2/3 now qualify on odd-sized canvases after the native
 fix for [subsampled channels](https://github.com/imazen/zenjxl-decoder/issues/69).
-Unknown/reserved roles remain unqualified. These source facts do not authorize
+Spot channels additionally state whether they already contributed to returned
+color; enabled and disabled rendering pass an independent F32 oracle for an
+exactly representable fixture. Unknown/reserved roles remain unqualified. These source facts do not authorize
 metadata passthrough or additional rendering of an already-composited color plane.
 Each decode carries its own region
 request; TIFF returns the selected canvas and region origin, while required JXL

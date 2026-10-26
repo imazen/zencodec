@@ -241,6 +241,27 @@ qualification also checks exact no-dither u8 samples against libjxl float output
 under explicit matching quantization. That is not a claim of identical F32
 arithmetic across decoders. See the [receipt](../../benchmarks/jxl_subsampled_output_2026-10-26.json).
 
+### A retained spot plane can already be applied
+
+The selected output now records `ColorContribution::{Separate, Applied}` beside
+a spot channel's source linear RGBA. The native adapter can qualify both routes
+without changing the image identity. This is an output fact, not source metadata
+or permission to render it again. The private native boolean used by this test
+is not a proposed shared configuration API.
+
+A generated 9x7 black image with binary spot coverage is decoded in unrendered,
+rendered and unrendered order. All active F32 bytes match independent libjxl
+under the same setting, including the retained auxiliary plane. The exactly
+representable original values also provide a direct oracle. Rendering changes
+the color pixels while leaving auxiliary bytes unchanged; the contribution fact
+survives decoder/input drop. This narrow fixture qualifies independent F32 parity,
+not general cross-decoder floating-point equivalence.
+
+The [receipt](../../benchmarks/jxl_spot_contribution_2026-10-26.json) records the
+full TIFF/JXL matrix, the shared native AV1 output test and guide checks. Full
+native run: `run-heavy: done rc=0 119s | peak-RSS 0.22GiB | min-avail 13298MiB |
+peak-load 1.13`. This is test-process usage, not a native workspace bound.
+
 ### Native qualification
 
 [`src/jxl_items.rs`](src/jxl_items.rs) exercises the same operation-bound image
