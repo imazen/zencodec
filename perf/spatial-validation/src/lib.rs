@@ -13,7 +13,6 @@ mod description;
 mod description_checked_tests;
 mod description_jxl_tests;
 mod discovery;
-mod erased_collection;
 mod generated_output_tests;
 #[cfg(all(feature = "file_snapshot", not(target_os = "linux")))]
 compile_error!("the file_snapshot experiment requires Linux and a reflink-capable filesystem");

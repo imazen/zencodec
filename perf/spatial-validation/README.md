@@ -2,8 +2,8 @@
 
 ## Open native collections through registered factories
 
-The private [`Factories`](src/collection_factories.rs) candidate registers TIFF
-and JXL configurations once. Opening chooses an explicit format and composition,
+The shared [`CodecSet`](../../src/set/collection.rs) registers private native
+[TIFF and JXL factories](src/collection_factories.rs) once. Opening chooses an explicit format and composition,
 binds the source and stop token, and returns the existing checked consumer.
 Native limits stay on each registered configuration; the request also sets one
 discovery-call allowance. The first registered implementation wins. An error
@@ -13,7 +13,7 @@ The opened collection borrows its source and can outlive the factory registry.
 TIFF accepts local positional sources through `ReadAtReader`; no input copy or
 length scan is introduced. JXL borrows an already-resident slice. When a source
 cannot provide one, it refuses before reading rather than collecting the file.
-The [`ErasedCollection`](src/erased_collection.rs) candidate erases native state
+The shared [`ErasedCollection`](../../src/collection/erased.rs) erases native state
 once at open and owned cursor state once per cursor. It neither boxes each
 `next` result nor changes the native output owner. Typed collection calls remain
 available without this erasure.
@@ -28,8 +28,8 @@ forms support borrowed input; no new source capability query is required.
 The native adapters now use that shared source protocol, including the unchanged
 HTTP simulator. Typed `ReadAt` remains the implementor contract, and a caller can
 bind `ReadAtShim(source)` once before opening. Async drivers still prove their
-worker/future transferability at the boundary where it matters. This factory
-candidate itself is local and synchronous. The source interface was absent from
+worker/future transferability at the boundary where it matters. The opened collection
+is local and synchronous. The source interface was absent from
 the published 0.1.26 tree; existing users of its unreleased implicit `Send` bound
 need an explicit bound when transferring the erased object.
 The [shared-source receipt](../../benchmarks/local_source_2026-10-26.json)
@@ -43,18 +43,28 @@ also drives the registry over actual conditional HTTP requests. An opened file
 in the disk control stays unchanged under test ownership; positional reads are
 not a snapshot guarantee.
 
-This is an opening experiment, not `CodecSet` registration or released native
-adapters. Automatic format detection, transferable opened jobs, broader native
-configuration coverage, fallible cursor-erasure allocation and a stable public
-packaging decision remain open. It establishes no latency or allocation-cost
+Registration now uses `CodecSet`; the concrete native adapters remain private
+to this validation harness. Automatic format detection, transferable opened jobs, broader native
+configuration coverage, fallible cursor-erasure allocation and adapter
+packaging remain open. It establishes no latency or allocation-cost
 comparison and no whole-workspace/privacy guarantee. Cancellation can surface
 as a native, policy or wrapper error. The shared outer error now also exposes
 `stop_reason()`: callers can inspect the observed operation stop without choosing
 an error family, while coincident source/application causes and traces remain
 intact. Native seam controls and coincident-error controls qualify this accessor.
 
+The factory also receives the matched format, inherited `ResourceLimits` and
+`decode::DecodePolicy`. These native adapters refuse either supplied legacy
+configuration before source I/O until its full mapping is qualified. They never
+silently drop a configured limit or policy. Additional native controls check the
+wrong-view refusal, all three cancellation sources before opening, after registry
+drop and in publication callbacks, and retained terminal stop reasons. Inherited
+pulse cancellation is honored; native progress reports remain future integration.
+
 The [factory receipt](../../benchmarks/collection_factories_2026-10-26.json) records
 source hashes, commands, initial failures and successful gates.
+
+The [CodecSet integration receipt](../../benchmarks/collection_registry_2026-10-26.json) records the promotion, inherited controls, full workspace and HTTP gates.
 
 ## Inspect a selected image before reconstructing it
 

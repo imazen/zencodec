@@ -1,20 +1,20 @@
 use super::*;
 use crate::{
-    collection_factories::{Factories, Factory, FactoryError, JxlFactory, OpenRequest},
-    erased_collection::ErasedCollection,
+    collection_factories::{Factory, FactoryError, JxlFactory},
     jxl_items::{JxlItems, Limits},
     jxl_layers::JxlLayers,
     output_tests::mapped_planes,
 };
 use std::{cell::Cell, convert::Infallible, sync::Arc};
+use zencodec::decode::DecodePolicy;
 use zencodec::{
-    At, ImageFormat, StopToken, Unstoppable,
-    collection::{Cause, DiscoveryExhausted},
+    At, CodecSet, ImageFormat, ResourceLimits, StopToken, Unstoppable,
+    collection::{Cause, DiscoveryExhausted, ErasedCollection, OpenRequest},
     operation::{CollectionStage, Decision, PolicySet, Question},
     source::{DynReadAt, ReadAtShim, SliceReadAt, SourceError},
 };
 
-fn registered() -> Factories {
+fn registered() -> CodecSet {
     crate::collection::registered_factories(
         Allowances::default(),
         Limits {
@@ -24,10 +24,7 @@ fn registered() -> Factories {
     )
 }
 fn request(view: Composition) -> OpenRequest {
-    OpenRequest {
-        view,
-        discovery_attempts: 64,
-    }
+    OpenRequest::new(view, 64)
 }
 fn stop() -> StopToken {
     StopToken::new(Unstoppable)
@@ -117,7 +114,7 @@ fn collection_factory_borrowed_positional_tiff_keeps_regions_children_and_output
             };
             let set = registered();
             let mut images = set
-                .open(
+                .open_collection(
                     ImageFormat::Tiff,
                     &mut source,
                     request(Composition::Composited),
@@ -188,7 +185,7 @@ fn collection_factory_resident_jxl_views_keep_native_pixels_and_inspection() {
         let expected = typed.decode(&id, &ImageRequest::new()).unwrap();
         let mut source = ReadAtShim(SliceReadAt::new(&bytes));
         let mut images = registered()
-            .open(
+            .open_collection(
                 ImageFormat::Jxl,
                 &mut source,
                 request(view),
@@ -213,7 +210,7 @@ fn collection_factory_refuses_resident_input_requirement_before_reading() {
     let mut source = ReadAtShim(Positional::new(&bytes));
     for format in [ImageFormat::Jxl, ImageFormat::Png] {
         let error = registered()
-            .open(
+            .open_collection(
                 format,
                 &mut source,
                 request(Composition::Composited),
@@ -245,7 +242,7 @@ fn collection_factory_foreign_cursors_do_not_advance_either_operation() {
     let mut right = ReadAtShim(SliceReadAt::new(&bytes));
     let set = registered();
     let mut a = set
-        .open(
+        .open_collection(
             ImageFormat::Jxl,
             &mut left,
             request(Composition::Composited),
@@ -254,7 +251,7 @@ fn collection_factory_foreign_cursors_do_not_advance_either_operation() {
         )
         .unwrap();
     let mut b = set
-        .open(
+        .open_collection(
             ImageFormat::Jxl,
             &mut right,
             request(Composition::Composited),
@@ -284,7 +281,7 @@ fn collection_factory_source_failures_keep_trace_and_safe_default_formatting() {
     let reads = source.0.reads.clone();
     let fail_at = source.0.fail_at.clone();
     let mut images = registered()
-        .open(
+        .open_collection(
             ImageFormat::Tiff,
             &mut source,
             request(Composition::Composited),
@@ -313,7 +310,7 @@ fn collection_factory_shares_discovery_allowance_without_charging_decode() {
     let mut request = request(Composition::Composited);
     request.discovery_attempts = 3;
     let mut images = registered()
-        .open(
+        .open_collection(
             ImageFormat::Jxl,
             &mut source,
             request,
@@ -343,7 +340,10 @@ impl Factory for Refusing {
     fn open<'a>(
         &self,
         _source: &'a mut dyn DynReadAt,
+        _format: ImageFormat,
         _view: Composition,
+        _limits: Option<ResourceLimits>,
+        _policy: Option<DecodePolicy>,
         _stop: StopToken,
     ) -> Result<ErasedCollection<'a>, Cause> {
         self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -353,14 +353,14 @@ impl Factory for Refusing {
 #[test]
 fn collection_factory_first_registration_failure_never_falls_back() {
     let calls = Arc::default();
-    let set = Factories::default()
-        .with(Refusing(Arc::clone(&calls)))
-        .with(JxlFactory(64.into()));
+    let set = CodecSet::new()
+        .with_collection(Refusing(Arc::clone(&calls)))
+        .with_collection(JxlFactory(64.into()));
     let bytes = crate::jxl_tests::fixture("named_frame_test.jxl");
     let mut source = ReadAtShim(SliceReadAt::new(&bytes));
     let error = set
         .clone()
-        .open(
+        .open_collection(
             ImageFormat::Jxl,
             &mut source,
             request(Composition::Composited),
@@ -391,7 +391,7 @@ fn collection_factory_native_disk_reads_match_the_same_stored_samples() {
         let mut source =
             ReadAtShim(zencodec_io::FileReadAt::new(file.try_clone().unwrap()).unwrap());
         let mut images = registered()
-            .open(
+            .open_collection(
                 ImageFormat::Tiff,
                 &mut source,
                 request(Composition::Composited),
@@ -441,7 +441,7 @@ fn collection_factory_cancellation_survives_opening_and_erasure_at_every_observe
     let run =
         |control: &CheckStop| -> Result<(), At<zencodec::operation::CollectionOperationError>> {
             let mut source = ReadAtShim(Positional::new(&bytes));
-            let mut images = registered().open(
+            let mut images = registered().open_collection(
                 ImageFormat::Tiff,
                 &mut source,
                 request(Composition::Composited),
@@ -493,7 +493,10 @@ impl Factory for StopDuringOpen {
     fn open<'a>(
         &self,
         _source: &'a mut dyn DynReadAt,
+        _format: ImageFormat,
         _view: Composition,
+        _limits: Option<ResourceLimits>,
+        _policy: Option<DecodePolicy>,
         _stop: StopToken,
     ) -> Result<ErasedCollection<'a>, Cause> {
         self.0.after(0);
@@ -510,9 +513,9 @@ fn collection_factory_stop_accessor_retains_coincident_native_and_application_ca
         let bytes = crate::jxl_tests::fixture("named_frame_test.jxl");
         let mut source = ReadAtShim(SliceReadAt::new(&bytes));
         let control = CheckStop::with_reason(reason);
-        let set = Factories::default().with(StopDuringOpen(control.clone()));
+        let set = CodecSet::new().with_collection(StopDuringOpen(control.clone()));
         let error = set
-            .open(
+            .open_collection(
                 ImageFormat::Jxl,
                 &mut source,
                 request(Composition::Composited),
@@ -532,7 +535,7 @@ fn collection_factory_stop_accessor_retains_coincident_native_and_application_ca
             Err(At::wrap(Replaced(456)))
         };
         let mut images = registered()
-            .open(
+            .open_collection(
                 ImageFormat::Jxl,
                 &mut source,
                 request(Composition::Composited),
@@ -556,4 +559,144 @@ fn collection_factory_stop_accessor_retains_coincident_native_and_application_ca
             "finished operation entered the stop callback"
         );
     }
+}
+
+#[test]
+fn collection_factory_inherited_requirements_refuse_before_any_source_work() {
+    for format in [ImageFormat::Tiff, ImageFormat::Jxl] {
+        for (set, expected) in [
+            (
+                registered().with_limits(ResourceLimits::none().with_max_memory(1)),
+                FactoryError::UnsupportedLimits,
+            ),
+            (
+                registered().with_decode_policy(DecodePolicy::strict()),
+                FactoryError::UnsupportedDecodePolicy,
+            ),
+        ] {
+            let mut source = ReadAtShim(Positional::new(&[]));
+            let error = set
+                .clone()
+                .open_collection(
+                    format,
+                    &mut source,
+                    request(Composition::Composited),
+                    PolicySet::new(),
+                    stop(),
+                )
+                .err()
+                .unwrap();
+            assert_eq!(
+                *zencodec::find_cause::<FactoryError>(&error).unwrap(),
+                expected
+            );
+            assert_eq!(error.error().stage, CollectionStage::Open);
+            assert_eq!(error.error().stop_reason(), None);
+            assert_eq!(source.0.reads.get(), 0);
+            assert_eq!(source.0.lengths.get(), 0);
+        }
+    }
+}
+
+#[test]
+fn collection_factory_all_inherited_stops_survive_registry_drop_and_policy_calls() {
+    use zencodec::{
+        enough::StopReason,
+        how_far::{SharedPulse, StopOnly},
+    };
+    let (bytes, _) = nested_fixture(true, true, false);
+    for reason in [StopReason::Cancelled, StopReason::TimedOut] {
+        for stopped in 0..3 {
+            // Before opening, after opening, and inside the publication callback.
+            for phase in 0..3 {
+                let controls = std::array::from_fn::<_, 3, _>(|_| CheckStop::with_reason(reason));
+                let set = registered()
+                    .with_pulse(SharedPulse::new(StopOnly::new(controls[0].clone())))
+                    .with_stop(controls[1].token());
+                let resolver = |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+                    if phase == 2 {
+                        controls[stopped].after(0);
+                    }
+                    Ok(Decision::UsePreset)
+                };
+                let mut source = ReadAtShim(Positional::new(&bytes));
+                if phase == 0 {
+                    controls[stopped].after(0);
+                }
+                let opened = set.clone().open_collection(
+                    ImageFormat::Tiff,
+                    &mut source,
+                    request(Composition::Composited),
+                    resolver,
+                    controls[2].token(),
+                );
+                drop(set);
+                if phase == 0 {
+                    let error = opened.err().unwrap();
+                    assert_eq!(error.error().stage, CollectionStage::Stopped);
+                    assert_eq!(error.error().stop_reason(), Some(reason));
+                    assert_eq!(source.0.reads.get(), 0);
+                } else {
+                    let mut images = opened.unwrap();
+                    if phase == 1 {
+                        controls[stopped].after(0);
+                    }
+                    let error = images.first_image(&ImageRequest::new()).err().unwrap();
+                    assert_eq!(error.error().stop_reason(), Some(reason));
+                    assert!(images.is_finished());
+                    let counts = controls.each_ref().map(CheckStop::calls);
+                    let finished = images.images().err().unwrap();
+                    assert_eq!(finished.error().stop_reason(), Some(reason));
+                    assert_eq!(counts, controls.each_ref().map(CheckStop::calls));
+                }
+            }
+        }
+    }
+}
+
+struct WrongView;
+impl Factory for WrongView {
+    fn formats(&self) -> &[ImageFormat] {
+        &[ImageFormat::Tiff]
+    }
+    fn open<'a>(
+        &self,
+        source: &'a mut dyn DynReadAt,
+        format: ImageFormat,
+        _view: Composition,
+        limits: Option<ResourceLimits>,
+        policy: Option<DecodePolicy>,
+        stop: StopToken,
+    ) -> Result<ErasedCollection<'a>, Cause> {
+        crate::collection_factories::TiffFactory(Allowances::default()).open(
+            source,
+            format,
+            Composition::Composited,
+            limits,
+            policy,
+            stop,
+        )
+    }
+}
+
+#[test]
+fn collection_factory_cannot_silently_replace_the_required_view() {
+    let (bytes, _) = nested_fixture(false, false, false);
+    let mut source = ReadAtShim(Positional::new(&bytes));
+    let error = CodecSet::new()
+        .with_collection(WrongView)
+        .open_collection(
+            ImageFormat::Tiff,
+            &mut source,
+            request(Composition::Uncomposited),
+            PolicySet::new(),
+            stop(),
+        )
+        .err()
+        .unwrap();
+    assert_eq!(error.error().stage, CollectionStage::Open);
+    assert_eq!(
+        *zencodec::find_cause::<SelectionError>(&error).unwrap(),
+        SelectionError::UnsupportedComposition,
+    );
 }

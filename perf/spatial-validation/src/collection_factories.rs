@@ -1,84 +1,40 @@
-//! Executable registry candidate, before choosing a public CodecSet extension.
-//! No implicit full-source buffering, transport ownership or codec dependencies
-//! are added to the core traits crate by this experiment.
+//! Native factories validate the shared CodecSet contract without adding native
+//! dependencies to zencodec. Codec-specific limit templates remain explicit.
 use crate::{
-    erased_collection::ErasedCollection,
     jxl_items::{JxlItems, Limits},
     jxl_layers::JxlLayers,
     tiff_items::TiffCollection,
     tiff_region::Allowances,
 };
-use std::{error::Error, fmt, sync::Arc};
+use std::{error::Error, fmt};
+pub use zencodec::collection::{CollectionFactory as Factory, CollectionOpenError as FactoryError};
+use zencodec::decode::DecodePolicy;
 use zencodec::{
-    At, ImageFormat, StopToken,
-    collection::{Cause, Collection, Composition, Discovery, SelectionError},
-    operation::{CheckedCollection, CollectionOperationError, PolicyResolver},
+    ImageFormat, ResourceLimits, StopToken,
+    collection::{Cause, Composition, ErasedCollection, SelectionError},
     source::{DynReadAt, ReadAt},
 };
 use zencodec_io::ReadAtReader;
 
-pub trait Factory: Send + Sync {
-    fn formats(&self) -> &[ImageFormat];
-    fn open<'a>(
-        &self,
-        source: &'a mut dyn DynReadAt,
-        view: Composition,
-        stop: StopToken,
-    ) -> Result<ErasedCollection<'a>, Cause>;
-}
-
-#[derive(Clone, Default)]
-pub struct Factories(Vec<Arc<dyn Factory>>);
-impl Factories {
-    pub fn with(mut self, factory: impl Factory + 'static) -> Self {
-        self.0.push(Arc::new(factory));
-        self
+// There is no qualified native mapping of the full legacy configurations yet.
+// Refuse before source I/O, rather than imply these templates enforce them.
+fn require_configuration(
+    format: ImageFormat,
+    supported: ImageFormat,
+    limits: Option<ResourceLimits>,
+    policy: Option<DecodePolicy>,
+) -> Result<(), FactoryError> {
+    if format != supported {
+        return Err(FactoryError::NotRegistered(format));
     }
-    pub fn open<'a, R: PolicyResolver>(
-        &self,
-        format: ImageFormat,
-        source: &'a mut dyn DynReadAt,
-        request: OpenRequest,
-        resolver: R,
-        stop: StopToken,
-    ) -> Result<CheckedCollection<Discovery<ErasedCollection<'a>>, R>, At<CollectionOperationError>>
-    {
-        CheckedCollection::open(stop, resolver, |stop| {
-            let factory = self
-                .0
-                .iter()
-                .find(|f| f.formats().contains(&format))
-                .ok_or(FactoryError::NotRegistered(format))?;
-            let collection = factory.open(source, request.view, stop)?;
-            if collection.view() != request.view {
-                return Err(Box::new(SelectionError::UnsupportedComposition));
-            }
-            Ok(Discovery::new(collection, request.discovery_attempts))
-        })
+    if limits.is_some() {
+        return Err(FactoryError::UnsupportedLimits);
     }
-}
-
-#[derive(Clone, Copy)]
-pub struct OpenRequest {
-    pub view: Composition,
-    pub discovery_attempts: u64,
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FactoryError {
-    NotRegistered(ImageFormat),
-    ResidentInputRequired,
-}
-impl fmt::Display for FactoryError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::NotRegistered(_) => f.write_str("no collection factory registered for format"),
-            Self::ResidentInputRequired => {
-                f.write_str("this native collection requires already-resident input")
-            }
-        }
+    if policy.is_some() {
+        return Err(FactoryError::UnsupportedDecodePolicy);
     }
+    Ok(())
 }
-impl Error for FactoryError {}
 
 #[derive(Clone, Copy)]
 pub struct JxlFactory(pub Limits);
@@ -89,9 +45,13 @@ impl Factory for JxlFactory {
     fn open<'a>(
         &self,
         source: &'a mut dyn DynReadAt,
+        format: ImageFormat,
         view: Composition,
+        limits: Option<ResourceLimits>,
+        policy: Option<DecodePolicy>,
         stop: StopToken,
     ) -> Result<ErasedCollection<'a>, Cause> {
+        require_configuration(format, ImageFormat::Jxl, limits, policy)?;
         let bytes = DynReadAt::as_slice(source).ok_or(FactoryError::ResidentInputRequired)?;
         match view {
             Composition::Composited => Ok(ErasedCollection::new(JxlItems::open_with_stop(
@@ -114,9 +74,13 @@ impl Factory for TiffFactory {
     fn open<'a>(
         &self,
         source: &'a mut dyn DynReadAt,
+        format: ImageFormat,
         view: Composition,
+        limits: Option<ResourceLimits>,
+        policy: Option<DecodePolicy>,
         stop: StopToken,
     ) -> Result<ErasedCollection<'a>, Cause> {
+        require_configuration(format, ImageFormat::Tiff, limits, policy)?;
         Ok(ErasedCollection::new(TiffCollection::open_with_stop(
             ReadAtReader::new(ParserSource(source)),
             view,

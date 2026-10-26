@@ -117,30 +117,30 @@ pub use registered_consumer::{checked_registered_first, registered_factories};
 mod registered_consumer {
     // EXAMPLE: checked_registered_first
     use crate::{
-        collection_factories::{Factories, JxlFactory, OpenRequest, TiffFactory},
+        collection_factories::{JxlFactory, TiffFactory},
         jxl_items::Limits,
         tiff_region::Allowances,
     };
     use zencodec::{
-        At, ImageFormat, StopToken,
-        collection::ImageRequest,
+        At, CodecSet, ImageFormat, StopToken,
+        collection::{ImageRequest, OpenRequest},
         image::ImageOutput,
         operation::{CollectionOperationError, Outcome, PolicyResolver},
         source::DynReadAt,
     };
 
     // Configure native limits once. These factories are private candidates;
-    // the shared collection and policy types already live in zencodec.
-    pub fn registered_factories(tiff: Allowances, jxl: Limits) -> Factories {
-        Factories::default()
-            .with(TiffFactory(tiff))
-            .with(JxlFactory(jxl))
+    // CodecSet supplies registration, shared discovery and publication policy.
+    pub fn registered_factories(tiff: Allowances, jxl: Limits) -> CodecSet {
+        CodecSet::new()
+            .with_collection(TiffFactory(tiff))
+            .with_collection(JxlFactory(jxl))
     }
 
     // The caller supplies a stable source: immutable bytes, a conditional HTTP
     // object, or a file held unchanged. Choose one view and discovery allowance.
     pub fn checked_registered_first<R: PolicyResolver>(
-        factories: &Factories,
+        factories: &CodecSet,
         format: ImageFormat,
         source: &mut dyn DynReadAt,
         request: OpenRequest,
@@ -148,7 +148,7 @@ mod registered_consumer {
         stop: StopToken,
     ) -> Result<Option<Outcome<ImageOutput>>, At<CollectionOperationError>> {
         // ANCHOR: checked_registered_first
-        let mut images = factories.open(format, source, request, resolver, stop)?;
+        let mut images = factories.open_collection(format, source, request, resolver, stop)?;
         let image = images.first_image(&ImageRequest::new())?;
         // END: checked_registered_first
         // The image owns its samples after this operation ends. Applications
