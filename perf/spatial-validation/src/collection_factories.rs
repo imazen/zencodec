@@ -1,20 +1,16 @@
 //! Native factories validate the shared CodecSet contract without adding native
 //! dependencies to zencodec. Codec-specific limit templates remain explicit.
-use crate::{
-    jxl_items::{JxlItems, Limits},
-    jxl_layers::JxlLayers,
-    tiff_items::TiffCollection,
-    tiff_region::Allowances,
-};
+use crate::{tiff_items::TiffCollection, tiff_region::Allowances};
 use std::{error::Error, fmt};
 pub use zencodec::collection::{CollectionFactory as Factory, CollectionOpenError as FactoryError};
 use zencodec::decode::DecodePolicy;
 use zencodec::{
     At, ImageFormat, ResourceLimits, StopToken,
-    collection::{Cause, Composition, ErasedCollection, SelectionError},
+    collection::{Cause, Composition, ErasedCollection},
     source::{DynReadAt, ReadAt},
 };
 use zencodec_io::ReadAtReader;
+pub use zenjxl::collection::JxlCollectionConfig as JxlFactory;
 
 // Only the explicitly qualified fields may differ from the no-op configuration.
 // Comparing the remainder also refuses future fields until they are qualified.
@@ -53,35 +49,6 @@ fn require_configuration(
         return Err(At::wrap(FactoryError::UnsupportedDecodePolicy { unsupported }).into());
     }
     Ok(())
-}
-
-#[derive(Clone, Copy)]
-pub struct JxlFactory(pub Limits);
-impl Factory for JxlFactory {
-    fn formats(&self) -> &[ImageFormat] {
-        &[ImageFormat::Jxl]
-    }
-    fn open<'a>(
-        &self,
-        source: &'a mut dyn DynReadAt,
-        format: ImageFormat,
-        view: Composition,
-        limits: Option<ResourceLimits>,
-        policy: Option<DecodePolicy>,
-        stop: StopToken,
-    ) -> Result<ErasedCollection<'a>, Cause> {
-        require_configuration(format, ImageFormat::Jxl, limits, policy)?;
-        let bytes = DynReadAt::as_slice(source).ok_or(FactoryError::ResidentInputRequired)?;
-        match view {
-            Composition::Composited => Ok(ErasedCollection::new(JxlItems::open_with_stop(
-                bytes, view, self.0, stop,
-            )?)),
-            Composition::Uncomposited => {
-                Ok(ErasedCollection::new(JxlLayers::open(bytes, self.0, stop)?))
-            }
-            _ => Err(Box::new(SelectionError::UnsupportedComposition)),
-        }
-    }
 }
 
 #[derive(Clone, Copy)]

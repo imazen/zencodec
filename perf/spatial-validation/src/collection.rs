@@ -116,11 +116,7 @@ mod checked_inspection {
 pub use registered_consumer::{checked_registered_first, registered_factories};
 mod registered_consumer {
     // EXAMPLE: checked_registered_first
-    use crate::{
-        collection_factories::{JxlFactory, TiffFactory},
-        jxl_items::Limits,
-        tiff_region::Allowances,
-    };
+    use crate::{collection_factories::TiffFactory, tiff_region::Allowances};
     use zencodec::{
         At, CodecSet, ImageFormat, StopToken,
         collection::{ImageRequest, OpenRequest},
@@ -129,12 +125,16 @@ mod registered_consumer {
         source::DynReadAt,
     };
 
-    // Configure native limits once. These factories are private candidates;
-    // CodecSet supplies registration, shared discovery and publication policy.
-    pub fn registered_factories(tiff: Allowances, jxl: Limits) -> CodecSet {
+    use zenjxl::collection::JxlCollectionConfig;
+
+    // For example: JxlCollectionConfig::new(64, 256) bounds image identities
+    // and processed frame headers separately. Configure these once.
+    // JXL uses its real codec package; TIFF
+    // remains a private adapter candidate. Both use the shared checked operation.
+    pub fn registered_factories(tiff: Allowances, jxl: JxlCollectionConfig) -> CodecSet {
         CodecSet::new()
             .with_collection(TiffFactory(tiff))
-            .with_collection(JxlFactory(jxl))
+            .with_collection(jxl)
     }
 
     // The caller supplies a stable source: immutable bytes, a conditional HTTP

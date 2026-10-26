@@ -17,10 +17,7 @@ use zencodec::{
 fn registered() -> CodecSet {
     crate::collection::registered_factories(
         Allowances::default(),
-        Limits {
-            images: 64,
-            frame_headers: Some(64),
-        },
+        JxlFactory::new(64, 64),
     )
 }
 fn request(view: Composition) -> OpenRequest {
@@ -355,7 +352,7 @@ fn collection_factory_first_registration_failure_never_falls_back() {
     let calls = Arc::default();
     let set = CodecSet::new()
         .with_collection(Refusing(Arc::clone(&calls)))
-        .with_collection(JxlFactory(64.into()));
+        .with_collection(JxlFactory::new(64, 64));
     let bytes = crate::jxl_tests::fixture("named_frame_test.jxl");
     let mut source = ReadAtShim(SliceReadAt::new(&bytes));
     let error = set

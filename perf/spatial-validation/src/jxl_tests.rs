@@ -277,6 +277,24 @@ fn selected_jxl_presentations_match_native_sequential_with_dependencies() {
     ] {
         let data = fixture(name);
         let expected = sequential(&data, true).unwrap();
+        let expected_owned = super::output_tests::expected_output(&data);
+        let factories = zencodec::CodecSet::new()
+            .with_collection(zenjxl::collection::JxlCollectionConfig::new(4096, 4096));
+        let mut source = zencodec::source::ReadAtShim(zencodec::source::SliceReadAt::new(&data));
+        let mut packaged = factories
+            .open_collection(
+                zencodec::ImageFormat::Jxl,
+                &mut source,
+                zencodec::collection::OpenRequest::new(Composition::Composited, 16384),
+                zencodec::operation::PolicySet::new(),
+                zencodec::StopToken::new(zencodec::Unstoppable),
+            )
+            .unwrap();
+        let mut cursor = packaged.images().unwrap();
+        let mut package_ids = Vec::new();
+        while let Some(id) = packaged.next(&mut cursor).unwrap() {
+            package_ids.push(id);
+        }
         let mut items = JxlItems::open(&data, Composition::Composited, 4096).unwrap();
         let mut selected = Vec::new();
         while let Some(item) = items.next().unwrap() {
@@ -286,6 +304,11 @@ fn selected_jxl_presentations_match_native_sequential_with_dependencies() {
             selected.push(item);
         }
         assert_eq!(selected.len(), expected.len(), "{name}");
+        assert_eq!(
+            package_ids.len(),
+            selected.len(),
+            "packaged discovery: {name}"
+        );
         let oracle = independent_frames(name, true);
         assert_eq!(
             selected.len(),
@@ -311,13 +334,24 @@ fn selected_jxl_presentations_match_native_sequential_with_dependencies() {
                 &expected[item.native.index],
                 &items.decode(&item.image, 13).unwrap(),
             );
+            let id = &package_ids[item.native.index];
+            assert_eq!(
+                packaged.describe(id).unwrap(),
+                Collection::describe(&mut items, &item.image).unwrap(),
+                "packaged description: {name}"
+            );
+            let output = packaged.decode(id, &ImageRequest::new()).unwrap();
+            exact_rows(
+                &expected_owned[item.native.index],
+                &super::output_tests::mapped_planes(&output),
+            );
         }
         count += selected.len();
         eprintln!("JXL {name}: {} visible presentations", selected.len());
     }
     assert!(dependencies > 0, "must exercise dependent presentations");
     eprintln!(
-        "JXL selection: {count} presentations, {dependencies} require visible dependency replay"
+        "JXL selection: {count} presentations through private and packaged adapters, {dependencies} require visible dependency replay"
     );
 }
 

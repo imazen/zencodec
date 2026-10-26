@@ -102,6 +102,24 @@ fn raw_collection_native_samples_and_owner_bound_policy_match_independent_layers
         let (directory, independent) = oracle(name, &bytes);
         let oracle_version = independent["libjxl"].as_u64().unwrap();
         let expected = sequential(&bytes, false).unwrap();
+        let factories = zencodec::CodecSet::new()
+            .with_collection(zenjxl::collection::JxlCollectionConfig::new(64, 64));
+        let mut source = zencodec::source::ReadAtShim(zencodec::source::SliceReadAt::new(&bytes));
+        let mut packaged = factories
+            .open_collection(
+                zencodec::ImageFormat::Jxl,
+                &mut source,
+                zencodec::collection::OpenRequest::new(Composition::Uncomposited, 128),
+                PolicySet::new(),
+                StopToken::new(Unstoppable),
+            )
+            .unwrap();
+        let mut package_cursor = packaged.images().unwrap();
+        let mut package_ids = Vec::new();
+        while let Some(id) = packaged.next(&mut package_cursor).unwrap() {
+            package_ids.push(id);
+        }
+        assert_eq!(package_ids.len(), count);
         let visits = Cell::new(0);
         let address = Cell::new(0usize);
         let resolver = |question: Question<'_>| -> Result<Decision, At<Infallible>> {
@@ -143,22 +161,52 @@ fn raw_collection_native_samples_and_owner_bound_policy_match_independent_layers
         );
         let mut reports = Vec::new();
         let mut held = None;
+        let mut package_held = None;
         for index in (0..images.len()).rev().chain([0]) {
             let image = collection
                 .decode(&images[index], &ImageRequest::default())
                 .unwrap();
+            let package_image = packaged
+                .decode(&package_ids[index], &ImageRequest::new())
+                .unwrap();
+            assert_eq!(mapped_planes(&package_image), mapped_planes(&image));
+            assert_eq!(
+                package_image.interpretation().placement,
+                image.interpretation().placement
+            );
+            assert_eq!(
+                package_image.interpretation().geometry,
+                image.interpretation().geometry
+            );
+            let package_layer = package_image
+                .interpretation()
+                .source_details
+                .get::<zenjxl::collection::JxlRawLayer>()
+                .unwrap();
+            assert_eq!(package_layer.image, package_ids[index]);
             assert_eq!(
                 image.with_pixels(|p| p.row(0).as_ptr() as usize).unwrap(),
                 address.get()
             );
             let interpretation = image.interpretation();
             let layer = interpretation.source_details.get::<JxlRawLayer>().unwrap();
+            assert_eq!(package_layer.native, layer.native);
             let source = interpretation
                 .source_details
                 .get::<JxlSourceFacts>()
                 .unwrap();
             assert_eq!(layer.image, images[index]);
             let oracle = &independent["layers"][index];
+            assert_eq!(
+                serde_json::json!(package_layer.native.origin),
+                oracle["origin"]
+            );
+            assert_eq!(serde_json::json!(package_layer.native.size), oracle["size"]);
+            assert_eq!(blend(&package_layer.native.color_blend), oracle["blend"]);
+            assert_eq!(
+                package_layer.native.duration_ticks,
+                oracle["duration"].as_u64().unwrap() as u32
+            );
             assert_eq!(serde_json::json!(layer.native.origin), oracle["origin"]);
             assert_eq!(serde_json::json!(layer.native.size), oracle["size"]);
             assert_eq!(blend(&layer.native.color_blend), oracle["blend"]);
@@ -240,7 +288,9 @@ fn raw_collection_native_samples_and_owner_bound_policy_match_independent_layers
                     })
                 ));
             }
-            let mapped = mapped_planes(&image);
+            // The independent sample checks exercise the packaged output.
+            // Above, the private adapter remains a bit-exact cross-path check.
+            let mapped = mapped_planes(&package_image);
             let mut samples = 0u64;
             let mut different = 0u64;
             let mut max_error = 0f32;
@@ -307,10 +357,20 @@ fn raw_collection_native_samples_and_owner_bound_policy_match_independent_layers
             );
             reports.push(serde_json::json!({"layer":index,"samples":samples,"different_float_bits":different,"max_absolute_error":max_error}));
             held = Some(image);
+            package_held = Some(package_image);
         }
         assert_eq!(visits.get(), count + 1);
         drop(collection);
+        drop(packaged);
         drop(bytes);
+        let package_held = package_held.unwrap();
+        assert!(package_held.map().unwrap().plane_count() >= 2);
+        assert!(
+            package_held
+                .interpretation()
+                .source_details
+                .contains::<zenjxl::collection::JxlRawLayer>()
+        );
         let held = held.unwrap();
         assert!(held.map().unwrap().plane_count() >= 2);
         assert!(

@@ -451,6 +451,23 @@ spatial-factories-check artifacts:
     SPATIAL_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked collection_factory_ -- --nocapture --test-threads=1
     just spatial-validation-lint
 
+# Exact native pins are in the manifest; callers supply pinned independent readers.
+spatial-packaged-resolve:
+    cargo update --manifest-path perf/spatial-validation/Cargo.toml
+
+spatial-packaged-check artifacts:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    : "${JXL_SELECTION_ORACLE:?supply the pinned libjxl presentation reader}"
+    : "${JXL_LAYER_ORACLE:?supply the pinned libjxl raw-layer reader}"
+    export SPATIAL_ARTIFACTS="{{artifacts}}/factories"
+    export SPATIAL_LAYER_ARTIFACTS="{{artifacts}}/layers"
+    mkdir -p "{{artifacts}}"
+    cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked collection_factory_ -- --nocapture --test-threads=1
+    cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked selected_jxl_presentations_match_native_sequential_with_dependencies -- --nocapture
+    cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked raw_collection_native_samples_and_owner_bound_policy_match_independent_layers -- --nocapture
+    cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
+
 # Automatic selected-image publication policy, including native failure seams.
 spatial-checked-collection-check:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked checked_collection_ -- --nocapture --test-threads=1
