@@ -43,6 +43,16 @@ impl Example {
   assert.throws(()=>declarations(rust,{methods:['absent']}),/exactly one/);
 });
 
+test('the flat API catalog cannot silently overwrite a source contract',async()=>{
+  const catalog=await readFile(new URL('docs/site/api.mjs',root),'utf8');
+  const apiSource=catalog.split('export const api = {')[1].split('\n};')[0];
+  const declared=[...apiSource.matchAll(/^  (\w+): \{/gm)].map(m=>m[1]);
+  assert.equal(declared.length,new Set(declared).size,'duplicate API catalog key');
+  assert.deepEqual(declared,Object.keys(api),'every declared contract must survive evaluation');
+  assert.match(api.collectionOpen.path,/TiffCollection/);
+  assert.match(api.collectionOpenRequest.path,/OpenRequest/);
+});
+
 test('every displayed contract is extracted from a unique current source declaration',async()=>{
   for(const spec of Object.values(api)) {
     const declaration=declarations(await readFile(new URL(spec.file,root),'utf8'),spec);

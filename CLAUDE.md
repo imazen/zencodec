@@ -231,6 +231,12 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed source-guide regression (2026-10-26): a duplicate `collectionOpen`
+  key silently replaced the TIFF opening signatures with `OpenRequest`.
+  Keep separate `collectionOpen` / `collectionOpenRequest` entries. The source
+  gate now checks declared catalog keys against evaluated keys and rejects
+  duplicates; browser coverage retains both native and consumer context.
+
 - Independent raw-layer CI oracle (2026-10-26): libjxl 0.7 disagreed on the
   noise/spline fixture. A source-controlled experiment isolated the difference
   to two existing upstream noise fixes, without changing native output or the
