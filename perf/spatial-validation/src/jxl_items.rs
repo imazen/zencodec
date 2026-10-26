@@ -2,6 +2,7 @@
 //! This path retains the input and scans visible presentations, not raw layers.
 use super::{
     collection::{Collection, CollectionError, located},
+    control::Control,
     image_items::{Composition, ImageId, ImageRequest, Origin, RegionRequest, SelectionError},
     tiff_region::Failure,
 };
@@ -19,6 +20,7 @@ pub struct JxlItems<'a> {
     visible: Vec<VisibleFrameInfo>,
     limit: usize,
     failed: bool,
+    control: Control,
 }
 
 fn complete<T, U>(result: ProcessingResult<T, U>) -> Result<T, Failure> {
@@ -34,6 +36,14 @@ fn options() -> JxlDecoderOptions {
     JxlDecoderOptions::default()
         .with_adjust_orientation(false)
         .with_dither_u8(false)
+}
+
+fn controlled_options(control: &Control) -> JxlDecoderOptions {
+    let options = options();
+    match control.token() {
+        Some(stop) => options.with_stop(std::sync::Arc::new(stop.clone())),
+        None => options,
+    }
 }
 
 pub struct Presentation {
@@ -56,12 +66,30 @@ impl<'a> JxlItems<'a> {
     /// The view is fixed before discovery: flattened presentations and exposed
     /// layers have different cardinalities, so changing it at decode is unsound.
     pub fn open(data: &'a [u8], composition: Composition, limit: usize) -> Result<Self, Failure> {
+        Self::open_controlled(data, composition, limit, Control::default())
+    }
+    pub fn open_with_stop(
+        data: &'a [u8],
+        composition: Composition,
+        limit: usize,
+        stop: zencodec::StopToken,
+    ) -> Result<Self, Failure> {
+        Self::open_controlled(data, composition, limit, Control::new(stop))
+    }
+    fn open_controlled(
+        data: &'a [u8],
+        composition: Composition,
+        limit: usize,
+        control: Control,
+    ) -> Result<Self, Failure> {
         if composition != Composition::Composited {
             return Err(SelectionError::UnsupportedComposition.into());
         }
+        control.check()?;
         let mut remaining = data;
-        let decoder = JxlDecoder::new(options().with_scan_frames_only(true));
+        let decoder = JxlDecoder::new(controlled_options(&control).with_scan_frames_only(true));
         let scanner = complete(decoder.process(&mut remaining)?)?;
+        control.check()?;
         Ok(Self {
             data,
             remaining,
@@ -70,6 +98,7 @@ impl<'a> JxlItems<'a> {
             visible: Vec::new(),
             limit,
             failed: false,
+            control,
         })
     }
 
@@ -86,6 +115,7 @@ impl<'a> JxlItems<'a> {
     }
 
     fn next_inner(&mut self) -> Result<Option<Presentation>, Failure> {
+        self.control.check()?;
         let Some(scanner) = self.scanner.as_ref() else {
             return Ok(None);
         };
@@ -99,7 +129,9 @@ impl<'a> JxlItems<'a> {
         self.visible.try_reserve_exact(1)?;
         let scanner = self.scanner.take().expect("checked above");
         let frame = complete(scanner.process(&mut self.remaining)?)?;
+        self.control.check()?;
         let scanner = complete(frame.skip_frame(&mut self.remaining)?)?;
+        self.control.check()?;
         let native = scanner
             .scanned_frames()
             .last()
@@ -115,8 +147,10 @@ impl<'a> JxlItems<'a> {
     }
 
     pub fn decode(&self, image: &ImageId, padding: usize) -> Result<Vec<Plane>, Failure> {
-        let (decoder, mut input) = self.selected_decoder(image, options())?;
+        let (decoder, mut input) =
+            self.selected_decoder(image, controlled_options(&self.control))?;
         let (_, planes) = decode_next(decoder, &mut input, padding)?;
+        self.control.check()?;
         Ok(planes)
     }
 
@@ -134,7 +168,7 @@ impl<'a> JxlItems<'a> {
         image: &ImageId,
         render: bool,
     ) -> Result<super::image_output::ImageOutput, Failure> {
-        let native_options = options().with_render_spot_colors(render);
+        let native_options = controlled_options(&self.control).with_render_spot_colors(render);
         let (mut decoder, mut input) = self.selected_decoder(image, native_options)?;
         let index = usize::try_from(self.origin.key(image)?)?;
         let selected = &self.visible[index];
@@ -143,6 +177,7 @@ impl<'a> JxlItems<'a> {
         let mut extra_details = Vec::new();
         extra_details.try_reserve_exact(info.extra_channels.len())?;
         for index in 0..info.extra_channels.len() {
+            self.control.check()?;
             extra_details.push(
                 decoder
                     .extra_channel_details(index)
@@ -168,11 +203,16 @@ impl<'a> JxlItems<'a> {
         // 13-byte padding stress path above remains a separate regression test.
         let padding = format.color_type.samples_per_pixel() * 4;
         let decoded = decode_next_details(decoder, &mut input, padding)?;
+        self.control.check()?;
         let timing = if let Some(animation) = &info.animation {
-            let ticks = self.visible[..index].iter().try_fold(0i64, |sum, frame| {
-                sum.checked_add(i64::from(frame.duration_ticks))
-                    .ok_or_else(|| Error::other("JXL timestamp overflow"))
-            })?;
+            let ticks = self.visible[..index].iter().try_fold(
+                0i64,
+                |sum, frame| -> Result<i64, Failure> {
+                    self.control.check()?;
+                    sum.checked_add(i64::from(frame.duration_ticks))
+                        .ok_or_else(|| Error::other("JXL timestamp overflow").into())
+                },
+            )?;
             let base =
                 zencodec::time::TimeBase::new(animation.tps_denominator, animation.tps_numerator)?;
             Some(
@@ -182,7 +222,7 @@ impl<'a> JxlItems<'a> {
         } else {
             None
         };
-        super::jxl_output::adopt(
+        let image = super::jxl_output::adopt(
             decoded.planes,
             super::jxl_output::JxlSourceFacts {
                 header: info,
@@ -197,7 +237,9 @@ impl<'a> JxlItems<'a> {
             &profile,
             timing,
             render,
-        )
+        )?;
+        self.control.check()?;
+        Ok(image)
     }
 
     fn selected_decoder(
@@ -206,6 +248,7 @@ impl<'a> JxlItems<'a> {
         native_options: JxlDecoderOptions,
     ) -> Result<(JxlDecoder<states::WithImageInfo>, &[u8]), Failure> {
         let key = self.origin.key(image)?;
+        self.control.check()?;
         if self.failed {
             return Err(Error::other("JXL operation failed").into());
         }
@@ -221,6 +264,7 @@ impl<'a> JxlItems<'a> {
             )
         })?;
         let (mut decoder, _) = pixel_decoder(self.data, native_options)?;
+        self.control.check()?;
         decoder.start_new_frame(target);
         let start = usize::try_from(target.decode_start_file_offset)?;
         let input = self
@@ -344,6 +388,7 @@ impl Collection for JxlItems<'_> {
         Composition::Composited
     }
     fn images(&mut self) -> Result<JxlCursor, zencodec::At<CollectionError>> {
+        self.control.check().map_err(located)?;
         Ok(JxlCursor {
             owner: self.origin.image(u64::MAX),
             index: 0,
@@ -351,6 +396,7 @@ impl Collection for JxlItems<'_> {
     }
     fn children(&mut self, image: &ImageId) -> Result<JxlCursor, zencodec::At<CollectionError>> {
         self.origin.key(image).map_err(|e| located(e.into()))?;
+        self.control.check().map_err(located)?;
         Err(located(SelectionError::UnsupportedChildren.into()))
     }
     fn next(
@@ -363,6 +409,7 @@ impl Collection for JxlItems<'_> {
         if self.failed {
             return Err(located(Error::other("JXL operation failed").into()));
         }
+        self.control.check().map_err(located)?;
         let image = if cursor.index < self.visible.len() {
             Some(self.origin.image(cursor.index as u64))
         } else {
@@ -371,6 +418,7 @@ impl Collection for JxlItems<'_> {
                 .map_err(located)?
         };
         if image.is_some() {
+            self.control.check().map_err(located)?;
             cursor.index += 1;
         }
         Ok(image)

@@ -39,6 +39,9 @@ pub fn located(error: Failure) -> At<CollectionError> {
 
 /// Opening the concrete adapter fixes its view. Discovery can then be lazy and
 /// selection IDs remain stable while the source operation lives.
+/// The private adapters accept the existing StopToken at open and check it
+/// during discovery/replay and before returning an ID, exhaustion or output.
+/// This is cooperative cancellation, not a hard native-call latency bound.
 pub trait Collection {
     type Cursor;
     fn view(&self) -> Composition;

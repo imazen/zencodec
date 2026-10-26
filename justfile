@@ -352,6 +352,10 @@ spatial-consumer-check:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked common_ -- --nocapture
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
 
+spatial-cancellation-check:
+    cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked cancellation_ -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
+
 spatial-output-check artifacts:
     mkdir -p "{{artifacts}}-oracle"
     cc -std=c11 -Wall -Wextra -Werror perf/spatial-validation/jxl_oracle.c -ljxl -o "{{artifacts}}-oracle/jxl-oracle"

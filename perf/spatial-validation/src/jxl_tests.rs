@@ -1,3 +1,4 @@
+use super::control::CheckStop;
 use super::{
     collection::{Collection, first_child, first_image},
     image_items::{Composition, ImageRequest, Rect, SelectionError},
@@ -24,6 +25,93 @@ fn fixture_path(name: &str) -> PathBuf {
 pub(crate) fn fixture(name: &str) -> Vec<u8> {
     let path = fixture_path(name);
     std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+}
+
+fn assert_cancelled(error: &(dyn std::error::Error + 'static)) {
+    if let Some(reason) = zencodec::find_cause::<zencodec::CodecError>(error) {
+        assert_eq!(
+            reason.category(),
+            zencodec::ErrorCategory::Stopped(zencodec::enough::StopReason::Cancelled)
+        );
+    } else {
+        let native = zencodec::find_cause::<zenjxl_decoder::api::Error>(error)
+            .unwrap_or_else(|| panic!("not a cancellation cause: {error:?}"));
+        assert!(matches!(native, zenjxl_decoder::api::Error::Cancelled));
+    }
+}
+
+#[test]
+fn cancellation_covers_native_jxl_open_discovery_and_selected_decode() {
+    let data = fixture("conformance_test_images/blendmodes.jxl");
+    let run = |stop: &CheckStop| -> Result<_, super::tiff_region::Failure> {
+        let mut collection =
+            JxlItems::open_with_stop(&data, Composition::Composited, 4096, stop.token())?;
+        Ok(first_image(&mut collection, &ImageRequest::default())?)
+    };
+    let counted = CheckStop::default();
+    let output = run(&counted).unwrap().unwrap();
+    let expected = super::output_tests::expected_output(&data);
+    let mapped = output.map().unwrap();
+    assert_eq!(mapped.plane_count(), expected[0].len());
+    for (index, expected) in expected[0].iter().enumerate() {
+        let actual = mapped.plane(index).unwrap().unwrap();
+        assert_eq!(
+            actual.samples.dimensions(),
+            (expected.width, expected.height)
+        );
+        for y in 0..expected.height {
+            let super::image_output::Row::Bytes(row) = actual.samples.row(y).unwrap() else {
+                panic!("native f32 output became code words")
+            };
+            assert_eq!(
+                row,
+                &expected.bytes[y * expected.stride..][..expected.width * expected.channels * 4]
+            );
+        }
+    }
+    let checkpoints = counted.calls();
+    assert!(
+        checkpoints > 5 && checkpoints < 2048,
+        "unexpected fixture checkpoints: {checkpoints}"
+    );
+    for at in 0..checkpoints {
+        let stop = CheckStop::default();
+        stop.after(at);
+        let error = run(&stop).expect_err("cancelled JXL output escaped");
+        assert_cancelled(error.as_ref());
+    }
+}
+
+#[test]
+fn cancellation_blocks_cached_and_exhausted_jxl_cursors() {
+    let data = fixture("conformance_test_images/blendmodes.jxl");
+    let stop = CheckStop::default();
+    let mut collection =
+        JxlItems::open_with_stop(&data, Composition::Composited, 4096, stop.token()).unwrap();
+    let mut complete = collection.images().unwrap();
+    while Collection::next(&mut collection, &mut complete)
+        .unwrap()
+        .is_some()
+    {}
+    let mut cached = collection.images().unwrap();
+    stop.after(0);
+    for cursor in [&mut complete, &mut cached] {
+        let error = Collection::next(&mut collection, cursor).unwrap_err();
+        assert_cancelled(&error);
+    }
+    assert!(collection.images().is_err());
+}
+
+#[test]
+fn cancellation_during_native_jxl_scan_cannot_appear_exhausted() {
+    let data = fixture("conformance_test_images/blendmodes.jxl");
+    let stop = CheckStop::default();
+    let mut collection =
+        JxlItems::open_with_stop(&data, Composition::Composited, 4096, stop.token()).unwrap();
+    stop.after(1);
+    let error = collection.next().err().unwrap();
+    assert_cancelled(error.as_ref());
+    assert!(collection.next().is_err());
 }
 
 pub(crate) fn independent_metadata(name: &str, coalescing: bool) -> String {

@@ -239,6 +239,7 @@ fn selected(levels: &[u32]) -> Selection<'_> {
 
 mod image_selection {
     use super::*;
+    use crate::control::CheckStop;
     use crate::{
         collection::{Collection, first_child, first_image},
         image_items::{ImageRequest, RegionRequest},
@@ -393,6 +394,122 @@ mod image_selection {
                     })
                     .unwrap();
             }
+        }
+    }
+
+    #[test]
+    fn cancellation_covers_native_tiff_open_discovery_and_selected_decode() {
+        for big in [false, true] {
+            let (bytes, refs) = nested_fixture(big, true, false);
+            let run = |stop: &CheckStop| {
+                let mut collection = TiffCollection::open_with_stop(
+                    Cursor::new(&bytes),
+                    Composition::Composited,
+                    Allowances::default(),
+                    stop.token(),
+                )?;
+                first_child(&mut collection, &ImageRequest::default())
+            };
+            let counted = CheckStop::default();
+            let output = run(&counted).unwrap().unwrap();
+            output
+                .with_pixels(|p| {
+                    assert_eq!(p.as_contiguous_bytes().unwrap(), refs[1].bytes);
+                })
+                .unwrap();
+            let checkpoints = counted.calls();
+            assert!(
+                checkpoints > 10 && checkpoints < 2048,
+                "unexpected fixture checkpoints: {checkpoints}"
+            );
+            // Every observed seam in this real open -> root -> SubIFD -> decode
+            // operation is independently cancelled. No partial output may escape.
+            for at in 0..checkpoints {
+                let stop = CheckStop::default();
+                stop.after(at);
+                let error = run(&stop).expect_err("cancelled TIFF output escaped");
+                assert_eq!(
+                    zencodec::find_cause::<zencodec::CodecError>(&error).map(|e| e.category()),
+                    Some(zencodec::ErrorCategory::Stopped(
+                        zencodec::enough::StopReason::Cancelled
+                    )),
+                    "checkpoint {at}/{checkpoints}: {error:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn cancellation_rejects_tiff_open_before_source_io() {
+        let (bytes, _) = nested_fixture(false, false, false);
+        let source = Source::new(bytes);
+        let stop = CheckStop::default();
+        stop.after(0);
+        let error = TiffCollection::open_with_stop(
+            ReadAtReader::new(source.clone()),
+            Composition::Composited,
+            Allowances::default(),
+            stop.token(),
+        )
+        .err()
+        .unwrap();
+        assert_eq!(source.ledger.borrow().calls, 0);
+        assert_eq!(
+            zencodec::find_cause::<zencodec::CodecError>(&error).map(|e| e.category()),
+            Some(zencodec::ErrorCategory::Stopped(
+                zencodec::enough::StopReason::Cancelled
+            )),
+        );
+    }
+
+    #[test]
+    fn cancellation_interrupts_tiff_graph_checks_without_source_io() {
+        let (bytes, _) = nested_fixture(false, false, false);
+        let setup = |stop: &CheckStop| {
+            let source = Source::new(bytes.clone());
+            let mut collection = TiffCollection::open_with_stop(
+                ReadAtReader::new(source.clone()),
+                Composition::Composited,
+                Allowances::default(),
+                stop.token(),
+            )
+            .unwrap();
+            let mut roots = collection.images().unwrap();
+            let root = collection.next(&mut roots).unwrap().unwrap();
+            let mut children = collection.children(&root).unwrap();
+            let branch = collection.next(&mut children).unwrap().unwrap();
+            let mut children = collection.children(&branch).unwrap();
+            let leaf = collection.next(&mut children).unwrap().unwrap();
+            let second = collection.next(&mut roots).unwrap().unwrap();
+            let mut shared = collection.children(&second).unwrap();
+            assert_eq!(collection.next(&mut shared).unwrap().unwrap(), leaf);
+            let children = collection.children(&root).unwrap();
+            (collection, children, source, branch)
+        };
+        let counted = CheckStop::default();
+        let (mut collection, mut cursor, source, expected) = setup(&counted);
+        let before = counted.calls();
+        let reads = source.ledger.borrow().calls;
+        assert_eq!(collection.next(&mut cursor).unwrap().unwrap(), expected);
+        assert_eq!(source.ledger.borrow().calls, reads);
+        let checkpoints = counted.calls() - before;
+        assert!(
+            checkpoints > 4,
+            "the fixture must traverse known graph edges"
+        );
+        for at in 0..checkpoints {
+            let stop = CheckStop::default();
+            let (mut collection, mut cursor, source, _) = setup(&stop);
+            let reads = source.ledger.borrow().calls;
+            stop.after(at);
+            let error = collection.next(&mut cursor).unwrap_err();
+            assert_eq!(
+                zencodec::find_cause::<zencodec::CodecError>(&error)
+                    .unwrap()
+                    .category(),
+                zencodec::ErrorCategory::Stopped(zencodec::enough::StopReason::Cancelled)
+            );
+            assert_eq!(source.ledger.borrow().calls, reads);
         }
     }
 

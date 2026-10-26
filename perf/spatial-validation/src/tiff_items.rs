@@ -1,6 +1,7 @@
 //! A real TIFF directory graph over the candidate operation-bound identities.
 use super::{
     collection::{Collection, CollectionError, located},
+    control::{CheckedReader, Control},
     image_items::{
         Composition, ImageId, ImageRequest, Origin, RegionRequest, Relation, RelationKind,
         SelectionError,
@@ -14,7 +15,8 @@ use tiff::{
 };
 
 pub struct TiffItems<R> {
-    input: R,
+    input: CheckedReader<R>,
+    control: Control,
     header: TiffHeader,
     origin: Origin,
     limits: Allowances,
@@ -32,10 +34,18 @@ pub struct Cursor {
 }
 
 impl<R: Read + Seek> TiffItems<R> {
-    pub fn open(mut input: R, limits: Allowances) -> Result<Self, Failure> {
+    pub fn open(input: R, limits: Allowances) -> Result<Self, Failure> {
+        Self::open_controlled(input, limits, Control::default())
+    }
+
+    fn open_controlled(input: R, limits: Allowances, control: Control) -> Result<Self, Failure> {
+        control.check()?;
+        let mut input = control.reader(input);
         let header = TiffHeader::parse(&mut input)?;
+        control.check()?;
         Ok(Self {
             input,
+            control,
             header,
             limits,
             origin: Origin::default(),
@@ -68,6 +78,7 @@ impl<R: Read + Seek> TiffItems<R> {
     /// allowance. No pixel headers or child directories are decoded here.
     pub fn children(&mut self, parent: &ImageId) -> Result<Cursor, Failure> {
         let key = self.origin.key(parent)?;
+        self.control.check()?;
         let limits = self.native_limits();
         let mut decoder = self.header.open(&mut self.input).with_limits(limits);
         let directory = decoder.read_directory(IfdPointer(key))?;
@@ -80,6 +91,7 @@ impl<R: Read + Seek> TiffItems<R> {
         if children.len() > self.limits.discoveries {
             return Err(SelectionError::DiscoveryLimit.into());
         }
+        self.control.check()?;
         Ok(Cursor {
             owner: self.origin.image(0),
             parent: Some(parent.clone()),
@@ -102,6 +114,7 @@ impl<R: Read + Seek> TiffItems<R> {
         let mut seen = Vec::new();
         seen.try_reserve_exact(capacity)?;
         while let Some(item) = pending.pop() {
+            self.control.check()?;
             if item == target {
                 return Ok(true);
             }
@@ -109,12 +122,12 @@ impl<R: Read + Seek> TiffItems<R> {
                 continue;
             }
             seen.push(item);
-            pending.extend(
-                self.edges
-                    .iter()
-                    .filter(|(parent, _)| *parent == item)
-                    .map(|(_, child)| child),
-            );
+            for &(parent, child) in &self.edges {
+                self.control.check()?;
+                if parent == item {
+                    pending.push(child);
+                }
+            }
         }
         Ok(false)
     }
@@ -123,6 +136,7 @@ impl<R: Read + Seek> TiffItems<R> {
         self.origin
             .key(&cursor.owner)
             .map_err(|_| SelectionError::ForeignCursor)?;
+        self.control.check()?;
         let Some(pointer) = cursor.next else {
             return Ok(None);
         };
@@ -163,6 +177,7 @@ impl<R: Read + Seek> TiffItems<R> {
         if cursor.parent.is_none() {
             cursor.visited.try_reserve_exact(1)?;
         }
+        self.control.check()?;
         if let Some(edge) = new_edge {
             self.edges.push(edge);
         }
@@ -188,18 +203,23 @@ impl<R: Read + Seek> TiffItems<R> {
         image: &ImageId,
         region: impl Into<RegionRequest>,
         composition: Composition,
-        check: impl FnMut() -> Result<(), Failure>,
+        mut check: impl FnMut() -> Result<(), Failure>,
     ) -> Result<Region, Failure> {
         let key = self.origin.key(image)?;
         if composition != Composition::Composited {
             return Err(SelectionError::UnsupportedComposition.into());
         }
+        self.control.check()?;
+        let control = &self.control;
         tiff_region::decode_directory(
             &mut self.input,
             IfdPointer(key),
             region.into(),
             self.limits,
-            check,
+            || {
+                control.check()?;
+                check()
+            },
         )
     }
 }
@@ -215,11 +235,27 @@ impl<R: Read + Seek> TiffCollection<R> {
         view: Composition,
         limits: Allowances,
     ) -> Result<Self, zencodec::At<CollectionError>> {
+        Self::open_controlled(input, view, limits, Control::default())
+    }
+    pub fn open_with_stop(
+        input: R,
+        view: Composition,
+        limits: Allowances,
+        stop: zencodec::StopToken,
+    ) -> Result<Self, zencodec::At<CollectionError>> {
+        Self::open_controlled(input, view, limits, Control::new(stop))
+    }
+    fn open_controlled(
+        input: R,
+        view: Composition,
+        limits: Allowances,
+        control: Control,
+    ) -> Result<Self, zencodec::At<CollectionError>> {
         if view != Composition::Composited {
             return Err(located(SelectionError::UnsupportedComposition.into()));
         }
         Ok(Self {
-            items: TiffItems::open(input, limits).map_err(located)?,
+            items: TiffItems::open_controlled(input, limits, control).map_err(located)?,
         })
     }
 }
@@ -229,6 +265,7 @@ impl<R: Read + Seek> Collection for TiffCollection<R> {
         Composition::Composited
     }
     fn images(&mut self) -> Result<Cursor, zencodec::At<CollectionError>> {
+        self.items.control.check().map_err(located)?;
         Ok(self.items.images())
     }
     fn children(&mut self, image: &ImageId) -> Result<Cursor, zencodec::At<CollectionError>> {
@@ -248,10 +285,13 @@ impl<R: Read + Seek> Collection for TiffCollection<R> {
         image: &ImageId,
         request: &ImageRequest,
     ) -> Result<super::image_output::ImageOutput, zencodec::At<CollectionError>> {
-        self.items
+        let image = self
+            .items
             .decode(image, request.region, Composition::Composited, || Ok(()))
             .and_then(Region::into_pixels)
             .and_then(super::tiff_pixels::StoredRaster::into_image)
-            .map_err(located)
+            .map_err(located)?;
+        self.items.control.check().map_err(located)?;
+        Ok(image)
     }
 }

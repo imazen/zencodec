@@ -2,6 +2,12 @@
 
 ## Native image selection (unreleased experiment)
 
+- Qualify one operation stop token across private TIFF/JXL collection discovery
+  and selected decode. Check source I/O, graph traversal, cached/exhausted cursors
+  and final publication; pass the token into native JXL work. Inject cancellation
+  through the observed polls of real TIFF/SubIFD and JXL operations without
+  changing the common consumer signature.
+
 - Keep frame and decoder-boundary diagnostic facts once in `DecisionContext`;
   `Selection` records only the publication or boundary action. This aligns the
   unpublished report variants with selected images and removes duplicated
