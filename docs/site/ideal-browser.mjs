@@ -18,7 +18,8 @@ export async function checkIdeal(browser,url,output) {
     assert.ok((await page.locator('h1').textContent()).includes('executes today'));
     assert.equal(await page.locator('.ideal-step').count(),5);
     const changes=page.locator('.api-change');
-    assert.equal(await changes.count(),12);
+    assert.equal(await page.locator('.api-change:not(#change-operation-storage)').count(),12);
+    assert.equal(await changes.count(),13);
     assert.equal(await page.locator('#change-mapping').count(),1);
     assert.ok((await page.locator('#change-images .code-toolbar').textContent()).includes('Private prototype'));
     assert.equal(await page.locator('#change-images [data-example="checked_jxl_first"]').count(),1);
@@ -28,12 +29,12 @@ export async function checkIdeal(browser,url,output) {
     await page.keyboard.press('Enter');
     assert.ok(await owner.evaluate(el=>el.open));
     for(const required of ['PackedImageOwner','from_packed_owner','ValueSlice','last image drops','Native workspace','NeedsCms']) assert.ok((await owner.textContent()).includes(required),required);
-    const storage=page.locator('#change-operation-storage');
-    await storage.locator(':scope>summary').focus();
+    const storageChange=page.locator('#change-operation-storage');
+    await storageChange.locator(':scope>summary').focus();
     await page.keyboard.press('Enter');
-    assert.ok(await storage.evaluate(el=>el.open));
-    assert.equal(await storage.locator('[data-example="checked_output_storage"]').count(),1);
-    for(const required of ['with_output_storage','CollectionOpenContext','open_with','UnsupportedOutputStorage','max_memory_bytes']) assert.ok((await storage.textContent()).includes(required),required);
+    assert.ok(await storageChange.evaluate(el=>el.open));
+    assert.equal(await storageChange.locator('[data-example="checked_output_storage"]').count(),1);
+    for(const required of ['with_output_storage','CollectionOpenContext','open_with','UnsupportedOutputStorage','max_memory_bytes']) assert.ok((await storageChange.textContent()).includes(required),required);
     const inspection=page.locator('#change-inspection');
     await inspection.locator(':scope>summary').focus();
     await page.keyboard.press('Enter');

@@ -35,7 +35,7 @@
     "output": "ordinary/admitted bit-exact samples, strides/padding and unchanged independent-reader gates; charges follow old/new retained results through operation/input destruction",
     "requirements": "TIFF pool refusal before source/policy work; existing inherited limits, decode policy, stop and no-fallback controls unchanged",
     "example": "the guide opening function executes for every admitted presentation/layer setup",
-    "guide": "pending final browser gate"
+    "guide": "passed: source-derived signatures, exact compiled examples, independent inline context/copy, seven migration diagrams and thirteen API cards with original case/role gates retained, keyboard and 390/768/1440px layouts"
   },
   "native_consumer": {
     "passed": 14,
@@ -47,7 +47,9 @@
   },
   "initial_failures": [
     "An opaque impl Collection return hid the concrete owned-cursor lifetime, preventing the source-drop control from compiling. The example now names the existing concrete return type; the lifetime assertion is unchanged.",
-    "The site link gate refused the not-yet-written matrix receipt. Receipt generation precedes the final browser gate."
+    "The site link gate refused the not-yet-written matrix receipt. Receipt generation precedes the final browser gate.",
+    "The added seventh migration diagram hit a hard-coded six-diagram browser assertion. The correction retains the original six-case and role assertions, checks the new case separately, and verifies the combined count. The matrix commit was pushed before this browser failure was properly gated; its message incorrectly stated that the browser gate passed. This receipt preserves the failure.",
+    "The next browser pass reached the analogous fixed twelve-card assertion on the checked API page. Preserve the twelve original cards and assert the added thirteenth separately. Also rename the new locator to avoid shadowing the example source text used by full-copy validation."
   ],
   "runs": [
     {
@@ -69,6 +71,21 @@
       "name": "browser",
       "result": "run-heavy: done rc=1 0s | peak-RSS 0.13GiB | min-avail 13488MiB | peak-load 0.35",
       "sha256": "c99976605d015a7dd993d3aed4b75f524dfb077e1e4c3e043051d4a3c1bb8b94"
+    },
+    {
+      "name": "browser-2",
+      "result": "run-heavy: done rc=1 4s | peak-RSS 0.17GiB | min-avail 13256MiB | peak-load 0.46",
+      "sha256": "b60bc006304f11395b24f1fec7ef4f0d0cdc17f94d9b833415c4ef93ca8235ee"
+    },
+    {
+      "name": "browser-3",
+      "result": "run-heavy: done rc=1 5s | peak-RSS 0.17GiB | min-avail 13252MiB | peak-load 0.27",
+      "sha256": "ac7dbb3b24fdacd26b61f1f765c48afe1bfe3879f6b46f82ee2fc60f3c70e8f8"
+    },
+    {
+      "name": "browser-4",
+      "result": "run-heavy: done rc=0 9s | peak-RSS 0.17GiB | min-avail 13112MiB | peak-load 0.27",
+      "sha256": "7c98d4a3f73bd295545c9bbc918ec642451b68e3f5c323323caba89bb44274c9"
     }
   ],
   "artifact_directory": "/mnt/v/output/zencodec/platform-regions-20261026-run/operation-storage-matrix-2",
@@ -77,5 +94,5 @@
     "resource wrapper covers whole validation/build process tree",
     "no throughput or whole-codec memory claim"
   ],
-  "api_cleanup": "remove migration-only positional opening and error variant; the package removes its codec-specific output-storage setter; single required open_with context remains"
+  "api_cleanup": "remove migration-only positional opening and error variant; the package removes its codec-specific output-storage setter; single required open_with context remains; the bridge-only unit control is replaced by real TIFF refusal and native JXL request-pool controls, with no weakened established assertion"
 }

@@ -12,14 +12,18 @@ export async function checkMigration(browser,url,output) {
     const response=await page.goto(new URL('migration.html',url).href);
     assert.equal(response.status(),200);
     assert.equal(await page.locator('meta[name="robots"]').getAttribute('content'),'noindex, nofollow');
-    assert.equal(await page.locator('.migration-case:visible').count(),6);
+    assert.equal(await page.locator('.migration-case:not(#output-storage):visible').count(),6);
+    assert.equal(await page.locator('.migration-case:visible').count(),7);
+    assert.ok(await page.locator('#output-storage').isVisible());
     for(const item of await page.locator('.migration-case').all()) {
       assert.deepEqual(await item.locator('[data-stage]').evaluateAll(els=>els.map(el=>el.dataset.stage)),['released','current','proposed']);
     }
     if(output) await page.screenshot({path:`${output}/migration-desktop.png`});
     for(const [role,count] of [['consumer',5],['adapter',5],['implementor',4]]) {
       await page.selectOption('#migration-audience',role);
-      assert.equal(await page.locator('.migration-case:visible').count(),count);
+      assert.equal(await page.locator('.migration-case:not(#output-storage):visible').count(),count);
+      assert.equal(await page.locator('.migration-case:visible').count(),count+1);
+      assert.ok(await page.locator('#output-storage').isVisible());
     }
     await page.locator('.migration-controls a[href="#pixels"]').click();
     assert.equal(await page.locator('#migration-audience').inputValue(),'all');

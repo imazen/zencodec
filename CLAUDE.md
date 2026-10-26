@@ -231,6 +231,12 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Guide regression (2026-10-26, fixed): adding the operation-storage migration diagram
+  exposed a fixed six-case browser assertion. Keep the original six case/role
+  checks and verify the added diagram separately; do not weaken the existing
+  rendering or filtering gates. The checked API page similarly retains its
+  twelve original card checks while checking the added thirteenth card.
+
 - Fixed during packed-owner qualification (2026-10-26): direct `OutputError`
   mapping diagnostics printed arbitrary backend text. Its default Display and
   Debug are now bounded while `source()` retains the original typed cause and
