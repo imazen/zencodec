@@ -18,13 +18,23 @@ once at open and owned cursor state once per cursor. It neither boxes each
 `next` result nor changes the native output owner. Typed collection calls remain
 available without this erasure.
 
-The first factory signature used `DynReadAt`. Compiling the actual HTTP consumer
-failed because that existing trait requires `Send`, while the simulator uses
-thread-local state. [`LocalSource`](src/local_source.rs) tests erasure over any
-existing `ReadAt` without that requirement or a caller-written shim. The published
-transferable interface is unchanged. A public design still needs to place
-transferability on the path that actually crosses threads, without creating two
-independent source protocols. This candidate itself is local and synchronous.
+The first factory signature used `DynReadAt` with its former mandatory `Send`
+bound. Compiling the actual HTTP consumer rejected the simulator's local state.
+A private `LocalSource` experiment proved the local path; that duplicate protocol
+has now been removed. The shared `DynReadAt` and `ReadAtShim` accept local sources.
+Use `dyn DynReadAt + Send` when an erased source itself crosses threads. Both boxed
+forms support borrowed input; no new source capability query is required.
+
+The native adapters now use that shared source protocol, including the unchanged
+HTTP simulator. Typed `ReadAt` remains the implementor contract, and a caller can
+bind `ReadAtShim(source)` once before opening. Async drivers still prove their
+worker/future transferability at the boundary where it matters. This factory
+candidate itself is local and synchronous. The source interface was absent from
+the published 0.1.26 tree; existing users of its unreleased implicit `Send` bound
+need an explicit bound when transferring the erased object.
+The [shared-source receipt](../../benchmarks/local_source_2026-10-26.json)
+includes the published-tree check, local and scoped-thread controls, full
+workspace checks and native HTTP qualification.
 
 `just spatial-factories-check <fresh-artifact-directory>` checks native TIFF
 children, regions and disk reads, both JXL views, inspection, foreign cursors,

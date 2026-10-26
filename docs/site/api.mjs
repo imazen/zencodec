@@ -20,7 +20,7 @@ export const api = {
   collectionFactory: {path:'candidate::Factory (private registry experiment)',file:'perf/spatial-validation/src/collection_factories.rs',scope:'pub trait Factory',methods:['formats','open']},
   collectionFactories: {path:'candidate::Factories (private registry experiment)',file:'perf/spatial-validation/src/collection_factories.rs',scope:'impl Factories',methods:['with','open']},
   collectionStop: {path:'zencodec::operation::CollectionOperationError',file:'src/operation/collection.rs',scope:'impl CollectionOperationError',methods:['stop_reason']},
-  localSource: {path:'candidate::LocalSource (private source-erasure experiment)',file:'perf/spatial-validation/src/local_source.rs',scope:'pub trait LocalSource',methods:['len','len_hint','read_at','read_exact_at','read_many_at','as_slice']},
+  dynReadAt: {path:'zencodec::source::DynReadAt',file:'src/source.rs',scope:'pub trait DynReadAt',methods:['len','len_hint','read_at','read_exact_at','read_many_at','as_slice']},
   jxlSelection: {path:'candidate::JxlItems (private native experiment)',file:'perf/spatial-validation/src/jxl_items.rs',scope:"impl<'a> JxlItems<'a>",methods:['open','open_with_stop','next','decode']},
   sourceSnapshot: {path:'candidate::HttpSource (private HTTP qualification)',file:'perf/spatial-validation/src/http_source.rs',scope:'impl HttpSource',methods:['open']},
   fileSnapshot: {path:'candidate::clone_source (private Linux file snapshot)',file:'perf/spatial-validation/src/file_snapshot.rs',methods:['clone_source']},

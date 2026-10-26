@@ -1,0 +1,65 @@
+{
+  "base_revision": "85dfb9c3b55b5164bd07ced30c90e12dbf196872",
+  "published_baseline": {
+    "version": "0.1.26",
+    "revision": "998edf5f5152f675bbe3b4e959470dffe1536c36",
+    "check": "git ls-tree -r --name-only 998edf5f5152f675bbe3b4e959470dffe1536c36 src/source.rs",
+    "result": "No source.rs in that published tree."
+  },
+  "scope": "One shared erased positional-source protocol for local synchronous use and explicit + Send transfer. Borrowed boxed sources are supported; the duplicate private LocalSource trait was deleted.",
+  "sources": {
+    "src/source.rs": "9a294c8ebff93167e1cb0acfdf70b4df6dcb0792ec974f1ca6688689cce5aa64",
+    "zencodec-io/tests/std_source_errors.rs": "ff141fcf921fcba9cf439e44a595655568a7ef034881730b14e80db20e3d1296",
+    "perf/spatial-validation/src/collection_factories.rs": "ed75169f2c6e5ea35f011f121968557976d75a958eaf1c15a039001b001e69b1",
+    "perf/spatial-validation/src/factory_tests.rs": "761116588c989ee53ba00326ea513c2de8bf13d7cdd693d25291984a0852290c",
+    "perf/spatial-validation/src/http_tests.rs": "6700fb9d1d14a1c2114862376d8252040a14581faa4b4b4303dba6e4cd5a9f72",
+    "justfile": "4aa55bc76368725464ba6d8631d1e6fc3ad2d25e8c466bb24bf38e8b30c6c78c"
+  },
+  "runs": [
+    {
+      "log": "zencodec-local-source-1-2026-10-26.log",
+      "sha256": "8dd45049540779f2a03f6638ebfc7bae84ddaa7385325bd51abc26db61946ac6",
+      "scope": "Export-sync omission left source.rs at the old Send-bound revision; compile failed before native tests. Added source.rs to the durable sync recipe.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13307MiB :: timeout --kill-after=10s 300s bash -eu -c just spatial-factories-check /mnt/v/output/zencodec/platform-regions-20261026-run/local-source-disk-1; just io-contract-check; just spatial-http-check /mnt/v/output/zencodec/platform-regions-20261026-run/local-source-http-1 3568",
+        "run-heavy: done rc=101 1s | peak-RSS 0.26GiB | min-avail 13305MiB | peak-load 0.10"
+      ]
+    },
+    {
+      "log": "zencodec-local-source-2-2026-10-26.log",
+      "sha256": "d2b4e0591fa0b0be5557a2f8c96e7029b83b38157e2de8a6ce801b48c33a3a13",
+      "scope": "Eleven native factory checks, full workspace all-feature tests/lint and seven conditional HTTP controls pass using the shared source protocol.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13325MiB :: timeout --kill-after=10s 300s bash -eu -c just spatial-factories-check /mnt/v/output/zencodec/platform-regions-20261026-run/local-source-disk-1; just io-contract-check; just spatial-http-check /mnt/v/output/zencodec/platform-regions-20261026-run/local-source-http-1 3568",
+        "{\"scope\": \"Native TIFF selection over local HTTP/1.1; no WAN/TLS/performance claim\", \"requests\": 10934, \"cases\": 62, \"statuses\": {\"200\": 1, \"206\": 10920, \"302\": 1, \"412\": 12}, \"conditional_after_open\": true}",
+        "run-heavy: done rc=0 37s | peak-RSS 0.62GiB | min-avail 12772MiB | peak-load 0.97"
+      ]
+    },
+    {
+      "log": "zencodec-local-source-transfer-2026-10-26.log",
+      "sha256": "2d220513cf604c5ac3e8df9cb36e14377a3a8f351104743708d87fc639c2ad10",
+      "scope": "Local borrowed buffered source and explicitly Send borrowed source on an actual scoped thread pass; core/WASM, strict lint, Rustdoc and API snapshots pass.",
+      "results": [
+        "run-heavy: mem-cap=12G (cgroup, hard) jobs=2/24 avail=13396MiB :: timeout --kill-after=10s 180s bash -eu -c cargo test -p zencodec-io --features std --test std_source_errors --locked; cargo clippy -p zencodec-io --all-features --test std_source_errors --locked -- -D warnings; just collection-api-check; just doc-default; just api-doc",
+        "run-heavy: done rc=0 13s | peak-RSS 0.49GiB | min-avail 13017MiB | peak-load 0.73"
+      ]
+    },
+    {
+      "log": "zencodec-local-source-site-2026-10-26.log",
+      "sha256": "6c9ddce1b1bffd398d20b71cea33b00c11d7eac562c4aeb07209acbdf1eed0a4",
+      "scope": "Source extraction and all browser checks pass after deleting the duplicate private source trait.",
+      "results": [
+        "run-heavy: mem-cap=4G (cgroup, hard) jobs=2/24 avail=13422MiB :: timeout --kill-after=5s 120s bash -eu -c just docs-site-check; just docs-site-browser",
+        "Migration browser checks passed: release-state diagrams, audience filters, deep links, exact full-example copy, independent inline expansion, signatures, keyboard and responsive layouts.",
+        "Checked API browser checks passed: exact examples, independent expansion, signatures, clipboard, keyboard and responsive roles.",
+        "Browser checks passed: 15 chapters with signatures, 7 entry points, exact full-example clipboard contents, independent inline context, deep links, 8 lab combinations, keyboard, 390/768/1440px layouts.",
+        "run-heavy: done rc=0 9s | peak-RSS 0.17GiB | min-avail 12924MiB | peak-load 0.38"
+      ]
+    }
+  ],
+  "compatibility": "Unreleased consumers that relied on DynReadAt implying Send must request dyn DynReadAt + Send when transferring the erased source. No release version was changed.",
+  "limits": [
+    "No performance or codec workspace claim. Test/build resource receipts are not native decoder allocation bounds.",
+    "Collection factories remain private; opened collection transferability, detection and production packaging are not established by source transferability."
+  ]
+}
