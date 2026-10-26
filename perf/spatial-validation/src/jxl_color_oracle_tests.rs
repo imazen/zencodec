@@ -1,6 +1,10 @@
 //! Test-only, independently executed ICC math after native reconstruction.
 use super::*;
 use std::{fs, io::Write, path::Path, process::Command};
+use zencodec::{
+    image::{Meaning, Row},
+    operation::{Decision, PolicySet, PublicationOffer, Question, Selection, resolve_image},
+};
 use zenpixels::{AlphaMode, PixelFormat};
 use zenpixels_convert::icc_profiles::display_p3_icc;
 
@@ -99,7 +103,10 @@ fn native_color_profiles_match_independent_lcms_with_exact_alpha_and_admission()
                 .into_output();
             let directory = artifacts.join(format!("selection-{total}"));
             fs::create_dir(&directory).unwrap();
-            image.with_pixels(|pixels| {
+            let original = image.clone();
+            let source_charges = (pool.reserved_bytes(), pool.reserved_objects());
+            let destination_pool = StorageBudget::new(256 * 1024 * 1024, 1);
+            let color = image.with_pixels(|pixels| {
                 let format = pixels.descriptor().pixel_format();
                 assert!(matches!(format, PixelFormat::RgbF32 | PixelFormat::RgbaF32));
                 assert!(matches!(pixels.descriptor().alpha(), None | Some(AlphaMode::Straight)));
@@ -112,7 +119,6 @@ fn native_color_profiles_match_independent_lcms_with_exact_alpha_and_admission()
                     pixels.clone(), &ColorOrigin::from_icc(profile), target.clone(),
                 ).unwrap();
                 assert!(plan.borrow_rows(pixels.clone()).unwrap().is_none());
-                let destination_pool = StorageBudget::new(256 * 1024 * 1024, 1);
                 let color = convert(pixels.clone(), &mut plan, &destination_pool).unwrap();
                 let converted = color.pixels();
                 assert_eq!(converted.color_context().unwrap().icc, Some(target.clone()));
@@ -175,11 +181,88 @@ fn native_color_profiles_match_independent_lcms_with_exact_alpha_and_admission()
                 if max_abs > 0.0001 {
                     color_failures.push(report);
                 }
-                drop(color);
-                assert_eq!((destination_pool.reserved_bytes(), destination_pool.reserved_objects()), (0, 0));
+                color
             }).unwrap();
-            jxl_packaged_storage::assert_charges(&pool, &[&image]);
-            drop(image);
+            let color_address = color.pixels().as_strided_bytes().as_ptr();
+            let color_charge = color.data.charged_bytes();
+            let derived = image.replace_packed_color(color).unwrap();
+            assert!(std::ptr::eq(
+                original.interpretation(),
+                derived.interpretation()
+            ));
+            let auxiliaries = {
+                let before = original.map().unwrap();
+                let after = derived.map().unwrap();
+                assert_eq!(before.plane_count(), after.plane_count());
+                for index in 1..before.plane_count() {
+                    let a = before.plane(index).unwrap().unwrap();
+                    let b = after.plane(index).unwrap().unwrap();
+                    assert!(matches!(a.meaning, Meaning::Auxiliary(_)));
+                    assert_eq!(a.meaning, b.meaning);
+                    assert_eq!(a.samples.dimensions(), b.samples.dimensions());
+                    assert_eq!(a.samples.stride_bytes(), b.samples.stride_bytes());
+                    for y in 0..a.samples.dimensions().1 {
+                        let (Some(Row::Bytes(a)), Some(Row::Bytes(b))) =
+                            (a.samples.row(y), b.samples.row(y))
+                        else {
+                            panic!("native scalar values")
+                        };
+                        assert_eq!(a.as_ptr(), b.as_ptr());
+                        assert_eq!(a, b);
+                    }
+                }
+                before.plane_count() - 1
+            };
+            drop(original);
+            assert_eq!(
+                (pool.reserved_bytes(), pool.reserved_objects()),
+                if auxiliaries == 0 {
+                    (0, 0)
+                } else {
+                    source_charges
+                }
+            );
+            let mut calls = 0;
+            let published = resolve_image(
+                derived,
+                &mut |question: Question<'_>| -> Result<Decision, zencodec::At<core::convert::Infallible>> {
+                    calls += 1;
+                    let Question::Image { image, facts, .. } = question else { panic!() };
+                    assert_eq!(facts.auxiliaries, auxiliaries);
+                    image.with_pixels(|pixels| {
+                        assert_eq!(pixels.as_strided_bytes().as_ptr(), color_address);
+                        assert_eq!(pixels.color_context().unwrap().icc, Some(target.clone()));
+                    }).unwrap();
+                    Ok(Decision::UsePreset)
+                },
+                PolicySet::new(), &zencodec::Unstoppable,
+            ).unwrap();
+            assert_eq!(calls, 1);
+            assert!(matches!(
+                published.report().decisions().next().unwrap().selected,
+                Some(Selection::Image(PublicationOffer::ReturnHeld))
+            ));
+            assert_eq!(destination_pool.reserved_bytes(), color_charge);
+            save(
+                &directory.join("publication.json"),
+                &serde_json::to_vec_pretty(&serde_json::json!({
+                    "auxiliary_planes_retained": auxiliaries,
+                    "source_bytes_before": source_charges.0,
+                    "source_bytes_after": pool.reserved_bytes(),
+                    "destination_bytes": color_charge,
+                    "publication": "ReturnHeld",
+                    "same_auxiliary_addresses": true,
+                }))
+                .unwrap(),
+            );
+            drop(published);
+            assert_eq!(
+                (
+                    destination_pool.reserved_bytes(),
+                    destination_pool.reserved_objects()
+                ),
+                (0, 0)
+            );
             assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
             total += 1;
         }

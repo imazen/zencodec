@@ -53,6 +53,11 @@ impl ColorStage {
         .with_color_context(self.context.clone())
     }
 }
+impl zencodec::image::PackedImageOwner for ColorStage {
+    fn pixels(&self) -> Result<PixelSlice<'_>, zencodec::At<zencodec::image::OutputError>> {
+        Ok(ColorStage::pixels(self))
+    }
+}
 
 fn identity(pixels: &PixelSlice<'_>) -> OutputPlan {
     let profile = pixels
@@ -442,6 +447,211 @@ fn native_output_plan_owner_retention_requires_matching_signaling_too() {
             })
             .unwrap();
     }
+}
+
+#[test]
+fn native_output_owner_keeps_auxiliaries_and_interpretation_through_color_replacement() {
+    use zencodec::{
+        image::{Row, Samples},
+        operation::{ImageFacts, PolicySet, resolve_image},
+    };
+    let mut total = 0;
+    for (name, view, count) in [
+        (
+            "conformance_test_images/cmyk_layers.jxl",
+            Composition::Uncomposited,
+            4,
+        ),
+        (
+            "multiple_layers_noise_spline.jxl",
+            Composition::Uncomposited,
+            5,
+        ),
+        (
+            "conformance_test_images/spot.jxl",
+            Composition::Composited,
+            1,
+        ),
+        ("extra_channels.jxl", Composition::Composited, 1),
+    ] {
+        let bytes = fixture(name);
+        let mut source = ReadAtShim(SliceReadAt::new(&bytes));
+        let (codecs, pool) = jxl_packaged_storage::factories(64, 64);
+        let mut images =
+            jxl_packaged_storage::open_admitted(&codecs, &mut source, view, 64, &pool).unwrap();
+        let mut cursor = images.images().unwrap();
+        for _ in 0..count {
+            let id = images
+                .next(&mut cursor)
+                .unwrap()
+                .expect("required native selection");
+            let image = images
+                .decode(&id, &ImageRequest::new())
+                .unwrap()
+                .into_output();
+            let before = ImageFacts::new(&image);
+            let input_charge = (pool.reserved_bytes(), pool.reserved_objects());
+            let color_pool = StorageBudget::new(256 * 1024 * 1024, 1);
+            let color = image
+                .with_pixels(|pixels| {
+                    let mut plan = identity(&pixels);
+                    convert(pixels, &mut plan, &color_pool).unwrap()
+                })
+                .unwrap();
+            let original = image.clone();
+            let replaced = image.replace_packed_color(color).unwrap();
+            assert!(std::ptr::eq(
+                original.interpretation(),
+                replaced.interpretation()
+            ));
+            let after = ImageFacts::new(&replaced);
+            assert_eq!(
+                (
+                    before.planes,
+                    before.auxiliaries,
+                    before.applied_spot_colors
+                ),
+                (after.planes, after.auxiliaries, after.applied_spot_colors)
+            );
+            {
+                let a = original.map().unwrap();
+                let b = replaced.map().unwrap();
+                assert_eq!(a.plane_count(), b.plane_count());
+                for index in 0..a.plane_count() {
+                    let a = a.plane(index).unwrap().unwrap();
+                    let b = b.plane(index).unwrap().unwrap();
+                    assert_eq!(a.meaning, b.meaning);
+                    assert_eq!(a.samples.dimensions(), b.samples.dimensions());
+                    if let (Samples::Pixels(a), Samples::Pixels(b)) = (&a.samples, &b.samples) {
+                        assert_eq!(a.descriptor(), b.descriptor());
+                        assert_eq!(a.color_context(), b.color_context());
+                    }
+                    for y in 0..a.samples.dimensions().1 {
+                        let (Some(Row::Bytes(a)), Some(Row::Bytes(b))) =
+                            (a.samples.row(y), b.samples.row(y))
+                        else {
+                            panic!()
+                        };
+                        assert_eq!(a, b);
+                        assert_eq!(a.as_ptr() == b.as_ptr(), index != 0);
+                    }
+                }
+            }
+            drop(original);
+            assert_eq!(
+                (pool.reserved_bytes(), pool.reserved_objects()),
+                if before.auxiliaries == 0 {
+                    (0, 0)
+                } else {
+                    input_charge
+                }
+            );
+            let published = resolve_image(
+                replaced,
+                &mut PolicySet::new(),
+                PolicySet::new(),
+                &zencodec::Unstoppable,
+            )
+            .unwrap();
+            assert_eq!(color_pool.reserved_objects(), 1);
+            drop(published);
+            assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
+            assert_eq!(
+                (color_pool.reserved_bytes(), color_pool.reserved_objects()),
+                (0, 0)
+            );
+            total += 1;
+        }
+    }
+    assert_eq!(total, 11);
+}
+
+#[test]
+fn native_output_owner_preserves_premultiplication_but_format_only_plan_cannot_request_it() {
+    let bytes = fixture("conformance_test_images/alpha_premultiplied.jxl");
+    let mut source = ReadAtShim(SliceReadAt::new(&bytes));
+    let (codecs, pool) = jxl_packaged_storage::factories(64, 64);
+    let mut images = jxl_packaged_storage::open_admitted(
+        &codecs,
+        &mut source,
+        Composition::Composited,
+        64,
+        &pool,
+    )
+    .unwrap();
+    let image = images
+        .first_image(&ImageRequest::new())
+        .unwrap()
+        .unwrap()
+        .into_output();
+    let destination = StorageBudget::new(256 * 1024 * 1024, 1);
+    let owner = image
+        .with_pixels(|pixels| {
+            assert_eq!(
+                pixels.descriptor().alpha(),
+                Some(zenpixels::AlphaMode::Premultiplied)
+            );
+            let error = OutputPlan::new(
+                pixels.descriptor(),
+                pixels.color_context().cloned(),
+                &ColorOrigin::from_icc(pixels.color_context().unwrap().icc.clone().unwrap()),
+                OutputProfile::SameAsOrigin,
+                pixels.descriptor().pixel_format(),
+                &ConvertOptions::forbid_lossy(),
+                None,
+            )
+            .unwrap_err();
+            // PixelFormat chooses straight alpha. SameAsOrigin means the profile,
+            // not unchanged association. Preserve the actual refusal as a contract
+            // probe; the output-layout request needs separate API work.
+            assert!(matches!(
+                error.error(),
+                zenpixels_convert::ConvertError::NeedsCms { .. }
+            ));
+            assert_eq!(destination.reserved_bytes(), 0);
+            // An exact sample copy is sufficient to test the image-owner boundary;
+            // it establishes no numerical alpha or color conversion support.
+            let mut data = destination
+                .filled(pixels.stride() * pixels.rows() as usize / 4, 0xa5a5_a5a5u32)
+                .unwrap();
+            let bytes = pixels.as_strided_bytes();
+            bytemuck::cast_slice_mut(data.as_mut_slice())[..bytes.len()].copy_from_slice(bytes);
+            ColorStage {
+                data: data.freeze(),
+                width: pixels.width(),
+                rows: pixels.rows(),
+                stride: pixels.stride(),
+                descriptor: pixels.descriptor(),
+                context: pixels.color_context().unwrap().clone(),
+            }
+        })
+        .unwrap();
+    let original = image.clone();
+    let derived = image.replace_packed_color(owner).unwrap();
+    assert_eq!(
+        crate::output_tests::mapped_planes(&original),
+        crate::output_tests::mapped_planes(&derived)
+    );
+    original
+        .with_pixels(|a| {
+            derived
+                .with_pixels(|b| {
+                    assert_eq!(a.descriptor(), b.descriptor());
+                    assert_eq!(a.color_context(), b.color_context());
+                })
+                .unwrap()
+        })
+        .unwrap();
+    drop(original);
+    let retained = derived.clone();
+    drop(derived);
+    assert_eq!(destination.reserved_objects(), 1);
+    drop(retained);
+    assert_eq!(
+        (destination.reserved_bytes(), destination.reserved_objects()),
+        (0, 0)
+    );
+    assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
 }
 
 #[test]

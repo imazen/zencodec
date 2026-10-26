@@ -512,6 +512,19 @@ image-owner-check:
     cargo test -p zencodec --all-features --lib packed_owner_ --locked
     cargo clippy -p zencodec --all-features --lib --locked -- -D warnings
 
+image-color-replacement-check:
+    cargo fmt -p zencodec
+    cargo test -p zencodec --test packed_color_replacement --locked -- --nocapture
+    cargo clippy -p zencodec --all-features --lib --test packed_color_replacement --locked -- -D warnings
+
+image-color-replacement-integration:
+    just image-color-replacement-check
+    just image-owner-integration
+
+spatial-color-owner-check:
+    cargo fmt --manifest-path perf/spatial-validation/Cargo.toml -p spatial-validation
+    cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked native_output_owner_ -- --nocapture --test-threads=1
+
 image-owner-integration:
     just io-contract-check
     cargo check -p zencodec --no-default-features --target wasm32-unknown-unknown --locked
@@ -660,6 +673,7 @@ io-core-sync export:
     cp src/image/*.rs "{{export}}/src/image/"
     cp src/operation/*.rs "{{export}}/src/operation/"
     cp zencodec-io/src/*.rs "{{export}}/zencodec-io/src/"
+    cp tests/packed_color_replacement.rs "{{export}}/tests/"
     cp zencodec-io/tests/*.rs "{{export}}/zencodec-io/tests/"
     cp justfile "{{export}}/justfile"
 
