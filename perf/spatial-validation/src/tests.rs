@@ -382,7 +382,7 @@ mod image_selection {
                     Allowances::default(),
                 )
                 .unwrap();
-                let image = first_child(&mut collection, &ImageRequest { region: roi.into() })
+                let image = first_child(&mut collection, &ImageRequest::new().with_region(roi))
                     .unwrap()
                     .unwrap();
                 drop(collection);
@@ -659,15 +659,12 @@ mod image_selection {
                     let error = collection
                         .decode(
                             id,
-                            &ImageRequest {
-                                region: Rect {
-                                    x: reference.width,
-                                    y: 0,
-                                    width: 1,
-                                    height: 1,
-                                }
-                                .into(),
-                            },
+                            &ImageRequest::new().with_region(Rect {
+                                x: reference.width,
+                                y: 0,
+                                width: 1,
+                                height: 1,
+                            }),
                         )
                         .unwrap_err();
                     assert!(matches!(
@@ -682,12 +679,7 @@ mod image_selection {
                         height: 3,
                     };
                     let output = collection
-                        .decode(
-                            id,
-                            &ImageRequest {
-                                region: region.into(),
-                            },
-                        )
+                        .decode(id, &ImageRequest::new().with_region(region))
                         .unwrap();
                     output
                         .with_pixels(|p| {
@@ -720,9 +712,7 @@ mod image_selection {
                 assert_eq!(
                     first_image(
                         &mut collection,
-                        &ImageRequest {
-                            region: selected(&[]).region.into()
-                        }
+                        &ImageRequest::new().with_region(selected(&[]).region)
                     )
                     .unwrap()
                     .unwrap()
@@ -731,7 +721,7 @@ mod image_selection {
                     crop(&refs[0], roi)
                 );
                 assert_eq!(
-                    first_child(&mut collection, &ImageRequest { region: roi.into() })
+                    first_child(&mut collection, &ImageRequest::new().with_region(roi))
                         .unwrap()
                         .unwrap()
                         .with_pixels(|p| p.as_contiguous_bytes().unwrap().to_vec())
@@ -781,7 +771,9 @@ mod image_selection {
                         (edge.into(), edge),
                         (selected(&[]).region.into(), selected(&[]).region),
                     ] {
-                        let output = images.decode(id, &ImageRequest { region }).unwrap();
+                        let output = images
+                            .decode(id, &ImageRequest::new().with_region(region))
+                            .unwrap();
                         assert_eq!(
                             (
                                 output.interpretation().geometry.canvas_width,
@@ -825,12 +817,7 @@ mod image_selection {
                     },
                 ] {
                     let error = images
-                        .decode(
-                            &child,
-                            &ImageRequest {
-                                region: invalid.into(),
-                            },
-                        )
+                        .decode(&child, &ImageRequest::new().with_region(invalid))
                         .unwrap_err();
                     assert_eq!(
                         zencodec::find_cause::<SelectionError>(&error),
@@ -879,9 +866,7 @@ mod image_selection {
         source.ledger.borrow_mut().changed = true;
         let err = first_image(
             &mut collection,
-            &ImageRequest {
-                region: selected(&[]).region.into(),
-            },
+            &ImageRequest::new().with_region(selected(&[]).region),
         )
         .unwrap_err();
         assert!(matches!(

@@ -495,15 +495,12 @@ fn common_jxl_region_requirement_refuses_without_substituting_full_output() {
     let id = Collection::next(&mut collection, &mut cursor)
         .unwrap()
         .unwrap();
-    let request = ImageRequest {
-        region: Rect {
-            x: 1,
-            y: 1,
-            width: 1,
-            height: 1,
-        }
-        .into(),
-    };
+    let request = ImageRequest::new().with_region(Rect {
+        x: 1,
+        y: 1,
+        width: 1,
+        height: 1,
+    });
     let error = Collection::decode(&mut collection, &id, &request).unwrap_err();
     assert_eq!(
         zencodec::find_cause::<SelectionError>(&error),

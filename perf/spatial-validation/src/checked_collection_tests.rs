@@ -111,15 +111,12 @@ fn checked_collection_request_and_policy_failures_remain_request_local() {
     let error = collection
         .decode(
             &id,
-            &ImageRequest {
-                region: Rect {
-                    x: 0,
-                    y: 0,
-                    width: 1,
-                    height: 1,
-                }
-                .into(),
-            },
+            &ImageRequest::new().with_region(Rect {
+                x: 0,
+                y: 0,
+                width: 1,
+                height: 1,
+            }),
         )
         .unwrap_err();
     assert_eq!(error.error().stage, Stage::Decode);

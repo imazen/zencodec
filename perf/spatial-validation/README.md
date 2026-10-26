@@ -1,12 +1,14 @@
 # Native spatial contract experiments
 
-## Image selection candidate
+## Image selection and shared contracts
 
 The native TIFF loop now also exercises a separate candidate in
 [`src/image_items.rs`](src/image_items.rs) and
 [`src/tiff_items.rs`](src/tiff_items.rs). It discovers main directories lazily,
 follows arbitrary SubIFDs, and decodes the selected directory through the same
-native region path. These types remain private to this experiment.
+native region path. Native adapters remain private to this experiment;
+identity, request and collection contracts now come from `zencodec::collection`.
+The [shared contract](../../docs/collection-contract.md) records their scope.
 
 The important contract is an operation-bound image identity, distinct from its
 relationship and requested composition. A SubIFD is not necessarily a reduced
@@ -31,7 +33,7 @@ whole graph. The native decoder owns TIFF parsing and compression throughout.
 
 ### Common consumer loop
 
-The private [`Collection`](src/collection.rs) trait now runs the same
+The shared [`Collection`](../../src/collection.rs) trait now runs the same
 `first_image` consumer against `TiffCollection` and `JxlItems`: discover lazily,
 retain the returned identity, decode that identity. `first_child` selects a
 native TIFF SubIFD; the JXL adapter returns `UnsupportedChildren` because it
@@ -61,7 +63,7 @@ native resource bounds.
 
 ### Selected output executes the configured policy automatically
 
-The private [`Checked<C, R>` consumer](src/checked_collection.rs) owns the native
+The shared [`CheckedCollection<C, R>` consumer](../../src/operation/collection.rs) owns the native
 collection, one resolver, its preset and one stop token. Its `decode` and
 `first_image` return `Outcome<ImageOutput>` only after `resolve_image` accepts the
 held owner. The [executable guide function](src/collection.rs) shows native JXL
@@ -97,9 +99,11 @@ workspace/privacy refusal and cancellation injected at every observed checkpoint
 of a small native JXL request. The guide fixture compares active rows and untouched
 padding separately; equal pixels do not require equal strides.
 
-This remains a private std-based driver experiment. It does not add a second
-policy interface or prove preallocation admission, whole-container privacy,
-cheap ROI, native workspace bounds, callback overhead or no_std driver portability.
+The wrapper now lives in core and the native factories remain private std-based
+adapters. It uses the existing resolver and does not prove preallocation
+admission, whole-container privacy, cheap ROI, native workspace bounds or callback
+overhead. Full-crate freestanding compilation remains blocked by
+[issue 165](https://github.com/imazen/zencodec/issues/165).
 The initial two-code atomic stop encoding was rejected by the compiler because
 `StopReason` is non-exhaustive; the qualified latch stores the original value.
 A large-error lint was fixed by owning the bounded report behind a box, matching
@@ -121,7 +125,7 @@ child query. Native TIFF currently counts returned relationships while JXL
 limits its cached presentations. Those are different native limits, so neither
 is presented as a universal discovery-work bound.
 
-The private [`Discovery<C>` experiment](src/discovery.rs) wraps either adapter
+The shared [`Discovery<C>` wrapper](../../src/collection/discovery.rs) wraps either adapter
 without changing `Collection` or its consumer loop. It charges each `images`,
 `children` and `next` attempt before delegation. Cached results, exhaustion and
 errors consume attempts; opening another cursor and retrying cannot reset or
@@ -140,8 +144,8 @@ This is a bound on calls, not on parser bytes, retained graph memory or CPU
 inside one call. It excludes opening the native decoder. Native limits and
 source admission remain required. Keep accounting in an operation/driver layer;
 there is no evidence here for another public codec trait, a callback per item,
-or requiring every caller to coordinate capability flags. Promotion still needs
-native work accounting and integration with the existing operation context.
+or requiring every caller to coordinate capability flags. The promoted wrapper
+keeps its call-only scope explicit; native work accounting is still separate.
 
 JXL now also has a separate native header allowance. The private adapter accepts
 `Limits { images: 1, frame_headers: Some(5) }` at open and applies that
@@ -355,7 +359,7 @@ Opaque ICC carriage does not establish profile validity or a PII policy.
 The targeted gate passed with run-heavy rc=0, 5 s, peak RSS 0.45 GiB,
 minimum available 12273 MiB, peak load 0.92; log
 `~/tmp/zencodec-native-samples3-2026-10-25.log`. This is a test-process receipt,
-not a decoder memory bound. The shared collection is still private. Oriented
+not a decoder memory bound. The shared collection is now implemented on the review PR. Oriented
 display geometry, unknown-color policy, full auxiliary rendering details and
 the distinction between raw sample carriage and approved display conversion
 remain promotion gates. Media's unsigned component-code encoding remains
@@ -463,8 +467,8 @@ causes through `At<OutputError>`. Packed pixels remain in `zenpixels`.
 Collection discovery and render/transform policy admission still need
 qualification. Auxiliary rendering, whole-container
 metadata/privacy, native memory bounds, HTTP revision binding and raw JXL layers
-remain open. The output is implemented on the API review PR; the collection is
-still private and neither surface has been released.
+remain open. The output and collection are implemented on the API review PR; concrete
+factory packaging remains open and neither surface has been released.
 
 The immutable-interpretation gate passed the full 46-test native suite and strict
 Clippy: run-heavy rc=0, 116 s, peak RSS 0.22 GiB, minimum available 13502 MiB,
@@ -694,7 +698,8 @@ Remaining qualifications: all blend configurations, native negative-origin
 fixtures, preview/progressive publication, reference-only export, representations
 other than F32, qualified CMYK conversion, raw random seeking and native workspace
 bounds. Publication happens after reconstruction; it does not prove preallocation
-admission or whole-container privacy. The shared collection remains private.
+admission or whole-container privacy. The collection contract is now shared;
+placement and concrete native adapter factories remain private.
 
 ### Independent oracle qualification
 

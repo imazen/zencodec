@@ -341,15 +341,12 @@ fn raw_collection_identity_limits_and_refusals_do_not_become_exhaustion() {
         Some(&SelectionError::ForeignCursor)
     );
     assert!(collection.children(&images[0]).is_err());
-    let request = ImageRequest {
-        region: Rect {
-            x: 0,
-            y: 0,
-            width: 1,
-            height: 1,
-        }
-        .into(),
-    };
+    let request = ImageRequest::new().with_region(Rect {
+        x: 0,
+        y: 0,
+        width: 1,
+        height: 1,
+    });
     assert!(collection.decode(&images[0], &request).is_err());
     collection
         .decode(&images[0], &ImageRequest::default())
