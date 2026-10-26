@@ -5,7 +5,8 @@
   "commands": [
     "just spatial-file-snapshot-resolve",
     "just spatial-file-snapshot-check <fresh-artifacts>",
-    "just spatial-validation-check <fresh-artifacts> <oracle-python> file_snapshot"
+    "just spatial-validation-check <fresh-artifacts> <oracle-python> file_snapshot",
+    "just docs-site-browser-check 3547"
   ],
   "filesystem": {
     "observed": "xfs",
@@ -36,6 +37,16 @@
         "test result: ok. 84 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 194.87s",
         "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
         "run-heavy: done rc=0 197s | peak-RSS 0.56GiB | min-avail 13341MiB | peak-load 1.36"
+      ]
+    },
+    {
+      "log": "zencodec-disk-source-guide-2026-10-26.log",
+      "sha256": "845596d1cb1fa345b4b92fc0d6ae8f93dba240df430aa71c8c8effcf3d52bdaf",
+      "results": [
+        "Migration browser checks passed: release-state diagrams, audience filters, deep links, exact full-example copy, independent inline expansion, signatures, keyboard and responsive layouts.",
+        "Checked API browser checks passed: exact examples, independent expansion, signatures, clipboard, keyboard and responsive roles.",
+        "Browser checks passed: 15 chapters with signatures, 7 entry points, exact full-example clipboard contents, independent inline context, deep links, 8 lab combinations, keyboard, 390/768/1440px layouts.",
+        "run-heavy: done rc=0 8s | peak-RSS 0.17GiB | min-avail 13023MiB | peak-load 0.29"
       ]
     }
   ],

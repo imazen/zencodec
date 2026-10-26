@@ -94,13 +94,15 @@ review.
 
 Remaining promotion gates:
 
-- One qualified output/interpretation contract for TIFF, JXL color and extra
-  planes, and mapped video samples. Native storage alone is insufficient for
-  rendering a depth, spot-color, gain-map or other auxiliary channel.
+- Broader rendering/conversion contracts for depth, spot-color, gain-map and
+  other auxiliary channels. The shared core output now carries verified native
+  samples and interpretation; that alone does not define display conversion.
 - Native discovery-work accounting beyond the now-tested common call allowance.
   Cancellation/timeout causes are qualified at observed polls; native latency
   remains unbounded. Single-object conditional HTTP reads now qualify through
-  TIFF/SubIFDs; multi-object, browser and stable disk snapshots remain open.
+  TIFF/SubIFDs. A private Linux/XFS clone source now qualifies stable disk bytes
+  after overwrite/truncate; multi-object, browser and other filesystem/platform
+  source contracts remain open. [Disk evidence](../benchmarks/file_snapshot_2026-10-26.json).
 - Qualified thumbnail, pyramid and auxiliary roles, plus native JXL layers.
 - Native workspace accounting, incremental still-codec input, planar conversion
   and whole-container privacy coverage. None follows from passing selection

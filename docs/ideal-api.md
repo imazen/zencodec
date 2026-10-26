@@ -47,7 +47,7 @@ work do not gate that loop. See [the executable selection evidence](../perf/spat
 
 | Contract | Implementation and verification |
 |---|---|
-| Synchronous parser bridge | `zencodec_io::ReadAtReader` supplies `Read + Seek` over a positional source, preserving native errors and its independent cursor. [Native TIFF experiments](../perf/spatial-validation/README.md) cover pages, reduced SubIFDs, planar edge tiles and wide strips. The shared spatial request, full interpretation and source-version binding remain open |
+| Synchronous parser bridge | `zencodec_io::ReadAtReader` supplies `Read + Seek` over a positional source, preserving native errors and its independent cursor. [Native TIFF experiments](../perf/spatial-validation/README.md) cover pages, reduced SubIFDs, planar edge tiles and wide strips. Shared selected output is implemented; the common selector remains private. Conditional single-object HTTP and Linux/XFS clone sources have native qualification; broader source contracts remain open |
 | Native video policy and accepted packet provenance | `Question::Frame` shares core interpretation/timing facts with media sessions. `zencodec_media::policy::PolicyDecoder` retains the native picture through every callback. Native AV1 queued clocks/epochs/colors and repeated ordinals preserve accepted context; refusal, stale decisions, cancellation, errors and caught unwinds release unpublished owners. 15 depth/layout configurations re-encode sample-exact under independent FFmpeg/libdav1d in both pooled and bounded native-plane modes. The native setting admits picture planes before allocation and keeps charges with native owners. Publication policy still follows reconstruction; complete workspace bounds and coupled conversion remain open. [Qualification and limits](../perf/av1-policy-validation/README.md) |
 | Native batches fit admitted sink strips | `DecodeRowSink::max_buffer_rows` and shared copying split delivery automatically. Native PNG RGB8/RGBA16 at 97x65/257 preserve exact independent samples with 1/3/64-row transcode buffers. Native batch/workspace storage remains separate |
 | Native standard-source errors survive erasure | `StdSourceError` retains I/O kind, OS code and custom payload; source, truncation and erased-driver tests |
@@ -126,7 +126,11 @@ not pre-allocation admission or a privacy certificate. Collection promotion stil
 needs native discovery-work accounting and broader source-revision qualification.
 A private HTTP source now qualifies conditional single-object reads through native
 TIFF/SubIFD selection, including replacement and malformed-response refusal.
-Multi-object manifests, browser transports and stable disk snapshots remain open. A private
+A private atomic-clone source now preserves native TIFF/SubIFD samples after
+in-place writes and truncation on Linux/XFS, through the existing `ReadAt`
+contract. Plain file handles are qualified across atomic path replacement but
+do not prevent in-place mutation. Multi-object manifests, browser transports
+and other filesystems/platforms remain open. [Disk source evidence](../perf/spatial-validation/README.md#disk-snapshots-use-the-existing-positional-source-contract). A private
 common wrapper now bounds discovery calls consistently across cached/repeated
 TIFF and JXL browsing; it does not bound work inside a native call. The native
 JXL adapter also applies an opt-in frame-header allowance to discovery and each
