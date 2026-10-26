@@ -343,11 +343,11 @@ spatial-validation-setup:
 spatial-oracle-install python:
     uv pip install --python "{{python}}" --only-binary :all: Pillow==13.0.0
 
-spatial-validation-check artifacts python:
+spatial-validation-check artifacts python features="":
     mkdir -p "{{artifacts}}-oracle"
     cc -std=c11 -Wall -Wextra -Werror perf/spatial-validation/jxl_oracle.c -ljxl -o "{{artifacts}}-oracle/jxl-oracle"
-    SPATIAL_ARTIFACTS="{{artifacts}}" SPATIAL_GENERATED_ARTIFACTS="{{artifacts}}-generated" SPATIAL_ORACLE_PYTHON="{{python}}" JXL_SELECTION_ORACLE="{{artifacts}}-oracle/jxl-oracle" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked -- --nocapture --test-threads=1
-    cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
+    SPATIAL_ARTIFACTS="{{artifacts}}" SPATIAL_GENERATED_ARTIFACTS="{{artifacts}}-generated" SPATIAL_ORACLE_PYTHON="{{python}}" JXL_SELECTION_ORACLE="{{artifacts}}-oracle/jxl-oracle" cargo test --manifest-path perf/spatial-validation/Cargo.toml --features "{{features}}" --locked -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --features "{{features}}" --all-targets --locked -- -D warnings
 
 spatial-consumer-check:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked common_ -- --nocapture
@@ -366,6 +366,14 @@ spatial-discovery-check:
 spatial-checked-collection-check:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked checked_collection_ -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# Caller explicitly selects Linux/reflink qualification; no unsupported-FS skips.
+spatial-file-snapshot-check artifacts:
+    SPATIAL_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/spatial-validation/Cargo.toml --features file_snapshot --locked file_snapshot_ -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --features file_snapshot --all-targets --locked -- -D warnings
+
+spatial-file-snapshot-resolve:
+    cargo update --manifest-path perf/spatial-validation/Cargo.toml -p rustix --precise 1.1.5
 
 # Native selection over IMI-derived real HTTP, with deliberate response faults.
 spatial-http-check artifacts port="3568":

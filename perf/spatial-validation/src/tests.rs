@@ -94,7 +94,14 @@ fn tiled<W: Write + Seek, K: TiffKind>(
     dir.finish_with_offsets().unwrap().pointer.0
 }
 fn fixture(bigtiff: bool, planar: bool, reduced: bool) -> (Vec<u8>, [Raster; 3]) {
-    let refs = [raster(35, 29, 0), raster(19, 17, 17), raster(21, 25, 73)];
+    fixture_version(bigtiff, planar, reduced, 0)
+}
+fn fixture_version(bigtiff: bool, planar: bool, reduced: bool, salt: u8) -> (Vec<u8>, [Raster; 3]) {
+    let refs = [
+        raster(35, 29, salt),
+        raster(19, 17, salt.wrapping_add(17)),
+        raster(21, 25, salt.wrapping_add(73)),
+    ];
     let mut cursor = Cursor::new(Vec::new());
     fn write<K: TiffKind>(
         mut encoder: TiffEncoder<&mut Cursor<Vec<u8>>, K>,
@@ -1175,6 +1182,11 @@ fn artifacts() -> &'static Path {
         std::fs::create_dir(&p).unwrap();
         p
     })
+}
+
+#[cfg(feature = "file_snapshot")]
+mod file_snapshots {
+    include!("file_snapshot_tests.rs");
 }
 #[test]
 fn positional_disk_and_independent_libtiff_decode_match_native_selection() {

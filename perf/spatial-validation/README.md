@@ -217,6 +217,51 @@ need not become invalid merely because a newer revision exists. File sources
 still require a stable-byte ownership/locking contract. A failed read may have
 written partial bytes into caller scratch; no selected output may publish them.
 
+### Disk snapshots use the existing positional source contract
+
+Holding a file handle pins the opened inode across an atomic path replacement.
+It does not stop a writer changing that inode in place. Native classic/BigTIFF,
+chunky/planar and buffered/direct tests confirm the distinction: path replacement
+keeps the old SubIFD pixels, while an in-place overwrite can return new pixels
+through the same discovered identity. The latter deliberately violates
+`FileReadAt`'s documented caller-stability obligation; it is not a codec guarantee.
+
+The private [`clone_source`](src/file_snapshot.rs) creates an unnamed inode in a
+caller-provided spool directory, requires `FICLONE`, and returns the existing
+`FileReadAt`. It exposes neither a writable handle nor a mutable filename.
+[Linux documents the clone as atomic with respect to concurrent writes](https://man7.org/linux/man-pages/man2/FICLONE.2const.html);
+source and destination must share a supporting filesystem. The safe
+[rustix interface](https://docs.rs/rustix/1.1.5/rustix/fs/fn.ioctl_ficlone.html)
+lives only in this optional experiment. No new core I/O trait is involved.
+
+On the tested XFS filesystem, cloned sources preserve exact native TIFF/SubIFD
+pixels after the original is overwritten and truncated. Thirty-two cloned
+representations remain unchanged through a synchronized concurrent positional
+writer test. Native reads use both zero-capacity and 4096-byte `BufReader`s.
+Bad directory/source descriptors, a non-regular source, a logical-byte limit and
+an unsupported procfs source refuse with retained typed/OS causes. There is no
+copy fallback. An ordinary sequential copy would not provide the required
+atomicity while the source is being changed.
+
+The logical extent is admitted before and after cloning. It is not a bound on
+physical disk blocks, filesystem metadata, kernel memory or syscall duration.
+A coherent filesystem instant also does not prove an application finished a
+multi-write file update. Filesystem attributes are not copied as image metadata.
+Other filesystems, Windows and macOS need separate qualification.
+
+Select this platform experiment explicitly:
+
+```sh
+just spatial-file-snapshot-check /path/on/reflink-filesystem/fresh-artifacts
+just spatial-validation-check /path/on/reflink-filesystem/fresh-integrated /path/to/oracle-python file_snapshot
+```
+
+Missing filesystem support fails the selected gate; tests do not silently skip.
+The [receipt](../../benchmarks/file_snapshot_2026-10-26.json) records the platform,
+commands and logs. The full native matrix and strict lint pass:
+`run-heavy: done rc=0 197s | peak-RSS 0.56GiB | min-avail 13341MiB | peak-load 1.36`.
+These are test-process measurements, not source performance or codec bounds.
+
 ### Cancellation belongs to the opened operation
 
 `TiffCollection::open_with_stop` and `JxlItems::open_with_stop` accept the existing

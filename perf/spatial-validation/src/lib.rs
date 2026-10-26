@@ -10,6 +10,10 @@ mod collection;
 mod control;
 mod discovery;
 mod generated_output_tests;
+#[cfg(all(feature = "file_snapshot", not(target_os = "linux")))]
+compile_error!("the file_snapshot experiment requires Linux and a reflink-capable filesystem");
+#[cfg(feature = "file_snapshot")]
+mod file_snapshot;
 #[cfg(feature = "http")]
 mod http_source;
 pub mod image_items;
