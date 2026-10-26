@@ -2,6 +2,12 @@
 
 ## Native image selection (unreleased experiment)
 
+- Compare actual float ICC conversion for one JXL presentation and five raw
+  RGB/RGBA layers against independently executed Little CMS. Keep the original
+  color tolerance, exact alpha/padding and admitted destination cleanup. Pin
+  the converter's float/range and ICC-precedence corrections, execute the
+  example shown by the guide, and record the remaining preset and owner gaps.
+
 - Combine the existing output-plan and native-sample review dependency pins.
   Validate borrowed JXL color input directly into admitted destination rows
   across four CMYK and five RGB layers. Preserve exact color/context and

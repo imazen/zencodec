@@ -196,7 +196,7 @@ with successful pixels and must not publish a partially converted destination.
 The next integration uses the existing `OutputPlan` from
 [zenpixels PR 92](https://github.com/imazen/zenpixels/pull/92), combined with
 [native sample carriage in PR 93](https://github.com/imazen/zenpixels/pull/93)
-at `8b68ef07`, including checked identity borrowing and same-profile opaque
+at `d79acec2`, including checked identity borrowing and same-profile opaque
 alpha addition. No second planning
 abstraction is added.
 
@@ -255,6 +255,58 @@ carriers; it is not evidence that pixels or encoded output have succeeded.
 
 [Admitted conversion receipt](../../benchmarks/admitted_color_plan_2026-10-26.json)
 and [identity-owner receipt](../../benchmarks/native_output_borrow_2026-10-26.json).
+
+### Independent float ICC conversion
+
+The `cms_oracle` feature adds a separately executed Little CMS reference to the
+native color stage. It converts the first RGB F32 presentation of
+`conformance_test_images/animation_spline.jxl` and all five RGBA F32 raw layers of
+`multiple_layers_noise_spline.jxl` from their actual current ICC to the exact
+`display_p3_icc(false)` target bytes. The adapter uses `OutputPlan`, preserves
+extended range explicitly, and writes into aligned, strided, admitted storage.
+
+The reference uses relative colorimetric intent and `NOOPTIMIZE|COPY_ALPHA`.
+The color tolerance was fixed at `0.0001` before the first run. Every active
+color sample is compared; alpha bits, padding, output context and charge release
+are exact checks. The baseline fails all six cases even with the same explicit
+unclipped request. Merely disabling fixed-point arithmetic also fails. The
+corrected float path passes all six, with maximum absolute errors:
+
+| Native selection | Baseline | Corrected |
+| --- | ---: | ---: |
+| RGB presentation | 0.0004351772367954254 | 0.000008165836334228516 |
+| RGBA layer 0 | 2.7187345027923584 | 0.00007697194814682007 |
+| RGBA layer 1 | 0.06446413323283195 | 0.0000186040997505188 |
+| RGBA layer 2 | 2.1296069622039795 | 0.00006747245788574219 |
+| RGBA layer 3 | 2.7416446208953857 | 0.00007224082946777344 |
+| RGBA layer 4 | 2.1330705285072327 | 0.00006723403930664062 |
+
+The conversion change lives in [zenpixels PR 92](https://github.com/imazen/zenpixels/pull/92).
+It selects float arithmetic and available analytic curves, preserves explicit
+ICC authority over embedded CICP, and applies requested clipping separately
+without touching alpha. An independent closed-form control also exposed an
+unequal-channel-curve case; the backend adapter now refuses it before writes
+and retains its concrete `MoxCmsError` through `whereat`.
+
+Reproduce with `just spatial-color-oracle <fresh-reference-directory>`, set
+`SPATIAL_COLOR_ORACLE` to that executable, then run
+`just spatial-color-check <fresh-artifact-directory>`. The full native CI suite
+enables `cms_oracle`; missing oracle inputs fail rather than skip. Per-selection
+artifacts retain exact profiles, input/output F32 rows, reference output and
+comparison JSON. `just spatial-color-inspect <selection-directory>` evaluates
+the recorded worst sample directly from matrix/type-3 ICC tags; it is a narrow
+diagnostic, not a general profile parser. Its math follows
+[ICC.1:2022 sections 10.18 and F.3](https://archive.color.org/specification/ICC.1-2022-05.pdf).
+
+`forbid_lossy()` alone still permits clipping. This example explicitly uses
+`with_clip_out_of_gamut(false)`; the preset name and required range semantics
+need review before 0.3. No new conversion trait or capability handshake was
+needed for these cases. General ICC/LUT qualification, numerical F32 CMYK,
+complete converted color-plus-auxiliary ownership, conversion cancellation and
+CMS workspace admission remain open. These are correctness measurements, not
+throughput or isolated memory measurements.
+
+[Pinned execution receipt](../../benchmarks/native_float_color_2026-10-26.json).
 
 ## Packaged retained output storage
 

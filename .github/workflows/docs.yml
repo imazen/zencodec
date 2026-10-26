@@ -120,6 +120,8 @@ jobs:
       SPATIAL_ORACLE_PYTHON: ${{ github.workspace }}/perf/spatial-validation/target/oracle-python/bin/python
       JXL_SELECTION_ORACLE: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-jxl/jxl-oracle
       JXL_LAYER_ORACLE: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-jxl/layer-oracle
+      SPATIAL_COLOR_ORACLE: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-cms/color-oracle
+      SPATIAL_COLOR_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-color
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -141,11 +143,12 @@ jobs:
           sudo timeout --kill-after=15s 2m apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
           sudo timeout --kill-after=15s 2m apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends cmake ninja-build libhwy-dev libbrotli-dev liblcms2-dev
           timeout --kill-after=15s 6m python3 perf/spatial-validation/build_jxl_oracles.py "$(dirname "$JXL_SELECTION_ORACLE")"
+          timeout --kill-after=10s 1m python3 perf/spatial-validation/build_color_oracle.py "$(dirname "$SPATIAL_COLOR_ORACLE")"
       - name: Execute native spatial selection and exact guide example
         run: |
           cp perf/spatial-validation/dependencies.lock perf/spatial-validation/Cargo.lock
-          timeout --kill-after=15s 10m cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked -- --nocapture --test-threads=1
-          timeout --kill-after=15s 5m cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
+          timeout --kill-after=15s 10m cargo test --manifest-path perf/spatial-validation/Cargo.toml --features cms_oracle --locked -- --nocapture --test-threads=1
+          timeout --kill-after=15s 5m cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --features cms_oracle --all-targets --locked -- -D warnings
       - name: Retain independent layer evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -156,6 +159,9 @@ jobs:
             perf/spatial-validation/target/oracle-*-jxl/commands.json
             perf/spatial-validation/target/oracle-*-layers/**/*.json
             perf/spatial-validation/target/oracle-*-layers/**/stderr.txt
+            perf/spatial-validation/target/oracle-*-cms/provenance.json
+            perf/spatial-validation/target/oracle-*-color/**/comparison.json
+            perf/spatial-validation/target/oracle-*-color/**/stderr.txt
           if-no-files-found: error
 
   build:

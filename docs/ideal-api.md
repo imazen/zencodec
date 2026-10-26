@@ -103,6 +103,23 @@ a CMS, retaining exact color bits. This fixes a real `NeedsCms` refusal; it does
 not add numerical CMYK conversion.
 [Implementation and evidence](../perf/spatial-validation/README.md#existing-outputplan-with-admitted-destination-storage).
 
+Actual ICC conversion now has an independent float check: one native JXL
+presentation and five raw RGB/RGBA layers convert into admitted rows under the
+selected Display P3 ICC. All six meet the unchanged absolute color tolerance
+of `0.0001` against Little CMS, with exact alpha and untouched row padding.
+The old route failed even when explicitly asked to retain extended range.
+The conversion adapter now uses float arithmetic and available analytic curves,
+keeps explicit ICC authority over embedded CICP, and refuses an identified
+unequal-channel-curve case before writes. This is a color-stage qualification;
+converted auxiliary-plane publication and general ICC conformance remain open.
+
+The validation also exposed a naming problem: `ConvertOptions::forbid_lossy()`
+still enables clipping. The native preservation example adds
+`with_clip_out_of_gamut(false)`. Before 0.3, presets must distinguish forbidden
+sample losses from a required color/range result; the caller should select
+effects through the existing resolver without coordinating backend capability
+flags. [Executed example and evidence](../perf/spatial-validation/README.md#independent-float-icc-conversion).
+
 
 ## The consumer shape
 

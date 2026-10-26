@@ -1,5 +1,6 @@
 // Paths and method selections only. Signatures are extracted from current Rust source.
 export const api = {
+  floatColorPlan: {path:'candidate::plan_float_export (private native color-stage prototype)',file:'perf/spatial-validation/src/jxl_color_oracle_tests.rs',scope:'mod planning {',methods:['plan_float_export'],associated:false},
   operationDecode: {path:'zencodec::operation::DecodeRequest',file:'src/operation.rs',scope:'impl DecodeRequest {',methods:['new','with_output','preferring_output','with_policy','decode','start_controlled']},
   operationEncode: {path:'zencodec::operation::EncodeRequest',file:'src/operation.rs',scope:'impl EncodeRequest {',methods:['new','with_fidelity','preferring_fidelity','with_resolution','with_policy','with_policy_set','encode','encode_with']},
   requiredResolution: {path:'zencodec::encode::EncodeJob',file:'src/traits/encoding.rs',scope:'pub trait EncodeJob: Sized',methods:['try_set_resolution','try_with_resolution'],associated:false},
