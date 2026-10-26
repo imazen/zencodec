@@ -54,17 +54,36 @@ an error family, while coincident source/application causes and traces remain
 intact. Native seam controls and coincident-error controls qualify this accessor.
 
 The factory also receives the matched format, inherited `ResourceLimits` and
-`decode::DecodePolicy`. These native adapters refuse either supplied legacy
-configuration before source I/O until its full mapping is qualified. They never
-silently drop a configured limit or policy. Additional native controls check the
-wrong-view refusal, all three cancellation sources before opening, after registry
-drop and in publication callbacks, and retained terminal stop reasons. Inherited
-pulse cancellation is honored; native progress reports remain future integration.
+`decode::DecodePolicy`. The TIFF mapping enforces `max_width`, `max_height` and
+`max_pixels` before selected output allocation or compressed-pixel reads. The
+same opened operation can inspect an oversized page and decode a smaller child.
+A tiny ROI cannot bypass its stored-image limit. The native path is sequential;
+`ThreadingPolicy::Sequential` is accepted. Both factories accept no-op defaults;
+the explicitly encode-only output-byte cap does not apply to decoding.
+
+All other nontrivial fields refuse before source I/O, including JXL geometry,
+working memory, input size, timing, cumulative pixels, allocation-mode choices
+and each nontrivial decode-policy flag. Mixing a supported dimension field with
+an unsupported memory cap also refuses before I/O. A limit violation retains
+`LimitExceeded { actual, max }` through the checked error; an unimplemented
+mapping retains `CollectionOpenError`. No request preflight is required.
+
+An independent source guard rejects every compressed-pixel range. Over-limit
+TIFF requests refuse without triggering it; an admitted child triggers the guard,
+and disabling it permits exact sample comparison. The fixture covers classic
+and BigTIFF, planar and chunky storage and all three geometry caps. Conditional
+HTTP also qualifies inspection/refusal followed by a successful child decode.
+Additional native controls check wrong-view refusal, all three cancellation
+sources before opening, after registry drop and in publication callbacks, and
+retained terminal stop reasons. Inherited pulse cancellation is honored; native
+progress reports remain future integration.
 
 The [factory receipt](../../benchmarks/collection_factories_2026-10-26.json) records
 source hashes, commands, initial failures and successful gates.
 
 The [CodecSet integration receipt](../../benchmarks/collection_registry_2026-10-26.json) records the promotion, inherited controls, full workspace and HTTP gates.
+
+The [native dimension receipt](../../benchmarks/collection_dimensions_2026-10-26.json) records source hashes and each gate; three of eight decode-relevant optional caps are qualified for TIFF.
 
 ## Inspect a selected image before reconstructing it
 

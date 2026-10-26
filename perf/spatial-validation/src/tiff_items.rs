@@ -21,6 +21,7 @@ pub struct TiffItems<R> {
     header: TiffHeader,
     origin: Origin,
     limits: Allowances,
+    required_dimensions: Option<zencodec::ResourceLimits>,
     edges: Vec<(u64, u64)>,
     discoveries: usize,
 }
@@ -49,6 +50,7 @@ impl<R: Read + Seek> TiffItems<R> {
             control,
             header,
             limits,
+            required_dimensions: None,
             origin: Origin::default(),
             edges: Vec::new(),
             discoveries: 0,
@@ -217,6 +219,7 @@ impl<R: Read + Seek> TiffItems<R> {
             IfdPointer(key),
             region.into(),
             self.limits,
+            self.required_dimensions.as_ref(),
             || {
                 control.check()?;
                 check()
@@ -260,6 +263,16 @@ pub struct TiffCollection<R> {
 }
 
 impl<R: Read + Seek> TiffCollection<R> {
+    // Only the factory's qualified dimension fields are enforced here. The
+    // factory refuses every other configured requirement before source I/O.
+    pub(crate) fn with_required_dimensions(
+        mut self,
+        limits: Option<zencodec::ResourceLimits>,
+    ) -> Self {
+        self.items.required_dimensions = limits;
+        self
+    }
+
     pub fn open(
         input: R,
         view: Composition,

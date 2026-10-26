@@ -700,3 +700,196 @@ fn collection_factory_cannot_silently_replace_the_required_view() {
         SelectionError::UnsupportedComposition,
     );
 }
+
+#[test]
+fn collection_factory_tiff_dimensions_admit_actual_stored_extent_before_payloads() {
+    use super::description_checks::NoPixels;
+    use zencodec::{LimitExceeded, ThreadingPolicy};
+    for big in [false, true] {
+        for planar in [false, true] {
+            let (bytes, refs) = nested_fixture(big, planar, false);
+            let (root, child) = (&refs[0], &refs[1]);
+            let pixels = u64::from(child.width) * u64::from(child.height);
+            for (limits, expected) in [
+                (
+                    ResourceLimits::none().with_max_width(child.width),
+                    LimitExceeded::Width {
+                        actual: root.width,
+                        max: child.width,
+                    },
+                ),
+                (
+                    ResourceLimits::none().with_max_height(child.height),
+                    LimitExceeded::Height {
+                        actual: root.height,
+                        max: child.height,
+                    },
+                ),
+                (
+                    ResourceLimits::none().with_max_pixels(pixels),
+                    LimitExceeded::Pixels {
+                        actual: u64::from(root.width) * u64::from(root.height),
+                        max: pixels,
+                    },
+                ),
+            ] {
+                let source = NoPixels::new(bytes.clone());
+                let denied = source.denied.clone();
+                let enabled = source.enabled.clone();
+                let mut source = ReadAtShim(source);
+                let set = registered()
+                    .with_limits(
+                        limits
+                            .with_threading(ThreadingPolicy::Sequential)
+                            .with_max_output(1),
+                    )
+                    .with_decode_policy(DecodePolicy::none());
+                let mut images = set
+                    .open_collection(
+                        ImageFormat::Tiff,
+                        &mut source,
+                        request(Composition::Composited),
+                        PolicySet::new(),
+                        stop(),
+                    )
+                    .unwrap();
+                let mut roots = images.images().unwrap();
+                let root_id = images.next(&mut roots).unwrap().unwrap();
+                assert_eq!(
+                    images.describe(&root_id).unwrap().stored_size,
+                    (root.width, root.height)
+                );
+                // A tiny ROI must not redefine the stored-image limit's scope.
+                for requested in [
+                    ImageRequest::new(),
+                    ImageRequest::new().with_region(Rect {
+                        x: 0,
+                        y: 0,
+                        width: 1,
+                        height: 1,
+                    }),
+                ] {
+                    let error = images.decode(&root_id, &requested).unwrap_err();
+                    assert_eq!(
+                        zencodec::find_cause::<LimitExceeded>(&error),
+                        Some(&expected)
+                    );
+                    assert_eq!(error.error().stage, CollectionStage::Decode);
+                    assert_eq!(error.error().stop_reason(), None);
+                    assert!(!images.is_finished());
+                    assert_eq!(
+                        denied.get(),
+                        0,
+                        "over-limit image tried to read compressed pixels"
+                    );
+                }
+                let mut children = images.children(&root_id).unwrap();
+                let child_id = images.next(&mut children).unwrap().unwrap();
+                // Positive control: the admitted child really reaches pixel data.
+                let error = images.decode(&child_id, &ImageRequest::new()).unwrap_err();
+                assert!(zencodec::find_cause::<LimitExceeded>(&error).is_none());
+                assert!(denied.get() > 0);
+                enabled.set(false);
+                let output = images.decode(&child_id, &ImageRequest::new()).unwrap();
+                output
+                    .with_pixels(|p| assert_eq!(p.as_contiguous_bytes().unwrap(), child.bytes))
+                    .unwrap();
+            }
+        }
+    }
+}
+
+#[test]
+fn collection_factory_configuration_fields_are_enforced_or_refused_individually() {
+    use zencodec::AllocPreference;
+    let unsupported = [
+        ResourceLimits::none().with_max_memory(1),
+        ResourceLimits::none().with_max_input_bytes(1),
+        ResourceLimits::none().with_max_frames(1),
+        ResourceLimits::none().with_max_animation_ms(1),
+        ResourceLimits::none().with_max_total_pixels(1),
+        ResourceLimits::none().with_prefer_fallible_allocations(AllocPreference::Fallible),
+        ResourceLimits::none().with_prefer_fallible_allocations(AllocPreference::Infallible),
+    ];
+    for format in [ImageFormat::Tiff, ImageFormat::Jxl] {
+        let unqualified_dimensions = [
+            ResourceLimits::none().with_max_width(1),
+            ResourceLimits::none().with_max_height(1),
+            ResourceLimits::none().with_max_pixels(1),
+        ];
+        let mixed = ResourceLimits::none().with_max_width(1).with_max_memory(1);
+        let dimensions = if format == ImageFormat::Jxl {
+            &unqualified_dimensions[..]
+        } else {
+            &[]
+        };
+        for limits in unsupported
+            .into_iter()
+            .chain(dimensions.iter().copied())
+            .chain([mixed])
+        {
+            let mut source = ReadAtShim(Positional::new(&[]));
+            let error = registered()
+                .with_limits(limits)
+                .open_collection(
+                    format,
+                    &mut source,
+                    request(Composition::Composited),
+                    PolicySet::new(),
+                    stop(),
+                )
+                .err()
+                .unwrap();
+            assert_eq!(
+                zencodec::find_cause::<FactoryError>(&error),
+                Some(&FactoryError::UnsupportedLimits),
+                "{format:?}: {limits:?}"
+            );
+            assert_eq!((source.0.reads.get(), source.0.lengths.get()), (0, 0));
+        }
+        for allow in [false, true] {
+            for policy in [
+                DecodePolicy::none().with_allow_icc(allow),
+                DecodePolicy::none().with_allow_exif(allow),
+                DecodePolicy::none().with_allow_xmp(allow),
+                DecodePolicy::none().with_allow_progressive(allow),
+                DecodePolicy::none().with_allow_animation(allow),
+                DecodePolicy::none().with_allow_truncated(allow),
+                DecodePolicy::none().with_strict(allow),
+            ] {
+                let mut source = ReadAtShim(Positional::new(&[]));
+                let error = registered()
+                    .with_decode_policy(policy)
+                    .open_collection(
+                        format,
+                        &mut source,
+                        request(Composition::Composited),
+                        PolicySet::new(),
+                        stop(),
+                    )
+                    .err()
+                    .unwrap();
+                assert_eq!(
+                    zencodec::find_cause::<FactoryError>(&error),
+                    Some(&FactoryError::UnsupportedDecodePolicy),
+                    "{format:?}: {policy:?}"
+                );
+                assert_eq!((source.0.reads.get(), source.0.lengths.get()), (0, 0));
+            }
+        }
+    }
+    let bytes = crate::jxl_tests::fixture("named_frame_test.jxl");
+    let mut source = ReadAtShim(SliceReadAt::new(&bytes));
+    let mut images = registered()
+        .with_limits(ResourceLimits::none().with_max_output(1))
+        .with_decode_policy(DecodePolicy::none())
+        .open_collection(
+            ImageFormat::Jxl,
+            &mut source,
+            request(Composition::Composited),
+            PolicySet::new(),
+            stop(),
+        )
+        .unwrap();
+    assert!(images.first_image(&ImageRequest::new()).unwrap().is_some());
+}

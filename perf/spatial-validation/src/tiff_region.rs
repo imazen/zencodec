@@ -111,7 +111,7 @@ pub fn decode<R: Read + Seek>(
             return Err(invalid("SubIFD is not a reduced image"));
         }
     }
-    decode_current(decoder, r.into(), limits, check)
+    decode_current(decoder, r.into(), limits, None, check)
 }
 
 /// Candidate adapter seam: the caller has already validated an operation-bound
@@ -121,6 +121,7 @@ pub(super) fn decode_directory<R: Read + Seek>(
     directory: tiff::tags::IfdPointer,
     region: RegionRequest,
     limits: Allowances,
+    required_dimensions: Option<&zencodec::ResourceLimits>,
     mut check: impl FnMut() -> Result<(), Failure>,
 ) -> Result<Region, Failure> {
     check()?;
@@ -133,16 +134,23 @@ pub(super) fn decode_directory<R: Read + Seek>(
     native.ifd_value_size = limits.tag;
     let mut decoder = header.open(input).with_limits(native);
     decoder.next_image()?;
-    decode_current(decoder, region, limits, check)
+    decode_current(decoder, region, limits, required_dimensions, check)
 }
 
 fn decode_current<R: Read + Seek>(
     mut decoder: Decoder<R>,
     region: RegionRequest,
     limits: Allowances,
+    required_dimensions: Option<&zencodec::ResourceLimits>,
     mut check: impl FnMut() -> Result<(), Failure>,
 ) -> Result<Region, Failure> {
     let (width, height) = decoder.dimensions()?;
+    if let Some(required) = required_dimensions {
+        // Check the actual native header before reconstructing any coding unit
+        // or allocating the selected output. A small ROI does not change the
+        // stored-image dimensions to which these requirements apply.
+        required.check_dimensions(width, height)?;
+    }
     let r = region.resolve(width, height)?;
     let right = r.x + r.width;
     let bottom = r.y + r.height;

@@ -3,14 +3,14 @@ use std::{cell::Cell, ops::Range};
 
 /// An independent I/O guard: native directory parsing establishes the encoded
 /// payload ranges, and every read intersecting them fails before copying bytes.
-struct NoPixels {
+pub(super) struct NoPixels {
     input: Cursor<Vec<u8>>,
     ranges: Vec<Range<u64>>,
-    denied: Rc<Cell<usize>>,
-    enabled: Rc<Cell<bool>>,
+    pub(super) denied: Rc<Cell<usize>>,
+    pub(super) enabled: Rc<Cell<bool>>,
 }
 impl NoPixels {
-    fn new(bytes: Vec<u8>) -> Self {
+    pub(super) fn new(bytes: Vec<u8>) -> Self {
         let mut input = Cursor::new(bytes);
         let header = TiffHeader::parse(&mut input).unwrap();
         let mut pending = vec![header.first_ifd];
@@ -49,6 +49,19 @@ impl Read for NoPixels {
 }
 impl Seek for NoPixels {
     fn seek(&mut self, to: SeekFrom) -> io::Result<u64> { self.input.seek(to) }
+}
+
+impl ReadAt for NoPixels {
+    type Error = io::Error;
+    fn len(&mut self) -> io::Result<u64> { Ok(self.input.get_ref().len() as u64) }
+    fn read_exact_at(&mut self, offset: u64, out: &mut [u8]) -> io::Result<()> {
+        self.seek(SeekFrom::Start(offset))?;
+        self.read_exact(out)
+    }
+    fn read_at(&mut self, offset: u64, out: &mut [u8]) -> io::Result<usize> {
+        self.seek(SeekFrom::Start(offset))?;
+        self.read(out)
+    }
 }
 
 #[test]

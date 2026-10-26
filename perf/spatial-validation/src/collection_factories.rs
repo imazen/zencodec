@@ -16,8 +16,8 @@ use zencodec::{
 };
 use zencodec_io::ReadAtReader;
 
-// There is no qualified native mapping of the full legacy configurations yet.
-// Refuse before source I/O, rather than imply these templates enforce them.
+// Only the explicitly qualified fields may differ from the no-op configuration.
+// Comparing the remainder also refuses future fields until they are qualified.
 fn require_configuration(
     format: ImageFormat,
     supported: ImageFormat,
@@ -27,10 +27,23 @@ fn require_configuration(
     if format != supported {
         return Err(FactoryError::NotRegistered(format));
     }
-    if limits.is_some() {
-        return Err(FactoryError::UnsupportedLimits);
+    if let Some(mut remaining) = limits {
+        // The shared field is explicitly encode-only; opening performs no encode.
+        remaining.max_output_bytes = None;
+        if supported == ImageFormat::Tiff {
+            remaining.max_width = None;
+            remaining.max_height = None;
+            remaining.max_pixels = None;
+            // The pinned TIFF path is sequential, including its decompressors.
+            if remaining.threading == zencodec::ThreadingPolicy::Sequential {
+                remaining.threading = zencodec::ThreadingPolicy::Parallel;
+            }
+        }
+        if remaining != ResourceLimits::none() {
+            return Err(FactoryError::UnsupportedLimits);
+        }
     }
-    if policy.is_some() {
+    if policy.is_some_and(|value| value != DecodePolicy::none()) {
         return Err(FactoryError::UnsupportedDecodePolicy);
     }
     Ok(())
@@ -81,12 +94,15 @@ impl Factory for TiffFactory {
         stop: StopToken,
     ) -> Result<ErasedCollection<'a>, Cause> {
         require_configuration(format, ImageFormat::Tiff, limits, policy)?;
-        Ok(ErasedCollection::new(TiffCollection::open_with_stop(
-            ReadAtReader::new(ParserSource(source)),
-            view,
-            self.0,
-            stop,
-        )?))
+        Ok(ErasedCollection::new(
+            TiffCollection::open_with_stop(
+                ReadAtReader::new(ParserSource(source)),
+                view,
+                self.0,
+                stop,
+            )?
+            .with_required_dimensions(limits),
+        ))
     }
 }
 

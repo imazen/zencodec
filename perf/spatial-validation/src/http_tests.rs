@@ -2,6 +2,37 @@ use super::*;
 use crate::http_source::{Failure, FailureKind, HttpSource};
 
 #[test]
+fn http_snapshot_collection_limits_keep_inspection_and_smaller_children_available() {
+    use crate::collection_factories::TiffFactory;
+    use zencodec::{CodecSet, ImageFormat, LimitExceeded, ResourceLimits, StopToken, Unstoppable,
+        collection::OpenRequest, operation::PolicySet, source::ReadAtShim};
+    let (bytes, refs) = nested_fixture(true, true, false);
+    let name = "collection-limits";
+    write_fixture(name, &bytes);
+    let mut source = ReadAtShim(HttpSource::open(url("stable", name, 0), 65536).unwrap());
+    let codecs = CodecSet::new().with_collection(TiffFactory(Allowances::default()))
+        .with_limits(ResourceLimits::none().with_max_width(refs[1].width));
+    let mut images = codecs.open_collection(
+        ImageFormat::Tiff, &mut source, OpenRequest::new(Composition::Composited, 32),
+        PolicySet::new(), StopToken::new(Unstoppable),
+    ).unwrap();
+    let mut roots = images.images().unwrap();
+    let root = images.next(&mut roots).unwrap().unwrap();
+    assert_eq!(images.describe(&root).unwrap().stored_size, (refs[0].width, refs[0].height));
+    let error = images.decode(&root, &ImageRequest::new()).unwrap_err();
+    assert_eq!(zencodec::find_cause::<LimitExceeded>(&error), Some(&LimitExceeded::Width {
+        actual: refs[0].width, max: refs[1].width,
+    }));
+    assert_eq!(images.report().decisions().count(), 0);
+    assert!(!images.is_finished());
+    let mut children = images.children(&root).unwrap();
+    let child = images.next(&mut children).unwrap().unwrap();
+    let output = images.decode(&child, &ImageRequest::new()).unwrap();
+    assert_eq!(output.with_pixels(|p| p.as_contiguous_bytes().unwrap().to_vec()).unwrap(), refs[1].bytes);
+    assert_eq!(images.report().decisions().count(), 1);
+}
+
+#[test]
 fn http_snapshot_collection_factory_preserves_positional_selection() {
     use crate::collection_factories::TiffFactory;
     use zencodec::{CodecSet, collection::OpenRequest};

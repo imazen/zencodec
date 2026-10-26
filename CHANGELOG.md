@@ -8,6 +8,11 @@
   to honor inherited limits/policy or refuse; preserve set, pulse and per-call
   cancellation after registry drop. Concrete TIFF/JXL adapters remain in the
   validation harness and refuse unqualified legacy configuration mappings.
+- Qualify TIFF stored width, height and pixel caps before compressed-pixel reads
+  and selected-output allocation. Keep over-limit inspection and smaller-child
+  decode available; a tiny ROI does not bypass a stored-image cap. Accept no-op
+  native defaults and exclude the explicitly encode-only output-byte field from
+  decoding. Other unqualified requirements still refuse before source I/O.
 
 - Make the unreleased `DynReadAt` protocol usable with thread-local sources.
   Request `dyn DynReadAt + Send` explicitly when moving an erased source
