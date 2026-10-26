@@ -135,15 +135,18 @@ Opaque ICC and unknown transfer/primaries remain distinguishable. This is not
 a privacy approval or proof of a display conversion. A source alpha plane must
 not silently disappear from the ordinary packed-color view.
 
-Auxiliary samples carry their declared role, name, source bit depth and source
+Auxiliary samples carry their declared role, name, source precision and source
 dimensional shift without pretending to be grayscale. Emitted plane dimensions
-are recorded independently of source subsampling. Spot-color/CFA parameters
-not exposed by the pinned decoder are explicitly marked incomplete. The eight
+are recorded independently of source subsampling. The native accessors in
+[zenjxl-decoder PR 68](https://github.com/imazen/zenjxl-decoder/pull/68) supply
+integer/float precision, exponent bits, spot-color linear RGBA and CFA indices.
+The eight
 native fixtures cover straight/associated alpha, extra channels, spot color,
 gray-alpha, upsampled alpha, rotated geometry and an embedded grayscale ICC.
-Native role coverage is 2/7 named roles: alpha and spot color. Depth, selection
-mask, black, CFA and thermal roles, plus unknown/reserved roles, still need native
-fixtures. The upsampled-alpha fixture declares source `dim_shift = 0`; a nonzero
+The generated native-encoder fixtures extend role coverage to 7/7 named roles:
+alpha, depth, spot color, selection mask, black, CFA and thermal. Unknown/reserved
+roles still need native fixtures. The upsampled-alpha fixture declares source
+`dim_shift = 0`; a nonzero
 source shift is not yet qualified. Independent libjxl checks orientation, role
 codes, source bit depth and source
 dimensional shift; pixel checks compare native sequential color/alpha/extra
@@ -185,12 +188,22 @@ names and opaque profiles still require retention policy.
 Independent libjxl metadata checks cover HLG, PQ, a PQ gradient, a 32-bit float
 source with 8 exponent bits, an embedded ICC and a preview. Animation checks
 retain exact tick rates, loop count and timecode-presence declarations. The
-fixtures exercise default intrinsic size, zero minimum luminance and zero
-`linear_below`; non-default values still need native fixtures. Per-frame timecodes
-and complete extra-channel precision/spot/CFA parameters are not exposed by the
-pinned native API. Preserving its header does not recover those missing facts.
-That native surface is tracked in
-[zenjxl-decoder issue 67](https://github.com/imazen/zenjxl-decoder/issues/67).
+generated fixtures additionally exercise a 13x9 intrinsic size over an 8x6
+canvas, intensity target 1000, minimum luminance 0.125, relative-to-display
+behavior and `linear_below = 0.25`. The mapped consumer retains these values
+after decoder/input drop and output cloning. Half/float alpha retains source
+16/5 or 32/8 precision while the emitted storage is F32; exactly representable
+source values also check these two fixtures independently of native sequential
+decoding. Selected-frame timecodes preserve absent versus present zero, and
+reverse selection keeps timecodes separate from rational PTS and duration.
+libjxl independently verifies the generated source headers and frame timecodes.
+The generator is native `jxl-encoder` at
+`0255e5a9f61b7270cb3ed3f7b85fec2283deec55`; it is a standalone test dependency.
+Generated binaries are retained under the explicit `SPATIAL_GENERATED_ARTIFACTS`
+directory, created without overwriting existing results, and never committed.
+The native surface remains under review in
+[PR 68](https://github.com/imazen/zenjxl-decoder/pull/68), tracked by
+[issue 67](https://github.com/imazen/zenjxl-decoder/issues/67).
 The tone-mapping source fields are kept verbatim; no unqualified conversion to
 `SourceColor::diffuse_white` is made. The
 [libjxl metadata contract](https://libjxl.readthedocs.io/en/latest/api_metadata.html)
@@ -206,6 +219,13 @@ Clippy: run-heavy rc=0, 116 s, peak RSS 0.22 GiB, minimum available 13502 MiB,
 peak load 0.95. Log: `~/tmp/zencodec-interpretation-full-2026-10-26.log`.
 This is test-process usage, not a native decoder resource bound.
 
+The auxiliary-interpretation extension passed the full native matrix and strict
+Clippy, plus the same AV1 ownership/sample matrix and guide browser checks.
+The [receipt](../../benchmarks/jxl_auxiliary_output_2026-10-26.json) records the
+tested commit, commands, dependency revisions and log hashes. Its full native
+run reports `run-heavy: done rc=0 115s | peak-RSS 0.22GiB | min-avail 13601MiB |
+peak-load 1.12`. This remains a test-process measurement.
+
 The subsequent full native TIFF/JXL gate passed with the pinned pixel change:
 run-heavy rc=0, 103 s, peak RSS 0.34 GiB, minimum available 11325 MiB,
 peak load 1.52; log `~/tmp/zencodec-native-samples-full-2026-10-25.log`.
@@ -214,8 +234,9 @@ peak load 1.52; log `~/tmp/zencodec-native-samples-full-2026-10-25.log`.
 
 [`src/jxl_items.rs`](src/jxl_items.rs) exercises the same operation-bound image
 identities against native zenjxl-decoder at
-`8399f17c54c8138f65304bbc46efc80c269c7402`. The dependency and test corpus are both
-pinned to that revision. `codec-corpus` retrieves the immutable archive; missing
+`064d08964de1df8181eb3d24ee52e18f70146313`. The existing test corpus remains pinned
+at `8399f17c54c8138f65304bbc46efc80c269c7402` so changing the decoder does not
+change its regression inputs. `codec-corpus` retrieves the immutable archive; missing
 fixtures fail. The harness retains the compressed input and scans presentation
 headers. It does not claim a streaming-input or native-workspace bound.
 

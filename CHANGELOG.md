@@ -2,6 +2,11 @@
 
 ## Native image selection (unreleased experiment)
 
+- Carry complete native JXL auxiliary precision, spot/CFA parameters and selected
+  timecodes through the shared output. Native encoder fixtures qualify all seven
+  named auxiliary roles, half/float alpha, non-default source HDR/display facts
+  and reverse-selected timecodes, with independent libjxl metadata inspection.
+
 - Freeze interpretation with the private mapped output and validate packed
   sample/region geometry at construction. Retain native JXL source precision,
   HDR/display/preview and animation declarations separately from output color

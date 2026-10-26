@@ -103,8 +103,13 @@ storage, with packed color, auxiliary values and component codes distinguished.
 Its interpretation is frozen with the storage and checked against packed sample
 geometry. JXL retains the native source header/profile and selected-frame facts
 separately from the actual output color profile; independent metadata checks
-cover HDR, floating-point precision, preview and animation declarations. This
-does not authorize metadata passthrough or qualify missing native fields.
+cover HDR, floating-point precision, preview and animation declarations. Native
+encoder fixtures now qualify all seven named auxiliary roles, spot/CFA parameters,
+half/float alpha precision and per-frame timecodes through the shared consumer,
+using [native decoder PR 68](https://github.com/imazen/zenjxl-decoder/pull/68).
+Absent timecodes remain distinct from present zero, and neither substitutes for
+PTS. Unknown/reserved roles and nonzero source dimensional shifts remain
+unqualified. These source facts do not authorize metadata passthrough or rendering.
 Each decode carries its own region
 request; TIFF returns the selected canvas and region origin, while required JXL
 regions refuse. The [platform review](platform-review-2026-10-25.md) records
