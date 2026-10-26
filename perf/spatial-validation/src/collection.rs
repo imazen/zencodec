@@ -95,3 +95,39 @@ pub fn first_child<C: Collection>(
         .map(|id| collection.decode(&id, request))
         .transpose()
 }
+
+pub use checked_consumer::checked_jxl_first;
+mod checked_consumer {
+    // EXAMPLE: checked_jxl_first
+    use crate::{
+        checked_collection::{Checked, Error},
+        image_items::{Composition, ImageRequest},
+        jxl_items::{JxlItems, Limits},
+    };
+    use zencodec::{
+        At, StopToken,
+        image::ImageOutput,
+        operation::{Outcome, PolicyResolver},
+    };
+
+    // Native factory setup stays in the adapter. Limits are application input:
+    // presentations bounds visible storage; frame_headers counts hidden work.
+    // The consumer uses the same checked operation for later selections.
+    pub fn checked_jxl_first<R: PolicyResolver>(
+        bytes: &[u8],
+        limits: Limits,
+        resolver: R,
+        stop: StopToken,
+    ) -> Result<Option<Outcome<ImageOutput>>, At<Error>> {
+        let mut images = Checked::open(stop, resolver, |stop| {
+            JxlItems::open_with_stop(bytes, Composition::Composited, limits, stop)
+        })?;
+        // ANCHOR: checked_jxl_first
+        let image = images.first_image(&ImageRequest::default())?;
+        // END: checked_jxl_first
+        // The result owns its samples after this opened collection is dropped.
+        // Policy ran before returning it; no separate authorization call follows.
+        Ok(image)
+    }
+    // END EXAMPLE: checked_jxl_first
+}

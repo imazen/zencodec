@@ -362,6 +362,11 @@ spatial-discovery-check:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked discovery_budget_ -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
 
+# Automatic selected-image publication policy, including native failure seams.
+spatial-checked-collection-check:
+    cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked checked_collection_ -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
+
 # Native selection over IMI-derived real HTTP, with deliberate response faults.
 spatial-http-check artifacts port="3568":
     python3 perf/spatial-validation/http_snapshot.py "{{artifacts}}" "{{port}}" -- cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked --features http http_snapshot_ -- --nocapture --test-threads=1

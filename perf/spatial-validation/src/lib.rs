@@ -2,6 +2,8 @@
 //! Executing native spatial candidates, not a promoted public API.
 #![cfg(test)]
 
+mod checked_collection;
+mod checked_collection_tests;
 #[path = "../../../docs/examples/checked_source.rs"]
 mod checked_source;
 mod collection;

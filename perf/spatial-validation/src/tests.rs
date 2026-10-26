@@ -605,6 +605,99 @@ mod image_selection {
     }
 
     #[test]
+    fn checked_collection_tiff_policy_follows_pages_subifds_and_corrected_regions() {
+        use crate::checked_collection::Checked;
+        use std::{cell::Cell, convert::Infallible};
+        use zencodec::{
+            At, StopToken, Unstoppable,
+            operation::{Decision, Question},
+        };
+        for big in [false, true] {
+            for planar in [false, true] {
+                let (bytes, refs) = nested_fixture(big, planar, false);
+                let seen = Cell::new(0);
+                let address = Cell::new(0);
+                let resolver = |question: Question<'_>| -> Result<Decision, At<Infallible>> {
+                    let Question::Image { image, facts, .. } = question else {
+                        panic!("wrong domain")
+                    };
+                    assert_eq!(facts.geometry, image.interpretation().geometry);
+                    address.set(image.with_pixels(|p| p.row(0).as_ptr() as usize).unwrap());
+                    seen.set(seen.get() + 1);
+                    Ok(Decision::UsePreset)
+                };
+                let mut collection = Checked::open(StopToken::new(Unstoppable), resolver, |stop| {
+                    TiffCollection::open_with_stop(
+                        Cursor::new(bytes),
+                        Composition::Composited,
+                        Allowances::default(),
+                        stop,
+                    )
+                    .map_err(Into::into)
+                })
+                .unwrap();
+                let mut roots = collection.images().unwrap();
+                let first = collection.next(&mut roots).unwrap().unwrap();
+                let second = collection.next(&mut roots).unwrap().unwrap();
+                let mut children = collection.children(&second).unwrap();
+                let child = collection.next(&mut children).unwrap().unwrap();
+                assert_eq!(seen.get(), 0, "discovery is not pixel publication");
+                for (id, reference) in [
+                    (&second, &refs[1]),
+                    (&child, &refs[2]),
+                    (&first, &refs[0]),
+                    (&child, &refs[2]),
+                ] {
+                    let before = seen.get();
+                    let error = collection
+                        .decode(
+                            id,
+                            &ImageRequest {
+                                region: Rect {
+                                    x: reference.width,
+                                    y: 0,
+                                    width: 1,
+                                    height: 1,
+                                }
+                                .into(),
+                            },
+                        )
+                        .unwrap_err();
+                    assert!(matches!(
+                        zencodec::find_cause::<SelectionError>(&error),
+                        Some(SelectionError::InvalidRegion { .. })
+                    ));
+                    assert_eq!(seen.get(), before);
+                    let region = Rect {
+                        x: reference.width - 2,
+                        y: reference.height - 3,
+                        width: 2,
+                        height: 3,
+                    };
+                    let output = collection
+                        .decode(
+                            id,
+                            &ImageRequest {
+                                region: region.into(),
+                            },
+                        )
+                        .unwrap();
+                    output
+                        .with_pixels(|p| {
+                            assert_eq!(p.row(0).as_ptr() as usize, address.get());
+                            assert_eq!(p.as_contiguous_bytes().unwrap(), crop(reference, region));
+                        })
+                        .unwrap();
+                    assert_eq!(seen.get(), before + 1);
+                    assert_eq!(output.interpretation().geometry.region, region);
+                }
+                assert_eq!(collection.report().decisions().count(), 4);
+                assert!(!collection.is_finished());
+            }
+        }
+    }
+
+    #[test]
     fn common_consumer_selects_native_tiff_root_and_subifd() {
         for big in [false, true] {
             for planar in [false, true] {

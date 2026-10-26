@@ -241,7 +241,7 @@ fn independent_frames(name: &str, coalescing: bool) -> Vec<Vec<i64>> {
         .collect()
 }
 
-fn exact_rows(expected: &[Plane], got: &[Plane]) {
+pub(crate) fn exact_rows(expected: &[Plane], got: &[Plane]) {
     assert_eq!(got.len(), expected.len());
     for (actual, expected) in got.iter().zip(expected) {
         assert_eq!(

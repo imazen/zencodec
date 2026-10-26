@@ -59,6 +59,52 @@ function, `just spatial-consumer-check` reruns its native cases and strict
 Clippy without repeating the full matrix. These are process receipts, not
 native resource bounds.
 
+### Selected output executes the configured policy automatically
+
+The private [`Checked<C, R>` consumer](src/checked_collection.rs) owns the native
+collection, one resolver, its preset and one stop token. Its `decode` and
+`first_image` return `Outcome<ImageOutput>` only after `resolve_image` accepts the
+held owner. The [executable guide function](src/collection.rs) shows native JXL
+setup followed by the one-line first-image call. Native factory closures are
+adapter setup; ordinary selections do not pass callbacks or query capabilities.
+
+The same wrapper selects TIFF pages/SubIFDs and JXL presentations. It rechecks
+repeated selections, preserves the accepted allocation address and returns exact
+samples. Each outcome has its own decision; the operation retains the existing
+bounded history, including refused decisions. Errors identify open/discovery/
+decode/policy/stop stages, preserve concrete causes and location traces, and
+omit application payloads from default formatting.
+
+Failure scope matters for an interactive viewer:
+
+- A bad region or policy refusal fails that request. A corrected request can
+  reuse the selected identity, and policy runs again. There is no automatic
+  retry or fallback. Native errors retain the native adapter's own terminal state.
+- An observed cancellation or timeout finishes the opened operation and drops
+  native state. A private shared latch preserves the original extensible reason,
+  including when an application stop callback subsequently returns success.
+- A caught unwind also finishes the operation. Previously returned image owners
+  remain usable; later calls cannot enter native code again.
+
+This differs from the temporal media driver's terminal-error contract: image
+selection is an explicit independent request, while a video session can already
+hold queued packets, frames and references. Shared output and policy types do not
+imply that every session has the same recovery rules.
+
+`just spatial-checked-collection-check` executes native selection, trace/payload
+checks, stale-choice refusal, corrected requests, bounded history, preset
+workspace/privacy refusal and cancellation injected at every observed checkpoint
+of a small native JXL request. The guide fixture compares active rows and untouched
+padding separately; equal pixels do not require equal strides.
+
+This remains a private std-based driver experiment. It does not add a second
+policy interface or prove preallocation admission, whole-container privacy,
+cheap ROI, native workspace bounds, callback overhead or no_std driver portability.
+The initial two-code atomic stop encoding was rejected by the compiler because
+`StopReason` is non-exhaustive; the qualified latch stores the original value.
+A large-error lint was fixed by owning the bounded report behind a box, matching
+the existing media error approach. [Receipts](../../benchmarks/checked_collection_2026-10-26.json).
+
 ### Repeated browsing has one operation allowance
 
 A viewport can revisit an image, create another cursor or ask an unsupported
