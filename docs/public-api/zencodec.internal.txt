@@ -10,7 +10,7 @@
 ## summary
 #
 #   inherent methods                           67
-#   trait roster entries (type × trait)       109
+#   trait roster entries (type × trait)       110
 #
 # per-module pub lines:
 #   (root)                           18
@@ -98,7 +98,7 @@ pub fn source::SourceError::assert_fields_are_eq(&self)
 pub fn time::TimeBase::assert_fields_are_eq(&self)
 pub fn time::Timestamp::assert_fields_are_eq(&self)
 
-## trait impls (109 types)
+## trait impls (110 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -199,9 +199,10 @@ operation::Decline: TrivialClone
 operation::EncodeFacts: TrivialClone
 operation::EncodeOffer: TrivialClone
 operation::FrameFacts: TrivialClone
-operation::FrameOffer: TrivialClone
+operation::ImageFacts: TrivialClone
 operation::MetadataTransfer: TrivialClone
 operation::PolicySet: TrivialClone
+operation::PublicationOffer: TrivialClone
 operation::Question<'a>: TrivialClone
 operation::Selection: TrivialClone
 operation::TranscodeOffer: TrivialClone

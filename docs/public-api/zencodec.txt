@@ -6,22 +6,22 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2704 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 176 lines (176 hidden + 0 excluded-feature)
+# files: zencodec.txt 2725 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 177 lines (177 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                18
-#   pub types (struct/enum/trait/alias)       307
+#   pub types (struct/enum/trait/alias)       308
 #   pub consts/statics                        296
-#   free functions                             82
-#   inherent methods                         1013
-#   struct fields                             370
-#   enum variants                             437
+#   free functions                             83
+#   inherent methods                         1014
+#   struct fields                             383
+#   enum variants                             440
 #   re-exports                                 15
-#   trait roster entries (type × trait)       884
+#   trait roster entries (type × trait)       887
 #   conditional trait impls (verbatim)          8
 #   auto-trait-complete types                 159
-#   auto-trait exceptions                      33
+#   auto-trait exceptions                      34
 #
 # per-module pub lines:
 #   (root)                          951
@@ -37,13 +37,13 @@
 #   image                            91
 #   inventory                       103
 #   metadata_rewrite                 58
-#   operation                       144
+#   operation                       163
 #   prelude                         233
 #   source                           37
 #   storage                          34
 #   time                             22
 
-## items (2460 lines)
+## items (2479 lines)
 
 pub mod zencodec
 pub use At
@@ -1396,13 +1396,12 @@ pub operation::DecisionCode::Stopped
 pub operation::DecisionContext::Boundary(decode::InterpretationFacts)
 pub operation::DecisionContext::Encode(operation::EncodeFacts)
 pub operation::DecisionContext::Frame(operation::FrameFacts)
+pub operation::DecisionContext::Image(operation::ImageFacts)
 pub operation::DecisionContext::Transcode(decode::InterpretationFacts)
 #[non_exhaustive] pub enum operation::Decline
 pub operation::Decline::ApplicationRule
 pub operation::Decline::NoPreferredChoice
 pub operation::Decline::UnsupportedQuestion
-#[non_exhaustive] pub enum operation::FrameOffer
-pub operation::FrameOffer::PreserveNative
 #[non_exhaustive] pub enum operation::MetadataTransfer
 pub operation::MetadataTransfer::DiscardDescriptive
 pub operation::MetadataTransfer::PreserveReported
@@ -1424,6 +1423,8 @@ pub operation::OperationError::OutputDescriptor::actual: zenpixels::descriptor::
 pub operation::OperationError::OutputDescriptor::requested: zenpixels::descriptor::PixelDescriptor
 pub operation::OperationError::Policy(operation::PolicyFailure)
 pub operation::OperationError::Stopped(enough::reason::StopReason)
+#[non_exhaustive] pub enum operation::PublicationOffer
+pub operation::PublicationOffer::PreserveNative
 #[non_exhaustive] pub enum operation::Question<'a>
 pub operation::Question::Boundary
 pub operation::Question::Boundary::choices: operation::Choices<'a, operation::BoundaryOffer>
@@ -1432,9 +1433,13 @@ pub operation::Question::Encode
 pub operation::Question::Encode::choices: operation::Choices<'a, operation::EncodeOffer>
 pub operation::Question::Encode::facts: operation::EncodeFacts
 pub operation::Question::Frame
-pub operation::Question::Frame::choices: operation::Choices<'a, operation::FrameOffer>
+pub operation::Question::Frame::choices: operation::Choices<'a, operation::PublicationOffer>
 pub operation::Question::Frame::interpretation: &'a frame::FrameInterpretation
 pub operation::Question::Frame::timing: frame::FrameTiming
+pub operation::Question::Image
+pub operation::Question::Image::choices: operation::Choices<'a, operation::PublicationOffer>
+pub operation::Question::Image::facts: operation::ImageFacts
+pub operation::Question::Image::image: &'a image::ImageOutput
 pub operation::Question::Transcode
 pub operation::Question::Transcode::choices: operation::Choices<'a, operation::TranscodeOffer>
 pub operation::Question::Transcode::facts: decode::InterpretationFacts
@@ -1445,7 +1450,8 @@ pub operation::Selection::Boundary::facts: decode::InterpretationFacts
 pub operation::Selection::Encode(operation::EncodeOffer)
 pub operation::Selection::Frame
 pub operation::Selection::Frame::facts: operation::FrameFacts
-pub operation::Selection::Frame::offer: operation::FrameOffer
+pub operation::Selection::Frame::offer: operation::PublicationOffer
+pub operation::Selection::Image(operation::PublicationOffer)
 pub operation::Selection::Transcode(operation::TranscodeOffer)
 #[non_exhaustive] pub struct operation::BoundaryOffer
 pub operation::BoundaryOffer::action: decode::BoundaryAction
@@ -1504,6 +1510,18 @@ pub operation::FrameFacts::siting: frame::ChromaSiting
 pub operation::FrameFacts::subsampling: frame::Subsampling
 pub operation::FrameFacts::timing: frame::FrameTiming
 pub fn operation::FrameFacts::new(&frame::FrameInterpretation, frame::FrameTiming) -> Self
+#[non_exhaustive] pub struct operation::ImageFacts
+pub operation::ImageFacts::applied_spot_colors: usize
+pub operation::ImageFacts::auxiliaries: usize
+pub operation::ImageFacts::frame: core::option::Option<operation::FrameFacts>
+pub operation::ImageFacts::geometry: image::ImageGeometry
+pub operation::ImageFacts::orientation: core::option::Option<zenpixels::orientation::Orientation>
+pub operation::ImageFacts::packed: core::option::Option<zenpixels::descriptor::PixelDescriptor>
+pub operation::ImageFacts::planes: usize
+pub operation::ImageFacts::presentation: core::option::Option<frame::Presentation>
+pub operation::ImageFacts::source_details: usize
+pub operation::ImageFacts::timing: core::option::Option<frame::FrameTiming>
+pub fn operation::ImageFacts::new(&image::ImageOutput) -> Self
 pub struct operation::OperationReport
 pub fn operation::OperationReport::decisions(&self) -> impl core::iter::traits::iterator::Iterator<Item = &operation::DecisionRecord>
 pub const fn operation::OperationReport::dropped_decisions(&self) -> u64
@@ -1546,6 +1564,7 @@ pub type operation::PolicyResolver::Error: core::error::Error + core::marker::Se
 pub fn operation::PolicyResolver::resolve(&mut self, operation::Question<'_>) -> core::result::Result<operation::Decision, whereat::at::At<Self::Error>>
 pub fn operation::resolve_boundary<R: operation::PolicyResolver + ?core::marker::Sized>(decode::DecodeBoundary, &mut R, operation::PolicySet, &dyn enough::Stop) -> core::result::Result<(decode::BoundaryAction, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
 pub fn operation::resolve_frame<R: operation::PolicyResolver + ?core::marker::Sized>(&frame::FrameInterpretation, frame::FrameTiming, &mut R, operation::PolicySet, &dyn enough::Stop) -> core::result::Result<operation::DecisionRecord, whereat::at::At<operation::PolicyFailure>>
+pub fn operation::resolve_image<R: operation::PolicyResolver + ?core::marker::Sized>(image::ImageOutput, &mut R, operation::PolicySet, &dyn enough::Stop) -> core::result::Result<operation::Outcome<image::ImageOutput>, whereat::at::At<operation::PolicyFailure>>
 pub fn operation::resolve_transcode<R: operation::PolicyResolver + ?core::marker::Sized>(decode::DecodeBoundary, &[operation::TranscodeOffer], &mut R, operation::PolicySet, &dyn enough::Stop) -> core::result::Result<(usize, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
 pub mod prelude
 pub use prelude::Pulse
@@ -2506,7 +2525,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (202 types)
+## trait impls (203 types)
 
 &mut D: decode::ControlledIncrementalDecode, decode::IncrementalDecode
 &mut S: source::DynReadAt
@@ -2684,7 +2703,7 @@ operation::EncodeFacts: Clone, Copy, Debug
 operation::EncodeOffer: Clone, Copy, Debug
 operation::EncodeRequest: Clone, Debug
 operation::FrameFacts: Clone, Copy, Debug, Eq, PartialEq
-operation::FrameOffer: Clone, Copy, Debug, Eq, PartialEq
+operation::ImageFacts: Clone, Copy, Debug
 operation::MetadataTransfer: Clone, Copy, Debug, Eq, PartialEq
 operation::OperationError: Debug, Display, Error
 operation::OperationReport: Clone, Debug, Default
@@ -2693,6 +2712,7 @@ operation::PolicyFailure: Debug, Display, Error
 operation::PolicySet: Clone, Copy, Debug, Default, operation::PolicyResolver
 operation::PreparedEncode: Debug
 operation::PreparedSendEncode: Debug
+operation::PublicationOffer: Clone, Copy, Debug, Eq, PartialEq
 operation::Question<'a>: Clone, Copy, Debug
 operation::RouteRejection: Debug
 operation::Selection: Clone, Copy, Debug
@@ -2751,6 +2771,7 @@ operation::Outcome<T>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 operation::PolicyFailure: !RefUnwindSafe !UnwindSafe
 operation::PreparedEncode: !RefUnwindSafe !Send !Sync !UnwindSafe
 operation::PreparedSendEncode: !RefUnwindSafe !Sync !UnwindSafe
+operation::Question<'a>: !RefUnwindSafe !UnwindSafe
 operation::RouteRejection: !RefUnwindSafe !UnwindSafe
 source::ReadAtShim<S>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 storage::OwnedStorage<T>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
