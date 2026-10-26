@@ -17,11 +17,18 @@ export async function checkIdeal(browser,url,output) {
     assert.ok((await page.locator('h1').textContent()).includes('executes today'));
     assert.equal(await page.locator('.ideal-step').count(),5);
     const changes=page.locator('.api-change');
-    assert.equal(await changes.count(),9);
+    assert.equal(await changes.count(),10);
     assert.equal(await page.locator('#change-mapping').count(),1);
     assert.ok((await page.locator('#change-images .code-toolbar').textContent()).includes('Private prototype'));
     assert.equal(await page.locator('#change-images [data-example="checked_jxl_first"]').count(),1);
     for(const change of await changes.all()) assert.ok(!await change.evaluate(el=>el.open));
+    const inspection=page.locator('#change-inspection');
+    await inspection.locator(':scope>summary').focus();
+    await page.keyboard.press('Enter');
+    assert.ok(await inspection.evaluate(el=>el.open));
+    assert.equal(await inspection.locator('[data-example="checked_first_description"]').count(),1);
+    assert.ok((await inspection.textContent()).includes('without reconstructing pixels'));
+    assert.ok((await inspection.textContent()).includes('Unknown orientation remains unknown'));
     const placement=page.locator('#change-placement');
     await placement.locator(':scope>summary').focus();
     await page.keyboard.press('Enter');
@@ -69,7 +76,7 @@ export async function checkIdeal(browser,url,output) {
       if(!await details.evaluate(el=>el.open)) await details.locator(':scope>summary').click();
     }
     const signatures=(await page.locator('.ideal-signatures,.api-panel').allTextContents()).join('\n');
-    for(const required of ['with_send_encoder','PolicyResolver','At<Self::Error>','step_controlled','transcode_async','prepare_send','resolve_frame','is_failed','ReadAtReader','stream_position','try_set_resolution','try_integer_density','with_resolution']) assert.ok(signatures.includes(required),required);
+    for(const required of ['with_send_encoder','PolicyResolver','At<Self::Error>','step_controlled','transcode_async','prepare_send','resolve_frame','is_failed','ReadAtReader','stream_position','try_set_resolution','try_integer_density','with_resolution','describe','ImageDescription','with_orientation','with_placement']) assert.ok(signatures.includes(required),required);
     assert.ok((await page.locator('#target').textContent()).includes('Native/CMS workspace'));
     assert.ok((await page.locator('#target').textContent()).includes('source version'));
     for(const width of [390,768,1440]) {
