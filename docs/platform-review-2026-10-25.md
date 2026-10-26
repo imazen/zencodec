@@ -97,9 +97,10 @@ Remaining promotion gates:
 - One qualified output/interpretation contract for TIFF, JXL color and extra
   planes, and mapped video samples. Native storage alone is insufficient for
   rendering a depth, spot-color, gain-map or other auxiliary channel.
-- Explicit discovery accounting and cancellation at the shared interface.
-  Source-bound IDs do not prove that successive HTTP ranges came from the same
-  object revision.
+- Native discovery-work accounting beyond the now-tested common call allowance.
+  Cancellation/timeout causes are qualified at observed polls; native latency
+  remains unbounded. Single-object conditional HTTP reads now qualify through
+  TIFF/SubIFDs; multi-object, browser and stable disk snapshots remain open.
 - Qualified thumbnail, pyramid and auxiliary roles, plus native JXL layers.
 - Native workspace accounting, incremental still-codec input, planar conversion
   and whole-container privacy coverage. None follows from passing selection
@@ -126,5 +127,5 @@ records the full native matrix, workspace tests, strict lint, no_std WebAssembly
 rustdoc and guide checks. Its integration process reports
 `run-heavy: done rc=0 138s | peak-RSS 0.54GiB | min-avail 13374MiB | peak-load 1.50`.
 This is not a codec workspace bound. The collection remains private: policy
-admission, discovery allowances/cancellation, remote source-revision binding and
+preallocation admission, native discovery-work/latency bounds, broader source snapshots and
 native raw layers remain separate qualification gates.

@@ -614,3 +614,15 @@ The added exact-timing case and auxiliary-output cases passed with the 22 TIFF
 sample cases and strict Clippy: `run-heavy: done rc=0 12s | peak-RSS 0.45GiB |
 min-avail 13431MiB | peak-load 0.61`; log
 `~/tmp/zencodec-common-output-timing-2026-10-26.log`.
+
+### Integrated source/discovery regression gate
+
+After the native timeout fix, common discovery allowance and coherent-source
+contract, the complete default-feature spatial gate passed. It retains the
+independent TIFF/libjxl checks, selected-sample parity, generated auxiliary
+roles/shifts, publication policy and cancellation controls. Its receipt is
+`run-heavy: done rc=0 186s | peak-RSS 0.54GiB | min-avail 13225MiB | peak-load 1.22`.
+Strict lint, warning-free workspace docs and public API snapshot checks also
+pass. [Integrated evidence](../../benchmarks/source_discovery_integrated_2026-10-26.json).
+HTTP runs separately with the explicit `http` feature and server harness above;
+it is not silently skipped by the default native gate.
