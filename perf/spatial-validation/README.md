@@ -1334,14 +1334,23 @@ Core controls cover drift in either owner, original traced native failures,
 component-code refusal before mapping, retained clones, publication refusal and
 unwind. Native identity controls cover four CMYK layers, five RGB layers, and
 first presentations with spot color and extra channels. A separate premultiplied
-control copies exact samples and keeps association through the owner API.
+control now uses the required-descriptor conversion plan and keeps exact samples
+and association through borrowed identity and the owner API.
 
-That last case exposes a separate planner limitation: `OutputPlan` currently
-accepts a `PixelFormat`, which chooses straight alpha. `SameAsOrigin` requests
-the origin profile, not the original alpha association. The current unknown-TRC
-fixture refuses this conversion with `NeedsCms`; the test keeps that refusal
-visible. Exact copying through the owner API does not establish numerical
-premultiplication conversion support. A target-layout contract is still needed.
+The format-only `OutputPlan::new` selects straight alpha. `SameAsOrigin` requests
+the origin profile, not the original association. The native unknown-TRC fixture
+still refuses that conversion with `NeedsCms`; the test preserves this existing
+contract. `OutputPlan::new_with_descriptor` now accepts the full required layout.
+The same fixture can retain its complete owner without a pixel allocation or
+write exact samples into admitted strided rows. The plan checks the current
+source interpretation, and descriptor/profile conflicts return
+`OutputInterpretationMismatch` before CMS construction. This is not general
+ICC premultiplication conversion support.
+
+The [descriptor receipt](../../benchmarks/native_output_descriptor_2026-10-26.json)
+pins the new implementation and the full 129-test native suite, including the
+unchanged independent-reader and six-case CMS gates. The site extracts actual
+constructor and execution signatures from that exact dependency revision.
 
 Reproduce the focused ownership controls with `just image-color-replacement-check`
 and `just spatial-color-owner-check`. `just spatial-color-check <fresh-artifacts>`

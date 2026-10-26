@@ -31,8 +31,8 @@ rustix = { version = "1.1.5", features = ["fs"], optional = true }
 zencodec = { path = "../.." }
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "fe819360581acb3796ea2925f2a81f44f0a430e6" }
 # Combined output planning and native sample carriage from zenpixels PRs 92/93.
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "d79acec203ad6781b0c85373b7202c512fbbf3c8" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "d79acec203ad6781b0c85373b7202c512fbbf3c8" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "4e59d3c04dc74b4d78a98f0b5310363644f9ac82" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "4e59d3c04dc74b4d78a98f0b5310363644f9ac82" }
 
 [profile.release]
 debug = 1

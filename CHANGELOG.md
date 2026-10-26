@@ -611,6 +611,12 @@ None.
 
 ## [Unreleased]
 
+### Native API validation
+
+- Pin the required-descriptor `OutputPlan` constructor and validate exact native
+  JXL premultiplication through borrowed identity and admitted strided output.
+  Preserve format-only behavior and the independent color/selection gates.
+
 ### Added
 
 - Required physical resolution on checked encode requests and generic/erased

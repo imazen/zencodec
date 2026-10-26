@@ -8,8 +8,7 @@ use zencodec::{
     source::{ReadAtShim, SliceReadAt},
     storage::{SharedStorage, StorageBudget, StorageError},
 };
-use zenpixels::{ColorContext, ColorOrigin, PixelDescriptor, PixelSlice, PixelSliceMut};
-use zenpixels_convert::{ConvertOptions, OutputPlan, OutputProfile};
+use zenpixels::{ColorContext, PixelSliceMut};
 
 #[cfg(feature = "cms_oracle")]
 #[path = "jxl_color_oracle_tests.rs"]
@@ -59,6 +58,30 @@ impl zencodec::image::PackedImageOwner for ColorStage {
     }
 }
 
+// EXAMPLE: native_required_layout
+use zencodec::At;
+use zenpixels::{ColorOrigin, PixelDescriptor, PixelSlice};
+use zenpixels_convert::{ConvertError, ConvertOptions, OutputPlan, OutputProfile};
+
+fn plan_required_layout(
+    source: &PixelSlice<'_>,
+    origin: &ColorOrigin,
+    required: PixelDescriptor,
+) -> Result<OutputPlan, At<ConvertError>> {
+    // ANCHOR: native_required_layout
+    OutputPlan::new_with_descriptor(
+        source.descriptor(),
+        source.color_context().cloned(),
+        origin,
+        OutputProfile::SameAsOrigin,
+        required,
+        &ConvertOptions::forbid_lossy().with_clip_out_of_gamut(false),
+        None,
+    )
+    // END: native_required_layout
+}
+// END EXAMPLE: native_required_layout
+
 fn identity(pixels: &PixelSlice<'_>) -> OutputPlan {
     let profile = pixels
         .color_context()
@@ -67,16 +90,7 @@ fn identity(pixels: &PixelSlice<'_>) -> OutputPlan {
         .as_ref()
         .unwrap()
         .clone();
-    OutputPlan::new(
-        pixels.descriptor(),
-        pixels.color_context().cloned(),
-        &ColorOrigin::from_icc(profile),
-        OutputProfile::SameAsOrigin,
-        pixels.descriptor().pixel_format(),
-        &ConvertOptions::forbid_lossy(),
-        None,
-    )
-    .unwrap()
+    plan_required_layout(pixels, &ColorOrigin::from_icc(profile), pixels.descriptor()).unwrap()
 }
 
 // A color-stage prototype, not a complete converted ImageOutput: a caller must
@@ -567,7 +581,7 @@ fn native_output_owner_keeps_auxiliaries_and_interpretation_through_color_replac
 }
 
 #[test]
-fn native_output_owner_preserves_premultiplication_but_format_only_plan_cannot_request_it() {
+fn native_output_owner_required_descriptor_preserves_premultiplication() {
     let bytes = fixture("conformance_test_images/alpha_premultiplied.jxl");
     let mut source = ReadAtShim(SliceReadAt::new(&bytes));
     let (codecs, pool) = jxl_packaged_storage::factories(64, 64);
@@ -584,6 +598,23 @@ fn native_output_owner_preserves_premultiplication_but_format_only_plan_cannot_r
         .unwrap()
         .unwrap()
         .into_output();
+    let plan = image.with_pixels(|pixels| identity(&pixels)).unwrap();
+    let charged = (pool.reserved_bytes(), pool.reserved_objects());
+    let (retained, metadata) = retain_identity(&image, &plan).unwrap().unwrap();
+    assert_eq!(
+        crate::output_tests::mapped_planes(&retained),
+        crate::output_tests::mapped_planes(&image)
+    );
+    assert_eq!(metadata.icc, plan.metadata().icc);
+    assert_eq!(metadata.cicp, plan.metadata().cicp);
+    #[allow(deprecated)]
+    {
+        assert!(metadata.hdr.is_none());
+        assert!(plan.metadata().hdr.is_none());
+    }
+    assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), charged);
+    drop(retained);
+    assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), charged);
     let destination = StorageBudget::new(256 * 1024 * 1024, 1);
     let owner = image
         .with_pixels(|pixels| {
@@ -603,34 +634,39 @@ fn native_output_owner_preserves_premultiplication_but_format_only_plan_cannot_r
             .unwrap_err();
             // PixelFormat chooses straight alpha. SameAsOrigin means the profile,
             // not unchanged association. Preserve the actual refusal as a contract
-            // probe; the output-layout request needs separate API work.
+            // probe for the format-only convenience's established behavior.
             assert!(matches!(
                 error.error(),
                 zenpixels_convert::ConvertError::NeedsCms { .. }
             ));
             assert_eq!(destination.reserved_bytes(), 0);
-            // An exact sample copy is sufficient to test the image-owner boundary;
-            // it establishes no numerical alpha or color conversion support.
-            let mut data = destination
-                .filled(pixels.stride() * pixels.rows() as usize / 4, 0xa5a5_a5a5u32)
-                .unwrap();
-            let bytes = pixels.as_strided_bytes();
-            bytemuck::cast_slice_mut(data.as_mut_slice())[..bytes.len()].copy_from_slice(bytes);
-            ColorStage {
-                data: data.freeze(),
-                width: pixels.width(),
-                rows: pixels.rows(),
-                stride: pixels.stride(),
-                descriptor: pixels.descriptor(),
-                context: pixels.color_context().unwrap().clone(),
+            let mut plan = identity(&pixels);
+            let borrowed = plan.borrow_rows(pixels.clone()).unwrap().unwrap();
+            assert_eq!(
+                borrowed.as_strided_bytes().as_ptr(),
+                pixels.as_strided_bytes().as_ptr()
+            );
+            assert_eq!(borrowed.descriptor(), pixels.descriptor());
+            assert_eq!(borrowed.color_context(), pixels.color_context());
+            let color = convert(pixels.clone(), &mut plan, &destination).unwrap();
+            for y in 0..pixels.rows() {
+                assert_eq!(color.pixels().row(y), pixels.row(y));
+                let active = pixels.width() as usize * pixels.descriptor().bytes_per_pixel();
+                assert!(
+                    bytemuck::cast_slice::<u32, u8>(color.data.as_slice())
+                        [y as usize * color.stride + active..(y as usize + 1) * color.stride]
+                        .iter()
+                        .all(|b| *b == 0xa5)
+                );
             }
+            color
         })
         .unwrap();
     let original = image.clone();
     let derived = image.replace_packed_color(owner).unwrap();
     assert_eq!(
-        crate::output_tests::mapped_planes(&original),
-        crate::output_tests::mapped_planes(&derived)
+        &crate::output_tests::mapped_planes(&original)[1..],
+        &crate::output_tests::mapped_planes(&derived)[1..]
     );
     original
         .with_pixels(|a| {
@@ -638,6 +674,9 @@ fn native_output_owner_preserves_premultiplication_but_format_only_plan_cannot_r
                 .with_pixels(|b| {
                     assert_eq!(a.descriptor(), b.descriptor());
                     assert_eq!(a.color_context(), b.color_context());
+                    for y in 0..a.rows() {
+                        assert_eq!(a.row(y), b.row(y));
+                    }
                 })
                 .unwrap()
         })

@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-26",
+  "kind": "correctness qualification, not benchmark",
+  "source_zencodec_base": "a16d7f831c882beeb01bd5c2f6fd4a1a5e3c1a84",
+  "source_zenpixels": "4e59d3c04dc74b4d78a98f0b5310363644f9ac82",
+  "source_zenjxl": "3660d49318e4d234ec2eb8e531a3e3a1d40a2215",
+  "files_sha256": {
+    "perf/spatial-validation/src/jxl_planned_color_tests.rs": "3d5183fd6535f1d289472b4b8dca5ae480638ae3d1c25fe78e490200d22e7813",
+    "perf/spatial-validation/Cargo.toml": "529854c30ed8e9f5bfea1d2bd92919d888f79946774da4ee97c4e579ba401463",
+    "perf/spatial-validation/dependencies.lock": "d90bd7329c330cfe19d1aff446d1433aff86847fd3a7a26e3153522a6c528cb1"
+  },
+  "fixture": "conformance_test_images/alpha_premultiplied.jxl",
+  "contract": [
+    "Explicit full descriptor retains native premultiplied RgbaF32 without CMS",
+    "borrow_rows retains exact address, descriptor and current context",
+    "retain_identity keeps complete native output without a new payload reservation",
+    "convert_rows writes exact active samples into admitted strided destination; padding unchanged",
+    "replace_packed_color preserves association and source auxiliary samples",
+    "format-only constructor still refuses unknown-TRC unassociation with NeedsCms",
+    "last owner drops release destination and original source charges"
+  ],
+  "commands": [
+    "just spatial-color-owner-check",
+    "just spatial-ci-check /mnt/v/output/zencodec/platform-regions-20261026-run/native-descriptor-final-1 cms_oracle"
+  ],
+  "full_native_suite": {
+    "tests_passed": 129,
+    "tests_failed": 0,
+    "tests_ignored": 0,
+    "strict_clippy": "passed",
+    "log": "/home/lilith/tmp/zencodec-native-descriptor-suite-20261026.log",
+    "artifact_directory": "/mnt/v/output/zencodec/platform-regions-20261026-run/native-descriptor-final-1",
+    "resource_wrapper": "run-heavy: done rc=0 52s | peak-RSS 0.56GiB | min-avail 11029MiB | peak-load 0.86"
+  },
+  "source_note": "The final snippet moves existing imports into its expandable example; a focused native test and strict lint follow the full suite.",
+  "independent_oracles": "Same frozen TIFF/Pillow/libtiff, libjxl presentation/layer and Little CMS readers as native_color_owner_2026-10-26.json; unchanged gates.",
+  "limits": [
+    "No throughput or isolated codec/CMS memory claim",
+    "Unknown transfer does not permit numeric ICC unassociation",
+    "No general ICC, float CMYK or narrow/full conversion qualification",
+    "Auxiliary owners can retain original color allocations",
+    "CMS/native workspace remains outside payload pool"
+  ],
+  "final_snippet_check": {
+    "log": "/home/lilith/tmp/zencodec-native-descriptor-final-check-20261026.log",
+    "focused_tests_passed": 2,
+    "strict_clippy": "passed",
+    "resource_wrapper": "run-heavy: done rc=0 3s | peak-RSS 0.41GiB | min-avail 11300MiB | peak-load 0.40"
+  }
+}
