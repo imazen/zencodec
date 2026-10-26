@@ -27,6 +27,54 @@ roles, or remote revision binding. Discovery currently materializes one bounded
 SubIFD tag and charges yielded relationships; it does not eagerly load the
 whole graph. The native decoder owns TIFF parsing and compression throughout.
 
+## JXL presentations and layers
+
+[`src/jxl_items.rs`](src/jxl_items.rs) exercises the same operation-bound image
+identities against native zenjxl-decoder at
+`8399f17c54c8138f65304bbc46efc80c269c7402`. The dependency and test corpus are both
+pinned to that revision. `codec-corpus` retrieves the immutable archive; missing
+fixtures fail. The harness retains the compressed input and scans presentation
+headers. It does not claim a streaming-input or native-workspace bound.
+
+The matrix selects every presentation in reverse order and compares every f32
+sample byte and extra channel against native sequential decoding. Output rows
+have 13 padding bytes, whose sentinel must survive. The six fixtures contain
+147 visible presentations; 35 require replaying an earlier visible frame. The
+backend's opaque seek target owns the dependency restart; the adapter does not
+guess a keyframe from the visible index or file offset.
+
+The independent [`jxl_oracle.c`](jxl_oracle.c) uses libjxl only for test-time
+discovery. It confirms presentation count, duration ticks and canvas dimensions.
+It also demonstrates why view selection belongs before discovery:
+
+| Fixture | Composited presentations | Uncomposited regular layers |
+|---|---:|---:|
+| `blendmodes.jxl` | 1 | 5 |
+| `multiple_layers_noise_spline.jxl` | 1 | 5 |
+
+The latter includes cropped 1024×576 layers at nonzero origins inside a
+2048×1152 canvas. Native `coalescing=false` still returns the composited output,
+so the candidate refuses required `Uncomposited` before parsing. This is tracked
+in [zenjxl-decoder issue 57](https://github.com/imazen/zenjxl-decoder/issues/57).
+The independent library is libjxl 0.11.1 locally; CI records the installed
+library's exact numeric version in the test log. Install its development headers
+and library before running the gate (`libjxl-dev` on Ubuntu). Its executable is
+built outside the fresh TIFF artifact directory, and each invocation has a
+30-second deadline.
+
+The combined native tests, independent TIFF/JXL oracles and strict Clippy passed
+with `jxl-items4` on 2026-10-25: run-heavy rc=0, 104 s, peak RSS 0.42 GiB, minimum
+available 15782 MiB, peak load 1.64. Full log:
+`~/tmp/zencodec-jxl-items4-2026-10-25.log`. This is the test process receipt,
+not a per-codec or whole-operation memory guarantee.
+
+These are native cross-path pixel checks and independent discovery checks, not
+independent JXL pixel readback. Layer decoding, layer blend/extra-channel facts,
+gain maps, out-of-order container chunks, complete metadata interpretation and
+source replacement during network access remain unqualified. libjxl exposes
+regular layers when coalescing is disabled; reference-only and low-frequency
+frames remain internal ([decoder contract](https://libjxl.readthedocs.io/en/latest/api_decoder.html)).
+
 ## Reduced-level region candidate
 
 This is an executable candidate, not a public spatial API. It selects a main

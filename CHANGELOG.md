@@ -2,6 +2,12 @@
 
 ## Native image selection (unreleased experiment)
 
+- Exercise native JXL presentation selection and dependency replay against
+  sequential samples, with independent libjxl discovery. Fix the view before
+  issuing identities; refuse required layers while the pinned native decoder
+  cannot honor them. Keep the candidate private until the common consumer path
+  and source-version/interpretation boundaries are qualified.
+
 - Exercise operation-bound identities, lazy directory discovery and arbitrary
   nested/shared SubIFDs against native classic TIFF and BigTIFF. Keep image
   containment separate from reduced-level selection and requested composition;

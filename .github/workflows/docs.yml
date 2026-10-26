@@ -108,7 +108,7 @@ jobs:
           timeout --kill-after=15s 5m cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
 
   spatial:
-    name: Qualify native TIFF spatial contracts and guide
+    name: Qualify native TIFF and JXL image selection
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -116,6 +116,7 @@ jobs:
       CARGO_INCREMENTAL: 0
       SPATIAL_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}
       SPATIAL_ORACLE_PYTHON: ${{ github.workspace }}/perf/spatial-validation/target/oracle-python/bin/python
+      JXL_SELECTION_ORACLE: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-jxl/jxl-oracle
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -131,6 +132,10 @@ jobs:
           timeout --kill-after=10s 2m "$SPATIAL_ORACLE_PYTHON" -m pip install --disable-pip-version-check --only-binary :all: --retries 1 --timeout 20 Pillow==13.0.0
       - name: Execute native spatial selection and exact guide example
         run: |
+          timeout --kill-after=15s 2m sudo apt-get update -qq
+          timeout --kill-after=15s 2m sudo apt-get install -y --no-install-recommends libjxl-dev
+          mkdir -p "$(dirname "$JXL_SELECTION_ORACLE")"
+          cc -std=c11 -Wall -Wextra -Werror perf/spatial-validation/jxl_oracle.c -ljxl -o "$JXL_SELECTION_ORACLE"
           cp perf/spatial-validation/dependencies.lock perf/spatial-validation/Cargo.lock
           timeout --kill-after=15s 10m cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked -- --nocapture --test-threads=1
           timeout --kill-after=15s 5m cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings

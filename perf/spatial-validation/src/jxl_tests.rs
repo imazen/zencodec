@@ -1,0 +1,187 @@
+use super::{
+    image_items::{Composition, SelectionError},
+    jxl_items::{JxlItems, Plane, sequential},
+};
+use std::{path::PathBuf, sync::OnceLock};
+
+// Immutable corpus revision and cache key; a mutable branch is not a fixture pin.
+fn fixture_path(name: &str) -> PathBuf {
+    static ROOT: OnceLock<PathBuf> = OnceLock::new();
+    let root = ROOT.get_or_init(|| {
+        codec_corpus::Corpus::new().unwrap().tar_url(
+            "zencodec-jxl-8399f17c54c8138f65304bbc46efc80c269c7402",
+            "https://codeload.github.com/imazen/zenjxl-decoder/tar.gz/8399f17c54c8138f65304bbc46efc80c269c7402",
+        ).expect("download pinned JXL corpus via codec-corpus")
+        .join("zenjxl-decoder/resources/test")
+    });
+    root.join(name)
+}
+
+fn fixture(name: &str) -> Vec<u8> {
+    let path = fixture_path(name);
+    std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+}
+
+fn independent_frames(name: &str, coalescing: bool) -> Vec<Vec<i64>> {
+    let tool = std::env::var("JXL_SELECTION_ORACLE").expect("JXL_SELECTION_ORACLE is required");
+    let output = std::process::Command::new("timeout")
+        .args(["--kill-after=5s", "30s", &tool])
+        .arg(fixture_path(name))
+        .arg(if coalescing { "1" } else { "0" })
+        .output()
+        .expect("run independent libjxl oracle");
+    assert!(
+        output.status.success(),
+        "libjxl failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(text.starts_with("version "));
+    eprintln!("libjxl {name} coalescing={coalescing}: {text}");
+    text.lines()
+        .filter_map(|line| line.strip_prefix("frame "))
+        .map(|line| {
+            line.split_whitespace()
+                .map(|v| v.parse().unwrap())
+                .collect()
+        })
+        .collect()
+}
+
+fn exact_rows(expected: &[Plane], got: &[Plane]) {
+    assert_eq!(got.len(), expected.len());
+    for (actual, expected) in got.iter().zip(expected) {
+        assert_eq!(
+            (actual.width, actual.height, actual.channels),
+            (expected.width, expected.height, expected.channels)
+        );
+        let row_bytes = expected.width * expected.channels * 4;
+        for y in 0..expected.height {
+            let row = &actual.bytes[y * actual.stride..(y + 1) * actual.stride];
+            assert_eq!(
+                &row[..row_bytes],
+                &expected.bytes[y * expected.stride..y * expected.stride + row_bytes]
+            );
+            assert!(
+                row[row_bytes..].iter().all(|&b| b == 0xa5),
+                "padding changed"
+            );
+        }
+    }
+}
+
+#[test]
+fn selected_jxl_presentations_match_native_sequential_with_dependencies() {
+    let mut dependencies = 0;
+    let mut count = 0;
+    for name in [
+        "conformance_test_images/blendmodes.jxl",
+        "conformance_test_images/animation_spline.jxl",
+        "conformance_test_images/animation_newtons_cradle.jxl",
+        "conformance_test_images/animation_icos4d.jxl",
+        "multiple_layers_noise_spline.jxl",
+        "named_frame_test.jxl",
+    ] {
+        let data = fixture(name);
+        let expected = sequential(&data, true).unwrap();
+        let mut items = JxlItems::open(&data, Composition::Composited, 4096).unwrap();
+        let mut selected = Vec::new();
+        while let Some(item) = items.next().unwrap() {
+            assert_eq!(item.native.index, selected.len());
+            let target = item.native.seek_target.as_ref().expect("seekable fixture");
+            dependencies += usize::from(target.visible_frames_to_skip > 0);
+            selected.push(item);
+        }
+        assert_eq!(selected.len(), expected.len(), "{name}");
+        let oracle = independent_frames(name, true);
+        assert_eq!(
+            selected.len(),
+            oracle.len(),
+            "libjxl visible presentation count: {name}"
+        );
+        for (item, fields) in selected.iter().zip(&oracle) {
+            assert_eq!(
+                i64::from(item.native.duration_ticks),
+                fields[0],
+                "native duration ticks"
+            );
+            let plane = &expected[item.native.index][0];
+            assert_eq!(
+                (plane.width as i64, plane.height as i64),
+                (fields[1], fields[2])
+            );
+        }
+        assert!(items.next().unwrap().is_none());
+        // Reverse order proves an ID is not the current decoder position.
+        for item in selected.iter().rev() {
+            exact_rows(
+                &expected[item.native.index],
+                &items.decode(&item.image, 13).unwrap(),
+            );
+        }
+        count += selected.len();
+        eprintln!("JXL {name}: {} visible presentations", selected.len());
+    }
+    assert!(dependencies > 0, "must exercise dependent presentations");
+    eprintln!(
+        "JXL selection: {count} presentations, {dependencies} require visible dependency replay"
+    );
+}
+
+#[test]
+fn jxl_native_coalescing_flag_is_not_a_layer_contract() {
+    let mut distinct_views = 0;
+    for name in [
+        "conformance_test_images/blendmodes.jxl",
+        "multiple_layers_noise_spline.jxl",
+    ] {
+        let data = fixture(name);
+        // A control documenting the pinned backend's currently ignored option.
+        // If the backend implements it, this assertion forces adapter review.
+        assert_eq!(
+            sequential(&data, true).unwrap(),
+            sequential(&data, false).unwrap()
+        );
+        let composited = independent_frames(name, true);
+        let layers = independent_frames(name, false);
+        distinct_views += usize::from(composited != layers);
+        let err = JxlItems::open(&data, Composition::Uncomposited, 4096)
+            .err()
+            .unwrap();
+        assert_eq!(
+            err.downcast_ref::<SelectionError>(),
+            Some(&SelectionError::UnsupportedComposition)
+        );
+    }
+    assert!(distinct_views > 0, "oracle must prove the two views differ");
+    // The required-view refusal precedes native parsing or any pixel work.
+    let err = JxlItems::open(&[], Composition::Uncomposited, 4096)
+        .err()
+        .unwrap();
+    assert_eq!(
+        err.downcast_ref::<SelectionError>(),
+        Some(&SelectionError::UnsupportedComposition)
+    );
+}
+
+#[test]
+fn jxl_selection_rejects_foreign_identity_and_fuses_discovery_refusal() {
+    let data = fixture("conformance_test_images/blendmodes.jxl");
+    let mut first = JxlItems::open(&data, Composition::Composited, 4096).unwrap();
+    let mut second = JxlItems::open(&data, Composition::Composited, 0).unwrap();
+    let item = first.next().unwrap().unwrap();
+    let err = second.decode(&item.image, 0).unwrap_err();
+    assert_eq!(
+        err.downcast_ref::<SelectionError>(),
+        Some(&SelectionError::ForeignImage)
+    );
+    let err = second.next().err().unwrap();
+    assert_eq!(
+        err.downcast_ref::<SelectionError>(),
+        Some(&SelectionError::DiscoveryLimit)
+    );
+    assert!(
+        second.next().is_err(),
+        "a refused scan cannot appear exhausted"
+    );
+}

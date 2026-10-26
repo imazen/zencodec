@@ -293,6 +293,7 @@ spatial-validation-sync export:
     mkdir -p "{{export}}/perf/spatial-validation/src"
     cp perf/spatial-validation/Cargo.toml "{{export}}/perf/spatial-validation/"
     cp perf/spatial-validation/oracle.py "{{export}}/perf/spatial-validation/"
+    cp perf/spatial-validation/jxl_oracle.c "{{export}}/perf/spatial-validation/"
     cp perf/spatial-validation/src/*.rs "{{export}}/perf/spatial-validation/src/"
     mkdir -p "{{export}}/docs/examples"
     cp docs/examples/checked_source.rs "{{export}}/docs/examples/"
@@ -309,7 +310,9 @@ spatial-oracle-install python:
     uv pip install --python "{{python}}" --only-binary :all: Pillow==13.0.0
 
 spatial-validation-check artifacts python:
-    SPATIAL_ARTIFACTS="{{artifacts}}" SPATIAL_ORACLE_PYTHON="{{python}}" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked -- --nocapture --test-threads=1
+    mkdir -p "{{artifacts}}-oracle"
+    cc -std=c11 -Wall -Wextra -Werror perf/spatial-validation/jxl_oracle.c -ljxl -o "{{artifacts}}-oracle/jxl-oracle"
+    SPATIAL_ARTIFACTS="{{artifacts}}" SPATIAL_ORACLE_PYTHON="{{python}}" JXL_SELECTION_ORACLE="{{artifacts}}-oracle/jxl-oracle" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
 
 operation-policy-check:
