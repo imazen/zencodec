@@ -129,6 +129,15 @@ impl<'a> JxlItems<'a> {
         let selected = &self.visible[index];
         let info = decoder.basic_info().clone();
         let embedded_color = decoder.embedded_color_profile().clone();
+        let mut extra_details = Vec::new();
+        extra_details.try_reserve_exact(info.extra_channels.len())?;
+        for index in 0..info.extra_channels.len() {
+            extra_details.push(
+                decoder
+                    .extra_channel_details(index)
+                    .ok_or_else(|| Error::other("native extra-channel details unavailable"))?,
+            );
+        }
         let mut format = decoder.current_pixel_format().clone();
         if info
             .extra_channels
@@ -147,7 +156,7 @@ impl<'a> JxlItems<'a> {
         // We own these buffers, so request one pixel of padding. The native
         // 13-byte padding stress path above remains a separate regression test.
         let padding = format.color_type.samples_per_pixel() * 4;
-        let (_, planes) = decode_next(decoder, &mut input, padding)?;
+        let decoded = decode_next_details(decoder, &mut input, padding)?;
         let timing = if let Some(animation) = &info.animation {
             let ticks = self.visible[..index].iter().try_fold(0i64, |sum, frame| {
                 sum.checked_add(i64::from(frame.duration_ticks))
@@ -163,13 +172,15 @@ impl<'a> JxlItems<'a> {
             None
         };
         super::jxl_output::adopt(
-            planes,
+            decoded.planes,
             super::jxl_output::JxlSourceFacts {
                 header: info,
                 embedded_color,
                 frame_index: index,
                 frame_name: selected.name.clone(),
                 is_last: selected.is_last,
+                frame_timecode: decoded.timecode,
+                extra_details,
             },
             &format,
             &profile,
@@ -231,6 +242,21 @@ fn decode_next(
     input: &mut &[u8],
     padding: usize,
 ) -> Result<(JxlDecoder<states::WithImageInfo>, Vec<Plane>), Failure> {
+    let decoded = decode_next_details(decoder, input, padding)?;
+    Ok((decoded.decoder, decoded.planes))
+}
+
+struct DecodedNext {
+    decoder: JxlDecoder<states::WithImageInfo>,
+    planes: Vec<Plane>,
+    timecode: Option<u32>,
+}
+
+fn decode_next_details(
+    decoder: JxlDecoder<states::WithImageInfo>,
+    input: &mut &[u8],
+    padding: usize,
+) -> Result<DecodedNext, Failure> {
     let (width, height) = decoder.basic_info().size;
     let format = decoder.current_pixel_format();
     let mut planes = Vec::new();
@@ -262,6 +288,7 @@ fn decode_next(
         });
     }
     let frame = complete(decoder.process(input)?)?;
+    let timecode = frame.frame_timecode();
     let mut buffers: Vec<_> = planes
         .iter_mut()
         .map(|p| {
@@ -274,7 +301,11 @@ fn decode_next(
         })
         .collect();
     let decoder = complete(frame.process(input, &mut buffers)?)?;
-    Ok((decoder, planes))
+    Ok(DecodedNext {
+        decoder,
+        planes,
+        timecode,
+    })
 }
 
 pub fn sequential(data: &[u8], coalescing: bool) -> Result<Vec<Vec<Plane>>, Failure> {

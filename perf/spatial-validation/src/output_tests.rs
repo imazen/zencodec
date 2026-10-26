@@ -1,6 +1,6 @@
 use crate::{
     image_items::Composition,
-    image_output::{AuxiliaryKind, ImageOutput, Meaning, Row, Samples},
+    image_output::{AuxiliaryKind, ImageOutput, Meaning, Row, Samples, SourcePrecision},
     jxl_items::{JxlItems, sequential},
     jxl_tests::fixture,
 };
@@ -117,6 +117,16 @@ fn output_jxl_color_and_extra_planes_keep_native_bytes_roles_and_geometry() {
             })
             .collect();
         assert_eq!(independent_extras.len(), info.extra_channels.len());
+        let independent_details: Vec<Vec<u32>> = independent
+            .lines()
+            .filter_map(|line| line.strip_prefix("extra_details "))
+            .map(|line| {
+                line.split_whitespace()
+                    .map(|v| v.parse().unwrap())
+                    .collect()
+            })
+            .collect();
+        assert_eq!(independent_details.len(), info.extra_channels.len());
         let expected = expected_output(&data);
         let mut items = JxlItems::open(&data, Composition::Composited, 4096).unwrap();
         let selected = items.next().unwrap().unwrap();
@@ -212,10 +222,19 @@ fn output_jxl_color_and_extra_planes_keep_native_bytes_roles_and_geometry() {
                         0
                     }
                     AuxiliaryKind::Depth => 1,
-                    AuxiliaryKind::SpotColor => 2,
+                    AuxiliaryKind::SpotColor { linear_rgba } => {
+                        assert_eq!(
+                            linear_rgba.map(f32::to_bits).as_slice(),
+                            &independent_details[index - 1][5..9]
+                        );
+                        2
+                    }
                     AuxiliaryKind::SelectionMask => 3,
                     AuxiliaryKind::Black => 4,
-                    AuxiliaryKind::Cfa => 5,
+                    AuxiliaryKind::Cfa { channel } => {
+                        assert_eq!(channel, independent_details[index - 1][9]);
+                        5
+                    }
                     AuxiliaryKind::Thermal => 6,
                     AuxiliaryKind::Unknown(code) => code,
                 };
@@ -223,19 +242,24 @@ fn output_jxl_color_and_extra_planes_keep_native_bytes_roles_and_geometry() {
                     role_code, facts[1],
                     "{name}: common role disagrees with libjxl"
                 );
-                assert_eq!(role.source_bits, facts[2]);
+                assert_eq!(
+                    role.source_precision,
+                    SourcePrecision::Integer {
+                        bits: facts[2],
+                        signed: false
+                    }
+                );
+                assert_eq!(independent_details[index - 1][3], 0);
                 assert_eq!(role.source_dim_shift, facts[3]);
                 assert_eq!(role.name, native.name);
-                assert_eq!(role.source_bits, native.bits_per_sample);
-                assert_eq!(role.source_dim_shift, native.dim_shift);
                 assert_eq!(
-                    role.unexposed_native_parameters,
-                    matches!(
-                        native.ec_type,
-                        zenjxl_decoder::api::ExtraChannel::SpotColor
-                            | zenjxl_decoder::api::ExtraChannel::CFA
-                    )
+                    role.source_precision,
+                    SourcePrecision::Integer {
+                        bits: native.bits_per_sample,
+                        signed: false
+                    }
                 );
+                assert_eq!(role.source_dim_shift, native.dim_shift);
             }
         }
         assert!(mapped.plane(mapped.plane_count()).unwrap().is_none());

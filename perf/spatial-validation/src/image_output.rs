@@ -9,30 +9,39 @@ use zencodec_media::frame::{
 use zenpixels::{AlphaMode, ChannelType, Orientation, PixelBuffer, PixelSlice};
 type Failure = Box<dyn std::error::Error + Send + Sync>;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum AuxiliaryKind {
     Alpha(AlphaMode),
     Depth,
-    SpotColor,
+    /// Source linear RGBA parameters; not transformed to the output profile.
+    SpotColor {
+        linear_rgba: [f32; 4],
+    },
     SelectionMask,
     Black,
-    Cfa,
+    Cfa {
+        channel: u32,
+    },
     Thermal,
     Unknown(u32),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SourcePrecision {
+    Integer { bits: u32, signed: bool },
+    Float { bits: u32, exponent_bits: u32 },
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct Auxiliary {
     pub kind: AuxiliaryKind,
     pub name: String,
     /// Source facts, not the representation/geometry of the returned plane.
-    pub source_bits: u32,
+    pub source_precision: SourcePrecision,
     pub source_dim_shift: u32,
-    /// Spot color/CFA rendering parameters are not exposed by the pinned backend.
-    pub unexposed_native_parameters: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Meaning {
     Color,
     Component(PlaneRole),

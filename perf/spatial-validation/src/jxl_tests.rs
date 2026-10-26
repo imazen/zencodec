@@ -3,7 +3,10 @@ use super::{
     image_items::{Composition, ImageRequest, Rect, SelectionError},
     jxl_items::{JxlItems, Plane, sequential},
 };
-use std::{path::PathBuf, sync::OnceLock};
+use std::{
+    path::{Path, PathBuf},
+    sync::OnceLock,
+};
 
 // Immutable corpus revision and cache key; a mutable branch is not a fixture pin.
 fn fixture_path(name: &str) -> PathBuf {
@@ -24,10 +27,14 @@ pub(crate) fn fixture(name: &str) -> Vec<u8> {
 }
 
 pub(crate) fn independent_metadata(name: &str, coalescing: bool) -> String {
+    independent_metadata_at(&fixture_path(name), coalescing)
+}
+
+pub(crate) fn independent_metadata_at(path: &Path, coalescing: bool) -> String {
     let tool = std::env::var("JXL_SELECTION_ORACLE").expect("JXL_SELECTION_ORACLE is required");
     let output = std::process::Command::new("timeout")
         .args(["--kill-after=5s", "30s", &tool])
-        .arg(fixture_path(name))
+        .arg(path)
         .arg(if coalescing { "1" } else { "0" })
         .output()
         .expect("run independent libjxl oracle");
@@ -38,7 +45,7 @@ pub(crate) fn independent_metadata(name: &str, coalescing: bool) -> String {
     );
     let text = String::from_utf8(output.stdout).unwrap();
     assert!(text.starts_with("version "));
-    eprintln!("libjxl {name} coalescing={coalescing}: {text}");
+    eprintln!("libjxl {} coalescing={coalescing}: {text}", path.display());
     text
 }
 

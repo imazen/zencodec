@@ -1,13 +1,16 @@
 //! Interpret actual requested output, not merely the embedded source profile.
 use super::{
     image_items::{ImageGeometry, Rect},
-    image_output::{Auxiliary, AuxiliaryKind, ImageInterpretation, ImageOutput, Values},
+    image_output::{
+        Auxiliary, AuxiliaryKind, ImageInterpretation, ImageOutput, SourcePrecision, Values,
+    },
     jxl_items::Plane,
     tiff_region::Failure,
 };
 use std::{io::Error, sync::Arc};
 use zenjxl_decoder::api::{
-    ExtraChannel, JxlBasicInfo, JxlColorProfile, JxlColorType, JxlPixelFormat,
+    ExtraChannel, JxlBasicInfo, JxlBitDepth, JxlColorProfile, JxlColorType, JxlExtraChannelDetails,
+    JxlPixelFormat,
 };
 use zenpixels::{
     AlphaMode, ChannelLayout, ChannelType, ColorContext, ColorPrimaries, Orientation, PixelBuffer,
@@ -15,14 +18,15 @@ use zenpixels::{
 };
 
 /// Retain native source facts without treating them as an output profile or
-/// as metadata approved for passthrough. The pinned backend does not expose
-/// per-frame timecodes or the full extra-channel rendering parameters.
+/// as metadata approved for passthrough.
 pub struct JxlSourceFacts {
     pub header: JxlBasicInfo,
     pub embedded_color: JxlColorProfile,
     pub frame_index: usize,
     pub frame_name: String,
     pub is_last: bool,
+    pub frame_timecode: Option<u32>,
+    pub extra_details: Vec<JxlExtraChannelDetails>,
 }
 
 pub fn adopt(
@@ -71,7 +75,10 @@ pub fn adopt(
     let pixels = PixelBuffer::try_from_parts(parts).map_err(|e| e.without_buffer())?;
     let mut extras = Vec::new();
     extras.try_reserve_exact(info.extra_channels.len())?;
-    for ec in &info.extra_channels {
+    if source.extra_details.len() != info.extra_channels.len() {
+        return Err(Error::other("extra-channel interpretation count differs from source").into());
+    }
+    for (ec, details) in info.extra_channels.iter().zip(&source.extra_details) {
         let plane = planes
             .next()
             .ok_or_else(|| Error::other("missing requested native extra channel"))?;
@@ -81,10 +88,18 @@ pub fn adopt(
         let kind = match ec.ec_type {
             ExtraChannel::Alpha => AuxiliaryKind::Alpha(alpha_mode(ec.alpha_associated)),
             ExtraChannel::Depth => AuxiliaryKind::Depth,
-            ExtraChannel::SpotColor => AuxiliaryKind::SpotColor,
+            ExtraChannel::SpotColor => AuxiliaryKind::SpotColor {
+                linear_rgba: details
+                    .spot_color
+                    .ok_or_else(|| Error::other("spot channel is missing source RGBA"))?,
+            },
             ExtraChannel::SelectionMask => AuxiliaryKind::SelectionMask,
             ExtraChannel::Black => AuxiliaryKind::Black,
-            ExtraChannel::CFA => AuxiliaryKind::Cfa,
+            ExtraChannel::CFA => AuxiliaryKind::Cfa {
+                channel: details
+                    .cfa_channel
+                    .ok_or_else(|| Error::other("CFA channel is missing source index"))?,
+            },
             ExtraChannel::Thermal => AuxiliaryKind::Thermal,
             other => AuxiliaryKind::Unknown(other as u32),
         };
@@ -92,12 +107,20 @@ pub fn adopt(
             Auxiliary {
                 kind,
                 name: ec.name.clone(),
-                source_bits: ec.bits_per_sample,
+                source_precision: match details.bit_depth {
+                    JxlBitDepth::Int { bits_per_sample } => SourcePrecision::Integer {
+                        bits: bits_per_sample,
+                        signed: false,
+                    },
+                    JxlBitDepth::Float {
+                        bits_per_sample,
+                        exponent_bits_per_sample,
+                    } => SourcePrecision::Float {
+                        bits: bits_per_sample,
+                        exponent_bits: exponent_bits_per_sample,
+                    },
+                },
                 source_dim_shift: ec.dim_shift,
-                unexposed_native_parameters: matches!(
-                    ec.ec_type,
-                    ExtraChannel::SpotColor | ExtraChannel::CFA
-                ),
             },
             Values::new(
                 plane.bytes,

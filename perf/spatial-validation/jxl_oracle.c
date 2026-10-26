@@ -59,6 +59,11 @@ int main(int argc, char **argv) {
         printf("extra %" PRIu32 " %u %" PRIu32 " %" PRIu32 " %u\n",
                i, (unsigned)extra.type, extra.bits_per_sample, extra.dim_shift,
                (unsigned)extra.alpha_premultiplied);
+        printf("extra_details %" PRIu32 " %u %" PRIu32 " %" PRIu32 " %" PRIu32
+               " %" PRIu32 " %" PRIu32 " %" PRIu32 " %" PRIu32 " %" PRIu32 "\n",
+               i, (unsigned)extra.type, extra.bits_per_sample, extra.exponent_bits_per_sample,
+               extra.dim_shift, float_bits(extra.spot_color[0]), float_bits(extra.spot_color[1]),
+               float_bits(extra.spot_color[2]), float_bits(extra.spot_color[3]), extra.cfa_channel);
       }
     } else if (status == JXL_DEC_FRAME) {
       JxlFrameHeader frame;
@@ -66,6 +71,7 @@ int main(int argc, char **argv) {
       printf("frame %" PRIu32 " %" PRIu32 " %" PRIu32 " %" PRId32 " %" PRId32 "\n",
              frame.duration, frame.layer_info.xsize, frame.layer_info.ysize,
              frame.layer_info.crop_x0, frame.layer_info.crop_y0);
+      printf("timecode %" PRIu32 "\n", frame.timecode);
     } else { fprintf(stderr, "unexpected libjxl status %d\n", status); break; }
   }
 end:
