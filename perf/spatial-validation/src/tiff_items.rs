@@ -1,5 +1,6 @@
 //! A real TIFF directory graph over the candidate operation-bound identities.
 use super::{
+    collection::{Collection, CollectionError, located},
     image_items::{Composition, ImageId, Origin, Relation, RelationKind, SelectionError},
     tiff_region::{self, Allowances, Failure, Rect, Region},
 };
@@ -191,5 +192,55 @@ impl<R: Read + Seek> TiffItems<R> {
             return Err(SelectionError::UnsupportedComposition.into());
         }
         tiff_region::decode_directory(&mut self.input, IfdPointer(key), region, self.limits, check)
+    }
+}
+
+/// The candidate common path fixes a required view and stored-coordinate region
+/// when opened. Per-directory color interpretation is a separate promotion gate.
+pub struct TiffCollection<R> {
+    items: TiffItems<R>,
+    region: Rect,
+}
+impl<R: Read + Seek> TiffCollection<R> {
+    pub fn open(
+        input: R,
+        view: Composition,
+        region: Rect,
+        limits: Allowances,
+    ) -> Result<Self, zencodec::At<CollectionError>> {
+        if view != Composition::Composited {
+            return Err(located(SelectionError::UnsupportedComposition.into()));
+        }
+        Ok(Self {
+            items: TiffItems::open(input, limits).map_err(located)?,
+            region,
+        })
+    }
+}
+impl<R: Read + Seek> Collection for TiffCollection<R> {
+    type Cursor = Cursor;
+    type Samples = Region;
+    fn view(&self) -> Composition {
+        Composition::Composited
+    }
+    fn images(&mut self) -> Result<Cursor, zencodec::At<CollectionError>> {
+        Ok(self.items.images())
+    }
+    fn children(&mut self, image: &ImageId) -> Result<Cursor, zencodec::At<CollectionError>> {
+        self.items.children(image).map_err(located)
+    }
+    fn next(
+        &mut self,
+        cursor: &mut Cursor,
+    ) -> Result<Option<ImageId>, zencodec::At<CollectionError>> {
+        self.items
+            .next(cursor)
+            .map(|item| item.map(|v| v.image))
+            .map_err(located)
+    }
+    fn decode(&mut self, image: &ImageId) -> Result<Region, zencodec::At<CollectionError>> {
+        self.items
+            .decode(image, self.region, Composition::Composited, || Ok(()))
+            .map_err(located)
     }
 }

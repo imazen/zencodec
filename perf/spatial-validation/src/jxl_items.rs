@@ -1,6 +1,7 @@
 //! Qualifying the shared selection concepts against a native JXL decoder.
 //! This path retains the input and scans visible presentations, not raw layers.
 use super::{
+    collection::{Collection, CollectionError, located},
     image_items::{Composition, ImageId, Origin, SelectionError},
     tiff_region::Failure,
 };
@@ -221,4 +222,52 @@ pub fn sequential(data: &[u8], coalescing: bool) -> Result<Vec<Vec<Plane>>, Fail
         decoder = next;
     }
     Ok(frames)
+}
+
+pub struct JxlCursor {
+    owner: ImageId,
+    index: usize,
+}
+
+impl Collection for JxlItems<'_> {
+    type Cursor = JxlCursor;
+    type Samples = Vec<Plane>;
+    fn view(&self) -> Composition {
+        Composition::Composited
+    }
+    fn images(&mut self) -> Result<JxlCursor, zencodec::At<CollectionError>> {
+        Ok(JxlCursor {
+            owner: self.origin.image(u64::MAX),
+            index: 0,
+        })
+    }
+    fn children(&mut self, image: &ImageId) -> Result<JxlCursor, zencodec::At<CollectionError>> {
+        self.origin.key(image).map_err(|e| located(e.into()))?;
+        Err(located(SelectionError::UnsupportedChildren.into()))
+    }
+    fn next(
+        &mut self,
+        cursor: &mut JxlCursor,
+    ) -> Result<Option<ImageId>, zencodec::At<CollectionError>> {
+        self.origin
+            .key(&cursor.owner)
+            .map_err(|_| located(SelectionError::ForeignCursor.into()))?;
+        if self.failed {
+            return Err(located(Error::other("JXL operation failed").into()));
+        }
+        let image = if cursor.index < self.visible.len() {
+            Some(self.origin.image(cursor.index as u64))
+        } else {
+            self.next()
+                .map(|item| item.map(|v| v.image))
+                .map_err(located)?
+        };
+        if image.is_some() {
+            cursor.index += 1;
+        }
+        Ok(image)
+    }
+    fn decode(&mut self, image: &ImageId) -> Result<Vec<Plane>, zencodec::At<CollectionError>> {
+        JxlItems::decode(self, image, 13).map_err(located)
+    }
 }

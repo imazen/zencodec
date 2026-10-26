@@ -240,6 +240,10 @@ fn selected(levels: &[u32]) -> Selection<'_> {
 mod image_selection {
     use super::*;
     use crate::{
+        collection::{Collection, first_child, first_image},
+        tiff_items::TiffCollection,
+    };
+    use crate::{
         image_items::{Composition, RelationKind, SelectionError},
         tiff_items::TiffItems,
     };
@@ -349,6 +353,65 @@ mod image_selection {
                 }
             }
         }
+    }
+
+    #[test]
+    fn common_consumer_selects_native_tiff_root_and_subifd() {
+        for big in [false, true] {
+            for planar in [false, true] {
+                let (bytes, refs) = nested_fixture(big, planar, false);
+                let roi = selected(&[]).region;
+                let mut collection = TiffCollection::open(
+                    Cursor::new(bytes),
+                    Composition::Composited,
+                    roi,
+                    Allowances::default(),
+                )
+                .unwrap();
+                assert_eq!(collection.view(), Composition::Composited);
+                assert_eq!(
+                    first_image(&mut collection).unwrap().unwrap().bytes,
+                    crop(&refs[0], roi)
+                );
+                assert_eq!(
+                    first_child(&mut collection).unwrap().unwrap().bytes,
+                    crop(&refs[1], roi)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn common_selection_preserves_source_failure_and_refuses_view_before_read() {
+        let (bytes, _) = nested_fixture(false, false, false);
+        let source = Source::new(bytes);
+        let err = TiffCollection::open(
+            ReadAtReader::new(source.clone()),
+            Composition::Uncomposited,
+            selected(&[]).region,
+            Allowances::default(),
+        )
+        .err()
+        .unwrap();
+        assert_eq!(
+            zencodec::find_cause::<SelectionError>(&err),
+            Some(&SelectionError::UnsupportedComposition)
+        );
+        assert_eq!(source.ledger.borrow().calls, 0);
+
+        let mut collection = TiffCollection::open(
+            ReadAtReader::new(source.clone()),
+            Composition::Composited,
+            selected(&[]).region,
+            Allowances::default(),
+        )
+        .unwrap();
+        source.ledger.borrow_mut().changed = true;
+        let err = first_image(&mut collection).unwrap_err();
+        assert!(matches!(
+            zencodec::find_cause::<SourceFault>(&err),
+            Some(SourceFault::VersionChanged)
+        ));
     }
 
     #[test]

@@ -65,6 +65,7 @@ pub enum SelectionError {
     DiscoveryLimit,
     Cycle,
     UnsupportedComposition,
+    UnsupportedChildren,
 }
 impl fmt::Display for SelectionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -74,6 +75,7 @@ impl fmt::Display for SelectionError {
             Self::DiscoveryLimit => "image discovery allowance exceeded",
             Self::Cycle => "cyclic image containment",
             Self::UnsupportedComposition => "requested composition is not implemented",
+            Self::UnsupportedChildren => "child-image discovery is not implemented",
         })
     }
 }

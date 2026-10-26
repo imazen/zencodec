@@ -315,6 +315,10 @@ spatial-validation-check artifacts python:
     SPATIAL_ARTIFACTS="{{artifacts}}" SPATIAL_ORACLE_PYTHON="{{python}}" JXL_SELECTION_ORACLE="{{artifacts}}-oracle/jxl-oracle" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
 
+spatial-consumer-check:
+    cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked common_ -- --nocapture
+    cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
+
 operation-policy-check:
     cargo test -p zencodec-testkit --test operation_policy --test operation_requests --locked
     cargo test -p zencodec --lib operation:: --locked

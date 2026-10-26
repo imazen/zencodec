@@ -29,6 +29,39 @@ whole graph. The native decoder owns TIFF parsing and compression throughout.
 
 ## JXL presentations and layers
 
+### Common consumer loop
+
+The private [`Collection`](src/collection.rs) trait now runs the same
+`first_image` consumer against `TiffCollection` and `JxlItems`: discover lazily,
+retain the returned identity, decode that identity. `first_child` selects a
+native TIFF SubIFD; the JXL adapter returns `UnsupportedChildren` because it
+cannot establish that query. Unsupported discovery is not an empty collection.
+Repeated JXL discovery returns the same IDs even after the native scanner has
+advanced. Cross-operation cursors refuse.
+
+The common boundary returns `whereat::At<CollectionError>` and preserves the
+original native/source cause. A source replacement injected after TIFF open is
+still inspectable as the original `SourceFault::VersionChanged`, and a required
+unsupported view refuses before any source read. The guide displays the exact
+executed `first_image` function with its enclosing imports and return type.
+
+This trial also identifies why the trait is not ready for public promotion:
+`Samples` is still an associated native type, TIFF's region is fixed at open,
+and per-item interpretation is not unified. Publishing that shape would move
+format-specific pixel/metadata coordination back to consumers. The next loop
+must return qualified zenpixels/interpretation through one consumer request,
+with discovery allowances whose scope is explicit. Network revision binding,
+cancellation across discovery, and pixel/privacy policy remain separate gates.
+
+The full combined gate passed after adding the common path: run-heavy rc=0,
+104 s, peak RSS 0.37 GiB, minimum available 15919 MiB, peak load 0.92; log
+`~/tmp/zencodec-common-selection2-2026-10-25.log`. After extracting the displayed
+function, `just spatial-consumer-check` reruns its native cases and strict
+Clippy without repeating the full matrix. These are process receipts, not
+native resource bounds.
+
+### Native qualification
+
 [`src/jxl_items.rs`](src/jxl_items.rs) exercises the same operation-bound image
 identities against native zenjxl-decoder at
 `8399f17c54c8138f65304bbc46efc80c269c7402`. The dependency and test corpus are both

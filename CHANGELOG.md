@@ -2,6 +2,12 @@
 
 ## Native image selection (unreleased experiment)
 
+- Run one private collection consumer over native TIFF and JXL with traced
+  failures. Distinguish unsupported child discovery from successful exhaustion,
+  preserve source-replacement causes, and execute the guide's exact selection
+  example against both adapters. Native sample/interpretation differences remain
+  a public-API promotion gate.
+
 - Exercise native JXL presentation selection and dependency replay against
   sequential samples, with independent libjxl discovery. Fix the view before
   issuing identities; refuse required layers while the pinned native decoder

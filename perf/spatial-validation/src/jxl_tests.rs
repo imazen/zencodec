@@ -1,4 +1,5 @@
 use super::{
+    collection::{Collection, first_child, first_image},
     image_items::{Composition, SelectionError},
     jxl_items::{JxlItems, Plane, sequential},
 };
@@ -183,5 +184,42 @@ fn jxl_selection_rejects_foreign_identity_and_fuses_discovery_refusal() {
     assert!(
         second.next().is_err(),
         "a refused scan cannot appear exhausted"
+    );
+}
+
+#[test]
+fn common_consumer_selects_jxl_and_refuses_unknown_child_support() {
+    let data = fixture("named_frame_test.jxl");
+    let expected = sequential(&data, true).unwrap();
+    let mut collection = JxlItems::open(&data, Composition::Composited, 4096).unwrap();
+    assert_eq!(Collection::view(&collection), Composition::Composited);
+    exact_rows(
+        &expected[0],
+        &first_image(&mut collection).unwrap().unwrap(),
+    );
+    // A second consumer pass must yield the same operation-bound identity and
+    // pixels, even though the native scanner has already visited this frame.
+    exact_rows(
+        &expected[0],
+        &first_image(&mut collection).unwrap().unwrap(),
+    );
+    let mut a = Collection::images(&mut collection).unwrap();
+    let mut b = Collection::images(&mut collection).unwrap();
+    let id = Collection::next(&mut collection, &mut a).unwrap().unwrap();
+    assert_eq!(
+        Collection::next(&mut collection, &mut b).unwrap().unwrap(),
+        id
+    );
+    let err = first_child(&mut collection).unwrap_err();
+    assert_eq!(
+        zencodec::find_cause::<SelectionError>(&err),
+        Some(&SelectionError::UnsupportedChildren)
+    );
+
+    let mut other = JxlItems::open(&data, Composition::Composited, 4096).unwrap();
+    let err = Collection::next(&mut other, &mut a).unwrap_err();
+    assert_eq!(
+        zencodec::find_cause::<SelectionError>(&err),
+        Some(&SelectionError::ForeignCursor)
     );
 }
