@@ -70,8 +70,8 @@ trait MappedPlanes {
 
 The core has no media or I/O-driver dependency. Accounted software `OwnedPlanes`
 remain in media, while packed image interchange remains `zenpixels::PixelSlice`.
-The selected-image collection remains private pending policy and discovery
-qualification. Its shared output is implemented below. Mapping does not certify
+The shared collection and checked consumer are implemented on the API review
+PR; concrete native factories remain in the validation harness. Mapping does not certify
 display conversion, whole-container metadata treatment or a native workspace
 bound. See [the media contract](media-contract.md#frames).
 
@@ -116,6 +116,53 @@ mapped per-plane dimensions/encoding. It retains native mapping errors in the
 source chain. It does not scan sample codes, validate ICC profiles or establish
 metadata privacy. Names, opaque profiles and typed source details remain
 unfiltered data; policy admission is a separate boundary.
+
+## Image collections (`zencodec::collection`)
+
+An opened collection fixes its source operation and composited/uncomposited view.
+`ImageId` is opaque, clonable, comparable and hashable within that operation;
+it is not a portable index or proof of source consistency. `Origin` lets an
+adapter issue IDs and reject foreign ones. Cursor ownership is also checked by
+the adapter. Containment is separate from reduced levels and video timing.
+
+```rust
+trait Collection {
+    type Cursor;
+    fn view(&self) -> Composition;
+    fn images(&mut self) -> Result<Self::Cursor, At<CollectionError>>;
+    fn children(&mut self, image: &ImageId) -> Result<Self::Cursor, At<CollectionError>>;
+    fn next(&mut self, cursor: &mut Self::Cursor) -> Result<Option<ImageId>, At<CollectionError>>;
+    fn decode(&mut self, image: &ImageId, request: &ImageRequest)
+        -> Result<ImageOutput, At<CollectionError>>;
+}
+```
+
+`ImageRequest::new()` requests the full selected image. `with_region(Rect)`
+requires that exact nonempty stored region. Unsupported views, containment and
+regions return typed errors; they cannot silently become flattened pixels,
+empty discovery or a clipped region. Backend failures retain their original
+concrete error and location trace; default formatting omits backend payloads.
+
+`Discovery<C>::new(collection, attempts)` applies one immutable call allowance
+across all cursors. It charges before delegating `images`, `children` and `next`,
+including cached results, exhaustion and errors. It does not count native parser
+work, source bytes, allocation or CPU time. Issued IDs remain decodable after
+discovery exhaustion.
+
+`operation::CheckedCollection<C, R>::open(stop, resolver, factory)` passes one
+latched stop token to the factory and checks it before and after requests. Its
+`first_image` and `decode` return `Outcome<ImageOutput>` only after the existing
+resolver accepts that exact held owner. `with_policy_set` supplies preset
+decisions; `report` retains bounded diagnostics. Region/policy refusals are
+request-local; cancellation or unwind drops the native collection permanently.
+Native terminal errors remain the adapter's duty. `CollectionOperationError`
+identifies the failure stage and retains the original cause through `Error::source`.
+
+This is publication after reconstruction, not native allocation admission or a
+whole-container privacy guarantee. Concrete adapter packaging, `CodecSet`
+registration, generic layer-placement facts and broader source/workspace bounds
+remain open. See [the collection contract](collection-contract.md) for executing
+native coverage, caller examples and the full failure boundaries.
 
 ## Stored operation requests
 

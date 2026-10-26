@@ -49,6 +49,7 @@ whereat::define_at_crate_info!();
 
 pub mod animation;
 mod capabilities;
+pub mod collection;
 /// Cross-codec color-signaling emission policy (ICC vs CICP). See
 /// `docs/color-emit-model.md`.
 mod color;

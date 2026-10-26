@@ -1,0 +1,313 @@
+//! Checked consumer for the shared collection mechanism.
+use super::{OperationReport, Outcome, PolicyResolver, PolicySet, resolve_image};
+use crate::{
+    At, StopToken,
+    collection::{Cause, Collection, ImageId, ImageRequest},
+    image::ImageOutput,
+};
+use alloc::boxed::Box;
+use core::fmt;
+use enough::{Stop, StopReason};
+
+#[derive(Debug)]
+struct Finished;
+impl fmt::Display for Finished {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("selected-image operation has finished")
+    }
+}
+impl core::error::Error for Finished {}
+
+/// The boundary at which a checked collection request failed.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum CollectionStage {
+    /// Native adapter creation.
+    Open,
+    /// Starting or advancing discovery.
+    Discovery,
+    /// Native selected-image reconstruction.
+    Decode,
+    /// Publication decision for the retained output.
+    Policy,
+    /// Cooperative cancellation or timeout.
+    Stopped,
+    /// A call after terminal cancellation or unwind.
+    Finished,
+}
+
+/// Safe default formatting; concrete causes and prior decisions remain available.
+#[non_exhaustive]
+pub struct CollectionOperationError {
+    /// Boundary that failed; the concrete cause remains in the error chain.
+    pub stage: CollectionStage,
+    /// Bounded prior decisions, excluding arbitrary input or callback payloads.
+    pub report: Box<OperationReport>,
+    cause: Cause,
+}
+impl fmt::Debug for CollectionOperationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CollectionOperationError")
+            .field("stage", &self.stage)
+            .field("report", &self.report)
+            .finish_non_exhaustive()
+    }
+}
+impl fmt::Display for CollectionOperationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "selected-image request failed during {:?}", self.stage)
+    }
+}
+impl core::error::Error for CollectionOperationError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        Some(self.cause.as_ref())
+    }
+}
+fn failure(
+    stage: CollectionStage,
+    report: &OperationReport,
+    cause: impl Into<Cause>,
+) -> CollectionOperationError {
+    CollectionOperationError {
+        stage,
+        report: Box::new(report.clone()),
+        cause: cause.into(),
+    }
+}
+
+/// The first native or wrapper observation stops this opened operation, even
+/// when a custom stop callback would subsequently return Ok. Policy failure and
+/// request refusal do not change this token. No application callback runs while
+/// the first reason is being stored.
+struct LatchedStop {
+    source: StopToken,
+    reason: spin::Once<StopReason>,
+}
+impl Stop for LatchedStop {
+    fn may_stop(&self) -> bool {
+        self.source.may_stop()
+    }
+    fn check(&self) -> Result<(), StopReason> {
+        if let Some(reason) = self.reason.get() {
+            return Err(*reason);
+        }
+        if let Err(reason) = self.source.check() {
+            // Preserve the first recorded reason, including future variants.
+            return Err(*self.reason.call_once(|| reason));
+        }
+        // Another caller may have stopped while this callback returned Ok.
+        self.reason.get().map_or(Ok(()), |reason| Err(*reason))
+    }
+}
+
+/// One checked opened collection, with reusable policy and bounded diagnostics.
+///
+/// Every selected output passes through the resolver before it is returned.
+/// Cancellation and unwind terminate the operation; ordinary request/policy
+/// refusal is recoverable. Native terminal errors remain the adapter's duty.
+/// This is post-reconstruction publication, not native allocation admission.
+pub struct CheckedCollection<C, R> {
+    collection: Option<C>,
+    resolver: R,
+    preset: PolicySet,
+    stop: StopToken,
+    report: OperationReport,
+}
+impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
+    /// Bind the same token to the native adapter and publication checks. The
+    /// factory is adapter setup; ordinary selection methods need no callback args.
+    pub fn open(
+        stop: StopToken,
+        resolver: R,
+        open: impl FnOnce(StopToken) -> Result<C, Cause>,
+    ) -> Result<Self, At<CollectionOperationError>> {
+        let stop = StopToken::new(LatchedStop {
+            source: stop,
+            reason: spin::Once::new(),
+        });
+        let report = OperationReport::default();
+        let run = || {
+            check(&stop, &report)?;
+            let collection =
+                open(stop.clone()).map_err(|e| failure(CollectionStage::Open, &report, e))?;
+            check(&stop, &report)?;
+            Ok(Self {
+                collection: Some(collection),
+                resolver,
+                preset: PolicySet::new(),
+                stop,
+                report,
+            })
+        };
+        run().map_err(At::wrap)
+    }
+    /// Configure the preset used when the callback returns `Decision::UsePreset`.
+    pub fn with_policy_set(mut self, preset: PolicySet) -> Self {
+        self.preset = preset;
+        self
+    }
+    /// The operation's bounded decision history across selected outputs.
+    pub fn report(&self) -> &OperationReport {
+        &self.report
+    }
+    /// Whether cancellation or unwind has dropped the native collection.
+    pub fn is_finished(&self) -> bool {
+        self.collection.is_none()
+    }
+
+    fn run<T>(
+        &mut self,
+        operation: impl FnOnce(
+            &mut C,
+            &mut R,
+            PolicySet,
+            &StopToken,
+            &mut OperationReport,
+        ) -> Result<T, CollectionOperationError>,
+    ) -> Result<T, At<CollectionOperationError>> {
+        // An unwind drops native state and cannot leave a half-mutated operation
+        // callable after catch_unwind. Ordinary errors remain request-local;
+        // the native adapter retains responsibility for its own terminal state.
+        let Some(mut collection) = self.collection.take() else {
+            return Err(At::wrap(failure(
+                CollectionStage::Finished,
+                &self.report,
+                Finished,
+            )));
+        };
+        check(&self.stop, &self.report).map_err(At::wrap)?;
+        let result = operation(
+            &mut collection,
+            &mut self.resolver,
+            self.preset,
+            &self.stop,
+            &mut self.report,
+        );
+        match check(&self.stop, &self.report) {
+            Ok(()) => {
+                self.collection = Some(collection);
+                result.map_err(At::wrap)
+            }
+            Err(stopped) => {
+                // Preserve the first native/policy cause; drop a successful
+                // unpublished owner if cancellation arrived at the final seam.
+                result.and_then(|_| Err(stopped)).map_err(At::wrap)
+            }
+        }
+    }
+    /// Begin top-level discovery, checking the shared operation stop token.
+    pub fn images(&mut self) -> Result<C::Cursor, At<CollectionOperationError>> {
+        self.run(|c, _, _, _, report| {
+            c.images()
+                .map_err(|e| failure(CollectionStage::Discovery, report, e))
+        })
+    }
+    /// Begin child discovery. Unsupported containment returns an error.
+    pub fn children(&mut self, image: &ImageId) -> Result<C::Cursor, At<CollectionOperationError>> {
+        self.run(|c, _, _, _, report| {
+            c.children(image)
+                .map_err(|e| failure(CollectionStage::Discovery, report, e))
+        })
+    }
+    /// Advance discovery. Successful exhaustion is distinct from refusal.
+    pub fn next(
+        &mut self,
+        cursor: &mut C::Cursor,
+    ) -> Result<Option<ImageId>, At<CollectionOperationError>> {
+        self.run(|c, _, _, _, report| {
+            c.next(cursor)
+                .map_err(|e| failure(CollectionStage::Discovery, report, e))
+        })
+    }
+    /// Reconstruct the required extent, resolve policy on that exact owner,
+    /// and return it only after the final cancellation check.
+    pub fn decode(
+        &mut self,
+        image: &ImageId,
+        request: &ImageRequest,
+    ) -> Result<Outcome<ImageOutput>, At<CollectionOperationError>> {
+        self.run(|c, resolver, preset, stop, report| {
+            let image = c
+                .decode(image, request)
+                .map_err(|e| failure(CollectionStage::Decode, report, e))?;
+            match resolve_image(image, resolver, preset, stop) {
+                Ok(output) => {
+                    for &record in output.report().decisions() {
+                        report.record(record);
+                    }
+                    Ok(output)
+                }
+                Err(cause) => {
+                    report.record(cause.error().record());
+                    Err(failure(CollectionStage::Policy, report, cause))
+                }
+            }
+        })
+    }
+    /// Discover and decode the first image through the same checked path.
+    /// Returns `None` only for successful empty top-level discovery.
+    pub fn first_image(
+        &mut self,
+        request: &ImageRequest,
+    ) -> Result<Option<Outcome<ImageOutput>>, At<CollectionOperationError>> {
+        let mut cursor = self.images()?;
+        self.next(&mut cursor)?
+            .map(|id| self.decode(&id, request))
+            .transpose()
+    }
+}
+
+fn check(stop: &StopToken, report: &OperationReport) -> Result<(), CollectionOperationError> {
+    stop.check().map_err(|reason| {
+        failure(
+            CollectionStage::Stopped,
+            report,
+            crate::CodecError::new(None, reason.into()),
+        )
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate std;
+    use super::*;
+    use core::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Barrier};
+
+    #[test]
+    fn collection_stop_race_preserves_one_original_reason_for_every_observer() {
+        struct Race {
+            calls: Arc<AtomicUsize>,
+            entered: Barrier,
+        }
+        impl Stop for Race {
+            fn check(&self) -> Result<(), StopReason> {
+                let call = self.calls.fetch_add(1, Ordering::Relaxed);
+                self.entered.wait();
+                Err(if call == 0 {
+                    StopReason::TimedOut
+                } else {
+                    StopReason::Cancelled
+                })
+            }
+        }
+        let calls = Arc::new(AtomicUsize::new(0));
+        let stop = Arc::new(LatchedStop {
+            source: StopToken::new(Race {
+                calls: calls.clone(),
+                entered: Barrier::new(2),
+            }),
+            reason: spin::Once::new(),
+        });
+        let a = stop.clone();
+        let b = stop.clone();
+        let a = std::thread::spawn(move || a.check());
+        let b = std::thread::spawn(move || b.check());
+        let reason = a.join().unwrap().unwrap_err();
+        assert_eq!(b.join().unwrap(), Err(reason));
+        for _ in 0..4 {
+            assert_eq!(stop.check(), Err(reason));
+        }
+        assert_eq!(calls.load(Ordering::Relaxed), 2);
+    }
+}

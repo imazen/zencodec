@@ -15,11 +15,13 @@ use alloc::vec::Vec;
 use core::fmt;
 use zenpixels::{PixelDescriptor, PixelSlice};
 
+mod collection;
 mod decoding;
 mod frame;
 mod image;
 mod policy;
 mod transcode;
+pub use collection::{CheckedCollection, CollectionOperationError, CollectionStage};
 pub use frame::{FrameFacts, PublicationOffer, resolve_frame};
 pub use image::{ImageFacts, resolve_image};
 pub use policy::{

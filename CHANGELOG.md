@@ -2,6 +2,14 @@
 
 ## Native image selection (unreleased experiment)
 
+- Promote the native-qualified collection mechanism to `zencodec::collection`
+  and its checked consumer to `operation::CheckedCollection`. TIFF/SubIFD,
+  JXL presentation/layer and conditional HTTP adapters now import those shared
+  contracts. Preserve source-scoped identity, exact regions, operation-wide
+  discovery-call accounting, traced errors and the first cancellation reason.
+  Adapter factories and placement remain private; CodecSet registration and
+  native workspace admission are still separate work.
+
 - Update the native JXL validation dependency after CMS callback failures were
   changed to return their original traced error. Recheck selected layers, TIFF
   regions and conditional HTTP source identity against that implementation.
