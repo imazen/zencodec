@@ -4,11 +4,29 @@ use crate::{jxl_packaged_storage, jxl_tests::fixture};
 use std::sync::Arc;
 use zencodec::{
     collection::{Cause, Composition, ImageRequest},
+    image::ImageOutput,
     source::{ReadAtShim, SliceReadAt},
     storage::{SharedStorage, StorageBudget, StorageError},
 };
 use zenpixels::{ColorContext, ColorOrigin, PixelDescriptor, PixelSlice, PixelSliceMut};
 use zenpixels_convert::{ConvertOptions, OutputPlan, OutputProfile};
+
+/// Retain the complete native image only when samples AND current signaling
+/// already satisfy the plan. Otherwise the caller still owns the source.
+fn retain_identity(
+    image: &ImageOutput,
+    plan: &OutputPlan,
+) -> Result<Option<(ImageOutput, zenpixels_convert::output::OutputMetadata)>, Cause> {
+    let unchanged = image.with_pixels(|pixels| {
+        plan.borrow_rows(pixels.clone()).map(|borrowed| {
+            borrowed.is_some_and(|view| {
+                view.descriptor() == pixels.descriptor()
+                    && view.color_context() == pixels.color_context()
+            })
+        })
+    })??;
+    Ok(unchanged.then(|| (image.clone(), plan.metadata().clone())))
+}
 
 struct ColorStage {
     data: SharedStorage<u32>,
@@ -277,9 +295,148 @@ fn native_output_plan_shared_pool_counts_source_and_destination_together() {
                 .expect("source-only pool admitted another full color plane");
             assert!(zencodec::find_cause::<StorageError>(error.as_ref()).is_some());
             jxl_packaged_storage::assert_charges(&pool, &[&source]);
+            let plan = source.with_pixels(|pixels| identity(&pixels)).unwrap();
+            let (retained, _) = retain_identity(&source, &plan).unwrap().unwrap();
             drop(source);
+            assert_eq!(pool.reserved_bytes(), native_bytes);
+            jxl_packaged_storage::assert_charges(&pool, &[&retained]);
+            drop(retained);
         }
         assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
+    }
+}
+
+#[test]
+fn native_output_plan_identity_retains_all_native_planes_and_last_owner_charge() {
+    use crate::output_tests::mapped_planes;
+    let mut total = 0;
+    for name in [
+        "conformance_test_images/cmyk_layers.jxl",
+        "multiple_layers_noise_spline.jxl",
+    ] {
+        let bytes = fixture(name);
+        let mut source = ReadAtShim(SliceReadAt::new(&bytes));
+        let (codecs, pool) = jxl_packaged_storage::factories(64, 64);
+        let mut images = jxl_packaged_storage::open_admitted(
+            &codecs,
+            &mut source,
+            Composition::Uncomposited,
+            64,
+            &pool,
+        )
+        .unwrap();
+        let mut cursor = images.images().unwrap();
+        let mut held = Vec::new();
+        let mut expected = Vec::new();
+        while let Some(id) = images.next(&mut cursor).unwrap() {
+            let image = images
+                .decode(&id, &ImageRequest::new())
+                .unwrap()
+                .into_output();
+            expected.push(mapped_planes(&image));
+            let before = (pool.reserved_bytes(), pool.reserved_objects());
+            let plan = image.with_pixels(|pixels| identity(&pixels)).unwrap();
+            let (retained, metadata) = retain_identity(&image, &plan).unwrap().unwrap();
+            assert!(std::ptr::eq(
+                image.interpretation(),
+                retained.interpretation()
+            ));
+            let original_map = image.map().unwrap();
+            let retained_map = retained.map().unwrap();
+            assert_eq!(original_map.plane_count(), retained_map.plane_count());
+            for index in 0..original_map.plane_count() {
+                let original = original_map.plane(index).unwrap().unwrap();
+                let retained = retained_map.plane(index).unwrap().unwrap();
+                assert_eq!(original.meaning, retained.meaning);
+                let zencodec::image::Row::Bytes(a) = original.samples.row(0).unwrap() else {
+                    panic!("native F32 bytes")
+                };
+                let zencodec::image::Row::Bytes(b) = retained.samples.row(0).unwrap() else {
+                    panic!("native F32 bytes")
+                };
+                assert_eq!(a.as_ptr(), b.as_ptr());
+            }
+            retained
+                .with_pixels(|pixels| {
+                    let context = pixels.color_context().unwrap();
+                    assert_eq!(metadata.icc, context.icc);
+                    assert_eq!(metadata.cicp, context.cicp);
+                })
+                .unwrap();
+            drop(original_map);
+            drop(retained_map);
+            drop(image);
+            assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), before);
+            held.push(retained);
+            total += 1;
+        }
+        drop(images);
+        drop(bytes);
+        drop(codecs);
+        jxl_packaged_storage::assert_charges(&pool, &held.iter().collect::<Vec<_>>());
+        for (image, samples) in held.iter().zip(expected) {
+            assert_eq!(mapped_planes(image), samples);
+        }
+        drop(held);
+        assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
+    }
+    assert_eq!(total, 9);
+}
+
+#[test]
+fn native_output_plan_owner_retention_requires_matching_signaling_too() {
+    use zencodec::image::{ImageGeometry, ImageInterpretation, Rect};
+    use zenpixels::{Cicp, Orientation, PixelBuffer, PixelFormat};
+    let pixels = PixelBuffer::from_vec(vec![7, 19, 121], 1, 1, PixelDescriptor::RGB8_SRGB).unwrap();
+    let geometry = ImageGeometry {
+        canvas_width: 1,
+        canvas_height: 1,
+        region: Rect {
+            x: 0,
+            y: 0,
+            width: 1,
+            height: 1,
+        },
+    };
+    let image = ImageOutput::packed(
+        pixels,
+        vec![],
+        ImageInterpretation::packed(geometry, Orientation::Identity),
+    )
+    .unwrap();
+    for format in [PixelFormat::Rgb8, PixelFormat::Rgba8] {
+        let plan = OutputPlan::new(
+            PixelDescriptor::RGB8_SRGB,
+            None,
+            &ColorOrigin::assumed(),
+            OutputProfile::Named(Cicp::SRGB),
+            format,
+            &ConvertOptions::forbid_lossy(),
+            None,
+        )
+        .unwrap();
+        image
+            .with_pixels(|pixels| {
+                let borrowed = plan.borrow_rows(pixels.clone()).unwrap();
+                assert_eq!(borrowed.is_some(), format == PixelFormat::Rgb8);
+                if let Some(view) = borrowed {
+                    assert_eq!(
+                        view.as_strided_bytes().as_ptr(),
+                        pixels.as_strided_bytes().as_ptr()
+                    );
+                    assert_eq!(view.color_context().unwrap().cicp, Some(Cicp::SRGB));
+                }
+            })
+            .unwrap();
+        assert!(retain_identity(&image, &plan).unwrap().is_none());
+        // Declining owner reuse must leave the original source available to the
+        // conversion/relabeling adapter, with its original interpretation.
+        image
+            .with_pixels(|pixels| {
+                assert_eq!(pixels.row(0), &[7, 19, 121]);
+                assert!(pixels.color_context().is_none());
+            })
+            .unwrap();
     }
 }
 

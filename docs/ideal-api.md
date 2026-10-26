@@ -93,8 +93,12 @@ this from descriptor-only row conversion. Finalization ownership remains open in
 `OutputPlan` now has a native admitted-destination control: all nine raw JXL
 layers keep exact color samples and ICC without an owned input copy. Errors
 after partial CMS writes release the unpublished destination. This remains a
-color-stage prototype; auxiliary-plane publication, identity borrowing and CMS
-workspace are unqualified. [Implementation and evidence](../perf/spatial-validation/README.md#existing-outputplan-with-admitted-destination-storage).
+color-stage prototype for actual conversions. Checked identity borrowing now
+retains all nine layers' original color and auxiliary planes, their frozen facts
+and their storage charges without another sample allocation. Reuse requires
+matching current signaling as well as unchanged samples; converted
+auxiliary-plane publication and CMS workspace are still unqualified.
+[Implementation and evidence](../perf/spatial-validation/README.md#existing-outputplan-with-admitted-destination-storage).
 
 
 ## The consumer shape

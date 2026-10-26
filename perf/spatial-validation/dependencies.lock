@@ -910,7 +910,7 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.2.17"
-source = "git+https://github.com/imazen/zenpixels?rev=67bc6da7055d23582a7fb94052544b30de070f80#67bc6da7055d23582a7fb94052544b30de070f80"
+source = "git+https://github.com/imazen/zenpixels?rev=e44cf05490a37da749beb0b78477a45051ba3777#e44cf05490a37da749beb0b78477a45051ba3777"
 dependencies = [
  "bytemuck",
  "rgb",
@@ -920,7 +920,7 @@ dependencies = [
 [[package]]
 name = "zenpixels-convert"
 version = "0.2.17"
-source = "git+https://github.com/imazen/zenpixels?rev=67bc6da7055d23582a7fb94052544b30de070f80#67bc6da7055d23582a7fb94052544b30de070f80"
+source = "git+https://github.com/imazen/zenpixels?rev=e44cf05490a37da749beb0b78477a45051ba3777#e44cf05490a37da749beb0b78477a45051ba3777"
 dependencies = [
  "archmage",
  "bytemuck",

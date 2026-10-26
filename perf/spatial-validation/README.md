@@ -196,7 +196,8 @@ with successful pixels and must not publish a partially converted destination.
 The next integration uses the existing `OutputPlan` from
 [zenpixels PR 92](https://github.com/imazen/zenpixels/pull/92), combined with
 [native sample carriage in PR 93](https://github.com/imazen/zenpixels/pull/93)
-at `67bc6da7`. No second planning abstraction is added.
+at `e44cf054`, including checked identity borrowing. No second planning
+abstraction is added.
 
 `just spatial-output-plan-check` prepares a plan from the actual mapped
 descriptor and current ICC, then calls `convert_rows` directly into aligned
@@ -217,15 +218,32 @@ is unchanged, and destination storage is released. Controlled unwinding exercise
 the same ownership cleanup. The injected worker qualifies failure handling,
 not CMYK conversion arithmetic.
 
-This is a color-stage prototype. `OutputPlan` still copies identity samples to
-a separate destination. Complete derivative publication must also account for
+`OutputPlan::borrow_rows` now returns the original strided view for identity,
+with matching output color context. For all nine native layers, the prototype
+retains the original `ImageOutput`: exact samples, color and auxiliary addresses,
+roles, placement and interpretation stay together. Its storage charge survives
+source/collection teardown and every clone until the last image drops. This
+route succeeds with a pool that fits the source alone, where copying the color
+plane is correctly refused.
+
+Unchanged samples do not alone justify retaining unchanged signaling. A control
+requests explicit sRGB CICP for an untagged sRGB buffer: borrowing the samples
+works, but returning the old image would omit the selected current context. The
+prototype therefore retains the entire image only when descriptor and context
+also match. Otherwise it leaves the source with its caller for an explicit
+conversion or interpretation adapter. Required RGB-to-RGBA conversion also
+declines reuse without weakening the request.
+
+The allocating path remains a color-stage prototype. Complete derivative
+publication must also account for
 auxiliary planes and their meanings; this test does not silently drop them into
 a new `ImageOutput`. Native codec workspace, CMS scratch/profile allocations,
 conversion cancellation latency and true CMYK-to-RGB arithmetic remain separate.
 Planned metadata is available before execution so an encoder can reject its
 carriers; it is not evidence that pixels or encoded output have succeeded.
 
-[Execution receipt](../../benchmarks/admitted_color_plan_2026-10-26.json).
+[Admitted conversion receipt](../../benchmarks/admitted_color_plan_2026-10-26.json)
+and [identity-owner receipt](../../benchmarks/native_output_borrow_2026-10-26.json).
 
 ## Packaged retained output storage
 
