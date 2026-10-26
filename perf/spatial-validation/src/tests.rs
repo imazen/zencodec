@@ -370,11 +370,23 @@ mod image_selection {
                 .unwrap();
                 assert_eq!(collection.view(), Composition::Composited);
                 assert_eq!(
-                    first_image(&mut collection).unwrap().unwrap().bytes,
+                    first_image(&mut collection)
+                        .unwrap()
+                        .unwrap()
+                        .pixels
+                        .as_slice()
+                        .as_contiguous_bytes()
+                        .unwrap(),
                     crop(&refs[0], roi)
                 );
                 assert_eq!(
-                    first_child(&mut collection).unwrap().unwrap().bytes,
+                    first_child(&mut collection)
+                        .unwrap()
+                        .unwrap()
+                        .pixels
+                        .as_slice()
+                        .as_contiguous_bytes()
+                        .unwrap(),
                     crop(&refs[1], roi)
                 );
             }

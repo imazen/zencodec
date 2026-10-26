@@ -57,14 +57,18 @@ impl Default for Allowances {
 pub struct Region {
     pub bytes: Vec<u8>,
     pub stride: usize,
+    pub width: u32,
+    pub height: u32,
     pub color: ColorType,
     pub sample: SampleFormat,
     pub orientation: u32,
+    pub extra_samples: Option<Vec<u16>>,
+    pub icc: Option<Vec<u8>>,
 }
 
 /// Raw stored-coordinate candidate. It preserves native sample bytes and reports
-/// the native sample/color tag facts. ICC, auxiliary dependencies, complete file
-/// validation and display conversion are deliberately not established here.
+/// the native sample/color tag facts and opaque ICC bytes. Auxiliary dependencies,
+/// complete file validation and display conversion are not established here.
 pub fn decode<R: Read + Seek>(
     mut input: R,
     selected: Selection<'_>,
@@ -201,12 +205,26 @@ fn decode_current<R: Read + Seek>(
         .ok_or_else(|| invalid("unit index overflow"))?;
     let layout = decoder.image_coding_unit_layout(TiffCodingUnit(first))?;
     let sample = layout.sample_format;
+    let extra_samples = decoder
+        .current_ifd()
+        .find_tag(Tag::ExtraSamples)?
+        .map(|v| v.into_u16_vec())
+        .transpose()?;
+    let icc = decoder
+        .current_ifd()
+        .find_tag(Tag::IccProfile)?
+        .map(|v| v.into_u8_vec())
+        .transpose()?;
     let mut out = Region {
         bytes: zeros(length)?,
         stride,
+        width: r.width,
+        height: r.height,
         color,
         sample,
         orientation,
+        extra_samples,
+        icc,
     };
     for y in y0..=y1 {
         for x in x0..=x1 {

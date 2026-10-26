@@ -28,9 +28,9 @@ dependencies = [
 
 [[package]]
 name = "archmage"
-version = "0.9.31-beta.1"
+version = "0.9.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8eb78f99f21cbafac07b21fdfc795c62479a4175c264d255e06728b77875f655"
+checksum = "15785ee3576fbd41276a25f063b1e6b5bf323af9b4924632e25a8de6a3065f06"
 dependencies = [
  "archmage-macros",
  "safe_unaligned_simd",
@@ -39,9 +39,9 @@ dependencies = [
 
 [[package]]
 name = "archmage-macros"
-version = "0.9.31-beta.1"
+version = "0.9.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6548920cabd08932e44d64bae280e1639f4d632763431ddb723048032a3b246d"
+checksum = "ce7707714970d5cf476caccbae2d282000c6c14ca5aada878e722a10d8e1c153"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -211,6 +211,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "garb"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b968bb36272be4662f264fd123e96915e7dd51c8ca529c2d35f621817ff4207"
+dependencies = [
+ "archmage",
+ "bytemuck",
+ "paste",
+]
+
+[[package]]
 name = "half"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -243,6 +254,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
 
 [[package]]
+name = "libm"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
+
+[[package]]
 name = "libredox"
 version = "0.1.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -252,10 +269,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "linear-srgb"
+version = "0.6.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe0e61c33d85bc56dcaf27cdf48ca32b8e34af7236584eb1d8a47316c49e0be1"
+dependencies = [
+ "archmage",
+ "bytemuck",
+ "magetypes",
+ "num-traits",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
+
+[[package]]
+name = "lz4_flex"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ecbdfe44b1bd960b68170b417450a628c43f7cf56bb3c5317e61cb230ee7f226"
+
+[[package]]
+name = "magetypes"
+version = "0.9.30"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5726fd3335b1d2814036c420a5c8d105abcc0e0b43eebb477e48f8c725fc8fb2"
+dependencies = [
+ "archmage",
+ "libm",
+ "rustversion",
+]
 
 [[package]]
 name = "memchr"
@@ -291,7 +337,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
+ "libm",
 ]
+
+[[package]]
+name = "once_cell"
+version = "1.21.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "option-ext"
@@ -351,6 +404,12 @@ dependencies = [
  "linux-raw-sys",
  "windows-sys 0.61.2",
 ]
+
+[[package]]
+name = "rustversion"
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
 name = "safe_unaligned_simd"
@@ -422,6 +481,8 @@ dependencies = [
  "zencodec",
  "zencodec-io",
  "zenjxl-decoder",
+ "zenpixels",
+ "zenpixels-convert",
 ]
 
 [[package]]
@@ -652,12 +713,29 @@ dependencies = [
 
 [[package]]
 name = "zenpixels"
-version = "0.2.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5851fd39b312749a3c367a0cd3522bd95d43276cfa613e9c18df748447cef3a8"
+version = "0.2.17"
+source = "git+https://github.com/imazen/zenpixels?rev=9dad0cb609bbc07ed329696902ed5a1a3d3951b6#9dad0cb609bbc07ed329696902ed5a1a3d3951b6"
 dependencies = [
  "bytemuck",
  "whereat",
+]
+
+[[package]]
+name = "zenpixels-convert"
+version = "0.2.17"
+source = "git+https://github.com/imazen/zenpixels?rev=9dad0cb609bbc07ed329696902ed5a1a3d3951b6#9dad0cb609bbc07ed329696902ed5a1a3d3951b6"
+dependencies = [
+ "archmage",
+ "bytemuck",
+ "garb",
+ "libm",
+ "linear-srgb",
+ "lz4_flex",
+ "magetypes",
+ "once_cell",
+ "paste",
+ "whereat",
+ "zenpixels",
 ]
 
 [[package]]

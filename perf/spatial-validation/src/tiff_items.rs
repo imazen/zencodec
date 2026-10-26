@@ -219,7 +219,7 @@ impl<R: Read + Seek> TiffCollection<R> {
 }
 impl<R: Read + Seek> Collection for TiffCollection<R> {
     type Cursor = Cursor;
-    type Samples = Region;
+    type Samples = super::tiff_pixels::StoredRaster;
     fn view(&self) -> Composition {
         Composition::Composited
     }
@@ -238,9 +238,10 @@ impl<R: Read + Seek> Collection for TiffCollection<R> {
             .map(|item| item.map(|v| v.image))
             .map_err(located)
     }
-    fn decode(&mut self, image: &ImageId) -> Result<Region, zencodec::At<CollectionError>> {
+    fn decode(&mut self, image: &ImageId) -> Result<Self::Samples, zencodec::At<CollectionError>> {
         self.items
             .decode(image, self.region, Composition::Composited, || Ok(()))
+            .and_then(Region::into_pixels)
             .map_err(located)
     }
 }

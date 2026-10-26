@@ -30,6 +30,14 @@ fn encoded<C: colortype::ColorType, K: TiffKind>(
         .encoder()
         .write_tag(Tag::Orientation, orientation)
         .unwrap();
+    // The four-channel fixture explicitly declares straight alpha. A storage
+    // layout alone cannot establish the fourth channel's meaning.
+    if C::BITS_PER_SAMPLE.len() == 4 {
+        image
+            .encoder()
+            .write_tag(Tag::ExtraSamples, &[2u16][..])
+            .unwrap();
+    }
     image.write_data(samples).unwrap();
 }
 
@@ -132,6 +140,37 @@ fn qualify<C: colortype::ColorType>(
                         output.bytes, expected,
                         "big={big} compression={compression:?} predictor={predictor:?}"
                     );
+                    let allocation = output.bytes.as_ptr();
+                    let raster = output.into_pixels().unwrap();
+                    let pixels = raster.pixels.as_slice();
+                    assert_eq!(pixels.as_strided_bytes().as_ptr(), allocation);
+                    assert_eq!(pixels.width(), region.width);
+                    assert_eq!(pixels.rows(), region.height);
+                    assert_eq!(pixels.as_contiguous_bytes().unwrap(), expected);
+                    assert_eq!(
+                        raster.orientation,
+                        zenpixels::Orientation::from_exif(orientation.try_into().unwrap()).unwrap()
+                    );
+                    assert_eq!(
+                        pixels.descriptor().transfer(),
+                        zenpixels::TransferFunction::Unknown
+                    );
+                    assert_eq!(
+                        pixels.descriptor().primaries,
+                        zenpixels::ColorPrimaries::Unknown
+                    );
+                    let mut copy = zenpixels_convert::RowConverter::new(
+                        pixels.descriptor(),
+                        pixels.descriptor(),
+                    )
+                    .unwrap();
+                    let mut row = vec![0xa5; pixels.stride() + 13];
+                    for y in 0..pixels.rows() {
+                        copy.try_convert_row(pixels.row(y), &mut row, pixels.width())
+                            .unwrap();
+                        assert_eq!(&row[..pixels.row(y).len()], pixels.row(y));
+                        assert_eq!(&row[pixels.row(y).len()..], &[0xa5; 13]);
+                    }
                 }
             }
         }

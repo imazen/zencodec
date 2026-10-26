@@ -12,4 +12,5 @@ mod jxl_tests;
 mod strip_tests;
 mod tests;
 mod tiff_items;
+mod tiff_pixels;
 mod tiff_region;

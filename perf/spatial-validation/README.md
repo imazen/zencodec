@@ -60,6 +60,47 @@ function, `just spatial-consumer-check` reruns its native cases and strict
 Clippy without repeating the full matrix. These are process receipts, not
 native resource bounds.
 
+### Native TIFF pixels through the shared owner
+
+The TIFF collection now returns `StoredRaster`: a `zenpixels::PixelBuffer`
+and unapplied orientation. [`tiff_pixels.rs`](src/tiff_pixels.rs) adopts the
+native region allocation with its explicit dimensions and byte stride. It
+does not normalize signed values, narrow wide integers or canonicalize NaNs.
+The integration exposed a missing external constructor for `PixelBufferParts`;
+[zenpixels PR 93](https://github.com/imazen/zenpixels/pull/93) adds it alongside
+the signed/wide storage formats. Both crates are pinned at
+`9dad0cb609bbc07ed329696902ed5a1a3d3951b6` in this standalone harness.
+
+`just spatial-samples-check` runs all 22 native strip sample/layout cases
+through checked adoption and identity row conversion, checking the original
+allocation pointer, all active sample bytes, row padding and unapplied
+orientation. It covers classic/BigTIFF, the existing four compression modes,
+predictors and edge/interior/full-image regions. Signed types are qualified
+in gray; unsigned and floating types also cover RGB/RGBA. This is not a claim
+of GrayAlpha, half-float or arbitrary-band native coverage.
+
+The selected directory supplies its own ICC bytes and alpha declaration.
+Unknown transfer and primaries remain unknown. Missing, unspecified or
+unsupported alpha association refuses with `InterpretationError::Alpha`;
+associated and straight declarations survive unchanged. The per-directory
+test decodes two differently tagged pages out of order and repeats a page,
+checking its profile and orientation every time. Malformed or over-budget
+ICC fields remain native errors rather than becoming absent metadata.
+Opaque ICC carriage does not establish profile validity or a PII policy.
+
+The targeted gate passed with run-heavy rc=0, 5 s, peak RSS 0.45 GiB,
+minimum available 12273 MiB, peak load 0.92; log
+`~/tmp/zencodec-native-samples3-2026-10-25.log`. This is a test-process receipt,
+not a decoder memory bound. The shared collection is still private: JXL
+extra-plane roles, one common output interpretation, ROI geometry, unknown-color
+policy and the distinction between raw sample carriage and display conversion
+must be qualified before promotion. Media's unsigned component-code encoding
+also remains distinct from signed/floating image samples.
+
+The subsequent full native TIFF/JXL gate passed with the pinned pixel change:
+run-heavy rc=0, 103 s, peak RSS 0.34 GiB, minimum available 11325 MiB,
+peak load 1.52; log `~/tmp/zencodec-native-samples-full-2026-10-25.log`.
+
 ### Native qualification
 
 [`src/jxl_items.rs`](src/jxl_items.rs) exercises the same operation-bound image
