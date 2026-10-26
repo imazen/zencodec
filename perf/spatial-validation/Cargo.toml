@@ -35,3 +35,11 @@ zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "284a05
 [profile.release]
 debug = 1
 lto = "thin"
+
+# Execute the full native matrix within its existing CI timeout. Keep the
+# correctness checks enabled; unoptimized codec loops dominate this harness.
+[profile.test]
+opt-level = 1
+debug = 1
+debug-assertions = true
+overflow-checks = true

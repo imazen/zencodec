@@ -231,6 +231,12 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Native spatial CI (2026-10-26): packaged JXL comparisons made the full
+  unoptimized suite exceed its existing ten-minute command timeout. The
+  standalone harness now uses test optimization level 1 with debug assertions
+  and overflow checks enabled. `just spatial-ci-check` keeps the complete suite
+  and timeout; `benchmarks/native_ci_2026-10-26.json` records qualification.
+
 - Packaged-JXL qualification (2026-10-26): the first harness promotion omitted
   the regenerated tracked `perf/spatial-validation/dependencies.lock`; CI copies
   it to the ignored `Cargo.lock` before its locked build. Updating only

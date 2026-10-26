@@ -475,6 +475,20 @@ spatial-admission-check artifacts:
     SPATIAL_LAYER_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked native_jxl_admission_ -- --nocapture --test-threads=1
     just spatial-validation-lint
 
+# Same complete native suite and test timeout as the documentation workflow.
+spatial-ci-check artifacts:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    : "${SPATIAL_ORACLE_PYTHON:?supply pinned Pillow/libtiff reader}"
+    : "${JXL_SELECTION_ORACLE:?supply pinned libjxl presentation reader}"
+    : "${JXL_LAYER_ORACLE:?supply pinned libjxl layer reader}"
+    export SPATIAL_ARTIFACTS="{{artifacts}}/native"
+    export SPATIAL_GENERATED_ARTIFACTS="{{artifacts}}/generated"
+    export SPATIAL_LAYER_ARTIFACTS="{{artifacts}}/layers"
+    mkdir -p "{{artifacts}}"
+    timeout --kill-after=15s 10m cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked -- --nocapture --test-threads=1
+    timeout --kill-after=15s 5m cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
+
 # Automatic selected-image publication policy, including native failure seams.
 spatial-checked-collection-check:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked checked_collection_ -- --nocapture --test-threads=1

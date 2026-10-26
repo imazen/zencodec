@@ -1084,3 +1084,13 @@ Strict lint, warning-free workspace docs and public API snapshot checks also
 pass. [Integrated evidence](../../benchmarks/source_discovery_integrated_2026-10-26.json).
 HTTP runs separately with the explicit `http` feature and server harness above;
 it is not silently skipped by the default native gate.
+
+## Complete native CI gate
+
+`just spatial-ci-check <fresh-parent-directory>` runs every native test and
+strict lint with the same ten-minute test timeout as the documentation job.
+Supply the pinned Python and two JXL oracle executables used above. The test
+profile uses optimization level 1 while keeping debug assertions and overflow
+checks enabled. [The full-suite receipt](../../benchmarks/native_ci_2026-10-26.json)
+records all 112 passing tests and the earlier unoptimized CI timeout. It is
+correctness evidence, not a codec benchmark.
