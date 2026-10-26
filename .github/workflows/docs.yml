@@ -116,8 +116,10 @@ jobs:
       CARGO_INCREMENTAL: 0
       SPATIAL_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}
       SPATIAL_GENERATED_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-generated
+      SPATIAL_LAYER_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-layers
       SPATIAL_ORACLE_PYTHON: ${{ github.workspace }}/perf/spatial-validation/target/oracle-python/bin/python
       JXL_SELECTION_ORACLE: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-jxl/jxl-oracle
+      JXL_LAYER_ORACLE: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-jxl/layer-oracle
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -137,6 +139,7 @@ jobs:
           timeout --kill-after=15s 2m sudo apt-get install -y --no-install-recommends libjxl-dev
           mkdir -p "$(dirname "$JXL_SELECTION_ORACLE")"
           cc -std=c11 -Wall -Wextra -Werror perf/spatial-validation/jxl_oracle.c -ljxl -o "$JXL_SELECTION_ORACLE"
+          cc -std=c11 -Wall -Wextra -Werror perf/spatial-validation/layer_oracle.c -ljxl -o "$JXL_LAYER_ORACLE"
           cp perf/spatial-validation/dependencies.lock perf/spatial-validation/Cargo.lock
           timeout --kill-after=15s 10m cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked -- --nocapture --test-threads=1
           timeout --kill-after=15s 5m cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
