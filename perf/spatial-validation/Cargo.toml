@@ -9,6 +9,7 @@ publish = false
 [dependencies]
 zencodec = { path = "../..", features = ["std"] }
 zencodec-io = { path = "../../zencodec-io", features = ["std"] }
+zencodec-media = { path = "../../zencodec-media" }
 tiff = { version = "0.11.3", git = "https://github.com/lilith/image-tiff", rev = "0219e7099c658422d47bd986ff279b686202b2e0", default-features = false, features = ["lzw", "deflate"] }
 zenjxl-decoder = { version = "0.4.0", git = "https://github.com/imazen/zenjxl-decoder", rev = "8399f17c54c8138f65304bbc46efc80c269c7402", default-features = false }
 codec-corpus = "1.1.0"

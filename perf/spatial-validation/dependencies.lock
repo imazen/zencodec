@@ -480,6 +480,7 @@ dependencies = [
  "tiff",
  "zencodec",
  "zencodec-io",
+ "zencodec-media",
  "zenjxl-decoder",
  "zenpixels",
  "zenpixels-convert",
@@ -668,6 +669,16 @@ dependencies = [
  "enough",
  "how-far",
  "zencodec",
+ "zenpixels",
+]
+
+[[package]]
+name = "zencodec-media"
+version = "0.1.0"
+dependencies = [
+ "enough",
+ "zencodec",
+ "zencodec-io",
  "zenpixels",
 ]
 

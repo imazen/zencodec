@@ -29,6 +29,19 @@ int main(int argc, char **argv) {
       JxlBasicInfo info;
       if (JxlDecoderGetBasicInfo(decoder, &info) != JXL_DEC_SUCCESS) break;
       printf("canvas %" PRIu32 " %" PRIu32 "\n", info.xsize, info.ysize);
+      printf("orientation %u\n", (unsigned)info.orientation);
+      if (info.have_animation) {
+        printf("animation %" PRIu32 " %" PRIu32 " %" PRIu32 " %u\n",
+               info.animation.tps_numerator, info.animation.tps_denominator,
+               info.animation.num_loops, (unsigned)info.animation.have_timecodes);
+      }
+      for (uint32_t i = 0; i < info.num_extra_channels; i++) {
+        JxlExtraChannelInfo extra;
+        if (JxlDecoderGetExtraChannelInfo(decoder, i, &extra) != JXL_DEC_SUCCESS) goto end;
+        printf("extra %" PRIu32 " %u %" PRIu32 " %" PRIu32 " %u\n",
+               i, (unsigned)extra.type, extra.bits_per_sample, extra.dim_shift,
+               (unsigned)extra.alpha_premultiplied);
+      }
     } else if (status == JXL_DEC_FRAME) {
       JxlFrameHeader frame;
       if (JxlDecoderGetFrameHeader(decoder, &frame) != JXL_DEC_SUCCESS) break;
