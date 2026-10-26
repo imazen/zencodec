@@ -127,6 +127,12 @@ trait PackedImageOwner: Send + Sync {
     fn pixels(&self) -> Result<zenpixels::PixelSlice<'_>, At<OutputError>>;
     fn auxiliary(&self, index: usize)
         -> Result<Option<ValueSlice<'_>>, At<OutputError>>;
+    fn retain_auxiliaries(&self)
+        -> Result<Option<Arc<dyn AuxiliaryImageOwner>>, At<OutputError>>;
+}
+trait AuxiliaryImageOwner: Send + Sync {
+    fn auxiliary(&self, index: usize)
+        -> Result<Option<ValueSlice<'_>>, At<OutputError>>;
 }
 ```
 
@@ -146,11 +152,16 @@ mapping guards. The replacement must cover the same stored coordinates. It
 retains geometry, placement, orientation, timing, auxiliary roles and original
 source facts; its descriptor/context describe the new color. It neither
 transforms nor renders auxiliaries, and it refuses component-code output.
-An auxiliary owner can also retain its original color allocation, which stays
-charged. Repeated replacement releases intermediate color owners. With no
+`PackedImageOwner::retain_auxiliaries` optionally supplies an independent owner
+of the same scalar planes. Replacement calls it automatically, verifies the
+frozen layouts and retains its traced failures. The source color can then
+release when no original image clone retains it. `None` keeps the complete
+source owner, including its original color charge; it never triggers a copy.
+Repeated replacement releases intermediate color owners and keeps the already
+retained auxiliary owner without invoking the hook again. With no
 auxiliaries, the consumed source storage releases unless another clone holds it.
-Publication still uses the existing resolver. This adds one composition method,
-not another mapping trait or callback.
+Publication still uses the existing resolver. The optional owner mechanism does
+not require caller capability coordination or a second policy callback.
 
 Packed construction checks region bounds, pixel dimensions and compatible
 interpretation. Frame mapping checks the stored/crop extent, role count and

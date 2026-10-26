@@ -2,6 +2,17 @@
 use super::*;
 use zenpixels::{ColorContext, PixelDescriptor};
 
+/// An immutable owner of scalar auxiliary planes independent of packed color.
+///
+/// Returned views and any storage charges stay alive through this owner. A
+/// retained owner must expose the same samples and indices as the original
+/// [`PackedImageOwner`]. It may share backing storage, but must not borrow that
+/// original owner. This is an optional implementor mechanism, not a policy hook.
+pub trait AuxiliaryImageOwner: Send + Sync {
+    /// Borrow a scalar plane; `None` for a declared index is a missing-plane error.
+    fn auxiliary(&self, index: usize) -> Result<Option<ValueSlice<'_>>, At<OutputError>>;
+}
+
 /// Immutable CPU-mappable packed pixels and optional scalar auxiliary planes.
 ///
 /// Implementors retain the backing allocations, color context and any admission
@@ -21,6 +32,17 @@ pub trait PackedImageOwner: Send + Sync {
     /// at zero and correspond to the roles passed to `from_packed_owner`.
     /// `None` for a declared index is a typed missing-plane failure.
     fn auxiliary(&self, _index: usize) -> Result<Option<ValueSlice<'_>>, At<OutputError>> {
+        Ok(None)
+    }
+
+    /// Retain the same immutable auxiliaries without requiring this color owner.
+    ///
+    /// Color replacement calls this automatically when auxiliary planes exist.
+    /// Return `None` when they cannot be retained separately; the complete
+    /// original owner then stays alive. An error is preserved and aborts the
+    /// replacement without fallback. No pixels may change or be copied here.
+    /// Independent image clones still retain the original owner and its charges.
+    fn retain_auxiliaries(&self) -> Result<Option<Arc<dyn AuxiliaryImageOwner>>, At<OutputError>> {
         Ok(None)
     }
 }
@@ -50,7 +72,7 @@ struct Held<P> {
     stride: usize,
     descriptor: PixelDescriptor,
     color: Option<Arc<ColorContext>>,
-    extras: Vec<(Meaning, ValueLayout)>,
+    extras: Arc<Vec<(Meaning, ValueLayout)>>,
 }
 
 impl ImageOutput {
@@ -110,7 +132,7 @@ impl ImageOutput {
                 stride,
                 descriptor,
                 color,
-                extras,
+                extras: Arc::new(extras),
             }),
             interpretation: Arc::new(interpretation),
         })
@@ -135,6 +157,18 @@ struct HeldMap<'a, P> {
     pixels: PixelSlice<'a>,
 }
 impl<P: PackedImageOwner> ImageStorage for Held<P> {
+    fn auxiliary_source(&self) -> Result<Option<AuxiliarySource>, Failure> {
+        let Some(owner) = self.owner.retain_auxiliaries()? else {
+            return Ok(None);
+        };
+        Ok(Some(AuxiliarySource {
+            storage: Arc::new(AuxiliaryOnly {
+                owner,
+                extras: self.extras.clone(),
+            }),
+            first: 0,
+        }))
+    }
     fn facts(&self) -> SampleFacts {
         SampleFacts {
             packed: Some(self.descriptor),
@@ -177,6 +211,69 @@ impl<P: PackedImageOwner> ImageStorage for Held<P> {
             self.values(index)?;
         }
         Ok(Box::new(HeldMap { held: self, pixels }))
+    }
+}
+
+struct AuxiliaryOnly {
+    owner: Arc<dyn AuxiliaryImageOwner>,
+    extras: Arc<Vec<(Meaning, ValueLayout)>>,
+}
+impl AuxiliaryOnly {
+    fn values(&self, index: usize) -> Result<ValueSlice<'_>, Failure> {
+        let values = self
+            .owner
+            .auxiliary(index)?
+            .ok_or_else(|| fail(OutputError::MissingPlane))?;
+        if ValueLayout::from(values) != self.extras[index].1 {
+            return Err(fail(OutputError::Geometry));
+        }
+        Ok(values)
+    }
+}
+impl ImageStorage for AuxiliaryOnly {
+    fn facts(&self) -> SampleFacts {
+        SampleFacts {
+            packed: None,
+            planes: self.extras.len(),
+            auxiliaries: self.extras.len(),
+            applied_spot_colors: self
+                .extras
+                .iter()
+                .filter(|(meaning, _)| {
+                    matches!(
+                        meaning,
+                        Meaning::Auxiliary(Auxiliary {
+                            kind: AuxiliaryKind::SpotColor {
+                                contribution: ColorContribution::Applied,
+                                ..
+                            },
+                            ..
+                        })
+                    )
+                })
+                .count(),
+        }
+    }
+    fn map(&self) -> Result<Box<dyn MappedImage + '_>, Failure> {
+        for index in 0..self.extras.len() {
+            self.values(index)?;
+        }
+        Ok(Box::new(AuxiliaryMap(self)))
+    }
+}
+struct AuxiliaryMap<'a>(&'a AuxiliaryOnly);
+impl MappedImage for AuxiliaryMap<'_> {
+    fn plane_count(&self) -> usize {
+        self.0.extras.len()
+    }
+    fn plane(&self, index: usize) -> Result<Option<Plane<'_>>, Failure> {
+        let Some((meaning, _)) = self.0.extras.get(index) else {
+            return Ok(None);
+        };
+        Ok(Some(Plane {
+            meaning,
+            samples: Samples::Values(self.0.values(index)?),
+        }))
     }
 }
 

@@ -619,6 +619,12 @@ None.
 
 ### Added
 
+- Optional `PackedImageOwner::retain_auxiliaries` and `AuxiliaryImageOwner`
+  retain immutable auxiliary allocations independently of replaced color.
+  Inseparable owners keep existing behavior; errors preserve their typed cause.
+
+### Added
+
 - Required physical resolution on checked encode requests and generic/erased
   jobs, with exact cross-unit and unknown-unit aspect comparison. Unsupported
   jobs refuse before encoding; no implicit rounding or physical-unit loss.

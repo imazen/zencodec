@@ -17,7 +17,7 @@ type Failure = At<OutputError>;
 mod placement;
 pub use placement::{Placement, PlacementError, PlacementOverlap};
 mod owner;
-pub use owner::PackedImageOwner;
+pub use owner::{AuxiliaryImageOwner, PackedImageOwner};
 mod replace;
 
 /// A rectangle in the selected image's stored coordinates, before orientation.
@@ -355,9 +355,16 @@ trait ImageStorage: Send + Sync {
     fn map(&self) -> Result<Box<dyn MappedImage + '_>, Failure>;
     // A replacement keeps only the original auxiliary owner, not a chain of
     // intermediate color allocations. This is deliberately not an adapter API.
-    fn auxiliary_source(&self) -> Option<Arc<dyn ImageStorage>> {
-        None
+    fn auxiliary_source(&self) -> Result<Option<AuxiliarySource>, Failure> {
+        Ok(None)
     }
+}
+#[derive(Clone)]
+struct AuxiliarySource {
+    storage: Arc<dyn ImageStorage>,
+    // An inseparable source still maps its old color at zero. A separately
+    // retained auxiliary owner starts directly at its first auxiliary plane.
+    first: usize,
 }
 
 /// Frozen together with the storage. Callers can inspect or clone these facts,
