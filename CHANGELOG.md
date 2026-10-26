@@ -2,6 +2,12 @@
 
 ## Native image selection (unreleased experiment)
 
+- Freeze interpretation with the private mapped output and validate packed
+  sample/region geometry at construction. Retain native JXL source precision,
+  HDR/display/preview and animation declarations separately from output color
+  and metadata retention permission; qualify them with independent libjxl
+  inspection and keep native AV1 ownership/timing tests passing.
+
 - Replace associated native samples in the private collection with one mapped
   image output, exercised by TIFF, JXL and AV1. Preserve packed alpha, auxiliary
   roles and native video code-depth/ownership; keep rendering and resource gates

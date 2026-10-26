@@ -1,0 +1,58 @@
+{
+  "implementation": "8b6d7e43690252719f49c68643558dc8e4f1b105",
+  "scope": "Private immutable interpretation and native JXL source-fact retention; not public promotion, full rendering/metadata qualification, or a native memory bound.",
+  "commands": {
+    "spatial_full": "run-heavy --mem 12G --jobs 4 -- timeout --kill-after=15s 6m just spatial-validation-check <fresh-artifacts> <oracle-python>",
+    "spatial_output": "run-heavy --mem 12G --jobs 4 -- timeout --kill-after=15s 4m just spatial-output-check <fresh-artifacts>",
+    "video": "run-heavy --mem 12G --jobs 4 -- timeout --kill-after=15s 4m just av1-output-check <fresh-artifacts>"
+  },
+  "native_pins": "Unchanged from benchmarks/common_image_output_2026-10-26.json and the standalone dependencies.lock files.",
+  "receipts": [
+    {
+      "log": "zencodec-interpretation1-2026-10-26.log",
+      "sha256": "93887f3ee1499accdcaba357f34e2524cb6dab33e4e904caeec9bb9c54a6042e",
+      "results": [
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 42 filtered out; finished in 9.70s",
+        "test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 24 filtered out; finished in 0.32s",
+        "run-heavy: done rc=0 12s | peak-RSS 0.45GiB | min-avail 13328MiB | peak-load 0.57"
+      ]
+    },
+    {
+      "log": "zencodec-interpretation-full-2026-10-26.log",
+      "sha256": "991816d41642c6c333e558c60be7b1a680884d08337da097cdb9b25630d2bd3d",
+      "results": [
+        "test result: ok. 46 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 115.44s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "run-heavy: done rc=0 116s | peak-RSS 0.22GiB | min-avail 13502MiB | peak-load 0.95"
+      ]
+    },
+    {
+      "log": "zencodec-interpretation-av1-2026-10-26.log",
+      "sha256": "6da711d59511df69368297c69c6b0d2b17c0f6a078db2af25490a055f45cff9c",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 3.68s",
+        "run-heavy: done rc=0 9s | peak-RSS 0.54GiB | min-avail 13334MiB | peak-load 0.46"
+      ]
+    }
+  ],
+  "jxl_source_fact_fixtures": [
+    "hdr_hlg_test.jxl",
+    "hdr_pq_test.jxl",
+    "pq_gradient.jxl",
+    "conformance_test_images/lossless_pfm.jxl",
+    "with_preview.jxl",
+    "small_grayscale_patches_modular_with_icc.jxl",
+    "conformance_test_images/animation_newtons_cradle.jxl"
+  ],
+  "unqualified": [
+    "non-default intrinsic size",
+    "nonzero min_nits and linear_below",
+    "per-frame timecodes",
+    "complete extra-channel precision/spot/CFA parameters",
+    "whole-container retention/privacy",
+    "rendering policy",
+    "native workspace bounds"
+  ],
+  "issue": "https://github.com/imazen/zenjxl-decoder/issues/67",
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/"
+}

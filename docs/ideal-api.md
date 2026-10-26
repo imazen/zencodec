@@ -100,11 +100,16 @@ an approved display conversion or privacy decision.
 They are not a public `CodecSet` collection API. The private collection now
 returns one mapped `ImageOutput` for TIFF/JXL, also qualified against native AV1
 storage, with packed color, auxiliary values and component codes distinguished.
+Its interpretation is frozen with the storage and checked against packed sample
+geometry. JXL retains the native source header/profile and selected-frame facts
+separately from the actual output color profile; independent metadata checks
+cover HDR, floating-point precision, preview and animation declarations. This
+does not authorize metadata passthrough or qualify missing native fields.
 Each decode carries its own region
 request; TIFF returns the selected canvas and region origin, while required JXL
 regions refuse. The [platform review](platform-review-2026-10-25.md) records
 WIC/OpenImageIO evidence and the distinction between containment and roles. The next
-promotion gate is complete interpretation and immutable admission,
+promotion gate is complete rendering interpretation and policy admission,
 explicit discovery allowances and source-revision validation. Raw JXL layer implementation is
 still [decoder issue 57](https://github.com/imazen/zenjxl-decoder/issues/57);
 the existing [paged-decoder issue](https://github.com/imazen/zencodec/issues/1)
