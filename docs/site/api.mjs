@@ -14,6 +14,8 @@ export const api = {
   mediaPumpCause: {path:'core::error::Error for zencodec_media::session::PumpError',file:'zencodec-media/src/session.rs',scope:"impl<U: core::error::Error + 'static, D: core::error::Error + 'static> core::error::Error",methods:['source']},
   mediaMapCause: {path:'core::error::Error for zencodec_media::frame::MapError',file:'zencodec-media/src/frame.rs',scope:'impl core::error::Error for MapError',methods:['source']},
   findCause: {path:'zencodec::find_cause',file:'src/error.rs',methods:['find_cause']},
+  tiffSelection: {path:'candidate::TiffItems (private native experiment)',file:'perf/spatial-validation/src/tiff_items.rs',scope:'impl<R: Read + Seek> TiffItems<R>',methods:['open','images','children','next','decode']},
+  jxlSelection: {path:'candidate::JxlItems (private native experiment)',file:'perf/spatial-validation/src/jxl_items.rs',scope:"impl<'a> JxlItems<'a>",methods:['open','next','decode']},
 
   checkedDecodePolicy: {path:"zencodec::decode::DecodeJob<'a>",file:'src/traits/decoding.rs',scope:"pub trait DecodeJob<'a>",methods:['try_set_policy','try_with_policy'],associated:false},
   checkedEncodePolicy: {path:'zencodec::encode::EncodeJob',file:'src/traits/encoding.rs',scope:'pub trait EncodeJob: Sized',methods:['try_set_policy','try_with_policy'],associated:false},

@@ -16,7 +16,7 @@ export async function checkIdeal(browser,url,output) {
     assert.ok((await page.locator('h1').textContent()).includes('executes today'));
     assert.equal(await page.locator('.ideal-step').count(),5);
     const changes=page.locator('.api-change');
-    assert.equal(await changes.count(),5);
+    assert.equal(await changes.count(),6);
     for(const change of await changes.all()) assert.ok(!await change.evaluate(el=>el.open));
     const videoChange=page.locator('#change-video');
     await videoChange.locator(':scope>summary').focus();

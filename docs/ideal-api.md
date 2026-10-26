@@ -20,6 +20,11 @@ minimum available 15998 MiB and peak load 1.45; this measures the guide check.
 
 ## What still needs production implementation
 
+The current priority is the API/native-codec validation loop. The spatial
+candidate now exercises real TIFF directory graphs and JXL presentations before
+adding a shared public selector. Performance tuning and additional platform
+work do not gate that loop. See [the executable selection evidence](../perf/spatial-validation/README.md).
+
 - Extend coupled routes beyond the qualified JPEG/PNG sources and JPEG/PNG targets.
   Add encoded rewrite choices, whole-container disclosure guarantees and
   qualified native workspace/staging bounds to the existing typed resolver.
@@ -62,6 +67,34 @@ Existing codec memory estimates and capability flags are not whole-operation
 memory guarantees. The new request layer does not strengthen those old claims.
 
 ## The consumer shape
+
+### Selection beyond animation and pages
+
+The native loop has established three constraints for the next shared selector:
+
+- An image identity belongs to one opened operation. TIFF can share a SubIFD
+  between parents, and a SubIFD need not be a reduced image. A containment edge
+  and a resolution-level choice cannot be the same thing.
+- Select the presentation/layer view before discovery. The same JXL file can
+  expose one composited presentation or five layers. A boolean passed only to
+  `decode(id)` cannot identify which layer the caller meant. Required views
+  refuse when unsupported; a resolver may choose only an explicitly permitted
+  alternative.
+- Keep timing and decode dependencies separate from item identity. Selecting
+  a JXL presentation can require earlier invisible or visible work. The backend
+  supplies the restart target; a page ordinal or byte offset is insufficient.
+
+The actual private candidates are `TiffItems::{images,children,next,decode}`
+and `JxlItems::{open,next,decode}` under `perf/spatial-validation/src`. They
+execute against the native codecs and share the opaque operation-bound identity.
+They are not a public `CodecSet` collection API. The next promotion gate is one
+consumer selection path with per-item interpretation, bounded discovery,
+source-revision validation and traced errors. Raw JXL layer implementation is
+still [decoder issue 57](https://github.com/imazen/zenjxl-decoder/issues/57);
+the existing [paged-decoder issue](https://github.com/imazen/zencodec/issues/1)
+owns the shared-selector discussion.
+
+### Ordinary checked operations
 
 Keep the small conveniences and registered codec templates. A stored request
 adds requirements when the application needs them:
