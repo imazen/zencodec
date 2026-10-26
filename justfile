@@ -255,6 +255,16 @@ plane-view-check:
     cargo check -p zencodec --no-default-features --target wasm32-unknown-unknown --locked
     just api-doc
 
+compile-time-prepare root main ideal:
+    python3 perf/compile-time.py prepare "{{root}}" "{{main}}" "{{ideal}}"
+
+compile-time-run zenbench root:
+    "{{zenbench}}" pair "{{root}}/plan.json" --dry-run > "{{root}}/dry-run.json"
+    "{{zenbench}}" pair "{{root}}/plan.json" --mode iterate --output "{{root}}/attempt"
+
+compile-time-report root log receipt:
+    python3 perf/compile-time-report.py "{{root}}" "{{log}}" "{{receipt}}"
+
 # Pump, mapping, type-erasure and fused-session debugging contracts.
 media-errors-sync export:
     just frame-policy-sync "{{export}}"
