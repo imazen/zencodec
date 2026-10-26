@@ -15,7 +15,8 @@ pub trait CollectionFactory: Send + Sync {
     ///
     /// `format` is the matched registration, not a fresh format-detection result.
     /// Supplied limits and decode policy are requirements: honor them throughout
-    /// the collection or refuse before the affected work. Do not ignore fields,
+    /// the collection or refuse before the affected work. Do not ignore applicable
+    /// fields; `ResourceLimits::max_output_bytes` is encode-only. Do not
     /// buffer the complete source implicitly, or substitute another view.
     /// `None` keeps the native template's configuration. Native parsing/workspace
     /// admission remains this adapter's responsibility; publication policy cannot

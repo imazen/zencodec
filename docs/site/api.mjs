@@ -17,6 +17,7 @@ export const api = {
   findCause: {path:'zencodec::find_cause',file:'src/error.rs',methods:['find_cause']},
   tiffSelection: {path:'candidate::TiffItems (private native experiment)',file:'perf/spatial-validation/src/tiff_items.rs',scope:'impl<R: Read + Seek> TiffItems<R>',methods:['open','images','children','next','decode']},
   collectionOpen: {path:'candidate::TiffCollection (private native experiment)',file:'perf/spatial-validation/src/tiff_items.rs',scope:'impl<R: Read + Seek> TiffCollection<R>',methods:['open','open_with_stop']},
+  collectionOpen: {path:'zencodec::collection::OpenRequest',file:'src/collection/factory.rs',scope:'impl OpenRequest',methods:['new']},
   collectionFactory: {path:'zencodec::collection::CollectionFactory',file:'src/collection/factory.rs',scope:'pub trait CollectionFactory',methods:['formats','open']},
   collectionFactories: {path:'zencodec::CodecSet',file:'src/set/collection.rs',scope:'impl CodecSet',methods:['with_collection','open_collection']},
   collectionStop: {path:'zencodec::operation::CollectionOperationError',file:'src/operation/collection.rs',scope:'impl CollectionOperationError',methods:['stop_reason']},

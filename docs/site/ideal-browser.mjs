@@ -38,6 +38,8 @@ export async function checkIdeal(browser,url,output) {
     assert.ok((await factories.textContent()).includes('open_collection'));
     assert.ok((await factories.textContent()).includes('CollectionFactory'));
     assert.ok((await factories.textContent()).includes('refuse unqualified legacy'));
+    assert.ok((await factories.textContent()).includes('stored width, height and pixel caps'));
+    assert.ok((await factories.textContent()).includes('OpenRequest'));
     const placement=page.locator('#change-placement');
     await placement.locator(':scope>summary').focus();
     await page.keyboard.press('Enter');

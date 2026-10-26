@@ -187,7 +187,8 @@ configurations. `open_collection(format, source, request, resolver, stop)` retur
 source without borrowing the registry. The first matching registration wins,
 including failures; no implicit format detection, source staging or fallback.
 The factory receives the matched format, required view, inherited resource limits
-and decode policy, and the shared latched stop token. It must honor configured
+and decode policy, and the shared latched stop token. The explicitly encode-only
+output-byte limit does not constrain collection decoding. It must honor configured
 requirements or refuse before affected work. This is stronger than the legacy
 best-effort policy setter on still-image jobs. Inherited pulse cancellation,
 inherited stop and per-call stop all remain active after the registry drops;

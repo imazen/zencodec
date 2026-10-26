@@ -66,11 +66,22 @@ reporting or an implicit format probe.
 
 Configured `ResourceLimits` and `decode::DecodePolicy` are requirements on this
 path. An adapter must enforce them or return a typed refusal before affected
-work. The private TIFF/JXL factories currently refuse either supplied legacy
-configuration before source I/O; their codec-specific templates still apply.
-That qualification gap must not be hidden by a capability query or by applying
-only the fields that happen to be convenient. It also does not make the legacy
-still-image `with_decode_policy` setter a checked operation.
+work. The private TIFF factory enforces `max_width`, `max_height` and
+`max_pixels` against the actual selected stored dimensions before allocating
+selected output or reading compressed pixels. Header-only inspection remains
+available for over-limit images, and a smaller child can still decode. A tiny
+ROI does not redefine the stored-image limit. The pinned native path executes
+sequentially and accepts `ThreadingPolicy::Sequential`.
+
+Both factories accept the no-op native-default configurations. The explicitly
+encode-only `max_output_bytes` field does not constrain a decode. Other
+nontrivial resource or decode-policy requirements currently refuse before source
+I/O; this includes geometry requirements on the JXL factory. Mixed supported and
+unsupported fields refuse as a whole. Codec-specific templates still apply.
+Limit violations retain `LimitExceeded` with the actual value and requested cap;
+unimplemented enforcement retains `CollectionOpenError`. Neither means that
+stripping metadata after reconstruction could establish a parsing/PII policy.
+The legacy still-image `with_decode_policy` setter remains best-effort.
 
 [`ErasedCollection`](../src/collection/erased.rs) retains native identities and
 output ownership, checks cursor origin before native work and avoids boxing each
@@ -80,6 +91,8 @@ admission. Concrete adapter packaging, automatic detection, full native limit
 mappings and progress integration remain open.
 
 The [registration receipt](../benchmarks/collection_registry_2026-10-26.json) records native, HTTP, workspace, WASM, documentation and browser validation, including failed initial attempts.
+
+The [native dimension receipt](../benchmarks/collection_dimensions_2026-10-26.json) records the three qualified decode caps, payload-read guard, per-field refusals and conditional HTTP control.
 
 ## Browse, retain an identity, request a region
 
