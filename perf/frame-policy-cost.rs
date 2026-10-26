@@ -99,7 +99,7 @@ impl Workload {
             assert_eq!(facts.timing, Self::timing(i));
             assert!(matches!(
                 record.selected,
-                Some(Selection::Frame(PublicationOffer::PreserveNative))
+                Some(Selection::Frame(PublicationOffer::ReturnHeld))
             ));
         }
     }

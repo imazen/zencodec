@@ -18,6 +18,7 @@ mod placement;
 pub use placement::{Placement, PlacementError, PlacementOverlap};
 mod owner;
 pub use owner::PackedImageOwner;
+mod replace;
 
 /// A rectangle in the selected image's stored coordinates, before orientation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -352,6 +353,11 @@ pub(crate) struct SampleFacts {
 trait ImageStorage: Send + Sync {
     fn facts(&self) -> SampleFacts;
     fn map(&self) -> Result<Box<dyn MappedImage + '_>, Failure>;
+    // A replacement keeps only the original auxiliary owner, not a chain of
+    // intermediate color allocations. This is deliberately not an adapter API.
+    fn auxiliary_source(&self) -> Option<Arc<dyn ImageStorage>> {
+        None
+    }
 }
 
 /// Frozen together with the storage. Callers can inspect or clone these facts,
@@ -391,7 +397,7 @@ impl ImageInterpretation {
     }
 }
 
-/// Owned native output. Clones retain the same storage and frozen facts.
+/// Owned image output. Clones retain the same storage and frozen facts.
 #[derive(Clone)]
 pub struct ImageOutput {
     storage: Arc<dyn ImageStorage>,

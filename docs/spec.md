@@ -111,6 +111,8 @@ impl ImageOutput {
     fn from_packed_owner<P: PackedImageOwner + 'static>(owner: P,
         auxiliaries: Vec<Auxiliary>, interpretation: ImageInterpretation)
         -> Result<Self, At<OutputError>>;
+    fn replace_packed_color<P: PackedImageOwner + 'static>(self, owner: P)
+        -> Result<Self, At<OutputError>>;
     fn from_frame(frame: frame::Frame) -> Self;
     fn interpretation(&self) -> &ImageInterpretation;
     fn map(&self) -> Result<Box<dyn MappedImage + '_>, At<OutputError>>;
@@ -138,6 +140,17 @@ mechanism; it adds no policy callback and does not admit existing allocations
 retroactively. Native workspace and small owner/metadata allocations are outside
 a managed payload allowance. [Native qualification](../perf/spatial-validation/README.md#packed-output-admission)
 exercises release on refusal/cancellation and retention through clones.
+
+`replace_packed_color` composes converted color with the original auxiliary
+mapping guards. The replacement must cover the same stored coordinates. It
+retains geometry, placement, orientation, timing, auxiliary roles and original
+source facts; its descriptor/context describe the new color. It neither
+transforms nor renders auxiliaries, and it refuses component-code output.
+An auxiliary owner can also retain its original color allocation, which stays
+charged. Repeated replacement releases intermediate color owners. With no
+auxiliaries, the consumed source storage releases unless another clone holds it.
+Publication still uses the existing resolver. This adds one composition method,
+not another mapping trait or callback.
 
 Packed construction checks region bounds, pixel dimensions and compatible
 interpretation. Frame mapping checks the stored/crop extent, role count and
@@ -594,7 +607,7 @@ impl SampleEncoding {
 }
 
 // zencodec::operation
-enum PublicationOffer { PreserveNative } // non_exhaustive
+enum PublicationOffer { ReturnHeld } // non_exhaustive
 fn resolve_image<R: PolicyResolver + ?Sized>(
     image: image::ImageOutput, resolver: &mut R, preset: PolicySet, stop: &dyn Stop,
 ) -> Result<Outcome<image::ImageOutput>, At<PolicyFailure>>;
@@ -633,6 +646,8 @@ records retain these facts once in `DecisionContext::Image`; the selected offer
 names only its effect. `PublicationOffer` is shared by image and frame questions,
 replacing the unpublished frame-only option type. No additional resolver trait
 or duplicate native-publication option enum is introduced.
+`ReturnHeld` promises these held samples unchanged; it does not claim they are
+the original samples before an explicit conversion.
 
 Both publication routes follow native reconstruction. Presets requiring metadata
 treatment, disallowing opaque profiles or requiring a workspace bound refuse

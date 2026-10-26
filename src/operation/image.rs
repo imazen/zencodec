@@ -79,7 +79,7 @@ pub fn resolve_image<R: PolicyResolver + ?Sized>(
 ) -> Result<Outcome<ImageOutput>, At<PolicyFailure>> {
     let facts = ImageFacts::new(&image);
     let (_, record) = policy::choose(
-        &[PublicationOffer::PreserveNative],
+        &[PublicationOffer::ReturnHeld],
         DecisionContext::Image(facts),
         |choices| Question::Image {
             image: &image,

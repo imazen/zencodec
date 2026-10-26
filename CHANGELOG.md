@@ -2,6 +2,11 @@
 
 ## Native image selection (unreleased experiment)
 
+- Add `ImageOutput::replace_packed_color`: retain original auxiliary mapping
+  guards and frozen source facts beside new color, with the existing publication
+  resolver. Charges follow both owners; repeated replacement releases
+  intermediate colors. Component codes refuse this same-coordinate operation.
+
 - Compare actual float ICC conversion for one JXL presentation and five raw
   RGB/RGBA layers against independently executed Little CMS. Keep the original
   color tolerance, exact alpha/padding and admitted destination cleanup. Pin
@@ -42,6 +47,10 @@
   inverted-CMYK conversion still refuses with `NeedsCms`.
 
 ### QUEUED BREAKING CHANGES
+
+- Rename review-only `PublicationOffer::PreserveNative` to `ReturnHeld`: an
+  explicitly converted image can be published through this same boundary. The
+  offer promises the current held samples, not the original pre-conversion ones.
 
 - Review-only `OpenRequest` is now `Clone` instead of `Copy`: cloned requests
   share the same retained-output storage allowance (`27cc94e3`). Native factories

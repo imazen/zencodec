@@ -49,14 +49,15 @@ impl FrameFacts {
     }
 }
 
-/// Publish the same held native output without conversion, relabeling, trimming
+/// Publish the same held output without further conversion, relabeling, trimming
 /// or new encoding. Unknown declarations remain inspectable. This establishes
 /// no metadata privacy, display rendering or native workspace bound.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum PublicationOffer {
-    /// Return the original native samples, interpretation and presentation.
-    PreserveNative,
+    /// Return these held samples, interpretation and presentation unchanged.
+    /// A prior explicit conversion may already have produced this output.
+    ReturnHeld,
 }
 
 /// Resolve publication of an actual retained native frame through the same
@@ -75,7 +76,7 @@ pub fn resolve_frame<R: PolicyResolver + ?Sized>(
 ) -> Result<DecisionRecord, At<PolicyFailure>> {
     let facts = FrameFacts::new(interpretation, timing);
     let (_, record) = policy::choose(
-        &[PublicationOffer::PreserveNative],
+        &[PublicationOffer::ReturnHeld],
         DecisionContext::Frame(facts),
         |choices| Question::Frame {
             interpretation,
