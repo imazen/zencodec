@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2907 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 196 lines (196 hidden + 0 excluded-feature)
+# files: zencodec.txt 2908 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 196 lines (196 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -14,7 +14,7 @@
 #   pub types (struct/enum/trait/alias)       340
 #   pub consts/statics                        302
 #   free functions                             83
-#   inherent methods                         1057
+#   inherent methods                         1058
 #   struct fields                             421
 #   enum variants                             475
 #   re-exports                                 15
@@ -31,7 +31,7 @@
 #   encode                          189
 #   estimate                         48
 #   exif                             94
-#   frame                            96
+#   frame                            97
 #   gainmap                         126
 #   helpers                          17
 #   icc                               1
@@ -44,7 +44,7 @@
 #   storage                          34
 #   time                             22
 
-## items (2632 lines)
+## items (2633 lines)
 
 pub mod zencodec
 pub use At
@@ -1084,6 +1084,7 @@ pub const fn frame::FrameTiming::at(time::Timestamp) -> Self
 pub const fn frame::FrameTiming::with_duration_ticks(self, u64) -> Self
 pub const fn frame::FrameTiming::with_packet(self, core::option::Option<u64>, core::option::Option<u64>) -> Self
 pub struct frame::PlaneView<'a>
+pub fn frame::PlaneView<'a>::as_strided_samples(&self) -> frame::PlaneSamples<'a>
 pub fn frame::PlaneView<'a>::code(&self, usize, usize) -> core::option::Option<u16>
 pub fn frame::PlaneView<'a>::encoding(&self) -> frame::SampleEncoding
 pub fn frame::PlaneView<'a>::height(&self) -> usize

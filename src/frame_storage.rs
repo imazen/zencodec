@@ -177,6 +177,26 @@ impl<'a> PlaneView<'a> {
         self.encoding
     }
 
+    /// Borrow the strided storage through the last active sample, including
+    /// padding between rows but excluding trailing allocation space.
+    ///
+    /// Empty geometry returns an empty slice. This does not copy, normalize,
+    /// shift or mask samples: consumers must honor [`Self::encoding`] and
+    /// [`Self::stride_bytes`]. Padding has no sample meaning. The borrow is
+    /// bounded by the native mapping guard, just like [`Self::row`].
+    pub fn as_strided_samples(&self) -> PlaneSamples<'a> {
+        let end = if self.width == 0 || self.height == 0 {
+            0
+        } else {
+            // Non-empty geometry and its storage span were checked at new.
+            (self.height - 1) * self.stride_samples + self.width
+        };
+        match self.samples {
+            PlaneSamples::U8(s) => PlaneSamples::U8(&s[..end]),
+            PlaneSamples::U16(s) => PlaneSamples::U16(&s[..end]),
+        }
+    }
+
     /// Row `y`, without padding. A zero-width row is empty regardless of stride.
     pub fn row(&self, y: usize) -> Option<PlaneSamples<'a>> {
         if y >= self.height {
@@ -344,6 +364,45 @@ impl fmt::Debug for Frame {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn strided_span_borrows_raw_storage_without_trailing_space() {
+        let bytes = [1, 2, 231, 232, 3, 4, 233, 234];
+        let plane = PlaneView::new(PlaneSamples::U8(&bytes), 2, 2, 4, SampleEncoding::U8).unwrap();
+        let PlaneSamples::U8(span) = plane.as_strided_samples() else {
+            panic!("byte storage changed")
+        };
+        assert_eq!(span.as_ptr(), bytes.as_ptr());
+        assert_eq!(span, &bytes[..6]);
+        assert_eq!(plane.code(1, 1), Some(4));
+
+        let words = [0x0043, 0xffc7, 0xdead, 0xbeef, 0x008b, 0x010d, 0xffff];
+        let encoding = SampleEncoding::new(ChannelType::U16, 10, 6).unwrap();
+        let plane = PlaneView::new(PlaneSamples::U16(&words), 2, 2, 8, encoding).unwrap();
+        let PlaneSamples::U16(span) = plane.as_strided_samples() else {
+            panic!("word storage changed")
+        };
+        assert_eq!(span.as_ptr(), words.as_ptr());
+        assert_eq!(span, &words[..6]);
+        assert_eq!(plane.code(0, 0), Some(1));
+        assert_eq!(plane.code(1, 0), Some(1023));
+        assert_eq!(plane.code(1, 1), Some(4));
+    }
+
+    #[test]
+    fn strided_empty_geometry_does_not_expose_or_address_storage() {
+        for (width, height, stride) in [(0, usize::MAX, usize::MAX), (usize::MAX, 0, 0)] {
+            let plane = PlaneView::new(
+                PlaneSamples::U8(&[42]),
+                width,
+                height,
+                stride,
+                SampleEncoding::U8,
+            )
+            .unwrap();
+            assert!(plane.as_strided_samples().is_empty());
+        }
+    }
 
     #[test]
     fn empty_width_rows_remain_empty_with_any_stride() {

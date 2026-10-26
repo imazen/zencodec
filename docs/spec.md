@@ -57,6 +57,10 @@ immutable interpretation and an owned picture after decoder reset/drop; another
 presentation can share that picture with different timing. Mapped rows borrow
 the native guard and preserve word stride, significant code bits and bit shift.
 A native ten-bit word remains a component code, not a normalized RGB U16 sample.
+`PlaneView::as_strided_samples` borrows the complete declared span for existing
+plane kernels: it includes inter-row padding and ends after the last active
+sample. Empty geometry exposes no storage. The accessor neither copies nor
+applies the sample encoding; consumers must still honor code bits and shift.
 
 ```rust
 trait Picture: Send + Sync {

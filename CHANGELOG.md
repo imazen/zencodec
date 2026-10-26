@@ -2,6 +2,10 @@
 
 ## Native image selection (unreleased experiment)
 
+- Add `PlaneView::as_strided_samples` for existing plane kernels to borrow the
+  declared storage span without a full-plane copy. Keep raw word encoding,
+  mapping lifetime and inter-row padding; exclude trailing allocation space.
+
 - Add `ImageOutput::replace_packed_color`: retain original auxiliary mapping
   guards and frozen source facts beside new color, with the existing publication
   resolver. Charges follow both owners; repeated replacement releases

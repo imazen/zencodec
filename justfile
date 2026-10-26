@@ -249,6 +249,12 @@ frame-policy-check:
     cargo clippy -p zencodec -p zencodec-media -p zencodec-media-testkit --all-targets --locked -- -D warnings
     cargo check -p zencodec -p zencodec-media --no-default-features --locked
 
+plane-view-check:
+    cargo test -p zencodec --all-features --locked --lib frame_storage::tests
+    cargo clippy -p zencodec -p zencodec-media -p zencodec-media-testkit --all-targets --locked -- -D warnings
+    cargo check -p zencodec --no-default-features --target wasm32-unknown-unknown --locked
+    just api-doc
+
 # Pump, mapping, type-erasure and fused-session debugging contracts.
 media-errors-sync export:
     just frame-policy-sync "{{export}}"
