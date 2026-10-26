@@ -1,5 +1,46 @@
 # Native spatial contract experiments
 
+## Open native collections through registered factories
+
+The private [`Factories`](src/collection_factories.rs) candidate registers TIFF
+and JXL configurations once. Opening chooses an explicit format and composition,
+binds the source and stop token, and returns the existing checked consumer.
+Native limits stay on each registered configuration; the request also sets one
+discovery-call allowance. The first registered implementation wins. An error
+does not try another implementation with potentially different semantics.
+
+The opened collection borrows its source and can outlive the factory registry.
+TIFF accepts local positional sources through `ReadAtReader`; no input copy or
+length scan is introduced. JXL borrows an already-resident slice. When a source
+cannot provide one, it refuses before reading rather than collecting the file.
+The [`ErasedCollection`](src/erased_collection.rs) candidate erases native state
+once at open and owned cursor state once per cursor. It neither boxes each
+`next` result nor changes the native output owner. Typed collection calls remain
+available without this erasure.
+
+The first factory signature used `DynReadAt`. Compiling the actual HTTP consumer
+failed because that existing trait requires `Send`, while the simulator uses
+thread-local state. [`LocalSource`](src/local_source.rs) tests erasure over any
+existing `ReadAt` without that requirement or a caller-written shim. The published
+transferable interface is unchanged. A public design still needs to place
+transferability on the path that actually crosses threads, without creating two
+independent source protocols. This candidate itself is local and synchronous.
+
+`just spatial-factories-check <fresh-artifact-directory>` checks native TIFF
+children, regions and disk reads, both JXL views, inspection, foreign cursors,
+source causes, discovery exhaustion and output lifetime. `just spatial-http-check`
+also drives the registry over actual conditional HTTP requests. An opened file
+in the disk control stays unchanged under test ownership; positional reads are
+not a snapshot guarantee.
+
+This is an opening experiment, not `CodecSet` registration or released native
+adapters. Automatic format detection, transferable opened jobs, broader native
+configuration coverage, fallible cursor-erasure allocation and a stable public
+packaging decision remain open. It establishes no latency or allocation-cost
+comparison and no whole-workspace/privacy guarantee. Cancellation can currently
+surface as a native, policy or wrapper error; all carry their original reason,
+but a common outer stop accessor would reduce caller error-family coordination.
+
 ## Inspect a selected image before reconstructing it
 
 The shared [`ImageDescription`](../../src/collection/description.rs) describes only the

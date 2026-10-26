@@ -7,11 +7,13 @@ mod checked_collection_tests;
 #[path = "../../../docs/examples/checked_source.rs"]
 mod checked_source;
 mod collection;
+mod collection_factories;
 mod control;
 mod description;
 mod description_checked_tests;
 mod description_jxl_tests;
 mod discovery;
+mod erased_collection;
 mod generated_output_tests;
 #[cfg(all(feature = "file_snapshot", not(target_os = "linux")))]
 compile_error!("the file_snapshot experiment requires Linux and a reflink-capable filesystem");
@@ -26,6 +28,7 @@ mod jxl_layer_tests;
 mod jxl_layers;
 mod jxl_output;
 mod jxl_tests;
+mod local_source;
 mod output_tests;
 mod placement;
 #[cfg(test)]
