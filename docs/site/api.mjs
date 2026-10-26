@@ -10,6 +10,7 @@ export const api = {
   operationRegistration: {path:'zencodec::CodecSet',file:'src/set.rs',scope:'impl CodecSet {',methods:['new','with_decoder','with_send_encoder','with_limits','with_stop']},
   operationControl: {path:'zencodec::decode::ControlledIncrementalDecode',file:'src/traits/control.rs',scope:'pub trait ControlledIncrementalDecode: IncrementalDecode',methods:['step_controlled','resume']},
   framePolicy: {path:'zencodec_media::policy::PolicyDecoder',file:'zencodec-media/src/policy.rs',scope:'impl<D, R> PolicyDecoder<D, R>',methods:['new','with_policy_set','report','is_failed']},
+  imageResolution: {path:'zencodec::operation::resolve_image',file:'src/operation/image.rs',methods:['resolve_image']},
   frameResolution: {path:'zencodec::operation::resolve_frame',file:'src/operation/frame.rs',methods:['resolve_frame']},
   mediaPumpCause: {path:'core::error::Error for zencodec_media::session::PumpError',file:'zencodec-media/src/session.rs',scope:"impl<U: core::error::Error + 'static, D: core::error::Error + 'static> core::error::Error",methods:['source']},
   mediaMapCause: {path:'core::error::Error for zencodec::frame::MapError',file:'src/frame_storage.rs',scope:'impl core::error::Error for MapError',methods:['source']},

@@ -357,6 +357,46 @@ mod image_selection {
     }
 
     #[test]
+    fn output_policy_native_tiff_subifd_keeps_selected_samples_and_extent() {
+        use zencodec::operation::{Decision, PolicySet, Question, resolve_image};
+        for big in [false, true] {
+            for planar in [false, true] {
+                let (bytes, refs) = nested_fixture(big, planar, false);
+                let roi = selected(&[]).region;
+                let mut collection = TiffCollection::open(
+                    Cursor::new(bytes),
+                    Composition::Composited,
+                    Allowances::default(),
+                )
+                .unwrap();
+                let image = first_child(&mut collection, &ImageRequest { region: roi.into() })
+                    .unwrap()
+                    .unwrap();
+                drop(collection);
+                let address = image.with_pixels(|p| p.row(0).as_ptr() as usize).unwrap();
+                let expected_geometry = image.interpretation().geometry;
+                let outcome = resolve_image(image,
+                    &mut |question: Question<'_>| -> Result<Decision, zencodec::At<std::convert::Infallible>> {
+                        let Question::Image { image, facts, choices } = question else { panic!("wrong domain") };
+                        assert_eq!(facts.geometry, expected_geometry);
+                        assert_eq!(facts.planes, 1);
+                        assert_eq!(facts.auxiliaries, 0);
+                        assert!(facts.frame.is_none());
+                        image.with_pixels(|p| assert_eq!(facts.packed, Some(p.descriptor()))).unwrap();
+                        Ok(Decision::choose(choices.first().unwrap()))
+                    }, PolicySet::new(), &zencodec::Unstoppable).unwrap();
+                assert_eq!(outcome.report().decisions().count(), 1);
+                outcome
+                    .with_pixels(|p| {
+                        assert_eq!(p.row(0).as_ptr() as usize, address);
+                        assert_eq!(p.as_contiguous_bytes().unwrap(), crop(&refs[1], roi));
+                    })
+                    .unwrap();
+            }
+        }
+    }
+
+    #[test]
     fn common_consumer_selects_native_tiff_root_and_subifd() {
         for big in [false, true] {
             for planar in [false, true] {

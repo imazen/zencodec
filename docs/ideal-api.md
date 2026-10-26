@@ -119,9 +119,11 @@ metadata passthrough or additional rendering of an already-composited color plan
 Each decode carries its own region
 request; TIFF returns the selected canvas and region origin, while required JXL
 regions refuse. The [platform review](platform-review-2026-10-25.md) records
-WIC/OpenImageIO evidence and the distinction between containment and roles. The next
-collection promotion gate is publication policy admission,
-explicit discovery allowances and source-revision validation. Raw JXL layer implementation is
+WIC/OpenImageIO evidence and the distinction between containment and roles. The owned output now has `operation::resolve_image`, using the existing resolver
+and a shared `PublicationOffer`. It returns the same owner only on acceptance;
+failed decisions drop unpublished output. This is post-reconstruction publication,
+not pre-allocation admission or a privacy certificate. Collection promotion still
+needs explicit discovery allowances, cancellation and source-revision validation. Raw JXL layer implementation is
 still [decoder issue 57](https://github.com/imazen/zenjxl-decoder/issues/57);
 the existing [paged-decoder issue](https://github.com/imazen/zencodec/issues/1)
 owns the shared-selector discussion. The [public-output receipt](../benchmarks/public_image_output_2026-10-26.json)

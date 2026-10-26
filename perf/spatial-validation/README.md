@@ -270,6 +270,31 @@ full TIFF/JXL matrix, the shared native AV1 output test and guide checks. Full
 native run: `run-heavy: done rc=0 119s | peak-RSS 0.22GiB | min-avail 13298MiB |
 peak-load 1.13`. This is test-process usage, not a native workspace bound.
 
+### Policy follows the actual held output
+
+`zencodec::operation::resolve_image` consumes an `ImageOutput`, invokes the
+existing fallible resolver with `Question::Image`, and returns the same owner
+with its decision record only on acceptance. Image and video publication share
+`PublicationOffer::PreserveNative`; there is no extra callback interface. The
+callback sees actual immutable output and bounded facts, including whether
+retained spot planes already contributed to color. Those counts do not certify
+that every source channel was discovered or retained.
+
+The native TIFF case admits a selected SubIFD and retains its exact extent,
+allocation address and samples across classic/BigTIFF and chunky/planar variants.
+The JXL case alternates rendered/unrendered selections under one identity; a rule
+against already-applied retained spots refuses the actual rendered route and
+accepts the separate route, preserving all color/auxiliary bytes. The native AV1
+matrix passes its mapped output through the same resolver while retaining plane
+addresses, code depth, crop, timing and owner lifetime.
+
+Authored ownership controls additionally check stale choices, callback failures
+with retained typed traces, refusal, cancellation before/after callback and
+unwind. Presets requiring metadata treatment, no opaque profiles or a workspace
+bound refuse: this publication offer has no evidence for those obligations.
+This boundary follows native reconstruction and is not allocation admission or
+a whole-container privacy certificate. Caller-retained clones remain independent.
+
 ### Native qualification
 
 [`src/jxl_items.rs`](src/jxl_items.rs) exercises the same operation-bound image

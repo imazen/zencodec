@@ -526,3 +526,52 @@ fn output_rejects_geometry_and_interpretation_that_disagree_with_packed_samples(
         vec![17; 6]
     );
 }
+
+#[test]
+fn output_policy_native_spot_decision_uses_actual_applied_effects() {
+    use zencodec::operation::{
+        Decision, DecisionCode, DecisionContext, Decline, PolicySet, Question, resolve_image,
+    };
+    let data = fixture("conformance_test_images/spot.jxl");
+    let mut collection = JxlItems::open(&data, Composition::Composited, 8).unwrap();
+    let id = collection.next().unwrap().unwrap().image;
+    let mut seen = 0;
+    for render in [true, false, true, false] {
+        let image = collection.decode_with_spot_colors(&id, render).unwrap();
+        let expected = mapped_planes(&image);
+        let address = image.with_pixels(|p| p.row(0).as_ptr() as usize).unwrap();
+        let result = resolve_image(image,
+            &mut |question: Question<'_>| -> Result<Decision, zencodec::At<std::convert::Infallible>> {
+                let Question::Image { image, facts, choices } = question else { panic!("wrong domain") };
+                seen += 1;
+                assert_eq!(facts.source_details, 1);
+                assert_eq!(facts.planes, expected.len());
+                assert_eq!(facts.auxiliaries, expected.len() - 1);
+                assert_eq!(facts.applied_spot_colors > 0, render);
+                assert_eq!(mapped_planes(image), expected);
+                if facts.applied_spot_colors > 0 {
+                    Ok(Decision::decline(Decline::ApplicationRule))
+                } else {
+                    Ok(Decision::choose(choices.first().unwrap()))
+                }
+            }, PolicySet::new(), &zencodec::Unstoppable);
+        if render {
+            let error = result.unwrap_err();
+            assert_eq!(error.error().record().code, DecisionCode::Declined);
+            let DecisionContext::Image(facts) = error.error().record().context else {
+                panic!("lost refusal facts")
+            };
+            assert!(facts.applied_spot_colors > 0);
+            assert!(zencodec::find_cause::<Decline>(&error).is_some());
+        } else {
+            let output = result.unwrap();
+            assert_eq!(mapped_planes(&output), expected);
+            assert_eq!(
+                output.with_pixels(|p| p.row(0).as_ptr() as usize).unwrap(),
+                address
+            );
+            assert_eq!(output.report().decisions().count(), 1);
+        }
+    }
+    assert_eq!(seen, 4);
+}

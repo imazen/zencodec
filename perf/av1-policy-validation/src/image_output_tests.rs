@@ -58,6 +58,23 @@ fn output_native_av1_keeps_mapping_ownership_codes_roles_and_timing() {
                         .collect()
                 };
                 let image = ImageOutput::from_frame(native);
+                let image = zencodec::operation::resolve_image(
+                    image,
+                    &mut |question: zencodec::operation::Question<'_>| -> Result<_, zencodec::At<std::convert::Infallible>> {
+                        let zencodec::operation::Question::Image { image, facts, choices } = question else {
+                            panic!("wrong publication domain")
+                        };
+                        assert!(Arc::ptr_eq(image.interpretation().signal.as_ref().unwrap(), &interpretation));
+                        assert_eq!(facts.packed, None);
+                        assert_eq!(facts.planes, addresses.len());
+                        assert_eq!(facts.timing, Some(timing));
+                        assert_eq!(facts.presentation, Some(presentation));
+                        assert_eq!(facts.frame.unwrap().encoding, interpretation.encoding);
+                        Ok(zencodec::operation::Decision::choose(choices.first().unwrap()))
+                    },
+                    zencodec::operation::PolicySet::new(),
+                    &Unstoppable,
+                ).unwrap().into_output();
                 let retained = image.clone();
                 drop(image);
                 assert!(owner.upgrade().is_some());
