@@ -250,7 +250,12 @@ impl ReadAt for SliceReadAt<'_> {
 
 /// Object-safe [`ReadAt`]. Jobs receive this; codecs wrap its boxed errors
 /// with their own source-error constructor.
-pub trait DynReadAt: Send {
+///
+/// A synchronous operation may borrow a thread-local source. Request
+/// `dyn DynReadAt + Send` when the erased source itself crosses threads;
+/// erasure does not move it. Async drivers can instead construct a local
+/// reader on their compute thread and keep transport ownership on the runtime.
+pub trait DynReadAt {
     /// Total length in bytes (may be expensive; see [`ReadAt::len`]).
     fn len(&mut self) -> Result<u64, BoxedError>;
     /// Total length if known without reading ahead.
@@ -338,7 +343,7 @@ impl<S: DynReadAt + ?Sized> DynReadAt for &mut S {
 /// Shim presenting a concrete [`ReadAt`] as a [`DynReadAt`].
 pub struct ReadAtShim<S>(pub S);
 
-impl<S: ReadAt + Send> DynReadAt for ReadAtShim<S> {
+impl<S: ReadAt> DynReadAt for ReadAtShim<S> {
     fn len(&mut self) -> Result<u64, BoxedError> {
         self.0.len().map_err(|e| Box::new(e) as BoxedError)
     }
@@ -370,7 +375,13 @@ impl<S: ReadAt + Send> DynReadAt for ReadAtShim<S> {
     }
 }
 
-impl<S: ReadAt + Send + 'static> From<S> for Box<dyn DynReadAt> {
+impl<'a, S: ReadAt + 'a> From<S> for Box<dyn DynReadAt + 'a> {
+    fn from(source: S) -> Self {
+        Box::new(ReadAtShim(source))
+    }
+}
+
+impl<'a, S: ReadAt + Send + 'a> From<S> for Box<dyn DynReadAt + Send + 'a> {
     fn from(source: S) -> Self {
         Box::new(ReadAtShim(source))
     }

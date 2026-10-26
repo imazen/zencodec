@@ -85,3 +85,66 @@ fn structural_refusals_remain_distinct_from_native_io() {
     ));
     assert!(zencodec::find_cause::<io::Error>(&error).is_none());
 }
+
+#[test]
+fn erased_local_source_retains_borrowed_input_and_thread_local_reader_state() {
+    use std::{cell::Cell, rc::Rc};
+    struct LocalReader<'a> {
+        input: io::Cursor<&'a [u8]>,
+        reads: Rc<Cell<usize>>,
+    }
+    impl Read for LocalReader<'_> {
+        fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
+            self.reads.set(self.reads.get() + 1);
+            self.input.read(out)
+        }
+    }
+    let bytes = [2, 3, 5, 7, 11, 13];
+    let reads = Rc::new(Cell::new(0));
+    let reader = LocalReader {
+        input: io::Cursor::new(&bytes),
+        reads: reads.clone(),
+    };
+    let mut source: Box<dyn DynReadAt + '_> =
+        BufferedReadAt::new(reader, BufferPolicy::Spool { max_bytes: 6 }).into();
+    let mut first = [0; 2];
+    let mut last = [0; 2];
+    source
+        .read_many_at(&mut [(4, &mut last), (0, &mut first)])
+        .unwrap();
+    assert_eq!(first, [2, 3]);
+    assert_eq!(last, [11, 13]);
+    let before = reads.get();
+    source.read_exact_at(1, &mut first).unwrap();
+    assert_eq!(first, [3, 5]);
+    assert_eq!(
+        reads.get(),
+        before,
+        "cached local read touched the reader again"
+    );
+    assert!(before > 0);
+}
+
+#[test]
+fn explicitly_send_erased_source_can_borrow_input_across_a_scoped_thread() {
+    use zencodec::source::SliceReadAt;
+    let bytes = vec![2, 3, 5, 7, 11, 13];
+    let expected = bytes.as_slice();
+    let mut source: Box<dyn DynReadAt + Send + '_> = SliceReadAt::new(&bytes).into();
+    let (first, last) = std::thread::scope(|scope| {
+        scope
+            .spawn(move || {
+                let mut first = [0; 2];
+                let mut last = [0; 2];
+                source
+                    .read_many_at(&mut [(0, &mut first), (4, &mut last)])
+                    .unwrap();
+                assert_eq!(source.as_slice(), Some(expected));
+                (first, last)
+            })
+            .join()
+            .unwrap()
+    });
+    assert_eq!(first, [2, 3]);
+    assert_eq!(last, [11, 13]);
+}

@@ -1916,7 +1916,7 @@ pub source::SourceError::UnexpectedEof::total: core::option::Option<u64>
 pub struct source::ReadAtShim<S>(pub S)
 pub struct source::SliceReadAt<'a>
 pub const fn source::SliceReadAt<'a>::new(&'a [u8]) -> Self
-pub trait source::DynReadAt: core::marker::Send
+pub trait source::DynReadAt
 pub fn source::DynReadAt::as_slice(&self) -> core::option::Option<&[u8]>
 pub fn source::DynReadAt::is_empty(&mut self) -> core::result::Result<bool, encode::BoxedError>
 pub fn source::DynReadAt::len(&mut self) -> core::result::Result<u64, encode::BoxedError>

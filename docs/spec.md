@@ -974,8 +974,10 @@ trait ReadAt {
     fn read_many_at(&mut self, reqs: &mut [(u64, &mut [u8])]) -> Result<(), Self::Error>; // default: sequential
     fn as_slice(&self) -> Option<&[u8]>;                      // default None; in-memory sources
 }
-trait DynReadAt: Send { /* same, over BoxedError */ }
+trait DynReadAt { /* same, over BoxedError */ }
 struct SliceReadAt<'a>;  struct ReadAtShim<S>(pub S);
+// Box<dyn DynReadAt + 'a>: local or borrowed source.
+// Box<dyn DynReadAt + Send + 'a>: explicitly transferable source.
 enum AccessPattern { Sequential, BoundedBacktrack { window_bytes: u64 }, RandomAccess }
 enum SourceError { BeyondWindow {..}, BeyondLimit {..}, UnexpectedEof {..}, Io {..} }
 

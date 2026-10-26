@@ -561,7 +561,7 @@ io-core-sync export:
     test ! -e "{{export}}/.jj"
     test -f "{{export}}/zencodec-io/Cargo.toml"
     cp Cargo.toml "{{export}}/Cargo.toml"
-    cp src/lib.rs src/storage.rs src/frame.rs src/frame_storage.rs src/image.rs src/collection.rs src/operation.rs "{{export}}/src/"
+    cp src/lib.rs src/source.rs src/storage.rs src/frame.rs src/frame_storage.rs src/image.rs src/collection.rs src/operation.rs "{{export}}/src/"
     mkdir -p "{{export}}/src/collection" "{{export}}/src/operation" "{{export}}/src/image"
     cp src/collection/*.rs "{{export}}/src/collection/"
     cp src/image/*.rs "{{export}}/src/image/"

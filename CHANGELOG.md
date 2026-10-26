@@ -2,6 +2,11 @@
 
 ## Native image selection (unreleased experiment)
 
+- Make the unreleased `DynReadAt` protocol usable with thread-local sources.
+  Request `dyn DynReadAt + Send` explicitly when moving an erased source
+  between threads. Both boxed forms accept borrowed input. Native factories
+  reuse this protocol; remove their duplicate private `LocalSource` trait.
+
 - Add `CollectionOperationError::stop_reason()` (`2cdadc3c`) so callers can
   inspect the operation token's first observed stop across native, policy and
   wrapper failures. Preserve coincident source/application causes and traces,
