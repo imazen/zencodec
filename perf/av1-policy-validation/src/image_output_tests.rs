@@ -62,16 +62,16 @@ fn output_native_av1_keeps_mapping_ownership_codes_roles_and_timing() {
                 drop(image);
                 assert!(owner.upgrade().is_some());
                 assert!(Arc::ptr_eq(
-                    retained.signal.as_ref().unwrap(),
+                    retained.interpretation().signal.as_ref().unwrap(),
                     &interpretation
                 ));
-                assert_eq!(retained.timing, Some(timing));
-                assert_eq!(retained.presentation, Some(presentation));
-                assert_eq!(retained.orientation, None);
+                assert_eq!(retained.interpretation().timing, Some(timing));
+                assert_eq!(retained.interpretation().presentation, Some(presentation));
+                assert_eq!(retained.interpretation().orientation, None);
                 assert_eq!(
                     (
-                        retained.geometry.canvas_width,
-                        retained.geometry.canvas_height
+                        retained.interpretation().geometry.canvas_width,
+                        retained.interpretation().geometry.canvas_height
                     ),
                     (settings.width, settings.height)
                 );

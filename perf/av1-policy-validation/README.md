@@ -15,6 +15,11 @@ decoder reset/drop, and releases the picture with the final output owner.
 Its packed-color convenience refuses planar code samples. The trial is private;
 it does not establish a display conversion or a complete memory bound.
 
+The trial now exposes an immutable `interpretation()` snapshot instead of mutable
+output fields. The same native address, exact-sample, ownership and FFmpeg checks
+passed after this change: run-heavy rc=0, 9 s, peak RSS 0.54 GiB, minimum available
+13334 MiB, peak load 0.46. Log: `~/tmp/zencodec-interpretation-av1-2026-10-26.log`.
+
 The output gate passed on 2026-10-26: run-heavy rc=0, 9 s, peak RSS 0.54 GiB,
 minimum available 13206 MiB, peak load 0.36. Log:
 `~/tmp/zencodec-common-output-video1-2026-10-26.log`. This measures the build/test
