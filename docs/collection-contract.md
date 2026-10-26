@@ -76,6 +76,14 @@ resident span before native parsing. Missing or misleading length hints do not
 change the decision. This bounds accepted parser input; the caller already owns
 that storage, and native workspace is not admitted by this check.
 
+[Native resource-scope controls](../perf/spatial-validation/README.md#native-jxl-limit-scope)
+show why the remaining mappings need more than forwarding numbers. A small
+local JXL layer fits a selected-image pixel cap while its larger canvas exceeds
+the native cap. Independently budgeted native decoders can also leave retained
+output capacity above any one decoder's budget. Keep selected geometry, native
+work and shared retained allocations explicit; publication policy happens too
+late to admit allocations that already occurred.
+
 Both factories accept the no-op native-default configurations. The explicitly
 encode-only `max_output_bytes` field does not constrain a decode. Other
 nontrivial resource or decode-policy requirements currently refuse before source

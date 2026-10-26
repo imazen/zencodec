@@ -96,6 +96,34 @@ The [CodecSet integration receipt](../../benchmarks/collection_registry_2026-10-
 
 The [native dimension receipt](../../benchmarks/collection_dimensions_2026-10-26.json) records source hashes and each gate; three of eight decode-relevant optional caps are qualified for TIFF.
 
+## Native JXL limit scope
+
+`just spatial-admission-check <fresh-artifact-directory>` tests whether native
+options can stand in for selected-output and retained-storage requirements.
+The [receipt](../../benchmarks/jxl_resource_scope_2026-10-26.json) records the
+native revision, executed controls, source hash and initial compile failure.
+
+The CMYK fixture's final local layer is 110×68 (7,480 pixels). It decodes under
+the normal raw-layer path, but a native pixel cap of 7,480 rejects the 512×512
+canvas (262,144 pixels) before selection. The native parser also checks preview
+and internal upsampled frame extents. A selected-image cap and this native work
+cap therefore have different scopes; forwarding one number changes behavior.
+
+The native memory control rejects budgets of 0, 1,048,576 and 4,194,304 bytes,
+then succeeds at 16,777,216. Three independently budgeted decodes retain
+18,948,096 bytes of output vector capacity at once, with identical samples.
+Each decoder has already dropped; the caller still owns those strided planes.
+This measures actual live `Vec::capacity`, not RSS or total native workspace.
+
+Do not map the shared memory requirement to a fresh per-decoder tracker and
+claim a whole-collection bound. Retained outputs need a shared allocation charge
+that follows their last owner. Native workspace, discovery, caller-owned input
+and encoded staging need their own qualified scope. The current packed
+`ImageOutput` constructor adopts `PixelBuffer` and auxiliary `Vec` storage;
+integrating already-admitted packed storage without copying remains an adapter
+boundary to resolve. No new policy decision can supply a missing allocator
+mechanism. Keep the existing typed refusal until that mechanism is qualified.
+
 ## Packaged JXL validation
 
 The harness pins [zenjxl PR31](https://github.com/imazen/zenjxl/pull/31) at

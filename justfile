@@ -470,6 +470,11 @@ spatial-packaged-check artifacts:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked raw_collection_native_samples_and_owner_bound_policy_match_independent_layers -- --nocapture
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
 
+# Native option scope is qualified separately from shared resource requirements.
+spatial-admission-check artifacts:
+    SPATIAL_LAYER_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked native_jxl_admission_ -- --nocapture --test-threads=1
+    just spatial-validation-lint
+
 # Automatic selected-image publication policy, including native failure seams.
 spatial-checked-collection-check:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked checked_collection_ -- --nocapture --test-threads=1

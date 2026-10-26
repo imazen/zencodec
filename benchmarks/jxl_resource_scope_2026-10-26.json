@@ -1,0 +1,67 @@
+{
+  "kind": "native resource-contract experiment, not a performance benchmark",
+  "base_commit": "e730bfa00e786622bf46ef7d81d131e2355a5ac3",
+  "native_commit": "fe819360581acb3796ea2925f2a81f44f0a430e6",
+  "source_sha256": {
+    "perf/spatial-validation/src/jxl_admission_tests.rs": "4767eb9e5619dc4526b8b0100e656cde58f00b57e11b54e8ccf2cbc1bff7da7a"
+  },
+  "command": "just spatial-admission-check <fresh-artifact-directory>",
+  "host": "r7900x",
+  "results": {
+    "native-memory-scope": {
+      "attempts": [
+        {
+          "accepted": false,
+          "actual": 4096,
+          "budget": 0
+        },
+        {
+          "accepted": false,
+          "actual": 1052672,
+          "budget": 1048576
+        },
+        {
+          "accepted": false,
+          "actual": 4198400,
+          "budget": 4194304
+        },
+        {
+          "accepted": true,
+          "budget": 16777216
+        }
+      ],
+      "fixture": "conformance_test_images/cmyk_layers.jxl",
+      "measurement_scope": "actual output Vec capacities only; not RSS or total native workspace",
+      "native_samples": "bit-exact across repeated independently budgeted decodes",
+      "per_decoder_budget": 16777216,
+      "retained_decodes": 3,
+      "retained_output_vec_capacity_bytes": 18948096
+    },
+    "native-pixel-scope": {
+      "fixture": "conformance_test_images/cmyk_layers.jxl",
+      "native_refusal_actual_pixels": 262144,
+      "native_refusal_limit_pixels": 7480,
+      "native_scope": "canvas, preview and internal upsampled frame extents; not just selected output",
+      "selected_pixels": 7480,
+      "selected_size": [
+        110,
+        68
+      ]
+    }
+  },
+  "checks": "both native behavioral controls and strict all-target lint passed",
+  "attempts": [
+    {
+      "exit_code": 101,
+      "reason": "new experiment used a private error-module path and PixelSlice::height instead of public api::Error and rows",
+      "run_heavy": "done rc=101 2s | peak-RSS 0.35GiB | min-avail 13563MiB | peak-load 0.18"
+    },
+    {
+      "exit_code": 0,
+      "run_heavy": "done rc=0 5s | peak-RSS 0.64GiB | min-avail 13185MiB | peak-load 0.24"
+    }
+  ],
+  "measurement_limit": "Output capacity is read from live Vec allocations. It is not native workspace, peak process memory or RSS. run-heavy reports the whole build/test process tree. No timing conclusion.",
+  "artifact_directory": "/mnt/v/output/zencodec/platform-regions-20261026-run/jxl-admission-scope-2",
+  "log": "~/tmp/zencodec-jxl-admission-scope-2-20261026.log"
+}
