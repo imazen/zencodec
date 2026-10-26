@@ -2,6 +2,13 @@
 
 ## Native image selection (unreleased experiment)
 
+- Combine the existing output-plan and native-sample review dependency pins.
+  Validate borrowed JXL color input directly into admitted destination rows
+  across four CMYK and five RGB layers. Preserve exact color/context and
+  charges through retained output; discard unpublished storage on admission,
+  interpretation, late CMS failure and unwind. Complete auxiliary-plane
+  publication and owner-preserving identity remain outside this color stage.
+
 - Qualify profile-aware CMYK identity finalization with native JXL samples:
   preserve exact samples and ICC, refuse unsupported RGB conversion and missing
   current color context, and demonstrate that the required owned input and

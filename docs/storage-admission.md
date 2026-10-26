@@ -88,6 +88,14 @@ and its owned result creates another allocation. Both survive after the decode
 pool returns to zero. See the [executing controls](../perf/spatial-validation/README.md#cmyk-output-finalization)
 and [existing ownership issue](https://github.com/imazen/zenpixels/issues/69).
 
+The combined review revision's `OutputPlan` supplies a separate, checked path:
+the native JXL color-stage prototype borrows mapped input and writes directly
+into an admitted, aligned destination. All nine raw layers preserve color bits
+and ICC. Refusal, late CMS errors and unwinding release unpublished destination
+charges. This qualifies color payload storage; complete auxiliary-plane
+publication, identity borrowing and CMS workspace admission remain open.
+See [the native execution](../perf/spatial-validation/README.md#existing-outputplan-with-admitted-destination-storage).
+
 Policy waiting, conversion scratch and encoded staging must use this ownership
 mechanism when they claim a managed payload allowance. A hard whole-operation
 limit additionally needs qualified native codec and service bounds. The ordinary

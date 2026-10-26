@@ -485,6 +485,11 @@ spatial-conversion-check:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked native_cmyk_finalization_ -- --nocapture --test-threads=1
     just spatial-validation-lint
 
+spatial-output-plan-check:
+    cargo fmt --manifest-path perf/spatial-validation/Cargo.toml -p spatial-validation
+    cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked native_output_plan_ -- --nocapture --test-threads=1
+    just spatial-validation-lint
+
 image-owner-check:
     cargo test -p zencodec --all-features --lib packed_owner_ --locked
     cargo clippy -p zencodec --all-features --lib --locked -- -D warnings

@@ -30,6 +30,7 @@ mod jxl_layers;
 mod jxl_output;
 mod jxl_owned_tests;
 mod jxl_packaged_storage;
+mod jxl_planned_color_tests;
 mod jxl_tests;
 mod output_tests;
 mod placement;

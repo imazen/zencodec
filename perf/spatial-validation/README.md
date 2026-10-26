@@ -191,6 +191,42 @@ with successful pixels and must not publish a partially converted destination.
 
 [Execution receipt](../../benchmarks/cmyk_finalization_2026-10-26.json).
 
+### Existing OutputPlan with admitted destination storage
+
+The next integration uses the existing `OutputPlan` from
+[zenpixels PR 92](https://github.com/imazen/zenpixels/pull/92), combined with
+[native sample carriage in PR 93](https://github.com/imazen/zenpixels/pull/93)
+at `67bc6da7`. No second planning abstraction is added.
+
+`just spatial-output-plan-check` prepares a plan from the actual mapped
+descriptor and current ICC, then calls `convert_rows` directly into aligned
+`StorageBudget` storage. All four CMYK and five RGB raw layers preserve every
+active color bit, ICC and destination padding. There is no owned input staging
+buffer. The destination stays charged through its last shared owner after the
+original decoded image is dropped.
+
+A separate control uses one pool for the native source and converted destination.
+A pool that fits only the held source refuses conversion. A pool covering both
+keeps both payloads charged; dropping the source releases only its own charge.
+Thus a new conversion stage cannot silently reset the retained-output allowance.
+
+Byte/object refusal and changed interpretation return errors without retaining
+destination charges. An injected CMS fails after writing the second row; its
+concrete error remains inspectable, no `ColorStage` is returned, the native input
+is unchanged, and destination storage is released. Controlled unwinding exercises
+the same ownership cleanup. The injected worker qualifies failure handling,
+not CMYK conversion arithmetic.
+
+This is a color-stage prototype. `OutputPlan` still copies identity samples to
+a separate destination. Complete derivative publication must also account for
+auxiliary planes and their meanings; this test does not silently drop them into
+a new `ImageOutput`. Native codec workspace, CMS scratch/profile allocations,
+conversion cancellation latency and true CMYK-to-RGB arithmetic remain separate.
+Planned metadata is available before execution so an encoder can reject its
+carriers; it is not evidence that pixels or encoded output have succeeded.
+
+[Execution receipt](../../benchmarks/admitted_color_plan_2026-10-26.json).
+
 ## Packaged retained output storage
 
 The shared `OpenRequest::with_output_storage` path now runs beside the

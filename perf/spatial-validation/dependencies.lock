@@ -599,6 +599,7 @@ checksum = "d0d5d4b1981b8bbbb7aed204cae5726d683d5d6ac7e74ec54122ea28f315e7c8"
 name = "spatial-validation"
 version = "0.0.0"
 dependencies = [
+ "bytemuck",
  "codec-corpus",
  "jxl-encoder",
  "rustix",
@@ -909,7 +910,7 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.2.17"
-source = "git+https://github.com/imazen/zenpixels?rev=284a0598abf441dc886755b1e65c34dbdf6ce94d#284a0598abf441dc886755b1e65c34dbdf6ce94d"
+source = "git+https://github.com/imazen/zenpixels?rev=67bc6da7055d23582a7fb94052544b30de070f80#67bc6da7055d23582a7fb94052544b30de070f80"
 dependencies = [
  "bytemuck",
  "rgb",
@@ -919,7 +920,7 @@ dependencies = [
 [[package]]
 name = "zenpixels-convert"
 version = "0.2.17"
-source = "git+https://github.com/imazen/zenpixels?rev=284a0598abf441dc886755b1e65c34dbdf6ce94d#284a0598abf441dc886755b1e65c34dbdf6ce94d"
+source = "git+https://github.com/imazen/zenpixels?rev=67bc6da7055d23582a7fb94052544b30de070f80#67bc6da7055d23582a7fb94052544b30de070f80"
 dependencies = [
  "archmage",
  "bytemuck",

@@ -19,6 +19,7 @@ zenjxl-decoder = { version = "0.4.0", git = "https://github.com/imazen/zenjxl-de
 zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "3660d49318e4d234ec2eb8e531a3e3a1d40a2215", default-features = false, features = ["collections"] }
 jxl-encoder = { version = "0.4.0", git = "https://github.com/imazen/jxl-encoder", rev = "0255e5a9f61b7270cb3ed3f7b85fec2283deec55", default-features = false, features = ["std"] }
 codec-corpus = "1.1.0"
+bytemuck = "1.25.2"
 serde_json = "1.0.151"
 zenpixels = ">=0.2.17, <0.4.0"
 zenpixels-convert = { version = ">=0.2.17, <0.4.0", features = ["cms-moxcms"] }
@@ -28,9 +29,9 @@ rustix = { version = "1.1.5", features = ["fs"], optional = true }
 [patch.crates-io]
 zencodec = { path = "../.." }
 zenjxl-decoder = { git = "https://github.com/imazen/zenjxl-decoder", rev = "fe819360581acb3796ea2925f2a81f44f0a430e6" }
-# Native TIFF/IMIJ sample carriage under review in zenpixels PR 93.
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "284a0598abf441dc886755b1e65c34dbdf6ce94d" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "284a0598abf441dc886755b1e65c34dbdf6ce94d" }
+# Combined output planning and native sample carriage from zenpixels PRs 92/93.
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "67bc6da7055d23582a7fb94052544b30de070f80" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "67bc6da7055d23582a7fb94052544b30de070f80" }
 
 [profile.release]
 debug = 1

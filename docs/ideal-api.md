@@ -89,7 +89,13 @@ moxcms attached. The current finalizer requires an owned input copy and creates
 an owned result outside the decode output pool. The [executing controls and next
 contract](../perf/spatial-validation/README.md#cmyk-output-finalization) distinguish
 this from descriptor-only row conversion. Finalization ownership remains open in
-[zenpixels issue 69](https://github.com/imazen/zenpixels/issues/69).
+[zenpixels issue 69](https://github.com/imazen/zenpixels/issues/69). The existing
+`OutputPlan` now has a native admitted-destination control: all nine raw JXL
+layers keep exact color samples and ICC without an owned input copy. Errors
+after partial CMS writes release the unpublished destination. This remains a
+color-stage prototype; auxiliary-plane publication, identity borrowing and CMS
+workspace are unqualified. [Implementation and evidence](../perf/spatial-validation/README.md#existing-outputplan-with-admitted-destination-storage).
+
 
 ## The consumer shape
 
