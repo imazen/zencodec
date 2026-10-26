@@ -124,10 +124,14 @@ still enables clipping. The native preservation example adds
 `with_clip_out_of_gamut(false)`. Before 0.3, presets must distinguish forbidden
 sample losses from a required color/range result; the caller should select
 effects through the existing resolver without coordinating backend capability
-flags. A native premultiplied fixture also exposes an output-layout gap:
+flags. A native premultiplied fixture exposed an output-layout gap:
 `PixelFormat` selects straight alpha, so `SameAsOrigin` alone cannot request
-unchanged association. The owner API retains the original descriptor; the
-format-only plan correctly refuses an unqualified conversion.
+unchanged association. `OutputPlan::new_with_descriptor` now requires a full
+descriptor and refuses conflicts with the chosen profile. The native fixture
+retains exact samples through borrowed identity and admitted destination rows;
+the format-only constructor still refuses the unqualified unassociation path.
+This adds one constructor, not another policy interface. The site displays its
+actual signatures from the revision used by the native tests.
 [Executed example and evidence](../perf/spatial-validation/README.md#independent-float-icc-conversion).
 
 

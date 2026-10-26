@@ -2,6 +2,20 @@
 // Signatures come from Rust through apiPanels; examples remain executable files.
 export const improvements = [
   {
+    id:'output-descriptor', title:'Require the pixel interpretation, including alpha association',
+    state:'Implemented on review PR · native premultiplied JXL', date:'2026-10-26',
+    summary:'OutputPlan::new_with_descriptor accepts the complete required PixelDescriptor. A native premultiplied JXL now retains its samples through both borrowed identity and admitted output rows.',
+    why:'An editor keeps premultiplied working pixels. Choosing the same ICC profile with only a PixelFormat requests straight alpha, which can introduce unassociation or require a CMS. Profile choice and alpha association are separate requirements.',
+    consumer:'Pass the required descriptor. For unchanged native layout, pass the source descriptor and its origin profile. A conflicting target profile returns a typed error; there is no preparatory capability query.',
+    adapter:'The executed helper below selects SameAsOrigin and disables clipping. Borrow only when the plan accepts the exact source interpretation. Retain the complete ImageOutput only when current signaling also matches; otherwise write to admitted rows and compose the returned color owner.',
+    implementor:'Validate the required descriptor against the resolved profile before constructing a transform. Preserve existing alpha-removal, range and source-binding checks. The existing format-only constructor keeps its straight-alpha behavior.',
+    open:'This does not make arbitrary ICC premultiplication, narrow/full conversion or CMYK math available. Unsupported transforms still refuse. Auxiliary owners may retain old color payloads. CMS and native workspace bounds remain separate.',
+    signatures:['imageColorReplacement','imageMapping'], outputPlan:true,
+    example:'native_required_layout', exampleSource:'perf/spatial-validation/src/jxl_planned_color_tests.rs',
+    flow:[['consumer','Require interpretation','profile + full descriptor'],['adapter','Validate and prepare','borrow identity or admit rows'],['implementor','Execute the same plan','exact context or traced refusal']],
+    evidence:[['Native descriptor qualification','benchmarks/native_output_descriptor_2026-10-26.json'],['Conversion contract and regression','https://github.com/imazen/zenpixels/issues/94'],['Conversion implementation','https://github.com/imazen/zenpixels/pull/92']],
+  },
+  {
     id:'float-color', title:'Make float color and clipping match the request',
     state:'Native conversion and retained-auxiliary publication qualified', date:'2026-10-26',
     summary:'A real JXL image and five native layers now convert to the selected Display P3 ICC through OutputPlan and admitted destination rows. Independent Little CMS comparison keeps a fixed 0.0001 color tolerance and exact alpha.',
@@ -9,8 +23,8 @@ export const improvements = [
     consumer:'Choose the required target profile and range behavior. The current forbid_lossy preset still enables clipping, so this preservation example explicitly disables it. There is no new capability query or separate float-conversion API.',
     adapter:'Prepare OutputPlan from current sample interpretation, admit destination rows, then execute that same plan. replace_packed_color composes matching output context with the original auxiliary-plane mapping guards. Run the existing resolver before publication; ReturnHeld describes this actual converted image. Errors discard unpublished rows.',
     implementor:'Use float arithmetic and available analytic curves; apply requested clipping to color without changing alpha. Explicit ICC remains authoritative over embedded CICP. Unqualified partially shared channel curves return a traced backend error before writes.',
-    open:'An auxiliary owner can retain its old color allocation, which stays charged alongside the destination. Replacing color again releases the intermediate color. F32 CMYK arithmetic, general ICC/LUT behavior and CMS workspace admission remain open. PixelFormat cannot request retained premultiplication through OutputPlan; same profile alone is not sample identity. Preset naming and range requirements need review before 0.3. No speed claim is made.',
-    signatures:['floatColorPlan','imageColorReplacement','imageStorageBudget','findCause'],
+    open:'An auxiliary owner can retain its old color allocation, which stays charged alongside the destination. Replacing color again releases the intermediate color. F32 CMYK arithmetic, general ICC/LUT behavior and CMS workspace admission remain open. Same profile alone is not sample identity; the new descriptor constructor makes association explicit. Preset naming and range requirements need review before 0.3. No speed claim is made.',
+    signatures:['floatColorPlan','imageColorReplacement','imageStorageBudget','findCause'], outputPlan:true,
     example:'native_float_color', exampleSource:'perf/spatial-validation/src/jxl_color_oracle_tests.rs',
     flow:[['consumer','Choose target and range','explicit preservation or clipping'],['adapter','Prepare actual conversion','current samples + selected ICC'],['implementor','Convert or refuse','qualified math + original cause'],['adapter','Compose and resolve','converted color + retained auxiliaries']],
     evidence:[['Converted owner and retention evidence','benchmarks/native_color_owner_2026-10-26.json'],['Independent float comparison','benchmarks/native_float_color_2026-10-26.json'],['Native scope and reproduction','perf/spatial-validation/README.md#independent-float-icc-conversion'],['Conversion implementation','https://github.com/imazen/zenpixels/pull/92'],['Output ownership and policy follow-up','https://github.com/imazen/zenpixels/issues/69']],
@@ -190,7 +204,7 @@ export const improvements = [
 ];
 
 const escape=s=>s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
-export function improvementsSection({apiPanels,codePanel,flow,gh}) {
+export function improvementsSection({apiPanels,codePanel,flow,gh,outputSignatures}) {
   return `<section id="changes" class="ideal-role ideal-changes" aria-labelledby="changes-title">
 <p class="section-kicker">Living implementation record / updated with the code</p>
 <h2 id="changes-title">What changed, and why?</h2>
@@ -201,7 +215,7 @@ export function improvementsSection({apiPanels,codePanel,flow,gh}) {
 <dl class="change-roles">${['consumer','adapter','implementor'].map(role=>`<div class="${role}"><dt>${role[0].toUpperCase()+role.slice(1)}</dt><dd>${escape(entry[role])}</dd></div>`).join('')}</dl>
 ${entry.flow?flow(`change-${entry.id}-flow`,entry.flow):''}
 ${entry.example?codePanel(`change-${entry.id}`,entry.example,entry.exampleSource??'docs/examples/checked_operations.rs'):''}
-<details class="ideal-signatures"><summary>Exact traits and signatures</summary>${apiPanels(`change-${entry.id}`,entry.signatures)}</details>
+<details class="ideal-signatures"><summary>Exact traits and signatures</summary>${apiPanels(`change-${entry.id}`,entry.signatures)}${entry.outputPlan?outputSignatures:''}</details>
 <p class="change-open"><b>Still open.</b> ${escape(entry.open)}</p>
 <p class="change-evidence">${entry.evidence.map(([label,target])=>`<a href="${target.startsWith('https://')?target:gh(target)}">${escape(label)} ↗</a>`).join(' · ')}</p>
 </div></details>`).join('')}</div>

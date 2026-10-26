@@ -9,6 +9,7 @@ export async function checkIdeal(browser,url,output) {
   const selection=await readFile(new URL('../../perf/spatial-validation/src/collection.rs',import.meta.url),'utf8');
   const storage=await readFile(new URL('../../perf/spatial-validation/src/jxl_packaged_storage.rs',import.meta.url),'utf8');
   const color=await readFile(new URL('../../perf/spatial-validation/src/jxl_color_oracle_tests.rs',import.meta.url),'utf8');
+  const layout=await readFile(new URL('../../perf/spatial-validation/src/jxl_planned_color_tests.rs',import.meta.url),'utf8');
   const page=await browser.newPage({viewport:{width:1440,height:1100},reducedMotion:'reduce',permissions:['clipboard-read','clipboard-write']});
   const errors=[];
   page.on('pageerror',error=>errors.push(error.message));
@@ -19,8 +20,9 @@ export async function checkIdeal(browser,url,output) {
     assert.ok((await page.locator('h1').textContent()).includes('executes today'));
     assert.equal(await page.locator('.ideal-step').count(),5);
     const changes=page.locator('.api-change');
-    assert.equal(await page.locator('.api-change:not(#change-operation-storage):not(#change-float-color)').count(),12);
-    assert.equal(await page.locator('.api-change:not(#change-float-color)').count(),13);
+    assert.equal(await page.locator('.api-change:not(#change-operation-storage):not(#change-float-color):not(#change-output-descriptor)').count(),12);
+    assert.equal(await page.locator('.api-change:not(#change-float-color):not(#change-output-descriptor)').count(),13);
+    assert.equal(await page.locator('#change-output-descriptor').count(),1);
     assert.equal(await page.locator('#change-float-color').count(),1);
     assert.equal(await page.locator('#change-mapping').count(),1);
     assert.ok((await page.locator('#change-images .code-toolbar').textContent()).includes('Private prototype'));
@@ -83,7 +85,7 @@ export async function checkIdeal(browser,url,output) {
     }
     for(const panel of await page.locator('.code-panel').all()) {
       const exampleSource=await panel.getAttribute('data-example-source');
-      const sources={'docs/examples/checked_operations.rs':source,'docs/examples/checked_video.rs':video,'docs/examples/checked_source.rs':positional,'perf/spatial-validation/src/collection.rs':selection,'perf/spatial-validation/src/jxl_packaged_storage.rs':storage,'perf/spatial-validation/src/jxl_color_oracle_tests.rs':color};
+      const sources={'docs/examples/checked_operations.rs':source,'docs/examples/checked_video.rs':video,'docs/examples/checked_source.rs':positional,'perf/spatial-validation/src/collection.rs':selection,'perf/spatial-validation/src/jxl_packaged_storage.rs':storage,'perf/spatial-validation/src/jxl_color_oracle_tests.rs':color,'perf/spatial-validation/src/jxl_planned_color_tests.rs':layout};
       assert.ok(exampleSource in sources);
       // An adapter example may start inside a collapsed explanation. Open that
       // container without changing the independent above/below default states.

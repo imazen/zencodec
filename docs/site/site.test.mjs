@@ -94,6 +94,12 @@ test('checked API page links executable examples and actual signatures for each 
   assert.ok(page.includes('data-example="checked_resolution"'));
   assert.ok(page.includes('data-example="checked_video_storage"'));
   assert.ok(html.includes('ideal.html#changes'));
+  assert.ok(page.includes('data-api="outputPlan"'));
+  assert.ok(page.includes('data-example="native_required_layout"'));
+  const outputApi=JSON.parse(await readFile(new URL('../output-plan-api.json',import.meta.url),'utf8'));
+  assert.ok(page.includes(`/blob/${outputApi.revision}/${outputApi.path}#L${outputApi.line}`));
+  assert.match(outputApi.surface,/pub fn new_with_descriptor\(/);
+  assert.match(outputApi.surface,/pub fn borrow_rows<'a>/);
   for(const entry of improvements) {
     assert.ok(ids.includes(`change-${entry.id}`));
     for(const field of ['why','consumer','adapter','implementor','open']) assert.ok(entry[field]?.length,`${entry.id}: ${field}`);
