@@ -265,6 +265,8 @@ frame-policy-integration:
 # Standalone native AV1 policy guard, real re-encode and required FFmpeg oracle.
 av1-policy-sync export:
     just frame-policy-sync "{{export}}"
+    mkdir -p "{{export}}/perf/spatial-validation/src"
+    cp perf/spatial-validation/src/image_items.rs perf/spatial-validation/src/image_output.rs "{{export}}/perf/spatial-validation/src/"
     mkdir -p "{{export}}/perf/av1-policy-validation/src"
     cp perf/av1-policy-validation/Cargo.toml "{{export}}/perf/av1-policy-validation/"
     cp perf/av1-policy-validation/src/*.rs "{{export}}/perf/av1-policy-validation/src/"
@@ -285,9 +287,14 @@ av1-policy-guide-check:
     cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked guide_ -- --nocapture
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
 
+av1-output-check artifacts:
+    AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked output_native_ -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
 # Native TIFF spatial candidates and the positional-to-seek bridge.
 spatial-validation-sync export:
     just io-core-sync "{{export}}"
+    cp zencodec-media/src/*.rs "{{export}}/zencodec-media/src/"
     test ! -e "{{export}}/.git"
     test ! -e "{{export}}/.jj"
     mkdir -p "{{export}}/perf/spatial-validation/src"
@@ -317,6 +324,13 @@ spatial-validation-check artifacts python:
 
 spatial-consumer-check:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked common_ -- --nocapture
+    cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+spatial-output-check artifacts:
+    mkdir -p "{{artifacts}}-oracle"
+    cc -std=c11 -Wall -Wextra -Werror perf/spatial-validation/jxl_oracle.c -ljxl -o "{{artifacts}}-oracle/jxl-oracle"
+    JXL_SELECTION_ORACLE="{{artifacts}}-oracle/jxl-oracle" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked output_ -- --nocapture
+    cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked strip_tests -- --nocapture
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
 
 # Real TIFF sample carriage through the common pixel owner and row converter.

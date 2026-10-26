@@ -5,6 +5,22 @@ This standalone workspace runs the shared policy resolver over real
 `Av1VideoEncoder`. FFmpeg/libdav1d independently reads the resulting IVF files.
 Expected samples come from strided source planes; no conversion is used.
 
+The selected-image output trial compiles the same
+[`ImageOutput`](../spatial-validation/src/image_output.rs) used by the spatial
+harness. `just av1-output-check <fresh-artifacts>` exercises three frames in
+each of the 15 depth/layout configurations with native encode/decode and
+required FFmpeg readback. It preserves native plane addresses, code depth,
+roles, color/siting/crop/epoch interpretation and presentation timing, survives
+decoder reset/drop, and releases the picture with the final output owner.
+Its packed-color convenience refuses planar code samples. The trial is private;
+it does not establish a display conversion or a complete memory bound.
+
+The output gate passed on 2026-10-26: run-heavy rc=0, 9 s, peak RSS 0.54 GiB,
+minimum available 13206 MiB, peak load 0.36. Log:
+`~/tmp/zencodec-common-output-video1-2026-10-26.log`. This measures the build/test
+process. Native picture-address and ownership assertions establish the storage
+handoff, rather than a process-memory estimate.
+
 From an export outside the zen workspace's path overrides:
 
 ```sh
