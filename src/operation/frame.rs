@@ -49,12 +49,12 @@ impl FrameFacts {
     }
 }
 
-/// Publish the same held native frame without conversion, relabeling, trimming
+/// Publish the same held native output without conversion, relabeling, trimming
 /// or new encoding. Unknown declarations remain inspectable. This establishes
 /// no metadata privacy, display rendering or native workspace bound.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum FrameOffer {
+pub enum PublicationOffer {
     /// Return the original native samples, interpretation and presentation.
     PreserveNative,
 }
@@ -75,7 +75,7 @@ pub fn resolve_frame<R: PolicyResolver + ?Sized>(
 ) -> Result<DecisionRecord, At<PolicyFailure>> {
     let facts = FrameFacts::new(interpretation, timing);
     let (_, record) = policy::choose(
-        &[FrameOffer::PreserveNative],
+        &[PublicationOffer::PreserveNative],
         DecisionContext::Frame(facts),
         |choices| Question::Frame {
             interpretation,

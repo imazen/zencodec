@@ -211,11 +211,13 @@ trait PolicyResolver {
     fn resolve(&mut self, question: Question<'_>) -> Result<Decision, At<Self::Error>>;
 }
 enum Question<'a> { // non_exhaustive
+    Image { image: &'a image::ImageOutput, facts: ImageFacts,
+        choices: Choices<'a, PublicationOffer> },
     Transcode { facts: InterpretationFacts, choices: Choices<'a, TranscodeOffer> },
     Boundary { facts: InterpretationFacts, choices: Choices<'a, BoundaryOffer> },
     Encode { facts: EncodeFacts, choices: Choices<'a, EncodeOffer> },
     Frame { interpretation: &'a frame::FrameInterpretation,
-        timing: frame::FrameTiming, choices: Choices<'a, FrameOffer> },
+        timing: frame::FrameTiming, choices: Choices<'a, PublicationOffer> },
 }
 struct BoundaryOffer { action: BoundaryAction }
 struct EncodeFacts { width: u32, height: u32, descriptor: PixelDescriptor }
@@ -449,7 +451,10 @@ impl SampleEncoding {
 }
 
 // zencodec::operation
-enum FrameOffer { PreserveNative } // non_exhaustive
+enum PublicationOffer { PreserveNative } // non_exhaustive
+fn resolve_image<R: PolicyResolver + ?Sized>(
+    image: image::ImageOutput, resolver: &mut R, preset: PolicySet, stop: &dyn Stop,
+) -> Result<Outcome<image::ImageOutput>, At<PolicyFailure>>;
 fn resolve_frame<R: PolicyResolver + ?Sized>(
     interpretation: &frame::FrameInterpretation, timing: frame::FrameTiming,
     resolver: &mut R, preset: PolicySet, stop: &dyn Stop,
@@ -470,6 +475,27 @@ impl Error {
     fn report(&self) -> &OperationReport;
 }
 ```
+
+`resolve_image` consumes the held output and invokes the same resolver with
+`Question::Image`. The callback can inspect immutable facts and map samples;
+source names, profiles and typed extensions remain unfiltered data. Success
+returns the same owner with its decision report. Refusal, cancellation, callback
+failure, stale choice or unwind drops the unpublished owner. Caller-retained
+clones remain independent.
+
+`ImageFacts` records geometry, descriptor, declared plane/auxiliary counts,
+applied retained spot contributions, source-extension count and optional native
+frame/timing facts. These diagnostics contain no source payloads. Image selection
+records retain these facts once in `DecisionContext::Image`; the selected offer
+names only its effect. `PublicationOffer` is shared by image and frame questions,
+replacing the unpublished frame-only option type. No additional resolver trait
+or duplicate native-publication option enum is introduced.
+
+Both publication routes follow native reconstruction. Presets requiring metadata
+treatment, disallowing opaque profiles or requiring a workspace bound refuse
+because native publication alone supplies no such proof. Spot counts describe
+retained auxiliary channels; absence does not certify complete source discovery.
+This boundary does not apply a spot plane again or transform pixels.
 
 `FrameFacts` is the bounded report snapshot of geometry, subsampling, siting,
 encoding, plane count, color, epoch and timing; the question borrows the full
@@ -494,7 +520,7 @@ the publication guard, native ownership and independent re-encode readback.
 The guide separately sets the native `rav1d_safe::Settings::max_picture_bytes`
 before constructing the decoder. That optional allowance admits requested
 picture-plane bytes before allocation and follows retained native ownership.
-It does not supply whole-decoder workspace evidence to a `FrameOffer`; native
+It does not supply whole-decoder workspace evidence to a `PublicationOffer`; native
 refusal remains a decode-stage error with its original trace.
 
 ## Encode traits

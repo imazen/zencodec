@@ -17,9 +17,11 @@ use zenpixels::{PixelDescriptor, PixelSlice};
 
 mod decoding;
 mod frame;
+mod image;
 mod policy;
 mod transcode;
-pub use frame::{FrameFacts, FrameOffer, resolve_frame};
+pub use frame::{FrameFacts, PublicationOffer, resolve_frame};
+pub use image::{ImageFacts, resolve_image};
 pub use policy::{
     BoundaryOffer, Choice, ChoiceId, Choices, Decision, DecisionCode, DecisionContext,
     DecisionRecord, Decline, EncodeFacts, EncodeOffer, OperationReport, PolicyFailure,

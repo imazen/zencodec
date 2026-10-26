@@ -118,3 +118,182 @@ fn missing_planes_and_invalid_canvas_refuse_before_exposing_samples() {
     // Geometry is rejected before entering the deliberately refusing backend.
     assert!(matches!(invalid.map(), Err(error) if matches!(error.error(), OutputError::Region(_))));
 }
+
+mod publication {
+    use super::*;
+    use enough::{Stop, StopReason, Unstoppable};
+    use std::{
+        convert::Infallible,
+        sync::atomic::{AtomicBool, Ordering},
+    };
+    use zencodec::operation::{
+        Decision, DecisionCode, DecisionContext, Decline, MetadataTransfer, PolicySet, Question,
+        Selection, resolve_image,
+    };
+
+    #[test]
+    fn selected_image_policy_returns_the_same_owner_and_bounded_facts() {
+        let native = words();
+        let owner = Arc::downgrade(&native);
+        let image = frame(native, 3, 10);
+        let facts_address = image.interpretation() as *const _;
+        let outcome = resolve_image(
+            image,
+            &mut |question: Question<'_>| -> Result<Decision, At<Infallible>> {
+                let Question::Image {
+                    image,
+                    facts,
+                    choices,
+                } = question
+                else {
+                    panic!("wrong domain")
+                };
+                assert_eq!(image.interpretation() as *const _, facts_address);
+                assert_eq!(facts.planes, 1);
+                assert_eq!(facts.auxiliaries, 0);
+                assert_eq!(facts.source_details, 0);
+                assert_eq!(facts.packed, None);
+                assert_eq!(facts.frame.unwrap().encoding, encoding(10));
+                let mapped = image.map().unwrap();
+                assert_eq!(
+                    mapped.plane(0).unwrap().unwrap().samples.code_encoding(),
+                    Some(encoding(10))
+                );
+                Ok(Decision::choose(choices.first().unwrap()))
+            },
+            PolicySet::new(),
+            &Unstoppable,
+        )
+        .unwrap();
+        assert!(owner.upgrade().is_some());
+        assert_eq!(outcome.interpretation() as *const _, facts_address);
+        let records: Vec<_> = outcome.report().decisions().collect();
+        assert_eq!(records.len(), 1);
+        assert!(matches!(records[0].selected, Some(Selection::Image(_))));
+        drop(outcome);
+        assert!(owner.upgrade().is_none());
+    }
+
+    #[test]
+    fn all_unsuccessful_decisions_drop_the_unpublished_image() {
+        let mut stale = None;
+        let first = resolve_image(
+            frame(words(), 3, 10),
+            &mut |question: Question<'_>| -> Result<Decision, At<Infallible>> {
+                let Question::Image { choices, .. } = question else {
+                    panic!("wrong domain")
+                };
+                stale = Some(choices.first().unwrap().id());
+                Ok(Decision::UsePreset)
+            },
+            PolicySet::new(),
+            &Unstoppable,
+        )
+        .unwrap();
+        drop(first);
+        for mode in 0..4 {
+            let native = words();
+            let owner = Arc::downgrade(&native);
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                resolve_image(
+                    frame(native, 3, 10),
+                    &mut |_: Question<'_>| -> Result<Decision, At<NativeError>> {
+                        match mode {
+                            0 => Ok(Decision::decline(Decline::ApplicationRule)),
+                            1 => Err(At::wrap(NativeError(99)).at_named("private-source-name")),
+                            2 => Ok(Decision::Choose(stale.unwrap())),
+                            _ => panic!("authored callback panic"),
+                        }
+                    },
+                    PolicySet::new(),
+                    &Unstoppable,
+                )
+            }));
+            assert!(owner.upgrade().is_none());
+            if mode == 3 {
+                assert!(result.is_err());
+            } else {
+                let error = result.unwrap().unwrap_err();
+                assert_eq!(
+                    error.error().record().code,
+                    [
+                        DecisionCode::Declined,
+                        DecisionCode::CallbackFailed,
+                        DecisionCode::InvalidChoice
+                    ][mode]
+                );
+                assert!(matches!(
+                    error.error().record().context,
+                    DecisionContext::Image(_)
+                ));
+                assert!(!format!("{:?}", error.error()).contains("private-source-name"));
+                if mode == 1 {
+                    assert_eq!(zencodec::find_cause::<NativeError>(&error).unwrap().0, 99);
+                    assert!(zencodec::find_cause::<At<NativeError>>(&error).is_some());
+                }
+            }
+        }
+    }
+
+    struct Cancel(AtomicBool);
+    impl Stop for Cancel {
+        fn check(&self) -> Result<(), StopReason> {
+            if self.0.load(Ordering::SeqCst) {
+                Err(StopReason::Cancelled)
+            } else {
+                Ok(())
+            }
+        }
+    }
+    #[test]
+    fn cancellation_before_and_after_callback_prevents_publication() {
+        for pre_cancelled in [false, true] {
+            let stop = Cancel(AtomicBool::new(pre_cancelled));
+            let native = words();
+            let owner = Arc::downgrade(&native);
+            let mut called = false;
+            let error = resolve_image(
+                frame(native, 3, 10),
+                &mut |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+                    called = true;
+                    stop.0.store(true, Ordering::SeqCst);
+                    Ok(Decision::UsePreset)
+                },
+                PolicySet::new(),
+                &stop,
+            )
+            .unwrap_err();
+            assert_eq!(called, !pre_cancelled);
+            assert!(owner.upgrade().is_none());
+            assert_eq!(error.error().record().code, DecisionCode::Stopped);
+            assert_eq!(error.error().stop_reason(), Some(StopReason::Cancelled));
+        }
+    }
+
+    #[test]
+    fn presets_refuse_unproven_metadata_and_workspace_requirements() {
+        for preset in [
+            PolicySet::new().allow_opaque_profiles(false),
+            PolicySet::new().with_workspace_limit(u64::MAX),
+            PolicySet::new().require_metadata(MetadataTransfer::DiscardDescriptive),
+        ] {
+            let native = words();
+            let owner = Arc::downgrade(&native);
+            let error = resolve_image(
+                frame(native, 3, 10),
+                &mut |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+                    Ok(Decision::UsePreset)
+                },
+                preset,
+                &Unstoppable,
+            )
+            .unwrap_err();
+            assert!(owner.upgrade().is_none());
+            assert_eq!(
+                zencodec::find_cause::<Decline>(&error),
+                Some(&Decline::UnsupportedQuestion)
+            );
+            assert!(error.error().record().used_preset);
+        }
+    }
+}

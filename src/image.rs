@@ -289,7 +289,14 @@ pub trait MappedImage {
     /// declared native plane is an error.
     fn plane(&self, index: usize) -> Result<Option<Plane<'_>>, At<OutputError>>;
 }
+pub(crate) struct SampleFacts {
+    pub packed: Option<zenpixels::PixelDescriptor>,
+    pub planes: usize,
+    pub auxiliaries: usize,
+    pub applied_spot_colors: usize,
+}
 trait ImageStorage: Send + Sync {
+    fn facts(&self) -> SampleFacts;
     fn map(&self) -> Result<Box<dyn MappedImage + '_>, Failure>;
 }
 
@@ -339,6 +346,9 @@ impl fmt::Debug for ImageOutput {
     }
 }
 impl ImageOutput {
+    pub(crate) fn sample_facts(&self) -> SampleFacts {
+        self.storage.facts()
+    }
     /// Adapter constructor: adopt packed color plus explicitly interpreted
     /// auxiliary planes. Validate the selected region and compatible facts.
     /// Auxiliary planes retain their own dimensions; no resampling is implied.
@@ -495,6 +505,29 @@ struct Packed {
 }
 struct PackedMap<'a>(&'a Packed);
 impl ImageStorage for Packed {
+    fn facts(&self) -> SampleFacts {
+        SampleFacts {
+            packed: Some(self.pixels.descriptor()),
+            planes: 1 + self.extras.len(),
+            auxiliaries: self.extras.len(),
+            applied_spot_colors: self
+                .extras
+                .iter()
+                .filter(|(meaning, _)| {
+                    matches!(
+                        meaning,
+                        Meaning::Auxiliary(Auxiliary {
+                            kind: AuxiliaryKind::SpotColor {
+                                contribution: ColorContribution::Applied,
+                                ..
+                            },
+                            ..
+                        })
+                    )
+                })
+                .count(),
+        }
+    }
     fn map(&self) -> Result<Box<dyn MappedImage + '_>, Failure> {
         Ok(Box::new(PackedMap(self)))
     }
@@ -531,6 +564,14 @@ struct ComponentMap<'a> {
     signal: &'a FrameInterpretation,
 }
 impl ImageStorage for Components {
+    fn facts(&self) -> SampleFacts {
+        SampleFacts {
+            packed: None,
+            planes: self.roles.len(),
+            auxiliaries: 0,
+            applied_spot_colors: 0,
+        }
+    }
     fn map(&self) -> Result<Box<dyn MappedImage + '_>, Failure> {
         let signal = self.frame.interpretation();
         let g = signal.geometry;

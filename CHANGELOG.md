@@ -2,6 +2,12 @@
 
 ## Native image selection (unreleased experiment)
 
+- Add `operation::resolve_image`: the existing fallible resolver admits the exact
+  held selected output or drops it on refusal, error, cancellation or unwind.
+  Share `PublicationOffer` with native-frame questions instead of introducing a
+  second publication option type. Native TIFF, JXL and AV1 exercise this boundary;
+  privacy and workspace requirements without evidence refuse.
+
 - Promote the native-qualified mapped output to `zencodec::image`. TIFF/JXL
   and AV1 validation import the same implementation. Preserve immutable facts,
   source/actual precision, auxiliary contribution and native ownership; expose
