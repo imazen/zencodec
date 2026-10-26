@@ -1,6 +1,6 @@
 {
   "native_pin": "65e3c871b7341703664039fd2ee70e0524f45db6",
-  "status": "First integration reproduced a missing F32 CMYK PixelFormat; adapter construction panicked rather than carrying native CMYK samples. Follow-through belongs in zenpixels plus typed adapter refusal for unsupported layouts.",
+  "status": "Qualified selected raw F32 output: nine layers, reverse/repeated selection, owner-bound placement/policy and explicit CMYK polarity. Shared collection remains private.",
   "receipts": [
     {
       "log": "zencodec-raw-collection-1-2026-10-26.log",
@@ -9,6 +9,182 @@
         "test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 79 filtered out; finished in 40.89s",
         "run-heavy: done rc=101 49s | peak-RSS 0.59GiB | min-avail 13071MiB | peak-load 0.86"
       ]
+    },
+    {
+      "log": "zencodec-raw-collection-2-2026-10-26.log",
+      "sha256": "f909d15f87c312f980f263531e3d5f959eb1f0450882899eb316437e65901e3d",
+      "results": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 79 filtered out; finished in 42.75s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 81 filtered out; finished in 18.27s",
+        "run-heavy: done rc=0 78s | peak-RSS 0.99GiB | min-avail 12936MiB | peak-load 1.09"
+      ]
+    },
+    {
+      "log": "zencodec-raw-collection-full-1-2026-10-26.log",
+      "sha256": "1745cf7c899d4dd3432cd1f8615342cd5a036d23ec4500c3122333f6cd6ba3be",
+      "results": [
+        "test result: FAILED. 82 passed; 11 failed; 0 ignored; 0 measured; 0 filtered out; finished in 245.79s",
+        "run-heavy: done rc=101 251s | peak-RSS 0.61GiB | min-avail 13156MiB | peak-load 1.26"
+      ]
+    },
+    {
+      "log": "zencodec-raw-collection-full-2-2026-10-26.log",
+      "sha256": "c69aa51a2e8e57f8a1369785b08e86c7fec9df770d55f52b9f320960d4df740b",
+      "results": [
+        "run-heavy: done rc=1 240s | peak-RSS 0.03GiB | min-avail 13386MiB | peak-load 1.12",
+        "test result: FAILED. 88 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 246.39s"
+      ]
+    },
+    {
+      "log": "zencodec-raw-collection-full-3-2026-10-26.log",
+      "sha256": "5455fd1d7f1caf8d7b80655b356b8921bd97572b1295edee3008405fd9f233b8",
+      "results": [
+        "Ran 2 tests in 3.010s",
+        "test result: ok. 88 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 245.26s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 83 filtered out; finished in 7.50s",
+        "{\"scope\": \"Native TIFF selection over local HTTP/1.1; no WAN/TLS/performance claim\", \"requests\": 7650, \"cases\": 48, \"statuses\": {\"200\": 1, \"206\": 7641, \"302\": 1, \"412\": 7}, \"conditional_after_open\": true}",
+        "run-heavy: done rc=0 266s | peak-RSS 0.61GiB | min-avail 13294MiB | peak-load 1.18"
+      ]
+    },
+    {
+      "log": "zencodec-raw-image-api-2-2026-10-26.log",
+      "sha256": "9ba9032a9c64967ec2f10dc96b854a0f3514cdd08feed869e36ed754fd68ac0e",
+      "results": [
+        "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.77s",
+        "run-heavy: done rc=0 23s | peak-RSS 0.34GiB | min-avail 13234MiB | peak-load 0.67"
+      ]
+    },
+    {
+      "log": "zencodec-raw-guide-2026-10-26.log",
+      "sha256": "c101373564ad0d5763cd62e7d79afcbeeaf9632e22faddf8e7330b1465e1b5e1",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 82 filtered out; finished in 0.40s",
+        "run-heavy: done rc=0 3s | peak-RSS 0.56GiB | min-avail 13552MiB | peak-load 0.06"
+      ]
+    },
+    {
+      "log": "zencodec-raw-site-2026-10-26.log",
+      "sha256": "f343ccd49bad5f5511d673a7acde583dec70b2293c6085b52bb8c86790722103",
+      "results": [
+        "\u2139 pass 8",
+        "Migration browser checks passed: release-state diagrams, audience filters, deep links, exact full-example copy, independent inline expansion, signatures, keyboard and responsive layouts.",
+        "Checked API browser checks passed: exact examples, independent expansion, signatures, clipboard, keyboard and responsive roles.",
+        "Browser checks passed: 15 chapters with signatures, 7 entry points, exact full-example clipboard contents, independent inline context, deep links, 8 lab combinations, keyboard, 390/768/1440px layouts.",
+        "run-heavy: done rc=0 8s | peak-RSS 0.17GiB | min-avail 13164MiB | peak-load 0.27"
+      ]
     }
+  ],
+  "pixel_pin": "284a0598abf441dc886755b1e65c34dbdf6ce94d",
+  "oracle_origin": "imazen/zenjxl-decoder@65e3c871b7341703664039fd2ee70e0524f45db6:perf/raw-layer-validation/oracle.c",
+  "scope": "Correctness and deterministic source operations only; no speed or native workspace bound claim.",
+  "harness_findings": [
+    "Initial combined run: layer artifact root collided with TIFF fresh-directory precondition; layer namespace now separate. HTTP feature was invoked without its simulator, now an explicit phase.",
+    "Second combined run spent the unchanged simulator 240-second deadline on non-HTTP work. Timeout killed just but left cargo briefly running. Separate native/disk and HTTP phases preserve the original deadline.",
+    "Simulator now kills its own entire process group on abnormal exit. Actual child/grandchild negative control and exit-status preservation pass."
+  ],
+  "independent_output": {
+    "layers-multiple_layers_noise_spline.jxl": {
+      "artifact": "/mnt/v/output/zencodec/platform-regions-20261026-run/raw-collection-full-3-layers/layers-multiple_layers_noise_spline.jxl/comparison.json",
+      "sha256": "d353b6adade2c2345146fa36acc50aa8686d768342c5d3f6bdcabbaef6f77f46",
+      "selections": [
+        {
+          "different_float_bits": 20325,
+          "layer": 4,
+          "max_absolute_error": 0.0001538991928100586,
+          "samples": 2949120
+        },
+        {
+          "different_float_bits": 0,
+          "layer": 3,
+          "max_absolute_error": 0.0,
+          "samples": 2949120
+        },
+        {
+          "different_float_bits": 0,
+          "layer": 2,
+          "max_absolute_error": 0.0,
+          "samples": 2949120
+        },
+        {
+          "different_float_bits": 574090,
+          "layer": 1,
+          "max_absolute_error": 0.00036650896072387695,
+          "samples": 2949120
+        },
+        {
+          "different_float_bits": 4891326,
+          "layer": 0,
+          "max_absolute_error": 7.152557373046875e-07,
+          "samples": 11796480
+        },
+        {
+          "different_float_bits": 4891326,
+          "layer": 0,
+          "max_absolute_error": 7.152557373046875e-07,
+          "samples": 11796480
+        }
+      ]
+    },
+    "layers-conformance_test_images_cmyk_layers.jxl": {
+      "artifact": "/mnt/v/output/zencodec/platform-regions-20261026-run/raw-collection-full-3-layers/layers-conformance_test_images_cmyk_layers.jxl/comparison.json",
+      "sha256": "1c9cc3107edf23176b5ed94db8e05d756c78ce18b56fd2f73bf37979f7375091",
+      "selections": [
+        {
+          "different_float_bits": 0,
+          "layer": 3,
+          "max_absolute_error": 0.0,
+          "samples": 44880
+        },
+        {
+          "different_float_bits": 0,
+          "layer": 2,
+          "max_absolute_error": 0.0,
+          "samples": 158400
+        },
+        {
+          "different_float_bits": 0,
+          "layer": 1,
+          "max_absolute_error": 0.0,
+          "samples": 128400
+        },
+        {
+          "different_float_bits": 0,
+          "layer": 0,
+          "max_absolute_error": 0.0,
+          "samples": 1572864
+        },
+        {
+          "different_float_bits": 0,
+          "layer": 0,
+          "max_absolute_error": 0.0,
+          "samples": 1572864
+        }
+      ]
+    }
+  },
+  "http": {
+    "scope": "Native TIFF selection over local HTTP/1.1; no WAN/TLS/performance claim",
+    "requests": 7650,
+    "cases": 48,
+    "statuses": {
+      "200": 1,
+      "206": 7641,
+      "302": 1,
+      "412": 7
+    },
+    "conditional_after_open": true
+  },
+  "remaining": [
+    "all blend configurations",
+    "native negative-origin fixtures",
+    "preview/progressive output",
+    "reference-only export",
+    "non-F32 raw output",
+    "qualified CMYK and polarity conversion",
+    "random raw seek",
+    "native workspace and staging bounds",
+    "whole-container privacy"
   ]
 }

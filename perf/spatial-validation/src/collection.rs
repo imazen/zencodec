@@ -131,3 +131,74 @@ mod checked_consumer {
     }
     // END EXAMPLE: checked_jxl_first
 }
+
+pub use checked_layer_consumer::checked_jxl_layer_first;
+mod checked_layer_consumer {
+    // EXAMPLE: checked_jxl_layer_first
+    use crate::{
+        checked_collection::{Checked, Error},
+        image_items::ImageRequest,
+        jxl_items::Limits,
+        jxl_layers::JxlLayers,
+    };
+    use zencodec::{
+        At, StopToken,
+        image::ImageOutput,
+        operation::{Outcome, PolicyResolver},
+    };
+
+    // The adapter fixes the uncomposited view before IDs are discovered.
+    // This qualified F32 path retains stored orientation and unrendered spots.
+    pub fn checked_jxl_layer_first<R: PolicyResolver>(
+        bytes: &[u8],
+        limits: Limits,
+        resolver: R,
+        stop: StopToken,
+    ) -> Result<Option<Outcome<ImageOutput>>, At<Error>> {
+        let mut images =
+            Checked::open(stop, resolver, |stop| JxlLayers::open(bytes, limits, stop))?;
+        // ANCHOR: checked_jxl_layer_first
+        let layer = images.first_image(&ImageRequest::default())?;
+        // END: checked_jxl_layer_first
+        // The result retains the full local samples, source blend facts, signed
+        // canvas placement and explicit CMYK polarity. It is not a flat preview.
+        Ok(layer)
+    }
+    // END EXAMPLE: checked_jxl_layer_first
+}
+
+#[test]
+fn raw_collection_guide_uses_the_same_checked_consumer_call() {
+    let bytes = crate::jxl_tests::fixture("conformance_test_images/cmyk_layers.jxl");
+    let result = checked_jxl_layer_first(
+        &bytes,
+        crate::jxl_items::Limits {
+            images: 64,
+            frame_headers: Some(64),
+        },
+        zencodec::operation::PolicySet::default(),
+        zencodec::StopToken::new(zencodec::Unstoppable),
+    )
+    .unwrap()
+    .unwrap();
+    result
+        .output()
+        .with_pixels(|p| {
+            assert_eq!(
+                p.descriptor().format,
+                zenpixels::PixelFormat::CmykF32Inverted
+            )
+        })
+        .unwrap();
+    assert_eq!(
+        result
+            .output()
+            .interpretation()
+            .source_details
+            .get::<crate::jxl_output::JxlRawLayer>()
+            .unwrap()
+            .native
+            .origin,
+        (0, 0)
+    );
+}

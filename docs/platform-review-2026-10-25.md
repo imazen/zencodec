@@ -129,9 +129,22 @@ records the full native matrix, workspace tests, strict lint, no_std WebAssembly
 rustdoc and guide checks. Its integration process reports
 `run-heavy: done rc=0 138s | peak-RSS 0.54GiB | min-avail 13374MiB | peak-load 1.50`.
 This is not a codec workspace bound. The collection remains private: policy
-preallocation admission, native discovery-work/latency bounds, broader source snapshots and
-public native raw-layer output remains a separate qualification gate. The
-[native layer probe](https://github.com/imazen/zenjxl-decoder/blob/9a4442e9bf1554bdd1b191e546547ec04a83bea4/docs/source-interpretation.md#independent-layer-samples-and-composition-facts)
-now retains complete local samples before composition and independently qualifies
-nine layers' placement and blend facts. Its exact CMYK/alpha evidence and lossy
-RGB conformance evidence remain distinct; it does not enable the public factory.
+preallocation admission, native work/latency bounds and broader source snapshots
+remain separate qualification gates.
+
+The native raw F32 factory now supplies a private `JxlLayers` adapter. Nine
+local layers retain placement, blend/reference facts and their original sample
+allocation through the same automatic policy publication used for TIFF and
+presentations. Reverse/repeated selection, off-canvas samples, scoped IDs,
+discovery exhaustion and exact stop reasons have executing tests. Independent
+CMYK/alpha samples are bit-exact; lossy RGB conformance differences are recorded.
+The [raw collection receipt](../benchmarks/raw_collection_2026-10-26.json) preserves
+failures as well as the succeeding integration gate.
+
+That integration required explicit inverted-CMYK storage and black-plane
+polarity. Attaching source ICC bytes must not imply conventional device values.
+Storage stays unchanged and unqualified conversion refuses. The native factory
+still restricts output to F32, stored orientation, skipped previews, unrendered
+spots and retained black. Remaining blend configurations, native negative-origin
+fixtures, reference-only export, progressive output, raw random seeks and memory
+bounds remain open; source composition facts do not promise lossless re-encoding.

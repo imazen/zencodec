@@ -20,6 +20,7 @@ export const api = {
   jxlSelection: {path:'candidate::JxlItems (private native experiment)',file:'perf/spatial-validation/src/jxl_items.rs',scope:"impl<'a> JxlItems<'a>",methods:['open','open_with_stop','next','decode']},
   sourceSnapshot: {path:'candidate::HttpSource (private HTTP qualification)',file:'perf/spatial-validation/src/http_source.rs',scope:'impl HttpSource',methods:['open']},
   fileSnapshot: {path:'candidate::clone_source (private Linux file snapshot)',file:'perf/spatial-validation/src/file_snapshot.rs',methods:['clone_source']},
+  jxlLayerSelection: {path:'candidate::JxlLayers (private native F32 adapter)',file:'perf/spatial-validation/src/jxl_layers.rs',scope:"impl<'a> JxlLayers<'a>",methods:['open']},
   layerPlacement: {path:'candidate::Placement (private geometry experiment)',file:'perf/spatial-validation/src/placement.rs',scope:'impl Placement {',methods:['visible']},
   collectionDiscovery: {path:'candidate::Discovery<C> (private call allowance)',file:'perf/spatial-validation/src/discovery.rs',scope:'impl<C> Discovery<C>',methods:['new','usage']},
   checkedCollection: {path:'candidate::Checked<C, R> (private consumer operation)',file:'perf/spatial-validation/src/checked_collection.rs',scope:'impl<C: Collection, R: PolicyResolver> Checked<C, R>',methods:['open','with_policy_set','first_image','decode','report','is_finished']},

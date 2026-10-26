@@ -143,21 +143,37 @@ collection adapters now carry one existing `StopToken` through discovery,
 selected replay and final output checks. Cancellation injection covers observed
 polls in classic TIFF/BigTIFF SubIFD and JXL presentation operations; native-call
 latency remains unqualified. Both cancellation and timeout retain their exact
-reasons through native errors and collection traces in these operations. Raw JXL layer implementation is
-still [decoder issue 57](https://github.com/imazen/zenjxl-decoder/issues/57).
-The native decoder now refuses `coalescing=false` with a typed error before
-consuming input, instead of silently returning composited pixels. Independent
-libjxl discovery includes a layer extending beyond the presentation canvas;
-its placement cannot be represented as a bounded crop. A private `Placement::visible`
-experiment now preserves local pixel bounds and computes an explicit signed
-placement intersection, with typed coordinate errors. It adds no public API:
-raw samples and blend/dependency semantics must qualify together before promotion.
-A [test-only native tap](https://github.com/imazen/zenjxl-decoder/blob/9a4442e9bf1554bdd1b191e546547ec04a83bea4/docs/source-interpretation.md#independent-layer-samples-and-composition-facts)
-now captures nine complete local layers before blending without changing composed
-output. Independent libjxl agrees on placement and blend facts, with bit-exact
-CMYK/alpha samples and recorded lossy RGB float-conformance differences. Public
-raw-output selection, frozen owner-bound placement, representation conversion and
-remaining configurations still need qualification. The existing [paged-decoder issue](https://github.com/imazen/zencodec/issues/1)
+reasons through native errors and collection traces in these operations.
+
+Raw JXL output now uses a qualified public native F32 path and a private
+`JxlLayers` collection. The same `Checked<C, R>::first_image` call selects a
+layer or presentation; the factory fixes the view before discovery. Nine layers
+retain their complete local samples, signed canvas placement, color/auxiliary
+blend instructions and scoped reference slots with the same `ImageOutput` owner.
+Policy runs on that held owner before publication. Reverse/repeated selection
+replays from the source start; it does not promise efficient random access.
+
+A 1024×576 native layer at (1860,950) has only a 188×202 visible intersection.
+The separate `Placement::visible` operation computes that intersection without
+clipping the held samples or weakening bounded-region validation. Independent
+libjxl agrees on geometry and blend facts. CMYK/alpha samples agree exactly;
+lossy RGB differences remain within the unchanged native conformance bound and
+are recorded in the [selected-layer receipt](../benchmarks/raw_collection_2026-10-26.json).
+
+The integration exposed two interpretation failures: missing F32 CMYK storage
+panicked, and conventional CMYK would have mislabeled native reversed ink
+polarity. The adapter now uses a fallible format lookup, `CmykF32Inverted`, and
+explicit polarity on the separate black plane. An ICC profile alone does not
+establish polarity. Unqualified color and polarity conversions refuse.
+
+The collection remains private. The native path requires stored orientation,
+skipped previews, unrendered spots, retained black, and F32 output. Remaining
+blend configurations, native negative-origin fixtures, preview/progressive
+publication, reference-only export, random raw seeking, conversion and whole
+workspace bounds remain qualification gates in
+[decoder issue 57](https://github.com/imazen/zenjxl-decoder/issues/57).
+Source blend facts are not a lossless re-encoding contract.
+ The existing [paged-decoder issue](https://github.com/imazen/zencodec/issues/1)
 owns the shared-selector discussion. The [public-output receipt](../benchmarks/public_image_output_2026-10-26.json)
 records the executing core/native qualification.
 

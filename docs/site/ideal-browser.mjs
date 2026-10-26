@@ -27,9 +27,10 @@ export async function checkIdeal(browser,url,output) {
     await page.keyboard.press('Enter');
     assert.ok(await placement.evaluate(el=>el.open));
     assert.ok((await placement.textContent()).includes('188×202'));
-    assert.ok((await placement.textContent()).includes('no new public type'));
-    assert.ok((await placement.textContent()).includes('test-only'));
-    assert.ok((await placement.textContent()).includes('public raw-layer output remains unsupported'));
+    assert.ok((await placement.textContent()).includes('CmykF32Inverted'));
+    assert.ok((await placement.textContent()).includes('native raw output is implemented'));
+    assert.ok((await placement.textContent()).includes('not a lossless re-encoding contract'));
+    assert.equal(await placement.locator('[data-example="checked_jxl_layer_first"]').count(),1);
     const videoChange=page.locator('#change-video');
     await videoChange.locator(':scope>summary').focus();
     await page.keyboard.press('Enter');

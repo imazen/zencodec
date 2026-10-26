@@ -567,14 +567,14 @@ It also demonstrates why view selection belongs before discovery:
 
 The latter includes 1024×576 layers with nonzero origins on a 2048×1152
 canvas. One starts at (1860,950), extending beyond the canvas: layer placement
-is distinct from a bounded decoded region. Native `coalescing=false` now returns
-the typed `UncoalescedOutputUnsupported` error before consuming input, including
-scan-only processing. The candidate also refuses required `Uncomposited` before
-parsing. This fixes the previously ignored requirement; raw-layer decoding is
-still tracked in [zenjxl-decoder issue 57](https://github.com/imazen/zenjxl-decoder/issues/57).
-The [downstream receipt](../../benchmarks/spatial_layer_refusal_2026-10-26.json)
-qualifies the new native pin against both independent libjxl views. It does not
-claim layer reconstruction or compositing support.
+is distinct from a bounded decoded region. The presentation-only `JxlItems`
+adapter still refuses an `Uncomposited` requirement; the separate `JxlLayers`
+factory fixes that view before discovery and uses the qualified native F32 path.
+The [initial refusal receipt](../../benchmarks/spatial_layer_refusal_2026-10-26.json)
+records the earlier native correction that stopped silently substituting a
+composited canvas. The current gate exercises actual raw output with preserved
+source samples, described below. Remaining native configurations stay tracked in
+[zenjxl-decoder issue 57](https://github.com/imazen/zenjxl-decoder/issues/57).
 The independent library is libjxl 0.11.1 locally; CI records the installed
 library's exact numeric version in the test log. Install its development headers
 and library before running the gate (`libjxl-dev` on Ubuntu). Its executable is
@@ -636,12 +636,65 @@ samples are bit-exact; lossy RGB uses the unchanged native float-conformance
 bound, with every differing float count and maximum error recorded. A single
 changed CMYK mantissa bit fails the independent gate.
 
-This is a test-only native tap, not a public raw-output factory. The collection
-still refuses uncomposited requests. The result supports keeping sample extent,
-signed placement and composition facts distinct. Frozen owner-bound placement,
-publication, conversion, preview state and the other blend configurations remain
-promotion gates. The native oracle receipt is linked from its owning document;
-no binary captures are copied into this repository.
+### Selected native raw output
+
+The follow-through replaces the test tap with the public native F32 path pinned
+at `65e3c871b7341703664039fd2ee70e0524f45db6`. The private
+[`JxlLayers`](src/jxl_layers.rs) adapter discovers regular raw layers, fixes the
+view before issuing scoped identities, and replays from the start for a selected
+layer. It retains the source bytes; this is not incremental input or efficient
+random raw seeking. LF/reference-only helpers remain native internal state.
+
+The existing `Checked<C, R>` consumer runs the configured resolver on the actual
+held output before returning it. The guide's executed
+`checked_jxl_layer_first` example differs from presentation setup only in the
+native factory. Both finish with `images.first_image(&ImageRequest::default())?`.
+Stored output has one `ImageOutput` owner: local geometry, signed placement,
+source color/extra blend instructions, saved-reference slots, duration and last
+flags stay attached to its allocation. Reference slots belong to that opened
+source context; they are not item IDs or a lossless re-encoding instruction set.
+
+The selected native matrix covers nine layers from the two fixtures above,
+reverse order plus repeated first selection, exact native sequential sample
+bytes, retained padding, unchanged allocation through policy, and ownership
+past source/collection drop. Independent libjxl checks every emitted sample and
+composition fact. CMYK and alpha agree bit-for-bit. Lossy RGB differences remain
+within the existing 1/256 conformance bound; the per-selection receipt records
+the differing-bit count and maximum error, including duplicated packed/auxiliary
+channels. Foreign IDs/cursors, unsupported child/region requirements, exhausted
+image/header allowances, policy rejection, cancellation and timeout are tested.
+A one-bit CMYK negative control must fail comparison.
+
+The first integration failed because `PixelDescriptor::new(F32, Cmyk, ...)`
+had no physical format and panicked. A fallible lookup now returns a runtime
+error for absent formats. The pixel dependency at `284a0598abf441dc886755b1e65c34dbdf6ce94d`
+adds conventional and inverted F32 CMYK. Native JXL uses the inverted variant:
+zero means full ink and one means no ink, including its separate black plane.
+Source ICC bytes describe conventional device values; they cannot silently
+relabel that native domain. Unqualified conversion, including polarity changes,
+refuses. The pixel suite preserves every sample bit and ICC context in both
+formats without copying the owned allocation.
+
+Run `just spatial-layer-check <fresh-artifacts>` for the focused gate; the full
+`spatial-validation-check` also executes these cases. For the combined HTTP and
+Linux snapshot features use `just spatial-validation-all <fresh-artifacts>
+<python> <port>`: it runs the native/disk matrix, then starts the required
+simulator for the HTTP tests. This preserves the simulator's 240-second child
+deadline instead of spending it on unrelated native reconstruction. Layer, TIFF, generated-image
+and HTTP artifacts have separate namespaces so every fixture retains its fresh
+directory check. An initial combined invocation exposed the directory collision
+and missing simulator setup; those failures are preserved in the receipt. The
+[raw collection receipt](../../benchmarks/raw_collection_2026-10-26.json) retains
+the initial failure and verified follow-through. The independent C helper is
+copied from `imazen/zenjxl-decoder` commit `65e3c871`'s
+`perf/raw-layer-validation/oracle.c`; it is test-only and uses libjxl 0.11.1 here.
+No binary captures are copied into this repository.
+
+Remaining qualifications: all blend configurations, native negative-origin
+fixtures, preview/progressive publication, reference-only export, representations
+other than F32, qualified CMYK conversion, raw random seeking and native workspace
+bounds. Publication happens after reconstruction; it does not prove preallocation
+admission or whole-container privacy. The shared collection remains private.
 
 ## Reduced-level region candidate
 
