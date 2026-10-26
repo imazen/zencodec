@@ -2,6 +2,18 @@
 // Signatures come from Rust through apiPanels; examples remain executable files.
 export const improvements = [
   {
+    id:'debugging', title:'Media failures retain the original cause',
+    state:'Implemented · review PR', date:'2026-10-25',
+    summary:'Pump and mapping errors preserve concrete backend causes and location traces through adapters and type erasure.',
+    why:'A production error often crosses a codec, a pump, conversion and a destination. Losing the cause at any wrapper makes the failure hard to classify or reproduce.',
+    consumer:'Use Error::source or zencodec::find_cause to inspect the original failure. The pump still identifies which side failed; no message parsing is required for retained typed causes.',
+    adapter:'Forward the owned error through PumpError, AdaptError and erasure. Keep traced callback and destination failures intact. An error report adds context without replacing its cause.',
+    implementor:'Pass the original error into MapError::Backend as a boxed Error + Send + Sync. Use Unavailable for storage without a CPU mapping.',
+    open:'This changes the unpublished MapError payload from String to an owned error. Native AV1 plane-limit refusal still lacks a distinct typed category and stable refusal facts; retaining its cause does not supply those facts.',
+    signatures:['findCause','mediaPumpCause','mediaMapCause'],
+    evidence:[['Media error contract','docs/media-contract.md#error-inspection-across-pumps-and-mappings'],['Mapping and pump regression controls','zencodec-media-testkit/tests/error_chains.rs'],['Encoder pump and terminal behavior','zencodec-media-testkit/tests/encoder_fusing.rs'],['Native refusal category gap','https://github.com/imazen/rav1d-safe/issues/538']],
+  },
+  {
     id:'video', title:'Video policy follows each actual presentation',
     state:'Partly implemented', date:'2026-10-25',
     summary:'Native AV1 retains samples, color, timing and packet provenance through the shared resolver. Optional native plane admission precedes allocation; full workspace bounds and coupled conversion remain open.',

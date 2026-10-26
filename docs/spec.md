@@ -345,6 +345,12 @@ of these same types. Native picture storage, mapping and sessions stay in
 `zencodec-media`. These facts do not flatten planar samples into a packed
 `zenpixels::PixelDescriptor`.
 
+Media pump failures expose their upstream or downstream cause through
+`Error::source()`. `MapError::Backend(Box<dyn Error + Send + Sync>)` keeps a
+native mapping failure and its location trace inspectable through adapters and
+type erasure. `Unavailable` has no backend cause. These debugging contracts are
+part of the unpublished media surface; see [the media contract](media-contract.md#error-inspection-across-pumps-and-mappings).
+
 ```rust
 // zencodec::frame (public fields; non_exhaustive except Crop and SampleEncoding)
 enum Subsampling { Mono, Yuv420, Yuv422, Yuv444 }

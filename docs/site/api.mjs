@@ -11,6 +11,9 @@ export const api = {
   operationControl: {path:'zencodec::decode::ControlledIncrementalDecode',file:'src/traits/control.rs',scope:'pub trait ControlledIncrementalDecode: IncrementalDecode',methods:['step_controlled','resume']},
   framePolicy: {path:'zencodec_media::policy::PolicyDecoder',file:'zencodec-media/src/policy.rs',scope:'impl<D, R> PolicyDecoder<D, R>',methods:['new','with_policy_set','report','is_failed']},
   frameResolution: {path:'zencodec::operation::resolve_frame',file:'src/operation/frame.rs',methods:['resolve_frame']},
+  mediaPumpCause: {path:'core::error::Error for zencodec_media::session::PumpError',file:'zencodec-media/src/session.rs',scope:"impl<U: core::error::Error + 'static, D: core::error::Error + 'static> core::error::Error",methods:['source']},
+  mediaMapCause: {path:'core::error::Error for zencodec_media::frame::MapError',file:'zencodec-media/src/frame.rs',scope:'impl core::error::Error for MapError',methods:['source']},
+  findCause: {path:'zencodec::find_cause',file:'src/error.rs',methods:['find_cause']},
 
   checkedDecodePolicy: {path:"zencodec::decode::DecodeJob<'a>",file:'src/traits/decoding.rs',scope:"pub trait DecodeJob<'a>",methods:['try_set_policy','try_with_policy'],associated:false},
   checkedEncodePolicy: {path:'zencodec::encode::EncodeJob',file:'src/traits/encoding.rs',scope:'pub trait EncodeJob: Sized',methods:['try_set_policy','try_with_policy'],associated:false},

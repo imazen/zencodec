@@ -368,7 +368,7 @@ None.
 
 - On the unpublished media API, `MapError::Backend` takes an owned
   `Box<dyn Error + Send + Sync>` instead of `String`, retaining concrete causes
-  and location traces through mapping, adaptation and erasure (PR 168).
+  and location traces through mapping, adaptation and erasure (`6241cad4`).
 
 - `PlaneData` gains accounted 8/16-bit storage variants on the unpublished media
   API. Exhaustive matches must handle the new variants (`5019a40a`).
