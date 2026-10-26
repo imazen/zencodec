@@ -181,11 +181,42 @@ calls. Coincident cancellation does not replace the original failure. `None`
 means no stop was observed through that token, rather than classifying all native
 or application errors as non-cancellation.
 
+`CodecSet::with_collection(factory)` registers immutable `CollectionFactory`
+configurations. `open_collection(format, source, request, resolver, stop)` returns
+`CheckedCollection<Discovery<ErasedCollection<'a>>, R>`, borrowing the positional
+source without borrowing the registry. The first matching registration wins,
+including failures; no implicit format detection, source staging or fallback.
+The factory receives the matched format, required view, inherited resource limits
+and decode policy, and the shared latched stop token. It must honor configured
+requirements or refuse before affected work. This is stronger than the legacy
+best-effort policy setter on still-image jobs. Inherited pulse cancellation,
+inherited stop and per-call stop all remain active after the registry drops;
+native progress reporting is not supplied by this opening contract.
+
+```rust
+trait CollectionFactory: Send + Sync {
+    fn formats(&self) -> &[ImageFormat];
+    fn open<'a>(&self, source: &'a mut dyn DynReadAt, format: ImageFormat,
+        view: Composition, limits: Option<ResourceLimits>, policy: Option<DecodePolicy>,
+        stop: StopToken) -> Result<ErasedCollection<'a>, Cause>;
+}
+impl OpenRequest {
+    fn new(view: Composition, discovery_attempts: u64) -> Self;
+}
+```
+
+`ErasedCollection::new` erases the native collection once and its owned cursor
+state once per cursor. Foreign cursors fail before native work. The small box
+allocations are infallible; the erased job is not promised `Send`. Native image
+IDs and output ownership remain unchanged. Typed collections remain available.
+`CollectionOpenError` distinguishes absent registration, resident-input needs,
+unimplemented limit enforcement and unimplemented decode-policy enforcement.
+
 This is publication after reconstruction, not native allocation admission or a
-whole-container privacy guarantee. Concrete adapter packaging, `CodecSet`
-registration and broader source/workspace bounds
-remain open. See [the collection contract](collection-contract.md) for executing
-native coverage, caller examples and the full failure boundaries.
+whole-container privacy guarantee. Concrete adapter packaging, qualified native
+configuration mappings and broader source/workspace bounds remain open. See
+[the collection contract](collection-contract.md) for executing native coverage,
+caller examples and the full failure boundaries.
 
 ## Stored operation requests
 
@@ -1638,6 +1669,12 @@ Runtime set of registered codec configs with one entry point per operation.
 struct CodecSet { /* private */ }
 
 impl CodecSet {
+    fn with_collection(self, factory: impl collection::CollectionFactory + 'static) -> Self;
+    fn open_collection<'a, R: operation::PolicyResolver>(&self, format: ImageFormat,
+        source: &'a mut dyn source::DynReadAt, request: collection::OpenRequest,
+        resolver: R, stop: StopToken)
+        -> Result<operation::CheckedCollection<collection::Discovery<collection::ErasedCollection<'a>>, R>,
+            At<operation::CollectionOperationError>>;
     fn new() -> Self;
 
     // Registration — self-describing via DecoderConfig::formats() /

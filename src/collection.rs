@@ -14,8 +14,12 @@ use core::{error::Error, fmt};
 
 mod description;
 mod discovery;
+mod erased;
+mod factory;
 pub use description::ImageDescription;
 pub use discovery::{Discovery, DiscoveryExhausted, DiscoveryMethod, DiscoveryUsage};
+pub use erased::{ErasedCollection, ErasedCursor};
+pub use factory::{CollectionFactory, CollectionOpenError, OpenRequest};
 
 /// Retained concrete backend cause, including an existing location trace.
 pub type Cause = Box<dyn Error + Send + Sync + 'static>;

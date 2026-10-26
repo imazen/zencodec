@@ -6,27 +6,27 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2857 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 193 lines (193 hidden + 0 excluded-feature)
+# files: zencodec.txt 2879 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 196 lines (196 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                19
-#   pub types (struct/enum/trait/alias)       331
-#   pub consts/statics                        301
+#   pub types (struct/enum/trait/alias)       336
+#   pub consts/statics                        302
 #   free functions                             83
-#   inherent methods                         1041
-#   struct fields                             410
-#   enum variants                             470
+#   inherent methods                         1046
+#   struct fields                             412
+#   enum variants                             474
 #   re-exports                                 15
-#   trait roster entries (type × trait)       960
+#   trait roster entries (type × trait)       971
 #   conditional trait impls (verbatim)          8
-#   auto-trait-complete types                 173
-#   auto-trait exceptions                      38
+#   auto-trait-complete types                 175
+#   auto-trait exceptions                      40
 #
 # per-module pub lines:
-#   (root)                          957
+#   (root)                          960
 #   animation                        11
-#   collection                       73
+#   collection                       87
 #   decode                          283
 #   encode                          189
 #   estimate                         48
@@ -44,7 +44,7 @@
 #   storage                          34
 #   time                             22
 
-## items (2590 lines)
+## items (2607 lines)
 
 pub mod zencodec
 pub use At
@@ -78,6 +78,11 @@ pub mod collection
 pub collection::CollectionError::Backend(collection::Cause)
 pub collection::CollectionError::Requirement(collection::SelectionError)
 pub fn collection::CollectionError::located(collection::Cause) -> whereat::at::At<Self>
+#[non_exhaustive] pub enum collection::CollectionOpenError
+pub collection::CollectionOpenError::NotRegistered(ImageFormat)
+pub collection::CollectionOpenError::ResidentInputRequired
+pub collection::CollectionOpenError::UnsupportedDecodePolicy
+pub collection::CollectionOpenError::UnsupportedLimits
 #[non_exhaustive] pub enum collection::Composition
 pub collection::Composition::Composited
 pub collection::Composition::Uncomposited
@@ -116,6 +121,9 @@ pub collection::DiscoveryUsage::backend_errors: u64
 pub collection::DiscoveryUsage::exhausted_cursors: u64
 pub collection::DiscoveryUsage::returned_descriptions: u64
 pub collection::DiscoveryUsage::returned_ids: u64
+pub struct collection::ErasedCollection<'a>(_)
+pub fn collection::ErasedCollection<'a>::new<C: collection::Collection + 'a>(C) -> Self where <C as collection::Collection>::Cursor: 'static
+pub struct collection::ErasedCursor
 #[non_exhaustive] pub struct collection::ImageDescription
 pub collection::ImageDescription::placement: core::option::Option<image::Placement>
 pub collection::ImageDescription::stored_orientation: core::option::Option<zenpixels::orientation::Orientation>
@@ -133,6 +141,10 @@ pub struct collection::ImageId
 pub collection::ImageRequest::region: collection::RegionRequest
 pub const fn collection::ImageRequest::new() -> Self
 pub fn collection::ImageRequest::with_region(self, impl core::convert::Into<collection::RegionRequest>) -> Self
+#[non_exhaustive] pub struct collection::OpenRequest
+pub collection::OpenRequest::discovery_attempts: u64
+pub collection::OpenRequest::view: collection::Composition
+pub const fn collection::OpenRequest::new(collection::Composition, u64) -> Self
 pub struct collection::Origin(_)
 pub fn collection::Origin::image(&self, u64) -> collection::ImageId
 pub fn collection::Origin::key(&self, &collection::ImageId) -> core::result::Result<u64, collection::SelectionError>
@@ -149,6 +161,9 @@ pub fn collection::Collection::describe(&mut self, &collection::ImageId) -> core
 pub fn collection::Collection::images(&mut self) -> core::result::Result<Self::Cursor, whereat::at::At<collection::CollectionError>>
 pub fn collection::Collection::next(&mut self, &mut Self::Cursor) -> core::result::Result<core::option::Option<collection::ImageId>, whereat::at::At<collection::CollectionError>>
 pub fn collection::Collection::view(&self) -> collection::Composition
+pub trait collection::CollectionFactory: core::marker::Send + core::marker::Sync
+pub fn collection::CollectionFactory::formats(&self) -> &[ImageFormat]
+pub fn collection::CollectionFactory::open<'a>(&self, &'a mut dyn source::DynReadAt, ImageFormat, collection::Composition, core::option::Option<ResourceLimits>, core::option::Option<decode::DecodePolicy>, almost_enough::stop_token::StopToken) -> core::result::Result<collection::ErasedCollection<'a>, collection::Cause>
 pub type collection::Cause = alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)>
 pub mod decode
 #[non_exhaustive] pub enum decode::BoundaryAction
@@ -2313,6 +2328,8 @@ pub fn CodecSet::with_limits(self, ResourceLimits) -> Self
 pub fn CodecSet::with_pulse(self, how_far::pulse::SharedPulse) -> Self
 pub fn CodecSet::with_send_encoder<C>(self, C) -> Self where C: encode::EncoderConfig + 'static, <C as encode::EncoderConfig>::Job: core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::Enc: encode::Encoder + core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::AnimationFrameEnc: encode::AnimationFrameEncoder
 pub fn CodecSet::with_stop(self, almost_enough::stop_token::StopToken) -> Self
+pub fn CodecSet::open_collection<'a, R: operation::PolicyResolver>(&self, ImageFormat, &'a mut dyn source::DynReadAt, collection::OpenRequest, R, almost_enough::stop_token::StopToken) -> core::result::Result<operation::CheckedCollection<collection::Discovery<collection::ErasedCollection<'a>>, R>, whereat::at::At<operation::CollectionOperationError>>
+pub fn CodecSet::with_collection(self, impl collection::CollectionFactory + 'static) -> Self
 pub struct CodecSetIncrementalDecoder
 pub fn CodecSetIncrementalDecoder::new(CodecSet, &[zenpixels::descriptor::PixelDescriptor]) -> Self
 #[non_exhaustive] pub struct ColorEmitFields
@@ -2637,7 +2654,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (220 types)
+## trait impls (223 types)
 
 &mut D: decode::ControlledIncrementalDecode, decode::IncrementalDecode
 &mut S: source::DynReadAt
@@ -2697,14 +2714,17 @@ animation::FrameDuration: Clone, Copy, Debug, Eq, Hash, PartialEq
 animation::TimingError: Clone, Copy, Debug, Display, Eq, Error, PartialEq
 animation::TimingQuantizer: Clone, Copy, Debug
 collection::CollectionError: Debug, Display, Error
+collection::CollectionOpenError: Clone, Copy, Debug, Display, Eq, Error, PartialEq
 collection::Composition: Clone, Copy, Debug, Eq, PartialEq
 collection::Discovery<C>: collection::Collection
 collection::DiscoveryExhausted: Debug, Display, Error
 collection::DiscoveryMethod: Clone, Copy, Debug, Eq, PartialEq
 collection::DiscoveryUsage: Clone, Copy, Debug, Default, Eq, PartialEq
+collection::ErasedCollection<'_>: collection::Collection
 collection::ImageDescription: Clone, Copy, Debug, Eq, PartialEq
 collection::ImageId: Clone, Debug, Eq, Hash, PartialEq
 collection::ImageRequest: Clone, Copy, Debug, Default
+collection::OpenRequest: Clone, Copy, Debug
 collection::Origin: Default
 collection::RegionRequest: Clone, Copy, Debug, Default, Eq, From<image::Rect>, PartialEq
 collection::SelectionError: Clone, Copy, Debug, Display, Eq, Error, PartialEq
@@ -2870,7 +2890,7 @@ impl<J, E> decode::IncrementalDecode for helpers::WholeFileIncremental<J> where 
 
 ## auto traits
 
-173 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+175 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
 CodecSet: !RefUnwindSafe !UnwindSafe
 CodecSetError: !RefUnwindSafe !UnwindSafe
@@ -2881,6 +2901,8 @@ OwnedAnimationFrame: !RefUnwindSafe !UnwindSafe
 Unsupported<E>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 collection::CollectionError: !RefUnwindSafe !UnwindSafe
 collection::Discovery<C>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+collection::ErasedCollection<'a>: !RefUnwindSafe !Send !Sync !UnwindSafe
+collection::ErasedCursor: !RefUnwindSafe !Send !Sync !UnwindSafe
 decode::DecodeOutput: !RefUnwindSafe !UnwindSafe
 decode::ErasedError: !RefUnwindSafe !UnwindSafe
 decode::Fused<D>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe

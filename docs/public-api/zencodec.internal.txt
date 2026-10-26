@@ -9,13 +9,13 @@
 
 ## summary
 #
-#   inherent methods                           73
-#   trait roster entries (type × trait)       120
+#   inherent methods                           74
+#   trait roster entries (type × trait)       122
 #
 # per-module pub lines:
 #   (root)                           18
 #   animation                         1
-#   collection                        4
+#   collection                        5
 #   decode                           12
 #   encode                            4
 #   estimate                          2
@@ -29,7 +29,7 @@
 #   source                            2
 #   time                              2
 
-## items (73 lines)
+## items (74 lines)
 
 pub fn CodecIoKind::assert_fields_are_eq(&self)
 pub fn ColorEmitFields::assert_fields_are_eq(&self)
@@ -50,6 +50,7 @@ pub fn StreamOffset::assert_fields_are_eq(&self)
 pub fn Supplements::assert_fields_are_eq(&self)
 pub fn ThreadingPolicy::assert_fields_are_eq(&self)
 pub fn animation::FrameDuration::assert_fields_are_eq(&self)
+pub fn collection::CollectionOpenError::assert_fields_are_eq(&self)
 pub fn collection::DiscoveryUsage::assert_fields_are_eq(&self)
 pub fn collection::ImageDescription::assert_fields_are_eq(&self)
 pub fn collection::RegionRequest::assert_fields_are_eq(&self)
@@ -105,7 +106,7 @@ pub fn source::SourceError::assert_fields_are_eq(&self)
 pub fn time::TimeBase::assert_fields_are_eq(&self)
 pub fn time::Timestamp::assert_fields_are_eq(&self)
 
-## trait impls (120 types)
+## trait impls (122 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -137,11 +138,13 @@ UnsupportedOperation: TrivialClone
 animation::FrameDuration: TrivialClone
 animation::TimingError: TrivialClone
 animation::TimingQuantizer: TrivialClone
+collection::CollectionOpenError: TrivialClone
 collection::Composition: TrivialClone
 collection::DiscoveryMethod: TrivialClone
 collection::DiscoveryUsage: TrivialClone
 collection::ImageDescription: TrivialClone
 collection::ImageRequest: TrivialClone
+collection::OpenRequest: TrivialClone
 collection::RegionRequest: TrivialClone
 collection::SelectionError: TrivialClone
 decode::BatchMeta: TrivialClone

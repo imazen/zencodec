@@ -2,6 +2,13 @@
 
 ## Native image selection (unreleased experiment)
 
+- Register borrowed native collections with `CodecSet::with_collection` and
+  `open_collection`. Share one checked discovery/publication path; retain source
+  lifetimes, cursor ownership and first-registration-wins errors. Require adapters
+  to honor inherited limits/policy or refuse; preserve set, pulse and per-call
+  cancellation after registry drop. Concrete TIFF/JXL adapters remain in the
+  validation harness and refuse unqualified legacy configuration mappings.
+
 - Make the unreleased `DynReadAt` protocol usable with thread-local sources.
   Request `dyn DynReadAt + Send` explicitly when moving an erased source
   between threads. Both boxed forms accept borrowed input. Native factories

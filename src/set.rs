@@ -58,6 +58,7 @@
 
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::fmt;
 
@@ -75,6 +76,8 @@ use crate::{
     ColorEmitPolicy, DecodeOutput, DecodePolicy, DecodeRowSink, EncodeOutput, EncodePolicy,
     ImageInfo, Metadata, MetadataPolicy, OutputInfo, ResourceLimits, StopToken,
 };
+
+mod collection;
 
 // ===========================================================================
 // Internal entries — object-safe configs that can also clone themselves
@@ -269,6 +272,7 @@ impl From<BoxedError> for CodecSetError {
 pub struct CodecSet {
     decoders: Vec<Box<dyn DecoderEntry>>,
     encoders: Vec<Box<dyn EncoderEntry>>,
+    collections: Vec<Arc<dyn crate::collection::CollectionFactory>>,
     limits: Option<ResourceLimits>,
     stop: Option<StopToken>,
     pulse: Option<how_far::SharedPulse>,
@@ -283,6 +287,7 @@ impl CodecSet {
         Self {
             decoders: Vec::new(),
             encoders: Vec::new(),
+            collections: Vec::new(),
             limits: None,
             stop: None,
             pulse: None,
@@ -1032,6 +1037,7 @@ impl Clone for CodecSet {
         Self {
             decoders: self.decoders.iter().map(|d| d.clone_entry()).collect(),
             encoders: self.encoders.iter().map(|e| e.clone_entry()).collect(),
+            collections: self.collections.clone(),
             limits: self.limits,
             stop: self.stop.clone(),
             pulse: self.pulse.clone(),
