@@ -2,9 +2,9 @@
 //! Packed color, auxiliary values and integer component codes stay distinct.
 use super::image_items::ImageGeometry;
 use std::{fmt, sync::Arc};
-use zencodec::frame::{FrameInterpretation, FrameTiming, PlaneRole, SampleEncoding};
-use zencodec_media::frame::{
-    Frame, MappedPlanes, PlaneSamples, PlaneView as CodePlane, Presentation,
+use zencodec::frame::{
+    Frame, FrameInterpretation, FrameTiming, MappedPlanes, PlaneRole, PlaneSamples,
+    PlaneView as CodePlane, Presentation, SampleEncoding,
 };
 use zenpixels::{AlphaMode, ChannelType, Orientation, PixelBuffer, PixelSlice};
 type Failure = Box<dyn std::error::Error + Send + Sync>;

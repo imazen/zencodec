@@ -62,6 +62,7 @@ mod extensions;
 mod fidelity;
 mod format;
 pub mod frame;
+mod frame_storage;
 /// Cross-codec gain map types (ISO 21496-1).
 pub mod gainmap;
 /// Codec implementation helpers (not consumer API).

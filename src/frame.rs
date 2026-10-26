@@ -1,8 +1,12 @@
 //! Immutable native-frame interpretation and timing facts.
 //!
-//! These values describe planar samples without mapping, converting or owning
-//! a native picture. Shared policy questions use the same facts as media
-//! sessions; storage and codec execution remain in `zencodec-media`.
+//! Interpretation and mapped frame owners are shared by still-image and video
+//! operations. Mapping borrows native storage without conversion. Media codec
+//! sessions and accounted software allocations stay outside this crate.
+
+pub use crate::frame_storage::{
+    Frame, MapError, MappedPlanes, Picture, PlaneError, PlaneSamples, PlaneView, Presentation,
+};
 
 use crate::time::Timestamp;
 use alloc::vec::Vec;

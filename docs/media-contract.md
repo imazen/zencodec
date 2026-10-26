@@ -104,11 +104,12 @@ the fused-session terminal rules.
 
 ## Frames
 
-Immutable interpretation and timing types now live in `zencodec::frame`;
-the previous `zencodec_media::frame` import paths remain compatibility
-re-exports. Native pictures, plane mapping and storage remain in the media
-crate. This lets still and video operations share one typed policy resolver
-without making the core depend on media sessions or I/O drivers. The existing
+Immutable interpretation, timing, frame owners and borrowed plane mappings live
+in `zencodec::frame`; the existing `zencodec_media::frame` import paths name the
+same types. Media retains codec sessions and `OwnedPlanes`, whose accounted
+allocations depend on I/O storage. Core mapping contracts add no driver or
+media dependency. Selected-image adapters and native AV1 now use this shared
+ownership boundary; packed pixels still use `zenpixels`. The existing
 media `SampleEncoding` compatibility type still needs migration to
 `zenpixels::sample::SampleEncoding`; this move does not create a second new
 sample interpretation implementation.

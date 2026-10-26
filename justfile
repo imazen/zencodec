@@ -229,7 +229,7 @@ operation-sync export:
     test ! -e "{{export}}/.git"
     test ! -e "{{export}}/.jj"
     mkdir -p "{{export}}/src/operation"
-    cp src/operation.rs src/lib.rs src/set.rs src/info.rs src/frame.rs src/resolution.rs "{{export}}/src/"
+    cp src/operation.rs src/lib.rs src/set.rs src/info.rs src/frame.rs src/frame_storage.rs src/resolution.rs "{{export}}/src/"
     cp src/operation/*.rs "{{export}}/src/operation/"
     cp src/traits/encoding.rs src/traits/dyn_encoding.rs src/traits/mod.rs "{{export}}/src/traits/"
     cp zencodec-testkit/tests/operation_*.rs "{{export}}/zencodec-testkit/tests/"
@@ -290,6 +290,12 @@ av1-policy-guide-check:
 av1-output-check artifacts:
     AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked output_native_ -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# Verify the same core mapping contract with native still and AV1 owners.
+shared-output-check artifacts:
+    just spatial-output-check "{{artifacts}}-still"
+    just av1-output-check "{{artifacts}}-av1"
+    cargo check -p zencodec -p zencodec-media --no-default-features --target wasm32-unknown-unknown --locked
 
 # Native TIFF spatial candidates and the positional-to-seek bridge.
 spatial-validation-sync export:
@@ -392,7 +398,7 @@ io-core-sync export:
     test ! -e "{{export}}/.git"
     test ! -e "{{export}}/.jj"
     test -f "{{export}}/zencodec-io/Cargo.toml"
-    cp src/lib.rs src/storage.rs "{{export}}/src/"
+    cp src/lib.rs src/storage.rs src/frame.rs src/frame_storage.rs "{{export}}/src/"
     cp zencodec-io/src/*.rs "{{export}}/zencodec-io/src/"
     cp zencodec-io/tests/*.rs "{{export}}/zencodec-io/tests/"
     cp justfile "{{export}}/justfile"
