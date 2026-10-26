@@ -6,25 +6,25 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2597 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 168 lines (168 hidden + 0 excluded-feature)
+# files: zencodec.txt 2704 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 176 lines (176 hidden + 0 excluded-feature)
 
 ## summary
 #
-#   pub modules                                17
-#   pub types (struct/enum/trait/alias)       291
+#   pub modules                                18
+#   pub types (struct/enum/trait/alias)       307
 #   pub consts/statics                        296
 #   free functions                             82
-#   inherent methods                          997
-#   struct fields                             338
-#   enum variants                             410
+#   inherent methods                         1013
+#   struct fields                             370
+#   enum variants                             437
 #   re-exports                                 15
-#   trait roster entries (type × trait)       841
+#   trait roster entries (type × trait)       884
 #   conditional trait impls (verbatim)          8
-#   auto-trait-complete types                 147
-#   auto-trait exceptions                      30
+#   auto-trait-complete types                 159
+#   auto-trait exceptions                      33
 #
 # per-module pub lines:
-#   (root)                          950
+#   (root)                          951
 #   animation                        11
 #   decode                          283
 #   encode                          189
@@ -34,6 +34,7 @@
 #   gainmap                         126
 #   helpers                          17
 #   icc                               1
+#   image                            91
 #   inventory                       103
 #   metadata_rewrite                 58
 #   operation                       144
@@ -42,7 +43,7 @@
 #   storage                          34
 #   time                             22
 
-## items (2368 lines)
+## items (2460 lines)
 
 pub mod zencodec
 pub use At
@@ -1117,6 +1118,98 @@ pub fn helpers::parse_exif_orientation(&[u8]) -> core::option::Option<zenpixels:
 pub fn helpers::set_exif_color_space(&[u8], bool) -> core::option::Option<alloc::vec::Vec<u8>>
 pub fn helpers::set_exif_orientation(&[u8], zenpixels::orientation::Orientation) -> core::option::Option<alloc::vec::Vec<u8>>
 pub mod icc
+pub mod image
+#[non_exhaustive] pub enum image::AuxiliaryKind
+pub image::AuxiliaryKind::Alpha(zenpixels::descriptor::AlphaMode)
+pub image::AuxiliaryKind::Black
+pub image::AuxiliaryKind::Cfa
+pub image::AuxiliaryKind::Cfa::channel: u32
+pub image::AuxiliaryKind::Depth
+pub image::AuxiliaryKind::SelectionMask
+pub image::AuxiliaryKind::SpotColor
+pub image::AuxiliaryKind::SpotColor::contribution: image::ColorContribution
+pub image::AuxiliaryKind::SpotColor::linear_rgba: [f32; 4]
+pub image::AuxiliaryKind::Thermal
+pub image::AuxiliaryKind::Unknown(u32)
+pub enum image::ColorContribution
+pub image::ColorContribution::Applied
+pub image::ColorContribution::Separate
+pub enum image::Meaning
+pub image::Meaning::Auxiliary(image::Auxiliary)
+pub image::Meaning::Color
+pub image::Meaning::Component(frame::PlaneRole)
+#[non_exhaustive] pub enum image::OutputError
+pub image::OutputError::Component
+pub image::OutputError::Component::actual_dimensions: (usize, usize)
+pub image::OutputError::Component::actual_encoding: frame::SampleEncoding
+pub image::OutputError::Component::expected_dimensions: (usize, usize)
+pub image::OutputError::Component::expected_encoding: frame::SampleEncoding
+pub image::OutputError::Component::index: usize
+pub image::OutputError::Geometry
+pub image::OutputError::Interpretation
+pub image::OutputError::Mapping(frame::MapError)
+pub image::OutputError::MissingPlane
+pub image::OutputError::NotPackedColor
+pub image::OutputError::Region(image::GeometryError)
+pub enum image::Row<'a>
+pub image::Row::Bytes(&'a [u8])
+pub image::Row::Words16(&'a [u16])
+pub enum image::Samples<'a>
+pub image::Samples::Codes(frame::PlaneView<'a>)
+pub image::Samples::Pixels(zenpixels::buffer::PixelSlice<'a>)
+pub image::Samples::Values(&'a image::Values)
+pub fn image::Samples<'_>::channel_type(&self) -> zenpixels::descriptor::ChannelType
+pub fn image::Samples<'_>::code_encoding(&self) -> core::option::Option<frame::SampleEncoding>
+pub fn image::Samples<'_>::dimensions(&self) -> (usize, usize)
+pub fn image::Samples<'_>::row(&self, usize) -> core::option::Option<image::Row<'_>>
+pub fn image::Samples<'_>::stride_bytes(&self) -> usize
+pub enum image::SourcePrecision
+pub image::SourcePrecision::Float
+pub image::SourcePrecision::Float::bits: u32
+pub image::SourcePrecision::Float::exponent_bits: u32
+pub image::SourcePrecision::Integer
+pub image::SourcePrecision::Integer::bits: u32
+pub image::SourcePrecision::Integer::signed: bool
+pub struct image::Auxiliary
+pub image::Auxiliary::kind: image::AuxiliaryKind
+pub image::Auxiliary::name: alloc::string::String
+pub image::Auxiliary::source_dim_shift: u32
+pub image::Auxiliary::source_precision: image::SourcePrecision
+pub struct image::GeometryError
+pub image::GeometryError::geometry: image::ImageGeometry
+pub struct image::ImageGeometry
+pub image::ImageGeometry::canvas_height: u32
+pub image::ImageGeometry::canvas_width: u32
+pub image::ImageGeometry::region: image::Rect
+pub fn image::ImageGeometry::validate(self) -> core::result::Result<(), image::GeometryError>
+pub struct image::ImageInterpretation
+pub image::ImageInterpretation::geometry: image::ImageGeometry
+pub image::ImageInterpretation::orientation: core::option::Option<zenpixels::orientation::Orientation>
+pub image::ImageInterpretation::presentation: core::option::Option<frame::Presentation>
+pub image::ImageInterpretation::signal: core::option::Option<alloc::rcs::arc::Arc<frame::FrameInterpretation>>
+pub image::ImageInterpretation::source_details: Extensions
+pub image::ImageInterpretation::timing: core::option::Option<frame::FrameTiming>
+pub fn image::ImageInterpretation::packed(image::ImageGeometry, zenpixels::orientation::Orientation) -> Self
+pub struct image::ImageOutput
+pub fn image::ImageOutput::from_frame(frame::Frame) -> Self
+pub fn image::ImageOutput::interpretation(&self) -> &image::ImageInterpretation
+pub fn image::ImageOutput::map(&self) -> core::result::Result<alloc::boxed::Box<(dyn image::MappedImage + '_)>, whereat::at::At<image::OutputError>>
+pub fn image::ImageOutput::packed(zenpixels::buffer::PixelBuffer, alloc::vec::Vec<(image::Auxiliary, image::Values)>, image::ImageInterpretation) -> core::result::Result<Self, whereat::at::At<image::OutputError>>
+pub fn image::ImageOutput::with_pixels<T>(&self, impl core::ops::function::FnOnce(zenpixels::buffer::PixelSlice<'_>) -> T) -> core::result::Result<T, whereat::at::At<image::OutputError>>
+pub struct image::Plane<'a>
+pub image::Plane::meaning: &'a image::Meaning
+pub image::Plane::samples: image::Samples<'a>
+pub struct image::Rect
+pub image::Rect::height: u32
+pub image::Rect::width: u32
+pub image::Rect::x: u32
+pub image::Rect::y: u32
+pub struct image::Values
+pub fn image::Values::as_strided_bytes(&self) -> &[u8]
+pub fn image::Values::new(alloc::vec::Vec<u8>, u32, u32, usize, zenpixels::descriptor::ChannelType) -> core::result::Result<Self, whereat::at::At<image::OutputError>>
+pub trait image::MappedImage
+pub fn image::MappedImage::plane(&self, usize) -> core::result::Result<core::option::Option<image::Plane<'_>>, whereat::at::At<image::OutputError>>
+pub fn image::MappedImage::plane_count(&self) -> usize
 pub mod inventory
 #[non_exhaustive] pub enum inventory::Disposition
 pub inventory::Disposition::Dropped
@@ -2413,7 +2506,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (190 types)
+## trait impls (202 types)
 
 &mut D: decode::ControlledIncrementalDecode, decode::IncrementalDecode
 &mut S: source::DynReadAt
@@ -2549,6 +2642,18 @@ gainmap::GainMapSource: Clone, Debug
 gainmap::Iso21496Format: Clone, Copy, Debug, Eq, PartialEq
 gainmap::UFraction: Clone, Copy, Debug, Default, Eq, PartialEq
 helpers::IccMatchTolerance: Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd
+image::Auxiliary: Clone, Debug, PartialEq
+image::AuxiliaryKind: Clone, Debug, PartialEq
+image::ColorContribution: Clone, Copy, Debug, Eq, PartialEq
+image::GeometryError: Clone, Copy, Debug, Display, Eq, Error, PartialEq
+image::ImageGeometry: Clone, Copy, Debug, Eq, PartialEq
+image::ImageInterpretation: Clone, Debug
+image::ImageOutput: Clone, Debug
+image::Meaning: Clone, Debug, PartialEq
+image::OutputError: Debug, Display, Error
+image::Rect: Clone, Copy, Debug, Eq, PartialEq
+image::SourcePrecision: Clone, Debug, Eq, PartialEq
+image::Values: Debug
 inventory::Disposition: Clone, Copy, Debug, Display, Eq, Hash, PartialEq
 inventory::Inventory: Clone, Debug, Display, Eq, PartialEq
 inventory::InventoryError: CategorizedError, Clone, Debug, Display, Eq, Error, PartialEq
@@ -2616,7 +2721,7 @@ impl<J, E> decode::IncrementalDecode for helpers::WholeFileIncremental<J> where 
 
 ## auto traits
 
-147 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+159 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
 CodecSet: !RefUnwindSafe !UnwindSafe
 CodecSetError: !RefUnwindSafe !UnwindSafe
@@ -2634,6 +2739,9 @@ encode::EncodeOutput: !RefUnwindSafe !UnwindSafe
 frame::Frame: !RefUnwindSafe !UnwindSafe
 frame::MapError: !RefUnwindSafe !UnwindSafe
 helpers::WholeFileIncremental<J>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
+image::ImageInterpretation: !RefUnwindSafe !UnwindSafe
+image::ImageOutput: !RefUnwindSafe !UnwindSafe
+image::OutputError: !RefUnwindSafe !UnwindSafe
 metadata_rewrite::Request<'a>: !RefUnwindSafe !Send !Sync !UnwindSafe
 operation::Choice<'a, T>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 operation::Choices<'a, T>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe

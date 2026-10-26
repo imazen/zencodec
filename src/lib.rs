@@ -72,6 +72,7 @@ pub mod helpers;
 // breaking change. The removal stays in CHANGELOG's QUEUED BREAKING CHANGES for
 // a future major; do not ship it in a patch/minor.
 pub mod icc;
+pub mod image;
 mod info;
 pub mod inventory;
 mod limits;

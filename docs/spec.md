@@ -70,10 +70,47 @@ trait MappedPlanes {
 
 The core has no media or I/O-driver dependency. Accounted software `OwnedPlanes`
 remain in media, while packed image interchange remains `zenpixels::PixelSlice`.
-The selected-image collection and its combined output remain private native
-experiments pending policy and discovery qualification. Sharing the mapping
-contract does not certify display conversion, whole-container metadata treatment
-or a native workspace bound. See [the media contract](media-contract.md#frames).
+The selected-image collection remains private pending policy and discovery
+qualification. Its shared output is implemented below. Mapping does not certify
+display conversion, whole-container metadata treatment or a native workspace
+bound. See [the media contract](media-contract.md#frames).
+
+### Mapped image output (`zencodec::image`)
+
+`ImageOutput` owns packed pixels plus auxiliary values, or an existing native
+component `Frame`. `map` borrows planes through a guard. `with_pixels` is the
+packed-color convenience and refuses component codes. Each plane distinguishes
+`Samples::{Pixels, Values, Codes}` and `Meaning::{Color, Auxiliary, Component}`;
+auxiliary scalar values are not relabeled grayscale color.
+
+`ImageInterpretation` is frozen with the owner. It retains stored canvas/region,
+residual orientation, optional native signal/timing and opaque typed source
+details. `Auxiliary` separately retains source precision and source dimensional
+shift. Spot color records whether its contribution is already `Applied` or
+still `Separate`; retaining its samples does not authorize applying it again.
+
+```rust
+impl ImageOutput {
+    fn packed(pixels: zenpixels::PixelBuffer, extras: Vec<(Auxiliary, Values)>,
+        interpretation: ImageInterpretation) -> Result<Self, At<OutputError>>;
+    fn from_frame(frame: frame::Frame) -> Self;
+    fn interpretation(&self) -> &ImageInterpretation;
+    fn map(&self) -> Result<Box<dyn MappedImage + '_>, At<OutputError>>;
+    fn with_pixels<T>(&self, consume: impl FnOnce(zenpixels::PixelSlice<'_>) -> T)
+        -> Result<T, At<OutputError>>;
+}
+trait MappedImage {
+    fn plane_count(&self) -> usize;
+    fn plane(&self, index: usize) -> Result<Option<Plane<'_>>, At<OutputError>>;
+}
+```
+
+Packed construction checks region bounds, pixel dimensions and compatible
+interpretation. Frame mapping checks the stored/crop extent, role count and
+mapped per-plane dimensions/encoding. It retains native mapping errors in the
+source chain. It does not scan sample codes, validate ICC profiles or establish
+metadata privacy. Names, opaque profiles and typed source details remain
+unfiltered data; policy admission is a separate boundary.
 
 ## Stored operation requests
 

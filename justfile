@@ -229,7 +229,7 @@ operation-sync export:
     test ! -e "{{export}}/.git"
     test ! -e "{{export}}/.jj"
     mkdir -p "{{export}}/src/operation"
-    cp src/operation.rs src/lib.rs src/set.rs src/info.rs src/frame.rs src/frame_storage.rs src/resolution.rs "{{export}}/src/"
+    cp src/operation.rs src/lib.rs src/set.rs src/info.rs src/frame.rs src/frame_storage.rs src/image.rs src/resolution.rs "{{export}}/src/"
     cp src/operation/*.rs "{{export}}/src/operation/"
     cp src/traits/encoding.rs src/traits/dyn_encoding.rs src/traits/mod.rs "{{export}}/src/traits/"
     cp zencodec-testkit/tests/operation_*.rs "{{export}}/zencodec-testkit/tests/"
@@ -239,7 +239,7 @@ operation-sync export:
 frame-policy-sync export:
     just operation-sync "{{export}}"
     cp zencodec-media/src/*.rs "{{export}}/zencodec-media/src/"
-    cp zencodec-media-testkit/tests/frame_policy.rs "{{export}}/zencodec-media-testkit/tests/"
+    cp zencodec-media-testkit/tests/frame_policy.rs zencodec-media-testkit/tests/image_output.rs "{{export}}/zencodec-media-testkit/tests/"
 
 frame-policy-check:
     cargo test -p zencodec-media-testkit --test frame_policy --locked
@@ -290,6 +290,21 @@ av1-policy-guide-check:
 av1-output-check artifacts:
     AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked output_native_ -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# Complete qualification of the public output and its native consumers.
+image-output-integration artifacts python:
+    just io-contract-check
+    just spatial-validation-check "{{artifacts}}-still" "{{python}}"
+    just av1-output-check "{{artifacts}}-av1"
+    cargo check -p zencodec --no-default-features --target wasm32-unknown-unknown --locked
+    just doc-default
+    just api-doc
+
+# Public mapped output rejects native geometry/encoding disagreement.
+image-output-check:
+    cargo test -p zencodec-media-testkit --test image_output --locked
+    cargo clippy -p zencodec -p zencodec-media-testkit --all-targets --locked -- -D warnings
+    cargo check -p zencodec --no-default-features --target wasm32-unknown-unknown --locked
 
 # Empty geometries must remain safe through the borrowed native-plane API.
 frame-storage-edge-check:
@@ -403,7 +418,7 @@ io-core-sync export:
     test ! -e "{{export}}/.git"
     test ! -e "{{export}}/.jj"
     test -f "{{export}}/zencodec-io/Cargo.toml"
-    cp src/lib.rs src/storage.rs src/frame.rs src/frame_storage.rs "{{export}}/src/"
+    cp src/lib.rs src/storage.rs src/frame.rs src/frame_storage.rs src/image.rs "{{export}}/src/"
     cp zencodec-io/src/*.rs "{{export}}/zencodec-io/src/"
     cp zencodec-io/tests/*.rs "{{export}}/zencodec-io/tests/"
     cp justfile "{{export}}/justfile"

@@ -2,6 +2,12 @@
 
 ## Native image selection (unreleased experiment)
 
+- Promote the native-qualified mapped output to `zencodec::image`. TIFF/JXL
+  and AV1 validation import the same implementation. Preserve immutable facts,
+  source/actual precision, auxiliary contribution and native ownership; expose
+  typed traced region/mapping failures and reject conflicting native plane
+  dimensions or code encoding. Collection discovery remains private.
+
 - Move native frame ownership and borrowed component-plane mappings into
   `zencodec::frame`, retaining the existing media import paths as re-exports.
   Core gains no media/I/O dependency; native selected-image and AV1 consumers

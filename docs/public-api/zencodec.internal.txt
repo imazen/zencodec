@@ -9,8 +9,8 @@
 
 ## summary
 #
-#   inherent methods                           63
-#   trait roster entries (type × trait)       105
+#   inherent methods                           67
+#   trait roster entries (type × trait)       109
 #
 # per-module pub lines:
 #   (root)                           18
@@ -21,13 +21,14 @@
 #   exif                              3
 #   frame                             7
 #   gainmap                           2
+#   image                             4
 #   inventory                         6
 #   metadata_rewrite                  2
 #   operation                         2
 #   source                            2
 #   time                              2
 
-## items (63 lines)
+## items (67 lines)
 
 pub fn CodecIoKind::assert_fields_are_eq(&self)
 pub fn ColorEmitFields::assert_fields_are_eq(&self)
@@ -78,6 +79,10 @@ pub fn frame::Presentation::assert_fields_are_eq(&self)
 pub fn frame::SampleEncoding::assert_fields_are_eq(&self)
 pub fn gainmap::Fraction::assert_fields_are_eq(&self)
 pub fn gainmap::UFraction::assert_fields_are_eq(&self)
+pub fn image::GeometryError::assert_fields_are_eq(&self)
+pub fn image::ImageGeometry::assert_fields_are_eq(&self)
+pub fn image::Rect::assert_fields_are_eq(&self)
+pub fn image::SourcePrecision::assert_fields_are_eq(&self)
 pub fn inventory::Disposition::assert_fields_are_eq(&self)
 pub fn inventory::Inventory::assert_fields_are_eq(&self)
 pub fn inventory::InventoryError::assert_fields_are_eq(&self)
@@ -93,7 +98,7 @@ pub fn source::SourceError::assert_fields_are_eq(&self)
 pub fn time::TimeBase::assert_fields_are_eq(&self)
 pub fn time::Timestamp::assert_fields_are_eq(&self)
 
-## trait impls (105 types)
+## trait impls (109 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -175,6 +180,10 @@ gainmap::GainMapRender: TrivialClone
 gainmap::Iso21496Format: TrivialClone
 gainmap::UFraction: TrivialClone
 helpers::IccMatchTolerance: TrivialClone
+image::ColorContribution: TrivialClone
+image::GeometryError: TrivialClone
+image::ImageGeometry: TrivialClone
+image::Rect: TrivialClone
 inventory::Disposition: TrivialClone
 inventory::MetadataKind: TrivialClone
 inventory::PartId: TrivialClone
