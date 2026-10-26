@@ -177,12 +177,18 @@ impl<'a> PlaneView<'a> {
         self.encoding
     }
 
-    /// Row `y`, without padding.
+    /// Row `y`, without padding. A zero-width row is empty regardless of stride.
     pub fn row(&self, y: usize) -> Option<PlaneSamples<'a>> {
         if y >= self.height {
             return None;
         }
-        let start = y * self.stride_samples;
+        // Empty rows address no storage, even when their logical row number or
+        // unused stride would overflow. Non-empty geometry was checked at new.
+        let start = if self.width == 0 {
+            0
+        } else {
+            y * self.stride_samples
+        };
         let end = start + self.width;
         Some(match self.samples {
             PlaneSamples::U8(s) => PlaneSamples::U8(&s[start..end]),
@@ -332,5 +338,37 @@ impl fmt::Debug for Frame {
             .field("presentation", &self.presentation)
             .field("epoch", &self.interpretation.config_epoch)
             .finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_width_rows_remain_empty_with_any_stride() {
+        let plane = PlaneView::new(
+            PlaneSamples::U8(&[]),
+            0,
+            usize::MAX,
+            usize::MAX,
+            SampleEncoding::U8,
+        )
+        .unwrap();
+        for y in [0, 1, 2, usize::MAX - 1] {
+            assert!(plane.row(y).unwrap().is_empty());
+            assert_eq!(plane.code(0, y), None);
+        }
+        assert!(plane.row(usize::MAX).is_none());
+        let encoding = SampleEncoding::new(ChannelType::U16, 10, 6).unwrap();
+        let words = PlaneView::new(
+            PlaneSamples::U16(&[]),
+            0,
+            usize::MAX,
+            usize::MAX - 1,
+            encoding,
+        )
+        .unwrap();
+        assert!(words.row(usize::MAX - 1).unwrap().is_empty());
     }
 }

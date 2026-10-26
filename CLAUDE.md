@@ -231,6 +231,11 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed in the shared mapping review (2026-10-26): a zero-width `PlaneView`
+  with nonzero stride accepted empty storage but `row(1)` indexed beyond it.
+  Empty rows now avoid unused offset arithmetic. The regression covers extreme
+  U8/U16 heights and strides without weakening non-empty geometry checks.
+
 - Fixed during native TIFF spatial qualification (2026-10-25): `find_cause`
   skipped a transport error embedded in `std::io::Error`, whose `source()`
   delegates past its payload. With `std`, lookup now follows `get_ref()` before

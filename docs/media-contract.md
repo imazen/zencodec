@@ -114,6 +114,9 @@ media `SampleEncoding` compatibility type still needs migration to
 `zenpixels::sample::SampleEncoding`; this move does not create a second new
 sample interpretation implementation.
 
+- A zero-width mapped plane returns empty rows within its declared height,
+  without indexing unused stride or overflowing a row offset. A zero-height
+  plane has no rows. Non-empty planes validate their full active extent.
 - A frame is valid after its decoder resets or drops. Two frames may share a
   picture (show-existing); `shares_picture` tells.
 - A frame's interpretation is immutable: a configuration change makes a new

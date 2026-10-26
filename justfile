@@ -291,6 +291,11 @@ av1-output-check artifacts:
     AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked output_native_ -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
 
+# Empty geometries must remain safe through the borrowed native-plane API.
+frame-storage-edge-check:
+    cargo test -p zencodec --locked frame_storage::tests::empty_width_rows_remain_empty_with_any_stride
+    cargo clippy -p zencodec -p zencodec-media --all-targets --locked -- -D warnings
+
 # Verify the same core mapping contract with native still and AV1 owners.
 shared-output-check artifacts:
     just spatial-output-check "{{artifacts}}-still"
