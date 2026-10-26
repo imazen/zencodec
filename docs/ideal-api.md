@@ -138,7 +138,10 @@ still [decoder issue 57](https://github.com/imazen/zenjxl-decoder/issues/57).
 The native decoder now refuses `coalescing=false` with a typed error before
 consuming input, instead of silently returning composited pixels. Independent
 libjxl discovery includes a layer extending beyond the presentation canvas;
-its placement cannot be represented as a bounded crop. The existing [paged-decoder issue](https://github.com/imazen/zencodec/issues/1)
+its placement cannot be represented as a bounded crop. A private `Placement::visible`
+experiment now preserves local pixel bounds and computes an explicit signed
+placement intersection, with typed coordinate errors. It adds no public API:
+raw samples and blend/dependency semantics must qualify together before promotion. The existing [paged-decoder issue](https://github.com/imazen/zencodec/issues/1)
 owns the shared-selector discussion. The [public-output receipt](../benchmarks/public_image_output_2026-10-26.json)
 records the executing core/native qualification.
 

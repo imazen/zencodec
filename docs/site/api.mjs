@@ -19,6 +19,7 @@ export const api = {
   collectionOpen: {path:'candidate::TiffCollection (private native experiment)',file:'perf/spatial-validation/src/tiff_items.rs',scope:'impl<R: Read + Seek> TiffCollection<R>',methods:['open','open_with_stop']},
   jxlSelection: {path:'candidate::JxlItems (private native experiment)',file:'perf/spatial-validation/src/jxl_items.rs',scope:"impl<'a> JxlItems<'a>",methods:['open','open_with_stop','next','decode']},
   sourceSnapshot: {path:'candidate::HttpSource (private HTTP qualification)',file:'perf/spatial-validation/src/http_source.rs',scope:'impl HttpSource',methods:['open']},
+  layerPlacement: {path:'candidate::Placement (private geometry experiment)',file:'perf/spatial-validation/src/placement.rs',scope:'impl Placement {',methods:['visible']},
   collectionDiscovery: {path:'candidate::Discovery<C> (private call allowance)',file:'perf/spatial-validation/src/discovery.rs',scope:'impl<C> Discovery<C>',methods:['new','usage']},
   collectionSelection: {path:'candidate::Collection (private common contract)',file:'perf/spatial-validation/src/collection.rs',scope:'pub trait Collection',methods:['view','images','children','next','decode']},
   tiffPixels: {path:'candidate::Region (private TIFF sample handoff)',file:'perf/spatial-validation/src/tiff_pixels.rs',scope:'impl Region {',methods:['into_pixels']},

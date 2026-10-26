@@ -474,6 +474,37 @@ source replacement during network access remain unqualified. libjxl exposes
 regular layers when coalescing is disabled; reference-only and low-frequency
 frames remain internal ([decoder contract](https://libjxl.readthedocs.io/en/latest/api_decoder.html)).
 
+## Layer placement without weakening pixel bounds
+
+A viewer receives a selected image or a local region of it, then places that
+image on a presentation canvas. Those are different coordinate spaces. A raw
+JXL layer can have a negative origin or extend beyond the canvas. Making
+`ImageGeometry::region` accept out-of-bounds coordinates would weaken the
+mapped-buffer contract and still lose the layer's own coordinate system.
+
+The private [`Placement::visible`](src/placement.rs) candidate takes the existing
+local `ImageGeometry` plus a signed origin and separate presentation dimensions.
+It returns matching rectangles in the returned sample buffer and presentation
+canvas. A valid fully off-canvas image returns `None`; its pixels and source
+extent are retained. Invalid local regions, empty canvases and signed coordinate
+overflow return typed errors. Orientation, resampling and blending remain
+separate operations; this helper cannot authorize dropping hidden source data.
+
+An exhaustive small-coordinate point-membership oracle checks intersections,
+including nonzero local-region origins. A strided RGB example copies only the
+intersection, preserves destination padding and retains the original owner.
+Independent libjxl discovery supplies the five actual raw extents of
+`multiple_layers_noise_spline.jxl`; two extend beyond the presentation canvas.
+The native decoder's internal-header regression confirms those same extents in
+two input chunk sizes while still returning one composited presentation.
+Negative-origin coverage here is synthetic, not native raw reconstruction.
+
+No new public type is promoted by this experiment. A future layer output needs
+placement frozen with its owner and qualified blend/dependency semantics. Keep
+this candidate separate until the native layer-output path can exercise that
+whole contract. [Qualification receipt](../../benchmarks/spatial_placement_2026-10-26.json).
+Run `just spatial-placement-check /path/to/artifacts`.
+
 ## Reduced-level region candidate
 
 This is an executable candidate, not a public spatial API. It selects a main
