@@ -35,8 +35,7 @@ fn assert_cause(error: &(dyn std::error::Error + 'static), kind: FailureKind) {
 
 #[test]
 fn http_snapshot_description_and_later_decode_keep_the_source_revision() {
-    use crate::description::Describe;
-    for big in [false, true] {
+        for big in [false, true] {
         let (bytes, refs) = nested_fixture(big, true, false);
         let name = format!("selected-description-{big}");
         write_fixture(&name, &bytes);

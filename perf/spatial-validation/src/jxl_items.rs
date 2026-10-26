@@ -3,7 +3,7 @@
 use super::{
     collection::{Collection, CollectionError, located},
     control::Control,
-    description::{Describe, Description},
+    description::Description,
     image_items::{Composition, ImageId, ImageRequest, Origin, RegionRequest, SelectionError},
     tiff_region::Failure,
 };
@@ -85,18 +85,16 @@ pub(super) fn controlled_options(control: &Control, limits: Limits) -> JxlDecode
 pub(super) fn describe_header(
     info: &zenjxl_decoder::api::JxlBasicInfo,
 ) -> Result<Description, Failure> {
-    Description {
-        stored_size: (
-            u32::try_from(info.coded_size.0)?,
-            u32::try_from(info.coded_size.1)?,
-        ),
-        stored_orientation: Some(
-            zenpixels::Orientation::from_exif(info.intrinsic_orientation as u8)
-                .ok_or_else(|| Error::other("invalid stored JXL orientation"))?,
-        ),
-        placement: None,
-    }
-    .validate()
+    let description = Description::new((
+        u32::try_from(info.coded_size.0)?,
+        u32::try_from(info.coded_size.1)?,
+    ))
+    .with_orientation(
+        zenpixels::Orientation::from_exif(info.intrinsic_orientation as u8)
+            .ok_or_else(|| Error::other("invalid stored JXL orientation"))?,
+    );
+    description.validate()?;
+    Ok(description)
 }
 
 pub struct Presentation {
@@ -455,7 +453,7 @@ pub struct JxlCursor {
     index: usize,
 }
 
-impl Describe for JxlItems<'_> {
+impl Collection for JxlItems<'_> {
     fn describe(&mut self, image: &ImageId) -> Result<Description, zencodec::At<CollectionError>> {
         let describe = || -> Result<Description, Failure> {
             let index = usize::try_from(self.origin.key(image)?)?;
@@ -469,9 +467,7 @@ impl Describe for JxlItems<'_> {
         };
         describe().map_err(located)
     }
-}
 
-impl Collection for JxlItems<'_> {
     type Cursor = JxlCursor;
     fn view(&self) -> Composition {
         Composition::Composited

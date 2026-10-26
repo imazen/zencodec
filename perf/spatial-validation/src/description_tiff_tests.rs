@@ -1,5 +1,4 @@
 use super::*;
-use crate::description::Describe;
 use std::{cell::Cell, ops::Range};
 
 /// An independent I/O guard: native directory parsing establishes the encoded

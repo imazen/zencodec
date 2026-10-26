@@ -1,7 +1,7 @@
 use crate::{
     collection::Collection,
     control::CheckStop,
-    description::{Describe, Description},
+    description::Description,
     image_items::{Composition, ImageRequest, SelectionError},
     jxl_items::{JxlItems, Limits},
     jxl_layers::JxlLayers,
@@ -16,7 +16,7 @@ fn limits(images: usize) -> Limits {
     }
 }
 
-fn compare<C: Describe>(mut collection: C, orientation: Option<u8>) -> usize {
+fn compare<C: Collection>(mut collection: C, orientation: Option<u8>) -> usize {
     let mut cursor = collection.images().unwrap();
     let mut descriptions = Vec::new();
     while let Some(id) = collection.next(&mut cursor).unwrap() {
@@ -106,7 +106,7 @@ fn description_jxl_preserves_all_eight_stored_orientations_in_both_views() {
     }
 }
 
-fn cached_stop<C: Describe>(factory: impl Fn(StopToken) -> C) {
+fn cached_stop<C: Collection>(factory: impl Fn(StopToken) -> C) {
     let describe =
         |stop: &CheckStop,
          at: Option<usize>|
@@ -141,7 +141,7 @@ fn cached_stop<C: Describe>(factory: impl Fn(StopToken) -> C) {
     }
 }
 
-fn failed_scan<C: Describe>(mut collection: C) {
+fn failed_scan<C: Collection>(mut collection: C) {
     let mut cursor = collection.images().unwrap();
     let first = collection.next(&mut cursor).unwrap().unwrap();
     collection.describe(&first).unwrap();

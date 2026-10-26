@@ -2,7 +2,7 @@
 use super::{
     collection::{Collection, CollectionError, located},
     control::{CheckedReader, Control},
-    description::{Describe, Description},
+    description::Description,
     image_items::{
         Composition, ImageId, ImageRequest, Origin, RegionRequest, Relation, RelationKind,
         SelectionError,
@@ -247,12 +247,9 @@ impl<R: Read + Seek> TiffItems<R> {
             .and_then(zenpixels::Orientation::from_exif)
             .ok_or_else(|| std::io::Error::other("invalid stored TIFF orientation"))?;
         self.control.check()?;
-        Description {
-            stored_size,
-            stored_orientation: Some(stored_orientation),
-            placement: None,
-        }
-        .validate()
+        let description = Description::new(stored_size).with_orientation(stored_orientation);
+        description.validate()?;
+        Ok(description)
     }
 }
 
@@ -261,11 +258,7 @@ impl<R: Read + Seek> TiffItems<R> {
 pub struct TiffCollection<R> {
     items: TiffItems<R>,
 }
-impl<R: Read + Seek> Describe for TiffCollection<R> {
-    fn describe(&mut self, image: &ImageId) -> Result<Description, zencodec::At<CollectionError>> {
-        self.items.describe(image).map_err(located)
-    }
-}
+
 impl<R: Read + Seek> TiffCollection<R> {
     pub fn open(
         input: R,
@@ -297,6 +290,10 @@ impl<R: Read + Seek> TiffCollection<R> {
     }
 }
 impl<R: Read + Seek> Collection for TiffCollection<R> {
+    fn describe(&mut self, image: &ImageId) -> Result<Description, zencodec::At<CollectionError>> {
+        self.items.describe(image).map_err(located)
+    }
+
     type Cursor = Cursor;
     fn view(&self) -> Composition {
         Composition::Composited

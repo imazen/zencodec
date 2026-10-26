@@ -3,7 +3,7 @@
 use super::{
     collection::{Collection, CollectionError, located},
     control::Control,
-    description::{Describe, Description},
+    description::Description,
     image_items::{Composition, ImageId, ImageRequest, Origin, RegionRequest, SelectionError},
     image_output::ImageOutput,
     jxl_items::{
@@ -204,7 +204,7 @@ impl<'a> JxlLayers<'a> {
     }
 }
 
-impl Describe for JxlLayers<'_> {
+impl Collection for JxlLayers<'_> {
     fn describe(&mut self, image: &ImageId) -> Result<Description, At<CollectionError>> {
         let describe = || -> Result<Description, Failure> {
             let index = usize::try_from(self.origin.key(image)?)?;
@@ -213,23 +213,20 @@ impl Describe for JxlLayers<'_> {
                 .layers
                 .get(index)
                 .ok_or_else(|| Error::other("unknown raw layer"))?;
-            let description = Description {
-                stored_size: (u32::try_from(layer.size.0)?, u32::try_from(layer.size.1)?),
-                stored_orientation: self.description.stored_orientation,
-                placement: Some(zencodec::image::Placement {
-                    canvas: self.description.stored_size,
-                    origin: (i64::from(layer.origin.0), i64::from(layer.origin.1)),
-                }),
-            }
-            .validate()?;
+            let mut description =
+                Description::new((u32::try_from(layer.size.0)?, u32::try_from(layer.size.1)?))
+                    .with_placement(zencodec::image::Placement {
+                        canvas: self.description.stored_size,
+                        origin: (i64::from(layer.origin.0), i64::from(layer.origin.1)),
+                    });
+            description.stored_orientation = self.description.stored_orientation;
+            description.validate()?;
             self.check()?;
             Ok(description)
         };
         describe().map_err(located)
     }
-}
 
-impl Collection for JxlLayers<'_> {
     type Cursor = Cursor;
     fn view(&self) -> Composition {
         Composition::Uncomposited
