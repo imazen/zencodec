@@ -21,5 +21,13 @@
     "result": [
       "run-heavy: done rc=1 5s | peak-RSS 0.17GiB | min-avail 13355MiB | peak-load 0.10"
     ]
+  },
+  "guide_followthrough": {
+    "reason": "The new eighth improvement card exposed a fixed seven-card expectation. Update the expected count and exercise the new card with keyboard and scope assertions.",
+    "log": "zencodec-placement-guide-fixed-2026-10-26.log",
+    "sha256": "4af62bc5b0aece31ff4d30bd0243a28fd0fa405e60d8a2fe597112acfc3a8b9b",
+    "result": [
+      "run-heavy: done rc=0 8s | peak-RSS 0.17GiB | min-avail 13195MiB | peak-load 0.45"
+    ]
   }
 }

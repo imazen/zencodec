@@ -17,10 +17,16 @@ export async function checkIdeal(browser,url,output) {
     assert.ok((await page.locator('h1').textContent()).includes('executes today'));
     assert.equal(await page.locator('.ideal-step').count(),5);
     const changes=page.locator('.api-change');
-    assert.equal(await changes.count(),7);
+    assert.equal(await changes.count(),8);
     assert.equal(await page.locator('#change-mapping').count(),1);
     assert.ok((await page.locator('#change-images .code-toolbar').textContent()).includes('Private prototype'));
     for(const change of await changes.all()) assert.ok(!await change.evaluate(el=>el.open));
+    const placement=page.locator('#change-placement');
+    await placement.locator(':scope>summary').focus();
+    await page.keyboard.press('Enter');
+    assert.ok(await placement.evaluate(el=>el.open));
+    assert.ok((await placement.textContent()).includes('188×202'));
+    assert.ok((await placement.textContent()).includes('no new public type'));
     const videoChange=page.locator('#change-video');
     await videoChange.locator(':scope>summary').focus();
     await page.keyboard.press('Enter');
