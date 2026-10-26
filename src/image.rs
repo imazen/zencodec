@@ -107,7 +107,11 @@ pub enum AuxiliaryKind {
     /// Selection coverage, not display alpha.
     SelectionMask,
     /// Black/key channel; this alone does not establish a CMYK transform.
-    Black,
+    Black {
+        /// False: zero means no ink. True: the maximum nominal value means
+        /// no ink (one for normalized float samples), as in native JPEG XL.
+        inverted: bool,
+    },
     /// A color-filter-array channel, whose source identity is retained.
     Cfa {
         /// Source channel index, not an invented RGB component mapping.

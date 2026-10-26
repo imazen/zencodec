@@ -88,6 +88,11 @@ residual orientation, optional native signal/timing and opaque typed source
 details. `Auxiliary` separately retains source precision and source dimensional
 shift. Spot color records whether its contribution is already `Applied` or
 still `Separate`; retaining its samples does not authorize applying it again.
+`AuxiliaryKind::Black { inverted }` declares ink polarity rather than assuming
+an attached ICC profile establishes it. Native JXL uses inverted black and the
+`zenpixels::PixelFormat::CmykF32Inverted` packed format; conventional device values
+use `CmykF32`. These are different interpretations of the same physical layout,
+and an unqualified conversion must refuse.
 
 ```rust
 impl ImageOutput {

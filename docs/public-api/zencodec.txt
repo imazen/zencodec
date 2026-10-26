@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2721 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 177 lines (177 hidden + 0 excluded-feature)
+# files: zencodec.txt 2722 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 177 lines (177 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -15,7 +15,7 @@
 #   pub consts/statics                        296
 #   free functions                             83
 #   inherent methods                         1014
-#   struct fields                             379
+#   struct fields                             380
 #   enum variants                             440
 #   re-exports                                 15
 #   trait roster entries (type × trait)       887
@@ -34,7 +34,7 @@
 #   gainmap                         126
 #   helpers                          17
 #   icc                               1
-#   image                            91
+#   image                            92
 #   inventory                       103
 #   metadata_rewrite                 58
 #   operation                       159
@@ -43,7 +43,7 @@
 #   storage                          34
 #   time                             22
 
-## items (2475 lines)
+## items (2476 lines)
 
 pub mod zencodec
 pub use At
@@ -1122,6 +1122,7 @@ pub mod image
 #[non_exhaustive] pub enum image::AuxiliaryKind
 pub image::AuxiliaryKind::Alpha(zenpixels::descriptor::AlphaMode)
 pub image::AuxiliaryKind::Black
+pub image::AuxiliaryKind::Black::inverted: bool
 pub image::AuxiliaryKind::Cfa
 pub image::AuxiliaryKind::Cfa::channel: u32
 pub image::AuxiliaryKind::Depth
