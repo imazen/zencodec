@@ -90,6 +90,13 @@ execute against the native codecs and share the opaque operation-bound identity.
 The private `Collection` trait now executes the same `first_image` consumer
 against both, returning traced errors and preserving source-replacement causes.
 Unsupported child discovery refuses instead of reporting an empty collection.
+The TIFF adapter now adopts native samples into a strided `PixelBuffer`,
+retaining the selected directory's opaque ICC, alpha association and unapplied
+orientation. Signed and wider samples require
+[zenpixels PR 93](https://github.com/imazen/zenpixels/pull/93); the native strip
+matrix checks exact bytes and original allocation ownership. Unknown color
+stays unknown, and unresolved alpha refuses. This is raw sample carriage, not
+an approved display conversion or privacy decision.
 They are not a public `CodecSet` collection API: the associated native sample
 types and TIFF's fixed region still expose adapter differences. The next
 promotion gate is qualified zenpixels output with per-item interpretation,

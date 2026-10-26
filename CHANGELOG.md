@@ -2,6 +2,12 @@
 
 ## Native image selection (unreleased experiment)
 
+- Adopt native TIFF regions into the shared pixel owner with exact signed/wide
+  sample bytes, explicit stride and original allocation ownership. Retain each
+  selected directory's ICC and unapplied orientation; refuse unresolved alpha
+  association and malformed/over-budget metadata. The native consumer exposed
+  the external allocation constructor added in zenpixels PR 93.
+
 - Run one private collection consumer over native TIFF and JXL with traced
   failures. Distinguish unsupported child discovery from successful exhaustion,
   preserve source-replacement causes, and execute the guide's exact selection
