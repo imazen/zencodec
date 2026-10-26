@@ -302,7 +302,7 @@ diagnostic, not a general profile parser. Its math follows
 `with_clip_out_of_gamut(false)`; the preset name and required range semantics
 need review before 0.3. No new conversion trait or capability handshake was
 needed for these cases. General ICC/LUT qualification, numerical F32 CMYK,
-complete converted color-plus-auxiliary ownership, conversion cancellation and
+conversion cancellation and
 CMS workspace admission remain open. These are correctness measurements, not
 throughput or isolated memory measurements.
 
@@ -922,7 +922,7 @@ peak-load 1.13`. This is test-process usage, not a native workspace bound.
 `zencodec::operation::resolve_image` consumes an `ImageOutput`, invokes the
 existing fallible resolver with `Question::Image`, and returns the same owner
 with its decision record only on acceptance. Image and video publication share
-`PublicationOffer::PreserveNative`; there is no extra callback interface. The
+`PublicationOffer::ReturnHeld`; there is no extra callback interface. The
 callback sees actual immutable output and bounded facts, including whether
 retained spot planes already contributed to color. Those counts do not certify
 that every source channel was discovered or retained.
@@ -1309,3 +1309,49 @@ profile uses optimization level 1 while keeping debug assertions and overflow
 checks enabled. [The full-suite receipt](../../benchmarks/native_ci_2026-10-26.json)
 records all 112 passing tests and the earlier unoptimized CI timeout. It is
 correctness evidence, not a codec benchmark.
+
+
+### Converted color with retained auxiliary owners
+
+`ImageOutput::replace_packed_color` consumes the old image and a new immutable
+packed owner. The stored coordinates stay the same. Auxiliary mapping guards,
+source roles, placement, timing and opaque source facts remain attached; color
+uses the replacement's descriptor and current context. This is an ownership
+operation, not a CMS, auxiliary renderer or privacy certification. The existing
+resolver still gates publication. Its review-only offer is now `ReturnHeld`,
+which describes a converted image without claiming it is the original raster.
+
+The independent six-case float comparison now also publishes each converted
+owner. Original auxiliary addresses and bytes remain exact; target ICC and
+admission charges survive publication. The RGB case has no auxiliary and
+releases its source payload. Each of the five raw RGBA layers keeps its original
+auxiliary owner, including that owner's old color allocation. The first layer
+retains 47,222,784 source bytes alongside 37,785,600 destination bytes. These are
+observed payload charges, not process memory measurements. Repeated replacement
+releases intermediate colors; it does not accumulate a chain of them.
+
+Core controls cover drift in either owner, original traced native failures,
+component-code refusal before mapping, retained clones, publication refusal and
+unwind. Native identity controls cover four CMYK layers, five RGB layers, and
+first presentations with spot color and extra channels. A separate premultiplied
+control copies exact samples and keeps association through the owner API.
+
+That last case exposes a separate planner limitation: `OutputPlan` currently
+accepts a `PixelFormat`, which chooses straight alpha. `SameAsOrigin` requests
+the origin profile, not the original alpha association. The current unknown-TRC
+fixture refuses this conversion with `NeedsCms`; the test keeps that refusal
+visible. Exact copying through the owner API does not establish numerical
+premultiplication conversion support. A target-layout contract is still needed.
+
+Reproduce the focused ownership controls with `just image-color-replacement-check`
+and `just spatial-color-owner-check`. `just spatial-color-check <fresh-artifacts>`
+also exercises actual profile conversion with the independent reader; each
+selection records `publication.json` beside its numerical comparison.
+
+The [execution receipt](../../benchmarks/native_color_owner_2026-10-26.json)
+records every source/hash and all six publication charges. Full native tests and
+strict lint pass: `run-heavy: done rc=0 37s | peak-RSS 0.48GiB | min-avail
+11072MiB | peak-load 0.78`. Full workspace/API validation passes: `run-heavy:
+done rc=0 12s | peak-RSS 0.32GiB | min-avail 11217MiB | peak-load 0.72`.
+These wrapper observations cover whole test/build commands, not isolated codec
+memory or timing comparisons.

@@ -96,8 +96,9 @@ after partial CMS writes release the unpublished destination. This remains a
 color-stage prototype for actual conversions. Checked identity borrowing now
 retains all nine layers' original color and auxiliary planes, their frozen facts
 and their storage charges without another sample allocation. Reuse requires
-matching current signaling as well as unchanged samples; converted
-auxiliary-plane publication and CMS workspace are still unqualified.
+matching current signaling as well as unchanged samples. Converted color can
+now retain auxiliary mapping guards through `replace_packed_color`; CMS
+workspace remains unqualified.
 Native ICC-tagged RGB F32 can now add opaque alpha into admitted storage without
 a CMS, retaining exact color bits. This fixes a real `NeedsCms` refusal; it does
 not add numerical CMYK conversion.
@@ -110,15 +111,24 @@ of `0.0001` against Little CMS, with exact alpha and untouched row padding.
 The old route failed even when explicitly asked to retain extended range.
 The conversion adapter now uses float arithmetic and available analytic curves,
 keeps explicit ICC authority over embedded CICP, and refuses an identified
-unequal-channel-curve case before writes. This is a color-stage qualification;
-converted auxiliary-plane publication and general ICC conformance remain open.
+unequal-channel-curve case before writes. All six converted selections now
+assemble complete owners and pass through the same publication resolver.
+Auxiliaries keep their original addresses, roles and samples. Their native owner
+can also retain the old color allocation, which remains charged; repeated
+replacement releases intermediate colors. General ICC conformance remains open.
+`PublicationOffer::ReturnHeld` replaces the review-only `PreserveNative` name
+so publication does not claim that converted samples are still original.
 
 The validation also exposed a naming problem: `ConvertOptions::forbid_lossy()`
 still enables clipping. The native preservation example adds
 `with_clip_out_of_gamut(false)`. Before 0.3, presets must distinguish forbidden
 sample losses from a required color/range result; the caller should select
 effects through the existing resolver without coordinating backend capability
-flags. [Executed example and evidence](../perf/spatial-validation/README.md#independent-float-icc-conversion).
+flags. A native premultiplied fixture also exposes an output-layout gap:
+`PixelFormat` selects straight alpha, so `SameAsOrigin` alone cannot request
+unchanged association. The owner API retains the original descriptor; the
+format-only plan correctly refuses an unqualified conversion.
+[Executed example and evidence](../perf/spatial-validation/README.md#independent-float-icc-conversion).
 
 
 ## The consumer shape

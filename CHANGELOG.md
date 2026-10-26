@@ -50,7 +50,8 @@
 
 - Rename review-only `PublicationOffer::PreserveNative` to `ReturnHeld`: an
   explicitly converted image can be published through this same boundary. The
-  offer promises the current held samples, not the original pre-conversion ones.
+  offer promises the current held samples, not the original pre-conversion ones
+  (`ab25c9d4`).
 
 - Review-only `OpenRequest` is now `Clone` instead of `Copy`: cloned requests
   share the same retained-output storage allowance (`27cc94e3`). Native factories

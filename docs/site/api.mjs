@@ -37,6 +37,7 @@ export const api = {
   tiffPixels: {path:'candidate::Region (private TIFF sample handoff)',file:'perf/spatial-validation/src/tiff_pixels.rs',scope:'impl Region {',methods:['into_pixels']},
   imageOutput: {path:'zencodec::image::ImageOutput',file:'src/image.rs',scope:'impl ImageOutput {',methods:['interpretation','map','with_pixels']},
   packedImageOwner: {path:'zencodec::image::PackedImageOwner',file:'src/image/owner.rs',scope:'pub trait PackedImageOwner:',methods:['pixels','auxiliary']},
+  imageColorReplacement: {path:'zencodec::image::ImageOutput',file:'src/image/replace.rs',scope:'impl ImageOutput {',methods:['replace_packed_color']},
   imageStorageBudget: {path:'zencodec::storage::StorageBudget',file:'src/storage.rs',scope:'impl StorageBudget {',methods:['new','reserved_bytes','reserved_objects']},
   adoptPackedOwner: {path:'zencodec::image::ImageOutput',file:'src/image/owner.rs',scope:'impl ImageOutput {',methods:['from_packed_owner']},
   auxiliarySlice: {path:'zencodec::image::ValueSlice',file:'src/image.rs',scope:"impl<'a> ValueSlice<'a>",methods:['new','as_strided_bytes']},

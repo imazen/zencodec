@@ -3,17 +3,17 @@
 export const improvements = [
   {
     id:'float-color', title:'Make float color and clipping match the request',
-    state:'Native color stage qualified · owner integration remains open', date:'2026-10-26',
+    state:'Native conversion and retained-auxiliary publication qualified', date:'2026-10-26',
     summary:'A real JXL image and five native layers now convert to the selected Display P3 ICC through OutputPlan and admitted destination rows. Independent Little CMS comparison keeps a fixed 0.0001 color tolerance and exact alpha.',
     why:'A viewer needs display color, while an editor may retain negative and above-one values for later compositing. Float storage alone did not preserve them: the old backend route clipped values and quantized dark colors. Merely attaching the target ICC would not correct the samples.',
     consumer:'Choose the required target profile and range behavior. The current forbid_lossy preset still enables clipping, so this preservation example explicitly disables it. There is no new capability query or separate float-conversion API.',
-    adapter:'Prepare the existing OutputPlan from current sample interpretation, then admit destination rows and execute that same plan. Keep its matching output context. A conversion error must not publish partial rows or replace the target with the source profile.',
+    adapter:'Prepare OutputPlan from current sample interpretation, admit destination rows, then execute that same plan. replace_packed_color composes matching output context with the original auxiliary-plane mapping guards. Run the existing resolver before publication; ReturnHeld describes this actual converted image. Errors discard unpublished rows.',
     implementor:'Use float arithmetic and available analytic curves; apply requested clipping to color without changing alpha. Explicit ICC remains authoritative over embedded CICP. Unqualified partially shared channel curves return a traced backend error before writes.',
-    open:'This qualifies six native RGB/RGBA selections, not arbitrary ICC profiles. Converted color plus retained auxiliary-plane publication, F32 CMYK arithmetic, general extended LUT behavior and CMS workspace admission remain open. The preset name and required range semantics need review before 0.3. No speed claim is made.',
-    signatures:['floatColorPlan','imageStorageBudget','findCause'],
+    open:'An auxiliary owner can retain its old color allocation, which stays charged alongside the destination. Replacing color again releases the intermediate color. F32 CMYK arithmetic, general ICC/LUT behavior and CMS workspace admission remain open. PixelFormat cannot request retained premultiplication through OutputPlan; same profile alone is not sample identity. Preset naming and range requirements need review before 0.3. No speed claim is made.',
+    signatures:['floatColorPlan','imageColorReplacement','imageStorageBudget','findCause'],
     example:'native_float_color', exampleSource:'perf/spatial-validation/src/jxl_color_oracle_tests.rs',
-    flow:[['consumer','Choose target and range','explicit preservation or clipping'],['adapter','Prepare actual conversion','current samples + selected ICC'],['implementor','Convert or refuse','qualified math + original cause'],['adapter','Return matching rows','admitted destination + output context']],
-    evidence:[['Independent float comparison','benchmarks/native_float_color_2026-10-26.json'],['Native scope and reproduction','perf/spatial-validation/README.md#independent-float-icc-conversion'],['Conversion implementation','https://github.com/imazen/zenpixels/pull/92'],['Output ownership and policy follow-up','https://github.com/imazen/zenpixels/issues/69']],
+    flow:[['consumer','Choose target and range','explicit preservation or clipping'],['adapter','Prepare actual conversion','current samples + selected ICC'],['implementor','Convert or refuse','qualified math + original cause'],['adapter','Compose and resolve','converted color + retained auxiliaries']],
+    evidence:[['Converted owner and retention evidence','benchmarks/native_color_owner_2026-10-26.json'],['Independent float comparison','benchmarks/native_float_color_2026-10-26.json'],['Native scope and reproduction','perf/spatial-validation/README.md#independent-float-icc-conversion'],['Conversion implementation','https://github.com/imazen/zenpixels/pull/92'],['Output ownership and policy follow-up','https://github.com/imazen/zenpixels/issues/69']],
   },
   {
     id:'operation-storage', title:'Put output admission on the operation request',
