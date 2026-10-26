@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2725 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 177 lines (177 hidden + 0 excluded-feature)
+# files: zencodec.txt 2721 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 177 lines (177 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -15,7 +15,7 @@
 #   pub consts/statics                        296
 #   free functions                             83
 #   inherent methods                         1014
-#   struct fields                             383
+#   struct fields                             379
 #   enum variants                             440
 #   re-exports                                 15
 #   trait roster entries (type × trait)       887
@@ -37,13 +37,13 @@
 #   image                            91
 #   inventory                       103
 #   metadata_rewrite                 58
-#   operation                       163
+#   operation                       159
 #   prelude                         233
 #   source                           37
 #   storage                          34
 #   time                             22
 
-## items (2479 lines)
+## items (2475 lines)
 
 pub mod zencodec
 pub use At
@@ -1444,13 +1444,9 @@ pub operation::Question::Transcode
 pub operation::Question::Transcode::choices: operation::Choices<'a, operation::TranscodeOffer>
 pub operation::Question::Transcode::facts: decode::InterpretationFacts
 #[non_exhaustive] pub enum operation::Selection
-pub operation::Selection::Boundary
-pub operation::Selection::Boundary::action: decode::BoundaryAction
-pub operation::Selection::Boundary::facts: decode::InterpretationFacts
+pub operation::Selection::Boundary(decode::BoundaryAction)
 pub operation::Selection::Encode(operation::EncodeOffer)
-pub operation::Selection::Frame
-pub operation::Selection::Frame::facts: operation::FrameFacts
-pub operation::Selection::Frame::offer: operation::PublicationOffer
+pub operation::Selection::Frame(operation::PublicationOffer)
 pub operation::Selection::Image(operation::PublicationOffer)
 pub operation::Selection::Transcode(operation::TranscodeOffer)
 #[non_exhaustive] pub struct operation::BoundaryOffer

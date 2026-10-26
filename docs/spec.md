@@ -500,7 +500,11 @@ This boundary does not apply a spot plane again or transform pixels.
 `FrameFacts` is the bounded report snapshot of geometry, subsampling, siting,
 encoding, plane count, color, epoch and timing; the question borrows the full
 component roles. `DecisionContext::Frame(FrameFacts)` remains available on
-failure and `Selection::Frame { offer, facts }` identifies a successful choice.
+success and failure; `Selection::Frame(PublicationOffer)` identifies a successful
+choice without duplicating the facts. Similarly,
+`Selection::Boundary(BoundaryAction)` records only the mechanism, with the
+interpretation in `DecisionContext::Boundary`. Consumers inspect one source of
+facts for successful and refused operations.
 
 Every native presentation passes policy before publication. The held frame and
 its picture owner survive unchanged on success. Failure or unwind drops the

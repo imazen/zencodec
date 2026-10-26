@@ -6,7 +6,8 @@ use zencodec::{
         Subsampling,
     },
     operation::{
-        DecisionContext, DecisionRecord, OperationReport, PolicySet, Selection, resolve_frame,
+        DecisionContext, DecisionRecord, OperationReport, PolicySet, PublicationOffer, Selection,
+        resolve_frame,
     },
     time::{TimeBase, Timestamp},
 };
@@ -50,9 +51,6 @@ impl Workload {
         let mut record = self.seed;
         record.question = i as u64 + 1;
         if let DecisionContext::Frame(ref mut facts) = record.context {
-            facts.timing = Self::timing(i);
-        }
-        if let Some(Selection::Frame { ref mut facts, .. }) = record.selected {
             facts.timing = Self::timing(i);
         }
         record
@@ -99,10 +97,10 @@ impl Workload {
                 panic!("lost frame context")
             };
             assert_eq!(facts.timing, Self::timing(i));
-            let Some(Selection::Frame { facts: chosen, .. }) = record.selected else {
-                panic!("lost selection")
-            };
-            assert_eq!(chosen.timing, facts.timing);
+            assert!(matches!(
+                record.selected,
+                Some(Selection::Frame(PublicationOffer::PreserveNative))
+            ));
         }
     }
 }

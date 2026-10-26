@@ -105,8 +105,9 @@ pub struct EncodeOffer {
     pub resolution: Option<crate::Resolution>,
 }
 
-/// The qualified contract chosen at a policy boundary. Contains facts, never
-/// input bytes, paths, metadata payloads or application error text.
+/// The qualified effect chosen at a policy boundary. Input facts remain in
+/// `DecisionContext`, including on refusal. No input bytes, paths, metadata
+/// payloads or application error text are copied into either diagnostic.
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum Selection {
@@ -114,23 +115,15 @@ pub enum Selection {
     /// Output facts are retained once in `DecisionContext::Image`.
     Image(PublicationOffer),
     /// Publication of the original held native presentation.
-    Frame {
-        /// Prepared publication mechanism.
-        offer: PublicationOffer,
-        /// Immutable interpretation and timing of the held frame.
-        facts: FrameFacts,
-    },
+    /// Interpretation and timing remain in `DecisionContext::Frame`.
+    Frame(PublicationOffer),
     /// Selected conversion, metadata, encoder and storage route.
     Transcode(TranscodeOffer),
     /// The selected prepared encoder configuration.
     Encode(EncodeOffer),
     /// The selected mechanism at a mandatory interpretation suspension.
-    Boundary {
-        /// Mechanism selected for these facts.
-        action: BoundaryAction,
-        /// Interpretation state and output geometry at the suspension.
-        facts: InterpretationFacts,
-    },
+    /// Interpretation state and geometry remain in `DecisionContext::Boundary`.
+    Boundary(BoundaryAction),
 }
 
 /// The facts that prompted a question, retained even when no route was selected.
@@ -603,10 +596,7 @@ pub fn resolve_boundary<R: PolicyResolver + ?Sized>(
         offers,
         DecisionContext::Boundary(facts),
         |choices| Question::Boundary { facts, choices },
-        |offer| Selection::Boundary {
-            action: offer.action,
-            facts,
-        },
+        |offer| Selection::Boundary(offer.action),
         resolver,
         preset,
         stop,

@@ -82,7 +82,7 @@ pub fn resolve_frame<R: PolicyResolver + ?Sized>(
             timing,
             choices,
         },
-        |offer| Selection::Frame { offer, facts },
+        Selection::Frame,
         resolver,
         preset,
         stop,

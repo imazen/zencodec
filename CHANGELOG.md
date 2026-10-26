@@ -2,6 +2,11 @@
 
 ## Native image selection (unreleased experiment)
 
+- Keep frame and decoder-boundary diagnostic facts once in `DecisionContext`;
+  `Selection` records only the publication or boundary action. This aligns the
+  unpublished report variants with selected images and removes duplicated
+  interpretation/timing from successful records.
+
 - Add `operation::resolve_image`: the existing fallible resolver admits the exact
   held selected output or drops it on refusal, error, cancellation or unwind.
   Share `PublicationOffer` with native-frame questions instead of introducing a
