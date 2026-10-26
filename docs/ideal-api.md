@@ -97,9 +97,11 @@ orientation. Signed and wider samples require
 matrix checks exact bytes and original allocation ownership. Unknown color
 stays unknown, and unresolved alpha refuses. This is raw sample carriage, not
 an approved display conversion or privacy decision.
-They are not a public `CodecSet` collection API. The private collection now
-returns one mapped `ImageOutput` for TIFF/JXL, also qualified against native AV1
-storage, with packed color, auxiliary values and component codes distinguished.
+The collection is not yet a public `CodecSet` API. Its mapped output is now the
+implemented `zencodec::image::ImageOutput`, also used by native AV1 validation.
+Packed color, auxiliary values and component codes stay distinct. The output
+has typed traced failures for invalid regions, missing planes and disagreement
+between native mappings and held dimensions/code encoding.
 Its interpretation is frozen with the storage and checked against packed sample
 geometry. JXL retains the native source header/profile and selected-frame facts
 separately from the actual output color profile; independent metadata checks
@@ -118,11 +120,12 @@ Each decode carries its own region
 request; TIFF returns the selected canvas and region origin, while required JXL
 regions refuse. The [platform review](platform-review-2026-10-25.md) records
 WIC/OpenImageIO evidence and the distinction between containment and roles. The next
-promotion gate is complete rendering interpretation and policy admission,
+collection promotion gate is publication policy admission,
 explicit discovery allowances and source-revision validation. Raw JXL layer implementation is
 still [decoder issue 57](https://github.com/imazen/zenjxl-decoder/issues/57);
 the existing [paged-decoder issue](https://github.com/imazen/zencodec/issues/1)
-owns the shared-selector discussion.
+owns the shared-selector discussion. The [public-output receipt](../benchmarks/public_image_output_2026-10-26.json)
+records the executing core/native qualification.
 
 ### Ordinary checked operations
 

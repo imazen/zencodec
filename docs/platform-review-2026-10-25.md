@@ -110,3 +110,21 @@ Performance work remains separate from these correctness gates. Existing
 4096-byte buffering case changing 68 reads/3020 returned bytes to 9 reads/34390
 bytes, including rereads. This is not a latency measurement. Large-graph cycle
 checking cost and whole-operation memory remain unmeasured.
+
+## Native output follow-through
+
+The common output gate now has an implemented core surface:
+[`zencodec::image::ImageOutput`](../src/image.rs). Native TIFF/JXL adapters and
+AV1 validation import that same implementation. It retains frozen output facts,
+separate source details, native storage and mapped plane interpretation. It
+refuses disagreement between native dimensions/code encoding and the held
+signal, with typed traced causes. Spot-color output records whether its
+retained auxiliary samples already contributed to the returned color.
+
+The [public-output receipt](../benchmarks/public_image_output_2026-10-26.json)
+records the full native matrix, workspace tests, strict lint, no_std WebAssembly,
+rustdoc and guide checks. Its integration process reports
+`run-heavy: done rc=0 138s | peak-RSS 0.54GiB | min-avail 13374MiB | peak-load 1.50`.
+This is not a codec workspace bound. The collection remains private: policy
+admission, discovery allowances/cancellation, remote source-revision binding and
+native raw layers remain separate qualification gates.
