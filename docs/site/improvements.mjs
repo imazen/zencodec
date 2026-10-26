@@ -13,7 +13,7 @@ export const improvements = [
     signatures:['framePolicy','frameResolution','video'],
     example:'checked_video_storage', exampleSource:'docs/examples/checked_video.rs',
     flow:[['implementor','Admit native planes','before first allocation'],['implementor','Reconstruct picture','accepted packet context'],['adapter','Retain exact owner','immutable timing + color'],['consumer','Resolve publication','choose, decline or error']],
-    evidence:[['Native AV1 scope and independent FFmpeg checks','perf/av1-policy-validation/README.md'],['Executable video examples','docs/examples/checked_video.rs'],['Native allocation contract','https://github.com/imazen/rav1d-safe/blob/b19aec6561204ff310250bf2bc1b2c6faa42c3b5/docs/PICTURE_STORAGE_LIMIT.md']],
+    evidence:[['Native AV1 scope and independent FFmpeg checks','perf/av1-policy-validation/README.md'],['Executable video examples','docs/examples/checked_video.rs'],['Native allocation contract','https://github.com/imazen/rav1d-safe/blob/b19aec6561204ff310250bf2bc1b2c6faa42c3b5/docs/PICTURE_STORAGE_LIMIT.md'],['Typed native refusal gap','https://github.com/imazen/rav1d-safe/issues/538']],
   },
   {
     id:'resolution', title:'Required density survives, or encoding refuses',
