@@ -20,8 +20,9 @@ export async function checkIdeal(browser,url,output) {
     assert.ok((await page.locator('h1').textContent()).includes('executes today'));
     assert.equal(await page.locator('.ideal-step').count(),5);
     const changes=page.locator('.api-change');
-    assert.equal(await page.locator('.api-change:not(#change-operation-storage):not(#change-float-color):not(#change-output-descriptor)').count(),12);
-    assert.equal(await page.locator('.api-change:not(#change-float-color):not(#change-output-descriptor)').count(),13);
+    assert.equal(await page.locator('.api-change:not(#change-operation-storage):not(#change-float-color):not(#change-output-descriptor):not(#change-strided-plane)').count(),12);
+    assert.equal(await page.locator('.api-change:not(#change-float-color):not(#change-output-descriptor):not(#change-strided-plane)').count(),13);
+    assert.equal(await page.locator('#change-strided-plane').count(),1);
     assert.equal(await page.locator('#change-output-descriptor').count(),1);
     assert.equal(await page.locator('#change-float-color').count(),1);
     assert.equal(await page.locator('#change-mapping').count(),1);

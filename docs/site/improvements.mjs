@@ -2,6 +2,19 @@
 // Signatures come from Rust through apiPanels; examples remain executable files.
 export const improvements = [
   {
+    id:'strided-plane', title:'Borrow complete planes without losing their interpretation',
+    state:'Implemented accessor · private native conversion bridge', date:'2026-10-26',
+    summary:'PlaneView::as_strided_samples lets existing strip kernels borrow native storage. The span includes row padding and ends after the last active sample; it never shifts or normalizes words.',
+    why:'The shared view exposed individual rows, while existing chroma kernels need neighboring rows at strip boundaries. Copying whole planes to join those interfaces would add work and retained memory.',
+    consumer:'Keep native decoding separate from display rendering. A subsampled stream with unknown siting needs an explicit decision before a centered kernel can be used. Packed access alone does not establish a rendered canvas.',
+    adapter:'Honor stride, code bits and bit shift. Validate active words before writes; padding has no sample meaning. Keep coded coordinates through chroma upsampling and crop afterward so odd origins preserve phase.',
+    implementor:'Return the checked native span tied to its mapping guard. No new allocation, sample conversion or storage owner is introduced by the accessor.',
+    open:'The private AV1 bridge checks 18 depth/subsampling/range combinations, 54 presentations and 162 crop cases. FFmpeg verifies native component samples; RGB accuracy is not independently qualified. Public planar conversion, prepared siting offers, converted video publication and complete workspace admission remain open.',
+    signatures:['stridedPlane','layerPlacement'],
+    flow:[['implementor','Map native plane','borrow + stride + encoding'],['adapter','Validate interpretation','siting, words and coordinates'],['adapter','Convert selected rows','keep phase, normalize explicitly'],['consumer','Retain output facts','timing without old raw owner']],
+    evidence:[['Native bridge receipt','benchmarks/native_planar_bridge_2026-10-26.json'],['Private implementation and limits','perf/av1-policy-validation/README.md'],['Canvas rendering gap','https://github.com/imazen/zencodec/issues/170']],
+  },
+  {
     id:'output-descriptor', title:'Require the pixel interpretation, including alpha association',
     state:'Implemented on review PR · native premultiplied JXL', date:'2026-10-26',
     summary:'OutputPlan::new_with_descriptor accepts the complete required PixelDescriptor. A native premultiplied JXL now retains its samples through both borrowed identity and admitted output rows.',

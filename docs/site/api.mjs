@@ -1,5 +1,6 @@
 // Paths and method selections only. Signatures are extracted from current Rust source.
 export const api = {
+  stridedPlane: {path:'zencodec::frame::PlaneView',file:'src/frame_storage.rs',scope:"impl<'a> PlaneView<'a>",methods:['encoding','stride_bytes','as_strided_samples','row','code']},
   floatColorPlan: {path:'candidate::plan_float_export (private native color-stage prototype)',file:'perf/spatial-validation/src/jxl_color_oracle_tests.rs',scope:'mod planning {',methods:['plan_float_export'],associated:false},
   operationDecode: {path:'zencodec::operation::DecodeRequest',file:'src/operation.rs',scope:'impl DecodeRequest {',methods:['new','with_output','preferring_output','with_policy','decode','start_controlled']},
   operationEncode: {path:'zencodec::operation::EncodeRequest',file:'src/operation.rs',scope:'impl EncodeRequest {',methods:['new','with_fidelity','preferring_fidelity','with_resolution','with_policy','with_policy_set','encode','encode_with']},

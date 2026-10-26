@@ -22,6 +22,10 @@ picture. Unsupported color, geometry, word placement and active values refuse
 before destination writes. Row scratch is fallibly allocated but not admitted
 through the shared pool. Full-frame partition controls intentionally allocate
 larger scratch; the one-row route needs one coded RGB row.
+The private bridge validates every active source word even for a small crop;
+it does not qualify proportional ROI work or conversion throughput. Native
+canonical-word evidence or kernels that honor SampleEncoding directly need
+evaluation before choosing the production boundary.
 
 Missing: a public planar plan in zenpixels-convert, a prepared siting choice in
 the shared policy resolver, independent RGB accuracy, unclipped float output,
