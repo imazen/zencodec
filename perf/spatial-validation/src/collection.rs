@@ -85,6 +85,34 @@ mod checked_consumer {
     // END EXAMPLE: checked_jxl_first
 }
 
+pub use checked_inspection::checked_first_description;
+mod checked_inspection {
+    // EXAMPLE: checked_first_description
+    use zencodec::{
+        At,
+        collection::{Collection, ImageDescription, ImageId},
+        operation::{CheckedCollection, CollectionOperationError, PolicyResolver},
+    };
+
+    // The caller keeps this opened operation, so the returned ID can be used
+    // for later region requests. No pixel-format capability query is needed.
+    pub fn checked_first_description<C: Collection, R: PolicyResolver>(
+        images: &mut CheckedCollection<C, R>,
+    ) -> Result<Option<(ImageId, ImageDescription)>, At<CollectionOperationError>> {
+        let mut roots = images.images()?;
+        let Some(id) = images.next(&mut roots)? else {
+            return Ok(None);
+        };
+        // ANCHOR: checked_first_description
+        let description = images.describe(&id)?;
+        // END: checked_first_description
+        // Stored geometry can guide layout/region choices. A later decode still
+        // checks source consistency and must pass publication policy.
+        Ok(Some((id, description)))
+    }
+    // END EXAMPLE: checked_first_description
+}
+
 pub use checked_layer_consumer::checked_jxl_layer_first;
 mod checked_layer_consumer {
     // EXAMPLE: checked_jxl_layer_first

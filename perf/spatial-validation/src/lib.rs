@@ -9,6 +9,7 @@ mod checked_source;
 mod collection;
 mod control;
 mod description;
+mod description_checked_tests;
 mod description_jxl_tests;
 mod discovery;
 mod generated_output_tests;
