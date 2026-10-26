@@ -327,6 +327,7 @@ spatial-validation-sync export:
     cp perf/spatial-validation/Cargo.toml "{{export}}/perf/spatial-validation/"
     cp perf/spatial-validation/oracle.py "{{export}}/perf/spatial-validation/"
     cp perf/spatial-validation/jxl_oracle.c "{{export}}/perf/spatial-validation/"
+    cp perf/spatial-validation/http_snapshot.py "{{export}}/perf/spatial-validation/"
     cp perf/spatial-validation/src/*.rs "{{export}}/perf/spatial-validation/src/"
     mkdir -p "{{export}}/docs/examples"
     cp docs/examples/checked_source.rs "{{export}}/docs/examples/"
@@ -360,6 +361,14 @@ spatial-cancellation-check filter="cancellation_":
 spatial-discovery-check:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked discovery_budget_ -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# Native selection over IMI-derived real HTTP, with deliberate response faults.
+spatial-http-check artifacts port="3568":
+    python3 perf/spatial-validation/http_snapshot.py "{{artifacts}}" "{{port}}" -- cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked --features http http_snapshot_ -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --features http --locked -- -D warnings
+
+spatial-http-resolve:
+    cargo update --manifest-path perf/spatial-validation/Cargo.toml -p ureq
 
 spatial-output-check artifacts:
     mkdir -p "{{artifacts}}-oracle"

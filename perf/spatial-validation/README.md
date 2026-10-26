@@ -88,6 +88,55 @@ there is no evidence here for another public codec trait, a callback per item,
 or requiring every caller to coordinate capability flags. Promotion still needs
 native work accounting and integration with the existing operation context.
 
+### Source identity is established by the transport
+
+The [private HTTP source](src/http_source.rs) and [response harness](http_snapshot.py)
+reuse IMI's HTTP range study at `f7652c97119c936b53d739098e2eab789a42592a`.
+They add typed retained causes and deliberate protocol faults around native TIFF
+selection. No HTTP dependency or validator type enters the public codec traits.
+
+The source pins a strong ETag and representation length on its first successful
+response. Every later request sends that ETag in `If-Match` and asks for identity
+encoding. It requires exact 206 coverage, length and the same validator before
+accepting the body. Ignored ranges, redirects and encoding changes refuse.
+Errors permanently fail that source instance; retries preserve the original
+cause and cannot silently adopt a replacement. This uses
+[RFC 9110 conditional range semantics](https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.1).
+`If-Range` permits replacement with a full response, which is inappropriate for
+continuing a decode already tied to the original bytes.
+
+`just spatial-http-check <fresh-artifacts> 3568` explicitly enables the private
+`http` feature and runs real local HTTP/1.1. Classic/BigTIFF and chunky/planar
+SubIFDs match original rasters through direct and 4096-byte buffered reads.
+Replacement immediately after discovery refuses selected decode with a retained
+412 cause; retry performs no more HTTP. Fourteen changed/malformed response
+cases refuse through native open. Initial validator and range-admission cases
+also run. The server independently verifies every request after opening is
+conditional. The [receipt](../../benchmarks/http_snapshot_2026-10-26.json)
+records 32 URL cases, 2186 requests and the complete external trace pointer.
+
+The same trace makes the buffering tradeoff visible without timing a busy host:
+
+| Selected SubIFD | Direct requests / body bytes | 4096-byte buffer requests / body bytes |
+|---|---:|---:|
+| Classic, chunky | 236 / 2977 | 13 / 47877 |
+| Classic, planar | 340 / 3041 | 21 / 80773 |
+| BigTIFF, chunky | 239 / 3353 | 12 / 44257 |
+| BigTIFF, planar | 343 / 3417 | 20 / 77153 |
+
+These totals include opening and repeated reads. Buffering reduces requests and
+fetches more bytes in these fixtures; this establishes neither a speedup nor an
+optimal window. Native admission and transport request/byte budgets must remain
+separate. The full HTTP gate and strict lint report `run-heavy: done rc=0 9s |
+peak-RSS 0.58GiB | min-avail 12907MiB | peak-load 0.28` (test process).
+
+This qualifies one object's revision on a cooperating HTTP server. It does not
+prove multipart-manifest coherence, CDN/browser/TLS behavior, a disk-file snapshot
+or dishonest unchanged ETags. Existing verified bytes from the pinned revision
+need not become invalid merely because a newer revision exists. File sources
+still require a stable-byte ownership/locking contract. A failed read may have
+written partial bytes into caller scratch; no selected output may publish them.
+
 ### Cancellation belongs to the opened operation
 
 `TiffCollection::open_with_stop` and `JxlItems::open_with_stop` accept the existing

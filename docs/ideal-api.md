@@ -123,7 +123,10 @@ WIC/OpenImageIO evidence and the distinction between containment and roles. The 
 and a shared `PublicationOffer`. It returns the same owner only on acceptance;
 failed decisions drop unpublished output. This is post-reconstruction publication,
 not pre-allocation admission or a privacy certificate. Collection promotion still
-needs native discovery-work accounting and source-revision validation. A private
+needs native discovery-work accounting and broader source-revision qualification.
+A private HTTP source now qualifies conditional single-object reads through native
+TIFF/SubIFD selection, including replacement and malformed-response refusal.
+Multi-object manifests, browser transports and stable disk snapshots remain open. A private
 common wrapper now bounds discovery calls consistently across cached/repeated
 TIFF and JXL browsing; it does not bound work inside a native call. The native
 collection adapters now carry one existing `StopToken` through discovery,

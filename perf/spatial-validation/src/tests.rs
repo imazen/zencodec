@@ -250,6 +250,11 @@ mod image_selection {
         tiff_items::TiffItems,
     };
 
+    #[cfg(feature = "http")]
+    mod http_snapshot {
+        include!("http_tests.rs");
+    }
+
     fn nested_fixture(big: bool, planar: bool, cycle: bool) -> (Vec<u8>, [Raster; 3]) {
         let refs = [raster(35, 29, 13), raster(21, 25, 39), raster(19, 17, 73)];
         let mut cursor = Cursor::new(Vec::new());
