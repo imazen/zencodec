@@ -6,21 +6,21 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2824 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 187 lines (187 hidden + 0 excluded-feature)
+# files: zencodec.txt 2841 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 191 lines (191 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                19
-#   pub types (struct/enum/trait/alias)       327
+#   pub types (struct/enum/trait/alias)       330
 #   pub consts/statics                        297
 #   free functions                             83
-#   inherent methods                         1037
-#   struct fields                             400
-#   enum variants                             463
+#   inherent methods                         1038
+#   struct fields                             406
+#   enum variants                             467
 #   re-exports                                 15
-#   trait roster entries (type × trait)       942
+#   trait roster entries (type × trait)       955
 #   conditional trait impls (verbatim)          8
-#   auto-trait-complete types                 169
+#   auto-trait-complete types                 172
 #   auto-trait exceptions                      38
 #
 # per-module pub lines:
@@ -35,16 +35,16 @@
 #   gainmap                         126
 #   helpers                          17
 #   icc                               1
-#   image                            93
+#   image                           106
 #   inventory                       103
 #   metadata_rewrite                 58
-#   operation                       179
+#   operation                       180
 #   prelude                         233
 #   source                           37
 #   storage                          34
 #   time                             22
 
-## items (2561 lines)
+## items (2575 lines)
 
 pub mod zencodec
 pub use At
@@ -1217,7 +1217,12 @@ pub image::OutputError::Interpretation
 pub image::OutputError::Mapping(frame::MapError)
 pub image::OutputError::MissingPlane
 pub image::OutputError::NotPackedColor
+pub image::OutputError::Placement(image::PlacementError)
 pub image::OutputError::Region(image::GeometryError)
+#[non_exhaustive] pub enum image::PlacementError
+pub image::PlacementError::CoordinateOverflow
+pub image::PlacementError::EmptyCanvas
+pub image::PlacementError::Region(image::GeometryError)
 pub enum image::Row<'a>
 pub image::Row::Bytes(&'a [u8])
 pub image::Row::Words16(&'a [u16])
@@ -1252,6 +1257,7 @@ pub fn image::ImageGeometry::validate(self) -> core::result::Result<(), image::G
 pub struct image::ImageInterpretation
 pub image::ImageInterpretation::geometry: image::ImageGeometry
 pub image::ImageInterpretation::orientation: core::option::Option<zenpixels::orientation::Orientation>
+pub image::ImageInterpretation::placement: core::option::Option<image::Placement>
 pub image::ImageInterpretation::presentation: core::option::Option<frame::Presentation>
 pub image::ImageInterpretation::signal: core::option::Option<alloc::rcs::arc::Arc<frame::FrameInterpretation>>
 pub image::ImageInterpretation::source_details: Extensions
@@ -1263,6 +1269,13 @@ pub fn image::ImageOutput::interpretation(&self) -> &image::ImageInterpretation
 pub fn image::ImageOutput::map(&self) -> core::result::Result<alloc::boxed::Box<(dyn image::MappedImage + '_)>, whereat::at::At<image::OutputError>>
 pub fn image::ImageOutput::packed(zenpixels::buffer::PixelBuffer, alloc::vec::Vec<(image::Auxiliary, image::Values)>, image::ImageInterpretation) -> core::result::Result<Self, whereat::at::At<image::OutputError>>
 pub fn image::ImageOutput::with_pixels<T>(&self, impl core::ops::function::FnOnce(zenpixels::buffer::PixelSlice<'_>) -> T) -> core::result::Result<T, whereat::at::At<image::OutputError>>
+pub struct image::Placement
+pub image::Placement::canvas: (u32, u32)
+pub image::Placement::origin: (i64, i64)
+pub fn image::Placement::visible(self, image::ImageGeometry) -> core::result::Result<core::option::Option<image::PlacementOverlap>, image::PlacementError>
+pub struct image::PlacementOverlap
+pub image::PlacementOverlap::canvas: image::Rect
+pub image::PlacementOverlap::samples: image::Rect
 pub struct image::Plane<'a>
 pub image::Plane::meaning: &'a image::Meaning
 pub image::Plane::samples: image::Samples<'a>
@@ -1512,7 +1525,7 @@ pub operation::Question::Frame::interpretation: &'a frame::FrameInterpretation
 pub operation::Question::Frame::timing: frame::FrameTiming
 pub operation::Question::Image
 pub operation::Question::Image::choices: operation::Choices<'a, operation::PublicationOffer>
-pub operation::Question::Image::facts: operation::ImageFacts
+pub operation::Question::Image::facts: &'a operation::ImageFacts
 pub operation::Question::Image::image: &'a image::ImageOutput
 pub operation::Question::Transcode
 pub operation::Question::Transcode::choices: operation::Choices<'a, operation::TranscodeOffer>
@@ -1600,6 +1613,7 @@ pub operation::ImageFacts::frame: core::option::Option<operation::FrameFacts>
 pub operation::ImageFacts::geometry: image::ImageGeometry
 pub operation::ImageFacts::orientation: core::option::Option<zenpixels::orientation::Orientation>
 pub operation::ImageFacts::packed: core::option::Option<zenpixels::descriptor::PixelDescriptor>
+pub operation::ImageFacts::placement: core::option::Option<image::Placement>
 pub operation::ImageFacts::planes: usize
 pub operation::ImageFacts::presentation: core::option::Option<frame::Presentation>
 pub operation::ImageFacts::source_details: usize
@@ -2608,7 +2622,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (216 types)
+## trait impls (219 types)
 
 &mut D: decode::ControlledIncrementalDecode, decode::IncrementalDecode
 &mut S: source::DynReadAt
@@ -2764,6 +2778,9 @@ image::ImageInterpretation: Clone, Debug
 image::ImageOutput: Clone, Debug
 image::Meaning: Clone, Debug, PartialEq
 image::OutputError: Debug, Display, Error
+image::Placement: Clone, Copy, Debug, Eq, PartialEq
+image::PlacementError: Debug, Display, Error
+image::PlacementOverlap: Clone, Copy, Debug, Eq, PartialEq
 image::Rect: Clone, Copy, Debug, Eq, PartialEq
 image::SourcePrecision: Clone, Debug, Eq, PartialEq
 image::Values: Debug
@@ -2837,7 +2854,7 @@ impl<J, E> decode::IncrementalDecode for helpers::WholeFileIncremental<J> where 
 
 ## auto traits
 
-169 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+172 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
 CodecSet: !RefUnwindSafe !UnwindSafe
 CodecSetError: !RefUnwindSafe !UnwindSafe

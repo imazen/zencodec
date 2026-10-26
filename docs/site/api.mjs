@@ -21,7 +21,7 @@ export const api = {
   sourceSnapshot: {path:'candidate::HttpSource (private HTTP qualification)',file:'perf/spatial-validation/src/http_source.rs',scope:'impl HttpSource',methods:['open']},
   fileSnapshot: {path:'candidate::clone_source (private Linux file snapshot)',file:'perf/spatial-validation/src/file_snapshot.rs',methods:['clone_source']},
   jxlLayerSelection: {path:'candidate::JxlLayers (private native F32 adapter)',file:'perf/spatial-validation/src/jxl_layers.rs',scope:"impl<'a> JxlLayers<'a>",methods:['open']},
-  layerPlacement: {path:'candidate::Placement (private geometry experiment)',file:'perf/spatial-validation/src/placement.rs',scope:'impl Placement {',methods:['visible']},
+  layerPlacement: {path:'zencodec::image::Placement',file:'src/image/placement.rs',scope:'impl Placement {',methods:['visible']},
   collectionDiscovery: {path:'zencodec::collection::Discovery<C>',file:'src/collection/discovery.rs',scope:'impl<C> Discovery<C>',methods:['new','usage']},
   checkedCollection: {path:'zencodec::operation::CheckedCollection<C, R>',file:'src/operation/collection.rs',scope:'impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R>',methods:['open','with_policy_set','images','children','next','first_image','decode','report','is_finished']},
   collectionSelection: {path:'zencodec::collection::Collection',file:'src/collection.rs',scope:'pub trait Collection',methods:['view','images','children','next','decode']},

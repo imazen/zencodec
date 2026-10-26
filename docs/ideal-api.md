@@ -167,8 +167,11 @@ Policy runs on that held owner before publication. Reverse/repeated selection
 replays from the source start; it does not promise efficient random access.
 
 A 1024×576 native layer at (1860,950) has only a 188×202 visible intersection.
-The separate `Placement::visible` operation computes that intersection without
-clipping the held samples or weakening bounded-region validation. Independent
+The shared `ImageInterpretation::placement` field supplies the placement.
+`Placement::visible` computes that intersection without
+clipping the held samples or weakening bounded-region validation. The owner
+validates the placement before policy; diagnostic facts retain it and the
+callback borrows those facts. Independent
 libjxl agrees on geometry and blend facts. CMYK/alpha samples agree exactly;
 lossy RGB differences remain within the unchanged native conformance bound and
 are recorded in the [selected-layer receipt](../benchmarks/raw_collection_2026-10-26.json).

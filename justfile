@@ -228,10 +228,11 @@ io-contract-check:
 operation-sync export:
     test ! -e "{{export}}/.git"
     test ! -e "{{export}}/.jj"
-    mkdir -p "{{export}}/src/operation" "{{export}}/src/collection"
+    mkdir -p "{{export}}/src/operation" "{{export}}/src/collection" "{{export}}/src/image"
     cp Cargo.toml "{{export}}/Cargo.toml"
     cp src/operation.rs src/lib.rs src/set.rs src/info.rs src/frame.rs src/frame_storage.rs src/image.rs src/resolution.rs src/collection.rs "{{export}}/src/"
     cp src/collection/*.rs "{{export}}/src/collection/"
+    cp src/image/*.rs "{{export}}/src/image/"
     cp src/operation/*.rs "{{export}}/src/operation/"
     cp src/traits/encoding.rs src/traits/dyn_encoding.rs src/traits/mod.rs "{{export}}/src/traits/"
     cp zencodec-testkit/tests/operation_*.rs "{{export}}/zencodec-testkit/tests/"
@@ -416,6 +417,9 @@ spatial-validation-check artifacts python features="":
 
 spatial-validation-with-oracles artifacts python oracles features="":
     JXL_LAYER_ORACLE="{{oracles}}/layer-oracle" SPATIAL_LAYER_ARTIFACTS="{{artifacts}}-layers" SPATIAL_ARTIFACTS="{{artifacts}}" SPATIAL_GENERATED_ARTIFACTS="{{artifacts}}-generated" SPATIAL_ORACLE_PYTHON="{{python}}" JXL_SELECTION_ORACLE="{{oracles}}/jxl-oracle" cargo test --manifest-path perf/spatial-validation/Cargo.toml --features "{{features}}" --locked -- --nocapture --test-threads=1
+    just spatial-validation-lint "{{features}}"
+
+spatial-validation-lint features="":
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --features "{{features}}" --all-targets --locked -- -D warnings
 
 # Start the real HTTP simulator and keep each fixture family in its own namespace.
@@ -548,8 +552,9 @@ io-core-sync export:
     test -f "{{export}}/zencodec-io/Cargo.toml"
     cp Cargo.toml "{{export}}/Cargo.toml"
     cp src/lib.rs src/storage.rs src/frame.rs src/frame_storage.rs src/image.rs src/collection.rs src/operation.rs "{{export}}/src/"
-    mkdir -p "{{export}}/src/collection" "{{export}}/src/operation"
+    mkdir -p "{{export}}/src/collection" "{{export}}/src/operation" "{{export}}/src/image"
     cp src/collection/*.rs "{{export}}/src/collection/"
+    cp src/image/*.rs "{{export}}/src/image/"
     cp src/operation/*.rs "{{export}}/src/operation/"
     cp zencodec-io/src/*.rs "{{export}}/zencodec-io/src/"
     cp zencodec-io/tests/*.rs "{{export}}/zencodec-io/tests/"
