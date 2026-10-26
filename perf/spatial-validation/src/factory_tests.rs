@@ -567,11 +567,15 @@ fn collection_factory_inherited_requirements_refuse_before_any_source_work() {
         for (set, expected) in [
             (
                 registered().with_limits(ResourceLimits::none().with_max_memory(1)),
-                FactoryError::UnsupportedLimits,
+                FactoryError::UnsupportedLimits {
+                    unsupported: ResourceLimits::none().with_max_memory(1),
+                },
             ),
             (
                 registered().with_decode_policy(DecodePolicy::strict()),
-                FactoryError::UnsupportedDecodePolicy,
+                FactoryError::UnsupportedDecodePolicy {
+                    unsupported: DecodePolicy::strict(),
+                },
             ),
         ] {
             let mut source = ReadAtShim(Positional::new(&[]));
@@ -592,6 +596,7 @@ fn collection_factory_inherited_requirements_refuse_before_any_source_work() {
             );
             assert_eq!(error.error().stage, CollectionStage::Open);
             assert_eq!(error.error().stop_reason(), None);
+            assert!(zencodec::find_cause::<At<FactoryError>>(&error).is_some());
             assert_eq!(source.0.reads.get(), 0);
             assert_eq!(source.0.lengths.get(), 0);
         }
@@ -842,7 +847,16 @@ fn collection_factory_configuration_fields_are_enforced_or_refused_individually(
                 .unwrap();
             assert_eq!(
                 zencodec::find_cause::<FactoryError>(&error),
-                Some(&FactoryError::UnsupportedLimits),
+                Some(&FactoryError::UnsupportedLimits {
+                    unsupported: {
+                        // Only the TIFF width field in the mixed request is qualified.
+                        let mut expected = limits;
+                        if format == ImageFormat::Tiff {
+                            expected.max_width = None;
+                        }
+                        expected
+                    }
+                }),
                 "{format:?}: {limits:?}"
             );
             assert_eq!((source.0.reads.get(), source.0.lengths.get()), (0, 0));
@@ -871,7 +885,9 @@ fn collection_factory_configuration_fields_are_enforced_or_refused_individually(
                     .unwrap();
                 assert_eq!(
                     zencodec::find_cause::<FactoryError>(&error),
-                    Some(&FactoryError::UnsupportedDecodePolicy),
+                    Some(&FactoryError::UnsupportedDecodePolicy {
+                        unsupported: policy
+                    }),
                     "{format:?}: {policy:?}"
                 );
                 assert_eq!((source.0.reads.get(), source.0.lengths.get()), (0, 0));

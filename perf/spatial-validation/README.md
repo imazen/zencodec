@@ -66,7 +66,11 @@ working memory, input size, timing, cumulative pixels, allocation-mode choices
 and each nontrivial decode-policy flag. Mixing a supported dimension field with
 an unsupported memory cap also refuses before I/O. A limit violation retains
 `LimitExceeded { actual, max }` through the checked error; an unimplemented
-mapping retains `CollectionOpenError`. No request preflight is required.
+mapping retains `CollectionOpenError` with the unhandled settings as typed data.
+The mixed TIFF width/memory control reports only the unqualified memory cap;
+JXL also reports the unqualified width. Every explicit policy flag is retained
+when refused. This is diagnostic data, not permission to weaken the request.
+No request preflight or error-text parsing is required.
 
 An independent source guard rejects every compressed-pixel range. Over-limit
 TIFF requests refuse without triggering it; an admitted child triggers the guard,

@@ -10,7 +10,7 @@ use std::{error::Error, fmt};
 pub use zencodec::collection::{CollectionFactory as Factory, CollectionOpenError as FactoryError};
 use zencodec::decode::DecodePolicy;
 use zencodec::{
-    ImageFormat, ResourceLimits, StopToken,
+    At, ImageFormat, ResourceLimits, StopToken,
     collection::{Cause, Composition, ErasedCollection, SelectionError},
     source::{DynReadAt, ReadAt},
 };
@@ -18,14 +18,15 @@ use zencodec_io::ReadAtReader;
 
 // Only the explicitly qualified fields may differ from the no-op configuration.
 // Comparing the remainder also refuses future fields until they are qualified.
+#[track_caller]
 fn require_configuration(
     format: ImageFormat,
     supported: ImageFormat,
     limits: Option<ResourceLimits>,
     policy: Option<DecodePolicy>,
-) -> Result<(), FactoryError> {
+) -> Result<(), Cause> {
     if format != supported {
-        return Err(FactoryError::NotRegistered(format));
+        return Err(At::wrap(FactoryError::NotRegistered(format)).into());
     }
     if let Some(mut remaining) = limits {
         // The shared field is explicitly encode-only; opening performs no encode.
@@ -40,11 +41,16 @@ fn require_configuration(
             }
         }
         if remaining != ResourceLimits::none() {
-            return Err(FactoryError::UnsupportedLimits);
+            return Err(At::wrap(FactoryError::UnsupportedLimits {
+                unsupported: remaining,
+            })
+            .into());
         }
     }
-    if policy.is_some_and(|value| value != DecodePolicy::none()) {
-        return Err(FactoryError::UnsupportedDecodePolicy);
+    if let Some(unsupported) = policy
+        && unsupported != DecodePolicy::none()
+    {
+        return Err(At::wrap(FactoryError::UnsupportedDecodePolicy { unsupported }).into());
     }
     Ok(())
 }

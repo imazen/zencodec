@@ -79,9 +79,19 @@ nontrivial resource or decode-policy requirements currently refuse before source
 I/O; this includes geometry requirements on the JXL factory. Mixed supported and
 unsupported fields refuse as a whole. Codec-specific templates still apply.
 Limit violations retain `LimitExceeded` with the actual value and requested cap;
-unimplemented enforcement retains `CollectionOpenError`. Neither means that
-stripping metadata after reconstruction could establish a parsing/PII policy.
+unimplemented enforcement retains `CollectionOpenError`. Its `UnsupportedLimits`
+and `UnsupportedDecodePolicy` variants carry an `unsupported` field containing
+only the unhandled requirements (other fields use no-op/default values). For a
+TIFF width-plus-memory request, the error identifies memory; JXL also identifies
+the unqualified width requirement. Inspect it with
+`zencodec::find_cause::<CollectionOpenError>(&error)` instead of parsing text or
+knowing the native adapter's error type. The data is bounded and contains no
+source/metadata bytes. It is not permission to retry with weaker requirements.
+Neither stripping metadata after reconstruction nor reporting this data could
+establish a parsing/PII policy.
 The legacy still-image `with_decode_policy` setter remains best-effort.
+The [typed-refusal receipt](../benchmarks/collection_refusals_2026-10-26.json)
+records the per-field, mixed-configuration and original-trace controls.
 
 [`ErasedCollection`](../src/collection/erased.rs) retains native identities and
 output ownership, checks cursor origin before native work and avoids boxing each

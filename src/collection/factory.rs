@@ -64,19 +64,28 @@ pub enum CollectionOpenError {
     /// This adapter needs an already-resident slice; it did not stage the source.
     ResidentInputRequired,
     /// The adapter cannot enforce the supplied resource-limit configuration.
-    UnsupportedLimits,
+    UnsupportedLimits {
+        /// Required fields the adapter cannot enforce. Qualified fields and
+        /// fields that do not apply to decoding have their no-op/default values.
+        /// This bounded structured data contains no source or metadata payload.
+        unsupported: ResourceLimits,
+    },
     /// The adapter cannot enforce the supplied decode-policy configuration.
-    UnsupportedDecodePolicy,
+    UnsupportedDecodePolicy {
+        /// Explicit requirements the adapter cannot enforce. Handled fields
+        /// are `None`; this is not permission to retry with weaker requirements.
+        unsupported: DecodePolicy,
+    },
 }
 impl core::fmt::Display for CollectionOpenError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(match self {
             Self::NotRegistered(_) => "no collection factory registered for format",
             Self::ResidentInputRequired => "this collection requires already-resident input",
-            Self::UnsupportedLimits => {
+            Self::UnsupportedLimits { .. } => {
                 "collection factory cannot enforce configured resource limits"
             }
-            Self::UnsupportedDecodePolicy => {
+            Self::UnsupportedDecodePolicy { .. } => {
                 "collection factory cannot enforce configured decode policy"
             }
         })

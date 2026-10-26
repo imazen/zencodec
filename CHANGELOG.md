@@ -2,6 +2,11 @@
 
 ## Native image selection (unreleased experiment)
 
+- Retain unhandled limit and decode-policy fields in typed collection-opening
+  refusals. Callers can inspect bounded settings without knowing adapter-specific
+  causes or parsing text; handled fields are excluded and refusals never authorize
+  weaker retries. Show the exact error variants and fields in the source guide.
+
 - Register borrowed native collections with `CodecSet::with_collection` and
   `open_collection`. Share one checked discovery/publication path; retain source
   lifetimes, cursor ownership and first-registration-wins errors. Require adapters

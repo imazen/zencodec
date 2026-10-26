@@ -212,6 +212,10 @@ allocations are infallible; the erased job is not promised `Send`. Native image
 IDs and output ownership remain unchanged. Typed collections remain available.
 `CollectionOpenError` distinguishes absent registration, resident-input needs,
 unimplemented limit enforcement and unimplemented decode-policy enforcement.
+Its `UnsupportedLimits { unsupported: ResourceLimits }` and
+`UnsupportedDecodePolicy { unsupported: DecodePolicy }` variants retain the
+unhandled requirements. Qualified or irrelevant fields have no-op/default
+values. This bounded data is diagnostic; it never authorizes a weaker retry.
 
 This is publication after reconstruction, not native allocation admission or a
 whole-container privacy guarantee. Concrete adapter packaging, qualified native
