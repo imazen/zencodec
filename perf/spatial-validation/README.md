@@ -606,7 +606,7 @@ JXL layer can have a negative origin or extend beyond the canvas. Making
 `ImageGeometry::region` accept out-of-bounds coordinates would weaken the
 mapped-buffer contract and still lose the layer's own coordinate system.
 
-The private [`Placement::visible`](src/placement.rs) candidate takes the existing
+The shared [`Placement::visible`](../../src/image/placement.rs) method takes the existing
 local `ImageGeometry` plus a signed origin and separate presentation dimensions.
 It returns matching rectangles in the returned sample buffer and presentation
 canvas. A valid fully off-canvas image returns `None`; its pixels and source
@@ -623,10 +623,11 @@ The native decoder's internal-header regression confirms those same extents in
 two input chunk sizes while still returning one composited presentation.
 Negative-origin coverage here is synthetic, not native raw reconstruction.
 
-No new public type is promoted by this experiment. A future layer output needs
-placement frozen with its owner and qualified blend/dependency semantics. Keep
-this candidate separate until the native layer-output path can exercise that
-whole contract. [Qualification receipt](../../benchmarks/spatial_placement_2026-10-26.json).
+Placement is now frozen in `ImageInterpretation` and validated by the shared
+owner. Native raw JXL selection supplies it through the same output used by
+TIFF and AV1; callers no longer need a private JXL downcast to find the canvas
+origin. The bounded policy facts retain placement and the callback borrows
+those facts. Native blend/reference semantics remain separate source details. [Qualification receipt](../../benchmarks/spatial_placement_2026-10-26.json).
 Run `just spatial-placement-check /path/to/artifacts`.
 
 The next native experiment now captures complete F32 local planes before
@@ -699,7 +700,7 @@ fixtures, preview/progressive publication, reference-only export, representation
 other than F32, qualified CMYK conversion, raw random seeking and native workspace
 bounds. Publication happens after reconstruction; it does not prove preallocation
 admission or whole-container privacy. The collection contract is now shared;
-placement and concrete native adapter factories remain private.
+concrete native adapter factories remain private; placement is now shared.
 
 ### Independent oracle qualification
 

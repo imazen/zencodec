@@ -7,7 +7,6 @@ use super::{
     image_output::ImageOutput,
     jxl_items::{Limits, complete, controlled_options, decode_next_details, pixel_decoder},
     jxl_output::{JxlRawLayer, JxlSourceFacts, adopt},
-    placement::Placement,
     tiff_region::Failure,
 };
 use std::{io::Error, sync::Arc};
@@ -174,13 +173,6 @@ impl<'a> JxlLayers<'a> {
         } else {
             None
         };
-        let placement = Placement {
-            canvas: (
-                u32::try_from(info.coded_size.0)?,
-                u32::try_from(info.coded_size.1)?,
-            ),
-            origin: (i64::from(selected.origin.0), i64::from(selected.origin.1)),
-        };
         let result = adopt(
             decoded.planes,
             JxlSourceFacts {
@@ -198,7 +190,6 @@ impl<'a> JxlLayers<'a> {
             false,
             Some(JxlRawLayer {
                 image: image.clone(),
-                placement,
                 native: decoded.layer,
             }),
         )?;

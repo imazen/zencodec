@@ -35,7 +35,6 @@ pub struct JxlSourceFacts {
 #[derive(Clone, Debug)]
 pub struct JxlRawLayer {
     pub image: super::image_items::ImageId,
-    pub placement: super::placement::Placement,
     pub native: zenjxl_decoder::api::JxlLayerInfo,
 }
 
@@ -181,10 +180,20 @@ pub fn adopt(
         .ok_or_else(|| Error::other("invalid JXL orientation"))?;
     let mut interpretation = ImageInterpretation::packed(geometry, orientation);
     interpretation.timing = timing;
+    if let Some(layer) = &layer {
+        interpretation.placement = Some(zencodec::image::Placement {
+            canvas: (
+                u32::try_from(info.coded_size.0)?,
+                u32::try_from(info.coded_size.1)?,
+            ),
+            origin: (
+                i64::from(layer.native.origin.0),
+                i64::from(layer.native.origin.1),
+            ),
+        });
+    }
     interpretation.source_details.insert(source);
     if let Some(layer) = layer {
-        // Validate placement without clipping or dropping off-canvas samples.
-        layer.placement.visible(geometry)?;
         interpretation.source_details.insert(layer);
     }
     ImageOutput::packed(pixels, extras, interpretation).map_err(Into::into)

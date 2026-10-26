@@ -114,6 +114,14 @@ fn raw_collection_native_samples_and_owner_bound_policy_match_independent_layers
                 .get::<JxlRawLayer>()
                 .unwrap();
             assert_eq!(facts.geometry.canvas_width as usize, layer.native.size.0);
+            assert_eq!(facts.placement, image.interpretation().placement);
+            assert_eq!(
+                facts.placement.unwrap().origin,
+                (
+                    i64::from(layer.native.origin.0),
+                    i64::from(layer.native.origin.1)
+                )
+            );
             assert_eq!(facts.source_details, 2);
             address.set(image.with_pixels(|p| p.row(0).as_ptr() as usize).unwrap());
             visits.set(visits.get() + 1);
@@ -177,11 +185,9 @@ fn raw_collection_native_samples_and_owner_bound_policy_match_independent_layers
                 u32::from(layer.native.is_last),
                 oracle["is_last"].as_u64().unwrap() as u32
             );
-            let overlap = layer
-                .placement
-                .visible(interpretation.geometry)
-                .unwrap()
-                .unwrap();
+            let placement = interpretation.placement.unwrap();
+            assert_eq!(serde_json::json!(placement.origin), oracle["origin"]);
+            let overlap = placement.visible(interpretation.geometry).unwrap().unwrap();
             if name == "multiple_layers_noise_spline.jxl" && index == 4 {
                 assert_eq!((overlap.canvas.width, overlap.canvas.height), (188, 202));
                 assert_eq!(layer.native.size, (1024, 576));
@@ -290,6 +296,8 @@ fn raw_collection_native_samples_and_owner_bound_policy_match_independent_layers
                 }
             }
             let mut detached = interpretation.clone();
+            detached.placement = None;
+            assert_eq!(image.interpretation().placement, Some(placement));
             detached.source_details.remove::<JxlRawLayer>();
             assert!(
                 image
