@@ -2,6 +2,7 @@
 //! Executing native spatial candidates, not a promoted public API.
 #![cfg(test)]
 
+mod canvas_projection;
 mod checked_collection;
 mod checked_collection_tests;
 #[path = "../../../docs/examples/checked_source.rs"]

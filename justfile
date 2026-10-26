@@ -419,6 +419,36 @@ spatial-oracle-install python:
 spatial-jxl-oracle-build output:
     python3 perf/spatial-validation/build_jxl_oracles.py "{{output}}"
 
+# Recompile test helpers against an already pinned independent library. Preserve
+# old helpers and evidence; both helper binaries require a new output directory.
+spatial-jxl-oracle-relink pinned output:
+    #!/usr/bin/env python3
+    import hashlib, json, pathlib, subprocess
+    pinned, output = pathlib.Path("{{pinned}}").resolve(), pathlib.Path("{{output}}").resolve()
+    receipt = json.loads((pinned / "provenance.json").read_text())
+    assert receipt["runtime_version"] == 11001
+    assert receipt["source_sha256"] == "1492dfef8dd6c3036446ac3b340005d92ab92f7d48ee3271b5dac1d36945d3d9"
+    output.mkdir(parents=True, exist_ok=False)
+    library = pinned / "build/lib"
+    for helper in ["jxl", "layer"]:
+        source = pathlib.Path(f"perf/spatial-validation/{helper}_oracle.c").resolve()
+        command = ["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-I", str(pinned / "build/lib/include"), "-I", str(pinned / "libjxl-0.11.1/lib/include"), str(source), "-L", str(library), f"-Wl,-rpath,{library}", "-ljxl_dec", "-o", str(output / f"{helper}-oracle")]
+        subprocess.run(command, check=True, timeout=60)
+    assert subprocess.check_output([str(output / "layer-oracle"), "--version"], timeout=5).strip() == b"11001"
+    receipt["helpers"] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in output.glob("*-oracle")}
+    receipt["helper_sources"] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in pathlib.Path("perf/spatial-validation").glob("*_oracle.c")}
+    receipt["reused_library"] = {str(p.resolve()): hashlib.sha256(p.read_bytes()).hexdigest() for p in library.glob("libjxl_dec.so.*") if not p.is_symlink()}
+    assert receipt["reused_library"]
+    (output / "provenance.json").write_text(json.dumps(receipt, indent=2) + "\n")
+
+spatial-projection-check artifacts:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    : "${JXL_SELECTION_ORACLE:?supply current pinned libjxl helper}"
+    export SPATIAL_PROJECTION_ARTIFACTS="{{artifacts}}"
+    cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked canvas_projection -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
+
 # Reproduce a raw-layer oracle disagreement with explicit headers and libraries.
 # Native captures are reused; this does not rerun or time the Rust decoder.
 spatial-layer-oracle-compare captured native output headers="/usr/include" libdir="/usr/lib/x86_64-linux-gnu" library="jxl":
@@ -438,7 +468,7 @@ spatial-validation-check artifacts python features="":
     just spatial-validation-with-oracles "{{artifacts}}" "{{python}}" "{{artifacts}}-oracle" "{{features}}"
 
 spatial-validation-with-oracles artifacts python oracles features="":
-    JXL_LAYER_ORACLE="{{oracles}}/layer-oracle" SPATIAL_LAYER_ARTIFACTS="{{artifacts}}-layers" SPATIAL_ARTIFACTS="{{artifacts}}" SPATIAL_GENERATED_ARTIFACTS="{{artifacts}}-generated" SPATIAL_ORACLE_PYTHON="{{python}}" JXL_SELECTION_ORACLE="{{oracles}}/jxl-oracle" cargo test --manifest-path perf/spatial-validation/Cargo.toml --features "{{features}}" --locked -- --nocapture --test-threads=1
+    JXL_LAYER_ORACLE="{{oracles}}/layer-oracle" SPATIAL_LAYER_ARTIFACTS="{{artifacts}}-layers" SPATIAL_ARTIFACTS="{{artifacts}}" SPATIAL_GENERATED_ARTIFACTS="{{artifacts}}-generated" SPATIAL_PROJECTION_ARTIFACTS="{{artifacts}}-projection" SPATIAL_ORACLE_PYTHON="{{python}}" JXL_SELECTION_ORACLE="{{oracles}}/jxl-oracle" cargo test --manifest-path perf/spatial-validation/Cargo.toml --features "{{features}}" --locked -- --nocapture --test-threads=1
     just spatial-validation-lint "{{features}}"
 
 spatial-validation-lint features="":
@@ -576,6 +606,7 @@ spatial-ci-check artifacts features="":
     export SPATIAL_GENERATED_ARTIFACTS="{{artifacts}}/generated"
     export SPATIAL_LAYER_ARTIFACTS="{{artifacts}}/layers"
     export SPATIAL_COLOR_ARTIFACTS="{{artifacts}}/color"
+    export SPATIAL_PROJECTION_ARTIFACTS="{{artifacts}}/projection"
     mkdir -p "{{artifacts}}"
     timeout --kill-after=15s 10m cargo test --manifest-path perf/spatial-validation/Cargo.toml --features "{{features}}" --locked -- --nocapture --test-threads=1
     timeout --kill-after=15s 5m cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --features "{{features}}" --all-targets --locked -- -D warnings

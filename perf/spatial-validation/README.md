@@ -1381,3 +1381,58 @@ strict lint pass: `run-heavy: done rc=0 37s | peak-RSS 0.48GiB | min-avail
 done rc=0 12s | peak-RSS 0.32GiB | min-avail 11217MiB | peak-load 0.72`.
 These wrapper observations cover whole test/build commands, not isolated codec
 memory or timing comparisons.
+
+### Canvas projection before a complete render API
+
+The private [`canvas_projection::project`](src/canvas_projection.rs) executes a
+geometry stage over the shared owned output. `None` selects the complete
+oriented canvas; an explicit `Rect` selects display-space coordinates. The
+source must be qualified `Composited`, have an established orientation and no
+separate placement, and contain every required stored sample. A raw layer cannot
+substitute, even if its local dimensions equal the canvas. Native reconstruction
+and reference composition already happened before this stage.
+
+The stage inverse-maps the requested rectangle, borrows that strided stored
+region, and uses `zenpixels_convert::orient::apply_orientation_into` directly
+into admitted, padded output. It allocates no full oriented intermediate.
+Color descriptor/context, timing and original source details remain intact;
+`ProjectionSource` records the immediate input coordinates and orientation.
+The output declares identity orientation and its actual canvas/region. Scalar
+auxiliaries remain values with their original roles, including already-applied
+spots. Their independent owner lets later color replacement release old color.
+
+The [execution receipt](../../benchmarks/native_canvas_projection_2026-10-27.json)
+records 128 successful TIFF projections from 32 classic/BigTIFF RGBA8/float
+inputs, including all eight orientations and selected stored regions. Native
+float round trips preserve NaN payloads, signed zero and excursions. Eight
+JXL orientation fixtures also agree with independently oriented libjxl output
+under the existing native F32 tolerance; projection itself requires exact bits.
+Two further JXL presentations retain their canvas, while all nine raw layers
+refuse this operation, including the 1024×576 layer with 188×202 visible support.
+
+Additional controls cover strided U8/F32/F64 auxiliaries, premultiplied color,
+160 cancellation/timeout seams, 16 callback unwinds, 40 object/byte admission
+refusals, invalid rectangles and an incompatible auxiliary extent. Every
+unpublished payload charge releases. Padding stays untouched. Whole-pixel row
+stride is required by `PixelSlice`; machine-word alignment alone is insufficient
+for RGB or 16-byte pixels. The prototype pads in whole pixels.
+
+This is **not the full render API**. Current color is preserved, not converted
+to a requested display profile. Display resizing, native component conversion,
+general auxiliary grid origins/phases, grids requiring resampling, native
+workspace admission, and publication of a complete planned render remain open.
+Matching auxiliary dimensions alone do not prove co-registration: this stage is
+qualified for the native JXL emitted grids and controlled fixtures above. The
+shared contract must carry stronger grid facts before a general adapter can
+infer alignment. It still allocates output for identity, retains the borrowed
+source during work, and checks cancellation at plane boundaries rather than
+inside the orientation kernel. No speed or whole-operation memory claim follows.
+
+Run `just spatial-projection-check <fresh-artifacts>` with a current pinned
+`JXL_SELECTION_ORACLE`; `SPATIAL_PROJECTION_ARTIFACTS` is set by that recipe.
+`just spatial-ci-check` and the documentation workflow include these checks with
+a separate artifact directory so the native TIFF fresh-directory gate stays
+unchanged. `just spatial-jxl-oracle-relink <pinned-build> <fresh-output>` can
+rebuild the helpers against an existing libjxl 0.11.1 library while retaining the
+old binaries and recording source/binary hashes. The ordinary helper modes are
+unchanged; `samples-oriented` enables libjxl's own orientation for this oracle.

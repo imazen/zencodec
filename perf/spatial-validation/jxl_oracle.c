@@ -15,7 +15,8 @@ static uint32_t float_bits(float value) {
 int main(int argc, char **argv) {
   if (argc != 3 && argc != 4) return 2;
   int full = argc == 4;
-  int sample_dump = full && (!strcmp(argv[3], "samples") || !strcmp(argv[3], "samples-unrendered"));
+  int bake_orientation = full && !strcmp(argv[3], "samples-oriented");
+  int sample_dump = full && (!strcmp(argv[3], "samples") || !strcmp(argv[3], "samples-unrendered") || bake_orientation);
   int render_spots = !full || strcmp(argv[3], "samples-unrendered");
   if (full && !sample_dump && strcmp(argv[3], "full")) return 2;
   FILE *input = fopen(argv[1], "rb");
@@ -34,7 +35,7 @@ int main(int argc, char **argv) {
   unsigned decoded = 0;
   int rc = 7;
   if (JxlDecoderSetCoalescing(decoder, argv[2][0] == '1') != JXL_DEC_SUCCESS ||
-      JxlDecoderSetKeepOrientation(decoder, JXL_TRUE) != JXL_DEC_SUCCESS ||
+      JxlDecoderSetKeepOrientation(decoder, bake_orientation ? JXL_FALSE : JXL_TRUE) != JXL_DEC_SUCCESS ||
       JxlDecoderSetRenderSpotcolors(decoder, render_spots ? JXL_TRUE : JXL_FALSE) != JXL_DEC_SUCCESS ||
       JxlDecoderSubscribeEvents(decoder, JXL_DEC_BASIC_INFO | JXL_DEC_FRAME |
                                 (full ? JXL_DEC_FULL_IMAGE : 0)) != JXL_DEC_SUCCESS ||

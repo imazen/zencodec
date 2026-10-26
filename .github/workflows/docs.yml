@@ -117,6 +117,7 @@ jobs:
       SPATIAL_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}
       SPATIAL_GENERATED_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-generated
       SPATIAL_LAYER_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-layers
+      SPATIAL_PROJECTION_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-projection
       SPATIAL_ORACLE_PYTHON: ${{ github.workspace }}/perf/spatial-validation/target/oracle-python/bin/python
       JXL_SELECTION_ORACLE: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-jxl/jxl-oracle
       JXL_LAYER_ORACLE: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-jxl/layer-oracle
@@ -162,6 +163,8 @@ jobs:
             perf/spatial-validation/target/oracle-*-cms/provenance.json
             perf/spatial-validation/target/oracle-*-color/**/comparison.json
             perf/spatial-validation/target/oracle-*-color/**/publication.json
+            perf/spatial-validation/target/oracle-*-projection/**/*.json
+            perf/spatial-validation/target/oracle-*-projection/**/*.txt
             perf/spatial-validation/target/oracle-*-color/**/stderr.txt
           if-no-files-found: error
 
