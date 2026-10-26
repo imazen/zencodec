@@ -17,7 +17,7 @@ export async function checkIdeal(browser,url,output) {
     assert.ok((await page.locator('h1').textContent()).includes('executes today'));
     assert.equal(await page.locator('.ideal-step').count(),5);
     const changes=page.locator('.api-change');
-    assert.equal(await changes.count(),10);
+    assert.equal(await changes.count(),11);
     assert.equal(await page.locator('#change-mapping').count(),1);
     assert.ok((await page.locator('#change-images .code-toolbar').textContent()).includes('Private prototype'));
     assert.equal(await page.locator('#change-images [data-example="checked_jxl_first"]').count(),1);
@@ -29,6 +29,12 @@ export async function checkIdeal(browser,url,output) {
     assert.equal(await inspection.locator('[data-example="checked_first_description"]').count(),1);
     assert.ok((await inspection.textContent()).includes('without reconstructing pixels'));
     assert.ok((await inspection.textContent()).includes('Unknown orientation remains unknown'));
+    const factories=page.locator('#change-factories');
+    await factories.locator(':scope>summary').focus();
+    await page.keyboard.press('Enter');
+    assert.ok(await factories.evaluate(el=>el.open));
+    assert.ok((await factories.textContent()).includes('requires an already-resident slice'));
+    assert.equal(await factories.locator('[data-example="checked_registered_first"]').count(),1);
     const placement=page.locator('#change-placement');
     await placement.locator(':scope>summary').focus();
     await page.keyboard.press('Enter');

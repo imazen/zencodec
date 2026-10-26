@@ -41,6 +41,9 @@ comparison and no whole-workspace/privacy guarantee. Cancellation can currently
 surface as a native, policy or wrapper error; all carry their original reason,
 but a common outer stop accessor would reduce caller error-family coordination.
 
+The [factory receipt](../../benchmarks/collection_factories_2026-10-26.json) records
+source hashes, commands, initial failures and successful gates.
+
 ## Inspect a selected image before reconstructing it
 
 The shared [`ImageDescription`](../../src/collection/description.rs) describes only the
