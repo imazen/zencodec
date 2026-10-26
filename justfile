@@ -333,6 +333,12 @@ spatial-output-check artifacts:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked strip_tests -- --nocapture
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
 
+spatial-subsampling-check artifacts:
+    mkdir -p "{{artifacts}}-oracle"
+    cc -std=c11 -Wall -Wextra -Werror perf/spatial-validation/jxl_oracle.c -ljxl -o "{{artifacts}}-oracle/jxl-oracle"
+    SPATIAL_GENERATED_ARTIFACTS="{{artifacts}}-generated" JXL_SELECTION_ORACLE="{{artifacts}}-oracle/jxl-oracle" cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked output_generated_subsampled_ -- --nocapture
+    cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
+
 # Real TIFF sample carriage through the common pixel owner and row converter.
 spatial-samples-check:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked strip_tests -- --nocapture

@@ -6,7 +6,7 @@ use crate::{
     image_output::{AuxiliaryKind, ImageOutput, Meaning, Row, SourcePrecision},
     jxl_items::{JxlItems, Plane},
     jxl_output::JxlSourceFacts,
-    jxl_tests::independent_metadata_at,
+    jxl_tests::independent_inspect_at,
     output_tests::expected_output,
 };
 use jxl_encoder::{
@@ -29,7 +29,7 @@ fn inspect(name: &str, encoded: &[u8]) -> String {
         .unwrap()
         .write_all(encoded)
         .unwrap();
-    independent_metadata_at(&path, true)
+    independent_inspect_at(&path, true, true)
 }
 
 fn rows(text: &str, prefix: &str) -> Vec<Vec<u32>> {
@@ -332,6 +332,67 @@ fn output_generated_reverse_selected_timecodes_remain_separate_from_exact_pts() 
                     zencodec::time::TimeBase::new(1001, 30000).unwrap()
                 ))
             );
+        }
+    }
+}
+
+#[test]
+fn output_generated_subsampled_auxiliary_geometry_is_distinct_from_source_shift() {
+    let (width, height) = (17usize, 13usize);
+    let color: Vec<u8> = (0..width * height * 3)
+        .map(|i| (i * 19 + 7) as u8)
+        .collect();
+    for shift in [1, 2, 3] {
+        let source_width = width.div_ceil(1 << shift);
+        let source_height = height.div_ceil(1 << shift);
+        let values: Vec<u8> = (0..source_width * source_height)
+            .map(|i| (i * 37 + 11) as u8)
+            .collect();
+        for role in 0..7 {
+            let extra = match role {
+                0 => ExtraChannel::from_alpha_buf(&values, false),
+                1 => ExtraChannel::depth(&values),
+                2 => ExtraChannel::spot_color(&values, [0.25, 0.5, 0.75, 1.0]),
+                3 => ExtraChannel::selection_mask(&values),
+                4 => ExtraChannel::black(&values),
+                5 => ExtraChannel::cfa(&values, 2),
+                6 => ExtraChannel::thermal(&values),
+                _ => unreachable!(),
+            }
+            .with_dim_shift(shift);
+            let extras = [extra];
+            let encoded = LosslessConfig::new()
+                .with_effort(3)
+                .encode_request(
+                    width.try_into().unwrap(),
+                    height.try_into().unwrap(),
+                    PixelLayout::Rgb8,
+                )
+                .with_extra_channels(&extras)
+                .encode(&color)
+                .unwrap();
+            let independent = inspect(&format!("subsampled-{role}-{shift}"), &encoded);
+            assert_eq!(
+                &rows(&independent, "extra_details ")[0][..5],
+                &[0, role, 8, 0, shift]
+            );
+            let (output, _) = owned_first(encoded);
+            let mapped = output.map().unwrap();
+            let plane = mapped.plane(1).unwrap().unwrap();
+            let Meaning::Auxiliary(aux) = plane.meaning else {
+                panic!("auxiliary role lost")
+            };
+            assert_eq!(aux.source_dim_shift, shift);
+            // The native API emits an upsampled canvas. The source shift does
+            // not redefine its emitted row length or permit reading fewer rows.
+            assert_eq!(plane.samples.dimensions(), (width, height));
+            assert_ne!(plane.samples.dimensions(), (source_width, source_height));
+            for row in 0..height {
+                let Row::Bytes(bytes) = plane.samples.row(row).unwrap() else {
+                    panic!("native F32 output lost")
+                };
+                assert_eq!(bytes.len(), width * 4);
+            }
         }
     }
 }

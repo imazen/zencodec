@@ -11,7 +11,7 @@ zencodec = { path = "../..", features = ["std"] }
 zencodec-io = { path = "../../zencodec-io", features = ["std"] }
 zencodec-media = { path = "../../zencodec-media" }
 tiff = { version = "0.11.3", git = "https://github.com/lilith/image-tiff", rev = "0219e7099c658422d47bd986ff279b686202b2e0", default-features = false, features = ["lzw", "deflate"] }
-zenjxl-decoder = { version = "0.4.0", git = "https://github.com/imazen/zenjxl-decoder", rev = "064d08964de1df8181eb3d24ee52e18f70146313", default-features = false }
+zenjxl-decoder = { version = "0.4.0", git = "https://github.com/imazen/zenjxl-decoder", rev = "4365fe97a955bcd0b9c3f30ca33678e8b1e85478", default-features = false }
 jxl-encoder = { version = "0.4.0", git = "https://github.com/imazen/jxl-encoder", rev = "0255e5a9f61b7270cb3ed3f7b85fec2283deec55", default-features = false, features = ["std"] }
 codec-corpus = "1.1.0"
 zenpixels = ">=0.2.17, <0.4.0"
