@@ -46,3 +46,59 @@ Reader build receipts (compilation resources, not codec performance):
 | Implementor 2 | 101 | 2s | 0.24 GiB | 8858 MiB | 0.38 |
 
 Related tracking: [consumer ergonomics and contracts](https://github.com/imazen/zencodec/issues/159).
+
+## Follow-up findings from repaired runtime attempts
+
+The implementor passed its source-assisted roundtrip/refusal and preflight
+controls in attempt 12. This is 2 of 4 assigned implementor tasks reaching runtime
+at this observation; input and output controls remain pending. The consumer's
+first control run only demonstrated garbage refusal: the purported valid fixture
+was also unrecognized, despite a zero process exit. It does not count as a
+positive roundtrip. The coordinator then supplied the exact-revision
+[testkit caller examples](https://github.com/imazen/zencodec/blob/7342ae3eeddb4ddd21d88b792ee42c3db3ccb5e7/zencodec-testkit/tests/usage.rs)
+as a recorded rescue. Resulting control successes must be reported separately.
+
+Further independently checked concerns:
+
+- `EncodePlan::validate(declaration)` checks zero geometry, lag, patch access and
+  input protocol constraints. It does not retain or compare the original
+  declaration. `validate_started` compares the reported plan facts; adapters
+  still retain the same job/declaration. A clearer name or a bound preparation
+  object is a design candidate, not an implemented guarantee.
+- `EncodeJob::Enc` and `DecodeJob::Dec` intentionally lack the executor trait
+  bounds. Typed generic callers add the capability bounds they use; a caller
+  accepting the corresponding dyn config avoids repeating them. Blanket dyn
+  implementations still have bounds: not every arbitrary EncoderConfig can be
+  assumed to satisfy them.
+- Output accessors were missing from the focused cards: encoded bytes borrow
+  through `data()` or move through `into_vec()`; decoded `pixels()` returns a
+  borrowed PixelSlice, while `into_buffer()` moves the PixelBuffer. The cards now
+  show these signatures, plus Outcome output/report access.
+- The fixture's `native_plan` is codec-owned test code, not a library function.
+  Its generic name and whole-file expansion obscure that boundary.
+
+One independent source check found a separate real rendering bug: array-type
+semicolons truncated the pinned YCbCr constructor signature. `8f182cc6` fixes
+array/const-generic parsing and recaptures the same revision and source hashes.
+This was not a reader runtime failure.
+
+Some initial reader interpretations were incorrect. Required methods do not
+live on an omitted supertrait, and the selected default methods are not from a
+different revision. Released 0.1.26 has `encode::EncoderConfig`; an unavailable
+root import does not establish that the trait is absent. These corrections
+matter when deciding whether to revise the API or its presentation.
+
+## Clean checkout control
+
+A public-source archive of `c39270dc` was unpacked outside workspace path
+overrides. It contains no committed root Cargo.lock; Cargo resolved the published
+dependencies on 2026-10-27. `cargo test -p zencodec-testkit --lib --test usage`
+passed the internal fixture tests and caller examples, including conversion.
+The site links this workspace manifest, shared helpers and command beside the
+encoder/decoder implementor flows. This is a core fixture recipe, not a native
+JPEG/PNG bootstrap or a reader first-attempt result.
+
+Receipt: `rc=0 1s | peak-RSS 0.28GiB | min-avail 7341MiB | peak-load 0.65`.
+The final browser run with visible imports, required signatures, output accessors
+and corrected YCbCr signature passed existing desktop/mobile/clipboard gates:
+`rc=0 36s | peak-RSS 0.30GiB | min-avail 6526MiB | peak-load 1.11`.

@@ -104,3 +104,7 @@
 .code-imports { padding: .5rem .8rem 0; }
 .code-imports > small { color: var(--muted); }
 .code-imports pre { margin: .25rem 0; padding: .4rem .6rem; font-size: .82rem; }
+
+.cf-project { margin: .5rem 0 1rem; font-size: .85rem; }
+.cf-project details { margin-top: .4rem; }
+.cf-project pre { overflow-x: auto; }

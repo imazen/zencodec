@@ -9,7 +9,7 @@ export const codeFlows = [
   ]},
   {id:'app-start',role:'consumer',title:'Register → decode → transcode',steps:[
     {example:'checked_registry',file:'docs/examples/checked_operations.rs',api:['operationRegistration']},
-    {example:'checked_decode',file:'docs/examples/checked_operations.rs',api:['operationDecode']},
+    {example:'checked_decode',file:'docs/examples/checked_operations.rs',api:['operationDecode','operationOutcome','decodedOutput']},
     {example:'checked_default',file:'docs/examples/checked_operations.rs',api:[],external:['integration-api.json']},
   ]},
   {id:'app-render',role:'consumer',title:'Select → crop canvas → render',steps:[
@@ -94,15 +94,15 @@ export const codeFlows = [
     {scope:'fn main()',file:'zenmeta/examples/audit_metadata.rs',api:['metadataAudit'],state:'Metadata audit CLI example'},
     {scope:'fn duplicates_spoofing_and_qualifiers_are_not_silently_selected()',file:'zenmeta/tests/metadata_inspection.rs',api:['xmpPacket'],state:'XMP ambiguity contract test; not whole-file PII certification'},
   ]},
-  {id:'codec-config',role:'implementor',title:'EncoderConfig → EncodeJob → Encoder',steps:[
+  {id:'codec-config',role:'implementor',title:'EncoderConfig → EncodeJob → Encoder',project:{manifest:'zencodec-testkit/Cargo.toml',helpers:'zencodec-testkit/src/reference.rs',command:'cargo test -p zencodec-testkit --lib --test usage'},steps:[
     {scope:'impl EncoderConfig for MinimalEncoderConfig',file:'zencodec-testkit/src/minimal.rs',api:['encoderConfig','codecErrorBuild'],state:'Internal testkit fixture; requires reference.rs helpers'},
     {scope:'impl EncodeJob for MinEncodeJob',file:'zencodec-testkit/src/minimal.rs',api:['encodeJob','checkedEncodePolicy'],state:'Testkit codec: minimal supported capabilities'},
-    {scope:'impl Encoder for MinEnc',file:'zencodec-testkit/src/minimal.rs',api:['rasterOutput'],state:'Testkit codec: one-shot encode'},
+    {scope:'impl Encoder for MinEnc',file:'zencodec-testkit/src/minimal.rs',api:['rasterOutput','encodedOutput'],state:'Testkit codec: one-shot encode'},
   ]},
-  {id:'codec-decode',role:'implementor',title:'DecoderConfig → DecodeJob → Decode',steps:[
+  {id:'codec-decode',role:'implementor',title:'DecoderConfig → DecodeJob → Decode',project:{manifest:'zencodec-testkit/Cargo.toml',helpers:'zencodec-testkit/src/reference.rs',command:'cargo test -p zencodec-testkit --lib --test usage'},steps:[
     {scope:'impl DecoderConfig for MinimalDecoderConfig',file:'zencodec-testkit/src/minimal.rs',api:['decoder'],state:'Testkit codec: minimal supported capabilities'},
     {scope:"impl<'a> DecodeJob<'a> for MinDecodeJob",file:'zencodec-testkit/src/minimal.rs',api:['decodeJob','checkedDecodePolicy'],state:'Testkit codec: minimal supported capabilities'},
-    {scope:"impl Decode for MinDec<'_>",file:'zencodec-testkit/src/minimal.rs',api:['decode'],state:'Testkit codec: one-shot decode'},
+    {scope:"impl Decode for MinDec<'_>",file:'zencodec-testkit/src/minimal.rs',api:['decode','decodedOutput'],state:'Testkit codec: one-shot decode'},
   ]},
   {id:'codec-sansio',role:'implementor',title:'Request bytes → step → write rows → Done',steps:[
     {scope:'impl IncrementalDecode for Burst',file:'zencodec-io/examples/io_contract_probes.rs',api:['incremental'],state:'Protocol test codec, not a production format'},
@@ -209,12 +209,12 @@ const lessons = {
     ['Refuse ambiguous XMP meaning', 'Duplicate fields or misleading namespaces prevent a unique interpretation. The test keeps those unknowns visible instead of selecting a convenient value.'],
   ],
   'codec-config': [
-    ['Expose a reusable configuration', 'Register format identity and accepted descriptors. This minimal test codec supplies a small implementation to read before a production adapter.'],
+    ['Expose a reusable configuration', 'An encoder emits one format: format() is singular. Register that identity and accepted descriptors. This internal test codec shows the trait shape; its complete workspace and shared helpers are linked above.'],
     ['Bind one operation', 'Read the per-operation trait shape. This internal fixture declares cancellation and limits unsupported and ignores those inputs; it is not a production control implementation. A production job must retain supported controls and reject unsupported required behavior.'],
     ['Accept one image', 'The simplest executor consumes PixelSlice, including its stride and interpretation, and returns encoded output or the codec’s own error.'],
   ],
   'codec-decode': [
-    ['Register a decoder', 'Expose format detection and actual supported behavior once on DecoderConfig.'],
+    ['Register a decoder', 'A decoder may recognize several formats: formats() returns the list. Expose their detection and actual supported behavior once on DecoderConfig.'],
     ['Prepare one decode', 'Bind source lifetime, Pulse, limits and output negotiation on DecodeJob.'],
     ['Return interpreted pixels', 'Decode owns the reconstructed result. Keep its descriptor, metadata and pixel storage consistent.'],
   ],

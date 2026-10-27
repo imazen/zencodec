@@ -1392,3 +1392,7 @@ planned-row-check:
 # Capture a pinned converter surface; CHECKOUT may be --github for remote source.
 capture-ycbcr-api checkout revision:
     node docs/capture-ycbcr-api.mjs "{{checkout}}" "{{revision}}"
+
+# Public-source checkout smoke test; no codec checkout or local path patches.
+guide-starter-check checkout:
+    cd "{{checkout}}" && cargo test -p zencodec-testkit --lib --test usage
