@@ -35,6 +35,27 @@ The implementation does not claim that this transient allocator behavior is
 bounded by the managed allowance. The small shared-owner header uses `Arc::new`;
 the potentially large vector uses fallible reservation.
 
+## Reserving a route before policy
+
+`StorageBudget::prepare_filled(len, value)` reserves bytes and an object slot
+without allocating or initializing the array. The returned `PreparedStorage<T>`
+holds that allowance across a callback. A rejected route drops its reservation;
+a selected route calls `allocate()` and transfers the same charge into its
+`OwnedStorage<T>`. Allocation can still fail, releasing the allowance. The stored
+fill value itself is outside the array-capacity charge.
+
+This lets a caller reject a proposed 10 GiB destination before it materializes.
+It also prevents competing operations from taking the reserved allowance while
+the caller decides. The reservation is not a system-allocator guarantee and
+holds no budget lock during application code. Cloning is deliberately absent.
+
+The native AV1 conversion witness retains both destination and one-row scratch
+reservations during `Question::ImageConversion`, then initializes them only
+after selection. Refusal, cancellation, partial admission and callback unwind
+release them. Scratch drops after execution; output clones retain only the
+completed destination charge. See
+[the executing witness](../perf/av1-policy-validation/README.md#prepared-conversion-before-allocation).
+
 ## Media owners
 
 `Packet::from_accounted` and `PacketPayload::Accounted` keep a shared byte view.

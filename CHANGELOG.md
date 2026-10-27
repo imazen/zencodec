@@ -2,6 +2,12 @@
 
 ## Native image selection (unreleased experiment)
 
+- Resolve retained image-conversion routes before destination initialization.
+  Disclose assumed chroma siting, extended-range preservation and scoped storage;
+  preserve selected records and original causes on failure. Add deferred
+  `StorageBudget::prepare_filled` reservations whose charge transfers on allocation
+  or releases on refusal. Qualify the private route with native AV1 strips/crops.
+
 - Add explicit converted-frame adoption with `ImageOutput::from_frame_pixels`.
   Retain exact timing/presentation and separate original component facts through
   `source_frame()` and `ImageFacts::source_frame`; current packed samples retain

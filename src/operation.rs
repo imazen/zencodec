@@ -16,6 +16,7 @@ use core::fmt;
 use zenpixels::{PixelDescriptor, PixelSlice};
 
 mod collection;
+mod conversion;
 mod decoding;
 mod frame;
 mod image;
@@ -23,6 +24,7 @@ mod policy;
 mod transcode;
 mod transition;
 pub use collection::{CheckedCollection, CollectionOperationError, CollectionStage};
+pub use conversion::{ImageConversionOffer, resolve_image_conversion};
 pub use frame::{FrameFacts, PublicationOffer, resolve_frame};
 pub use image::{ImageFacts, resolve_image};
 pub use policy::{

@@ -30,6 +30,7 @@ export async function checkIdeal(browser,url,output) {
     assert.equal(await page.locator('#change-frame-route').count(),1);
     assert.equal(await page.locator('#change-mux-finish').count(),1);
     assert.equal(await page.locator('#change-strided-plane').count(),1);
+    for(const required of ['resolve_image_conversion','prepare_filled','allocate','assumed_chroma_siting','preserves_extended_range']) assert.ok((await page.locator('#change-strided-plane').textContent()).includes(required),required);
     assert.equal(await page.locator('#change-output-descriptor').count(),1);
     assert.equal(await page.locator('#change-float-color').count(),1);
     assert.equal(await page.locator('#change-mapping').count(),1);

@@ -236,7 +236,7 @@ operation-sync export:
     test ! -e "{{export}}/.jj"
     mkdir -p "{{export}}/src/operation" "{{export}}/src/collection" "{{export}}/src/image"
     cp Cargo.toml "{{export}}/Cargo.toml"
-    cp src/operation.rs src/lib.rs src/set.rs src/info.rs src/frame.rs src/frame_storage.rs src/image.rs src/resolution.rs src/collection.rs "{{export}}/src/"
+    cp src/storage.rs src/operation.rs src/lib.rs src/set.rs src/info.rs src/frame.rs src/frame_storage.rs src/image.rs src/resolution.rs src/collection.rs "{{export}}/src/"
     cp src/collection/*.rs "{{export}}/src/collection/"
     cp src/image/*.rs "{{export}}/src/image/"
     cp src/operation/*.rs "{{export}}/src/operation/"
@@ -248,7 +248,7 @@ operation-sync export:
 frame-policy-sync export:
     just operation-sync "{{export}}"
     cp zencodec-media/src/*.rs "{{export}}/zencodec-media/src/"
-    cp zencodec-media-testkit/tests/frame_policy.rs zencodec-media-testkit/tests/image_output.rs "{{export}}/zencodec-media-testkit/tests/"
+    cp zencodec-media-testkit/tests/storage_ownership.rs zencodec-media-testkit/tests/frame_policy.rs zencodec-media-testkit/tests/image_output.rs "{{export}}/zencodec-media-testkit/tests/"
 
 frame-policy-check:
     cargo test -p zencodec-media-testkit --test frame_policy --locked
@@ -1156,3 +1156,8 @@ av1-mux-check artifacts:
 
 av1-timing-oracle-build directory version="8.0.1":
     python3 perf/av1-policy-validation/build_timing_oracle.py "{{directory}}" --version "{{version}}"
+
+# Deferred conversion admission and native route selection, with real AV1 pixels.
+conversion-check artifacts:
+    cargo test -p zencodec-media-testkit --locked --test storage_ownership --test image_output
+    just av1-planar-check "{{artifacts}}"

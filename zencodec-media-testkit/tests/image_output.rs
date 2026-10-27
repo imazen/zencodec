@@ -45,6 +45,88 @@ fn words() -> Arc<dyn Picture> {
 }
 
 #[test]
+fn conversion_policy_selects_only_qualified_choices_and_keeps_source_facts() {
+    use zencodec::operation::{
+        Decision, DecisionContext, ImageConversionOffer, PolicySet, Question, Selection,
+        resolve_image, resolve_image_conversion,
+    };
+    use zenpixels::{Orientation, PixelDescriptor};
+    let source = frame(words(), 3, 10);
+    let mut assumed = ImageConversionOffer::new(
+        PixelDescriptor::RGB16_SRGB,
+        source.interpretation().geometry,
+        Orientation::Identity,
+    );
+    assumed.assumed_chroma_siting = Some(ChromaSiting::Center);
+    let mut declared = assumed;
+    declared.assumed_chroma_siting = None;
+    let mut extended = declared;
+    // Policy-selection control only: this test does not execute/qualify F32 math.
+    extended.output = PixelDescriptor::RGBF32_LINEAR;
+    extended.preserves_extended_range = true;
+    extended.workspace_upper_bound = Some(4096);
+    let offers = [assumed, declared, extended];
+    let mut use_preset = |_: Question<'_>| -> Result<Decision, At<std::convert::Infallible>> {
+        Ok(Decision::UsePreset)
+    };
+    for (preset, expected) in [
+        (PolicySet::new(), 1),
+        (PolicySet::new().allow_assumed_chroma_siting(true), 0),
+        (PolicySet::new().require_extended_range(true), 2),
+        (PolicySet::new().with_workspace_limit(4096), 2),
+    ] {
+        let (index, record) = resolve_image_conversion(
+            &source,
+            &offers,
+            &mut use_preset,
+            preset,
+            &enough::Unstoppable,
+        )
+        .unwrap();
+        assert_eq!(index, expected);
+        let DecisionContext::ImageConversion(facts) = record.context else {
+            panic!()
+        };
+        assert_eq!(facts.frame.unwrap().encoding, encoding(10));
+        let Some(Selection::ImageConversion(selected)) = record.selected else {
+            panic!()
+        };
+        assert_eq!(selected.output, offers[index].output);
+    }
+    assumed.assumed_chroma_siting = Some(ChromaSiting::Unknown);
+    assert!(
+        resolve_image_conversion(
+            &source,
+            &[assumed],
+            &mut use_preset,
+            PolicySet::new().allow_assumed_chroma_siting(true),
+            &enough::Unstoppable
+        )
+        .is_err()
+    );
+    assert!(
+        resolve_image_conversion(
+            &source,
+            &[extended],
+            &mut use_preset,
+            PolicySet::new().with_workspace_limit(4095),
+            &enough::Unstoppable
+        )
+        .is_err()
+    );
+    // A different output question cannot silently ignore the new requirement.
+    assert!(
+        resolve_image(
+            source,
+            &mut use_preset,
+            PolicySet::new().require_extended_range(true),
+            &enough::Unstoppable
+        )
+        .is_err()
+    );
+}
+
+#[test]
 fn placement_is_validated_with_owner_without_clipping_hidden_samples() {
     use zencodec::image::{ImageGeometry, ImageInterpretation, Placement, PlacementError, Rect};
     use zenpixels::{Orientation, PixelBuffer, PixelDescriptor};

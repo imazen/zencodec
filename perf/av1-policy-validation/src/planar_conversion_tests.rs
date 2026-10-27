@@ -14,13 +14,13 @@ use zencodec_media::session::VideoDecoder;
 use zenpixels::{ChannelType, Cicp};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum SitingChoice {
+pub(super) enum SitingChoice {
     RequireDeclared,
     AssumeCenterIfUnknown,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum Refusal {
+pub(super) enum Refusal {
     Interpretation,
     Geometry,
     Destination,
@@ -32,12 +32,12 @@ enum Refusal {
 }
 
 #[derive(Debug)]
-struct ConvertedFacts {
+pub(super) struct ConvertedFacts {
     // Source evidence is retained independently of the decoded pixel owner.
     source: Arc<FrameInterpretation>,
     timing: FrameTiming,
     presentation: Presentation,
-    assumed_center: bool,
+    pub(super) assumed_center: bool,
     output_encoding: SampleEncoding,
 }
 
@@ -67,25 +67,15 @@ fn checked_plane<'a>(
 
 /// LSB replication from zenavif feadc4c's private `convert::scale_to_u16`.
 /// Its input is explicitly native-depth; output is normalized U16 RGB.
-fn widen(value: impl Into<u16>, bits: u8) -> u16 {
+pub(super) fn widen(value: impl Into<u16>, bits: u8) -> u16 {
     let value = value.into();
     let shift = 16 - bits;
     (value << shift) | (value >> (bits - shift))
 }
 
-/// Convert the visible crop into strided RGB16 destination rows. One coded
-/// RGB row is scratch; all source planes remain borrowed. Using coded
-/// coordinates until after upsampling preserves odd-origin chroma phase.
-///
-/// Deliberately private: only BT.709 matrix/sRGB transfer and primaries,
-/// centered subsampling and 8/10/12-bit LSB words are qualified here. The
-/// existing kernels clip into the output gamut; this is not a lossless offer.
-fn convert(
+pub(super) fn conversion_facts(
     frame: &Frame,
     choice: SitingChoice,
-    destination: &mut [[u16; 3]],
-    stride: usize,
-    rows_per_strip: usize,
 ) -> Result<ConvertedFacts, Refusal> {
     let info = frame.interpretation();
     let color = info.color.resolved.ok_or(Refusal::Interpretation)?;
@@ -124,10 +114,6 @@ fn convert(
     };
     let geometry = info.geometry;
     let crop = geometry.crop;
-    let (width, height) = (
-        geometry.coded_width as usize,
-        geometry.coded_height as usize,
-    );
     if crop.width == 0
         || crop.height == 0
         || crop
@@ -141,6 +127,40 @@ fn convert(
     {
         return Err(Refusal::Geometry);
     }
+    Ok(ConvertedFacts {
+        source: Arc::clone(info),
+        timing: frame.timing(),
+        presentation: frame.presentation(),
+        assumed_center,
+        output_encoding: SampleEncoding::new(ChannelType::U16, 16, 0).unwrap(),
+    })
+}
+
+/// Convert the visible crop into strided RGB16 destination rows. One coded
+/// RGB row is scratch; all source planes remain borrowed. Using coded
+/// coordinates until after upsampling preserves odd-origin chroma phase.
+///
+/// Deliberately private: only BT.709 matrix/sRGB transfer and primaries,
+/// centered subsampling and 8/10/12-bit LSB words are qualified here. The
+/// existing kernels clip into the output gamut; this is not a lossless offer.
+fn convert(
+    frame: &Frame,
+    choice: SitingChoice,
+    destination: &mut [[u16; 3]],
+    stride: usize,
+    rows_per_strip: usize,
+) -> Result<ConvertedFacts, Refusal> {
+    let facts = conversion_facts(frame, choice)?;
+    let info = frame.interpretation();
+    let color = info.color.resolved.unwrap();
+    let encoding = info.encoding;
+    let bits = encoding.code_bits();
+    let geometry = info.geometry;
+    let crop = geometry.crop;
+    let (width, height) = (
+        geometry.coded_width as usize,
+        geometry.coded_height as usize,
+    );
     let needed = (crop.height as usize - 1)
         .checked_mul(stride)
         .and_then(|n| n.checked_add(crop.width as usize))
@@ -219,13 +239,7 @@ fn convert(
             bits
         );
     }
-    Ok(ConvertedFacts {
-        source: Arc::clone(info),
-        timing: frame.timing(),
-        presentation: frame.presentation(),
-        assumed_center,
-        output_encoding: SampleEncoding::new(ChannelType::U16, 16, 0).unwrap(),
-    })
+    Ok(facts)
 }
 
 fn reinterpret(frame: &Frame, edit: impl FnOnce(&mut FrameInterpretation)) -> Frame {
@@ -349,6 +363,7 @@ fn planar_native_borrowed_rows_and_odd_crops_match_full_conversion() {
                             assert_eq!(facts.source.geometry.crop, crop);
                         }
                         qualify_packed_publication(&cropped, &full_rgb);
+                        crate::prepared_conversion::qualify(&cropped, &full_rgb);
                         rows.push_str(&format!(
                             "{bits},{sub:?},{full},{index},{},{},{},{},{}\n",
                             crop.x, crop.y, crop.width, crop.height, facts.assumed_center
@@ -581,6 +596,7 @@ fn planar_native_signalled_siting_cannot_be_overridden_by_unknown_fallback() {
         assert_eq!(frames.len(), 1);
         let native = &frames[0];
         assert_eq!(native.interpretation().siting, siting);
+        crate::prepared_conversion::reject_declared_siting(native);
         assert_eq!(samples(native), samples(&input));
         let mut destination = vec![[0xaaaa; 3]; 17 * 13];
         assert_eq!(

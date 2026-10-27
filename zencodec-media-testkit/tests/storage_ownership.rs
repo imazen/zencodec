@@ -9,6 +9,66 @@ use zencodec_media::{
     packet::{Packet, PacketAddition, PacketPayload},
 };
 
+#[test]
+fn deferred_admission_blocks_competitors_and_transfers_the_same_charge() {
+    let pool = StorageBudget::new(24, 1);
+    let prepared = pool.prepare_filled(4, [0x1234u16; 3]).unwrap();
+    assert_eq!(prepared.reserved_bytes(), 24);
+    assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (24, 1));
+    assert!(matches!(pool.bytes(0), Err(StorageError::Objects { .. })));
+    let data = prepared.allocate().unwrap();
+    assert_eq!(data.as_slice(), &[[0x1234; 3]; 4]);
+    let shared = data.freeze();
+    let empty = shared.slice(2..2).unwrap();
+    drop(shared);
+    assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (24, 1));
+    drop(empty);
+    assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
+}
+
+#[test]
+fn deferred_size_errors_and_unwind_release_all_allowances() {
+    let pool = StorageBudget::new(24, 2);
+    assert!(matches!(
+        pool.prepare_filled(usize::MAX, 1u16),
+        Err(StorageError::SizeOverflow)
+    ));
+    assert!(matches!(
+        pool.prepare_filled(25, 0u8),
+        Err(StorageError::Bytes { .. })
+    ));
+    assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
+    let unwind = std::panic::catch_unwind(|| {
+        let _held = pool.prepare_filled(24, 0u8).unwrap();
+        assert!(matches!(
+            pool.prepare_filled(1, 0u8),
+            Err(StorageError::Bytes { .. })
+        ));
+        panic!("application callback unwound");
+    });
+    assert!(unwind.is_err());
+    assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
+    let empty = pool.prepare_filled(0, 0u8).unwrap().allocate().unwrap();
+    let zero_sized = pool.prepare_filled(7, ()).unwrap().allocate().unwrap();
+    assert!(empty.is_empty());
+    assert_eq!(zero_sized.len(), 7);
+    assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 2));
+    drop((empty, zero_sized));
+    assert_eq!(pool.reserved_objects(), 0);
+}
+
+#[test]
+#[cfg(target_pointer_width = "64")]
+fn ten_gib_reservation_can_be_declined_without_materializing_pixels() {
+    let bytes = 10usize * 1024 * 1024 * 1024;
+    let pool = StorageBudget::new(bytes, 1);
+    let proposed = pool.prepare_filled(bytes, 0u8).unwrap();
+    assert_eq!(proposed.reserved_bytes(), bytes);
+    drop(proposed);
+    assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
+    assert_eq!(pool.bytes(1).unwrap().as_slice(), &[0]);
+}
+
 fn frame(data: PlaneData, encoding: SampleEncoding, epoch: u32) -> Frame {
     let words = encoding.bytes_per_sample();
     let picture = OwnedPlanes::new(

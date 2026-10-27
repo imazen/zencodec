@@ -428,6 +428,8 @@ trait PolicyResolver {
     fn resolve(&mut self, question: Question<'_>) -> Result<Decision, At<Self::Error>>;
 }
 enum Question<'a> { // non_exhaustive
+    ImageConversion { image: &'a image::ImageOutput, facts: &'a ImageFacts,
+        choices: Choices<'a, ImageConversionOffer> },
     FrameRoute { interpretation: &'a frame::FrameInterpretation,
         facts: &'a FrameRouteFacts, choices: Choices<'a, FrameRouteOffer> },
     Image { image: &'a image::ImageOutput, facts: ImageFacts,
@@ -470,6 +472,8 @@ impl PolicySet {
     const fn require_metadata(self, treatment: MetadataTransfer) -> Self;
     const fn allow_opaque_profiles(self, allowed: bool) -> Self;
     const fn with_workspace_limit(self, bytes: u64) -> Self;
+    const fn allow_assumed_chroma_siting(self, allowed: bool) -> Self;
+    const fn require_extended_range(self, required: bool) -> Self;
 }
 ```
 
@@ -510,6 +514,52 @@ The full implementation target and current gaps are recorded in
 [ideal-api.md](ideal-api.md). The resolver serves prepared encoder configuration, mandatory interpretation
 boundaries, native frame publication and complete pixel-transcode routes. The executing transcode adapter
 is in zencodecs; each native route still needs qualification.
+
+### Prepared image conversion
+
+```rust
+struct ImageConversionOffer { // non_exhaustive
+    output: PixelDescriptor, geometry: image::ImageGeometry,
+    orientation: Orientation, assumed_chroma_siting: Option<frame::ChromaSiting>,
+    preserves_extended_range: bool, admitted_bytes: usize,
+    workspace_upper_bound: Option<u64>,
+}
+fn resolve_image_conversion<R: PolicyResolver + ?Sized>(
+    image: &image::ImageOutput, offers: &[ImageConversionOffer], resolver: &mut R,
+    preset: PolicySet, stop: &dyn Stop,
+) -> Result<(usize, DecisionRecord), At<PolicyFailure>>;
+```
+
+Adapters hold the exact source mapping, conversion mechanism and resource
+reservations while the existing callback selects a route. Selection precedes
+pixel writes and destination initialization. The selected route executes once;
+there is no hidden fallback or plan reconstruction. Execution errors retain the
+selected `Selection::ImageConversion` record and the original cause.
+`DecisionContext::ImageConversion` preserves bounded source facts on refusal.
+The shared resolver validates decision tokens and cancellation, not conversion
+math, native mapping or adapter claims.
+
+The default preset refuses an assumed chroma location. Explicit permission only
+allows a disclosed concrete location when source siting is undeclared; it never
+permits replacing a signaled location. `require_extended_range(true)` accepts
+only a route qualifying that guarantee. Other output questions lack this
+proof and refuse; discovery boundaries may continue. This is neither a lossless
+precision guarantee nor an HDR rendering rule. Required metadata/opaque-profile
+policies refuse conversion-only offers, which cannot prove those obligations.
+
+`admitted_bytes` includes retained destination/scratch reservations, not just
+already allocated pixels. `StorageBudget::prepare_filled(len, value)` returns
+`PreparedStorage<T>` without creating the array. Its consuming `allocate()`
+transfers the same charge into `OwnedStorage<T>`; dropping it releases the charge.
+Allocation may still fail. `filled`, `bytes`, `words` and `floats` retain their
+immediate-allocation convenience. Neither admission nor a qualified additional
+workspace bound establishes total operation memory.
+
+The private native AV1 witness executes this boundary for strided RGB16 output,
+with one coded RGB row of admitted scratch. It reuses existing strip kernels;
+independent RGB accuracy, unclipped float/HDR output and a public planar plan in
+zenpixels-convert remain unqualified. See the
+[native qualification](../perf/av1-policy-validation/README.md#prepared-conversion-before-allocation).
 
 ### Prepared frame encoding transitions
 

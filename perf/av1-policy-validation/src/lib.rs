@@ -26,3 +26,6 @@ mod image_output_tests;
 mod mux_output;
 #[cfg(test)]
 mod planar_conversion_tests;
+
+#[cfg(test)]
+mod prepared_conversion;

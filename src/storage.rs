@@ -133,27 +133,28 @@ impl StorageBudget {
     /// This also admits bounded codec tables and range indexes. Any storage
     /// referenced by a value is separate; only this array's capacity is charged.
     pub fn filled<T: Copy>(&self, len: usize, value: T) -> Result<OwnedStorage<T>, StorageError> {
+        self.prepare_filled(len, value)?.allocate()
+    }
+
+    /// Reserve array capacity without allocating or initializing its payload.
+    ///
+    /// Use this before a policy callback so the route can hold its allowance
+    /// without materializing a large destination. Drop an unselected reservation
+    /// to release it; allocation still may fail after policy selects the route.
+    /// The stored fill value and allocator bookkeeping are outside the charge.
+    pub fn prepare_filled<T: Copy>(
+        &self,
+        len: usize,
+        value: T,
+    ) -> Result<PreparedStorage<T>, StorageError> {
         let bytes = len
             .checked_mul(size_of::<T>())
             .filter(|n| *n <= isize::MAX as usize)
             .ok_or(StorageError::SizeOverflow)?;
-        let reservation = self.reserve(bytes)?;
-        let mut data = Vec::new();
-        data.try_reserve_exact(len)
-            .map_err(StorageError::Allocation)?;
-        let actual = data
-            .capacity()
-            .checked_mul(size_of::<T>())
-            .ok_or(StorageError::SizeOverflow)?;
-        if actual > bytes {
-            return Err(StorageError::Capacity {
-                admitted: bytes,
-                actual,
-            });
-        }
-        data.resize(len, value);
-        Ok(OwnedStorage {
-            allocation: Allocation { data, reservation },
+        Ok(PreparedStorage {
+            len,
+            value,
+            reservation: self.reserve(bytes)?,
         })
     }
 
@@ -207,6 +208,60 @@ struct Allocation<T> {
     // Field order matters: free the payload before releasing its charge.
     data: Vec<T>,
     reservation: Reservation,
+}
+
+/// An admitted array whose payload has not been allocated or initialized.
+///
+/// This owns one object slot and its full byte allowance. It is not cloneable:
+/// consuming it transfers the same charge into storage, without re-admission.
+/// Dropping it releases the charge. This is a managed allowance, not a promise
+/// that the system allocator can satisfy a later request.
+pub struct PreparedStorage<T> {
+    len: usize,
+    value: T,
+    reservation: Reservation,
+}
+impl<T> PreparedStorage<T> {
+    /// Managed capacity reserved for this array, in bytes.
+    pub fn reserved_bytes(&self) -> usize {
+        self.reservation.bytes
+    }
+}
+impl<T: Copy> PreparedStorage<T> {
+    /// Allocate and initialize the admitted array, retaining its reservation.
+    /// On failure both the temporary payload and reservation are released.
+    pub fn allocate(self) -> Result<OwnedStorage<T>, StorageError> {
+        let Self {
+            len,
+            value,
+            reservation,
+        } = self;
+        let mut data = Vec::new();
+        data.try_reserve_exact(len)
+            .map_err(StorageError::Allocation)?;
+        let actual = data
+            .capacity()
+            .checked_mul(size_of::<T>())
+            .ok_or(StorageError::SizeOverflow)?;
+        if actual > reservation.bytes {
+            return Err(StorageError::Capacity {
+                admitted: reservation.bytes,
+                actual,
+            });
+        }
+        data.resize(len, value);
+        Ok(OwnedStorage {
+            allocation: Allocation { data, reservation },
+        })
+    }
+}
+impl<T> fmt::Debug for PreparedStorage<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PreparedStorage")
+            .field("elements", &self.len)
+            .field("reserved_bytes", &self.reserved_bytes())
+            .finish_non_exhaustive()
+    }
 }
 
 /// Uniquely owned, fixed-size admitted storage. Created by `StorageBudget`.

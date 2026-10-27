@@ -164,18 +164,55 @@ it does not qualify proportional ROI work or conversion throughput. Native
 canonical-word evidence or kernels that honor SampleEncoding directly need
 evaluation before choosing the production boundary.
 
-Missing: a public planar plan in zenpixels-convert, a prepared siting choice in
-the shared policy resolver, independent RGB accuracy, unclipped float output,
-other color matrices/transfers, mono/GBR, conversion reconfiguration, cancellation,
-and complete storage admission.
-The private bridge collapses mapping failures to its test refusal; a production
-adapter must retain the original cause and trace. These limits are not hidden
-behind a generic “video solved” claim.
+The original partition control retains its simple mapping-refusal enum. The
+prepared witness below preserves original mapping causes and adds shared policy,
+managed scratch and cancellation. Public planar conversion in zenpixels-convert,
+independent RGB accuracy, unclipped float output, other color matrices/transfers,
+mono/GBR, conversion reconfiguration and complete native workspace admission
+remain open.
 
 [Receipt](../../benchmarks/native_planar_bridge_2026-10-26.json): the full native
 suite and strict lint pass. Resource wrapper: rc=0, 18 s, peak RSS 0.51 GiB,
 minimum available 11298 MiB, peak load 0.43. This covers the whole build/test
 process, not isolated codec or conversion memory.
+
+### Prepared conversion before allocation
+
+`prepared_conversion.rs` retains the actual native mapping, kernel selection,
+destination reservation and scratch reservation through `Question::ImageConversion`.
+Only a selected route initializes either buffer. `convert` then executes one
+coded RGB row at a time, crops after upsampling and publishes the completed
+`ImageOutput` with original timing and interpretation separate from current RGB.
+The policy record accompanies success or execution failure. No fallback runs.
+
+`just conversion-check <fresh-artifacts>` runs the shared storage/policy controls
+and the native matrix. Every one of the existing 162 crop cases also executes
+the prepared route and agrees exactly with whole-picture conversion. FFmpeg
+still qualifies native component samples, not the resulting RGB color accuracy.
+The partition control retains 1/2/4/full-row comparisons and unchanged padding.
+
+The default preset refuses unknown subsampled siting; explicit permission accepts
+the disclosed center assumption. Native signaled Left/TopLeft refuses before
+policy. Integer clipping is disclosed as `preserves_extended_range: false`.
+The preset refuses a strict range-preservation requirement or an unknown
+workspace bound. Metadata/privacy requirements also refuse because this route
+has no evidence for them. A test-only synthetic F32 offer exercises selection;
+it does not claim an implemented F32 converter.
+
+Controls exercise traced callback/backend failures with safe default formatting,
+stale tokens, callback panic, cancellation before policy, after selection and
+during row execution, partial storage admission and final-owner release.
+A wrapped native picture confirms one mapping for the whole route; output
+retains source interpretation without retaining its consumed raw picture.
+Deferred-storage controls separately reserve and decline 10 GiB without creating
+that pixel array. This establishes admission order, not product RSS or throughput.
+
+This route needs **zero zenpixels API or kernel changes**: it borrows existing
+native planes, calls existing zenavif kernels and adopts a strided RGB16 owner.
+That is a qualification bridge, not the desired public planar implementation.
+Preparation still examines every active source word before asking policy;
+small-crop work is not proportional to returned pixels. Mapping, profile data,
+source storage and native kernel workspace are outside this payload allowance.
 
 ### Converted video uses the shared image output
 

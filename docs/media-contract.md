@@ -203,6 +203,14 @@ offer lacks that evidence. A default preset preserves the native presentation,
 including unknown declarations. Codec/container interpretation rules remain the
 format adapter's responsibility.
 
+A separate `Question::ImageConversion` chooses a retained conversion before
+its destination is initialized. The exact mapping and storage reservations
+survive the callback; declared assumptions and integer clipping remain visible.
+The private AV1 witness executes it through existing strip kernels and
+`ImageOutput::from_frame_pixels`, preserving timing and original signal facts.
+This does not turn the native publication gate into a converter. See
+[prepared image conversion](spec.md#prepared-image-conversion).
+
 The authored ownership controls in `zencodec-media-testkit/tests/frame_policy.rs`
 verify exact strided 10-bit samples and picture identity, cancellation after
 callback, stale choices, typed causes, unwind release, terminal work methods and

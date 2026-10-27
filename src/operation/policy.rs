@@ -111,6 +111,8 @@ pub struct EncodeOffer {
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum Selection {
+    /// Prepared conversion of a held image before destination writes.
+    ImageConversion(super::ImageConversionOffer),
     /// Prepared frame encoding and output continuity.
     FrameRoute(super::FrameRouteOffer),
     /// Publication of the exact held selected-image output.
@@ -133,6 +135,8 @@ pub enum Selection {
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum DecisionContext {
+    /// Held image before executing a selected conversion route.
+    ImageConversion(ImageFacts),
     /// Held frame and output state before an encoding transition.
     FrameRoute(super::FrameRouteFacts),
     /// Selected native output before publication to the application.
@@ -175,6 +179,15 @@ pub struct EncodeFacts {
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum Question<'a> {
+    /// Choose a prepared conversion before its destination pixels are written.
+    ImageConversion {
+        /// Exact input retained by the adapter throughout this decision.
+        image: &'a crate::image::ImageOutput,
+        /// Source interpretation and ownership facts, without payloads.
+        facts: &'a ImageFacts,
+        /// Request-compatible retained conversion plans and their effects.
+        choices: Choices<'a, super::ImageConversionOffer>,
+    },
     /// Choose among prepared encoding routes before accepting this frame or
     /// changing the destination's output sequence.
     FrameRoute {
@@ -297,6 +310,8 @@ pub struct PolicySet {
     metadata: Option<MetadataTransfer>,
     allow_opaque_profiles: bool,
     workspace_limit: Option<u64>,
+    allow_assumed_siting: bool,
+    require_extended_range: bool,
 }
 impl Default for PolicySet {
     fn default() -> Self {
@@ -311,6 +326,8 @@ impl PolicySet {
             metadata: None,
             allow_opaque_profiles: true,
             workspace_limit: None,
+            allow_assumed_siting: false,
+            require_extended_range: false,
         }
     }
     /// Prefer a confirmed lossless mode when offered; otherwise preserve the
@@ -341,6 +358,22 @@ impl PolicySet {
         self.workspace_limit = Some(bytes);
         self
     }
+    /// Permit an explicitly disclosed assumption for undeclared chroma siting.
+    /// Defaults to false. This never overrides a signaled location or permits
+    /// guessing other color metadata. Only prepared conversion questions use it.
+    pub const fn allow_assumed_chroma_siting(mut self, allowed: bool) -> Self {
+        self.allow_assumed_siting = allowed;
+        self
+    }
+    /// Require a conversion route that guarantees extended-range preservation.
+    /// Defaults to false, allowing a requested integer/display conversion.
+    /// This is separate from encoding fidelity and tone mapping; it does not
+    /// establish an end-to-end guarantee. Other output questions lack this
+    /// evidence and are refused; interpretation discovery may still proceed.
+    pub const fn require_extended_range(mut self, required: bool) -> Self {
+        self.require_extended_range = required;
+        self
+    }
     fn permits_transcode(self, offer: &TranscodeOffer) -> bool {
         self.metadata.is_none_or(|m| m == offer.metadata)
             && (self.allow_opaque_profiles || !offer.retains_opaque_profile)
@@ -354,7 +387,38 @@ impl PolicySet {
 impl PolicyResolver for PolicySet {
     type Error = Infallible;
     fn resolve(&mut self, question: Question<'_>) -> Result<Decision, At<Infallible>> {
+        if self.require_extended_range
+            && !matches!(
+                question,
+                Question::ImageConversion { .. } | Question::Boundary { .. }
+            )
+        {
+            return Ok(Decision::decline(Decline::UnsupportedQuestion));
+        }
         let choices = match question {
+            Question::ImageConversion { choices, .. } => {
+                // Conversion alone does not certify metadata or opaque-profile
+                // treatment. Do not silently ignore an existing obligation.
+                if self.metadata.is_some() || !self.allow_opaque_profiles {
+                    return Ok(Decision::decline(Decline::UnsupportedQuestion));
+                }
+                return Ok(choices
+                    .iter()
+                    .find(|choice| {
+                        let offer = choice.value();
+                        (offer.assumed_chroma_siting.is_none() || self.allow_assumed_siting)
+                            && offer.assumed_chroma_siting
+                                != Some(crate::frame::ChromaSiting::Unknown)
+                            && (!self.require_extended_range || offer.preserves_extended_range)
+                            && self.workspace_limit.is_none_or(|limit| {
+                                offer
+                                    .workspace_upper_bound
+                                    .is_some_and(|bound| bound <= limit)
+                            })
+                    })
+                    .map(Decision::choose)
+                    .unwrap_or_else(|| Decision::decline(Decline::NoPreferredChoice)));
+            }
             Question::FrameRoute { choices, .. } => {
                 // Encoding continuity does not establish metadata treatment or
                 // whole-container disclosure evidence.
