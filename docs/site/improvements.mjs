@@ -60,11 +60,11 @@ export const improvements = [
     why:'A decoder can discover new dimensions, color or clocks after output headers have escaped. Replacing the encoder alone cannot authorize a different destination representation.',
     consumer:'A fixed destination refuses an unsupported change. An explicitly segmented request can select a prepared replacement. There is no mandatory capability-query dance and no retry after execution failure.',
     adapter:'Retain the actual new encoder and held frame through policy, drain the old encoder in order, and record the decision. Count header publication as committed output even when no picture bytes have escaped.',
-    implementor:'Existing send, receive, end_input and output_config methods suffice for independent segments. The native AV1 witness preserves exact components through dimension, color, depth/layout and clock changes, checked by FFmpeg/libdav1d.',
+    implementor:'Existing send, receive, end_input and output_config methods suffice for independent segments. The native AV1 witness preserves exact components through dimension, color, depth/layout and clock changes, checked by FFmpeg/libdav1d. A fixed committed header also refuses equal-size color, depth/layout and clock changes while preserving earlier frames.',
     open:'This does not implement in-band muxer reconfiguration, planar conversion, a general spool or live sequential-output bounds. The finite witness drops native encoders before handing compressed output to the writer; native workspace and input owners remain outside payload admission.',
     signatures:['frameRoute','frameRouteOffer','frameRouteState'],
     flow:[['implementor','Hold the actual frame','source facts and timing'],['adapter','Prepare permitted route','retain real encoder'],['consumer','Resolve or refuse','one fallible callback'],['adapter','Drain then change','respect committed output']],
-    evidence:[['Native qualification','benchmarks/native_frame_route_2026-10-27.json'],['Implementation and limits','perf/av1-policy-validation/README.md#prepared-output-transitions'],['Streaming effect boundary','https://github.com/imazen/zencodec/issues/166']],
+    evidence:[['Equal-size transition refusals','benchmarks/native_transition_refusal_2026-10-27.json'],['Native qualification','benchmarks/native_frame_route_2026-10-27.json'],['Implementation and limits','perf/av1-policy-validation/README.md#prepared-output-transitions'],['Streaming effect boundary','https://github.com/imazen/zencodec/issues/166']],
   },
   {
     id:'auxiliary-grid', title:'Establish sample alignment before moving auxiliary planes',
