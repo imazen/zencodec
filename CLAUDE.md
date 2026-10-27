@@ -493,3 +493,11 @@ metadata, memory, range or output requirements were configured. `PolicyDecoder`
 can publish rows after adoption without another question. Adoption now refuses
 these unproven obligations; provisional discovery remains permitted. Native
 JPEG regression: `native_final_boundary_cannot_bypass_unproven_preset_requirements`.
+
+## Known Bugs: array arguments in source signature cards (2026-10-27, fixed)
+
+The guide's source scanner treated an array type's semicolon as a declaration
+terminator, truncating YcbcrToRgbF32::new after `[CodePlane;`. It now tracks
+parentheses, array brackets and generic arguments, including const blocks. The
+pinned converter snapshot was regenerated from identical source hashes; existing
+assertions remain, with a regression for arrays and const-generic return types.

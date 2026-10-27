@@ -35,6 +35,21 @@ function closeBrace(mask,open) {
   for(let i=open+1;i<mask.length;i++){if(mask[i]==='{')depth++;if(mask[i]==='}'&&!--depth)return i;}
   throw Error('Unclosed source scope');
 }
+function declarationEnd(mask,start,end) {
+  let round=0,square=0,angle=0,braces=0;
+  for(let i=start;i<end;i++) {
+    const c=mask[i];
+    if(c==='{' && !round && !square && !angle && !braces)return i;
+    if(c===';' && !round && !square && !angle && !braces)return i;
+    if(c==='{'){braces++;continue;}
+    if(c==='}'){braces--;continue;}
+    if(braces)continue; // Const-generic expressions are not type delimiters.
+    if(c==='(')round++;else if(c===')')round--;
+    else if(c==='[')square++;else if(c===']')square--;
+    else if(c==='<')angle++;else if(c==='>'&&mask[i-1]!=='-'&&angle)angle--;
+  }
+  return end;
+}
 export function declarations(source,{scope,methods,associated=true,item=false,includeRequired=false}) {
   if(item&&(!scope||methods.length))throw Error('A complete source item needs a scope and no method selection');
   const mask=maskRust(source);
@@ -42,7 +57,7 @@ export function declarations(source,{scope,methods,associated=true,item=false,in
   if(scope) {
     const at=mask.indexOf(scope);
     if(at<0||mask.indexOf(scope,at+scope.length)>=0)throw Error(`Scope must match once: ${scope}`);
-    const open=mask.indexOf('{',at);end=closeBrace(mask,open);start=open+1;
+    const open=declarationEnd(mask,at,mask.length);end=closeBrace(mask,open);start=open+1;
     if(item)return {code:deindent(source.slice(at,end+1)),line:source.slice(0,at).split('\n').length};
     header=source.slice(at,open).trim();
   }
@@ -54,8 +69,7 @@ export function declarations(source,{scope,methods,associated=true,item=false,in
     if(depth[m.index]!==0)continue;
     const name=m[1]||m[2];const type=Boolean(m[2]);
     const offset=start+m.index;
-    let stop=offset;
-    while(stop<end&&mask[stop]!=='{'&&mask[stop]!==';')stop++;
+    const stop=declarationEnd(mask,offset,end);
     if(stop===end)throw Error(`Missing declaration terminator: ${name}`);
     if(!type)available.push({name,required:mask[stop]===';'});
     if(type?(!scope||!associated):!(methods.includes(name)||(includeRequired&&mask[stop]===';')))continue;

@@ -77,3 +77,7 @@ Codec-implementor cards also include every required method signature, even when
 the editorial selection focuses on one operation. Consumer cards retain the
 smaller selection. Both identify omissions and defaults; a required-method list
 is not a claim that optional/default behavior meets an application's needs.
+
+Source signature extraction preserves array lengths and const-generic arguments;
+semicolons inside `[T; N]` are not declaration terminators. Pinned dependency
+recaptures retain the revision, full-source checksums and hyperlinks.

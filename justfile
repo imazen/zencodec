@@ -1388,3 +1388,7 @@ encode-plan-check:
 planned-row-check:
     cargo test -p zencodec-io --all-features --tests --locked
     cargo clippy -p zencodec-io --all-features --all-targets --locked -- -D warnings
+
+# Capture a pinned converter surface; CHECKOUT may be --github for remote source.
+capture-ycbcr-api checkout revision:
+    node docs/capture-ycbcr-api.mjs "{{checkout}}" "{{revision}}"

@@ -163,3 +163,13 @@ test('implementor selections include required method signatures but omit unrelat
   assert.deepEqual(view.omittedMethods,['estimate']);
   assert.deepEqual(view.requiredMethods,['format','job']);
 });
+
+test('array and const-generic signatures keep internal semicolons and braces',()=>{
+  const rust=`impl Converter {
+    pub fn new<const N: usize>(planes: [Plane; 3], table: &[u8; N]) -> Result<Self, Error> { todo!() }
+    pub fn map(&self) -> Buffer<{ 2 * 3 }> { todo!() }
+}`;
+  const view=declarations(rust,{scope:'impl Converter',methods:['new','map']});
+  assert.match(view.code,/planes: \[Plane; 3\], table: &\[u8; N\]\) -> Result<Self, Error>;/);
+  assert.match(view.code,/fn map\(&self\) -> Buffer<\{ 2 \* 3 \}>;/);
+});

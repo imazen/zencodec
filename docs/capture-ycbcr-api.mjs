@@ -13,7 +13,9 @@ const specifications=[
   {path:'zenpixels-convert/src/ycbcr.rs',scope:'pub enum YcbcrError',methods:[],item:true},
 ];
 const sources=specifications.map(spec=>{
-  const source=execFileSync('git',['-C',checkout,'show',`${revision}:${spec.path}`],{encoding:'utf8'});
+  const source=checkout==='--github'
+    ? Buffer.from(JSON.parse(execFileSync('gh',['api',`repos/imazen/zenpixels/contents/${spec.path}?ref=${revision}`],{encoding:'utf8',timeout:30000})).content,'base64').toString('utf8')
+    : execFileSync('git',['-C',checkout,'show',`${revision}:${spec.path}`],{encoding:'utf8'});
   const {code,line}=declarations(source,spec);
   return {path:spec.path,line,source_sha256:createHash('sha256').update(source).digest('hex'),code};
 });
