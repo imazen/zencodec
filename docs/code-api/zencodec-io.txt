@@ -27,6 +27,7 @@ pub fn zencodec_io::destination::Forward<W>::can_patch(&self) -> bool
 pub fn zencodec_io::destination::Forward<W>::position(&mut self, _: u64) -> core::io::error::Result<()>
 pub mod zencodec_io::row_encode
 #[non_exhaustive] pub enum zencodec_io::row_encode::Refusal
+pub zencodec_io::row_encode::Refusal::DestinationChanged
 pub zencodec_io::row_encode::Refusal::Empty
 pub zencodec_io::row_encode::Refusal::OutputLimit
 pub zencodec_io::row_encode::Refusal::Overflow
@@ -43,6 +44,7 @@ pub zencodec_io::row_encode::Stage::Policy
 pub zencodec_io::row_encode::Stage::Prepare
 pub zencodec_io::row_encode::Stage::Read
 pub zencodec_io::row_encode::Stage::Replay
+pub zencodec_io::row_encode::Stage::Start
 pub zencodec_io::row_encode::Stage::Write
 pub struct zencodec_io::row_encode::Completed
 pub zencodec_io::row_encode::Completed::emitted: u64
@@ -93,6 +95,8 @@ pub fn zencodec_io::row_encode::Raster<'_>::description(&self) -> zencodec_io::r
 pub fn zencodec_io::row_encode::Raster<'_>::mechanism(&self) -> zencodec::operation::scheduling::OutputSource
 pub fn zencodec_io::row_encode::Raster<'_>::read_rows(&mut self, first: u32, rows: zenpixels::buffer::PixelSliceMut<'_>, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(), Self::Error>
 pub fn zencodec_io::row_encode::encode<E: zencodec::traits::encoder::Encoder, S: zencodec_io::row_encode::Source, W: core::io::write::Write, R: zencodec::operation::policy::PolicyResolver>(encoder: E, source: S, writer: W, resolver: R, options: zencodec_io::row_encode::Options, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_io::row_encode::Completed, whereat::at::At<zencodec_io::row_encode::Failure>>
+pub fn zencodec_io::row_encode::encode_job<J: zencodec::traits::encoding::EncodeJob, S: zencodec_io::row_encode::Source, W: core::io::write::Write, R: zencodec::operation::policy::PolicyResolver>(job: J, source: S, writer: W, resolver: R, options: zencodec_io::row_encode::Options, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_io::row_encode::Completed, whereat::at::At<zencodec_io::row_encode::Failure>> where <J as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder
+pub fn zencodec_io::row_encode::encode_job_to_destination<J: zencodec::traits::encoding::EncodeJob, S: zencodec_io::row_encode::Source, D: zencodec_io::destination::Destination, R: zencodec::operation::policy::PolicyResolver>(job: J, source: S, writer: D, resolver: R, options: zencodec_io::row_encode::Options, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_io::row_encode::Completed, whereat::at::At<zencodec_io::row_encode::Failure>> where <J as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder
 pub fn zencodec_io::row_encode::encode_to_destination<E: zencodec::traits::encoder::Encoder, S: zencodec_io::row_encode::Source, D: zencodec_io::destination::Destination, R: zencodec::operation::policy::PolicyResolver>(encoder: E, source: S, writer: D, resolver: R, options: zencodec_io::row_encode::Options, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_io::row_encode::Completed, whereat::at::At<zencodec_io::row_encode::Failure>>
 pub mod zencodec_io::storage
 pub use zencodec_io::storage::OwnedStorage

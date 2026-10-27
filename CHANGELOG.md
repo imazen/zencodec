@@ -2,6 +2,11 @@
 
 ## Native image selection (unreleased experiment)
 
+- Add job-to-writer/destination row adapters that admit policy before driver
+  allocation and native construction, bind current color at startup, and reject
+  changed source/destination/plan facts before pixel reads or publication.
+  Whole-raster/replay execution and checked registry convenience remain open.
+
 - Add explicit effective-job encode planning and declared startup, including
   current color, actual destination access, input acquisition, bounded source
   passes and materialized carrier evidence. Defaults refuse; erased forwarding

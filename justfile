@@ -1383,3 +1383,8 @@ pulse-test:
 encode-plan-check:
     cargo test -p zencodec --lib --locked
     cargo clippy -p zencodec --all-targets --locked -- -D warnings
+
+# Planned row admission and the existing row/output regression coverage.
+planned-row-check:
+    cargo test -p zencodec-io --all-features --tests --locked
+    cargo clippy -p zencodec-io --all-features --all-targets --locked -- -D warnings

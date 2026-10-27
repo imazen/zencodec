@@ -217,3 +217,16 @@ driver.
 `rc=0 3s | peak-RSS 0.41GiB | min-avail 7426MiB | peak-load 0.60`.
 Log: `~/tmp/zencodec-encode-plan-20261027-final.log`. These are test resources, not
 encoder performance or memory bounds.
+
+### Planned row adapter qualification
+
+`row_encode::encode_job` and `encode_job_to_destination` now execute the retained
+job sequence. Scripted temporal controls check policy before construction,
+source drift across callbacks, storage/input refusal before startup, original
+native errors, complete startup-plan comparison, and finish-before-write on the
+default route. Existing row/output regressions remain unchanged. The native
+JPEG/PNG adoption gate and checked registry convenience are still separate.
+
+`just planned-row-check` passed tests and strict Clippy on 2026-10-27:
+`rc=0 8s | peak-RSS 0.30GiB | min-avail 8558MiB | peak-load 0.95`. This receipt
+includes testing/build resources; it is not a codec performance measurement.

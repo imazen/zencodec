@@ -2853,3 +2853,36 @@ The core preflight tests cover unsupported defaults, animation-only jobs, typed
 and erased forwarding, no construction during planning, original error recovery,
 current color/access binding, invalid lag/access and startup fact drift. Native
 JPEG/PNG implementations and checked destination integration are separate gates.
+
+### Execute a planned row job
+
+```rust
+zencodec_io::row_encode::encode_job(
+    job, source, writer, resolver, options, &pulse,
+)?;
+// For a Destination that can overwrite earlier output:
+zencodec_io::row_encode::encode_job_to_destination(
+    job, source, destination, resolver, options, &pulse,
+)?;
+```
+
+These adapter functions consume an already configured `EncodeJob`. They retain
+it through planning and policy, recheck source interpretation and destination
+access, reserve driver rows, then construct and start the encoder exactly once.
+The current source color context reaches `begin_declared` before any header can
+be generated. Startup-plan drift fails before source reads or output writes.
+Whole-raster and replay input protocols refuse before construction; this driver
+currently executes only the row protocol.
+
+Policy refusal precedes driver row reservation and encoder construction. The
+existing schedule policy still refuses unknown required workspace/wait bounds.
+The default finish-first route stages compressed output and releases the encoder
+before destination waits. Planning itself remains a codec contract, not an
+enforced sandbox or a native allocation bound.
+
+`Stage::Start` identifies construction, declared startup and startup-plan drift.
+Original native errors, the selected policy record and confirmed output counts
+remain available on failure. This is not yet the checked registry
+`EncodeRequest`-to-destination convenience: it does not infer metadata or fidelity
+requirements on the configured job. Existing raw-encoder entry points retain
+their startup behavior.

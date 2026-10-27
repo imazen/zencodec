@@ -36,7 +36,9 @@ use std::{
 use zencodec::output_patch::OutputAccess;
 use zencodec::{
     At,
-    encode::Encoder,
+    encode::{
+        EncodeDeclaration, EncodeJob, EncodePlan, EncodePlanError, Encoder, InputRequirement,
+    },
     operation::{
         OperationReport, OutputSchedule, OutputScheduleFacts, OutputScheduleOffer, OutputSource,
         PolicyResolver, PolicySet, StagingFacts, StagingKind, resolve_output_schedule,
@@ -216,6 +218,8 @@ pub enum Stage {
     Write,
     /// Seek or overwrite final patches, including restoration to the output end.
     Patch,
+    /// Construct and start the admitted job, or reject a changed native plan.
+    Start,
 }
 /// Driver contract refusal.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -231,6 +235,8 @@ pub enum Refusal {
     OutputLimit,
     /// Layout requires unavailable or unannounced seek-back writes.
     Patches,
+    /// Destination access changed while policy was deciding.
+    DestinationChanged,
 }
 impl fmt::Display for Refusal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -419,7 +425,133 @@ pub fn encode<E: Encoder, S: Source, W: Write, R: PolicyResolver>(
 /// confirmed byte count is distinct from appended extent. No automatic spooling
 /// converts a forward destination into a seekable one.
 pub fn encode_to_destination<E: Encoder, S: Source, D: Destination, R: PolicyResolver>(
-    mut encoder: E,
+    encoder: E,
+    source: S,
+    writer: D,
+    resolver: R,
+    options: Options,
+    pulse: &dyn zencodec::Pulse,
+) -> Result<Completed, At<Failure>> {
+    run_rows(
+        LegacyStartup(encoder),
+        source,
+        writer,
+        resolver,
+        options,
+        pulse,
+    )
+}
+
+/// Encode a configured job to a writer, admitting its plan before native startup.
+///
+/// Unlike the raw-encoder adapter, this retains the lightweight job across policy
+/// and supplies current color before header creation. Unsupported preflight or
+/// non-row input refuses before encoder construction; there is no fallback.
+/// Use `options.with_policy_set` for mandatory schedule/wait requirements. This
+/// primitive does not add or infer metadata/fidelity requirements on the job.
+/// The complete checked request-to-destination convenience is a separate layer.
+pub fn encode_job<J: EncodeJob, S: Source, W: Write, R: PolicyResolver>(
+    job: J,
+    source: S,
+    writer: W,
+    resolver: R,
+    options: Options,
+    pulse: &dyn zencodec::Pulse,
+) -> Result<Completed, At<Failure>>
+where
+    J::Enc: Encoder,
+{
+    encode_job_to_destination(job, source, Forward(writer), resolver, options, pulse)
+}
+
+/// Execute a retained job's declared row route against actual destination access.
+///
+/// Sequence: plan without native startup, admit policy, revalidate the retained
+/// source/destination, reserve driver rows, construct once, begin with current
+/// color, compare the complete plan, then read/publish. A refusal or startup
+/// failure never retries another route. Strict unknown workspace/wait evidence
+/// refuses; byte timing alone never establishes either bound.
+///
+/// This is an adapter primitive for an already configured job. It does not
+/// select registry configurations or certify descriptive metadata treatment.
+pub fn encode_job_to_destination<J: EncodeJob, S: Source, D: Destination, R: PolicyResolver>(
+    job: J,
+    source: S,
+    writer: D,
+    resolver: R,
+    options: Options,
+    pulse: &dyn zencodec::Pulse,
+) -> Result<Completed, At<Failure>>
+where
+    J::Enc: Encoder,
+{
+    run_rows(
+        PlannedStartup(job),
+        source,
+        writer,
+        resolver,
+        options,
+        pulse,
+    )
+}
+
+trait RowStartup {
+    type Enc: Encoder;
+    // Preserve legacy allocation/start ordering on the existing raw adapter.
+    const EARLY_BUFFER: bool;
+    fn plan(&mut self, declaration: &EncodeDeclaration<'_>) -> Result<EncodePlan, Cause>;
+    fn start(
+        self,
+        declaration: &EncodeDeclaration<'_>,
+        plan: &EncodePlan,
+    ) -> Result<Self::Enc, Cause>;
+}
+struct LegacyStartup<E>(E);
+impl<E: Encoder> RowStartup for LegacyStartup<E> {
+    type Enc = E;
+    const EARLY_BUFFER: bool = true;
+    fn plan(&mut self, declaration: &EncodeDeclaration<'_>) -> Result<EncodePlan, Cause> {
+        let timing = self.0.begin_output(
+            declaration.width,
+            declaration.height,
+            declaration.descriptor,
+            declaration.access,
+        )?;
+        Ok(EncodePlan::rows(timing))
+    }
+    fn start(self, _: &EncodeDeclaration<'_>, _: &EncodePlan) -> Result<E, Cause> {
+        Ok(self.0)
+    }
+}
+struct PlannedStartup<J>(J);
+impl<J: EncodeJob> RowStartup for PlannedStartup<J>
+where
+    J::Enc: Encoder,
+{
+    type Enc = J::Enc;
+    const EARLY_BUFFER: bool = false;
+    fn plan(&mut self, declaration: &EncodeDeclaration<'_>) -> Result<EncodePlan, Cause> {
+        let plan = self.0.plan_encode(declaration)?;
+        plan.validate(declaration)?;
+        if plan.input != InputRequirement::Rows {
+            return Err(EncodePlanError::InputProtocol.into());
+        }
+        Ok(plan)
+    }
+    fn start(
+        self,
+        declaration: &EncodeDeclaration<'_>,
+        plan: &EncodePlan,
+    ) -> Result<Self::Enc, Cause> {
+        let mut encoder = self.0.encoder()?;
+        let observed = encoder.begin_declared(declaration)?;
+        plan.validate_started(&observed)?;
+        Ok(encoder)
+    }
+}
+
+fn run_rows<P: RowStartup, S: Source, D: Destination, R: PolicyResolver>(
+    mut startup: P,
     mut source: S,
     mut writer: D,
     mut resolver: R,
@@ -442,13 +574,23 @@ pub fn encode_to_destination<E: Encoder, S: Source, D: Destination, R: PolicyRes
             .ok_or(Refusal::Overflow)?;
         let rows = options.batch_rows.get().min(desc.height);
         let len = stride.checked_mul(rows as usize).ok_or(Refusal::Overflow)?;
-        let mut buffer = options.storage.bytes(len)?;
+        let early_buffer = if P::EARLY_BUFFER {
+            Some(options.storage.bytes(len)?)
+        } else {
+            None
+        };
         let access = if writer.can_patch() {
             OutputAccess::SeekBack
         } else {
             OutputAccess::Forward
         };
-        let timing = encoder.begin_output(desc.width, desc.height, desc.descriptor, access)?;
+        let mut declaration =
+            EncodeDeclaration::new(desc.width, desc.height, desc.descriptor).with_access(access);
+        if let Some(color) = &desc.color_context {
+            declaration = declaration.with_color(color);
+        }
+        let plan = startup.plan(&declaration)?;
+        let timing = plan.timing;
         if timing.patches_at_finish() && !writer.can_patch() {
             return Err(Refusal::Patches.into());
         }
@@ -485,6 +627,28 @@ pub fn encode_to_destination<E: Encoder, S: Source, D: Destination, R: PolicyRes
         };
         report.record(record);
         let schedule = offers[index].schedule;
+        check(pulse)?;
+        boundary = Stage::Read;
+        validate_source(&source, &desc, mechanism)?;
+        let current_access = if writer.can_patch() {
+            OutputAccess::SeekBack
+        } else {
+            OutputAccess::Forward
+        };
+        if current_access != access {
+            return Err(Refusal::DestinationChanged.into());
+        }
+        boundary = Stage::Prepare;
+        let mut buffer = match early_buffer {
+            Some(buffer) => buffer,
+            None => options.storage.bytes(len)?,
+        };
+        check(pulse)?;
+        boundary = Stage::Start;
+        let mut encoder = startup.start(&declaration, &plan)?;
+        // Exact carrier evidence can own ICC bytes. Release it before final
+        // destination waits; the executing encoder owns its admitted metadata.
+        drop(plan);
         let mut staged = VecDeque::new();
         let mut produced = 0;
         let mut y = 0;
