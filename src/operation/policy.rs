@@ -1,5 +1,8 @@
 //! Application decisions over immutable, prepared alternatives.
 
+mod requirements;
+pub use requirements::{PolicyRequirement, RequirementEvidence, UnmetRequirements};
+
 use super::{FrameFacts, ImageFacts, MetadataTransfer, PublicationOffer, TranscodeOffer};
 use crate::decode::{BoundaryAction, DecodeBoundary, InterpretationFacts, InterpretationState};
 use crate::frame::{FrameInterpretation, FrameTiming};
@@ -50,6 +53,7 @@ impl<'a, T> Choice<'a, T> {
 pub struct Choices<'a, T> {
     ticket: u64,
     entries: &'a [T],
+    admitted: u64,
 }
 impl<T> Copy for Choices<'_, T> {}
 impl<T> Clone for Choices<'_, T> {
@@ -60,24 +64,21 @@ impl<T> Clone for Choices<'_, T> {
 impl<'a, T> Choices<'a, T> {
     /// The number of offered alternatives.
     pub const fn len(self) -> usize {
-        self.entries.len()
+        self.admitted.count_ones() as usize
     }
     /// Whether no implementation was offered.
     pub const fn is_empty(self) -> bool {
-        self.entries.is_empty()
+        self.admitted == 0
     }
     /// Choices in request preference order.
     pub fn iter(self) -> impl ExactSizeIterator<Item = Choice<'a, T>> {
-        self.entries
-            .iter()
-            .enumerate()
-            .map(move |(index, value)| Choice {
-                id: ChoiceId {
-                    ticket: self.ticket,
-                    index: index as u8,
-                },
-                value,
-            })
+        ChoiceIndices(self.admitted).map(move |index| Choice {
+            id: ChoiceId {
+                ticket: self.ticket,
+                index: index as u8,
+            },
+            value: &self.entries[index],
+        })
     }
     /// First prepared choice, if any.
     pub fn first(self) -> Option<Choice<'a, T>> {
@@ -85,9 +86,31 @@ impl<'a, T> Choices<'a, T> {
     }
     fn selected(self, id: ChoiceId) -> Option<usize> {
         let index = usize::from(id.index);
-        (id.ticket == self.ticket && index < self.entries.len()).then_some(index)
+        (id.ticket == self.ticket
+            && index < self.entries.len()
+            && self.admitted & (1u64 << index) != 0)
+            .then_some(index)
     }
 }
+
+// Set bits retain original offer indices without copying prepared objects.
+struct ChoiceIndices(u64);
+impl Iterator for ChoiceIndices {
+    type Item = usize;
+    fn next(&mut self) -> Option<usize> {
+        if self.0 == 0 {
+            return None;
+        }
+        let index = self.0.trailing_zeros() as usize;
+        self.0 &= self.0 - 1;
+        Some(index)
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let count = self.0.count_ones() as usize;
+        (count, Some(count))
+    }
+}
+impl ExactSizeIterator for ChoiceIndices {}
 
 /// A prepared still-image encoder job. The selected job is retained unchanged
 /// across the callback; the adapter does not reconfigure a fresh job afterward.
@@ -277,7 +300,8 @@ impl Error for Decline {}
 pub enum Decision {
     /// Select a token from the current question.
     Choose(ChoiceId),
-    /// Let the operation's configured `PolicySet` answer this question once.
+    /// Let the configured `PolicySet` choose among admitted routes once.
+    /// Mandatory requirements have already been enforced.
     UsePreset,
     /// Expected policy refusal with a location trace.
     Decline(At<Decline>),
@@ -313,8 +337,10 @@ where
     }
 }
 
-/// Configurable built-in policy; applications can use it directly or delegate
-/// selected questions to it with `Decision::UsePreset`.
+/// Mandatory route requirements plus configurable built-in preferences.
+/// Operations enforce requirements before calling any resolver. Applications may
+/// select an admitted route directly or delegate preferences with `Decision::UsePreset`.
+/// Lossless preference and chroma-siting assumption decisions remain callback-overridable.
 /// Requirements need evidence in the question that authorizes their effects.
 /// Interpretation discovery may continue, but final adoption refuses unrelated
 /// unproven requirements because it can immediately enable native sink output.
@@ -654,8 +680,13 @@ pub struct DecisionRecord {
     pub question: u64,
     /// What prompted this decision, including on refusal or callback failure.
     pub context: DecisionContext,
-    /// Number of qualified alternatives presented.
+    /// Number of executable alternatives supplied before mandatory admission.
     pub offered: u8,
+    /// Number of alternatives that passed mandatory admission.
+    pub admitted: u8,
+    /// Union of missing/contradicted evidence across excluded alternatives.
+    /// A selected route satisfies these requirements; rejected alternatives may not.
+    pub unmet_requirements: UnmetRequirements,
     /// Selected contract, including its original request preference index.
     pub selected: Option<Selection>,
     /// Whether the built-in policy resolved this decision after delegation.
@@ -753,7 +784,11 @@ impl fmt::Display for PolicyFailure {
             f,
             "policy {:?} at question {}",
             self.0.record.code, self.0.record.question
-        )
+        )?;
+        if self.0.record.admitted == 0 && !self.0.record.unmet_requirements.is_empty() {
+            write!(f, ": {}", self.0.record.unmet_requirements)?;
+        }
+        Ok(())
     }
 }
 impl Error for PolicyFailure {
@@ -836,7 +871,7 @@ pub fn resolve_boundary<R: PolicyResolver + ?Sized>(
 pub(super) fn choose<'a, T: Copy, R: PolicyResolver + ?Sized>(
     offers: &'a [T],
     context: DecisionContext,
-    question: impl FnOnce(Choices<'a, T>) -> Question<'a>,
+    question: impl Fn(Choices<'a, T>) -> Question<'a>,
     selection: impl FnOnce(T) -> Selection,
     resolver: &mut R,
     mut preset: PolicySet,
@@ -846,6 +881,8 @@ pub(super) fn choose<'a, T: Copy, R: PolicyResolver + ?Sized>(
         question: 0,
         context,
         offered: offers.len().min(255) as u8,
+        admitted: 0,
+        unmet_requirements: UnmetRequirements::default(),
         selected: None,
         used_preset: false,
         code: DecisionCode::Exhausted,
@@ -859,9 +896,50 @@ pub(super) fn choose<'a, T: Copy, R: PolicyResolver + ?Sized>(
         record.code = DecisionCode::Stopped;
         return Err(At::wrap(PolicyFailure::new(record, Cause::Stopped(reason))).at());
     }
+    let all = if offers.len() == MAX_OFFERS {
+        u64::MAX
+    } else {
+        (1u64 << offers.len()) - 1
+    };
+    let mut admitted = if preset.has_requirements() { 0 } else { all };
+    for index in 0..if preset.has_requirements() {
+        offers.len()
+    } else {
+        0
+    } {
+        let failures = preset.unmet(question(Choices {
+            ticket: record.question,
+            entries: offers,
+            admitted: 1u64 << index,
+        }));
+        if failures.is_empty() {
+            admitted |= 1u64 << index;
+        } else {
+            record.unmet_requirements.merge(failures);
+        }
+    }
+    record.admitted = admitted.count_ones() as u8;
+    if admitted == 0 && !record.unmet_requirements.is_empty() {
+        record.code = DecisionCode::Declined;
+        // Retain existing domain refusal causes; the record adds precise,
+        // payload-free requirement evidence without breaking cause inspection.
+        let reason = match preset
+            .resolve(question(Choices {
+                ticket: record.question,
+                entries: offers,
+                admitted: all,
+            }))
+            .unwrap_or_else(|never| match *never.error() {})
+        {
+            Decision::Decline(reason) => reason,
+            _ => At::wrap(Decline::NoPreferredChoice).at(),
+        };
+        return Err(At::wrap(PolicyFailure::new(record, Cause::Declined(reason))).at());
+    }
     let choices = Choices {
         ticket: record.question,
         entries: offers,
+        admitted,
     };
     let question = question(choices);
     // The resolver acquires no resource-budget locks. Prepared jobs remain
@@ -1004,6 +1082,8 @@ mod tests {
                     descriptor: PixelDescriptor::RGB8_SRGB,
                 }),
                 offered: 1,
+                admitted: 1,
+                unmet_requirements: UnmetRequirements::default(),
                 selected: None,
                 used_preset: false,
                 code: DecisionCode::Declined,
@@ -1037,6 +1117,8 @@ mod tests {
                     descriptor: PixelDescriptor::RGB8_SRGB,
                 }),
                 offered: 1,
+                admitted: 1,
+                unmet_requirements: UnmetRequirements::default(),
                 selected: None,
                 used_preset: question % 2 == 0,
                 code: DecisionCode::Declined,

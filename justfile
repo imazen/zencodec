@@ -240,6 +240,8 @@ operation-sync export:
     cp src/collection/*.rs "{{export}}/src/collection/"
     cp src/image/*.rs "{{export}}/src/image/"
     cp src/operation/*.rs "{{export}}/src/operation/"
+    mkdir -p "{{export}}/src/operation/policy"
+    cp src/operation/policy/*.rs "{{export}}/src/operation/policy/"
     cp src/traits/encoder.rs src/traits/encoding.rs src/traits/dyn_encoding.rs src/traits/mod.rs "{{export}}/src/traits/"
     cp zencodec-testkit/tests/operation_*.rs "{{export}}/zencodec-testkit/tests/"
     cp justfile "{{export}}/justfile"
@@ -783,6 +785,8 @@ io-core-sync export:
     cp src/collection/*.rs "{{export}}/src/collection/"
     cp src/image/*.rs "{{export}}/src/image/"
     cp src/operation/*.rs "{{export}}/src/operation/"
+    mkdir -p "{{export}}/src/operation/policy"
+    cp src/operation/policy/*.rs "{{export}}/src/operation/policy/"
     cp zencodec-io/src/*.rs "{{export}}/zencodec-io/src/"
     cp tests/packed_color_replacement.rs "{{export}}/tests/"
     cp zencodec-io/tests/*.rs "{{export}}/zencodec-io/tests/"
@@ -1360,3 +1364,9 @@ multipass-native-check artifacts:
     cp perf/multipass-validation/native/dependencies.lock perf/multipass-validation/native/Cargo.lock
     CARGO_NET_GIT_FETCH_WITH_CLI=true MULTIPASS_SCRATCH="{{artifacts}}" cargo test --manifest-path perf/multipass-validation/native/Cargo.toml --locked -- --test-threads=1
     CARGO_NET_GIT_FETCH_WITH_CLI=true cargo clippy --manifest-path perf/multipass-validation/native/Cargo.toml --all-targets --locked -- -D warnings
+
+# Mandatory route admission plus native JPEG effect-boundary regression.
+policy-admission-check artifacts:
+    cargo test --workspace --all-features --locked
+    cargo clippy -p zencodec --all-targets --all-features --locked -- -D warnings
+    just jpeg-policy-check "{{artifacts}}"

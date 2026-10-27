@@ -244,7 +244,11 @@ fn native_final_boundary_cannot_bypass_unproven_preset_requirements() {
                     panic!()
                 };
                 assert_eq!(facts.state, InterpretationState::Final);
-                assert_eq!(records[1].used_preset, delegated);
+                assert!(
+                    !records[1].used_preset,
+                    "mandatory admission precedes callback"
+                );
+                assert!(!records[1].unmet_requirements.is_empty());
                 assert_eq!((sink.begin, sink.rows, sink.finish), (0, 0, 0));
                 assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
             }

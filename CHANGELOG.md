@@ -377,6 +377,11 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### [Unreleased]
 
+- Enforce mandatory `PolicySet` constraints before custom callback selection;
+  preserve original offer indices and report named unknown/contradicted evidence.
+  Lossless preferences and disclosed chroma-siting decisions remain situational.
+
+
 - Qualify required unclipped Gamma22 conversion on real AV1-derived samples.
   The regression fails against the old pixel revision and passes the fixed
   internal steps. Save linear/encoded/restored traces and independently inspect

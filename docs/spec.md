@@ -485,6 +485,38 @@ accepts 1–64 targets, reserves its list storage fallibly, and never retries an
 execution failure with another target. Preparation can allocate inside codecs;
 the offer limit is not a total-memory guarantee.
 
+### Mandatory admission before callback selection
+
+`PolicySet` requirements now constrain every callback, including direct
+`Decision::Choose`. Metadata treatment, opaque-profile exclusion, workspace,
+extended range, output schedule and output-wait limits are checked before choices
+reach application code. `UsePreset` selects among the admitted choices; lossless
+preference and the decision to accept a disclosed chroma-siting assumption remain
+situational. Required request configuration still applies independently.
+
+Admission retains the original offer indices and prepared jobs. It uses a bounded
+bit mask, without copying offers or allocating a filtered list. When requirements
+exclude every executable alternative, the operation refuses before invoking the
+callback. An originally empty executable set retains its existing callback
+behavior. Stale tokens still cannot select a route from another question.
+
+`DecisionRecord::offered` remains the number of executable alternatives before
+admission; `admitted` counts the alternatives the callback can select.
+`unmet_requirements: UnmetRequirements` contains the union of failures across
+excluded alternatives. Its iterator yields `(PolicyRequirement,
+RequirementEvidence)` pairs: `Unknown` or `Contradicted`. Different alternatives
+can fail different requirements. A successful selection can retain failures from
+other, excluded alternatives. Default failure text names these requirement codes
+when admission leaves no route; no metadata payload is included.
+
+Scope is deliberately conservative: a domain lacking evidence cannot silently
+mark a requirement not applicable. Only interpretation discovery defers checking
+until final adoption, before affected output. This does not bound discovery
+allocations. Reusable tenant policy across coupled operation stages still needs
+explicit requirement scope and discharge; admission alone does not implement it.
+Do not remove `TranscodeRequest::with_metadata` in favor of preset requirements
+until that single-source contract is implemented and qualified.
+
 Tokens from another question, including a nested operation, are refused.
 `UsePreset` delegates once. A callback panic unwinds this one-shot operation and
 drops prepared jobs; a caught panic does not leave an operation to resume.

@@ -107,3 +107,22 @@ Scope: this closes enforcement inside the built-in resolver. A custom callback
 selecting a route directly still bypasses preset constraints in the current
 contract. Mandatory requirements shared by callbacks and presets need a separate
 admission rule; this regression does not claim to provide it.
+
+### Mandatory admission before application selection
+
+The operation policy now excludes alternatives that fail required metadata,
+opaque-profile, workspace, range, schedule or wait-memory constraints before the
+callback can select one. Independent proposed-behavior tests from review commit
+`23b6be6` pass against the implementation: direct selection refuses noncompliant
+routes, original indices survive filtering, preferences remain overridable, and
+refusal text names unmet requirements. The native final-boundary matrix also
+passes. Command/log receipt: `~/tmp/zencodec-admission-independent-20261027.log`;
+`rc=0 21s | peak-RSS 0.69GiB | min-avail 8261MiB | peak-load 1.08`.
+This measures compilation/testing resources, not codec runtime costs.
+
+The full workspace/native suites expose two existing diagnostic expectations
+that require an explicit migration decision: preset delegation used to occur
+before refusal, and an unavailable schedule used to invoke the callback once.
+Admission now refuses before callback invocation. Their refusal, ownership and
+pixel guarantees remain required; this receipt does not claim those full suites
+are green. Scoped obligations across multiple operation stages remain open.

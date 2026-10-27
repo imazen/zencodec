@@ -31,7 +31,7 @@ pub use image::{ImageFacts, resolve_image};
 pub use policy::{
     BoundaryOffer, Choice, ChoiceId, Choices, Decision, DecisionCode, DecisionContext,
     DecisionRecord, Decline, EncodeFacts, EncodeOffer, OperationReport, PolicyFailure,
-    PolicyResolver, PolicySet, Question, Selection, resolve_boundary,
+    PolicyResolver, PolicySet, PolicyRequirement, RequirementEvidence, UnmetRequirements, Question, Selection, resolve_boundary,
 };
 pub use scheduling::{
     OutputSchedule, OutputScheduleFacts, OutputScheduleOffer, OutputSource, resolve_output_schedule,
