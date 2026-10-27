@@ -16,10 +16,18 @@ root = args.directory.resolve()
 root.mkdir(parents=True, exist_ok=True)
 archive = root / f"ffmpeg-{args.version}.tar.xz"
 if not archive.exists():
+    # A timed-out transfer must not poison the archive cache. Keep failed
+    # transfers as evidence, and retry transient network failures within a cap.
+    with tempfile.NamedTemporaryFile(prefix=archive.name + ".partial-", dir=root,
+                                     delete=False) as partial:
+        download = Path(partial.name)
+    print(f"downloading pinned source to {download}", flush=True)
     subprocess.run([
-        "curl", "--fail", "--location", "--max-time", "60",
-        f"https://ffmpeg.org/releases/{archive.name}", "-o", str(archive),
-    ], check=True, timeout=65)
+        "curl", "--fail", "--location", "--connect-timeout", "15",
+        "--max-time", "60", "--retry", "2", "--retry-max-time", "180",
+        f"https://ffmpeg.org/releases/{archive.name}", "-o", str(download),
+    ], check=True, timeout=245)
+    download.rename(archive)
 digest = hashlib.sha256(archive.read_bytes()).hexdigest()
 expected = {
     "6.1.1": "8684f4b00f94b85461884c3719382f1261f0d9eb3d59640a1f4ac0873616f968",

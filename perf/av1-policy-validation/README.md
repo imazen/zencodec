@@ -656,3 +656,20 @@ deletion are application policy. Fault-injection aliases in tests do not qualify
 external mutation. Spool writes can wait while the encoder retains raw state.
 Only final-destination writes wait for encoder release. No throughput, total
 workspace-memory bound or live sequential guarantee follows from these tests.
+
+### Inspector download recovery (2026-10-27)
+
+Documentation run 40478221378 failed on a 60-second FFmpeg source-download timeout,
+before native AV1 validation. The pinned inspector builder now uses bounded
+curl retries (two retries, 180-second retry window, 245-second subprocess cap)
+and writes each transfer to a separate partial file. A failed transfer remains
+available for inspection without becoming the cached archive. The pinned SHA-256
+check remains mandatory before extraction/build; no source or correctness gate
+changed.
+
+A controlled curl exit 28 preserved the partial and left no cached archive.
+The next invocation in that same directory downloaded the real archive, verified
+its checksum, and built FFprobe successfully. Log:
+`/home/lilith/tmp/zencodec-timing-download-repair-20261027/build.log` on r7900x.
+Resource receipt: `rc=0 41s | peak-RSS 0.75GiB | min-avail 12166MiB | peak-load 1.03`.
+This is build validation, not a codec performance measurement.
