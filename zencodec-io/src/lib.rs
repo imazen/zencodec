@@ -56,6 +56,8 @@ mod pump;
 #[cfg(feature = "std")]
 mod read_at_reader;
 #[cfg(feature = "std")]
+pub mod row_encode;
+#[cfg(feature = "std")]
 mod std_source_error;
 #[cfg(feature = "tokio")]
 pub mod tokio_io;
@@ -84,6 +86,8 @@ pub use window::ProtocolViolation;
 #[cfg(feature = "std")]
 pub use buffered::{BufferPolicy, BufferedReadAt};
 #[cfg(feature = "std")]
+// Retain the deprecated convenience for existing callers.
+#[allow(deprecated)]
 pub use encode_write::{
     EncodeWriteError, EncodeWriteReport, encode_to_writer, write_pending, write_pending_animation,
 };

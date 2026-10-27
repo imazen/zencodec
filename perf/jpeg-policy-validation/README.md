@@ -63,4 +63,4 @@ encoder. Fixed-table JPEG offers live and finish-first; optimized JPEG offers
 finish-first only. Required unavailable schedules and required zero wait-memory
 bounds refuse before source/destination effects. Both native routes retain
 unknown total memory evidence; a pull source is never treated as proof of a
-bound. This remains an adapter witness, not a packaged generic row-source driver.
+bound. This witness now executes the shared row_encode driver; the private scheduling loop has been removed. Native total-retention bounds remain unqualified.

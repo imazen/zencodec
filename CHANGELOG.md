@@ -2,6 +2,10 @@
 
 ## Native image selection (unreleased experiment)
 
+- Add owned row-source encoding with admitted staging, explicit schedule policy,
+  strided raster convenience, preserved color context and located partial-write
+  errors. Deprecate encode_to_writer; retain its existing regression coverage.
+
 - Resolve prepared output schedules through the shared policy callback. Bind
   actual source mechanism and byte timing, refuse unknown required wait-memory
   bounds, and expose owned video finish-first guarantees automatically.

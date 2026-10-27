@@ -1,0 +1,373 @@
+//! The public driver runs native JPEG; the wrappers observe lifetimes only.
+use crate::fixtures;
+use std::{
+    cell::Cell,
+    io::{self, Write},
+    rc::Rc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
+use zencodec::enough::{Stop, StopReason};
+use zencodec::{
+    UnsupportedOperation,
+    encode::{EncodeJob, EncodeOutput, Encoder, EncoderConfig, OutputTiming},
+    operation::{OutputSchedule, PolicySet},
+    storage::StorageBudget,
+};
+use zencodec_io::row_encode::{self, Description, Options, Refusal, Source, Stage};
+use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
+
+struct Native<E: Encoder> {
+    inner: Option<E>,
+    live: Rc<Cell<bool>>,
+    expected_context: Option<Arc<zenpixels::ColorContext>>,
+}
+impl<E: Encoder> Drop for Native<E> {
+    fn drop(&mut self) {
+        self.live.set(false);
+    }
+}
+impl<E: Encoder> Encoder for Native<E> {
+    type Error = E::Error;
+    fn reject(op: UnsupportedOperation) -> Self::Error {
+        E::reject(op)
+    }
+    fn encode(mut self, pixels: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error> {
+        self.inner.take().unwrap().encode(pixels)
+    }
+    fn begin(&mut self, w: u32, h: u32, d: PixelDescriptor) -> Result<OutputTiming, Self::Error> {
+        self.inner.as_mut().unwrap().begin(w, h, d)
+    }
+    fn push_rows(&mut self, p: PixelSlice<'_>) -> Result<(), Self::Error> {
+        assert_eq!(p.color_context(), self.expected_context.as_ref());
+        self.inner.as_mut().unwrap().push_rows(p)
+    }
+    fn pending_output(&self) -> &[u8] {
+        self.inner.as_ref().unwrap().pending_output()
+    }
+    fn consume_output(&mut self, n: usize) {
+        self.inner.as_mut().unwrap().consume_output(n)
+    }
+    fn finish(mut self) -> Result<EncodeOutput, Self::Error> {
+        self.inner.take().unwrap().finish()
+    }
+}
+struct Cancel(Arc<AtomicBool>);
+impl Stop for Cancel {
+    fn check(&self) -> Result<(), StopReason> {
+        if self.0.load(Ordering::SeqCst) {
+            Err(StopReason::TimedOut)
+        } else {
+            Ok(())
+        }
+    }
+}
+struct Rows {
+    live: Rc<Cell<bool>>,
+    calls: Rc<Cell<u32>>,
+    random: u32,
+    fault: &'static str,
+    stop: Arc<AtomicBool>,
+    changed: bool,
+}
+impl Drop for Rows {
+    fn drop(&mut self) {
+        self.live.set(false);
+    }
+}
+impl Source for Rows {
+    type Error = io::Error;
+    fn description(&self) -> Description {
+        Description::new(
+            fixtures::WIDTH + u32::from(self.changed),
+            fixtures::HEIGHT,
+            PixelDescriptor::RGB8_SRGB,
+        )
+    }
+    fn read_rows(
+        &mut self,
+        first: u32,
+        mut rows: PixelSliceMut<'_>,
+        _: &dyn Stop,
+    ) -> io::Result<()> {
+        assert_eq!(first, self.calls.get());
+        if first >= 16 {
+            match self.fault {
+                "source" => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
+                        "private source detail",
+                    ));
+                }
+                "panic" => panic!("controlled source unwind"),
+                "cancel" => self.stop.store(true, Ordering::SeqCst),
+                "drift" => self.changed = true,
+                _ => {}
+            }
+        }
+        for y in 0..rows.rows() {
+            for b in rows.row_mut(y) {
+                self.random ^= self.random << 13;
+                self.random ^= self.random >> 17;
+                self.random ^= self.random << 5;
+                *b = self.random as u8;
+            }
+        }
+        self.calls.set(first + rows.rows());
+        Ok(())
+    }
+}
+struct Writer<'a> {
+    bytes: &'a mut Vec<u8>,
+    source: Rc<Cell<bool>>,
+    encoder: Rc<Cell<bool>>,
+    schedule: OutputSchedule,
+    fail: bool,
+}
+impl Write for Writer<'_> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        if self.schedule == OutputSchedule::FinishFirst {
+            assert!(!self.source.get(), "source retained at destination wait");
+            assert!(!self.encoder.get(), "encoder retained at destination wait");
+        }
+        if self.fail && self.bytes.len() == 13 {
+            return Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "private destination detail",
+            ));
+        }
+        let n = bytes.len().min(3).min(if self.fail {
+            13 - self.bytes.len()
+        } else {
+            usize::MAX
+        });
+        self.bytes.extend_from_slice(&bytes[..n]);
+        Ok(n)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+#[test]
+fn public_row_driver_native_schedules_preserve_pixels_owners_and_failure_context() {
+    for schedule in [OutputSchedule::FinishFirst, OutputSchedule::Live] {
+        for fault in [
+            "none", "source", "drift", "cancel", "writer", "budget", "limit", "panic",
+        ] {
+            let enc_live = Rc::new(Cell::new(true));
+            let src_live = Rc::new(Cell::new(true));
+            let calls = Rc::new(Cell::new(0));
+            let flag = Arc::new(AtomicBool::new(false));
+            let stop = Cancel(flag.clone());
+            let config = fixtures::config(false, false);
+            let native = Native {
+                inner: Some(config.clone().job().encoder().unwrap()),
+                live: enc_live.clone(),
+                expected_context: None,
+            };
+            let source = Rows {
+                live: src_live.clone(),
+                calls: calls.clone(),
+                random: 0x12345678,
+                fault,
+                stop: flag,
+                changed: false,
+            };
+            let budget = StorageBudget::new(if fault == "budget" { 0 } else { 1 << 20 }, 1024);
+            let mut bytes = Vec::new();
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                row_encode::encode(
+                    native,
+                    source,
+                    Writer {
+                        bytes: &mut bytes,
+                        source: src_live.clone(),
+                        encoder: enc_live.clone(),
+                        schedule,
+                        fail: fault == "writer",
+                    },
+                    PolicySet::new().require_output_schedule(schedule),
+                    Options::new(budget.clone(), if fault == "limit" { 0 } else { 1 << 20 }),
+                    &stop,
+                )
+            }));
+            assert!(!enc_live.get());
+            assert!(!src_live.get());
+            assert_eq!(budget.reserved_bytes(), 0);
+            if fault == "panic" {
+                assert!(result.is_err());
+                continue;
+            }
+            let result = result.unwrap();
+            if fault == "none" {
+                let completed = result.unwrap();
+                assert_eq!(completed.emitted as usize, bytes.len());
+                assert_eq!(completed.report.decisions().count(), 1);
+                assert_eq!(calls.get(), fixtures::HEIGHT);
+                let reference = config.encode(fixtures::pixels(&fixtures::raw())).unwrap();
+                assert_eq!(fixtures::oracle(&bytes), fixtures::oracle(reference.data()));
+            } else {
+                let error = result.unwrap_err();
+                let failure = error.error();
+                assert_eq!(failure.emitted as usize, bytes.len());
+                assert_eq!(
+                    failure.report.decisions().count(),
+                    usize::from(fault != "budget")
+                );
+                assert!(!format!("{error:?}").contains("private "));
+                match fault {
+                    "source" => {
+                        assert_eq!(failure.stage, Stage::Read);
+                        assert_eq!(
+                            zencodec::find_cause::<io::Error>(&error).unwrap().kind(),
+                            io::ErrorKind::UnexpectedEof
+                        );
+                    }
+                    "drift" => assert_eq!(
+                        zencodec::find_cause::<Refusal>(&error),
+                        Some(&Refusal::SourceChanged)
+                    ),
+                    "cancel" => {
+                        use zencodec::CodecErrorExt;
+                        assert_eq!(
+                            error.error_category(),
+                            Some(zencodec::ErrorCategory::Stopped(StopReason::TimedOut))
+                        );
+                    }
+                    "writer" => {
+                        assert_eq!(failure.stage, Stage::Write);
+                        assert_eq!(failure.emitted, 13);
+                        assert_eq!(
+                            zencodec::find_cause::<io::Error>(&error).unwrap().kind(),
+                            io::ErrorKind::BrokenPipe
+                        );
+                    }
+                    "budget" => assert!(
+                        zencodec::find_cause::<zencodec::storage::StorageError>(&error).is_some()
+                    ),
+                    "limit" => assert_eq!(
+                        zencodec::find_cause::<Refusal>(&error),
+                        Some(&Refusal::OutputLimit)
+                    ),
+                    _ => unreachable!(),
+                }
+                if schedule == OutputSchedule::FinishFirst && fault != "writer" {
+                    assert!(bytes.is_empty());
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn public_row_driver_raster_adapter_preserves_strides_and_never_substitutes_schedule() {
+    use row_encode::Raster;
+    use zencodec::operation::{Decision, OutputSource, Question};
+    let raw = fixtures::raw();
+    for progressive in [false, true] {
+        for optimized in [false, true] {
+            for schedule in [OutputSchedule::FinishFirst, OutputSchedule::Live] {
+                let config = fixtures::config(progressive, optimized);
+                let mut bytes = Vec::new();
+                let mut asked = 0;
+                let policy = PolicySet::new().require_output_schedule(schedule);
+                let result = row_encode::encode(
+                    config.clone().job().encoder().unwrap(),
+                    Raster::new(fixtures::pixels(&raw)),
+                    &mut bytes,
+                    |q: Question<'_>| -> Result<Decision, zencodec::At<std::convert::Infallible>> {
+                        asked += 1;
+                        let Question::OutputSchedule { facts, .. } = q else {
+                            panic!()
+                        };
+                        assert_eq!(facts.source, OutputSource::BorrowedRaster);
+                        Ok(Decision::UsePreset)
+                    },
+                    Options::new(StorageBudget::new(1 << 20, 1024), 1 << 20)
+                        .with_policy_set(policy),
+                    &zencodec::enough::Unstoppable,
+                );
+                assert_eq!(asked, 1);
+                if schedule == OutputSchedule::Live && (progressive || optimized) {
+                    assert!(result.is_err());
+                    assert!(bytes.is_empty());
+                } else {
+                    result.unwrap();
+                    let reference = config.encode(fixtures::pixels(&raw)).unwrap();
+                    assert_eq!(fixtures::oracle(&bytes), fixtures::oracle(reference.data()));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn public_row_driver_preserves_attached_color_context_on_every_native_push() {
+    let raw = fixtures::raw();
+    let context = Arc::new(zenpixels::ColorContext::from_cicp(zencodec::Cicp::SRGB));
+    let pixels = fixtures::pixels(&raw).with_color_context(context.clone());
+    let config = fixtures::config(false, false);
+    let live = Rc::new(Cell::new(true));
+    let native = Native {
+        inner: Some(config.job().encoder().unwrap()),
+        live: live.clone(),
+        expected_context: Some(context),
+    };
+    let mut bytes = Vec::new();
+    row_encode::encode(
+        native,
+        row_encode::Raster::new(pixels),
+        &mut bytes,
+        PolicySet::new(),
+        Options::new(StorageBudget::new(1 << 20, 1024), 1 << 20),
+        &zencodec::enough::Unstoppable,
+    )
+    .unwrap();
+    assert!(!live.get());
+    assert!(!fixtures::oracle(&bytes).is_empty());
+}
+
+#[test]
+fn public_row_driver_staging_admission_failure_releases_owners_before_any_output() {
+    let enc_live = Rc::new(Cell::new(true));
+    let src_live = Rc::new(Cell::new(true));
+    let calls = Rc::new(Cell::new(0));
+    let flag = Arc::new(AtomicBool::new(false));
+    let native = Native {
+        inner: Some(fixtures::config(false, false).job().encoder().unwrap()),
+        live: enc_live.clone(),
+        expected_context: None,
+    };
+    let source = Rows {
+        live: src_live.clone(),
+        calls: calls.clone(),
+        random: 0x12345678,
+        fault: "none",
+        stop: flag.clone(),
+        changed: false,
+    };
+    // Permit the row batch and header, but not the growing compressed sequence.
+    let budget = StorageBudget::new(fixtures::WIDTH as usize * 3 * 16 + 1024, 1024);
+    let mut bytes = Vec::new();
+    let error = row_encode::encode(
+        native,
+        source,
+        &mut bytes,
+        PolicySet::new(),
+        Options::new(budget.clone(), 1 << 20),
+        &Cancel(flag),
+    )
+    .unwrap_err();
+    assert!(
+        calls.get() > 0,
+        "this must exercise compressed staging, not initial row admission"
+    );
+    assert!(zencodec::find_cause::<zencodec::storage::StorageError>(&error).is_some());
+    assert_eq!(error.error().report.decisions().count(), 1);
+    assert!(bytes.is_empty());
+    assert_eq!(budget.reserved_bytes(), 0);
+    assert!(!enc_live.get());
+    assert!(!src_live.get());
+}

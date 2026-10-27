@@ -1,3 +1,5 @@
+// Keep the legacy writer protocol/fallback regression coverage executable.
+#![allow(deprecated)]
 //! `encode_to_writer` and `write_pending` against a small streaming encoder.
 
 use std::io::{self, Write};

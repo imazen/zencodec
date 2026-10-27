@@ -479,8 +479,8 @@ The owned video operation supplies finish-first evidence automatically through
 `FrameRouteOffer::output_schedule`. Native AV1 tests accept a required
 finish-first schedule, reject required live mode, and reject an unknown required
 wait bound before accepting frames or publishing bytes. JPEG executes the
-standalone question with generated strided rows and short writes. A general
-row-source facade and qualified native wait-memory bounds remain open.
+standalone question with generated strided rows and short writes. The shared row-source driver described below now executes these choices;
+qualified native wait-memory bounds remain open.
 
 Validation on 2026-10-27: the JPEG schedule matrix and generated-row policy
 witness passed with strict lint; all six owned AV1 cases passed with media
@@ -490,3 +490,22 @@ refusal, contradictory live offers and stale tokens. No zenpixels change or
 dependency addition was required. Validation resource receipt for core/JPEG:
 `rc=0 18s | peak-RSS 0.70GiB | min-avail 12414MiB | peak-load 0.90`.
 This includes compilation and is not a codec memory/performance comparison.
+
+The generic synchronous row-source driver is now implemented in
+`zencodec_io::row_encode`; the native JPEG scheduling witness calls it instead
+of maintaining a private loop. It preserves source descriptor/context, stages
+compressed payloads under admission, releases the source and encoder before
+finish-first writer waits, and retains selected decisions plus confirmed partial
+writes on runtime failures. Native JPEG tests cover both schedules, strided
+rasters, context retention, fixed/optimized/progressive configurations, source
+failure/drift/unwind, cancellation, output/storage refusal and partial writes.
+The shared memory bound remains unknown; this driver does not qualify native
+workspace or add disk staging for raster output.
+
+Row-driver validation on 2026-10-27: all 32 then-existing native JPEG cases
+passed with strict lint; the added compressed-staging admission control and all
+four row-driver cases subsequently passed. Workspace all-feature tests and the
+new public doctest passed. Native full-suite resource receipt:
+`rc=0 4s | peak-RSS 0.53GiB | min-avail 13023MiB | peak-load 0.21`.
+This is a correctness-run observation, not a throughput or memory comparison.
+No zenpixels change or dependency addition was required.

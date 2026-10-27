@@ -2643,5 +2643,37 @@ wait retention, and uses the same policy before frame acceptance. Spool writes
 are separate from final-destination waits.
 
 The native JPEG adapter witness executes both schedules from generated strided
-rows with real short writes. The general shared row-source scheduling driver
-and native total-retention qualification are not implemented by this resolver.
+rows with real short writes. The owned row-source driver below executes this resolver; native total-retention
+qualification remains separate.
+
+### Owned row-source encoding
+
+`zencodec_io::row_encode::encode(encoder, source, writer, resolver, options,
+stop)` is the shared synchronous driver. `Source::description` fixes width,
+height, descriptor and optional color context; `read_rows(first, PixelSliceMut,
+stop)` fills requested active samples with native stride support.
+`Raster::new(PixelSlice)` preserves a complete raster's stride and color
+context. The driver preserves context on each native row push and rejects
+changed declarations before accepting those samples.
+
+`Options::new(storage, max_output_bytes)` admits row and staged payload
+storage from a shared pool. `with_batch_rows` sets a nonzero request size;
+`with_policy_set` configures callback delegation. Finish-first is the first
+offer. It stages pending compressed chunks, completes/releases the encoder
+and source, then writes. Live output requires actual streaming timing.
+The final pending bytes go through finish before the last destination wait.
+No row-level refusal silently falls back to allocating a whole raster.
+
+`Completed` carries appended bytes, executed schedule and decision report.
+Located `Failure` carries stage, confirmed appends, bounded decisions and the
+original cause; formatting omits arbitrary backend payloads. Source, policy,
+native, admission, cancellation and writer failures consume the operation.
+Partial writes are never retried.
+
+This replaces the private JPEG scheduling loop. `encode_to_writer` is now
+deprecated; one-shot-only encoding remains `Encoder::encode` followed by writing
+its output. Native workspace, source allocations and queue bookkeeping are
+outside payload admission. A blocking OS operation cannot be interrupted by a
+cooperative stop. Disk staging and qualified native total-retention bounds
+remain separate work. This fixed-interpretation driver preserves supplied
+context; it does not perform color conversion or metadata/privacy resolution.

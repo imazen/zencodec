@@ -86,3 +86,21 @@ for a slow client. Admit buffered jobs and their encoded staging separately;
 [range-decoding contract](https://github.com/imazen/zencodec/blob/main/docs/range-decoding-contract.md).
 
 License: Apache-2.0 OR MIT.
+
+For policy-controlled row encoding, use
+`row_encode::encode(encoder, source, writer, resolver, options, stop)`.
+`Raster::new(pixels)` adapts an existing strided raster; implement `Source`
+to generate or fetch rows on demand. The declaration includes descriptor and
+optional color context, preserved on every row view. Changing either fails
+before the next native push.
+
+Finish-first is the default: admit compressed chunks, release source and
+encoder, then write. Required live output is offered only for an actual
+streaming configuration. Unknown required wait-memory bounds refuse. Errors
+retain decisions, original causes and confirmed partial writes.
+
+`encode_to_writer` is deprecated. Use the row driver for explicit scheduling,
+or `Encoder::encode` followed by writing its output for a one-shot encoder.
+The row driver rejects unsupported row mode; it never allocates a complete
+raster as a fallback. Managed payload limits exclude native workspace and
+queue bookkeeping. This synchronous driver does not yet provide disk staging.

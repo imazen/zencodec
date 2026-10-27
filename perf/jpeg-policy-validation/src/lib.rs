@@ -33,3 +33,6 @@ mod checked_guide;
 
 #[cfg(test)]
 mod output_scheduling;
+
+#[cfg(test)]
+mod row_driver;

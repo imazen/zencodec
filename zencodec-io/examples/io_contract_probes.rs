@@ -1,3 +1,5 @@
+// Keep the legacy writer protocol/fallback regression coverage executable.
+#![allow(deprecated)]
 //! Observational probes for issues 160–162. Values describe behavior; they
 //! deliberately do not turn a known defect into a regression expectation.
 //! Run with `just io-contract-probes`.

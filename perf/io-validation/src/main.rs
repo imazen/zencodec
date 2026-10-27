@@ -1,3 +1,5 @@
+// Keep the legacy writer protocol/fallback regression coverage executable.
+#![allow(deprecated)]
 //! Observations that must not become expectations preserving known defects.
 #![forbid(unsafe_code)]
 use zenbitmaps::BmpEncoderConfig;

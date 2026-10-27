@@ -93,6 +93,8 @@ fn native_jpeg_output_scheduling_preserves_exact_bytes_and_configuration() {
                 // Shared convenience must also preserve the requested codec
                 // settings and produce identical bytes despite different batches.
                 let mut writer = ShortWriter(Vec::new());
+                // Preserve coverage of the deprecated driver byte protocol.
+                #[allow(deprecated)]
                 let report = zencodec_io::encode_to_writer(
                     config.clone().job().encoder().unwrap(),
                     pixels,
@@ -122,75 +124,79 @@ impl Write for ShortWriter {
 // This is the executing adapter witness for the shared schedule resolver.
 // Source, encoder and destination stay held across selection; no re-preparation.
 fn execute_prepared<E: Encoder, R: zencodec::operation::PolicyResolver>(
-    mut encoder: E,
-    mut resolver: R,
+    encoder: E,
+    resolver: R,
     source_calls: &std::cell::Cell<u32>,
     writer_calls: &std::cell::Cell<u32>,
     writer: &mut impl Write,
 ) -> Result<(u64, zencodec::operation::DecisionRecord), Box<dyn std::error::Error>> {
-    use zencodec::operation::{
-        OutputSchedule, OutputScheduleFacts, OutputScheduleOffer, OutputSource, PolicySet,
-        resolve_output_schedule,
-    };
-    use zenpixels::PixelDescriptor;
-    let timing = encoder.begin(
-        fixtures::WIDTH,
-        fixtures::HEIGHT,
-        PixelDescriptor::RGB8_SRGB,
-    )?;
-    let mut offers = vec![OutputScheduleOffer::new(OutputSchedule::FinishFirst)];
-    if timing.streams() {
-        offers.push(OutputScheduleOffer::new(OutputSchedule::Live));
+    use zencodec_io::row_encode::{self, Description, Options, Source};
+    struct Generated<'a> {
+        calls: &'a std::cell::Cell<u32>,
+        random: u32,
     }
-    let (index, record) = resolve_output_schedule(
-        OutputScheduleFacts::new(timing, OutputSource::PullRows),
-        &offers,
-        &mut resolver,
-        PolicySet::new(),
+    impl Source for Generated<'_> {
+        type Error = std::convert::Infallible;
+        fn description(&self) -> Description {
+            Description::new(
+                fixtures::WIDTH,
+                fixtures::HEIGHT,
+                zenpixels::PixelDescriptor::RGB8_SRGB,
+            )
+        }
+        fn read_rows(
+            &mut self,
+            first: u32,
+            mut rows: zenpixels::PixelSliceMut<'_>,
+            _: &dyn zencodec::enough::Stop,
+        ) -> Result<(), Self::Error> {
+            assert_eq!(first, self.calls.get());
+            for y in 0..rows.rows() {
+                for byte in rows.row_mut(y) {
+                    self.random ^= self.random << 13;
+                    self.random ^= self.random >> 17;
+                    self.random ^= self.random << 5;
+                    *byte = self.random as u8;
+                }
+            }
+            self.calls.set(first + rows.rows());
+            Ok(())
+        }
+    }
+    struct CountWrites<'a, W> {
+        calls: &'a std::cell::Cell<u32>,
+        writer: &'a mut W,
+    }
+    impl<W: Write> Write for CountWrites<'_, W> {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.calls.set(self.calls.get() + 1);
+            self.writer.write(bytes)
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            self.writer.flush()
+        }
+    }
+    let completed = row_encode::encode(
+        encoder,
+        Generated {
+            calls: source_calls,
+            random: 0x12345678,
+        },
+        CountWrites {
+            calls: writer_calls,
+            writer,
+        },
+        resolver,
+        Options::new(
+            zencodec::storage::StorageBudget::new(1 << 20, 1024),
+            1 << 20,
+        ),
         &zencodec::enough::Unstoppable,
     )?;
-    let schedule = offers[index].schedule;
-    let mut emitted = 0u64;
-    let mut drain = |encoder: &mut E| -> io::Result<()> {
-        if schedule == OutputSchedule::Live && !encoder.pending_output().is_empty() {
-            writer_calls.set(writer_calls.get() + 1);
-            writer.write_all(encoder.pending_output())?;
-            let len = encoder.pending_output().len();
-            encoder.consume_output(len);
-            emitted += len as u64;
-        }
-        Ok(())
-    };
-    drain(&mut encoder)?;
-    // Own only one strided source row. No borrowed complete raster enters this
-    // route. Native retained memory is still unknown, so no bound is claimed.
-    let mut row = vec![0xa5; fixtures::STRIDE];
-    let mut random = 0x12345678u32;
-    for _ in 0..fixtures::HEIGHT {
-        source_calls.set(source_calls.get() + 1);
-        for byte in &mut row[..fixtures::WIDTH as usize * 3] {
-            random ^= random << 13;
-            random ^= random >> 17;
-            random ^= random << 5;
-            *byte = random as u8;
-        }
-        encoder.push_rows(PixelSlice::new(
-            &row,
-            fixtures::WIDTH,
-            1,
-            fixtures::STRIDE,
-            PixelDescriptor::RGB8_SRGB,
-        )?)?;
-        drain(&mut encoder)?;
-    }
-    drop(row);
-    let rest = encoder.finish()?;
-    if !rest.is_empty() {
-        writer_calls.set(writer_calls.get() + 1);
-        writer.write_all(rest.data())?;
-        emitted += rest.len() as u64;
-    }
-    Ok((emitted, record))
+    Ok((
+        completed.emitted,
+        *completed.report.decisions().next().unwrap(),
+    ))
 }
 
 #[test]

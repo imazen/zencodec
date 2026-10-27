@@ -1263,3 +1263,14 @@ jpeg-output-scheduling-check:
 output-schedule-check:
     cargo test -p zencodec --all-features --locked operation::scheduling
     cargo clippy -p zencodec --all-targets --all-features --locked -- -D warnings
+
+row-encode-sync export:
+    just jpeg-policy-sync "{{export}}"
+    cp zencodec-io/src/row_encode.rs zencodec-io/src/lib.rs zencodec-io/src/encode_write.rs "{{export}}/zencodec-io/src/"
+    cp zencodec-io/tests/encode_write.rs "{{export}}/zencodec-io/tests/"
+    cp zencodec-io/examples/io_contract_probes.rs "{{export}}/zencodec-io/examples/"
+
+row-encode-check:
+    cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked row_driver -- --nocapture
+    cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+    cargo clippy -p zencodec-io --all-targets --features std --locked -- -D warnings
