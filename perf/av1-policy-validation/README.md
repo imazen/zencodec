@@ -540,3 +540,35 @@ five coupled tests and strict all-target lint passed; run-heavy reported
 `rc=0 6s | peak-RSS 0.57GiB | min-avail 11253MiB | peak-load 0.65`.
 Artifacts: `/mnt/v/output/zencodec/platform-regions-20261026-run/retiming-20261027-2`
 on r7900x. Full log: `/home/lilith/tmp/zencodec-retiming-drift-20261027.log`.
+
+## Retimed encoder output through an exact MP4 destination
+
+`mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing` connects
+native AV1 decode, the prepared retiming route, native AV1 encode and the exact
+MP4 output adapter. The actual muxer is retained from header publication after
+the first frame through finish. Later frame decisions observe committed output.
+The three native packets go directly to that muxer without timestamp rewriting.
+FFprobe 8.0.1 independently reads the 1/90000 clock and PTS/duration pairs
+9000/1800, 10800/4500 and 15300/2700. FFmpeg/libdav1d verifies exact samples.
+The forward destination interrupts its first write and accepts three bytes per
+subsequent write; the output needs no finish patches.
+
+The paired partial-header test lets 13 bytes escape, then returns BrokenPipe.
+That error retains the mux drain stage and confirmed byte count through the
+encoder operation. The operation becomes terminal, releases native/staging
+owners, and refuses both another frame and another publication attempt.
+
+This is finite compressed staging: native encoders are dropped before packet
+writes. It does not qualify live sequential backpressure, a whole-operation RAM
+bound, seekable-disk retiming, audio, frame-rate conversion or in-band changes.
+Destination preparation still follows the first encoded frame; a combined
+prepared offer admitting encoder, conversion **and destination before initial
+encoding** remains an API-design gate. These tests do not close issue 172.
+No additional public API or zenpixels change was required for this composition.
+
+Run `just av1-coupled-mux-check <fresh-artifacts>` with `AV1_TIMING_FFPROBE`
+pointing to the pinned inspector. Both tests and strict lint passed on
+2026-10-27: `rc=0 2s | peak-RSS 0.57GiB | min-avail 11829MiB | peak-load 0.14`.
+Artifacts on r7900x:
+`/mnt/v/output/zencodec/platform-regions-20261026-run/coupled-mp4-20261027-3`.
+Full log: `/home/lilith/tmp/zencodec-coupled-mp4-terminal-20261027.log`.

@@ -759,3 +759,179 @@ fn mux_native_stop_during_packet_write_keeps_reason_and_cannot_resume() {
         assert_eq!(bytes.len() as u64, error.emitted);
     }
 }
+
+#[test]
+fn mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing() {
+    use crate::epoch_route::Candidate;
+    use std::{
+        cell::Cell,
+        sync::{Arc, atomic::AtomicUsize},
+    };
+    use zencodec::{
+        At,
+        frame::FrameTiming,
+        operation::{Decision, FrameConversionOffer, FrameFacts, Question},
+        storage::StorageBudget,
+        time::Timestamp,
+    };
+    let settings = settings(8, Subsampling::Yuv420, false);
+    let frames: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();
+    let (config, packets) = encode(settings, &frames);
+    let inputs = decode(
+        &mut zenavif::media::Av1VideoDecoder::new().unwrap(),
+        &config,
+        &packets,
+        &Unstoppable,
+    )
+    .unwrap();
+    let clock = TimeBase::hz(90_000).unwrap();
+    let timings = [(9000, 1800), (10800, 4500), (15300, 2700)].map(|(pts, duration)| {
+        FrameTiming::at(Timestamp::new(pts, clock)).with_duration_ticks(duration)
+    });
+    let calls = Cell::new(0usize);
+    let storage = StorageBudget::new(1 << 20, 64);
+    let live = Arc::new(AtomicUsize::new(0));
+    let mut operation = Candidate::new(
+        |q: Question<'_>| -> Result<Decision, At<std::convert::Infallible>> {
+            let Question::FrameRoute { facts, choices, .. } = q else {
+                panic!()
+            };
+            let i = calls.get();
+            assert_eq!(facts.input.timing, inputs[i].timing());
+            assert_eq!(facts.output.output_committed, i > 0);
+            let choice = choices.first().unwrap();
+            assert_eq!(
+                choice.value().conversion.unwrap().encoder_input.timing,
+                timings[i]
+            );
+            calls.set(i + 1);
+            Ok(Decision::choose(choice))
+        },
+        false,
+        false,
+        storage.clone(),
+        live.clone(),
+    );
+    let mut bytes = Vec::new();
+    let mut writer = Some(&mut bytes);
+    let mut destination = None;
+    let mut expected = Vec::new();
+    for (i, input) in inputs.iter().enumerate() {
+        let mut offer =
+            FrameConversionOffer::new(FrameFacts::new(input.interpretation(), timings[i]));
+        offer.preserves_samples = true;
+        offer.preserves_extended_range = true;
+        operation
+            .push_route(
+                input,
+                (input.interpretation(), timings[i]),
+                Some(offer),
+                || {
+                    let output = input.represent(timings[i], input.presentation());
+                    expected.push(output.clone());
+                    Ok(output)
+                },
+                &Unstoppable,
+            )
+            .unwrap();
+        if i == 0 {
+            operation
+                .publish_header(
+                    |config| {
+                        // Retain this exact destination after its header is published.
+                        destination = Some(Output::new_checked(
+                            ExactMp4(zenmp4::Mp4Muxer::new()),
+                            Forward(Short {
+                                writer: writer.take().unwrap(),
+                                interrupted: false,
+                            }),
+                            &[track(config)],
+                            &Unstoppable,
+                        )?);
+                        Ok(())
+                    },
+                    &Unstoppable,
+                )
+                .unwrap();
+        }
+    }
+    let segments = operation.finish(&Unstoppable).unwrap();
+    assert_eq!(segments.len(), 1);
+    assert_eq!(live.load(std::sync::atomic::Ordering::SeqCst), 0);
+    let segment = &segments[0];
+    let mut destination = destination.unwrap();
+    for (packet, timing) in segment.packets.iter().zip(timings) {
+        assert_eq!(packet.pts(), timing.pts);
+        assert_eq!(packet.duration_ticks(), timing.duration_ticks);
+        // No timestamp rewriting between native encoder and native muxer.
+        destination.send(packet.clone(), &Unstoppable).unwrap();
+    }
+    let stats = destination.finish(&Unstoppable).unwrap();
+    assert_eq!(stats.patches, 0);
+    let name = "mux-coupled-retimed";
+    oracle_container(&root(), name, "mp4", &segment.settings, &bytes, &expected);
+    assert_eq!(inspect_timing(name, "mp4", &segment.packets), timings.len());
+    drop(segments);
+    assert_eq!(storage.reserved_bytes(), 0);
+}
+
+#[test]
+fn mux_native_coupled_partial_header_failure_terminates_encoder_and_retains_cause() {
+    use crate::epoch_route::Candidate;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    use zencodec::{operation::PolicySet, storage::StorageBudget};
+    let input = frame(&settings(8, Subsampling::Yuv420, false), 0);
+    let storage = StorageBudget::new(1 << 20, 64);
+    let live = Arc::new(AtomicUsize::new(0));
+    let mut operation = Candidate::new(
+        PolicySet::new(),
+        false,
+        false,
+        storage.clone(),
+        live.clone(),
+    );
+    operation.push(&input, &Unstoppable).unwrap();
+    assert_eq!(live.load(Ordering::SeqCst), 1);
+    let mut bytes = Vec::new();
+    let failure = operation
+        .publish_header(
+            |config| {
+                let _output = Output::new_checked(
+                    ExactMp4(zenmp4::Mp4Muxer::new()),
+                    Forward(Broken {
+                        bytes: &mut bytes,
+                        remaining: 13,
+                    }),
+                    &[track(config)],
+                    &Unstoppable,
+                )?;
+                Ok(())
+            },
+            &Unstoppable,
+        )
+        .unwrap_err();
+    let mux = zencodec::find_cause::<Failure>(&*failure).unwrap();
+    assert!(matches!(mux.stage, Stage::Drain));
+    assert_eq!(mux.emitted, 13);
+    assert_eq!(
+        zencodec::find_cause::<io::Error>(&*failure).unwrap().kind(),
+        io::ErrorKind::BrokenPipe
+    );
+    assert_eq!(bytes.len(), 13);
+    assert!(operation.is_failed());
+    assert_eq!(live.load(Ordering::SeqCst), 0);
+    assert_eq!(storage.reserved_bytes(), 0);
+    assert!(operation.push(&input, &Unstoppable).is_err());
+    assert!(
+        operation
+            .publish_header(
+                |_| panic!("terminal operation retried publication"),
+                &Unstoppable
+            )
+            .is_err()
+    );
+    assert_eq!(bytes.len(), 13);
+}

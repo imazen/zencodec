@@ -1223,3 +1223,8 @@ frame-cost-pair-plan root before after:
 frame-cost-pair-run zenbench root:
     "{{zenbench}}" pair "{{root}}/pair-plan.json" --dry-run > "{{root}}/pair-dry-run.json"
     "{{zenbench}}" pair "{{root}}/pair-plan.json" --mode iterate --output "{{root}}/pair-attempt"
+
+# Native retained encoder → exact MP4 destination, without packet-time rewriting.
+av1-coupled-mux-check artifacts:
+    AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked mux_native_coupled_ -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
