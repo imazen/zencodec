@@ -1,0 +1,36 @@
+[package]
+name = "native-contract-video"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Native AV1 encoder retention and delay facts for the video encoder contract"
+
+[workspace]
+
+[dependencies]
+zencodec = { path = "../../..", features = ["std"] }
+zencodec-io = { path = "../../../zencodec-io", features = ["std"] }
+zencodec-media = { path = "../../../zencodec-media", features = ["std"] }
+zenpixels = ">=0.2.16, <0.4.0"
+enough = "0.4.4"
+# The native encoder revision perf/av1-policy-validation qualifies.
+zenavif = { git = "https://github.com/imazen/zenavif", rev = "feadc4c94b19acdcd82ee545a02263bc67c45d7d", features = ["media-encode", "_dev"] }
+# The decoder the AV1 harness pins beside it, for its native metadata accessors.
+rav1d-safe = { git = "https://github.com/imazen/rav1d-safe", rev = "b19aec6561204ff310250bf2bc1b2c6faa42c3b5", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }
+
+[patch.crates-io]
+zencodec = { path = "../../.." }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "86d0e2d30406a006bf8332f142029b7f58353086" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "86d0e2d30406a006bf8332f142029b7f58353086" }
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "10a79c3a888dd589884fd032846eec70bc31eb13" }
+
+[patch."https://github.com/imazen/zencodec"]
+zencodec = { path = "../../.." }
+zencodec-io = { path = "../../../zencodec-io" }
+zencodec-media = { path = "../../../zencodec-media" }
+zenmeta = { path = "../../../zenmeta" }
+
+[profile.test]
+opt-level = 1
+debug-assertions = true
+overflow-checks = true

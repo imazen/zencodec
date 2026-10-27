@@ -1,0 +1,21 @@
+[package]
+name = "native-contract-validation"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Executable witnesses of native encoder contract gaps (multi-pass, video retention)"
+
+[workspace]
+
+[dependencies]
+multipass-validation = { path = "../multipass-validation" }
+zencodec = { path = "../..", features = ["std"] }
+zencodec-io = { path = "../../zencodec-io", features = ["std"] }
+zencodec-media = { path = "../../zencodec-media", features = ["std"] }
+zenpixels = ">=0.2.14, <0.4.0"
+enough = "0.4.4"
+
+[profile.test]
+opt-level = 1
+debug-assertions = true
+overflow-checks = true
