@@ -1,0 +1,126 @@
+{
+  "source_revision": "115636d8564bddf292ecf7c6bef0ffac8c87541a",
+  "binary_sha256": "03b61a43a5a8a9da7a16c91c7b007d8ae1722c2ee69311e0b430d2eec72e9f67",
+  "profile": "debug; heaptrack; no pixel reads or output publication",
+  "dimensions": [
+    2048,
+    2048
+  ],
+  "format": "RGB8_SRGB",
+  "native_revision": "4535ec499d88b04f58882df03e61761526c35756",
+  "started": "2026-10-27T12:48:10.586816+00:00",
+  "cells": [
+    {
+      "configuration": "fixed",
+      "stage": "native-prepare",
+      "candidates": 1,
+      "peak_heap_bytes": 75464,
+      "allocation_calls": 17,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "f5315f937706d1edf137c36bcbe75dbc14369e4184dcbc678a6ee1844ae06040"
+    },
+    {
+      "configuration": "fixed",
+      "stage": "native-prepare",
+      "candidates": 4,
+      "peak_heap_bytes": 76686,
+      "allocation_calls": 17,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "c882ab1574c93f81101ba9063b2ef769e226c4a3a15051421bc7fe632dd86795"
+    },
+    {
+      "configuration": "fixed",
+      "stage": "native-plan",
+      "candidates": 1,
+      "peak_heap_bytes": 75464,
+      "allocation_calls": 17,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "8c36628025c498061b2ff08482247c41764e113eaf1a3596312902fd137b1f66"
+    },
+    {
+      "configuration": "fixed",
+      "stage": "native-plan",
+      "candidates": 4,
+      "peak_heap_bytes": 76683,
+      "allocation_calls": 17,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "0389355baa335a90c6c173d25fa144a652bd8b397a7ace7ae9e0dcb2dd2fc3c6"
+    },
+    {
+      "configuration": "fixed",
+      "stage": "native-begin",
+      "candidates": 1,
+      "peak_heap_bytes": 1835642,
+      "allocation_calls": 148,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "f0377ce6c19537bae2ffe75867161267294668f581b90d38ecc515391756861e"
+    },
+    {
+      "configuration": "fixed",
+      "stage": "native-begin",
+      "candidates": 4,
+      "peak_heap_bytes": 7120068,
+      "allocation_calls": 540,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "21b7cc728e1b1fbd45f5a970aa3f3b22df5bbeb9196317dead368aacebf7f512"
+    },
+    {
+      "configuration": "progressive",
+      "stage": "native-prepare",
+      "candidates": 1,
+      "peak_heap_bytes": 75464,
+      "allocation_calls": 17,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "bc511af5ae37a4083894a29e6fe085f54e0654a1afcf78499542f7d69434da1a"
+    },
+    {
+      "configuration": "progressive",
+      "stage": "native-prepare",
+      "candidates": 4,
+      "peak_heap_bytes": 76692,
+      "allocation_calls": 17,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "cc577edb4e03c833b6e591fe0cb79e09f15fe1a47bd72a03fe8127cc8c372b97"
+    },
+    {
+      "configuration": "progressive",
+      "stage": "native-plan",
+      "candidates": 1,
+      "peak_heap_bytes": 75464,
+      "allocation_calls": 17,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "8d31a2b23466f946a49ed5b23186ef579e4f98f55d81920fbee5942f34523e3f"
+    },
+    {
+      "configuration": "progressive",
+      "stage": "native-plan",
+      "candidates": 4,
+      "peak_heap_bytes": 76689,
+      "allocation_calls": 17,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "09f8bcf767165ae5891c83f7e4c0fa1bed93300c32aecd1bb8e5950fc382cf22"
+    },
+    {
+      "configuration": "progressive",
+      "stage": "native-begin",
+      "candidates": 1,
+      "peak_heap_bytes": 14573930,
+      "allocation_calls": 52,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "ea4212ccc52631b6c0f9d1470ba3ff319ad849b80e151bcee9c07350d3f47d45"
+    },
+    {
+      "configuration": "progressive",
+      "stage": "native-begin",
+      "candidates": 4,
+      "peak_heap_bytes": 58072178,
+      "allocation_calls": 156,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "67d79964ac3f78e9931089eb90533057fcd12617722d1ed0c5a765da668b50ba"
+    }
+  ],
+  "native_patch_sha256": "af92a22b40897c3eeb472c63a4ac607d36dd78c58e28ebe09bdaea0f9f42b645",
+  "configuration_scope": "direct native jobs, identical default quality; no registry",
+  "updated": "2026-10-27T12:48:12.902923+00:00",
+  "completed": "2026-10-27T12:48:12.903110+00:00"
+}

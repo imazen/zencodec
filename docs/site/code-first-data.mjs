@@ -67,6 +67,10 @@ export const codeFlows = [
   {id:'adapter-ownership',role:'adapter',title:'Admit storage → hold → publish / refuse',steps:[
     {example:'checked_output_storage',file:'perf/spatial-validation/src/jxl_packaged_storage.rs',api:['preparedStorage','imageOutput'],state:'Native JXL integration test'},
   ]},
+  {id:'adapter-preflight',role:'adapter',title:'Plan the effective job → validate → begin',issue:160,evidence:'docs/encode-output-preparation.md',note:'Private native JPEG implementation experiment: requires the committed native-preflight.patch and explicit test feature. This is not yet a zencodec method. Planning agrees with actual startup across 952 mode/geometry cases; the common checked destination contract still needs frozen jobs, input protocol and policy obligations.',steps:[
+    {scope:'fn planning_is_repeatable_and_does_not_change_strided_encode_bytes()',file:'perf/jpeg-policy-validation/src/native_preflight.rs',api:['operationPreparation','rasterOutput'],state:'Patched native JPEG preflight; byte-preserving strided control'},
+    {scope:'fn current_color_context_is_checked_before_startup()',file:'perf/jpeg-policy-validation/src/native_preflight.rs',api:['checkedEncodePolicy'],state:'Patched native JPEG preflight; current color context refusal'},
+  ]},
   {id:'adapter-scope',role:'adapter',title:'Keep obligations → inspect late metadata → publish',steps:[
     {scope:'impl<\'a> DeferredRewrite<\'a>',file:'perf/jpeg-policy-validation/src/requirement_scope.rs',api:['pendingPolicyPlan'],state:'Private native JPEG contract experiment'},
   ]},

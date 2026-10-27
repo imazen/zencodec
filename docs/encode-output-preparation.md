@@ -172,3 +172,31 @@ retains the resolved graph and patch identity. It never edits the native working
 checkout. The patch replaces the disabled optional sibling zenpredict path with
 its pinned git source to make the isolated export resolvable; that feature is
 not part of this qualification.
+
+### Allocation measurement of the implementation
+
+The [corrected event-level profiler](../perf/jpeg-policy-validation/profile-preparation.py)
+measured the implemented patch with direct native jobs at the default quality,
+2048×2048 RGB8, retaining all jobs/encoders simultaneously. These cases use the
+same configuration within each row, with no registry or quality alternatives.
+The [complete results](../benchmarks/native_encode_preflight_2026-10-27.json)
+include the binary and native patch hashes.
+
+| Configuration | Jobs | Prepared peak heap | Planned peak heap | Begun peak heap |
+|---|---:|---:|---:|---:|
+| Fixed-table sequential | 1 | 75,464 B | 75,464 B | 1,835,642 B |
+| Fixed-table sequential | 4 | 76,686 B | 76,683 B | 7,120,068 B |
+| Progressive, optimized | 1 | 75,464 B | 75,464 B | 14,573,930 B |
+| Progressive, optimized | 4 | 76,692 B | 76,689 B | 58,072,178 B |
+
+Whole-process peaks include startup and argument strings; equal peaks do not
+prove zero planning allocations. In particular, planning clones configuration
+and prepares metadata, and this measurement has no supplied metadata. It shows
+that this implementation avoids the measured native pixel-workspace startup;
+it does not establish a general constant-memory guarantee or a workspace limit.
+No source pixels were read and no encoded bytes were published. This is not a
+wall-clock performance measurement.
+
+```text
+profile: rc=0 2s | peak-RSS 0.13GiB | min-avail 8608MiB | peak-load 0.49
+```
