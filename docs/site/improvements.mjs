@@ -2,6 +2,19 @@
 // Signatures come from Rust through apiPanels; examples remain executable files.
 export const improvements = [
   {
+    id:'pending-requirements', title:'Keep requirements pending until the affected work is allowed',
+    state:'Native JPEG experiment qualified · production scope integration open', date:'2026-10-27',
+    summary:'Source planning can proceed before metadata inspection. PendingPlan retains the requirements independently of the diagnostic report and blocks incomplete execution.',
+    why:'A metadata requirement should not reject an unrelated source question. It must also survive that question, report wrap and nested operations until the actual output is qualified.',
+    consumer:'State the descriptive metadata requirement once. The native witness uses one callback for execution, metadata and fidelity; conflicting exact-preservation requirements refuse before output.',
+    adapter:'Retain the actual native rewrite plan. Accept only selections with the same operation, requirements and source/route context. Inspect later metadata before emitting its carrier.',
+    implementor:'Qualify effects from the native route and preserve its source ownership. A diagnostic record is not permission to execute; dropping it cannot discharge a requirement.',
+    open:'PendingPlan is a private three-stage experiment, not the production scoped policy API. Native planning allocations remain unbounded by this witness; opaque ICC remains retained and uncertified. General effect deadlines and operation-level NotApplicable are still open.',
+    signatures:['pendingPolicyPlan'],
+    flow:[['consumer','State requirements','one policy callback'],['adapter','Plan source access','metadata remains pending'],['implementor','Inspect retained input','prepare actual rewrite chunks'],['adapter','Validate complete plan','refuse stale or missing evidence'],['consumer','Receive output','GPS removed; same samples']],
+    evidence:[['Deadlines, tests and limits','docs/policy-requirement-deadlines.md'],['Native JPEG witness','perf/jpeg-policy-validation/src/requirement_scope.rs'],['Execution tests','perf/io-validation/tests/policy_execution.rs']],
+  },
+  {
     id:'retained-raster-replay', title:'Replay the retained pixels, not a transferable promise',
     state:'Native contract experiment qualified · production integration open', date:'2026-10-27',
     summary:'Input::raster holds the actual immutable pixels across every encoder pass. A custom source cannot borrow another raster’s proof token.',

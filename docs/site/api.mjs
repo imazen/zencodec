@@ -1,5 +1,6 @@
 // Paths and method selections only. Signatures are extracted from current Rust source.
 export const api = {
+  pendingPolicyPlan: {path:'policy::plan::PendingPlan (private contract experiment)',file:'perf/io-validation/src/policy/plan.rs',scope:'impl PendingPlan {',methods:['new','accept','remaining','finish']},
   multipassInput: {path:'multipass_validation::Input (contract experiment)',file:'perf/multipass-validation/src/lib.rs',scope:"pub enum Input<'a, S = NoSource>",methods:[],item:true},
   multipassEncode: {path:'multipass_validation::encode_passes (contract experiment)',file:'perf/multipass-validation/src/lib.rs',methods:['encode_passes']},
   multipassEncoder: {path:'multipass_validation::MultiPassEncoder (contract experiment)',file:'perf/multipass-validation/src/lib.rs',scope:'pub trait MultiPassEncoder',methods:['begin_passes','pull_rows','pending_output','consume_output','finish_output']},
