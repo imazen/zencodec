@@ -2,6 +2,10 @@
 
 ## Native image selection (unreleased experiment)
 
+- Add prepared-instance video encoder fidelity evidence with an unknown default.
+  Forward it through shared wrappers, bind it in owned staging, and refuse drift
+  before publication; conversion preservation remains independent.
+
 - Add owned finite `StagedEncode`: retain encoder, conversion and prepared
   destination through policy; stage compressed payloads and drop the encoder
   before writer I/O. Preserve decision reports and concrete partial-write errors.

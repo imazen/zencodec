@@ -384,9 +384,34 @@ log `/home/lilith/tmp/zencodec-public-conversion-20261027.log`.
 Run-heavy: `rc=0 45s | peak-RSS 0.58GiB | min-avail 12772MiB | peak-load 0.65`.
 No production API or zenpixels change was needed for this integration.
 
-This exposed a remaining contract gap: generic `VideoEncoder` reports container
+At that revision this exposed a contract gap: generic `VideoEncoder` reported container
 configuration, but no guarantee of the prepared encoding fidelity. The public
-operation therefore reports unknown encoder fidelity even when this native
+operation therefore reported unknown encoder fidelity even when this native
 witness uses lossless AV1. Required/preferred fidelity must eventually be derived
 from the actual retained encoder, without caller-supplied capability coordination
 or inferring guarantees from codec identity. Conversion fidelity remains separate.
+
+The replacement contract adds `VideoEncoder::output_fidelity()`, with unknown
+(`None`) as the default. It guarantees encoding fidelity for all accepted frames
+of this actual configured instance; it cannot be inferred from requested flags
+or codec identity. Boxed, fused and error-erased encoders forward the evidence.
+`StagedEncode` binds it together with the prepared configuration, offers it to
+policy, and rejects a change before accepting another frame or publishing the
+staged sequence. Conversion preservation remains independent: lossless encoding
+does not certify an earlier YCbCr conversion, quantization or clipping step.
+
+The native witness supplies evidence only for its quantizer-zero configurations,
+qualified by independent decoded samples. The pinned native crate itself still
+uses the unknown default until its adapter adopts the method; this is a measured
+adapter gap, not a claim that every video codec is now qualified. Native tests
+exercise the evidence through Box, FusedEncoder and VideoEncoderShim together,
+and inject a changed guarantee without changed container configuration bytes.
+
+Prepared-fidelity validation: all 43 native cases and strict lint passed with
+Box/FusedEncoder/VideoEncoderShim forwarding and a changed-fidelity refusal.
+Full evidence on r7900x:
+`/mnt/v/output/zencodec/platform-regions-20261026-run/encoder-fidelity-20261027`;
+log `/home/lilith/tmp/zencodec-encoder-fidelity-20261027.log`.
+Run-heavy: `rc=0 45s | peak-RSS 0.58GiB | min-avail 12886MiB | peak-load 0.61`.
+This additive default method leaves unadapted native implementations unknown;
+it does not assume their requested quantizer establishes a generic guarantee.

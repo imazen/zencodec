@@ -315,6 +315,16 @@ pub trait VideoEncoder {
 
     /// Codec configuration a muxer needs before the first packet.
     fn output_config(&self) -> Option<&CodecConfig>;
+
+    /// Fidelity guaranteed by this actual prepared encoder for every accepted
+    /// input frame. None means unqualified, not lossy or lossless. A guarantee
+    /// must not be inferred from codec identity or an unvalidated request.
+    /// This describes encoding only; preceding conversion may lose samples.
+    /// Fixed-configuration operations bind this value with output_config and
+    /// reject a later change before publishing staged output.
+    fn output_fidelity(&self) -> Option<zencodec::encode::Fidelity> {
+        None
+    }
 }
 
 /// A type-erased, sendable decoder session.
@@ -381,6 +391,9 @@ impl<E: VideoEncoder> VideoEncoder for VideoEncoderShim<E> {
     }
     fn output_config(&self) -> Option<&CodecConfig> {
         self.0.output_config()
+    }
+    fn output_fidelity(&self) -> Option<zencodec::encode::Fidelity> {
+        self.0.output_fidelity()
     }
 }
 
@@ -526,6 +539,9 @@ impl<E: VideoEncoder> VideoEncoder for FusedEncoder<E> {
     fn output_config(&self) -> Option<&CodecConfig> {
         self.inner.output_config()
     }
+    fn output_fidelity(&self) -> Option<zencodec::encode::Fidelity> {
+        self.inner.output_fidelity()
+    }
 }
 
 /// Erase a decoder: errors become [`ErasedError`], and errors and
@@ -588,6 +604,9 @@ impl<E: VideoEncoder + ?Sized> VideoEncoder for Box<E> {
     }
     fn output_config(&self) -> Option<&CodecConfig> {
         (**self).output_config()
+    }
+    fn output_fidelity(&self) -> Option<zencodec::encode::Fidelity> {
+        (**self).output_fidelity()
     }
 }
 

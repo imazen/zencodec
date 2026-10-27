@@ -108,7 +108,7 @@ pub enum Refusal {
     ReceivePendingWithoutPacket,
     /// Encoder ended before the caller finished input.
     EarlyEnd,
-    /// Encoder changed the configuration bound to the prepared container.
+    /// Encoder changed the configuration or fidelity bound at preparation.
     ConfigurationChanged,
     /// Encoder requested input after end_input.
     InputAfterEnd,
@@ -141,6 +141,7 @@ struct State<E, M, D> {
     encoder: E,
     output: PreparedOutput<M, D>,
     config: CodecConfig,
+    fidelity: Option<zencodec::encode::Fidelity>,
     packets: Vec<Packet>,
     previous: Option<FrameFacts>,
 }
@@ -192,8 +193,10 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
                 track = track.with_codec_private(private.clone());
             }
             let output = PreparedOutput::new(mux, destination, &[track.build()?], stop)?;
+            let fidelity = encoder.output_fidelity();
             Ok(State {
                 encoder,
+                fidelity,
                 output,
                 config,
                 packets: Vec::new(),
@@ -236,7 +239,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
         })
     }
     /// Send the exact held picture without conversion or timing changes.
-    /// Encoder fidelity and native workspace remain unqualified.
+    /// Prepared encoder fidelity is disclosed; native workspace remains unqualified.
     pub fn push(&mut self, input: Frame, stop: &dyn Stop) -> Result<(), At<Failure>> {
         let target = input.interpretation().clone();
         let mut offer = FrameConversionOffer::new(FrameFacts::new(&target, input.timing()));
@@ -263,6 +266,9 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
         let mut stage = Stage::Policy;
         let run = || -> Result<(), Cause> {
             check(stop)?;
+            if state.encoder.output_fidelity() != state.fidelity {
+                return Err(invalid(Refusal::ConfigurationChanged));
+            }
             if conversion.encoder_input != FrameFacts::new(target, conversion.encoder_input.timing)
             {
                 return Err(invalid(Refusal::OfferMismatch));
@@ -273,6 +279,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
                 FrameRoute::Continue
             });
             offer.conversion = Some(conversion);
+            offer.fidelity = state.fidelity;
             offer.destination = Some(state.output.facts());
             offer.admitted_encoded_bytes = self.storage.reserved_bytes();
             let mut progress = FrameRouteState::default();
@@ -328,6 +335,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
                 .encoder
                 .output_config()
                 .is_some_and(|config| same_config(config, &state.config))
+                || state.encoder.output_fidelity() != state.fidelity
             {
                 return Err(invalid(Refusal::ConfigurationChanged));
             }
@@ -365,6 +373,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
                 .encoder
                 .output_config()
                 .is_some_and(|config| same_config(config, &state.config))
+                || state.encoder.output_fidelity() != state.fidelity
             {
                 return Err(invalid(Refusal::ConfigurationChanged));
             }

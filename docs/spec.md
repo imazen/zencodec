@@ -2588,3 +2588,11 @@ Bookkeeping, native workspace and caller-owned pictures are outside that budget.
 It requires output configuration before input and a fixed configuration; it does
 not segment, spill to disk, infer fidelity or provide live encoder backpressure.
 The underlying encoder and muxer mechanisms remain sans-I/O.
+
+`VideoEncoder::output_fidelity() -> Option<zencodec::encode::Fidelity>` describes
+the guarantee of the retained configured encoder for all accepted inputs.
+Unknown is the default. All shared encoder wrappers forward the method.
+`StagedEncode` binds it at preparation, supplies it to frame-route policy, and
+rejects drift during push/drain before publication. This is automatic adapter
+coordination, not a query callers must perform. Preceding conversion fidelity
+remains a separate offer field.

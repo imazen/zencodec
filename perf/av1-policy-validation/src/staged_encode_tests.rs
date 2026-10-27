@@ -16,6 +16,8 @@ struct OwnedEncoder {
     native: zenavif::media::Av1VideoEncoder,
     live: Rc<Cell<bool>>,
     corrupt_epoch: bool,
+    change_fidelity: bool,
+    accepted: bool,
 }
 impl Drop for OwnedEncoder {
     fn drop(&mut self) {
@@ -29,7 +31,9 @@ impl VideoEncoder for OwnedEncoder {
         frame: &Frame,
         stop: &dyn Stop,
     ) -> Result<SendStatus, SessionError<Self::Error>> {
-        self.native.send(frame, stop)
+        let status = self.native.send(frame, stop)?;
+        self.accepted |= status == SendStatus::Accepted;
+        Ok(status)
     }
     fn receive(&mut self, stop: &dyn Stop) -> Result<Receive<Packet>, SessionError<Self::Error>> {
         Ok(match self.native.receive(stop)? {
@@ -44,6 +48,16 @@ impl VideoEncoder for OwnedEncoder {
     }
     fn output_config(&self) -> Option<&CodecConfig> {
         self.native.output_config()
+    }
+    fn output_fidelity(&self) -> Option<zencodec::encode::Fidelity> {
+        // This witness constructs only quantizer-zero native encoders, qualified
+        // against independent decoded samples. Fault injection changes evidence
+        // without changing configuration bytes.
+        if self.change_fidelity && self.accepted {
+            None
+        } else {
+            Some(zencodec::encode::Fidelity::Lossless)
+        }
     }
 }
 struct Writer<'a> {
@@ -72,11 +86,19 @@ impl Write for Writer<'_> {
 }
 fn encoder(live: &Rc<Cell<bool>>) -> OwnedEncoder {
     live.set(true);
+    let native =
+        zenavif::media::Av1VideoEncoder::new(settings(8, Subsampling::Yuv420, false), TB).unwrap();
+    assert_eq!(
+        native.output_fidelity(),
+        None,
+        "unadapted encoder must remain unqualified"
+    );
     OwnedEncoder {
-        native: zenavif::media::Av1VideoEncoder::new(settings(8, Subsampling::Yuv420, false), TB)
-            .unwrap(),
+        native,
         live: live.clone(),
         corrupt_epoch: false,
+        change_fidelity: false,
+        accepted: false,
     }
 }
 
@@ -156,7 +178,9 @@ fn staged_native_owned_pipeline_drops_encoder_before_writer_and_preserves_pixels
 
 #[test]
 fn staged_native_refusal_conversion_drift_and_unwind_never_publish_or_resume() {
-    for mode in ["policy", "drift", "unwind", "budget", "cancel", "epoch"] {
+    for mode in [
+        "policy", "drift", "unwind", "budget", "cancel", "epoch", "fidelity",
+    ] {
         let live = Rc::new(Cell::new(false));
         let calls = Rc::new(Cell::new(0));
         let budget = StorageBudget::new(if mode == "budget" { 0 } else { 1 << 20 }, 64);
@@ -169,8 +193,11 @@ fn staged_native_refusal_conversion_drift_and_unwind_never_publish_or_resume() {
         };
         let mut native = encoder(&live);
         native.corrupt_epoch = mode == "epoch";
+        native.change_fidelity = mode == "fidelity";
         let mut operation = StagedEncode::new(
-            native,
+            Box::new(zencodec_media::session::VideoEncoderShim(
+                zencodec_media::session::FusedEncoder::new(native),
+            )),
             ExactMp4(zenmp4::Mp4Muxer::new()),
             Forward(Writer {
                 bytes: &mut bytes,
@@ -243,7 +270,22 @@ fn staged_native_refusal_conversion_drift_and_unwind_never_publish_or_resume() {
             if mode == "unwind" {
                 assert!(result.is_err());
             } else {
-                assert!(result.unwrap().is_err());
+                let error = result.unwrap().unwrap_err();
+                if mode == "fidelity" {
+                    assert_eq!(
+                        zencodec::find_cause::<zencodec_media::staged::Refusal>(&error),
+                        Some(&zencodec_media::staged::Refusal::ConfigurationChanged)
+                    );
+                }
+                if mode == "cancel" {
+                    use zencodec::CodecErrorExt;
+                    assert_eq!(
+                        error.error_category(),
+                        Some(zencodec::ErrorCategory::Stopped(
+                            enough::StopReason::TimedOut
+                        ))
+                    );
+                }
             }
             assert!(operation.is_failed());
             assert!(operation.push(input, &Unstoppable).is_err());
@@ -277,9 +319,13 @@ fn staged_native_changing_ycbcr_converts_to_fixed_rgb_before_owned_output() {
             native: zenavif::media::Av1VideoEncoder::new(settings.clone(), TB).unwrap(),
             live: live.clone(),
             corrupt_epoch: false,
+            change_fidelity: false,
+            accepted: false,
         };
         let mut operation = StagedEncode::new(
-            native,
+            Box::new(zencodec_media::session::VideoEncoderShim(
+                zencodec_media::session::FusedEncoder::new(native),
+            )),
             ExactMp4(zenmp4::Mp4Muxer::new()),
             Forward(Writer {
                 bytes: &mut bytes,
@@ -301,8 +347,7 @@ fn staged_native_changing_ycbcr_converts_to_fixed_rgb_before_owned_output() {
                 let choice = choices.first().unwrap();
                 let offer = choice.value();
                 assert!(offer.destination.unwrap().exact_timing);
-                // The generic VideoEncoder trait does not yet qualify fidelity.
-                assert_eq!(offer.fidelity, None);
+                assert_eq!(offer.fidelity, Some(zencodec::encode::Fidelity::Lossless));
                 let conversion = offer.conversion.unwrap();
                 assert!(!conversion.preserves_samples);
                 assert!(!conversion.preserves_extended_range);
