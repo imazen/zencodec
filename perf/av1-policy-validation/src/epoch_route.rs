@@ -12,10 +12,10 @@ use zenavif::media::{Av1EncodeSettings, Av1VideoEncoder};
 use zencodec::{
     At, CodecError,
     encode::Fidelity,
-    frame::{ChromaSiting, Frame, FrameGeometry, FrameTiming, Subsampling},
+    frame::{ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, Subsampling},
     operation::{
-        FrameFacts, FrameRoute, FrameRouteOffer, FrameRouteState, OperationReport, PolicyResolver,
-        PolicySet, resolve_frame_route,
+        FrameConversionOffer, FrameFacts, FrameRoute, FrameRouteOffer, FrameRouteState,
+        OperationReport, PolicyResolver, PolicySet, resolve_frame_route,
     },
     storage::StorageBudget,
     time::TimeBase,
@@ -39,8 +39,7 @@ struct Key {
     clock: TimeBase,
 }
 impl Key {
-    fn from_frame(frame: &Frame) -> Result<Self, Cause> {
-        let input = frame.interpretation();
+    fn from_input(input: &FrameInterpretation, timing: FrameTiming) -> Result<Self, Cause> {
         let geometry = input.geometry;
         if geometry != FrameGeometry::full(geometry.coded_width, geometry.coded_height)
             || input.encoding.bit_shift() != 0
@@ -58,8 +57,7 @@ impl Key {
             color: input.color.resolved.ok_or_else(|| {
                 std::io::Error::other("unknown color requires an explicit interpretation route")
             })?,
-            clock: frame
-                .timing()
+            clock: timing
                 .pts
                 .ok_or_else(|| std::io::Error::other("native route requires PTS"))?
                 .base(),
@@ -185,12 +183,32 @@ impl<R: PolicyResolver> Candidate<R> {
         Ok(())
     }
     pub fn push(&mut self, frame: &Frame, stop: &dyn Stop) -> Result<(), Cause> {
+        self.push_route(
+            frame,
+            (frame.interpretation(), frame.timing()),
+            None,
+            || Ok(frame.clone()),
+            stop,
+        )
+    }
+    pub(super) fn push_route(
+        &mut self,
+        frame: &Frame,
+        target: (&FrameInterpretation, FrameTiming),
+        conversion: Option<FrameConversionOffer>,
+        execute: impl FnOnce() -> Result<Frame, Cause>,
+        stop: &dyn Stop,
+    ) -> Result<(), Cause> {
         let mut state = self
             .state
             .take()
             .ok_or_else(|| std::io::Error::other("terminal frame route"))?;
         check(stop)?;
-        let key = Key::from_frame(frame)?;
+        let (target, timing) = target;
+        if conversion.is_some_and(|c| c.encoder_input != FrameFacts::new(target, timing)) {
+            return Err(std::io::Error::other("conversion offer target mismatch").into());
+        }
+        let key = Key::from_input(target, timing)?;
         let changed = state.key != Some(key);
         let permitted = !changed || state.key.is_none() || self.segmented;
         // A real encoder/configuration is retained during policy. This may
@@ -206,6 +224,7 @@ impl<R: PolicyResolver> Candidate<R> {
             FrameRoute::Continue
         });
         offer.fidelity = Some(Fidelity::Lossless);
+        offer.conversion = conversion;
         offer.admitted_encoded_bytes = self.storage.reserved_bytes();
         let mut output = FrameRouteState::default();
         output.previous = state.previous;
@@ -233,6 +252,13 @@ impl<R: PolicyResolver> Candidate<R> {
                 return Err(error.into());
             }
         }
+        // The selected converter is consumed exactly once, after policy and
+        // before any old encoder is drained or replacement installed.
+        let converted = execute()?;
+        check(stop)?;
+        if converted.interpretation().as_ref() != target || converted.timing() != timing {
+            return Err(std::io::Error::other("prepared conversion target changed").into());
+        }
         if changed {
             finish_segment(&mut state, &self.storage, stop)?;
             state.native = prepared;
@@ -240,7 +266,7 @@ impl<R: PolicyResolver> Candidate<R> {
         }
         let encoder = &mut state.native.as_mut().unwrap().encoder;
         loop {
-            match encoder.send(frame, stop)? {
+            match encoder.send(&converted, stop)? {
                 SendStatus::Accepted => break,
                 SendStatus::ReceivePending => {
                     let Receive::Ready(packet) = encoder.receive(stop)? else {
@@ -265,7 +291,7 @@ impl<R: PolicyResolver> Candidate<R> {
             }
         }
         state.inputs.try_reserve(1)?;
-        state.inputs.push(frame.timing());
+        state.inputs.push(converted.timing());
         state.previous = Some(FrameFacts::new(frame.interpretation(), frame.timing()));
         check(stop)?;
         self.state = Some(state);

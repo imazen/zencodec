@@ -32,3 +32,6 @@ mod prepared_conversion;
 
 #[cfg(test)]
 mod float_processing;
+
+#[cfg(test)]
+mod coupled_route;

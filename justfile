@@ -1196,3 +1196,8 @@ native-pixels-check artifacts:
 av1-gamma-verify artifacts report:
     python3 -m unittest discover -s perf/av1-policy-validation -p verify_gamma_test.py
     python3 perf/av1-policy-validation/verify_gamma.py "{{artifacts}}" "{{report}}"
+
+# Coupled conversion and fixed native encoder; shared policy and required oracle.
+av1-coupled-check artifacts:
+    AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked coupled_native_ -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings

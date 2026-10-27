@@ -482,3 +482,34 @@ roundtrip samples and missing files. Reports include trace hashes.
 
 No public API, package or feature was added for this fix. General transfer/backend
 range guarantees, finite-domain behavior and numerical-model choice remain open.
+
+## Coupled fixed-output conversion
+
+`coupled_route.rs` retains a shared `YcbcrToRgbF32` plan, the source mapping,
+managed plane/row reservations and the native encoder through one
+`Question::FrameRoute` decision. `FrameConversionOffer` records the encoder's
+actual input interpretation/timing separately from source facts. Conversion
+runs after acceptance of the route, before accepting the frame into the encoder.
+Target drift or conversion failure terminates the operation and retains the
+selected decision; no alternative is retried.
+
+Three real decoded inputs (8-bit 4:2:0 full range, 10-bit 4:2:2 limited range,
+12-bit 4:4:4 full range) become one fixed 8-bit GBR AV1 sequence. The output
+configuration is published after the first frame and stays unchanged. The
+converter applies the existing BT.709/sRGB matrix route followed by explicitly
+clamped, nearest-integer RGB8 quantization; it reports neither sample nor extended
+range preservation. The native encoder is lossless for those converted codes.
+FFmpeg/libdav1d readback compares every emitted component against the actual
+converted frames. This checks encoding integration, not an independent proof of
+conversion accuracy; the shared float converter has its own independent matrix.
+
+`just av1-coupled-check <fresh-artifacts>` exercises the native witness and strict
+lint. Exact-sample callback and required-range preset refusals occur before
+conversion execution or destination initialization. Shared conformance covers
+missing evidence, unqualified encoders, allowed/disallowed/invalid siting
+assumptions and retained selected facts. No new dependency or zenpixels API is
+needed. Reservations cover three strided output planes and one RGB float row;
+input owners, native workspace/references and bookkeeping are outside that bound.
+The test retains converted frames for readback; it does not establish a streaming
+memory bound. HDR, resizing, retiming, continuous muxer changes and packaged
+transcode convenience remain unqualified.
