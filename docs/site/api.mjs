@@ -62,6 +62,7 @@ export const api = {
   frameResolution: {path:'zencodec::operation::resolve_frame',file:'src/operation/frame.rs',methods:['resolve_frame']},
   mediaPumpCause: {path:'core::error::Error for zencodec_media::session::PumpError',file:'zencodec-media/src/session.rs',scope:"impl<U: core::error::Error + 'static, D: core::error::Error + 'static> core::error::Error",methods:['source']},
   mediaMapCause: {path:'core::error::Error for zencodec::frame::MapError',file:'src/frame_storage.rs',scope:'impl core::error::Error for MapError',methods:['source']},
+  codecErrorBuild: {path:'zencodec::CodecError',file:'src/error.rs',scope:'impl CodecError {',methods:['new','from_native','of','from_parts']},
   findCause: {path:'zencodec::find_cause',file:'src/error.rs',methods:['find_cause']},
   tiffSelection: {path:'candidate::TiffItems (private native experiment)',file:'perf/spatial-validation/src/tiff_items.rs',scope:'impl<R: Read + Seek> TiffItems<R>',methods:['open','images','children','next','decode']},
   collectionOpen: {path:'candidate::TiffCollection (private native experiment)',file:'perf/spatial-validation/src/tiff_items.rs',scope:'impl<R: Read + Seek> TiffCollection<R>',methods:['open','open_with_stop']},

@@ -95,7 +95,7 @@ export const codeFlows = [
     {scope:'fn duplicates_spoofing_and_qualifiers_are_not_silently_selected()',file:'zenmeta/tests/metadata_inspection.rs',api:['xmpPacket'],state:'XMP ambiguity contract test; not whole-file PII certification'},
   ]},
   {id:'codec-config',role:'implementor',title:'EncoderConfig → EncodeJob → Encoder',steps:[
-    {scope:'impl EncoderConfig for MinimalEncoderConfig',file:'zencodec-testkit/src/minimal.rs',api:['encoderConfig'],state:'Testkit codec: minimal supported capabilities'},
+    {scope:'impl EncoderConfig for MinimalEncoderConfig',file:'zencodec-testkit/src/minimal.rs',api:['encoderConfig','codecErrorBuild'],state:'Internal testkit fixture; requires reference.rs helpers'},
     {scope:'impl EncodeJob for MinEncodeJob',file:'zencodec-testkit/src/minimal.rs',api:['encodeJob','checkedEncodePolicy'],state:'Testkit codec: minimal supported capabilities'},
     {scope:'impl Encoder for MinEnc',file:'zencodec-testkit/src/minimal.rs',api:['rasterOutput'],state:'Testkit codec: one-shot encode'},
   ]},

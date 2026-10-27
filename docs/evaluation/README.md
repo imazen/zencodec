@@ -61,3 +61,6 @@ lookups are recorded rescues, never hidden first-attempt knowledge.
 Results are pending. No success rate or naming recommendation has been inferred
 from merely launching the readers. Preserve their code, diagnostics, exposure
 sequence and exact site revision before independently checking their findings.
+
+[The 2026-10-27 reader record](reader-study-20261027.md) separates verified
+intermediate findings, remaining tasks and source corrections to reader guesses.
