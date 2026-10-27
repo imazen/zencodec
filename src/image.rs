@@ -444,6 +444,11 @@ pub struct ImageInterpretation {
     pub orientation: Option<Orientation>,
     /// Retains native component roles, code depth, siting, crop, color and epoch.
     pub signal: Option<Arc<FrameInterpretation>>,
+    /// Original component interpretation after explicit conversion to packed
+    /// color. This never describes current packed samples or retains pixels.
+    /// Keep it when cloning interpretation for a later crop/color transform;
+    /// current geometry, descriptor and context describe the transformed output.
+    pub source_frame: Option<Arc<FrameInterpretation>>,
     /// Presentation timing, when established; never inferred from item order.
     pub timing: Option<FrameTiming>,
     /// Native temporal presentation facts, if supplied by a frame adapter.
@@ -461,6 +466,7 @@ impl ImageInterpretation {
             placement: None,
             orientation: Some(orientation),
             signal: None,
+            source_frame: None,
             timing: None,
             presentation: None,
             source_details: crate::Extensions::new(),
@@ -521,7 +527,7 @@ impl ImageOutput {
         }
         if interpretation.orientation.is_none()
             || interpretation.signal.is_some()
-            || interpretation.presentation.is_some()
+            || (interpretation.presentation.is_some() && interpretation.source_frame.is_none())
         {
             return Err(fail(OutputError::Interpretation));
         }
@@ -563,6 +569,7 @@ impl ImageOutput {
             timing: Some(frame.timing()),
             presentation: Some(frame.presentation()),
             signal: Some(signal.clone()),
+            source_frame: None,
             source_details: crate::Extensions::new(),
         };
         Self {
@@ -581,6 +588,15 @@ impl ImageOutput {
     /// Frozen facts belonging to these samples, not a mutable relabeling API.
     pub fn interpretation(&self) -> &ImageInterpretation {
         &self.interpretation
+    }
+    /// Original component interpretation retained after explicit conversion.
+    ///
+    /// This is source evidence, not the interpretation of current packed pixels.
+    /// Current color/precision comes from their descriptor and context. Native
+    /// component output instead uses [`ImageInterpretation::signal`]. This does
+    /// not retain source pixels or grant permission to copy source metadata.
+    pub fn source_frame(&self) -> Option<&Arc<FrameInterpretation>> {
+        self.interpretation.source_frame.as_ref()
     }
     /// Borrow the output storage. Native mapping failures preserve their cause.
     pub fn map(&self) -> Result<Box<dyn MappedImage + '_>, At<OutputError>> {

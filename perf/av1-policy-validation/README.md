@@ -167,7 +167,7 @@ evaluation before choosing the production boundary.
 Missing: a public planar plan in zenpixels-convert, a prepared siting choice in
 the shared policy resolver, independent RGB accuracy, unclipped float output,
 other color matrices/transfers, mono/GBR, conversion reconfiguration, cancellation,
-complete storage admission and publication of a converted video `ImageOutput`.
+and complete storage admission.
 The private bridge collapses mapping failures to its test refusal; a production
 adapter must retain the original cause and trace. These limits are not hidden
 behind a generic “video solved” claim.
@@ -176,6 +176,32 @@ behind a generic “video solved” claim.
 suite and strict lint pass. Resource wrapper: rc=0, 18 s, peak RSS 0.51 GiB,
 minimum available 11298 MiB, peak load 0.43. This covers the whole build/test
 process, not isolated codec or conversion memory.
+
+### Converted video uses the shared image output
+
+`ImageOutput::from_frame_pixels(frame, owner, orientation)` now adopts an actual
+packed conversion result for the source's visible crop. The native AV1 matrix
+runs this through the existing `Question::Image` resolver, including odd-origin
+crops. The owner keeps strided normalized RGB16 and its sRGB context; source
+8/10/12-bit YCbCr facts stay separately accessible through `source_frame()`.
+Timing and presentation survive both adoption and later color replacement.
+Adoption does not copy the converted payload or retain the consumed native
+picture. Destination admission stays charged until the last output clone drops.
+
+This is an ownership and interpretation boundary, not a new conversion engine.
+The private strip bridge still controls unknown-siting assumptions and clips to
+integer RGB; independent RGB accuracy, float excursions and general HDR remain
+unqualified. The shared constructor does not verify conversion math, honor a
+source render-size instruction automatically, or authorize metadata transfer.
+Packed constructors still refuse native presentation claims without explicit
+source-frame provenance; later transforms retain it by cloning interpretation.
+No zenpixels API or kernel change was required for this adoption boundary;
+`bytemuck`, already in the standalone dependency graph, is now a direct test
+dependency for borrowing the typed admitted RGB allocation as bytes.
+
+The [qualification receipt](../../benchmarks/converted_video_output_2026-10-27.json)
+records 162 publications across 54 native presentations and 18 configurations,
+the final AV1/still-image checks and the zero zenpixels API delta for this step.
 
 ## Native publication and re-encode
 

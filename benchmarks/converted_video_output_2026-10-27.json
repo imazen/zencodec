@@ -1,0 +1,89 @@
+{
+  "date": "2026-10-27",
+  "base_commit": "e82d284e750bcb808d0dd10e1f383b7b9eac9b59",
+  "source_sha256": {
+    "src/image.rs": "cd322017cca684d2e0b2e677007a1de8e73a0164985985683b006231745e1990",
+    "src/image/owner.rs": "3600bcdbb699ce3d39c133304e7e2d10f948773085c7b49eeb96755550ab1be7",
+    "src/operation/image.rs": "9026efc128d8a6db65b23ab830daf004aeb6ee73acc02d62e5be19b20b0de781",
+    "zencodec-media-testkit/tests/image_output.rs": "c0f3676a07bae024ffe97e07fc0e1cc7ba591421122d7fe219cd819f10bac850",
+    "perf/av1-policy-validation/src/planar_conversion_tests.rs": "58373f99a92bf25e6616c9161a5688830e21cd853d468145860b4600f787f525",
+    "perf/av1-policy-validation/dependencies.lock": "f68d3bfde21626efac49033f3bf9f230e44e5b1b1e4a1ec2cc7a6906e4739ab0"
+  },
+  "scope": "Converted native AV1 visible-crop ownership and interpretation; not independent RGB accuracy or a throughput benchmark",
+  "native_pins": {
+    "zenavif": "feadc4c94b19acdcd82ee545a02263bc67c45d7d",
+    "rav1d-safe": "b19aec6561204ff310250bf2bc1b2c6faa42c3b5",
+    "zenpixels": "1d3ddd2131b22e9e3754c765d4ce45ce3901de59"
+  },
+  "converted_publications": 162,
+  "native_configurations": 18,
+  "native_presentations": 54,
+  "verified": [
+    "same admitted allocation pointer through adoption and publication",
+    "exact active RGB16 rows against the existing strip bridge, including odd-origin crops",
+    "one existing policy callback per adopted output",
+    "native source encoding separate from current full-range RGB16/sRGB interpretation",
+    "original timing and presentation preserved",
+    "converted owner cloning retains payload charges; last drop releases them",
+    "core controls release consumed native picture and preserve source provenance across color replacement and subsequent geometry adoption",
+    "invalid geometry and traced owner failure reject without retained payload"
+  ],
+  "validation": [
+    {
+      "command": "just image-output-check; AV1_TIMING_FFPROBE=<pinned-8.0.1> just av1-policy-check <fresh-artifacts>; just doc-default api-doc",
+      "log": "/home/lilith/tmp/zencodec-converted-video-final-20261027.log",
+      "exit_code": 0,
+      "run_heavy": "50s | peak-RSS 0.54GiB | min-avail 11156MiB | peak-load 0.76"
+    },
+    {
+      "command": "just spatial-ci-check <fresh-artifacts> cms_oracle,old_jpeg; just docs-site-browser-check 3547",
+      "log": "/home/lilith/tmp/zencodec-converted-frame-final-still-site-20261027.log",
+      "exit_code": 0,
+      "native_test_result": "145 passed; 0 failed; 0 ignored",
+      "run_heavy": "68s | peak-RSS 0.63GiB | min-avail 10902MiB | peak-load 0.89"
+    }
+  ],
+  "preliminary_validation": [
+    {
+      "command": "just image-output-check; just av1-planar-check <fresh-artifacts>",
+      "log": "/home/lilith/tmp/zencodec-converted-video-output-20261027-2.log",
+      "exit_code": 0,
+      "run_heavy": "48s | peak-RSS 1.04GiB | min-avail 10405MiB | peak-load 1.18"
+    },
+    {
+      "command": "AV1_TIMING_FFPROBE=<pinned-8.0.1> just av1-policy-check <fresh-artifacts>; just test doc-default api-doc",
+      "log": "/home/lilith/tmp/zencodec-converted-video-full-20261027.log",
+      "exit_code": 0,
+      "run_heavy": "58s | peak-RSS 0.43GiB | min-avail 11094MiB | peak-load 1.28"
+    },
+    {
+      "command": "just spatial-ci-check <fresh-artifacts> cms_oracle,old_jpeg; just docs-site-browser-check 3547",
+      "log": "/home/lilith/tmp/zencodec-converted-frame-still-site-20261027.log",
+      "exit_code": 0,
+      "run_heavy": "69s | peak-RSS 0.62GiB | min-avail 11009MiB | peak-load 1.11"
+    }
+  ],
+  "resource_scope": "run-heavy measures the entire build/test command, not codec or converter working memory",
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/converted-video-full-2",
+  "api_delta": [
+    "ImageOutput::from_frame_pixels",
+    "ImageOutput::source_frame",
+    "ImageInterpretation::source_frame",
+    "ImageFacts::source_frame"
+  ],
+  "zenpixels_delta": {
+    "api_items": 0,
+    "signature_changes": 0,
+    "kernels": 0,
+    "new_product_dependencies": 0
+  },
+  "standalone_dependency_delta": "bytemuck becomes a direct test dependency; package count/versions/sources unchanged",
+  "remaining": [
+    "independent RGB conversion accuracy",
+    "prepared siting choices and explicit assumptions in the shared resolver",
+    "public planar conversion plan",
+    "unclipped float/HDR and additional matrix/transfer support",
+    "row scratch and native/CMS workspace admission",
+    "complete composed display rendering for video"
+  ]
+}

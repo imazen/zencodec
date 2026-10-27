@@ -171,6 +171,14 @@ sample interpretation implementation.
 
 ### Policy before native publication
 
+After an explicit planar-to-packed conversion, adapters can adopt its exact
+visible-crop owner through `ImageOutput::from_frame_pixels`. Current packed
+descriptor/context stays separate from `source_frame()` component provenance;
+timing and presentation survive. This consumes the native frame without keeping
+its pixel allocation alive. The ordinary `resolve_image` publication boundary
+then sees both current samples and bounded source facts. This constructor does
+not convert samples, infer orientation or execute native render-size scaling.
+
 `zencodec_media::policy::PolicyDecoder::new(decoder, resolver)` wraps an existing
 `VideoDecoder`. Before returning each native frame it invokes the same
 `zencodec::operation::PolicyResolver` used by still-image operations, with a

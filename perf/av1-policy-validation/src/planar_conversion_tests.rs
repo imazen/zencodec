@@ -348,6 +348,7 @@ fn planar_native_borrowed_rows_and_odd_crops_match_full_conversion() {
                             );
                             assert_eq!(facts.source.geometry.crop, crop);
                         }
+                        qualify_packed_publication(&cropped, &full_rgb);
                         rows.push_str(&format!(
                             "{bits},{sub:?},{full},{index},{},{},{},{},{}\n",
                             crop.x, crop.y, crop.width, crop.height, facts.assumed_center
@@ -595,4 +596,117 @@ fn planar_native_signalled_siting_cannot_be_overridden_by_unknown_fallback() {
         );
         assert!(destination.iter().all(|v| *v == [0xaaaa; 3]));
     }
+}
+
+/// Carry the real strip-kernel result through shared packed-image publication.
+/// RGB accuracy is still separate from this exact ownership/interpretation check.
+fn qualify_packed_publication(native: &Frame, expected: &[[u16; 3]]) {
+    use zencodec::{
+        At,
+        image::{ImageOutput, OutputError, PackedImageOwner},
+        operation::{Decision, PolicySet, Question, resolve_image},
+        storage::{SharedStorage, StorageBudget},
+    };
+    use zenpixels::{ColorContext, Orientation, PixelDescriptor, PixelSlice};
+    struct Owner {
+        data: SharedStorage<[u16; 3]>,
+        width: u32,
+        height: u32,
+        stride: usize,
+        color: Arc<ColorContext>,
+    }
+    impl PackedImageOwner for Owner {
+        fn pixels(&self) -> Result<PixelSlice<'_>, At<OutputError>> {
+            PixelSlice::new(
+                bytemuck::cast_slice(self.data.as_slice()),
+                self.width,
+                self.height,
+                self.stride * 6,
+                PixelDescriptor::RGB16_SRGB,
+            )
+            .map(|p| p.with_color_context(self.color.clone()))
+            .map_err(|e| {
+                At::wrap(OutputError::Mapping(zencodec::frame::MapError::Backend(
+                    Box::new(e),
+                )))
+            })
+        }
+    }
+    let crop = native.interpretation().geometry.crop;
+    let stride = crop.width as usize + 5;
+    let pool = StorageBudget::new(stride * crop.height as usize * 6, 1);
+    let mut data = pool
+        .filled(stride * crop.height as usize, [0xdead; 3])
+        .unwrap();
+    let facts = convert(
+        native,
+        SitingChoice::AssumeCenterIfUnknown,
+        data.as_mut_slice(),
+        stride,
+        1,
+    )
+    .unwrap();
+    let address = data.as_slice().as_ptr() as usize;
+    let owner = Owner {
+        data: data.freeze(),
+        width: crop.width,
+        height: crop.height,
+        stride,
+        color: Arc::new(ColorContext::from_cicp(Cicp::SRGB)),
+    };
+    let image =
+        ImageOutput::from_frame_pixels(native.clone(), owner, Orientation::Identity).unwrap();
+    let calls = std::cell::Cell::new(0);
+    let image = resolve_image(
+        image,
+        &mut |q: Question<'_>| -> Result<Decision, At<std::convert::Infallible>> {
+            let Question::Image {
+                image,
+                facts: current,
+                ..
+            } = q
+            else {
+                panic!()
+            };
+            assert!(current.frame.is_none());
+            assert_eq!(
+                current.source_frame.unwrap().encoding,
+                facts.source.encoding
+            );
+            assert_eq!(current.timing, Some(facts.timing));
+            assert_eq!(current.presentation, Some(facts.presentation));
+            assert_eq!(current.packed, Some(PixelDescriptor::RGB16_SRGB));
+            assert!(Arc::ptr_eq(image.source_frame().unwrap(), &facts.source));
+            image
+                .with_pixels(|p| {
+                    assert_eq!(p.row(0).as_ptr() as usize, address);
+                    assert_eq!(p.color_context().unwrap().cicp, Some(Cicp::SRGB));
+                    for y in 0..crop.height as usize {
+                        assert_eq!(
+                            p.row(y as u32),
+                            bytemuck::cast_slice(
+                                &expected[(y + crop.y as usize)
+                                    * native.interpretation().geometry.coded_width as usize
+                                    + crop.x as usize..]
+                                    [..crop.width as usize]
+                            )
+                        );
+                    }
+                })
+                .unwrap();
+            calls.set(calls.get() + 1);
+            Ok(Decision::UsePreset)
+        },
+        PolicySet::new(),
+        &Unstoppable,
+    )
+    .unwrap()
+    .into_output();
+    assert_eq!(calls.get(), 1);
+    let retained = image.clone();
+    drop(image);
+    assert_eq!(pool.reserved_objects(), 1);
+    drop(retained);
+    assert_eq!(pool.reserved_bytes(), 0);
+    assert_eq!(pool.reserved_objects(), 0);
 }

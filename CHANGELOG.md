@@ -2,6 +2,12 @@
 
 ## Native image selection (unreleased experiment)
 
+- Add explicit converted-frame adoption with `ImageOutput::from_frame_pixels`.
+  Retain exact timing/presentation and separate original component facts through
+  `source_frame()` and `ImageFacts::source_frame`; current packed samples retain
+  their own descriptor/context. Adoption releases the consumed native picture,
+  preserves payload admission, and performs no hidden conversion or resizing.
+
 - Add `Muxer::begin_exact_timing`, including dyn dispatch. Unqualified
   implementations refuse before legacy setup; qualified instances preserve
   supplied packet timing or reject before packet output. Metadata, workspace

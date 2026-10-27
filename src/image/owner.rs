@@ -93,6 +93,57 @@ impl ImageOutput {
         auxiliaries: Vec<Auxiliary>,
         interpretation: ImageInterpretation,
     ) -> Result<Self, At<OutputError>> {
+        if interpretation.presentation.is_some() && interpretation.source_frame.is_none() {
+            return Err(fail(OutputError::Interpretation));
+        }
+        Self::adopt_packed_owner(owner, auxiliaries, interpretation)
+    }
+
+    /// Adopt explicitly converted pixels for the source frame's visible crop.
+    ///
+    /// Adapter boundary: this does not perform or certify conversion. The owner
+    /// must supply packed color for exactly the source crop, preserving its
+    /// stored coordinates. Its descriptor/context must describe the actual
+    /// converted samples; `orientation` explicitly describes their residual
+    /// orientation. No native render-size scaling is implied. Only the owner's
+    /// packed pixels are adopted; its auxiliary methods are not used.
+    ///
+    /// Exact timing and presentation are retained. Native component facts move
+    /// to [`Self::source_frame`], separate from current packed interpretation.
+    /// The consumed frame's pixel owner is released; independent clones remain
+    /// valid. Owner allocation charges survive adoption and image cloning.
+    /// This runs no publication/privacy policy and admits no native workspace.
+    pub fn from_frame_pixels<P: PackedImageOwner + 'static>(
+        frame: Frame,
+        owner: P,
+        orientation: Orientation,
+    ) -> Result<Self, At<OutputError>> {
+        let source = frame.interpretation().clone();
+        let g = source.geometry;
+        let mut interpretation = ImageInterpretation::packed(
+            ImageGeometry {
+                canvas_width: g.coded_width,
+                canvas_height: g.coded_height,
+                region: Rect {
+                    x: g.crop.x,
+                    y: g.crop.y,
+                    width: g.crop.width,
+                    height: g.crop.height,
+                },
+            },
+            orientation,
+        );
+        interpretation.timing = Some(frame.timing());
+        interpretation.presentation = Some(frame.presentation());
+        interpretation.source_frame = Some(source);
+        Self::from_packed_owner(owner, Vec::new(), interpretation)
+    }
+
+    pub(super) fn adopt_packed_owner<P: PackedImageOwner + 'static>(
+        owner: P,
+        auxiliaries: Vec<Auxiliary>,
+        interpretation: ImageInterpretation,
+    ) -> Result<Self, At<OutputError>> {
         let g = interpretation.geometry;
         g.validate().map_err(|e| fail(OutputError::Region(e)))?;
         if let Some(placement) = interpretation.placement {
@@ -100,10 +151,7 @@ impl ImageOutput {
                 .visible(g)
                 .map_err(|e| fail(OutputError::Placement(e)))?;
         }
-        if interpretation.orientation.is_none()
-            || interpretation.signal.is_some()
-            || interpretation.presentation.is_some()
-        {
+        if interpretation.orientation.is_none() || interpretation.signal.is_some() {
             return Err(fail(OutputError::Interpretation));
         }
         let pixels = owner.pixels()?;

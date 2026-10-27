@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2956 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 203 lines (203 hidden + 0 excluded-feature)
+# files: zencodec.txt 2960 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 203 lines (203 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -14,8 +14,8 @@
 #   pub types (struct/enum/trait/alias)       345
 #   pub consts/statics                        303
 #   free functions                             84
-#   inherent methods                         1063
-#   struct fields                             442
+#   inherent methods                         1065
+#   struct fields                             444
 #   enum variants                             485
 #   re-exports                                 15
 #   trait roster entries (type × trait)      1000
@@ -35,16 +35,16 @@
 #   gainmap                         126
 #   helpers                          17
 #   icc                               1
-#   image                           135
+#   image                           138
 #   inventory                       103
 #   metadata_rewrite                 58
-#   operation                       207
+#   operation                       208
 #   prelude                         233
 #   source                           37
 #   storage                          34
 #   time                             22
 
-## items (2676 lines)
+## items (2680 lines)
 
 pub mod zencodec
 pub use At
@@ -1315,6 +1315,7 @@ pub image::ImageInterpretation::placement: core::option::Option<image::Placement
 pub image::ImageInterpretation::presentation: core::option::Option<frame::Presentation>
 pub image::ImageInterpretation::signal: core::option::Option<alloc::rcs::arc::Arc<frame::FrameInterpretation>>
 pub image::ImageInterpretation::source_details: Extensions
+pub image::ImageInterpretation::source_frame: core::option::Option<alloc::rcs::arc::Arc<frame::FrameInterpretation>>
 pub image::ImageInterpretation::timing: core::option::Option<frame::FrameTiming>
 pub fn image::ImageInterpretation::packed(image::ImageGeometry, zenpixels::orientation::Orientation) -> Self
 pub struct image::ImageOutput
@@ -1322,7 +1323,9 @@ pub fn image::ImageOutput::from_frame(frame::Frame) -> Self
 pub fn image::ImageOutput::interpretation(&self) -> &image::ImageInterpretation
 pub fn image::ImageOutput::map(&self) -> core::result::Result<alloc::boxed::Box<(dyn image::MappedImage + '_)>, whereat::at::At<image::OutputError>>
 pub fn image::ImageOutput::packed(zenpixels::buffer::PixelBuffer, alloc::vec::Vec<(image::Auxiliary, image::Values)>, image::ImageInterpretation) -> core::result::Result<Self, whereat::at::At<image::OutputError>>
+pub fn image::ImageOutput::source_frame(&self) -> core::option::Option<&alloc::rcs::arc::Arc<frame::FrameInterpretation>>
 pub fn image::ImageOutput::with_pixels<T>(&self, impl core::ops::function::FnOnce(zenpixels::buffer::PixelSlice<'_>) -> T) -> core::result::Result<T, whereat::at::At<image::OutputError>>
+pub fn image::ImageOutput::from_frame_pixels<P: image::PackedImageOwner + 'static>(frame::Frame, P, zenpixels::orientation::Orientation) -> core::result::Result<Self, whereat::at::At<image::OutputError>>
 pub fn image::ImageOutput::from_packed_owner<P: image::PackedImageOwner + 'static>(P, alloc::vec::Vec<image::Auxiliary>, image::ImageInterpretation) -> core::result::Result<Self, whereat::at::At<image::OutputError>>
 pub fn image::ImageOutput::replace_packed_color<P: image::PackedImageOwner + 'static>(self, P) -> core::result::Result<Self, whereat::at::At<image::OutputError>>
 pub struct image::Placement
@@ -1715,6 +1718,7 @@ pub operation::ImageFacts::placement: core::option::Option<image::Placement>
 pub operation::ImageFacts::planes: usize
 pub operation::ImageFacts::presentation: core::option::Option<frame::Presentation>
 pub operation::ImageFacts::source_details: usize
+pub operation::ImageFacts::source_frame: core::option::Option<operation::FrameFacts>
 pub operation::ImageFacts::timing: core::option::Option<frame::FrameTiming>
 pub fn operation::ImageFacts::new(&image::ImageOutput) -> Self
 pub struct operation::OperationReport

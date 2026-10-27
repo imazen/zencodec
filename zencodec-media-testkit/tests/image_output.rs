@@ -362,3 +362,188 @@ mod publication {
         }
     }
 }
+
+struct RgbOwner {
+    storage: zencodec::storage::SharedStorage<u8>,
+    width: u32,
+    height: u32,
+    stride: usize,
+}
+impl zencodec::image::PackedImageOwner for RgbOwner {
+    fn pixels(&self) -> Result<zenpixels::PixelSlice<'_>, At<OutputError>> {
+        zenpixels::PixelSlice::new(
+            self.storage.as_slice(),
+            self.width,
+            self.height,
+            self.stride,
+            zenpixels::PixelDescriptor::RGB8_SRGB,
+        )
+        .map_err(|e| At::wrap(OutputError::Mapping(MapError::Backend(Box::new(e)))))
+    }
+}
+fn rgb_owner(pool: &zencodec::storage::StorageBudget, width: u32) -> RgbOwner {
+    RgbOwner {
+        storage: pool.bytes(24).unwrap().freeze(),
+        width,
+        height: 2,
+        stride: 12,
+    }
+}
+fn cropped_frame(picture: Arc<dyn Picture>, crop_width: u32) -> Frame {
+    let mut interpretation = FrameInterpretation::new(
+        FrameGeometry::full(3, 2),
+        Subsampling::Mono,
+        ChromaSiting::Unknown,
+        encoding(10),
+        vec![PlaneRole::Luma],
+    );
+    interpretation.geometry.crop.x = 1;
+    interpretation.geometry.crop.width = crop_width;
+    interpretation.geometry.render = Some((9, 6));
+    Frame::new(
+        picture,
+        Arc::new(interpretation),
+        FrameTiming::at(zencodec::time::Timestamp::new(
+            37,
+            zencodec::time::TimeBase::MILLIS,
+        ))
+        .with_duration_ticks(41)
+        .with_packet(Some(5), Some(100)),
+        Presentation::SHOW_EXISTING,
+    )
+}
+
+#[test]
+fn converted_frame_adoption_separates_source_codes_and_releases_native_storage() {
+    use zencodec::{
+        image::PackedImageOwner,
+        operation::{Decision, ImageFacts, PolicySet, Question, resolve_image},
+        storage::StorageBudget,
+    };
+    use zenpixels::{Orientation, PixelDescriptor};
+    let pool = StorageBudget::new(48, 2);
+    let frame = cropped_frame(words(), 2);
+    let weak = Arc::downgrade(frame.picture());
+    let source = frame.interpretation().clone();
+    let timing = frame.timing();
+    let presentation = frame.presentation();
+    let owner = rgb_owner(&pool, 2);
+    let address = owner.pixels().unwrap().row(0).as_ptr() as usize;
+    let image = ImageOutput::from_frame_pixels(frame, owner, Orientation::Identity).unwrap();
+    assert!(weak.upgrade().is_none());
+    assert!(Arc::ptr_eq(image.source_frame().unwrap(), &source));
+    assert!(image.interpretation().signal.is_none());
+    assert_eq!(image.interpretation().geometry.region.x, 1);
+    assert_eq!(image.interpretation().geometry.region.width, 2);
+    assert_eq!(image.interpretation().geometry.canvas_width, 3);
+    assert_eq!(image.source_frame().unwrap().geometry.render, Some((9, 6)));
+    assert_eq!(image.interpretation().timing, Some(timing));
+    assert_eq!(image.interpretation().presentation, Some(presentation));
+    assert_eq!(
+        image.with_pixels(|p| p.row(0).as_ptr() as usize).unwrap(),
+        address
+    );
+    let facts = ImageFacts::new(&image);
+    assert!(facts.frame.is_none());
+    assert_eq!(facts.source_frame.unwrap().encoding.code_bits(), 10);
+    assert_eq!(facts.packed, Some(PixelDescriptor::RGB8_SRGB));
+    let clone = image.clone();
+    let replacement = rgb_owner(&pool, 2);
+    let image = image.replace_packed_color(replacement).unwrap();
+    assert!(Arc::ptr_eq(image.source_frame().unwrap(), &source));
+    assert_eq!(image.interpretation().timing, Some(timing));
+    assert_eq!(pool.reserved_bytes(), 48);
+    drop(clone);
+    assert_eq!(pool.reserved_bytes(), 24);
+    // A later transform can clone/update current geometry while keeping source
+    // provenance; re-adoption must not lose the temporal identity.
+    let mut interpretation = image.interpretation().clone();
+    interpretation.geometry.region.width = 1;
+    let transformed =
+        ImageOutput::from_packed_owner(rgb_owner(&pool, 1), vec![], interpretation).unwrap();
+    assert!(Arc::ptr_eq(transformed.source_frame().unwrap(), &source));
+    assert_eq!(transformed.interpretation().timing, Some(timing));
+    drop(transformed);
+    let calls = std::cell::Cell::new(0);
+    let image = resolve_image(
+        image,
+        &mut |q: Question<'_>| -> Result<Decision, At<std::convert::Infallible>> {
+            let Question::Image { image, facts, .. } = q else {
+                panic!()
+            };
+            assert!(facts.frame.is_none());
+            assert_eq!(facts.source_frame.unwrap().encoding.code_bits(), 10);
+            assert_eq!(facts.packed, Some(PixelDescriptor::RGB8_SRGB));
+            assert!(image.with_pixels(|p| p.width() == 2).unwrap());
+            assert_eq!(facts.timing, Some(timing));
+            calls.set(calls.get() + 1);
+            Ok(Decision::UsePreset)
+        },
+        PolicySet::new(),
+        &enough::Unstoppable,
+    )
+    .unwrap()
+    .into_output();
+    assert_eq!(calls.get(), 1);
+    drop(image);
+    assert_eq!(pool.reserved_bytes(), 0);
+    assert_eq!(pool.reserved_objects(), 0);
+}
+
+#[test]
+fn converted_frame_bad_geometry_and_owner_failure_release_unpublished_payloads() {
+    use zencodec::storage::StorageBudget;
+    use zenpixels::Orientation;
+    let pool = StorageBudget::new(24, 1);
+    for (crop_width, owner_width) in [(3, 3), (2, 1)] {
+        let frame = cropped_frame(words(), crop_width);
+        let weak = Arc::downgrade(frame.picture());
+        let error = ImageOutput::from_frame_pixels(
+            frame,
+            rgb_owner(&pool, owner_width),
+            Orientation::Identity,
+        )
+        .unwrap_err();
+        if crop_width == 3 {
+            assert!(matches!(error.error(), OutputError::Region(_)));
+        } else {
+            assert!(matches!(error.error(), OutputError::Geometry));
+        }
+        assert!(weak.upgrade().is_none());
+        assert_eq!(pool.reserved_bytes(), 0);
+    }
+    let mut interpretation = zencodec::image::ImageInterpretation::packed(
+        zencodec::image::ImageGeometry {
+            canvas_width: 2,
+            canvas_height: 2,
+            region: zencodec::image::Rect {
+                x: 0,
+                y: 0,
+                width: 2,
+                height: 2,
+            },
+        },
+        Orientation::Identity,
+    );
+    interpretation.presentation = Some(Presentation::SHOW_EXISTING);
+    assert!(matches!(
+        ImageOutput::from_packed_owner(rgb_owner(&pool, 2), vec![], interpretation)
+            .unwrap_err()
+            .error(),
+        OutputError::Interpretation
+    ));
+    assert_eq!(pool.reserved_bytes(), 0);
+    struct BadOwner;
+    impl zencodec::image::PackedImageOwner for BadOwner {
+        fn pixels(&self) -> Result<zenpixels::PixelSlice<'_>, At<OutputError>> {
+            Err(At::wrap(OutputError::Mapping(MapError::Backend(Box::new(
+                At::wrap(NativeError(91)),
+            )))))
+        }
+    }
+    let failure =
+        ImageOutput::from_frame_pixels(cropped_frame(words(), 2), BadOwner, Orientation::Identity)
+            .unwrap_err();
+    assert_eq!(zencodec::find_cause::<NativeError>(&failure).unwrap().0, 91);
+    assert!(!format!("{failure:?} {failure}").contains("91"));
+}

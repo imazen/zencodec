@@ -126,6 +126,9 @@ impl ImageOutput {
     fn replace_packed_color<P: PackedImageOwner + 'static>(self, owner: P)
         -> Result<Self, At<OutputError>>;
     fn from_frame(frame: frame::Frame) -> Self;
+    fn from_frame_pixels<P: PackedImageOwner + 'static>(frame: frame::Frame,
+        owner: P, orientation: zenpixels::Orientation) -> Result<Self, At<OutputError>>;
+    fn source_frame(&self) -> Option<&Arc<frame::FrameInterpretation>>;
     fn interpretation(&self) -> &ImageInterpretation;
     fn map(&self) -> Result<Box<dyn MappedImage + '_>, At<OutputError>>;
     fn with_pixels<T>(&self, consume: impl FnOnce(zenpixels::PixelSlice<'_>) -> T)
@@ -147,6 +150,21 @@ trait AuxiliaryImageOwner: Send + Sync {
         -> Result<Option<ValueSlice<'_>>, At<OutputError>>;
 }
 ```
+
+`ImageOutput::from_frame_pixels` adopts an explicitly converted packed owner for
+the native frame's exact visible crop. It retains timing and presentation while
+moving the original component interpretation to `source_frame()`. Current
+`interpretation().signal` is absent: the packed descriptor/context describe
+current samples. `ImageFacts::source_frame` exposes bounded source facts to the
+existing publication resolver, distinct from native-current `ImageFacts::frame`.
+The consumed native picture is released; retained clones remain independent.
+Color replacement preserves that provenance and temporal identity. This adapter
+entry point does not execute or certify conversion, infer orientation, rescale
+to a signaled render size, or authorize metadata transfer. The caller supplies
+residual orientation explicitly. Packed constructors still reject current component claims and presentation
+facts without explicit source-frame provenance. That provenance is part of
+`ImageInterpretation`, so a subsequent transform can clone it without losing
+timing or source evidence.
 
 `PackedImageOwner` retains an immutable native or admitted allocation through the
 last `ImageOutput` clone. `ValueSlice` borrows strided auxiliary storage, so an

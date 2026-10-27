@@ -41,6 +41,9 @@ pub struct ImageFacts {
     pub presentation: Option<Presentation>,
     /// Native component interpretation, when supplied by a frame adapter.
     pub frame: Option<FrameFacts>,
+    /// Original component facts after explicit conversion to packed color.
+    /// These are provenance; `packed` describes the current sample encoding.
+    pub source_frame: Option<FrameFacts>,
 }
 impl ImageFacts {
     /// Inspect retained metadata without mapping, converting or copying samples.
@@ -63,6 +66,9 @@ impl ImageFacts {
                 .signal
                 .as_ref()
                 .map(|signal| FrameFacts::new(signal, interpretation.timing.unwrap_or_default())),
+            source_frame: image
+                .source_frame()
+                .map(|source| FrameFacts::new(source, interpretation.timing.unwrap_or_default())),
         }
     }
 }
