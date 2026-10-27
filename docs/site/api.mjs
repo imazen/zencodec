@@ -13,6 +13,7 @@ export const api = {
   operationControl: {path:'zencodec::decode::ControlledIncrementalDecode',file:'src/traits/control.rs',scope:'pub trait ControlledIncrementalDecode: IncrementalDecode',methods:['step_controlled','resume']},
   framePolicy: {path:'zencodec_media::policy::PolicyDecoder',file:'zencodec-media/src/policy.rs',scope:'impl<D, R> PolicyDecoder<D, R>',methods:['new','with_policy_set','report','is_failed']},
   imageResolution: {path:'zencodec::operation::resolve_image',file:'src/operation/image.rs',methods:['resolve_image']},
+  muxFinish: {path:'zencodec_media::container::MuxFinish',file:'zencodec-media/src/container.rs',scope:'impl MuxFinish {',methods:['validate','apply_to']},
   frameRoute: {path:'zencodec::operation::resolve_frame_route',file:'src/operation/transition.rs',methods:['resolve_frame_route']},
   frameRouteOffer: {path:'zencodec::operation::FrameRouteOffer',file:'src/operation/transition.rs',scope:'pub struct FrameRouteOffer',methods:[],item:true},
   frameRouteState: {path:'zencodec::operation::FrameRouteState',file:'src/operation/transition.rs',scope:'pub struct FrameRouteState',methods:[],item:true},

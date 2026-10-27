@@ -30,7 +30,7 @@ const gaps = [
     'No general admitted spool or configuration-specific sequential offer proving retained raw/intermediate storage and pausable upstream input. Byte availability does not prove that blocking the writer is safe.',
     'Encoder configurations, storage-aware drivers and transcode offers.', 'https://github.com/imazen/zencodec/issues/160'],
   ['Seek-back and repeated input', 'Encoder · DynReadAt · ReadAtReader',
-    'Positional input and standard Read/Seek parser bridge; sync/async drivers.',
+    'Positional input and standard Read/Seek parser bridge; sync/async drivers. Media MuxFinish validates all patches before final effects; a native three-container writer trial preserves prefixed disk files.',
     'No common output backpatch transaction or complete bounded multi-pass raster-source route. Those must distinguish seekable disk output from network publication and declare staging before work.',
     'Optional output/source mechanisms in adapters; no mandatory general I/O hierarchy.', 'https://github.com/imazen/zencodec/issues/159'],
   ['Packaged spatial adapters', 'CollectionFactory::open_with · Collection::children · Collection::describe · Collection::decode',

@@ -2,6 +2,19 @@
 // Signatures come from Rust through apiPanels; examples remain executable files.
 export const improvements = [
   {
+    id:'mux-finish', title:'Validate every output patch before changing bytes',
+    state:'Replacement implemented · apply_finish immediately deprecated', date:'2026-10-27',
+    summary:'MuxFinish::apply_to validates the complete result and reserves fallibly before mutation. External writers call validate before tail and patch effects.',
+    why:'The former helper could apply an earlier patch and append a tail before rejecting a later invalid range, leaving changed output behind an error.',
+    consumer:'Replace apply_finish(&mut bytes, finish) with finish.apply_to(&mut bytes). Validation or allocation failure leaves in-memory contents and length unchanged.',
+    adapter:'For external output, validate relative ranges before writes, add the captured stream origin, preserve preceding content and restore the final position. Real I/O failure can leave partial output; retain its cause and confirmed progress.',
+    implementor:'Keep the existing finish payload. Native IVF, WebM and MP4 use the same private writer adapter across forward-only and disk destinations, with independent AV1 component readback.',
+    open:'Transport success is not timing preservation: IVF lacks explicit durations, and the tested progressive MP4 route refuses a nonzero decode origin only at finish. Checked timing/layout admission, whole-operation memory, async writer pressure and continuous reconfiguration remain open.',
+    signatures:['muxFinish'],
+    flow:[['implementor','Finish muxing','tail and relative patches'],['adapter','Validate all ranges','before any final effects'],['consumer','Apply or receive an error','in-memory mutation is transactional']],
+    evidence:[['Native matrix and limits','perf/av1-policy-validation/README.md#container-destination-and-timing-qualification'],['Qualification receipt','benchmarks/native_mux_output_2026-10-27.json'],['Shared contract','docs/media-contract.md#muxers']],
+  },
+  {
     id:'frame-route', title:'Decide output transitions before accepting a changed frame',
     state:'Shared resolver implemented · native segmented witness remains private', date:'2026-10-27',
     summary:'FrameRoute offers Continue or BeginSegment through the existing policy callback. Input configuration epochs remain provenance; they do not control output segment numbering.',

@@ -1,0 +1,13 @@
+container,forward_only,bits,output_bytes,patches,patch_bytes,max_observed_pending_bytes,explicit_durations_preserved
+ivf,false,8,3528,1,4,1094,0
+webm,false,8,3659,0,0,2306,6
+mp4,false,8,4154,1,8,1082,6
+ivf,true,8,3528,0,0,1094,0
+webm,true,8,3659,0,0,2306,6
+mp4,true,8,4378,0,0,2390,6
+ivf,false,10,4571,1,4,1432,0
+webm,false,10,4702,0,0,2997,6
+mp4,false,10,5197,1,8,1420,6
+ivf,true,10,4571,0,0,1432,0
+webm,true,10,4702,0,0,2997,6
+mp4,true,10,5421,0,0,3081,6
