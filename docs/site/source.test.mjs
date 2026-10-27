@@ -134,3 +134,16 @@ test('pinned integration exposes every synchronous callback and source entry poi
   for(const method of ['transcode_with','transcode_from_read_at','transcode_from_read_at_with'])
     assert.match(surface,new RegExp(`pub fn ${method}<`),method);
 });
+
+// A selected trait view must not look like a complete implementation checklist.
+test('signature selections identify omitted and required methods independently',()=>{
+  const rust=`pub trait Config: Clone {
+    fn format() -> u8;
+    fn job(self);
+    fn encode(self) { todo!() }
+  }`;
+  const view=declarations(rust,{scope:'pub trait Config',methods:['encode']});
+  assert.deepEqual(view.omittedMethods,['format','job']);
+  assert.deepEqual(view.requiredMethods,['format','job']);
+  assert.ok(!view.code.includes('fn format'));
+});

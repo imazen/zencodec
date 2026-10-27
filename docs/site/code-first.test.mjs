@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
-import { implementation, catalogItems, sourceFingerprint } from './code-first.mjs';
+import { implementation, catalogItems, sourceFingerprint, exampleImports } from './code-first.mjs';
 import { codeFlows } from './code-first-data.mjs';
 import { example } from './source.mjs';
 const root=fileURLToPath(new URL('../../',import.meta.url));
@@ -43,4 +43,18 @@ test('implementation extraction ignores Rust comments and strings but rejects am
   const parts=implementation(source,'impl Foo');
   assert.equal(parts.focus,'impl Foo { fn x() { let s = "}"; /* } */ } }');
   assert.throws(()=>implementation(source+source,'impl Foo'),/once/);
+});
+
+test('visible imports retain crate origins and multiline groups without fixture bodies',()=>{
+  const above=`// use invented::Thing;
+use zencodec::CodecSet;
+use zencodecs::{
+    JpegDecoderConfig, PngEncoderConfig,
+};
+fn helper() { let text = "use fake::Thing;"; }
+`;
+  assert.equal(exampleImports(above), `use zencodec::CodecSet;
+use zencodecs::{
+    JpegDecoderConfig, PngEncoderConfig,
+};`);
 });

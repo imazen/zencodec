@@ -146,7 +146,7 @@ const lessons = {
     ['Start with the same interpretation', 'Share the effective planning implementation with startup. A matching lag alone cannot prove matching input acquisition or color carriers.'],
   ],
   'app-start': [
-    ['Choose the formats once', 'The gallery accepts JPEG and PNG and writes PNG. Register those implementations once; pass the set to each operation.'],
+    ['Choose the formats once', 'The gallery accepts JPEG and PNG and writes PNG. Register those implementations once; pass the set to each operation. with_send_encoder registers jobs that may move between threads for the later async path; with_encoder also exists for thread-affine jobs. Send does not mean writing to a destination.'],
     ['Open one upload', 'The caller has encoded bytes and wants their native pixels. DecodeRequest detects the format; the result retains pixel interpretation and the operation report.'],
     ['Save a derivative', 'Now the gallery needs a PNG file. TranscodeRequest belongs to zencodecs, which composes the codecs and conversion; unsupported preservation can refuse.'],
   ],

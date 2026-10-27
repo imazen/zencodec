@@ -49,21 +49,22 @@ export function declarations(source,{scope,methods,associated=true,item=false}) 
   const part=mask.slice(start,end);
   const depth=new Int32Array(part.length+1);
   for(let i=0;i<part.length;i++)depth[i+1]=depth[i]+(part[i]==='{'?1:part[i]==='}'?-1:0);
-  const items=[];
+  const items=[],available=[];
   for(const m of part.matchAll(/^[ \t]*(?:(?:pub(?:\([^\n)]*\))?\s+)?(?:(?:async|const)\s+)*fn\s+(\w+)\b|type\s+(\w+)\b)/gm)) {
     if(depth[m.index]!==0)continue;
     const name=m[1]||m[2];const type=Boolean(m[2]);
-    if(type?(!scope||!associated):!methods.includes(name))continue;
     const offset=start+m.index;
     let stop=offset;
     while(stop<end&&mask[stop]!=='{'&&mask[stop]!==';')stop++;
     if(stop===end)throw Error(`Missing declaration terminator: ${name}`);
+    if(!type)available.push({name,required:mask[stop]===';'});
+    if(type?(!scope||!associated):!methods.includes(name))continue;
     const code=deindent(source.slice(offset,stop)).trimEnd().replace(/,$/,'')+';';
     items.push({name,type,code,line:source.slice(0,offset).split('\n').length});
   }
   for(const name of methods)if(items.filter(x=>!x.type&&x.name===name).length!==1)throw Error(`Expected exactly one ${scope||'free function'}::${name}`);
   const ordered=[...items.filter(x=>x.type),...methods.map(name=>items.find(x=>!x.type&&x.name===name))];
-  return {code:scope?`${header} {\n${ordered.map(x=>x.code.split('\n').map(l=>'    '+l).join('\n')).join('\n\n')}\n}`:ordered.map(x=>x.code).join('\n\n'),line:ordered.find(x=>!x.type).line};
+  return {code:scope?`${header} {\n${ordered.map(x=>x.code.split('\n').map(l=>'    '+l).join('\n')).join('\n\n')}\n}`:ordered.map(x=>x.code).join('\n\n'),line:ordered.find(x=>!x.type).line,omittedMethods:available.filter(x=>!methods.includes(x.name)).map(x=>x.name),requiredMethods:available.filter(x=>x.required).map(x=>x.name)};
 }
 export function example(source,name) {
   if(!/^[a-z0-9_-]+$/.test(name))throw Error(`Invalid example name: ${name}`);

@@ -63,3 +63,12 @@ operation-wide deferred-obligation handling or a whole-file privacy certificate;
 remaining work is tracked in [issue 173](https://github.com/imazen/zencodec/issues/173).
 Native TIFF/JXL experiments, protocol fixtures and private multipass/policy
 experiments retain explicit labels.
+
+## Reader-driven context
+
+The compiler-feedback reader study records first attempts separately from repairs
+and runtime checks. Imports now appear beside the focused code, before expanding
+fixture setup. Signature cards identify selected methods and enumerate required
+trait methods, so an excerpt cannot silently serve as an incomplete implementor
+checklist. These annotations are extracted from source, including default versus
+required methods; they are not handwritten copies of signatures.

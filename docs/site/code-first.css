@@ -100,3 +100,7 @@
 .cf-why{max-width:85ch;margin:.3rem 0 .8rem;font-size:.85rem;line-height:1.65;color:#42565d}
 .cf-next{display:flex;justify-content:flex-end;margin:1.5rem 0;font-size:.85rem}
 @media(max-width:650px){.cf-step>summary{font-size:.85rem;gap:.45rem}.cf-step-hint{display:none}}
+
+.code-imports { padding: .5rem .8rem 0; }
+.code-imports > small { color: var(--muted); }
+.code-imports pre { margin: .25rem 0; padding: .4rem .6rem; font-size: .82rem; }

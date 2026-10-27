@@ -29,6 +29,13 @@ async function rustFiles(dir) {
   }
   return result.sort();
 }
+// Keep symbol origins visible without opening the whole fixture's setup.
+export function exampleImports(above) {
+  const masked=maskRust(above);
+  return [...masked.matchAll(/^[ \t]*(?:pub\s+)?use\s+[^;]+;/gm)]
+    .map(match=>above.slice(match.index,match.index+match[0].length).trim())
+    .join('\n');
+}
 export async function sourceFingerprint(root,directory) {
   const base=path.join(root,directory),hash=createHash('sha256');
   for(const file of [path.join(base,'Cargo.toml'),...await rustFiles(path.join(base,'src'))]) {
@@ -95,8 +102,10 @@ export async function codeFirstPage({sha,apiPanels,docs,dest}) {
   async function panel(step,id) {
     if(!sources.has(step.file))sources.set(step.file,await readFile(path.join(root,step.file),'utf8'));
     const source=sources.get(step.file),parts=step.example?example(source,step.example):implementation(source,step.scope);
+    const imports=exampleImports(parts.above);
+    const origins=imports?`<div class="code-imports"><small>Imports used by this source</small><pre><code>${highlight(imports)}</code></pre></div>`:'';
     const context=(key,label)=>`<details class="code-context" data-direction="${key}"><summary>${label}<span>${parts[key].split('\n').length} lines</span></summary><pre><code data-example-part="${key}">${highlight(parts[key])}</code></pre></details>`;
-    return `<div class="code-panel" id="${id}" data-example-source="${esc(step.file)}" data-example="${esc(step.example||'')}" data-scope="${esc(step.scope||'')}"><div class="code-toolbar"><span>${esc(step.state||'Implemented · review API')}</span><div class="code-actions"><a href="https://github.com/imazen/zencodec/blob/${sha}/${step.file}#L${parts.line}">Source ↗</a><button data-copy-full="${id}">Copy ${step.example?'full example':'source file'}</button></div></div>${context('above',step.example?'Imports & setup':'Imports & preceding definitions')}<pre class="code-focus"><code data-example-part="focus">${highlight(parts.focus)}</code></pre>${context('below',step.example?'Return & continuation':'Following definitions & tests')}<span class="copy-status sr-only" role="status"></span></div><details class="cf-contract"><summary>Signatures & related contracts</summary>${step.api?.length?apiPanels(id,step.api):''}${await externalPanels(step.external)}</details>`;
+    return `<div class="code-panel" id="${id}" data-example-source="${esc(step.file)}" data-example="${esc(step.example||'')}" data-scope="${esc(step.scope||'')}"><div class="code-toolbar"><span>${esc(step.state||'Implemented · review API')}</span><div class="code-actions"><a href="https://github.com/imazen/zencodec/blob/${sha}/${step.file}#L${parts.line}">Source ↗</a><button data-copy-full="${id}">Copy ${step.example?'full example':'source file'}</button></div></div>${origins}${context('above',step.example?'Imports & setup':'Imports & preceding definitions')}<pre class="code-focus"><code data-example-part="focus">${highlight(parts.focus)}</code></pre>${context('below',step.example?'Return & continuation':'Following definitions & tests')}<span class="copy-status sr-only" role="status"></span></div><details class="cf-contract"><summary>Signatures & related contracts</summary>${step.api?.length?apiPanels(id,step.api):''}${await externalPanels(step.external)}</details>`;
   }
   const rendered=new Map();
   for(const flow of codeFlows) {
