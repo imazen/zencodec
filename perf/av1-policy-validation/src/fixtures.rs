@@ -183,17 +183,33 @@ pub fn oracle(
     packets: &[Packet],
     frames: &[Frame],
 ) {
+    oracle_on_clock(root, name, s, packets, frames, TB)
+}
+
+pub fn ivf_header(width: u32, height: u32, clock: TimeBase, frames: u32) -> Vec<u8> {
+    let mut ivf = Vec::new();
+    ivf.extend_from_slice(b"DKIF\0\0\x20\0AV01");
+    ivf.extend_from_slice(&u16::try_from(width).unwrap().to_le_bytes());
+    ivf.extend_from_slice(&u16::try_from(height).unwrap().to_le_bytes());
+    ivf.extend_from_slice(&clock.denominator().to_le_bytes());
+    ivf.extend_from_slice(&clock.numerator().to_le_bytes());
+    ivf.extend_from_slice(&frames.to_le_bytes());
+    ivf.extend_from_slice(&0u32.to_le_bytes());
+    ivf
+}
+
+pub fn oracle_on_clock(
+    root: &Path,
+    name: &str,
+    s: &Av1EncodeSettings,
+    packets: &[Packet],
+    frames: &[Frame],
+    clock: TimeBase,
+) {
     let dir = root.join(name);
     std::fs::create_dir(&dir)
         .expect("use a fresh artifact directory; previous evidence is retained");
-    let mut ivf = Vec::new();
-    ivf.extend_from_slice(b"DKIF\0\0\x20\0AV01");
-    ivf.extend_from_slice(&(s.width as u16).to_le_bytes());
-    ivf.extend_from_slice(&(s.height as u16).to_le_bytes());
-    ivf.extend_from_slice(&TB.denominator().to_le_bytes());
-    ivf.extend_from_slice(&TB.numerator().to_le_bytes());
-    ivf.extend_from_slice(&(frames.len() as u32).to_le_bytes());
-    ivf.extend_from_slice(&0u32.to_le_bytes());
+    let mut ivf = ivf_header(s.width, s.height, clock, frames.len() as u32);
     for packet in packets {
         ivf.extend_from_slice(&(packet.bytes().len() as u32).to_le_bytes());
         ivf.extend_from_slice(&(packet.pts().unwrap().ticks() as u64).to_le_bytes());

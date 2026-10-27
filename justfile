@@ -308,6 +308,12 @@ av1-policy-check artifacts:
     AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
 
+# Native output transitions plus public build/documentation boundaries.
+frame-route-check artifacts:
+    just av1-policy-check "{{artifacts}}"
+    cargo check -p zencodec -p zencodec-media --no-default-features --target wasm32-unknown-unknown --locked
+    just doc-default
+
 av1-policy-guide-check:
     cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked guide_ -- --nocapture
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings

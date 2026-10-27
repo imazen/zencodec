@@ -1,5 +1,46 @@
 # Native AV1 policy qualification
 
+## Prepared output transitions
+
+`epoch_route.rs` is a private native adapter for the shared
+`Question::FrameRoute` / `resolve_frame_route` boundary. It uses the existing
+`VideoEncoder` methods: no codec-wide reconfiguration method is needed to finish
+one independently configured segment and prepare another. The actual replacement
+encoder stays alive during policy; a failed decision never retries another route.
+
+The native stream changes source epoch, dimensions, CICP, bit depth/subsampling
+and timestamp clock, with old pictures queued at one/four decoder threads.
+Eighteen presentations become five independently configured output segments;
+the source-epoch-only change continues the first segment. Each segment has
+independent FFmpeg/libdav1d exact-component readback. Native configuration checks
+verify color and clock retention; independent color-signaling accuracy is not
+established by the raw-sample oracle.
+
+A fixed destination publishes a real IVF header derived from its current native
+encoder configuration to an external writer buffer. No frame body is published.
+A later dimension change has no offered route and refuses before acceptance;
+the published header remains unchanged. Partial header failure and caught unwind
+leave those external bytes intact and make the operation terminal. This exercises
+the publication boundary, not an HTTP server or a complete container transaction.
+Cancellation and timeout before preparation, during initial/changed-configuration
+policy and at finish preserve their exact reasons and release native encoders
+and unpublished compressed payloads. Callback errors keep their original cause;
+decline, stale tokens, caught unwind, unknown-workspace refusal and staging
+exhaustion are terminal too.
+
+The finite route drains/drops native encoders before handing out compressed
+segments. Retained packet clones keep their payload admission until the final
+clone drops. This proves encoder lifetime ordering, not a whole-operation RAM
+bound: input owners, native references/workspace, allocation before packet
+admission, codec configuration and list bookkeeping remain outside that budget.
+Header publication can itself block and has no sequential-memory qualification.
+Continuous muxer reconfiguration, planar conversion and live sequential output
+are not implemented by this witness.
+
+Run `just av1-policy-check <fresh-artifacts>`; the
+[qualification receipt](../../benchmarks/native_frame_route_2026-10-27.json)
+records source identities and the native and shared API gates.
+
 ## Private planar conversion bridge
 
 `just av1-planar-check <fresh-artifacts>` separately exercises the existing

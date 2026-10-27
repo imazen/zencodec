@@ -1,0 +1,71 @@
+{
+  "date_utc": "2026-10-27",
+  "kind": "native frame transition qualification; no performance claim",
+  "base_commit": "15237d7f1bd1d9feb0471e1517b2283d69728399",
+  "zenavif": "feadc4c94b19acdcd82ee545a02263bc67c45d7d",
+  "rav1d": "b19aec6561204ff310250bf2bc1b2c6faa42c3b5",
+  "source_sha256": {
+    "src/operation.rs": "37ab1b29f3b73f44d28e502442fd758e6bce502f248f55ac2e4d03d05d5b7e8c",
+    "src/operation/policy.rs": "19dac1015ef333548930bdb71099b7b2fd00f243fb2b328bab07d975e304dc9c",
+    "src/operation/transition.rs": "e036fd13bfdd8e96a1993e7e037b2425298f52d461efdac191398803b2d98173",
+    "zencodec-media-testkit/tests/frame_policy.rs": "709e139e1261c9d8c6370994c0c7b6a935f13e33d82467fa58e16da4f2486654",
+    "perf/av1-policy-validation/src/epoch_route.rs": "bb49e1729c56badada5cc1b377ef102e5bb93a94708e96ca492e4e667a93f4b1",
+    "perf/av1-policy-validation/src/epoch_route_tests.rs": "ca7f95cca1522d931f295e74ccce9f08396c9329d6bb13d7865a78ccd6231322",
+    "perf/av1-policy-validation/src/fixtures.rs": "233225d269ca1def5e70ba150d614f5a7824f36238f15a509bd7b497a7402dd1",
+    "perf/av1-policy-validation/Cargo.toml": "2368cf892c4b574d6740860c6213dd4ad13f4a4f5423f4290419d698b300bf50",
+    "perf/av1-policy-validation/dependencies.lock": "8c32613fb425316a9248bede3db877e6f705d9ea3257b23c01c79955706fe182"
+  },
+  "checks": [
+    {
+      "command": "just av1-policy-check <epoch-route-1>",
+      "log": "/home/lilith/tmp/zencodec-epoch-route-1-20261027.log",
+      "sha256": "445c94821f11cadd8ae9501027bc5e92e4388f07c085dcb48ef55fa9810de14c",
+      "result": "15 native tests passed; strict lint failed on unused import; corrected",
+      "resource_line": "run-heavy: done rc=101 30s | peak-RSS 0.52GiB | min-avail 11118MiB | peak-load 0.54"
+    },
+    {
+      "command": "just av1-policy-check <epoch-route-2>",
+      "log": "/home/lilith/tmp/zencodec-epoch-route-2-20261027.log",
+      "sha256": "846b68e14ac33ffce0f96ad02462be9bc30476011ca638d9ca2a8dd6e23611ae",
+      "result": "17 native tests and strict lint passed before borrowed-question adjustment",
+      "resource_line": "run-heavy: done rc=0 30s | peak-RSS 0.52GiB | min-avail 11261MiB | peak-load 0.46"
+    },
+    {
+      "command": "just frame-policy-integration",
+      "log": "/home/lilith/tmp/zencodec-frame-route-core-20261027.log",
+      "sha256": "2fff9e50081a5b6a4a8a7d0c0400475d2214914e8273afaa230948b33a221e0c",
+      "result": "7 frame-policy tests passed; strict lint found large Question variant; changed callback facts to borrow without allocation",
+      "resource_line": "run-heavy: done rc=101 4s | peak-RSS 0.39GiB | min-avail 11413MiB | peak-load 0.41"
+    },
+    {
+      "command": "just frame-policy-integration",
+      "log": "/home/lilith/tmp/zencodec-frame-route-core-2-20261027.log",
+      "sha256": "3566a9f6d15cefae15cf464da2f1f0ba101d582edcd51bdfb86d23096c373088",
+      "result": "shared frame-policy tests, strict lint, no-default-features checks, all-feature workspace suite and API snapshots passed",
+      "resource_line": "run-heavy: done rc=0 23s | peak-RSS 0.51GiB | min-avail 10874MiB | peak-load 0.73"
+    },
+    {
+      "command": "just frame-route-check <epoch-route-3>",
+      "log": "/home/lilith/tmp/zencodec-epoch-route-3-20261027.log",
+      "sha256": "25ab9ad1e7fc75f5d2290b71d619158ca25ffe2883efc6aa335921098707d159",
+      "result": "final 17 native tests, strict lint, WASM and warning-free workspace/driver rustdoc passed",
+      "resource_line": "run-heavy: done rc=0 33s | peak-RSS 0.52GiB | min-avail 11294MiB | peak-load 0.63"
+    }
+  ],
+  "contract": [
+    "18 native presentations produce five output segments at one/four decoder threads; source-epoch-only change continues first segment.",
+    "Dimension, CICP, depth/subsampling and clock changes select prepared real encoders; FFmpeg/libdav1d verifies exact native components in all segments.",
+    "Fixed output publishes a real IVF header outside the operation before the changed frame is refused. Partial header error/unwind leaves external bytes intact and terminates the operation.",
+    "Cancellation and timeout preserve reasons before preparation, during initial/replacement policy and at finish. Callback causes, stale tokens, decline and storage failures remain terminal.",
+    "Unknown workspace cannot satisfy a required bound. Required metadata/opaque-profile rules refuse offers without corresponding evidence.",
+    "Native encoders drop before compressed segments are returned. Retained packet clones keep payload charges until their final owner drops."
+  ],
+  "limits": [
+    "Private finite native adapter, not a packaged video transcode API.",
+    "No in-band container reconfiguration, prepared planar conversion, live sequential-output qualification or general spool.",
+    "The external header writer is a buffer, not an HTTP server or complete container transaction. Header writes themselves may block while an encoder is live.",
+    "Encoded payload admission excludes native codec/reference/workspace, caller input owners, codec configuration, list bookkeeping and native output allocation before admission.",
+    "Independent component readback does not prove color-signaling correctness.",
+    "Resource lines describe build/test processes, not whole-operation bounds or comparative performance."
+  ]
+}

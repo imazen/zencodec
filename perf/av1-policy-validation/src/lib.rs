@@ -13,6 +13,8 @@ mod checked_video;
 // Compile the same private output candidate against the native video harness.
 // These modules are test-only; no published crate gains a dependency or API.
 #[cfg(test)]
+mod epoch_route;
+#[cfg(test)]
 #[path = "../../spatial-validation/src/image_items.rs"]
 pub mod image_items;
 #[cfg(test)]

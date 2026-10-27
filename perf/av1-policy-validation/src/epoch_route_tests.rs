@@ -1,0 +1,467 @@
+use super::*;
+use crate::fixtures::*;
+use enough::StopReason;
+use std::{cell::Cell, convert::Infallible, path::PathBuf, sync::atomic::AtomicBool};
+use zenavif::media::Av1VideoDecoder;
+use zencodec::{
+    operation::{
+        Decision, DecisionCode, Decline, FrameRouteFacts, PolicyFailure, Question, Selection,
+    },
+    storage::StorageError,
+    time::Timestamp,
+};
+use zencodec_media::session::VideoDecoder;
+
+fn native_stream(threads: u32) -> Vec<Frame> {
+    let mut source = settings(8, Subsampling::Yuv420, false);
+    let mut variants = vec![(source.clone(), TB), (source.clone(), TB)];
+    source.width = 19;
+    source.height = 15;
+    variants.push((source.clone(), TB));
+    source.color = Cicp::new(9, 16, 9, true);
+    variants.push((source.clone(), TB));
+    source.bit_depth = 10;
+    source.subsampling = Subsampling::Yuv422;
+    variants.push((source.clone(), TB));
+    variants.push((source, TimeBase::hz(90_000).unwrap()));
+    let mut settings = rav1d_safe::Settings::default();
+    settings.threads = threads;
+    let mut decoder = Av1VideoDecoder::with_settings(settings).unwrap();
+    let mut actual = Vec::new();
+    let mut expected = Vec::new();
+    for (group, (settings, clock)) in variants.into_iter().enumerate() {
+        let frames: Vec<_> = (0..3).map(|i| frame(&settings, group * 3 + i)).collect();
+        expected.extend(frames.iter().map(samples));
+        let (mut config, packets) = encode(settings, &frames);
+        config.epoch = 10 + group as u32;
+        config.time_base = clock;
+        decoder.configure(&config, &Unstoppable).unwrap();
+        for (index, packet) in packets.into_iter().enumerate() {
+            let pts = (group * 3 + index) as i64 * if clock == TB { 40 } else { 3600 };
+            let mut packet = packet
+                .with_pts(Timestamp::new(pts, clock))
+                .with_duration_ticks(if clock == TB { 40 } else { 3600 })
+                .with_config_epoch(config.epoch)
+                .with_ordinal(7)
+                .with_input_offset(1000 + (group * 3 + index) as u64);
+            while decoder.send(&mut packet, &Unstoppable).unwrap() != SendStatus::Accepted {
+                let Receive::Ready(frame) = decoder.receive(&Unstoppable).unwrap() else {
+                    panic!("native decoder progress promise")
+                };
+                actual.push(frame);
+            }
+        }
+    }
+    decoder.end_input().unwrap();
+    loop {
+        match decoder.receive(&Unstoppable).unwrap() {
+            Receive::Ready(frame) => actual.push(frame),
+            Receive::EndOfStream => break,
+            other => panic!("native decoder failed to drain: {other:?}"),
+        }
+    }
+    drop(decoder);
+    assert_eq!(actual.len(), expected.len());
+    for (index, (frame, expected)) in actual.iter().zip(expected).enumerate() {
+        assert_eq!(samples(frame), expected);
+        assert_eq!(frame.interpretation().config_epoch, 10 + (index / 3) as u32);
+        assert_eq!(frame.timing().packet_ordinal, Some(7));
+        assert_eq!(frame.timing().input_offset, Some(1000 + index as u64));
+    }
+    actual
+}
+
+#[test]
+fn epoch_route_native_changes_prepare_once_preserve_input_context_and_drain_before_output_wait() {
+    let root = PathBuf::from(
+        std::env::var_os("AV1_POLICY_ARTIFACTS").expect("persistent artifact directory required"),
+    );
+    std::fs::create_dir_all(&root).unwrap();
+    for threads in [1, 4] {
+        let frames = native_stream(threads);
+        let storage = StorageBudget::new(1 << 20, 64);
+        let live = Arc::new(AtomicUsize::new(0));
+        let mut seen = Vec::<(FrameRouteFacts, FrameRoute)>::new();
+        let resolver = |question: Question<'_>| -> Result<Decision, At<Infallible>> {
+            let Question::FrameRoute {
+                interpretation,
+                facts,
+                choices,
+            } = question
+            else {
+                panic!("encoding transition question")
+            };
+            assert_eq!(
+                facts.input,
+                FrameFacts::new(interpretation, facts.input.timing)
+            );
+            let choice = choices.first().unwrap();
+            if let Some((previous, _)) = seen.last() {
+                assert_eq!(facts.output.previous, Some(previous.input));
+            } else {
+                assert!(facts.output.previous.is_none());
+            }
+            assert!(!facts.output.output_committed);
+            assert_eq!(
+                choice.value().admitted_encoded_bytes,
+                storage.reserved_bytes()
+            );
+            seen.push((*facts, choice.value().route));
+            Ok(Decision::choose(choice))
+        };
+        let mut operation = Candidate::new(resolver, true, false, storage.clone(), live.clone());
+        for frame in &frames {
+            operation.push(frame, &Unstoppable).unwrap();
+        }
+        assert_eq!(operation.report().dropped_decisions(), 2);
+        for record in operation.report().decisions() {
+            let Some(Selection::FrameRoute(selected)) = record.selected else {
+                panic!("route record lost")
+            };
+            assert_eq!(selected.fidelity, Some(Fidelity::Lossless));
+            assert!(selected.workspace_upper_bound.is_none());
+        }
+        let segments = operation.finish(&Unstoppable).unwrap();
+        assert_eq!(segments.len(), 5);
+        assert_eq!(live.load(Ordering::SeqCst), 0);
+        assert_eq!(seen.len(), frames.len());
+        let mut at = 0;
+        for (epoch, segment) in segments.iter().enumerate() {
+            let count = if epoch == 0 { 6 } else { 3 };
+            assert_eq!(segment.inputs.len(), count);
+            assert_eq!(segment.config.epoch, epoch as u32);
+            assert_eq!(
+                segment.config.time_base,
+                frames[at].timing().pts.unwrap().base()
+            );
+            assert_eq!(
+                segment.config.video.unwrap().color,
+                frames[at].interpretation().color.resolved
+            );
+            for (packet, input) in segment.packets.iter().zip(&segment.inputs) {
+                assert_eq!(packet.pts(), input.pts);
+                assert_eq!(packet.duration_ticks(), input.duration_ticks);
+                assert_eq!(packet.config_epoch(), epoch as u32);
+            }
+            assert_eq!(segment.packets.len(), count);
+            oracle_on_clock(
+                &root,
+                &format!("epoch-{threads}-{epoch}"),
+                &segment.settings,
+                &segment.packets,
+                &frames[at..at + count],
+                segment.config.time_base,
+            );
+            at += count;
+        }
+        for (index, (_, route)) in seen.iter().enumerate() {
+            assert_eq!(
+                *route,
+                if [0, 6, 9, 12, 15].contains(&index) {
+                    FrameRoute::BeginSegment
+                } else {
+                    FrameRoute::Continue
+                }
+            );
+        }
+        // A stalled output consumer holds only accounted compressed payloads.
+        let retained: Vec<_> = segments
+            .iter()
+            .flat_map(|s| s.packets.iter().cloned())
+            .collect();
+        let bytes: usize = retained.iter().map(Packet::len).sum();
+        drop(segments);
+        drop(frames);
+        assert_eq!(storage.reserved_bytes(), bytes);
+        assert_eq!(live.load(Ordering::SeqCst), 0);
+        drop(retained);
+        assert_eq!(
+            (storage.reserved_bytes(), storage.reserved_objects()),
+            (0, 0)
+        );
+    }
+}
+
+#[test]
+fn epoch_route_fixed_committed_output_refuses_before_new_frame_acceptance() {
+    let frames = native_stream(1);
+    let live = Arc::new(AtomicUsize::new(0));
+    let storage = StorageBudget::new(1 << 20, 64);
+    let calls = Cell::new(0);
+    let mut operation = Candidate::new(
+        |question: Question<'_>| -> Result<Decision, At<Infallible>> {
+            calls.set(calls.get() + 1);
+            let Question::FrameRoute { facts, choices, .. } = question else {
+                panic!()
+            };
+            assert_eq!(facts.output.output_committed, calls.get() > 1);
+            if facts.input.geometry.coded_width == 19 {
+                assert_eq!(choices.iter().count(), 0);
+            }
+            Ok(Decision::UsePreset)
+        },
+        false,
+        false,
+        storage.clone(),
+        live.clone(),
+    );
+    operation.push(&frames[0], &Unstoppable).unwrap();
+    // The publisher owns these irreversible bytes, outside the operation.
+    // A header is committed even though no encoded picture has been sent.
+    let mut published = Vec::new();
+    operation
+        .publish_header(
+            |config| {
+                let video = config.video.unwrap();
+                published.extend(ivf_header(
+                    video.coded_width,
+                    video.coded_height,
+                    config.time_base,
+                    6,
+                ));
+                Ok(())
+            },
+            &Unstoppable,
+        )
+        .unwrap();
+    let header = published.clone();
+    assert_eq!(header.len(), 32);
+    assert_eq!(&header[12..16], &[17, 0, 13, 0]);
+    for frame in &frames[1..6] {
+        operation.push(frame, &Unstoppable).unwrap();
+    }
+    let error = operation.push(&frames[6], &Unstoppable).unwrap_err();
+    let policy = zencodec::find_cause::<PolicyFailure>(&*error).unwrap();
+    assert_eq!(policy.record().offered, 0);
+    assert_eq!(policy.record().code, DecisionCode::Declined);
+    assert!(operation.is_failed());
+    assert_eq!(calls.get(), 7);
+    assert_eq!(live.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        (storage.reserved_bytes(), storage.reserved_objects()),
+        (0, 0)
+    );
+    assert!(operation.push(&frames[7], &Unstoppable).is_err());
+    assert_eq!(calls.get(), 7);
+    assert_eq!(published, header);
+}
+
+struct StopAt {
+    stopped: AtomicBool,
+    reason: StopReason,
+}
+impl Stop for StopAt {
+    fn check(&self) -> Result<(), StopReason> {
+        if self.stopped.load(Ordering::SeqCst) {
+            Err(self.reason)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+#[test]
+fn epoch_route_stop_at_preparation_transition_and_finish_keeps_reason_and_releases_owners() {
+    let frames = native_stream(1);
+    for reason in [StopReason::Cancelled, StopReason::TimedOut] {
+        for point in 0..4 {
+            let storage = StorageBudget::new(1 << 20, 64);
+            let live = Arc::new(AtomicUsize::new(0));
+            let stop = StopAt {
+                stopped: AtomicBool::new(point == 0),
+                reason,
+            };
+            let calls = Cell::new(0);
+            let mut operation = Candidate::new(
+                |question: Question<'_>| -> Result<Decision, At<Infallible>> {
+                    calls.set(calls.get() + 1);
+                    let Question::FrameRoute { facts, .. } = question else {
+                        panic!()
+                    };
+                    if point == 1 || point == 2 && facts.input.geometry.coded_width == 19 {
+                        // The real replacement is retained beside the old encoder.
+                        assert_eq!(live.load(Ordering::SeqCst), if point == 1 { 1 } else { 2 });
+                        stop.stopped.store(true, Ordering::SeqCst);
+                    }
+                    Ok(Decision::UsePreset)
+                },
+                true,
+                false,
+                storage.clone(),
+                live.clone(),
+            );
+            let error = if point == 3 {
+                for frame in &frames[..6] {
+                    operation.push(frame, &stop).unwrap();
+                }
+                stop.stopped.store(true, Ordering::SeqCst);
+                operation.finish(&stop).err().expect("finish must stop")
+            } else {
+                let index = if point == 2 {
+                    for frame in &frames[..6] {
+                        operation.push(frame, &stop).unwrap();
+                    }
+                    6
+                } else {
+                    0
+                };
+                let error = operation.push(&frames[index], &stop).unwrap_err();
+                assert!(operation.is_failed());
+                let before = calls.get();
+                assert!(operation.push(&frames[index], &Unstoppable).is_err());
+                assert_eq!(calls.get(), before);
+                error
+            };
+            if point == 1 || point == 2 {
+                let failure = zencodec::find_cause::<PolicyFailure>(&*error).unwrap();
+                assert_eq!(failure.stop_reason(), Some(reason));
+                assert_eq!(failure.record().code, DecisionCode::Stopped);
+            } else {
+                let failure = zencodec::find_cause::<CodecError>(&*error).unwrap();
+                assert_eq!(failure.category(), zencodec::ErrorCategory::Stopped(reason));
+            }
+            assert_eq!(calls.get(), [0, 1, 7, 6][point]);
+            assert_eq!(live.load(Ordering::SeqCst), 0);
+            assert_eq!(
+                (storage.reserved_bytes(), storage.reserved_objects()),
+                (0, 0)
+            );
+        }
+    }
+}
+
+#[test]
+fn epoch_route_partial_header_failure_and_unwind_cannot_resume_or_undo_publication() {
+    let frames = native_stream(1);
+    for unwind in [false, true] {
+        let storage = StorageBudget::new(1 << 20, 64);
+        let live = Arc::new(AtomicUsize::new(0));
+        let mut operation = Candidate::new(
+            PolicySet::new(),
+            false,
+            false,
+            storage.clone(),
+            live.clone(),
+        );
+        operation.push(&frames[0], &Unstoppable).unwrap();
+        let mut published = Vec::new();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            operation.publish_header(
+                |config| {
+                    let video = config.video.unwrap();
+                    let bytes =
+                        ivf_header(video.coded_width, video.coded_height, config.time_base, 6);
+                    published.extend_from_slice(&bytes[..13]);
+                    if unwind {
+                        panic!("controlled partial header unwind")
+                    }
+                    Err(
+                        std::io::Error::new(std::io::ErrorKind::BrokenPipe, "partial header")
+                            .into(),
+                    )
+                },
+                &Unstoppable,
+            )
+        }));
+        if unwind {
+            assert!(result.is_err());
+        } else {
+            let error = result.unwrap().unwrap_err();
+            assert_eq!(
+                zencodec::find_cause::<std::io::Error>(&*error)
+                    .unwrap()
+                    .kind(),
+                std::io::ErrorKind::BrokenPipe
+            );
+        }
+        assert_eq!(published.len(), 13);
+        assert_eq!(&published[..4], b"DKIF");
+        assert!(operation.is_failed());
+        assert!(operation.push(&frames[1], &Unstoppable).is_err());
+        assert_eq!(live.load(Ordering::SeqCst), 0);
+        assert_eq!(
+            (storage.reserved_bytes(), storage.reserved_objects()),
+            (0, 0)
+        );
+    }
+}
+
+#[derive(Debug)]
+struct AppFailure;
+impl std::fmt::Display for AppFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("application route failure")
+    }
+}
+impl Error for AppFailure {}
+
+#[test]
+fn epoch_route_policy_error_decline_stale_choice_unwind_and_storage_failure_are_terminal() {
+    let frames = native_stream(1);
+    for mode in 0..6 {
+        let storage = StorageBudget::new(if mode == 5 { 0 } else { 1 << 20 }, 64);
+        let live = Arc::new(AtomicUsize::new(0));
+        let mut stale = None;
+        let mut operation = Candidate::new(
+            |question: Question<'_>| -> Result<Decision, At<AppFailure>> {
+                let Question::FrameRoute { facts, choices, .. } = question else {
+                    panic!()
+                };
+                let choice = choices.first().unwrap();
+                if stale.is_none() {
+                    stale = Some(choice.id());
+                }
+                if facts.input.geometry.coded_width == 19 {
+                    return match mode {
+                        0 => Err(At::wrap(AppFailure).at()),
+                        1 => Ok(Decision::decline(Decline::ApplicationRule)),
+                        2 => Ok(Decision::Choose(stale.unwrap())),
+                        3 => panic!("controlled transition policy unwind"),
+                        _ => Ok(Decision::UsePreset),
+                    };
+                }
+                Ok(Decision::UsePreset)
+            },
+            true,
+            false,
+            storage.clone(),
+            live.clone(),
+        );
+        if mode == 4 {
+            operation = operation.with_policy_set(PolicySet::new().with_workspace_limit(0));
+        }
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            for frame in &frames[..7] {
+                operation.push(frame, &Unstoppable)?;
+            }
+            Ok::<(), Cause>(())
+        }));
+        match mode {
+            3 => assert!(result.is_err()),
+            0 => assert!(
+                zencodec::find_cause::<AppFailure>(&*result.unwrap().unwrap_err()).is_some()
+            ),
+            5 => assert!(
+                zencodec::find_cause::<StorageError>(&*result.unwrap().unwrap_err()).is_some()
+            ),
+            _ => {
+                let error = result.unwrap().unwrap_err();
+                let failure = zencodec::find_cause::<PolicyFailure>(&*error).unwrap();
+                assert_eq!(
+                    failure.record().code,
+                    if mode == 2 {
+                        DecisionCode::InvalidChoice
+                    } else {
+                        DecisionCode::Declined
+                    }
+                );
+            }
+        }
+        assert!(operation.is_failed());
+        assert_eq!(live.load(Ordering::SeqCst), 0);
+        assert_eq!(
+            (storage.reserved_bytes(), storage.reserved_objects()),
+            (0, 0)
+        );
+    }
+}
