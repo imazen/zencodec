@@ -176,7 +176,10 @@ fn checked_collection_configured_preset_refuses_unproven_obligations() {
             zencodec::find_cause::<Decline>(&error),
             Some(&Decline::UnsupportedQuestion)
         );
-        assert!(error.error().report.decisions().last().unwrap().used_preset);
+        let record = error.error().report.decisions().last().unwrap();
+        assert!(!record.used_preset);
+        assert_eq!(record.admitted, 0);
+        assert!(!record.unmet_requirements.is_empty());
     }
 }
 
