@@ -19,7 +19,7 @@ zencodec-media = { path = "../../zencodec-media" }
 zenmeta = { path = "../../zenmeta", features = ["inventory"], optional = true }
 tiff = { version = "0.11.3", git = "https://github.com/lilith/image-tiff", rev = "10a3b6b2fa88eb5943525066a989ea9e64e644d5", default-features = false, features = ["lzw", "deflate"] }
 zenjxl-decoder = { version = "0.4.0", git = "https://github.com/imazen/zenjxl-decoder", rev = "fe819360581acb3796ea2925f2a81f44f0a430e6", default-features = false }
-zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "974aa0410030ca5b541fcf418a63690e51203ff7", default-features = false, features = ["collections"] }
+zenjxl = { git = "https://github.com/imazen/zenjxl", rev = "f2c0177e153c9308042bfd5fe51a4be1ebac11b0", default-features = false, features = ["collections"] }
 jxl-encoder = { version = "0.4.0", git = "https://github.com/imazen/jxl-encoder", rev = "0255e5a9f61b7270cb3ed3f7b85fec2283deec55", default-features = false, features = ["std"] }
 codec-corpus = "1.1.0"
 bytemuck = "1.25.2"

@@ -74,10 +74,14 @@ fn exact(source: &ImageOutput, output: &ImageOutput) {
                 assert_eq!(a.color_context(), b.color_context());
                 (b.as_strided_bytes(), b.descriptor().bytes_per_pixel())
             }
-            (Samples::Values(_), Samples::Values(b)) => (
-                b.as_strided_bytes(),
-                actual.samples.channel_type().byte_size(),
-            ),
+            (Samples::Values(a), Samples::Values(b)) => {
+                assert_eq!(a.grid(), AuxiliaryGrid::ColorSamples);
+                assert_eq!(b.grid(), AuxiliaryGrid::ColorSamples);
+                (
+                    b.as_strided_bytes(),
+                    actual.samples.channel_type().byte_size(),
+                )
+            }
             _ => panic!("sample role changed"),
         };
         let mut visited = 0;
@@ -484,6 +488,15 @@ fn canvas_projection_preserves_native_canvas_and_refuses_oversized_raw_layers() 
 }
 
 fn synthetic(exif: u8, unaligned: bool, composition: Option<Composition>) -> ImageOutput {
+    synthetic_with_grid(exif, unaligned, composition, AuxiliaryGrid::ColorSamples)
+}
+
+fn synthetic_with_grid(
+    exif: u8,
+    unaligned: bool,
+    composition: Option<Composition>,
+    grid: AuxiliaryGrid,
+) -> ImageOutput {
     let width = 7;
     let height = 5;
     let geometry = ImageGeometry {
@@ -546,10 +559,38 @@ fn synthetic(exif: u8, unaligned: bool, composition: Option<Composition>) -> Ima
                 },
                 source_dim_shift: 0,
             },
-            Values::new(bytes, w, height, stride, channel).unwrap(),
+            Values::new(bytes, w, height, stride, channel)
+                .unwrap()
+                .with_grid(if w == width {
+                    grid
+                } else {
+                    AuxiliaryGrid::Unknown
+                }),
         ));
     }
     ImageOutput::packed(color, extras, interpretation).unwrap()
+}
+
+#[test]
+fn canvas_projection_same_size_unknown_auxiliary_registration_refuses_before_admission() {
+    let source = synthetic_with_grid(
+        6,
+        false,
+        Some(Composition::Composited),
+        AuxiliaryGrid::Unknown,
+    );
+    let pool = StorageBudget::new(1 << 20, 16);
+    let error = project(&source, None, &pool, &zencodec::Unstoppable).unwrap_err();
+    assert!(matches!(
+        zencodec::find_cause::<Refusal>(error.as_ref()),
+        Some(Refusal::AuxiliaryGrid {
+            index: 1,
+            registration: AuxiliaryGrid::Unknown,
+            ..
+        })
+    ));
+    assert_eq!(pool.reserved_bytes(), 0);
+    assert_eq!(pool.reserved_objects(), 0);
 }
 
 #[test]

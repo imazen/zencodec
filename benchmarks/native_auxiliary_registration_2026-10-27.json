@@ -1,0 +1,50 @@
+{
+  "date_utc": "2026-10-27",
+  "kind": "auxiliary registration and native projection qualification; no benchmark claim",
+  "base_commit": "fd014a1890764dbe462c2be36789294acfb3188a",
+  "adapter_commit": "f2c0177e153c9308042bfd5fe51a4be1ebac11b0",
+  "tiff_fork": "10a3b6b2fa88eb5943525066a989ea9e64e644d5",
+  "source_sha256": {
+    "perf/spatial-validation/Cargo.toml": "cbaf8b8d5bfbe4fecf38419c18569fa1f9faf187d7cc7fa681648bd36b2cfcd5",
+    "perf/spatial-validation/dependencies.lock": "c925514837dc0456fee71c8e67a4570829f505dd8fd0330b3b03de3e740d25ec",
+    "perf/spatial-validation/src/canvas_projection.rs": "40003c62f4935b11c160b9f533f461d242e093fcf992615719e1d3713cbb7186",
+    "perf/spatial-validation/src/canvas_projection_tests.rs": "7369a94e632c9ed988222a038850f5eb49b27507633d774e1e8d5d84c0811ec3",
+    "perf/spatial-validation/src/generated_output_tests.rs": "80667651f5a33b82a4681f76ff6ec2430be341079494cceed350c8bef0f0a517"
+  },
+  "checks": [
+    {
+      "command": "just spatial-validation-resolve; just spatial-ci-check /mnt/v/output/zencodec/platform-regions-20261026-run/auxiliary-registration-full-1 cms_oracle,old_jpeg",
+      "log": "/home/lilith/tmp/zencodec-auxiliary-registration-native-20261027.log",
+      "sha256": "17ce96b262a58619417f72baf87c540b5e32ba63e7708991627f73df74bb3b60",
+      "result": "137 tests and strict lint passed; includes unknown same-size registration refusal before admission; precedes additional subsampled projection assertions",
+      "resource_line": "run-heavy: done rc=0 63s | peak-RSS 0.58GiB | min-avail 10954MiB | peak-load 1.06"
+    },
+    {
+      "command": "just spatial-selected-check output_generated_subsampled",
+      "log": "/home/lilith/tmp/zencodec-auxiliary-registration-subsampled-20261027.log",
+      "sha256": "f294c0912204f83093a6aaabe0a20d902bd563573ad103a99792f0fac05d9987",
+      "result": "orchestration failure: nonexistent recipe; no tests ran",
+      "resource_line": "run-heavy: done rc=1 0s | peak-RSS 0.00GiB | min-avail 11581MiB | peak-load 0.35"
+    },
+    {
+      "command": "just spatial-auxiliary-grid-check /mnt/v/output/zencodec/platform-regions-20261026-run/auxiliary-registration-subsampled-1",
+      "log": "/home/lilith/tmp/zencodec-auxiliary-registration-subsampled-2-20261027.log",
+      "sha256": "0df70c89c1251fc6a2ffef3c0ba905bc84f5124e25e743ddf7671f04b5e897d3",
+      "result": "strengthened existing subsampled test passed for seven roles at shifts 1/2/3; strict lint passed",
+      "resource_line": "run-heavy: done rc=0 17s | peak-RSS 0.55GiB | min-avail 11143MiB | peak-load 0.57"
+    }
+  ],
+  "contract": [
+    "Projection requires explicit ColorSamples registration, not matching dimensions or source dim_shift.",
+    "Unknown same-size auxiliaries refuse before payload admission.",
+    "The packaged adapter emits reconstructed auxiliary values on the color grid.",
+    "Odd-origin crop preserves exact native color/auxiliary samples, original source shifts and emitted registration."
+  ],
+  "limits": [
+    "General grid origins, sample phases and resampling are not represented.",
+    "This remains a private geometric projection, not a display render API.",
+    "Independent libjxl checks source declarations; crop equality uses native reconstructed sample bytes.",
+    "Native workspace, metadata and CMS memory are outside output payload admission.",
+    "These validation process resource observations are not comparative performance or a decoder memory bound."
+  ]
+}

@@ -985,7 +985,7 @@ dependencies = [
 [[package]]
 name = "zenjxl"
 version = "0.3.0"
-source = "git+https://github.com/imazen/zenjxl?rev=974aa0410030ca5b541fcf418a63690e51203ff7#974aa0410030ca5b541fcf418a63690e51203ff7"
+source = "git+https://github.com/imazen/zenjxl?rev=f2c0177e153c9308042bfd5fe51a4be1ebac11b0#f2c0177e153c9308042bfd5fe51a4be1ebac11b0"
 dependencies = [
  "bytemuck",
  "enough",

@@ -6,8 +6,8 @@ use zencodec::{
     collection::{Cause, Composition},
     enough::Stop,
     image::{
-        Auxiliary, AuxiliaryImageOwner, ImageGeometry, ImageOutput, Meaning, OutputError,
-        PackedImageOwner, Rect, Samples, ValueSlice,
+        Auxiliary, AuxiliaryGrid, AuxiliaryImageOwner, ImageGeometry, ImageOutput, Meaning,
+        OutputError, PackedImageOwner, Rect, Samples, ValueSlice,
     },
     storage::{SharedStorage, StorageBudget, StorageError},
 };
@@ -29,6 +29,7 @@ pub enum Refusal {
     AuxiliaryGrid {
         index: usize,
         dimensions: (usize, usize),
+        registration: AuxiliaryGrid,
     },
 }
 impl fmt::Display for Refusal {
@@ -86,6 +87,7 @@ impl AuxiliaryImageOwner for Extras {
                     plane.stride,
                     plane.descriptor.channel_type(),
                 )
+                .map(|values| values.with_grid(AuxiliaryGrid::ColorSamples))
             })
             .transpose()
     }
@@ -115,9 +117,9 @@ fn check(stop: &dyn Stop) -> Result<(), Cause> {
 /// admission. Cropping is in oriented canvas coordinates; unsupported raw views,
 /// placement, component codes or unaligned auxiliary grids refuse explicitly.
 /// Source decoding/composition has already happened and retains its own costs.
-/// Qualification here covers native JXL auxiliary registration and controlled
-/// fixtures. Equal dimensions alone do not prove arbitrary auxiliary origins
-/// or phase; the shared API still needs that fact before promoting this helper.
+/// Auxiliary registration must be explicitly established by its adapter;
+/// dimensions alone do not authorize projection. Other grids require their own
+/// geometry representation and resampling mechanism before they can be offered.
 pub fn project(
     image: &ImageOutput,
     region: Option<Rect>,
@@ -190,8 +192,15 @@ pub fn project(
         let (pixels, auxiliary) = match (index, plane.meaning, plane.samples) {
             (0, Meaning::Color, Samples::Pixels(pixels)) => (pixels, None),
             (_, Meaning::Auxiliary(role), Samples::Values(values)) if index > 0 => {
-                if dimensions != (available.width as usize, available.height as usize) {
-                    return Err(Refusal::AuxiliaryGrid { index, dimensions }.into());
+                if values.grid() != AuxiliaryGrid::ColorSamples
+                    || dimensions != (available.width as usize, available.height as usize)
+                {
+                    return Err(Refusal::AuxiliaryGrid {
+                        index,
+                        dimensions,
+                        registration: values.grid(),
+                    }
+                    .into());
                 }
                 // Internal byte-permutation view only: the existing orientation
                 // kernel moves whole scalar values and does no color arithmetic.

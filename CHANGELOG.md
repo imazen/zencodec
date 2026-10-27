@@ -2,6 +2,10 @@
 
 ## Native image selection (unreleased experiment)
 
+- Require declared auxiliary alignment in the private canvas projection and
+  qualify the packaged JXL adapter with subsampled source extras and exact
+  odd-origin crops. Unknown alignment refuses before output admission.
+
 - Retain explicit emitted auxiliary registration through owned/native planes,
   clones and separate color replacement. Registration defaults to unknown;
   equal dimensions and source reduction factors never imply alignment.

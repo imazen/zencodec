@@ -83,6 +83,81 @@ fn owned_first(encoded: Vec<u8>) -> (ImageOutput, Vec<Plane>) {
     (retained, expected)
 }
 
+fn project_packaged_subsampled(encoded: &[u8], expected: &[Plane], shift: u32) {
+    use zencodec::{
+        image::{AuxiliaryGrid, Rect, Samples},
+        source::{ReadAtShim, SliceReadAt},
+        storage::StorageBudget,
+    };
+    let (codecs, source_pool) = crate::jxl_packaged_storage::factories(8, 8);
+    let mut source = ReadAtShim(SliceReadAt::new(encoded));
+    let mut images = crate::jxl_packaged_storage::open_admitted(
+        &codecs,
+        &mut source,
+        Composition::Composited,
+        8,
+        &source_pool,
+    )
+    .unwrap();
+    let image = images
+        .first_image(&ImageRequest::new())
+        .unwrap()
+        .unwrap()
+        .into_output();
+    exact_samples(&image, expected);
+    let region = Rect {
+        x: 1,
+        y: 3,
+        width: 13,
+        height: 9,
+    };
+    let destination_pool = StorageBudget::new(1 << 20, 8);
+    let output = crate::canvas_projection::project(
+        &image,
+        Some(region),
+        &destination_pool,
+        &zencodec::Unstoppable,
+    )
+    .unwrap();
+    let mapped = output.map().unwrap();
+    assert_eq!(mapped.plane_count(), expected.len());
+    for (index, original) in expected.iter().enumerate() {
+        let plane = mapped.plane(index).unwrap().unwrap();
+        assert_eq!(plane.samples.dimensions(), (13, 9));
+        if let Meaning::Auxiliary(role) = plane.meaning {
+            assert_eq!(role.source_dim_shift, shift);
+            let Samples::Values(values) = &plane.samples else {
+                panic!("auxiliary values lost")
+            };
+            assert_eq!(values.grid(), AuxiliaryGrid::ColorSamples);
+        }
+        for y in 0..9 {
+            let Row::Bytes(actual) = plane.samples.row(y).unwrap() else {
+                panic!("native samples lost")
+            };
+            let start = (y + 3) * original.stride + original.channels * 4;
+            assert_eq!(
+                actual,
+                &original.bytes[start..start + 13 * original.channels * 4]
+            );
+        }
+    }
+    drop(mapped);
+    drop(output);
+    drop(image);
+    assert_eq!(
+        (source_pool.reserved_bytes(), source_pool.reserved_objects()),
+        (0, 0)
+    );
+    assert_eq!(
+        (
+            destination_pool.reserved_bytes(),
+            destination_pool.reserved_objects()
+        ),
+        (0, 0)
+    );
+}
+
 #[test]
 fn output_generated_all_seven_auxiliary_roles_preserve_parameters_and_source_hdr() {
     let color: Vec<u8> = (0..8 * 6 * 3).map(|v| (v * 37 + 11) as u8).collect();
@@ -383,7 +458,8 @@ fn output_generated_subsampled_auxiliary_geometry_is_distinct_from_source_shift(
                 &rows(&independent, "extra_details ")[0][..5],
                 &[0, role, 8, 0, shift]
             );
-            let (output, _) = owned_first(encoded);
+            let (output, expected) = owned_first(encoded.clone());
+            project_packaged_subsampled(&encoded, &expected, shift);
             let mapped = output.map().unwrap();
             let plane = mapped.plane(1).unwrap().unwrap();
             let Meaning::Auxiliary(aux) = plane.meaning else {

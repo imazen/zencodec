@@ -1421,12 +1421,25 @@ This is **not the full render API**. Current color is preserved, not converted
 to a requested display profile. Display resizing, native component conversion,
 general auxiliary grid origins/phases, grids requiring resampling, native
 workspace admission, and publication of a complete planned render remain open.
-Matching auxiliary dimensions alone do not prove co-registration: this stage is
-qualified for the native JXL emitted grids and controlled fixtures above. The
-shared contract must carry stronger grid facts before a general adapter can
-infer alignment. It still allocates output for identity, retains the borrowed
+Matching auxiliary dimensions alone do not prove co-registration. The shared
+`AuxiliaryGrid::ColorSamples` declaration now establishes the supported case:
+emitted auxiliary sample centers match color. `Unknown` remains the default and
+refuses projection before output admission, even with matching dimensions.
+Adoption checks the declaration against dimensions; later mappings and color
+replacement preserve it. The packaged JXL adapter supplies this native fact.
+This stage still allocates output for identity, retains the borrowed
 source during work, and checks cancellation at plane boundaries rather than
 inside the orientation kernel. No speed or whole-operation memory claim follows.
+
+The [registration receipt](../../benchmarks/native_auxiliary_registration_2026-10-27.json)
+records the full native gate and an additional odd-origin crop through the
+packaged JXL adapter for all seven named auxiliary roles at source shifts 1/2/3.
+The source declaration remains intact while the emitted grid is `ColorSamples`;
+cropped color and auxiliary values match the native reconstructed samples
+exactly. Independent libjxl inspection still checks the stored declaration.
+General grid origins, phases and resampling remain unrepresented.
+Run `just spatial-auxiliary-grid-check <fresh-artifacts>` with the pinned
+`JXL_SELECTION_ORACLE` to repeat that focused control.
 
 Run `just spatial-projection-check <fresh-artifacts>` with a current pinned
 `JXL_SELECTION_ORACLE`; `SPATIAL_PROJECTION_ARTIFACTS` is set by that recipe.
