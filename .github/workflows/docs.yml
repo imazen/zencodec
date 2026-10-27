@@ -176,6 +176,17 @@ jobs:
           cp perf/spatial-validation/dependencies.lock perf/spatial-validation/Cargo.lock
           timeout --kill-after=15s 10m cargo test --manifest-path perf/spatial-validation/Cargo.toml --features cms_oracle,old_jpeg --locked -- --nocapture --test-threads=1
           timeout --kill-after=15s 5m cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --features cms_oracle,old_jpeg --all-targets --locked -- -D warnings
+      - name: Check standalone renderer and its example
+        timeout-minutes: 5
+        run: |
+          cp zencodec-render/dependencies.lock zencodec-render/Cargo.lock
+          timeout --kill-after=15s 2m cargo check --manifest-path zencodec-render/Cargo.toml --no-default-features --locked
+          timeout --kill-after=15s 2m cargo clippy --manifest-path zencodec-render/Cargo.toml --all-targets --locked -- -D warnings
+          timeout --kill-after=15s 2m cargo test --manifest-path zencodec-render/Cargo.toml --doc --locked
+      - uses: dtolnay/rust-toolchain@1.89.0
+      - name: Check renderer MSRV
+        timeout-minutes: 3
+        run: timeout --kill-after=15s 2m cargo +1.89.0 check --manifest-path zencodec-render/Cargo.toml --no-default-features --locked
       - name: Retain independent layer evidence
         if: always()
         uses: actions/upload-artifact@v7

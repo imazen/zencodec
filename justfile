@@ -366,6 +366,9 @@ shared-output-check artifacts:
 
 # Native TIFF spatial candidates and the positional-to-seek bridge.
 spatial-validation-sync export:
+    mkdir -p "{{export}}/zencodec-render/src"
+    cp zencodec-render/Cargo.toml zencodec-render/dependencies.lock "{{export}}/zencodec-render/"
+    cp zencodec-render/src/*.rs "{{export}}/zencodec-render/src/"
     just io-core-sync "{{export}}"
     cp zenmeta/src/ifd/walk.rs "{{export}}/zenmeta/src/ifd/"
     cp zencodec-media/Cargo.toml "{{export}}/zencodec-media/"
@@ -474,6 +477,7 @@ spatial-projection-check artifacts:
 
 # Unified held-image color/geometry/publication candidate; native TIFF and JXL.
 spatial-render-check:
+    cp zencodec-render/dependencies.lock zencodec-render/Cargo.lock
     cargo fmt --manifest-path perf/spatial-validation/Cargo.toml -p spatial-validation
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked canvas_render -- --nocapture --test-threads=1
     just spatial-validation-lint
@@ -1230,3 +1234,14 @@ frame-cost-pair-run zenbench root:
 av1-coupled-mux-check artifacts:
     AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked mux_native_coupled_ -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# Standalone renderer uses the review converter; core codec graphs stay unchanged.
+render-check:
+    cp zencodec-render/dependencies.lock zencodec-render/Cargo.lock
+    cargo check --manifest-path zencodec-render/Cargo.toml --no-default-features --locked
+    cargo clippy --manifest-path zencodec-render/Cargo.toml --all-targets --locked -- -D warnings
+    cargo test --manifest-path zencodec-render/Cargo.toml --doc --locked
+
+render-msrv-check:
+    cp zencodec-render/dependencies.lock zencodec-render/Cargo.lock
+    cargo +1.89.0 check --manifest-path zencodec-render/Cargo.toml --no-default-features --locked

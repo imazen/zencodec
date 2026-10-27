@@ -1385,7 +1385,7 @@ memory or timing comparisons.
 
 ### Combined held-image rendering
 
-The private [`Renderer::render`](src/canvas_render.rs) now executes requested
+The shared [`Renderer::render`](../../zencodec-render/src/render.rs) executes requested
 color, oriented canvas/region projection, auxiliary retention and publication
 policy as one held-output operation. It prepares an actual `OutputPlan` against
 the current descriptor/context before allocating projected samples. The source
@@ -1423,7 +1423,7 @@ subsampled auxiliaries also go through the combined color/geometry operation.
 Tests inject cancellation/timeout at every observed seam, destination byte and
 object refusal, traced callback failure, policy refusal and unwind.
 
-The renderer remains private, but now exposes `render_selected(&mut images,
+The renderer is now in `zencodec-render` and exposes `render_selected(&mut images,
 &id)` through the shared `CheckedCollection::decode_with` adapter hook. Native
 reconstruction, transformation and one final publication decision happen inside
 the same checked operation. The already-held `render` entry remains available
@@ -1450,7 +1450,7 @@ native documentation CI runs the independent path with `cms_oracle` enabled.
 
 ### Canvas projection before a complete render API
 
-The private [`canvas_projection::project`](src/canvas_projection.rs) executes a
+The shared [`geometry::project`](../../zencodec-render/src/geometry.rs) executes a
 geometry stage over the shared owned output. `None` selects the complete
 oriented canvas; an explicit `Rect` selects display-space coordinates. The
 source must be qualified `Composited`, have an established orientation and no
@@ -1570,3 +1570,21 @@ It does not preserve encoded file bytes or perform descriptive-metadata policy.
 Run `just spatial-output-plan-check` for this and the existing conversion
 contracts. Full qualification uses `just spatial-ci-check` with the documented
 independent readers. No throughput or compile-time comparison is implied.
+
+
+## Public rendering companion
+
+The geometry and combined-render implementations now live in `zencodec-render`;
+the old harness modules only import them and host the unchanged native tests.
+`Renderer::new(storage)` defaults to full oriented sRGB RGBA8, rounding and
+clipping for display while retaining alpha. Explicit `RenderRequest` options
+support the precision-sensitive paths qualified above. One added native test
+checks all eight orientations, exact alpha preservation and one publication
+record through the default constructor.
+
+The full 147-case spatial suite, independent readers and strict lint passed
+against this shared implementation. The dependency lock changes from 127 to 128
+packages: only `zencodec-render` is added; no package version changes. Core
+zencodec gains no converter dependency. The companion is isolated while it needs
+the pinned converter review revision, and requires Rust 1.89 (verified).
+[Contract, reproduction and limits](../../docs/render-contract.md).

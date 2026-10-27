@@ -717,6 +717,7 @@ dependencies = [
  "zencodec",
  "zencodec-io",
  "zencodec-media",
+ "zencodec-render",
  "zenjxl",
  "zenjxl-decoder",
  "zenmeta",
@@ -980,6 +981,16 @@ dependencies = [
  "zencodec",
  "zencodec-io",
  "zenpixels",
+]
+
+[[package]]
+name = "zencodec-render"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "zencodec",
+ "zenpixels",
+ "zenpixels-convert",
 ]
 
 [[package]]

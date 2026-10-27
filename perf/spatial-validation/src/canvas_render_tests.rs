@@ -648,3 +648,55 @@ fn canvas_render_refuses_wrong_color_before_projection_and_raw_layers_before_pub
     assert_eq!(renderer.storage.reserved_bytes(), 0);
     assert_eq!(calls, 0);
 }
+
+#[test]
+fn canvas_render_public_default_delivers_oriented_srgb_rgba_and_retains_alpha() {
+    let renderer = Renderer::new(StorageBudget::new(1 << 20, 32)).with_cms(&MoxCms);
+    for exif in 1..=8 {
+        let source = native_tiff(exif, exif % 2 == 0, 8);
+        let before = source.clone();
+        let output = renderer
+            .render(
+                source,
+                &mut PolicySet::new(),
+                PolicySet::new(),
+                &Unstoppable,
+            )
+            .unwrap();
+        let dimensions = if exif <= 4 { (7, 5) } else { (5, 7) };
+        assert_eq!(
+            output.interpretation().geometry.region,
+            Rect {
+                x: 0,
+                y: 0,
+                width: dimensions.0,
+                height: dimensions.1
+            }
+        );
+        assert_eq!(
+            output.interpretation().orientation,
+            Some(Orientation::Identity)
+        );
+        output
+            .with_pixels(|pixels| {
+                assert_eq!(pixels.descriptor(), PixelDescriptor::RGBA8_SRGB);
+                before
+                    .with_pixels(|original| {
+                        for y in 0..5 {
+                            for x in 0..7 {
+                                let (dx, dy) = position(exif, x, y, 7, 5);
+                                assert_eq!(
+                                    pixels.row(dy)[dx as usize * 4 + 3],
+                                    original.row(y)[x as usize * 4 + 3]
+                                );
+                            }
+                        }
+                    })
+                    .unwrap();
+            })
+            .unwrap();
+        assert_eq!(output.report().decisions().count(), 1);
+        drop(output);
+        assert_eq!(renderer.storage.reserved_bytes(), 0);
+    }
+}

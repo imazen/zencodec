@@ -474,3 +474,13 @@ ownership of the complete route and destination-specific decision evidence;
 callers should not reproduce the preparation choreography. Native preparation
 allocation, whole-operation bounds and live sequential backpressure remain
 unqualified. [Implementation, tests and limits](../perf/av1-policy-validation/README.md#destination-preparation-before-encoder-input).
+
+
+### Shared rendering convenience
+
+`zencodec-render` now owns the tested geometry and color implementation.
+`Renderer::new(storage).render_selected(&mut images, &id)` requests the full
+oriented sRGB RGBA8 canvas and uses the collection policy once on final output.
+Supply a CMS with `with_cms` where required, or an explicit `RenderRequest` for
+color, precision and display-coordinate regions. This companion adds no I/O or
+converter dependency to core zencodec. [Contract and native evidence](render-contract.md).

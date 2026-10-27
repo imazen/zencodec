@@ -2268,3 +2268,20 @@ which tracks `zenpixels 0.2.7`.
 
 - Drop unnecessary `imgref` feature from zenpixels dependency.
 - Add magic byte detection audit example.
+
+## zencodec-render
+
+### [Unreleased]
+
+#### QUEUED BREAKING CHANGES
+
+- None; new unpublished companion API.
+
+#### Added
+
+- Shared `Renderer`, `RenderRequest` and `ColorTarget` for selected or decoded
+  images: full oriented sRGB RGBA8 canvas by default, explicit required output
+  and regions, aligned auxiliary retention and one final publication decision.
+  Geometry/color implementations moved from the native prototype; tests now
+  import the shared crate. Conversion remains outside core codec dependencies.
+  The review converter requires Rust 1.89; the core MSRV is unchanged.

@@ -13,6 +13,7 @@ cms_oracle = []
 old_jpeg = ["tiff/jpeg", "dep:zenmeta"]
 
 [dependencies]
+zencodec-render = { path = "../../zencodec-render" }
 zencodec = { path = "../..", features = ["std"] }
 zencodec-io = { path = "../../zencodec-io", features = ["std"] }
 zencodec-media = { path = "../../zencodec-media" }

@@ -2525,3 +2525,23 @@ operation terminal; dropping never publishes or finishes implicitly.
 Native validation uses this public driver directly. The complete frame-route
 facade and destination evidence in the shared policy record remain open. These
 blocking writers do not establish safe backpressure against a live encoder.
+
+## Rendering companion
+
+`zencodec_render::Renderer::new(storage)` configures full oriented sRGB RGBA8
+rendering. `with_request(RenderRequest)` and `with_cms(&dyn PluggableCms)`
+configure explicit output and color processing. `RenderRequest::new(descriptor)`
+requires current-space output with channel/depth restrictions; `with_target`,
+`with_region` and `with_conversion` change those requirements explicitly.
+
+`render_selected(&mut CheckedCollection<C, R>, &ImageId)` returns
+`Result<Outcome<ImageOutput>, At<CollectionOperationError>>` and uses the stored
+operation policy once, after rendering. `render(ImageOutput, &mut resolver,
+preset, stop)` returns `Result<Outcome<ImageOutput>, At<RenderFailure>>` for an
+already-held image. `RenderFailure` exposes `RenderStage` (ColorPlan, Geometry,
+Color, Publication) and retains the original error as its source.
+
+The companion and `geometry::project` perform no source I/O. See the
+[rendering contract](render-contract.md) for defaults, refusals, ownership and
+remaining limits. This review crate is separate from the root workspace until
+its required converter revision is published.
