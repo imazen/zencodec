@@ -300,3 +300,29 @@ Dropping a prepared or active output never implicitly finishes it.
 A slow writer may block these methods. Callers must finish the encoder or use a
 separately qualified configuration before allowing writer pressure to retain
 raw/reference buffers. `MuxTiming::streams` alone is not such qualification.
+
+### Retained destination evidence
+
+Frame-route callbacks can inspect `FrameRouteOffer::destination`, populated from
+`PreparedOutput::facts()` before publication or `Output::facts()` for the same
+continuing destination. The selected record retains this bounded value. It
+reports actual seek-back access, byte availability before finish, required final
+patches and whether exact packet timing was successfully required. Unqualified
+routes use `None`; ordinary container timing reports `exact_timing = false`.
+
+This avoids asking application code to coordinate capability queries. Preparation
+still refuses unsupported layout/timing before writes. Facts never authorize an
+unsupported mechanism, and streaming bytes do not prove safe backpressure on a
+live encoder. A full owned frame-to-destination facade remains open; the native
+witness still supplies and retains these objects explicitly.
+
+Native validation on 2026-10-27 exercises these facts with real AV1 encoding and
+MP4/WebM/IVF output: forward versus prefixed seekable destinations, exact versus
+ordinary timing, prepared-policy refusal, and selected-report retention. All 40
+native cases, strict lint and the independent gamma verifier passed. Artifacts
+on r7900x:
+`/mnt/v/output/zencodec/platform-regions-20261026-run/destination-facts-20261027-full-2`;
+log `/home/lilith/tmp/zencodec-destination-facts-full-2-20261027.log`.
+Run-heavy: `rc=0 42s | peak-RSS 0.57GiB | min-avail 11580MiB | peak-load 1.21`.
+This change requires no zenpixels changes. Earlier policy-cost measurements
+predate the added destination field and are not measurements of this revision.

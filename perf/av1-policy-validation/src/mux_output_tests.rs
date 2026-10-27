@@ -361,6 +361,11 @@ fn run<M: Muxer>(make: impl Fn() -> M, extension: &str, forward: bool, bits: u8)
         });
         let mut output =
             Output::with_container_timing(make(), destination, &[track], &Unstoppable).unwrap();
+        let facts = output.facts();
+        assert!(!facts.seek_back);
+        assert!(!facts.exact_timing);
+        assert!(!facts.patches_at_finish);
+
         for packet in packets {
             output.send(packet, &Unstoppable).unwrap();
         }
@@ -384,6 +389,11 @@ fn run<M: Muxer>(make: impl Fn() -> M, extension: &str, forward: bool, bits: u8)
         .unwrap();
         let mut output =
             Output::with_container_timing(make(), destination, &[track], &Unstoppable).unwrap();
+        let facts = output.facts();
+        assert!(facts.seek_back);
+        assert!(!facts.exact_timing);
+        assert_eq!(facts.patches_at_finish, extension != "webm");
+
         for packet in packets {
             output.send(packet, &Unstoppable).unwrap();
         }
@@ -809,6 +819,11 @@ fn mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing() {
             assert_eq!(facts.input.timing, inputs[i].timing());
             assert_eq!(facts.output.output_committed, i > 0);
             let choice = choices.first().unwrap();
+            let destination = choice.value().destination.unwrap();
+            assert!(!destination.seek_back);
+            assert!(destination.streams);
+            assert!(!destination.patches_at_finish);
+            assert!(destination.exact_timing);
             assert_eq!(
                 choice.value().conversion.unwrap().encoder_input.timing,
                 timings[i]
@@ -823,7 +838,7 @@ fn mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing() {
     );
     let mut bytes = Vec::new();
     let mut writer = Some(&mut bytes);
-    let mut destination = None;
+    let mut destination: Option<Output<ExactMp4, Forward<Short<&mut Vec<u8>>>>> = None;
     let mut expected = Vec::new();
     for (i, input) in inputs.iter().enumerate() {
         let mut offer =
@@ -848,10 +863,11 @@ fn mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing() {
                         )?;
                         assert!(!output.timing().patches_at_finish());
                         preparations.set(preparations.get() + 1);
-                        Ok(Some(output))
+                        let facts = output.facts();
+                        Ok((Some(output), Some(facts)))
                     } else {
                         assert!(destination.is_some());
-                        Ok(None)
+                        Ok((None, Some(destination.as_ref().unwrap().facts())))
                     }
                 },
                 || {
@@ -873,6 +889,13 @@ fn mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing() {
                 )
                 .unwrap();
         }
+    }
+    for record in operation.report().decisions() {
+        let Some(zencodec::operation::Selection::FrameRoute(offer)) = record.selected else {
+            panic!()
+        };
+        assert!(offer.destination.unwrap().exact_timing);
+        assert!(!offer.destination.unwrap().seek_back);
     }
     let segments = operation.finish(&Unstoppable).unwrap();
     assert_eq!(segments.len(), 1);
@@ -990,12 +1013,14 @@ fn mux_native_coupled_destination_refusal_precedes_policy_and_conversion() {
         (input.interpretation(), input.timing()),
         None,
         |config| {
-            Ok(PreparedOutput::new(
+            let output = PreparedOutput::new(
                 zenivf::IvfMuxer::new(),
                 Forward(&mut bytes),
                 &[track(config)],
                 &Unstoppable,
-            )?)
+            )?;
+            let facts = output.facts();
+            Ok((output, Some(facts)))
         },
         || panic!("unsupported destination executed conversion"),
         &Unstoppable,
@@ -1034,8 +1059,15 @@ fn mux_native_coupled_policy_refusal_drops_prepared_destination_without_publicat
     let live = Arc::new(AtomicUsize::new(0));
     let storage = StorageBudget::new(1 << 20, 64);
     let mut operation = Candidate::new(
-        |_: Question<'_>| -> Result<Decision, At<std::convert::Infallible>> {
+        |q: Question<'_>| -> Result<Decision, At<std::convert::Infallible>> {
             assert!(prepared.get());
+            let Question::FrameRoute { choices, .. } = q else {
+                panic!()
+            };
+            let destination = choices.first().unwrap().value().destination.unwrap();
+            assert!(destination.exact_timing);
+            assert!(!destination.seek_back);
+            assert!(!destination.patches_at_finish);
             Ok(Decision::decline(Decline::NoPreferredChoice))
         },
         false,
@@ -1056,7 +1088,8 @@ fn mux_native_coupled_policy_refusal_drops_prepared_destination_without_publicat
                 &Unstoppable,
             )?;
             prepared.set(true);
-            Ok(output)
+            let facts = output.facts();
+            Ok((output, Some(facts)))
         },
         || panic!("declined route executed conversion"),
         &Unstoppable,

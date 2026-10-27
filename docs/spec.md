@@ -2550,3 +2550,18 @@ The companion and `geometry::project` perform no source I/O. See the
 [rendering contract](render-contract.md) for defaults, refusals, ownership and
 remaining limits. This review crate is separate from the root workspace until
 its required converter revision is published.
+
+### Destination evidence at frame-route policy
+
+`FrameRouteOffer::destination: Option<DestinationFacts>` describes the actual
+retained writer/container: `seek_back`, `streams`, `patches_at_finish`, and
+`exact_timing`. `None` means unqualified. `PreparedOutput::facts()` and
+`Output::facts()` derive these values from their actual retained objects and
+successful preparation. Ordinary `with_container_timing` does not claim exact
+timing, even when a particular file happens to preserve it.
+
+The selected offer is retained in the bounded decision report. These are facts,
+not capability coordination required of callers: unsupported layouts still fail
+at preparation. Adapters must retain the objects described by their offer. Byte
+streaming says nothing about encoder raw-buffer ownership and never establishes
+safe backpressure or a whole-operation memory bound.

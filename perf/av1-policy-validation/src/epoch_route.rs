@@ -14,8 +14,8 @@ use zencodec::{
     encode::Fidelity,
     frame::{ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, Subsampling},
     operation::{
-        FrameConversionOffer, FrameFacts, FrameRoute, FrameRouteOffer, FrameRouteState,
-        OperationReport, PolicyResolver, PolicySet, resolve_frame_route,
+        DestinationFacts, FrameConversionOffer, FrameFacts, FrameRoute, FrameRouteOffer,
+        FrameRouteState, OperationReport, PolicyResolver, PolicySet, resolve_frame_route,
     },
     storage::StorageBudget,
     time::TimeBase,
@@ -199,7 +199,14 @@ impl<R: PolicyResolver> Candidate<R> {
         execute: impl FnOnce() -> Result<Frame, Cause>,
         stop: &dyn Stop,
     ) -> Result<(), Cause> {
-        self.push_route_with_destination(frame, target, conversion, |_| Ok(()), execute, stop)
+        self.push_route_with_destination(
+            frame,
+            target,
+            conversion,
+            |_| Ok(((), None)),
+            execute,
+            stop,
+        )
     }
     /// Retain the actual destination before policy, conversion or encoder input.
     /// This preparation must not publish bytes; publication is a later operation.
@@ -208,7 +215,7 @@ impl<R: PolicyResolver> Candidate<R> {
         frame: &Frame,
         target: (&FrameInterpretation, FrameTiming),
         conversion: Option<FrameConversionOffer>,
-        prepare_destination: impl FnOnce(&CodecConfig) -> Result<D, Cause>,
+        prepare_destination: impl FnOnce(&CodecConfig) -> Result<(D, Option<DestinationFacts>), Cause>,
         execute: impl FnOnce() -> Result<Frame, Cause>,
         stop: &dyn Stop,
     ) -> Result<D, Cause> {
@@ -252,6 +259,7 @@ impl<R: PolicyResolver> Candidate<R> {
         });
         offer.fidelity = Some(Fidelity::Lossless);
         offer.conversion = conversion;
+        offer.destination = destination.as_ref().and_then(|(_, facts)| *facts);
         offer.admitted_encoded_bytes = self.storage.reserved_bytes();
         let mut output = FrameRouteState::default();
         output.previous = state.previous;
@@ -322,7 +330,7 @@ impl<R: PolicyResolver> Candidate<R> {
         state.previous = Some(FrameFacts::new(frame.interpretation(), frame.timing()));
         check(stop)?;
         self.state = Some(state);
-        Ok(destination.expect("selected route retains destination"))
+        Ok(destination.expect("selected route retains destination").0)
     }
     pub fn finish(mut self, stop: &dyn Stop) -> Result<Vec<Segment>, Cause> {
         let mut state = self

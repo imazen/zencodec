@@ -46,6 +46,40 @@ pub struct FrameRouteState {
     pub output_committed: bool,
 }
 
+/// Facts derived from the actual retained container and writer preparation.
+/// This describes byte delivery, not encoder raw-buffer retention or a bound on
+/// memory. In particular, streaming bytes do not authorize upstream backpressure.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct DestinationFacts {
+    /// The retained writer supports overwriting earlier output positions.
+    pub seek_back: bool,
+    /// The prepared container makes bytes available before finish.
+    pub streams: bool,
+    /// Finishing this layout requires overwriting previously emitted bytes.
+    pub patches_at_finish: bool,
+    /// The retained muxer guarantees exact supplied packet timing or fails.
+    /// False means no such guarantee, not permission to discard timing.
+    pub exact_timing: bool,
+}
+impl DestinationFacts {
+    /// Describe a successfully prepared container/writer pair. Adapters must
+    /// derive these facts from retained objects, never from requested settings.
+    pub const fn new(
+        seek_back: bool,
+        streams: bool,
+        patches_at_finish: bool,
+        exact_timing: bool,
+    ) -> Self {
+        Self {
+            seek_back,
+            streams,
+            patches_at_finish,
+            exact_timing,
+        }
+    }
+}
+
 /// A prepared route for the destination encoder registration fixed by the
 /// request. The adapter retains its encoder/configuration and held input while
 /// policy runs. This question selects continuity, not an arbitrary output codec.
@@ -61,6 +95,9 @@ pub struct FrameRouteOffer {
     /// None means unqualified, not identity or sample preservation. Encoder
     /// fidelity alone never establishes end-to-end transcode fidelity.
     pub conversion: Option<FrameConversionOffer>,
+    /// Actual retained destination evidence. None means unqualified; it does
+    /// not imply forward-only, seekable, staged or safe encoder backpressure.
+    pub destination: Option<DestinationFacts>,
     /// Currently admitted encoded staging held by the operation. This excludes
     /// native input/reference/work buffers and is not a whole-operation bound.
     pub admitted_encoded_bytes: usize,
@@ -74,6 +111,7 @@ impl FrameRouteOffer {
             route,
             fidelity: None,
             conversion: None,
+            destination: None,
             admitted_encoded_bytes: 0,
             workspace_upper_bound: None,
         }

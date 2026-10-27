@@ -42,6 +42,7 @@ use std::{
     fmt,
     io::{self, Seek, SeekFrom, Write},
 };
+use zencodec::operation::DestinationFacts;
 
 type Cause = Box<dyn Error + Send + Sync>;
 
@@ -180,6 +181,7 @@ pub struct Output<M, D> {
     destination: D,
     tracks: Vec<TrackInfo>,
     timing: MuxTiming,
+    exact_timing: bool,
     stats: Stats,
 }
 
@@ -194,12 +196,18 @@ impl<M: Muxer, D: Destination> PreparedOutput<M, D> {
         tracks: &[TrackInfo],
         stop: &dyn Stop,
     ) -> Result<Self, Failure> {
-        Output::prepare_unpublished(mux, destination, tracks, stop, M::begin_exact_timing).map(Self)
+        Output::prepare_unpublished(mux, destination, tracks, stop, true, M::begin_exact_timing)
+            .map(Self)
     }
     /// Timing/layout of the retained muxer. Streaming bytes do not certify safe
     /// backpressure against an upstream encoder's raw-buffer ownership.
     pub const fn timing(&self) -> MuxTiming {
         self.0.timing
+    }
+    /// Facts of this exact preparation for policy and diagnostics. No bytes are
+    /// written, and the prepared muxer/writer remain owned by this object.
+    pub fn facts(&self) -> DestinationFacts {
+        self.0.facts()
     }
     /// Publish the retained header; any failure consumes the preparation.
     pub fn publish(self, stop: &dyn Stop) -> Result<Output<M, D>, Failure> {
@@ -254,7 +262,7 @@ impl<M: Muxer, D: Destination> Output<M, D> {
         tracks: &[TrackInfo],
         stop: &dyn Stop,
     ) -> Result<Self, Failure> {
-        Self::prepare(mux, destination, tracks, stop, M::begin)
+        Self::prepare(mux, destination, tracks, stop, false, M::begin)
     }
 
     /// Require exact packet timing from the actual muxer, or fail before writing.
@@ -264,7 +272,7 @@ impl<M: Muxer, D: Destination> Output<M, D> {
         tracks: &[TrackInfo],
         stop: &dyn Stop,
     ) -> Result<Self, Failure> {
-        Self::prepare(mux, destination, tracks, stop, M::begin_exact_timing)
+        Self::prepare(mux, destination, tracks, stop, true, M::begin_exact_timing)
     }
 
     fn prepare(
@@ -272,6 +280,7 @@ impl<M: Muxer, D: Destination> Output<M, D> {
         destination: D,
         tracks: &[TrackInfo],
         stop: &dyn Stop,
+        exact_timing: bool,
         begin: impl FnOnce(&mut M, &[TrackInfo], MuxHint) -> Result<MuxTiming, SessionError<M::Error>>,
     ) -> Result<Self, Failure> {
         PreparedOutput(Self::prepare_unpublished(
@@ -279,6 +288,7 @@ impl<M: Muxer, D: Destination> Output<M, D> {
             destination,
             tracks,
             stop,
+            exact_timing,
             begin,
         )?)
         .publish(stop)
@@ -289,6 +299,7 @@ impl<M: Muxer, D: Destination> Output<M, D> {
         destination: D,
         tracks: &[TrackInfo],
         stop: &dyn Stop,
+        exact_timing: bool,
         begin: impl FnOnce(&mut M, &[TrackInfo], MuxHint) -> Result<MuxTiming, SessionError<M::Error>>,
     ) -> Result<Self, Failure> {
         let prepare = || -> Result<_, Cause> {
@@ -317,8 +328,19 @@ impl<M: Muxer, D: Destination> Output<M, D> {
             destination,
             tracks: tracks.to_vec(),
             timing,
+            exact_timing,
             stats: Stats::default(),
         })
+    }
+    /// Facts of the retained container/writer, unchanged by publication.
+    /// Progress and partial effects are reported separately through stats/errors.
+    pub fn facts(&self) -> DestinationFacts {
+        DestinationFacts::new(
+            self.destination.can_patch(),
+            self.timing.streams(),
+            self.timing.patches_at_finish(),
+            self.exact_timing,
+        )
     }
     fn failure(&self, stage: Stage, cause: Cause) -> Failure {
         Failure {

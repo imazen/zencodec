@@ -2,6 +2,10 @@
 
 ## Native image selection (unreleased experiment)
 
+- Expose retained destination layout/access/timing facts to frame-route policy
+  and its selected report. Derive them from prepared/active output drivers; byte
+  streaming does not imply safe encoder backpressure or bounded memory.
+
 - Add `Renderer::render_first` for checked first-image rendering without caller
   discovery boilerplate. Preserve discovery/source failures and do not substitute
   thumbnails or skip unsupported selections.
