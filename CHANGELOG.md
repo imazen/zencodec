@@ -314,6 +314,11 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### [Unreleased]
 
+- Qualify required unclipped Gamma22 conversion on real AV1-derived samples.
+  The regression fails against the old pixel revision and passes the fixed
+  internal steps. Save linear/encoded/restored traces and independently inspect
+  them, including deliberate clipping and missing-input controls.
+
 - Migrate native JPEG, AV1/video and TIFF/JXL conversion callers from deprecated
   `forbid_lossy()` to `retain_channels()` without changing their policies. Exact
   carriage continues to use `new_preserving_samples`. Pin all native pixel

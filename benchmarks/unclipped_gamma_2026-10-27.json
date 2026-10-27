@@ -1,0 +1,98 @@
+{
+  "date_utc": "2026-10-27",
+  "base_commit": "26e6b6129ed07fece87fd3c2d149663a96efd45f",
+  "before_pixels": "27eeaf439faa5d71cc9b489d4ff141bf15582759",
+  "fixed_pixels": "86d0e2d30406a006bf8332f142029b7f58353086",
+  "native_before": {
+    "input": -0.46646955609321594,
+    "actual_encoded": 0,
+    "absolute_error": 0.7069873818228213
+  },
+  "model": "sign(x) * abs(x) ** (256/563); existing Adobe exponent, not literal gamma 2.2",
+  "bound": "2e-5 * max(1, abs(reference)) for encoding and roundtrip",
+  "measurements": {
+    "presentations": 54,
+    "extended_samples": 10714,
+    "max_error": 1.0032435548978924e-07,
+    "max_roundtrip_error": 4.76837158203125e-07
+  },
+  "independent_report": {
+    "path": "/mnt/v/output/zencodec/platform-regions-20261026-run/gamma-traces/independent-gamma.json",
+    "sha256": "4e4769da02f0b6e016197ec6cb09477cb739c5dc7fcb657ea98bfb99156ecf12"
+  },
+  "native_regression_suites": {
+    "jpeg": 27,
+    "av1_video": 30,
+    "tiff_jxl": 146,
+    "failed": 0,
+    "ignored": 0,
+    "strict_lint": "passed"
+  },
+  "unchanged_existing_float_outputs": 54,
+  "delta": {
+    "public_api": 0,
+    "packages": 0,
+    "features": 0
+  },
+  "validation": [
+    {
+      "log": "/home/lilith/tmp/zenpixels-unclipped-sdr-probe-20261027.log",
+      "sha256": "aefb72d728fb97cead60021c9888b040a65c2616d31fadd07939f5a0c12eb6c3",
+      "resource_line": "run-heavy: done rc=101 0s | peak-RSS 0.19GiB | min-avail 11780MiB | peak-load 0.32"
+    },
+    {
+      "log": "/home/lilith/tmp/zenpixels-unclipped-sdr-controls-20261027.log",
+      "sha256": "8c9ad2cf9b66b5f8537c80244f7c71db465d67a642e79947b6f23184223e46eb",
+      "resource_line": "run-heavy: done rc=0 1s | peak-RSS 0.28GiB | min-avail 11737MiB | peak-load 0.18"
+    },
+    {
+      "log": "/home/lilith/tmp/zenpixels-unclipped-sdr-workspace-20261027.log",
+      "sha256": "cb3022d142219e5bcd109c0e1c40808379e65ab946c0630d86b43e6e64dcf428",
+      "resource_line": "run-heavy: done rc=0 54s | peak-RSS 2.64GiB | min-avail 8712MiB | peak-load 1.98"
+    },
+    {
+      "log": "/home/lilith/tmp/zencodec-gamma-before-20261027.log",
+      "sha256": "f37763702fb37ff5c3428db61e21150ad790bb773bfe549416c2997d2bb3cf45",
+      "resource_line": "run-heavy: done rc=101 5s | peak-RSS 0.56GiB | min-avail 11478MiB | peak-load 1.26"
+    },
+    {
+      "log": "/home/lilith/tmp/zencodec-gamma-native-full-20261027.log",
+      "sha256": "641207ad184cebe49ce43b055ca908d907c7edc69128bc1d8f5f984813decd4f",
+      "resource_line": "run-heavy: done rc=0 148s | peak-RSS 0.84GiB | min-avail 10895MiB | peak-load 2.67"
+    },
+    {
+      "log": "/home/lilith/tmp/zencodec-gamma-traces-20261027.log",
+      "sha256": "7c9c48c177dee0d4d0fec6d8ca9f37ffc241cbe79c07d73407cd99a503ca14be",
+      "resource_line": "run-heavy: done rc=0 10s | peak-RSS 0.56GiB | min-avail 11476MiB | peak-load 0.88"
+    },
+    {
+      "log": "/home/lilith/tmp/zencodec-gamma-oracle-20261027.log",
+      "sha256": "8b7cbf1cbc8b7266812ed7da38f3afb76090f08b0a7747d2765d5170c7228719",
+      "resource_line": "run-heavy: done rc=0 0s | peak-RSS 0.02GiB | min-avail 11770MiB | peak-load 0.32"
+    },
+    {
+      "log": "/home/lilith/tmp/zencodec-gamma-site-20261027.log",
+      "sha256": "d5ee522b12f53b1ab42bc37aac3563f7bfeb8bbe336503dbf5b2204a0cc8627d",
+      "resource_line": "run-heavy: done rc=0 12s | peak-RSS 0.17GiB | min-avail 11210MiB | peak-load 0.50"
+    },
+    {
+      "log": "/home/lilith/tmp/zencodec-gamma-oracle-final-20261027.log",
+      "sha256": "e52f0934067d75b4e7a7a724b8a97b862a475c4b9ce371896b7eaa5d885ee5c0",
+      "resource_line": "run-heavy: done rc=0 0s | peak-RSS 0.02GiB | min-avail 11778MiB | peak-load 0.26"
+    }
+  ],
+  "scope": "Correctness qualification only; no throughput, isolated memory or compile-time comparison. Existing Adobe exponent and in-range approximation retained.",
+  "remaining": [
+    "all-transfer/backend range guarantees",
+    "finite-domain behavior and numerical-model choice",
+    "coupled streaming reconfiguration",
+    "whole-operation memory and performance/compile-time comparisons"
+  ],
+  "source_sha256": {
+    "perf/av1-policy-validation/src/float_processing.rs": "cfdacd76b62fe4525bda7bad1995639fbd5deb8a905832f902f1bd7d1d8a82c5",
+    "perf/av1-policy-validation/src/planar_conversion_tests.rs": "03f50b8356691d629597c30db0b6b59e2b23295792f3a8f5d47021c2a3bdd5b1",
+    "perf/av1-policy-validation/verify_gamma.py": "f175c419a3b597b30763bb3fee1091fa00df2c375b92313edec2df446e640d39",
+    "perf/av1-policy-validation/verify_gamma_test.py": "24d8e626750130cedf7053ef7b2906f92c325ca5d5478d2607a2b66424548d79"
+  },
+  "ci_gate": "docs.yml checks all saved traces, runs clipping/changed-roundtrip/missing-file controls and uploads raw traces plus independent report"
+}

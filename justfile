@@ -293,7 +293,7 @@ av1-policy-sync export:
     mkdir -p "{{export}}/perf/spatial-validation/src"
     cp perf/spatial-validation/src/image_items.rs perf/spatial-validation/src/image_output.rs "{{export}}/perf/spatial-validation/src/"
     mkdir -p "{{export}}/perf/av1-policy-validation/src"
-    cp perf/av1-policy-validation/Cargo.toml "{{export}}/perf/av1-policy-validation/"
+    cp perf/av1-policy-validation/Cargo.toml perf/av1-policy-validation/verify_gamma.py perf/av1-policy-validation/verify_gamma_test.py "{{export}}/perf/av1-policy-validation/"
     cp perf/av1-policy-validation/src/*.rs "{{export}}/perf/av1-policy-validation/src/"
     mkdir -p "{{export}}/docs/examples"
     cp docs/examples/checked_video.rs "{{export}}/docs/examples/"
@@ -307,6 +307,7 @@ av1-policy-setup:
 av1-policy-check artifacts:
     AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+    just av1-gamma-verify "{{artifacts}}" "{{artifacts}}/independent-gamma.json"
 
 # Native output transitions plus public build/documentation boundaries.
 frame-route-check artifacts:
@@ -1190,3 +1191,8 @@ native-pixels-check artifacts:
     just jpeg-policy-check "{{artifacts}}/jpeg"
     just av1-policy-check "{{artifacts}}/av1"
     just spatial-ci-check "{{artifacts}}/spatial" cms_oracle,old_jpeg
+
+# Inspect saved executing native traces without importing Rust conversion code.
+av1-gamma-verify artifacts report:
+    python3 -m unittest discover -s perf/av1-policy-validation -p verify_gamma_test.py
+    python3 perf/av1-policy-validation/verify_gamma.py "{{artifacts}}" "{{report}}"

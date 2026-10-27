@@ -316,7 +316,22 @@ fn planar_native_borrowed_rows_and_odd_crops_match_full_conversion() {
                     .unwrap();
                     let (full_float, processing) =
                         crate::prepared_conversion::float_pixels_with_processing(&native);
-                    std::fs::write(comparison.join(format!("processing-{index}.csv")), format!("max_iec_error,max_roundtrip_error,max_continuous_error,min_linear,max_linear,clipped_samples\n{},{},{},{},{},{}\n", processing.max_linear_error, processing.max_roundtrip_error, processing.max_model_error, processing.min_linear, processing.max_linear, processing.clipped_samples)).unwrap();
+                    std::fs::write(comparison.join(format!("processing-{index}.csv")), format!("max_iec_error,max_roundtrip_error,max_continuous_error,min_linear,max_linear,clipped_samples,max_gamma_error,max_gamma_roundtrip_error,gamma_extended_samples\n{},{},{},{},{},{},{},{},{}\n", processing.max_linear_error, processing.max_roundtrip_error, processing.max_model_error, processing.min_linear, processing.max_linear, processing.clipped_samples, processing.max_gamma_error, processing.max_gamma_roundtrip_error, processing.gamma_extended_samples)).unwrap();
+                    for (stage, samples) in [
+                        ("linear", &processing.gamma_input),
+                        ("encoded", &processing.gamma_encoded),
+                        ("restored", &processing.gamma_restored),
+                    ] {
+                        std::fs::write(
+                            comparison.join(format!("gamma-{stage}-{index}.raw")),
+                            samples
+                                .iter()
+                                .flatten()
+                                .flat_map(|v| v.to_le_bytes())
+                                .collect::<Vec<_>>(),
+                        )
+                        .unwrap();
+                    }
                     assert!(full_float.iter().flatten().any(|v| *v < 0.0));
                     assert!(full_float.iter().flatten().any(|v| *v > 1.0));
                     std::fs::write(

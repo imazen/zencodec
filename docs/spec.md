@@ -2448,3 +2448,10 @@ before execution. No CMS is consulted. This is distinct from unclipped color
 conversion, whose arithmetic is not bit-exact. The native JXL example in
 `perf/spatial-validation/src/jxl_planned_color_tests.rs` exercises borrowing and
 opaque-alpha addition against actual decoded samples.
+
+The native conversion qualification also covers required unclipped Gamma22
+execution. The previous route accepted the option but clipped actual negative
+AV1-derived samples. Internal extended steps now preserve that range while
+retaining positive in-range and default-clipped results. Raw native traces and
+an independent reader qualify the existing Adobe-exponent model. This does not
+establish universal numerical, HDR or CMS guarantees; see the native AV1 README.

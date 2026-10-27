@@ -452,3 +452,24 @@ strict-preset cleanup and coupled streaming reconfiguration also remain open.
 
 [Receipt](../../benchmarks/public_ycbcr_2026-10-27.json),
 [shared contract](https://github.com/imazen/zenpixels/blob/6250da2fc073150d69cbc6746ffa6cc6724b743f/docs/borrowed-ycbcr-contract.md).
+
+### Required unclipped Gamma22 execution
+
+The executing native regression first failed on the previous pixel revision:
+linear `-0.46646955609321594` became encoded zero despite
+`with_clip_out_of_gamut(false)`. The fixed internal transfer steps preserve
+negative and above-white values. They reuse the existing in-range SIMD results
+and reflect the existing Adobe exponent `563/256`; this is not a claim of
+literal gamma-2.2 equivalence or a change to the default clipped route.
+
+All 54 native presentations now run linear → Gamma22 → linear. Per-presentation
+`processing-*.csv` adds gamma and roundtrip errors and extended-sample counts.
+`gamma-{linear,encoded,restored}-*.raw` retains every little-endian RGB F32 sample.
+`just av1-gamma-verify <native-artifacts> <report.json>` independently reads those
+files with Python's double-precision power function. It requires every expected
+trace, enforces a fixed `2e-5 * max(1, abs(reference))` bound, and checks that
+extended values do not collapse. Negative controls reject clipping, changed
+roundtrip samples and missing files. Reports include trace hashes.
+
+No public API, package or feature was added for this fix. General transfer/backend
+range guarantees, finite-domain behavior and numerical-model choice remain open.

@@ -48,6 +48,12 @@ pub(super) struct Measurements {
     pub max_linear_error: f64,
     pub max_roundtrip_error: f64,
     pub max_model_error: f64,
+    pub max_gamma_error: f64,
+    pub max_gamma_roundtrip_error: f64,
+    pub gamma_extended_samples: usize,
+    pub gamma_input: Vec<[f32; 3]>,
+    pub gamma_encoded: Vec<[f32; 3]>,
+    pub gamma_restored: Vec<[f32; 3]>,
     pub clipped_samples: usize,
     pub min_linear: f32,
     pub max_linear: f32,
@@ -155,6 +161,86 @@ fn continuous_linear(encoded: f64) -> f64 {
     }
 }
 
+// Qualify the existing Gamma22 model on actual decoded-and-linearized AV1
+// samples. This does not publish a new color profile or claim literal gamma 2.2.
+struct GammaTrace {
+    max_error: f64,
+    max_roundtrip: f64,
+    extended: usize,
+    encoded: Vec<[f32; 3]>,
+    restored: Vec<[f32; 3]>,
+}
+fn qualify_gamma(samples: &[[f32; 3]], width: u32, rows: u32) -> GammaTrace {
+    use zenpixels_convert::RowConverter;
+    let linear = PixelDescriptor::RGBF32_LINEAR;
+    let encoded = linear.with_transfer(zenpixels::TransferFunction::Gamma22);
+    let options = ConvertOptions::retain_channels().with_clip_out_of_gamut(false);
+    let mut encode = RowConverter::new_explicit(linear, encoded, &options).unwrap();
+    let mut decode = RowConverter::new_explicit(encoded, linear, &options).unwrap();
+    encode.prepare(width).unwrap();
+    decode.prepare(width).unwrap();
+    let mut gamma = vec![[0f32; 3]; samples.len()];
+    let mut roundtrip = gamma.clone();
+    let stride = width as usize * 12;
+    encode
+        .convert_rows(
+            bytemuck::cast_slice(samples),
+            stride,
+            bytemuck::cast_slice_mut(&mut gamma),
+            stride,
+            width,
+            rows,
+        )
+        .unwrap();
+    decode
+        .convert_rows(
+            bytemuck::cast_slice(&gamma),
+            stride,
+            bytemuck::cast_slice_mut(&mut roundtrip),
+            stride,
+            width,
+            rows,
+        )
+        .unwrap();
+    let mut max_error = 0f64;
+    let mut max_roundtrip = 0f64;
+    let mut extended = 0;
+    for ((source, output), restored) in samples
+        .iter()
+        .flatten()
+        .zip(gamma.iter().flatten())
+        .zip(roundtrip.iter().flatten())
+    {
+        let source = f64::from(*source);
+        let expected = source.abs().powf(256.0 / 563.0).copysign(source);
+        let error = (f64::from(*output) - expected).abs();
+        let roundtrip_error = (f64::from(*restored) - source).abs();
+        assert!(output.is_finite() && restored.is_finite());
+        assert!(
+            error <= 2e-5 * expected.abs().max(1.0),
+            "gamma {source} -> {output}: {error}"
+        );
+        assert!(
+            roundtrip_error <= 2e-5 * source.abs().max(1.0),
+            "gamma roundtrip {source} -> {restored}: {roundtrip_error}"
+        );
+        if !(0.0..=1.0).contains(&source) {
+            assert!(!(0.0..=1.0).contains(output));
+            assert_eq!(source.is_sign_negative(), output.is_sign_negative());
+            extended += 1;
+        }
+        max_error = max_error.max(error);
+        max_roundtrip = max_roundtrip.max(roundtrip_error);
+    }
+    GammaTrace {
+        max_error,
+        max_roundtrip,
+        extended,
+        encoded: gamma,
+        restored: roundtrip,
+    }
+}
+
 pub(super) fn qualify(source: PixelSlice<'_>) -> Measurements {
     let linear = convert(source.clone(), true, false, source.rows()).active();
     assert!(ConvertOptions::retain_channels().clip_out_of_gamut);
@@ -180,10 +266,17 @@ pub(super) fn qualify(source: PixelSlice<'_>) -> Measurements {
         LINEAR,
     )));
     let roundtrip = convert(linear_view, false, false, 2).active();
+    let gamma = qualify_gamma(&linear, source.width(), source.rows());
     let mut measurements = Measurements {
         max_linear_error: 0.0,
         max_roundtrip_error: 0.0,
         max_model_error: 0.0,
+        max_gamma_error: gamma.max_error,
+        max_gamma_roundtrip_error: gamma.max_roundtrip,
+        gamma_extended_samples: gamma.extended,
+        gamma_input: linear.clone(),
+        gamma_encoded: gamma.encoded,
+        gamma_restored: gamma.restored,
         clipped_samples: 0,
         min_linear: f32::INFINITY,
         max_linear: f32::NEG_INFINITY,
