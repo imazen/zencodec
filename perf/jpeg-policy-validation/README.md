@@ -64,3 +64,24 @@ finish-first only. Required unavailable schedules and required zero wait-memory
 bounds refuse before source/destination effects. Both native routes retain
 unknown total memory evidence; a pull source is never treated as proof of a
 bound. This witness now executes the shared row_encode driver; the private scheduling loop has been removed. Native total-retention bounds remain unqualified.
+
+### Unknown opaque-profile evidence
+
+The harness now pins zencodecs `77d316ba`, whose retained transcode offers
+explicitly supply known opaque-profile evidence to zencodec `f384e4c7`.
+An unfilled offer remains unknown and cannot satisfy strict exclusion. The
+adapter also compiles against its older pinned boolean evidence shape; the
+native retain/discard assertions remain equivalent across that migration.
+
+Validation (2026-10-27): all 35 JPEG qualification cases and strict lint passed,
+including native rewrite privacy, late metadata refusal and checked transcodes.
+The separate adapter suite passed all 22 cases against both its original pins
+and a graph verified to contain exactly one local current zencodec. No zenpixels
+change was needed. This establishes these routes, not whole-container PII
+inspection of arbitrary XML, nested objects or reconstruction carriers.
+
+Receipt: `just jpeg-policy-check <artifacts>`; log
+`~/tmp/zencodec-profile-native-20261027.log`, artifacts
+`/mnt/v/output/zencodec/platform-regions-20261026-run/profile-evidence-native`.
+Resource wrapper: `rc=0 17s | peak-RSS 0.69GiB | min-avail 10109MiB | peak-load 0.82`.
+These are build/test process measurements, not codec performance bounds.

@@ -503,7 +503,7 @@ dependencies = [
 [[package]]
 name = "zencodecs"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenpipe?rev=ffecbf56ec8dc0ebcc6dbb16eb1d5925dccd37a5#ffecbf56ec8dc0ebcc6dbb16eb1d5925dccd37a5"
+source = "git+https://github.com/imazen/zenpipe?rev=77d316ba827a9d8e3d6b2aaed892beaef1c58f25#77d316ba827a9d8e3d6b2aaed892beaef1c58f25"
 dependencies = [
  "bytemuck",
  "enough",

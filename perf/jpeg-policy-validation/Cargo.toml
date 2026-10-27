@@ -15,7 +15,7 @@ zenpixels = ">=0.2.16, <0.4.0"
 zenpixels-convert = { version = ">=0.2.16, <0.4.0", features = ["icc-db"] }
 zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "4535ec499d88b04f58882df03e61761526c35756", features = ["controlled-decode", "metadata-rewrite", "extended-metadata"] }
 
-zencodecs = { git = "https://github.com/imazen/zenpipe", rev = "ffecbf56ec8dc0ebcc6dbb16eb1d5925dccd37a5", default-features = false, features = ["std", "cms", "jpeg", "png", "checked-transcode-async"] }
+zencodecs = { git = "https://github.com/imazen/zenpipe", rev = "77d316ba827a9d8e3d6b2aaed892beaef1c58f25", default-features = false, features = ["std", "cms", "jpeg", "png", "checked-transcode-async"] }
 
 [patch.crates-io]
 zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "4535ec499d88b04f58882df03e61761526c35756" }
