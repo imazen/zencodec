@@ -2754,3 +2754,14 @@ buffers the input raster explicitly, negotiates forward versus count-patched
 IVF, preserves a destination prefix, and independently verifies decoded samples.
 This is transport qualification, not a bounded/native streaming raster encoder.
 Production raster codec adoption and repeated-input execution remain open.
+
+### Legacy policy setter migration
+
+`EncodeJob::with_policy`, `DecodeJob::with_policy`, `DynEncodeJob::set_policy`
+and `DynDecodeJob::set_policy` are deprecated: they can silently ignore required
+fields. Use `try_with_policy` (typed), `try_set_policy` (typed or erased), or
+`EncodeRequest::with_policy` / `DecodeRequest::with_policy` with checked execution.
+The operation request builders store requirements; execution reports rejection.
+Deprecation does not change existing codec behavior, and legacy `CodecSet`
+conveniences retain their previous best-effort semantics. Their presence is not
+a guarantee that a requested policy was honored.

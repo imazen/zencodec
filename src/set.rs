@@ -597,6 +597,8 @@ impl CodecSet {
             job.set_stop(stop.clone());
         }
         if let Some(policy) = self.decode_policy {
+            // Legacy convenience preserves best-effort behavior.
+            #[allow(deprecated)]
             job.set_policy(policy);
         }
         Ok(job)
@@ -874,6 +876,8 @@ impl CodecSet {
         let source_metadata = Metadata::from(decoded.info());
         let mut job = self.encode_job_with(target, fidelity)?;
         job.set_metadata_policy(source_metadata, metadata);
+        // Legacy transcode preserves best-effort behavior.
+        #[allow(deprecated)]
         job.set_policy(
             self.encode_policy
                 .unwrap_or_else(EncodePolicy::none)
@@ -1020,6 +1024,8 @@ impl CodecSet {
             job.set_stop(stop.clone());
         }
         if let Some(policy) = self.encode_policy {
+            // Legacy convenience preserves best-effort behavior.
+            #[allow(deprecated)]
             job.set_policy(policy);
         }
         job

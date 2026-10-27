@@ -20,8 +20,10 @@ export async function checkIdeal(browser,url,output) {
     assert.ok((await page.locator('h1').textContent()).includes('executes today'));
     assert.equal(await page.locator('.ideal-step').count(),5);
     const changes=page.locator('.api-change');
-    assert.equal(await page.locator('.api-change:not(#change-operation-storage):not(#change-float-color):not(#change-output-descriptor):not(#change-strided-plane):not(#change-auxiliary-grid):not(#change-frame-route):not(#change-mux-finish):not(#change-mux-timing):not(#change-combined-render):not(#change-float-processing)').count(),12);
-    assert.equal(await page.locator('.api-change:not(#change-float-color):not(#change-output-descriptor):not(#change-strided-plane):not(#change-auxiliary-grid):not(#change-frame-route):not(#change-mux-finish):not(#change-mux-timing):not(#change-combined-render):not(#change-float-processing)').count(),13);
+    assert.equal(await page.locator('.api-change:not(#change-checked-policy-migration):not(#change-operation-storage):not(#change-float-color):not(#change-output-descriptor):not(#change-strided-plane):not(#change-auxiliary-grid):not(#change-frame-route):not(#change-mux-finish):not(#change-mux-timing):not(#change-combined-render):not(#change-float-processing)').count(),12);
+    assert.equal(await page.locator('.api-change:not(#change-checked-policy-migration):not(#change-float-color):not(#change-output-descriptor):not(#change-strided-plane):not(#change-auxiliary-grid):not(#change-frame-route):not(#change-mux-finish):not(#change-mux-timing):not(#change-combined-render):not(#change-float-processing)').count(),13);
+    assert.equal(await page.locator('#change-checked-policy-migration').count(),1);
+    for(const required of ['deprecated','try_with_policy','try_set_policy','atomically','legacy']) assert.ok((await page.locator('#change-checked-policy-migration').textContent()).includes(required),required);
     assert.equal(await page.locator('#change-float-processing').count(),1);
     for(const required of ['OutputPlan','with_clip_out_of_gamut(false)','IEC','replace_packed_color','pub fn']) assert.ok((await page.locator('#change-float-processing').textContent()).includes(required),required);
     assert.equal(await page.locator('#change-combined-render').count(),1);

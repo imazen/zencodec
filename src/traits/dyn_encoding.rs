@@ -426,7 +426,10 @@ pub trait DynEncodeJob {
     /// Override resource limits.
     fn set_limits(&mut self, limits: ResourceLimits);
 
-    /// Set encode security policy.
+    /// Legacy best-effort encode policy; unsupported fields may be ignored.
+    #[deprecated(
+        note = "may silently ignore policy; use try_set_policy or a checked operation request"
+    )]
     fn set_policy(&mut self, policy: crate::EncodePolicy);
 
     /// Apply a required policy or return a recoverable rejection.
@@ -564,6 +567,8 @@ where
     }
 
     fn set_policy(&mut self, policy: crate::EncodePolicy) {
+        // Preserve the legacy setter behavior; checked callers use try_set_policy.
+        #[allow(deprecated)]
         self.try_apply(|job| job.with_policy(policy));
     }
 

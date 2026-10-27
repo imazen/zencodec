@@ -208,7 +208,10 @@ pub trait DynDecodeJob<'a> {
     /// Override resource limits.
     fn set_limits(&mut self, limits: ResourceLimits);
 
-    /// Set decode security policy.
+    /// Legacy best-effort decode policy; unsupported fields may be ignored.
+    #[deprecated(
+        note = "may silently ignore policy; use try_set_policy or a checked operation request"
+    )]
     fn set_policy(&mut self, policy: crate::DecodePolicy);
 
     /// Apply a required policy or return a recoverable rejection.
@@ -392,6 +395,8 @@ where
     }
 
     fn set_policy(&mut self, policy: crate::DecodePolicy) {
+        // Preserve the legacy setter behavior; checked callers use try_set_policy.
+        #[allow(deprecated)]
         self.try_apply(|job| job.with_policy(policy));
     }
 

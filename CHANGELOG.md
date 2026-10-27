@@ -2,6 +2,9 @@
 
 ## Native image selection (unreleased experiment)
 
+- Deprecate generic and erased best-effort policy setters in favor of checked
+  policy methods or operation requests. Legacy behavior and its tests remain.
+
 - Default opaque-profile retention evidence to unknown in transcode offers.
   Strict profile exclusion requires explicit negative evidence from the route;
   descriptive metadata stripping alone cannot establish profile exclusion.

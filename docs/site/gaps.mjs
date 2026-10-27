@@ -43,7 +43,7 @@ const gaps = [
     'zenpixels-convert effects contract and output adapters.', 'docs/ideal-api.md'],
   ['Required metadata and settings', 'DecodeRequest::decode · EncodeRequest::prepare · EncodeRequest::encode_with',
     'Required-versus-preferred requests, prepared native choices, typed refusal and qualified JPEG/PNG metadata/density cases.',
-    'No codec-wide proof for every configuration, fidelity and metadata combination. Wider density reconciliation and whole-container retention remain open. Legacy best-effort setters are still public and are not strengthened by the new checked methods.',
+    'No codec-wide proof for every configuration, fidelity and metadata combination. Wider density reconciliation and whole-container retention remain open. Legacy best-effort policy setters are deprecated with checked replacements; compatibility implementations still retain their previous behavior.',
     'Native conformance loop, then migration/deprecation.', 'https://github.com/imazen/zencodec/issues/169'],
   ['0.3 surface cleanup', 'CodecSet::with_send_encoder · EncodeRequest::prepare_send · frame::SampleEncoding',
     'Additive Send registrations/preparation and shared image/video ownership.',

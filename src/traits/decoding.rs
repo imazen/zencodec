@@ -183,6 +183,9 @@ pub trait DecodeJob<'a>: Sized {
     /// best-effort; static capability flags do not confirm policy enforcement.
     /// Use [`try_set_policy`](Self::try_set_policy) or
     /// [`try_with_policy`](Self::try_with_policy) for a required policy.
+    #[deprecated(
+        note = "may silently ignore policy; use try_with_policy or a checked operation request"
+    )]
     fn with_policy(self, _policy: crate::DecodePolicy) -> Self {
         self
     }

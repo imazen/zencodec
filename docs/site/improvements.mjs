@@ -2,6 +2,19 @@
 // Signatures come from Rust through apiPanels; examples remain executable files.
 export const improvements = [
   {
+    id:'checked-policy-migration', title:'Make ignored policy requests visible to callers',
+    state:'Checked replacements implemented · legacy setters deprecated', date:'2026-10-27',
+    summary:'Typed with_policy and erased set_policy job methods now warn that unsupported fields can be silently ignored.',
+    why:'An infallible setter looks successful even when a codec does nothing. A caller should not need a capability preflight to require a policy.',
+    consumer:'Use EncodeRequest::with_policy or DecodeRequest::with_policy and execute the request; failures surface as errors. At the job level, use try_with_policy or try_set_policy.',
+    adapter:'Forward the checked method and preserve its original rejection. Required operation requests already use this path; legacy CodecSet conveniences retain their prior semantics.',
+    implementor:'Implement try_set_policy atomically: reject unsupported fields without partial mutation. The default accepts only the empty policy. Implementing the legacy setter does not prove checked support.',
+    open:'Deprecation changes diagnostics, not old behavior. Full configuration and metadata delivery remain native conformance obligations; remaining legacy convenience cleanup is still open.',
+    signatures:['checkedDecodePolicy','checkedEncodePolicy'],
+    flow:[['consumer','Store the requirement','operation request'],['adapter','Apply checked policy','before codec input'],['implementor','Accept or reject atomically','no silent substitution'],['consumer','Receive output or error','original cause retained']],
+    evidence:[['Canonical migration','docs/spec.md#legacy-policy-setter-migration'],['Required-policy conformance','zencodec-testkit/tests/operation_requests.rs']],
+  },
+  {
     id:'float-processing', title:'Keep range, precision and pixel storage distinct',
     state:'Native workflow qualified · numerical contract open', date:'2026-10-27',
     summary:'Native AV1 component planes now pass through unclipped RGB F32, existing OutputPlan linear-light processing and shared owned-image replacement.',
