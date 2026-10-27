@@ -332,6 +332,9 @@ impl PolicySet {
     }
     /// Prefer a confirmed lossless mode when offered; otherwise preserve the
     /// request's first available choice. This never weakens a required target.
+    /// For frame routes, first prefer both sample-preserving conversion and
+    /// lossless encoding; then encoder-only lossless evidence. This preference
+    /// is not a requirement for end-to-end sample preservation.
     pub const fn prefer_lossless(mut self, enabled: bool) -> Self {
         self.prefer_lossless = enabled;
         self
@@ -449,8 +452,21 @@ impl PolicyResolver for PolicySet {
                     })
                 };
                 let selected = if self.prefer_lossless {
+                    // Prefer a qualified complete route before considering
+                    // encoder-only evidence. This is still a preference, not
+                    // permission to violate any required bound.
                     permitted()
-                        .find(|choice| choice.value().fidelity == Some(Fidelity::Lossless))
+                        .find(|choice| {
+                            choice.value().fidelity == Some(Fidelity::Lossless)
+                                && choice
+                                    .value()
+                                    .conversion
+                                    .is_some_and(|c| c.preserves_samples)
+                        })
+                        .or_else(|| {
+                            permitted()
+                                .find(|choice| choice.value().fidelity == Some(Fidelity::Lossless))
+                        })
                         .or_else(|| permitted().next())
                 } else {
                     permitted().next()

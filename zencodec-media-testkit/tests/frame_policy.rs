@@ -491,3 +491,61 @@ fn frame_route_conversion_evidence_controls_range_and_siting_without_confusing_e
         }
     }
 }
+
+#[test]
+fn frame_route_lossless_preference_first_uses_complete_conversion_and_encoder_evidence() {
+    use zencodec::{
+        encode::Fidelity,
+        operation::{
+            FrameConversionOffer, FrameFacts, FrameRoute, FrameRouteOffer, FrameRouteState,
+            resolve_frame_route,
+        },
+    };
+    let budget = StorageBudget::new(16, 1);
+    let held = frame(&budget, 0);
+    let mut encoder_only = FrameRouteOffer::new(FrameRoute::Continue);
+    encoder_only.fidelity = Some(Fidelity::Lossless);
+    encoder_only.workspace_upper_bound = Some(16);
+    let mut changes_samples = encoder_only;
+    changes_samples.conversion = Some(FrameConversionOffer::new(FrameFacts::new(
+        held.interpretation(),
+        held.timing(),
+    )));
+    let mut preserves_samples = changes_samples;
+    preserves_samples
+        .conversion
+        .as_mut()
+        .unwrap()
+        .preserves_samples = true;
+    preserves_samples.workspace_upper_bound = Some(32);
+    let offers = [changes_samples, encoder_only, preserves_samples];
+    for (prefer, limit, expected) in [(true, 32, 2), (true, 16, 0), (false, 32, 0)] {
+        let (selected, _) = resolve_frame_route(
+            held.interpretation(),
+            held.timing(),
+            FrameRouteState::default(),
+            &offers,
+            &mut PolicySet::new()
+                .prefer_lossless(prefer)
+                .with_workspace_limit(limit),
+            PolicySet::new(),
+            &Unstoppable,
+        )
+        .unwrap();
+        assert_eq!(selected, expected);
+    }
+    // A preserving converter with unknown encoder fidelity is not a complete
+    // preserving route. Preserve the existing encoder preference in that case.
+    preserves_samples.fidelity = None;
+    let (selected, _) = resolve_frame_route(
+        held.interpretation(),
+        held.timing(),
+        FrameRouteState::default(),
+        &[preserves_samples, encoder_only],
+        &mut PolicySet::new().prefer_lossless(true),
+        PolicySet::new(),
+        &Unstoppable,
+    )
+    .unwrap();
+    assert_eq!(selected, 1);
+}

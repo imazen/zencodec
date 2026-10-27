@@ -643,6 +643,9 @@ one callback, executes only the selected plan, and checks its output before
 encoder acceptance. Conversion failure is terminal and retains the selected
 record. `fidelity` still describes the encoder alone: a sample-preserving
 transcode requires both a preserving conversion and lossless encoding.
+`prefer_lossless(true)` ranks that complete evidence first, then lossless encoder
+mode alone, then request order. It remains a preference and never bypasses a
+required workspace or range constraint.
 
 The range preset accepts a frame route only with both qualified range-preserving
 conversion and confirmed lossless encoding. Siting assumptions also require

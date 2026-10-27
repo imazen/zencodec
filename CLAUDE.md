@@ -462,3 +462,12 @@ passes without changing sample bits or the native conformance threshold; the
 receipt retains the initial failure (`benchmarks/raw_collection_2026-10-26.json`).
 F32 CMYK color conversion is still unqualified and refuses at runtime. Source ICC
 bytes alone must never imply conventional polarity for inverted samples.
+
+## Fixed frame-route preference regression (2026-10-27)
+
+The initial coupled conversion offer left `prefer_lossless` ranking only encoder
+fidelity. A sample-changing conversion could precede a fully preserving route.
+The resolver now ranks complete conversion/encoder preservation first, retaining
+required workspace gates and the legacy encoder-only fallback. The frame-policy
+regression reproduces the old selection and checks both required-bound refusal
+and explicit request-order behavior.

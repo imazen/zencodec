@@ -2,6 +2,9 @@
 
 ## Native image selection (unreleased experiment)
 
+- Prefer complete sample-preserving conversion plus lossless encoding before
+  encoder-only lossless evidence, without bypassing required route constraints.
+
 - Couple retained frame conversion evidence to encoder routes. Expose target
   interpretation/timing, sample/range preservation, siting assumptions and
   scoped admission; qualify fixed-output native AV1 conversion before acceptance.
