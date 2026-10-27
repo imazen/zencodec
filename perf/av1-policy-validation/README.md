@@ -513,3 +513,30 @@ input owners, native workspace/references and bookkeeping are outside that bound
 The test retains converted frames for readback; it does not establish a streaming
 memory bound. HDR, resizing, retiming, continuous muxer changes and packaged
 transcode convenience remain unqualified.
+
+## Explicit retiming through a prepared frame route
+
+The native `coupled_native_retiming_keeps_source_provenance_and_fixed_output_clock`
+case decodes three AV1 frames, then uses `Frame::represent` to share their pictures
+with explicitly supplied output timing. The callback sees unchanged source facts
+and previous-source timing separately from `FrameConversionOffer::encoder_input`.
+A fixed encoder publishes its 1/90000 clock after the first frame. PTS values
+9000, 10800 and 15300 and durations 1800, 4500 and 2700 survive in native output
+packets. FFmpeg/libdav1d independently verifies exact decoded component samples.
+A wrong promised timestamp, like a wrong interpretation, fails terminally before
+sending the converted frame, releases native/staging owners and retains the
+selected decision record.
+
+This qualifies explicit one-input/one-output retiming at the encoder boundary.
+It does not qualify a frame-rate converter (drop/duplicate/interpolation), audio
+synchronization, negative timestamps or preservation of durations in IVF. The
+independent IVF readback verifies samples; packet timing assertions inspect the
+native encoder directly. Coupling this route to the exact MP4 destination gate
+remains required before claiming end-to-end container timing. No public API,
+zenpixels change or pixel copy was required for this retiming mechanism.
+
+Reproduce with `just av1-coupled-check <fresh-artifacts>`. On 2026-10-27 the
+five coupled tests and strict all-target lint passed; run-heavy reported
+`rc=0 6s | peak-RSS 0.57GiB | min-avail 11253MiB | peak-load 0.65`.
+Artifacts: `/mnt/v/output/zencodec/platform-regions-20261026-run/retiming-20261027-2`
+on r7900x. Full log: `/home/lilith/tmp/zencodec-retiming-drift-20261027.log`.

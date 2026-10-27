@@ -186,6 +186,115 @@ fn sources() -> Vec<Frame> {
 }
 
 #[test]
+fn coupled_native_retiming_keeps_source_provenance_and_fixed_output_clock() {
+    use zencodec::{
+        frame::FrameTiming,
+        time::{TimeBase, Timestamp},
+    };
+    let settings = settings(8, Subsampling::Yuv420, false);
+    let originals: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();
+    let (config, packets) = encode(settings, &originals);
+    let inputs = decode(
+        &mut Av1VideoDecoder::new().unwrap(),
+        &config,
+        &packets,
+        &Unstoppable,
+    )
+    .unwrap();
+    let clock = TimeBase::hz(90_000).unwrap();
+    // Explicit variable-rate output, neither a clock-only relabel nor inferred FPS.
+    let timings = [(9000, 1800), (10800, 4500), (15300, 2700)].map(|(pts, duration)| {
+        FrameTiming::at(Timestamp::new(pts, clock)).with_duration_ticks(duration)
+    });
+    let calls = Cell::new(0usize);
+    let executions = Cell::new(0usize);
+    let storage = StorageBudget::new(1 << 20, 64);
+    let live = Arc::new(AtomicUsize::new(0));
+    let mut operation = Candidate::new(
+        |q: Question<'_>| -> Result<Decision, At<std::convert::Infallible>> {
+            let Question::FrameRoute { facts, choices, .. } = q else {
+                panic!()
+            };
+            let i = calls.get();
+            assert_eq!(executions.get(), i);
+            assert_eq!(facts.input.timing, inputs[i].timing());
+            assert_eq!(
+                facts.output.previous.map(|p| p.timing),
+                i.checked_sub(1).map(|j| inputs[j].timing())
+            );
+            assert_eq!(facts.output.output_committed, i > 0);
+            let choice = choices.first().unwrap();
+            let conversion = choice.value().conversion.unwrap();
+            assert_eq!(conversion.encoder_input.timing, timings[i]);
+            assert!(conversion.preserves_samples);
+            calls.set(i + 1);
+            Ok(Decision::choose(choice))
+        },
+        false,
+        false,
+        storage.clone(),
+        live.clone(),
+    );
+    let mut expected = Vec::new();
+    for (i, input) in inputs.iter().enumerate() {
+        let mut offer =
+            FrameConversionOffer::new(FrameFacts::new(input.interpretation(), timings[i]));
+        offer.preserves_samples = true;
+        offer.preserves_extended_range = true;
+        operation
+            .push_route(
+                input,
+                (input.interpretation(), timings[i]),
+                Some(offer),
+                || {
+                    executions.set(executions.get() + 1);
+                    let retimed = input.represent(timings[i], input.presentation());
+                    assert!(retimed.shares_picture(input));
+                    expected.push(retimed.clone());
+                    Ok(retimed)
+                },
+                &Unstoppable,
+            )
+            .unwrap();
+        if i == 0 {
+            operation
+                .publish_header(
+                    |config| {
+                        assert_eq!(config.time_base, clock);
+                        Ok(())
+                    },
+                    &Unstoppable,
+                )
+                .unwrap();
+        }
+    }
+    let segments = operation.finish(&Unstoppable).unwrap();
+    assert_eq!(segments.len(), 1);
+    assert_eq!(calls.get(), inputs.len());
+    assert_eq!(executions.get(), inputs.len());
+    let segment = &segments[0];
+    assert_eq!(segment.inputs, timings);
+    assert_eq!(segment.packets.len(), timings.len());
+    for (packet, timing) in segment.packets.iter().zip(timings) {
+        assert_eq!(packet.pts(), timing.pts);
+        assert_eq!(packet.duration_ticks(), timing.duration_ticks);
+    }
+    let root = PathBuf::from(std::env::var_os("AV1_POLICY_ARTIFACTS").unwrap());
+    std::fs::create_dir_all(&root).unwrap();
+    oracle_on_clock(
+        &root,
+        "coupled-retimed",
+        &segment.settings,
+        &segment.packets,
+        &expected,
+        clock,
+    );
+    drop(segments);
+    assert_eq!(live.load(std::sync::atomic::Ordering::SeqCst), 0);
+    assert_eq!(storage.reserved_bytes(), 0);
+}
+
+#[test]
 fn coupled_native_changes_convert_to_one_committed_encoder_with_disclosed_losses() {
     let inputs = sources();
     let pool = StorageBudget::new(1 << 20, 64);
@@ -349,7 +458,7 @@ fn coupled_native_exact_sample_callback_refuses_lossless_encoder_with_lossy_conv
 #[test]
 fn coupled_native_conversion_failure_and_target_drift_are_terminal_after_selection() {
     let inputs = sources();
-    for drift in [false, true] {
+    for drift in [0, 1, 2] {
         let live = Arc::new(AtomicUsize::new(0));
         let storage = StorageBudget::new(1 << 20, 64);
         let mut operation = Candidate::new(
@@ -370,7 +479,10 @@ fn coupled_native_conversion_failure_and_target_drift_are_terminal_after_selecti
                 (target, inputs[1].timing()),
                 Some(conversion),
                 || {
-                    if drift {
+                    if drift == 2 {
+                        // Correct target interpretation, wrong promised timestamp.
+                        Ok(inputs[0].clone())
+                    } else if drift == 1 {
                         Ok(inputs[1].clone())
                     } else {
                         Err(std::io::Error::other("conversion failed after policy").into())
@@ -381,7 +493,7 @@ fn coupled_native_conversion_failure_and_target_drift_are_terminal_after_selecti
             .unwrap_err();
         assert_eq!(
             error.to_string(),
-            if drift {
+            if drift != 0 {
                 "prepared conversion target changed"
             } else {
                 "conversion failed after policy"
