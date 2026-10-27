@@ -3,6 +3,7 @@
 #![cfg(test)]
 
 mod canvas_projection;
+mod canvas_render;
 mod checked_collection;
 mod checked_collection_tests;
 #[path = "../../../docs/examples/checked_source.rs"]

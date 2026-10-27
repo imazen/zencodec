@@ -231,6 +231,13 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Native render integration (2026-10-27) exposed a same-profile U8 sample
+  change in zenpixels-convert when TIFF supplied an authoritative ICC and
+  unknown descriptor color fields. Fixed by zenpixels `02ccdfb0`; the spatial
+  harness pins it and checks exact TIFF samples and independent CMS output.
+  The combined renderer remains private; collection-level integration,
+  planar video and full workspace/privacy admission are still open.
+
 - Fixed during destination-contract validation (2026-10-27): the former
   `apply_finish` appended its tail and applied earlier patches before rejecting
   a later invalid range. A native-output regression observed changed bytes on

@@ -469,6 +469,20 @@ spatial-projection-check artifacts:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked canvas_projection -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
 
+# Unified held-image color/geometry/publication candidate; native TIFF and JXL.
+spatial-render-check:
+    cargo fmt --manifest-path perf/spatial-validation/Cargo.toml -p spatial-validation
+    cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked canvas_render -- --nocapture --test-threads=1
+    just spatial-validation-lint
+
+spatial-render-oracle-check artifacts:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    : "${SPATIAL_COLOR_ORACLE:?supply compiled independent Little CMS reader}"
+    export SPATIAL_COLOR_ARTIFACTS="{{artifacts}}"
+    cargo test --manifest-path perf/spatial-validation/Cargo.toml --features cms_oracle --locked canvas_render -- --nocapture --test-threads=1
+    just spatial-validation-lint cms_oracle
+
 # Reproduce a raw-layer oracle disagreement with explicit headers and libraries.
 # Native captures are reused; this does not rerun or time the Rust decoder.
 spatial-layer-oracle-compare captured native output headers="/usr/include" libdir="/usr/lib/x86_64-linux-gnu" library="jxl":

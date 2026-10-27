@@ -646,6 +646,11 @@ None.
 
 ## [Unreleased]
 
+- Qualify a private combined held-image render operation over native TIFF and
+  JXL: exact required color, oriented regions, retained auxiliary values and
+  finished-output publication policy. The loop found and fixed a same-profile
+  sample change in zenpixels-convert; no new shared render API is claimed.
+
 ### Native API validation
 
 - Pin the required-descriptor `OutputPlan` constructor and validate exact native

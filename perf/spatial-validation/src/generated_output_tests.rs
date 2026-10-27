@@ -111,6 +111,7 @@ fn project_packaged_subsampled(encoded: &[u8], expected: &[Plane], shift: u32) {
         width: 13,
         height: 9,
     };
+    crate::canvas_render::tests::qualify_auxiliaries(&image, region);
     let destination_pool = StorageBudget::new(1 << 20, 8);
     let output = crate::canvas_projection::project(
         &image,

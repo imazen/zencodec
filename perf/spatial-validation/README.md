@@ -1382,6 +1382,62 @@ done rc=0 12s | peak-RSS 0.32GiB | min-avail 11217MiB | peak-load 0.72`.
 These wrapper observations cover whole test/build commands, not isolated codec
 memory or timing comparisons.
 
+### Combined held-image rendering
+
+The private [`Renderer::render`](src/canvas_render.rs) now executes requested
+color, oriented canvas/region projection, auxiliary retention and publication
+policy as one held-output operation. It prepares an actual `OutputPlan` against
+the current descriptor/context before allocating projected samples. The source
+owner drops before color replacement; separate projected auxiliary ownership
+lets the superseded color allocation drop as well. Cancellation is checked
+between conversion rows and at publication seams. Refusal, application errors
+and unwind release unpublished destination charges.
+
+`Request` requires an exact output descriptor and a target: current sample
+color, named CICP or explicit ICC. Current means the held samples, not the
+original file's pre-transform color. `None` for the region requests the full
+oriented canvas. The existing policy callback sees the finished owner with
+its exact color and geometry; failures preserve a stage and traced concrete
+cause without exposing arbitrary payloads in default formatting. Raw layers,
+unknown auxiliary registration and unsupported interpretation still refuse.
+This does not sanitize retained source extensions or establish a PII guarantee.
+
+The native TIFF loop found a one-bit same-profile change: RGBA8
+`[0, 37, 74, 111]` became `[0, 37, 73, 111]`. An authoritative ICC with unknown
+descriptor color fields incorrectly selected a CMS round trip.
+[zenpixels 02ccdfb0](https://github.com/imazen/zenpixels/commit/02ccdfb0810dd577a196997ad0bbf9e7bf7c8eb8)
+now resolves only unknown fields from that same ICC for identity planning.
+Borrowed views carry the resolved descriptor; borrowed and copied samples stay
+exact. This integration required zero new zenpixels public items, dependencies
+or signature changes. It does not quantify the remaining planar/HDR work.
+
+The [combined-render receipt](../../benchmarks/native_combined_render_2026-10-27.json)
+records the actual sources, failed reproduction, independent CMS results and
+full native gate. Classic TIFF and BigTIFF cover all eight orientations,
+RGBA U8/U16/F32, full output and odd crops. Same-profile samples require exact
+bits. Seventeen native TIFF/JXL float selections additionally compare against
+Little CMS followed by an independent EXIF coordinate table; the existing
+absolute CMS tolerance is 0.0001 and alpha stays exact. Generated native JXL
+subsampled auxiliaries also go through the combined color/geometry operation.
+Tests inject cancellation/timeout at every observed seam, destination byte and
+object refusal, traced callback failure, policy refusal and unwind.
+
+This candidate is not yet the shared selected-image render entry point. It
+starts from an already reconstructed owner, so native decode and its existing
+publication boundary precede this call. Its explicit cost is a projected
+payload, then a replacement color payload when needed; even identity geometry
+copies, and descriptor-only normalization currently also copies. One test
+admits geometry but denies the second object and observes a Color-stage error
+with all charges released. This establishes payload accounting, not peak RSS
+or a whole-operation budget. Prepared native decode/ROI, one collection-level
+publication boundary, coupled privacy/metadata decisions, resize, HDR display
+mapping and planar video remain required before promoting a complete render
+contract. No conversion kernel or CMS dependency was added to zencodec itself.
+
+Reproduce with `just spatial-render-check`, or set `SPATIAL_COLOR_ORACLE` and
+run `just spatial-render-oracle-check <fresh-artifact-directory>`. The normal
+native documentation CI runs the independent path with `cms_oracle` enabled.
+
 ### Canvas projection before a complete render API
 
 The private [`canvas_projection::project`](src/canvas_projection.rs) executes a

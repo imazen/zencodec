@@ -1,0 +1,270 @@
+{
+  "date": "2026-10-27",
+  "base": "46c6c28074c7ee9e2085831616ba455efe6b2984",
+  "scope": "Private combined held-image renderer; native decode and final collection API integration remain separate",
+  "zenpixels": "02ccdfb0810dd577a196997ad0bbf9e7bf7c8eb8",
+  "source_sha256": {
+    "perf/spatial-validation/src/canvas_render.rs": "10bb2224ae73c201477d340a3f65cd99df0a04337fd8e8c493b99c75390f8270",
+    "perf/spatial-validation/src/canvas_render_tests.rs": "2160a50a1440deee00fed0efcce9985079a97fe7481e62ad22562fe6da977616",
+    "perf/spatial-validation/src/canvas_render_oracle_tests.rs": "abefdd8a5f18d6ebd6f07365ca1fecfec97dedd125258896ceee5a073dae6c6f",
+    "perf/spatial-validation/src/canvas_projection.rs": "40003c62f4935b11c160b9f533f461d242e093fcf992615719e1d3713cbb7186",
+    "perf/spatial-validation/src/generated_output_tests.rs": "65d06f1e390010643ec09bbaaad5886a9aca54d03327cd395957c27486e94176",
+    "perf/spatial-validation/Cargo.toml": "1ab0c7ecf72813ef1b64db103d9cd473b30818ce19a068caac272bdad82e0c6f",
+    "perf/spatial-validation/dependencies.lock": "bb103092087b8f623da26e8456d98c9d2eefec782cd18be47f318f5865957bff"
+  },
+  "commands": [
+    "just spatial-render-check",
+    "just spatial-render-oracle-check <fresh-artifacts>",
+    "just spatial-ci-check <fresh-artifacts> cms_oracle,old_jpeg"
+  ],
+  "full_native_gate": {
+    "passed": 143,
+    "failed": 0,
+    "ignored": 0,
+    "strict_clippy": "passed",
+    "elapsed_seconds": 61,
+    "run_heavy_peak_rss_gib": 0.59,
+    "min_available_mib": 11101,
+    "peak_load": 1.03,
+    "log": "~/tmp/zencodec-render-full-20261027.log",
+    "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/combined-render-full-1"
+  },
+  "prior_failure": {
+    "log": "~/tmp/zencodec-render-20261027-4.log",
+    "same_profile_source_rgba8": [
+      0,
+      37,
+      74,
+      111
+    ],
+    "wrong_result": [
+      0,
+      37,
+      73,
+      111
+    ],
+    "expectation": "exact samples; unchanged"
+  },
+  "zenpixels_regression": {
+    "test": "current_icc_resolves_unknown_descriptor_without_changing_same_profile_samples",
+    "before": "fails by observing unintended CMS construction",
+    "after": "output contracts, strict lint, docs, WASM and API snapshots pass",
+    "new_public_items": 0,
+    "signature_changes": 0,
+    "new_dependencies": 0,
+    "scope": "this exact-ICC correction only; not the full rendering/video roadmap"
+  },
+  "independent_results": [
+    {
+      "changed_color_samples": 18,
+      "color_samples": 18,
+      "exact_alpha_samples": 0,
+      "held_output_bytes": 192,
+      "held_output_objects": 1,
+      "limit": 0.0001,
+      "max_absolute_difference": 1.1920928955078125e-07,
+      "oracle": "header 2170 runtime 2170 pixels 25600",
+      "orientation": 1,
+      "source": "orientation1_identity.jxl"
+    },
+    {
+      "changed_color_samples": 18,
+      "color_samples": 18,
+      "exact_alpha_samples": 0,
+      "held_output_bytes": 192,
+      "held_output_objects": 1,
+      "limit": 0.0001,
+      "max_absolute_difference": 1.1920928955078125e-07,
+      "oracle": "header 2170 runtime 2170 pixels 25600",
+      "orientation": 2,
+      "source": "orientation2_flip_horizontal.jxl"
+    },
+    {
+      "changed_color_samples": 18,
+      "color_samples": 18,
+      "exact_alpha_samples": 0,
+      "held_output_bytes": 192,
+      "held_output_objects": 1,
+      "limit": 0.0001,
+      "max_absolute_difference": 1.1920928955078125e-07,
+      "oracle": "header 2170 runtime 2170 pixels 25600",
+      "orientation": 3,
+      "source": "orientation3_rotate_180.jxl"
+    },
+    {
+      "changed_color_samples": 18,
+      "color_samples": 18,
+      "exact_alpha_samples": 0,
+      "held_output_bytes": 192,
+      "held_output_objects": 1,
+      "limit": 0.0001,
+      "max_absolute_difference": 1.1920928955078125e-07,
+      "oracle": "header 2170 runtime 2170 pixels 25600",
+      "orientation": 4,
+      "source": "orientation4_flip_vertical.jxl"
+    },
+    {
+      "changed_color_samples": 18,
+      "color_samples": 18,
+      "exact_alpha_samples": 0,
+      "held_output_bytes": 192,
+      "held_output_objects": 1,
+      "limit": 0.0001,
+      "max_absolute_difference": 1.1920928955078125e-07,
+      "oracle": "header 2170 runtime 2170 pixels 25600",
+      "orientation": 5,
+      "source": "orientation5_transpose.jxl"
+    },
+    {
+      "changed_color_samples": 18,
+      "color_samples": 18,
+      "exact_alpha_samples": 0,
+      "held_output_bytes": 192,
+      "held_output_objects": 1,
+      "limit": 0.0001,
+      "max_absolute_difference": 1.1920928955078125e-07,
+      "oracle": "header 2170 runtime 2170 pixels 25600",
+      "orientation": 6,
+      "source": "orientation6_rotate_90_cw.jxl"
+    },
+    {
+      "changed_color_samples": 18,
+      "color_samples": 18,
+      "exact_alpha_samples": 0,
+      "held_output_bytes": 192,
+      "held_output_objects": 1,
+      "limit": 0.0001,
+      "max_absolute_difference": 1.1920928955078125e-07,
+      "oracle": "header 2170 runtime 2170 pixels 25600",
+      "orientation": 7,
+      "source": "orientation7_anti_transpose.jxl"
+    },
+    {
+      "changed_color_samples": 18,
+      "color_samples": 18,
+      "exact_alpha_samples": 0,
+      "held_output_bytes": 192,
+      "held_output_objects": 1,
+      "limit": 0.0001,
+      "max_absolute_difference": 1.1920928955078125e-07,
+      "oracle": "header 2170 runtime 2170 pixels 25600",
+      "orientation": 8,
+      "source": "orientation8_rotate_90_ccw.jxl"
+    },
+    {
+      "changed_color_samples": 18,
+      "color_samples": 18,
+      "exact_alpha_samples": 0,
+      "held_output_bytes": 192,
+      "held_output_objects": 1,
+      "limit": 0.0001,
+      "max_absolute_difference": 4.440892098500626e-16,
+      "oracle": "header 2170 runtime 2170 pixels 102400",
+      "orientation": 1,
+      "source": "conformance_test_images/animation_spline.jxl"
+    },
+    {
+      "changed_color_samples": 0,
+      "color_samples": 18,
+      "exact_alpha_samples": 6,
+      "held_output_bytes": 256,
+      "held_output_objects": 1,
+      "limit": 0.0001,
+      "max_absolute_difference": 0.0,
+      "oracle": "header 2170 runtime 2170 pixels 35",
+      "orientation": 1,
+      "source": "tiff-1"
+    },
+    {
+      "changed_color_samples": 0,
+      "color_samples": 18,
+      "exact_alpha_samples": 6,
+      "held_output_bytes": 256,
+      "held_output_objects": 1,
+      "limit": 0.0001,
+      "max_absolute_difference": 0.0,
+      "oracle": "header 2170 runtime 2170 pixels 35",
+      "orientation": 2,
+      "source": "tiff-2"
+    },
+    {
+      "changed_color_samples": 0,
+      "color_samples": 18,
+      "exact_alpha_samples": 6,
+      "held_output_bytes": 256,
+      "held_output_objects": 1,
+      "limit": 0.0001,
+      "max_absolute_difference": 0.0,
+      "oracle": "header 2170 runtime 2170 pixels 35",
+      "orientation": 3,
+      "source": "tiff-3"
+    },
+    {
+      "changed_color_samples": 0,
+      "color_samples": 18,
+      "exact_alpha_samples": 6,
+      "held_output_bytes": 256,
+      "held_output_objects": 1,
+      "limit": 0.0001,
+      "max_absolute_difference": 0.0,
+      "oracle": "header 2170 runtime 2170 pixels 35",
+      "orientation": 4,
+      "source": "tiff-4"
+    },
+    {
+      "changed_color_samples": 0,
+      "color_samples": 18,
+      "exact_alpha_samples": 6,
+      "held_output_bytes": 256,
+      "held_output_objects": 1,
+      "limit": 0.0001,
+      "max_absolute_difference": 0.0,
+      "oracle": "header 2170 runtime 2170 pixels 35",
+      "orientation": 5,
+      "source": "tiff-5"
+    },
+    {
+      "changed_color_samples": 0,
+      "color_samples": 18,
+      "exact_alpha_samples": 6,
+      "held_output_bytes": 256,
+      "held_output_objects": 1,
+      "limit": 0.0001,
+      "max_absolute_difference": 0.0,
+      "oracle": "header 2170 runtime 2170 pixels 35",
+      "orientation": 6,
+      "source": "tiff-6"
+    },
+    {
+      "changed_color_samples": 0,
+      "color_samples": 18,
+      "exact_alpha_samples": 6,
+      "held_output_bytes": 256,
+      "held_output_objects": 1,
+      "limit": 0.0001,
+      "max_absolute_difference": 0.0,
+      "oracle": "header 2170 runtime 2170 pixels 35",
+      "orientation": 7,
+      "source": "tiff-7"
+    },
+    {
+      "changed_color_samples": 0,
+      "color_samples": 18,
+      "exact_alpha_samples": 6,
+      "held_output_bytes": 256,
+      "held_output_objects": 1,
+      "limit": 0.0001,
+      "max_absolute_difference": 0.0,
+      "oracle": "header 2170 runtime 2170 pixels 35",
+      "orientation": 8,
+      "source": "tiff-8"
+    }
+  ],
+  "limits": [
+    "Full native workspace and CMS scratch are not admitted by the output pool",
+    "Identity geometry copies; descriptor-only normalization currently adds a color payload",
+    "Starts from an already reconstructed owner, not a new shared collection rendering call",
+    "Planar video, HDR presentation, resize, general auxiliary registration and privacy remain open",
+    "No performance or whole-process memory bound claimed"
+  ]
+}
