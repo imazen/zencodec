@@ -242,6 +242,16 @@ fn check(stop: &dyn Stop) -> Result<(), Cause> {
     stop.check()
         .map_err(|r| At::wrap(zencodec::CodecError::new(None, r.into())).into())
 }
+fn validate_source<S: Source>(
+    source: &S,
+    desc: &Description,
+    mechanism: OutputSource,
+) -> Result<(), Cause> {
+    if source.description() != *desc || source.mechanism() != mechanism {
+        return Err(Refusal::SourceChanged.into());
+    }
+    Ok(())
+}
 fn count(total: &mut u64, len: usize, limit: u64) -> Result<(), Cause> {
     let next = total.checked_add(len as u64).ok_or(Refusal::Overflow)?;
     if next > limit {
@@ -317,6 +327,7 @@ pub fn encode<E: Encoder, S: Source, W: Write, R: PolicyResolver>(
     let run = || -> Result<OutputSchedule, Cause> {
         check(stop)?;
         let desc = source.description();
+        let mechanism = source.mechanism();
         if desc.width == 0 || desc.height == 0 {
             return Err(Refusal::Empty.into());
         }
@@ -335,7 +346,7 @@ pub fn encode<E: Encoder, S: Source, W: Write, R: PolicyResolver>(
         let offers = &offers[..if timing.streams() { 2 } else { 1 }];
         boundary = Stage::Policy;
         let (index, record) = match resolve_output_schedule(
-            OutputScheduleFacts::new(timing, source.mechanism()),
+            OutputScheduleFacts::new(timing, mechanism),
             offers,
             &mut resolver,
             options.preset,
@@ -354,6 +365,8 @@ pub fn encode<E: Encoder, S: Source, W: Write, R: PolicyResolver>(
         let mut y = 0;
         loop {
             check(stop)?;
+            boundary = Stage::Read;
+            validate_source(&source, &desc, mechanism)?;
             // The final pending bytes belong to finish. Do not introduce an
             // avoidable writer wait just before releasing native/source state.
             if y == desc.height {
@@ -375,6 +388,7 @@ pub fn encode<E: Encoder, S: Source, W: Write, R: PolicyResolver>(
                 .checked_mul(count as usize)
                 .ok_or(Refusal::Overflow)?;
             boundary = Stage::Read;
+            validate_source(&source, &desc, mechanism)?;
             let mut destination = PixelSliceMut::new(
                 &mut buffer.as_mut_slice()[..size],
                 desc.width,
@@ -387,9 +401,7 @@ pub fn encode<E: Encoder, S: Source, W: Write, R: PolicyResolver>(
             }
             source.read_rows(y, destination, stop)?;
             check(stop)?;
-            if source.description() != desc {
-                return Err(Refusal::SourceChanged.into());
-            }
+            validate_source(&source, &desc, mechanism)?;
             boundary = Stage::Encode;
             let mut pixels = PixelSlice::new(
                 &buffer.as_slice()[..size],

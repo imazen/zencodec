@@ -2655,6 +2655,11 @@ stop)` fills requested active samples with native stride support.
 `Raster::new(PixelSlice)` preserves a complete raster's stride and color
 context. The driver preserves context on each native row push and rejects
 changed declarations before accepting those samples.
+It snapshots acquisition facts before policy and revalidates declaration and
+mechanism after policy, before each output drain, and before/after row reads.
+A callback-induced change fails with `Refusal::SourceChanged`; already confirmed
+appends remain in the failure report. This is boundary validation, not a lock
+against concurrent mutation of externally shared source state.
 
 `Options::new(storage, max_output_bytes)` admits row and staged payload
 storage from a shared pool. `with_batch_rows` sets a nonzero request size;

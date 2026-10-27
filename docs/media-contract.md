@@ -509,3 +509,11 @@ new public doctest passed. Native full-suite resource receipt:
 `rc=0 4s | peak-RSS 0.53GiB | min-avail 13023MiB | peak-load 0.21`.
 This is a correctness-run observation, not a throughput or memory comparison.
 No zenpixels change or dependency addition was required.
+
+Callback-boundary regression (2026-10-27): native JPEG confirms that policy
+changes to dimensions, color context or acquisition fail before header output.
+The same changes during writer callbacks fail before source reads and preserve
+confirmed appends, the selected decision and the original typed refusal.
+All five row-driver tests and strict native/driver lint pass. Resource receipt:
+`rc=0 3s | peak-RSS 0.53GiB | min-avail 12843MiB | peak-load 0.31`.
+This correctness run does not establish a codec memory or performance bound.

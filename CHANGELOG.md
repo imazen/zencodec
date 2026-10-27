@@ -2,6 +2,10 @@
 
 ## Native image selection (unreleased experiment)
 
+- Revalidate retained row-source interpretation and acquisition across policy
+  and writer callbacks; reject drift before reading rows and retain confirmed
+  output effects and selected decisions in the failure.
+
 - Add owned row-source encoding with admitted staging, explicit schedule policy,
   strided raster convenience, preserved color context and located partial-write
   errors. Deprecate encode_to_writer; retain its existing regression coverage.

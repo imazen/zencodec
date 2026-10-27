@@ -371,3 +371,115 @@ fn public_row_driver_staging_admission_failure_releases_owners_before_any_output
     assert!(!enc_live.get());
     assert!(!src_live.get());
 }
+
+#[test]
+fn public_row_driver_revalidates_source_across_policy_and_writer_callbacks() {
+    use zencodec::operation::{Decision, OutputSource, Question};
+    struct Changed {
+        after_policy: Rc<Cell<bool>>,
+        mode: &'static str,
+        reads: Rc<Cell<u32>>,
+    }
+    impl Source for Changed {
+        type Error = io::Error;
+        fn description(&self) -> Description {
+            let changed = self.after_policy.get();
+            let mut desc = Description::new(
+                fixtures::WIDTH + u32::from(changed && self.mode == "width"),
+                fixtures::HEIGHT,
+                PixelDescriptor::RGB8_SRGB,
+            );
+            if changed && self.mode == "context" {
+                desc = desc.with_color_context(Arc::new(zenpixels::ColorContext::from_cicp(
+                    zencodec::Cicp::SRGB,
+                )));
+            }
+            desc
+        }
+        fn mechanism(&self) -> OutputSource {
+            if self.after_policy.get() && self.mode == "mechanism" {
+                OutputSource::Unknown
+            } else {
+                OutputSource::PullRows
+            }
+        }
+        fn read_rows(&mut self, _: u32, _: PixelSliceMut<'_>, _: &dyn Stop) -> io::Result<()> {
+            self.reads.set(self.reads.get() + 1);
+            Err(io::Error::other(
+                "source must not run after preparation changed",
+            ))
+        }
+    }
+    struct MutatingWriter<'a> {
+        bytes: &'a mut Vec<u8>,
+        changed: Rc<Cell<bool>>,
+        mutate: bool,
+    }
+    impl Write for MutatingWriter<'_> {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            if self.mutate {
+                self.changed.set(true);
+            }
+            let n = bytes.len().min(3);
+            self.bytes.extend_from_slice(&bytes[..n]);
+            Ok(n)
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+    for (mode, phase) in ["width", "context", "mechanism"]
+        .into_iter()
+        .flat_map(|mode| ["policy", "writer"].map(|phase| (mode, phase)))
+    {
+        let changed = Rc::new(Cell::new(false));
+        let reads = Rc::new(Cell::new(0));
+        let live = Rc::new(Cell::new(true));
+        let mut bytes = Vec::new();
+        let native = Native {
+            inner: Some(fixtures::config(false, false).job().encoder().unwrap()),
+            live: live.clone(),
+            expected_context: None,
+        };
+        let error = row_encode::encode(
+            native,
+            Changed {
+                after_policy: changed.clone(),
+                mode,
+                reads: reads.clone(),
+            },
+            MutatingWriter {
+                bytes: &mut bytes,
+                changed: changed.clone(),
+                mutate: phase == "writer",
+            },
+            |_: Question<'_>| -> Result<Decision, zencodec::At<std::convert::Infallible>> {
+                if phase == "policy" {
+                    changed.set(true);
+                }
+                Ok(Decision::UsePreset)
+            },
+            Options::new(StorageBudget::new(1 << 20, 1024), 1 << 20)
+                .with_policy_set(PolicySet::new().require_output_schedule(OutputSchedule::Live)),
+            &zencodec::enough::Unstoppable,
+        )
+        .unwrap_err();
+        if phase == "policy" {
+            assert!(
+                bytes.is_empty(),
+                "changed {mode} escaped into header publication"
+            );
+        } else {
+            assert!(!bytes.is_empty(), "mutation must follow actual publication");
+        }
+        assert_eq!(reads.get(), 0);
+        assert_eq!(error.error().emitted as usize, bytes.len());
+        assert_eq!(error.error().stage, Stage::Read);
+        assert_eq!(error.error().report.decisions().count(), 1);
+        assert_eq!(
+            zencodec::find_cause::<Refusal>(&error),
+            Some(&Refusal::SourceChanged)
+        );
+        assert!(!live.get());
+    }
+}

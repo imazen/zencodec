@@ -231,6 +231,12 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed on the API review branch (2026-10-27): the new row driver could publish
+  a live header after policy changed source dimensions/context/acquisition.
+  It now revalidates the retained declaration before output and before/after
+  source reads, preserving the selected record and confirmed output count.
+  Native regression: `public_row_driver_revalidates_source_across_policy_and_writer_callbacks`.
+
 - Native render integration (2026-10-27) exposed a same-profile U8 sample
   change in zenpixels-convert when TIFF supplied an authoritative ICC and
   unknown descriptor color fields. Fixed by zenpixels `02ccdfb0`; the spatial
