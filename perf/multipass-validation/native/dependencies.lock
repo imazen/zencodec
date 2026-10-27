@@ -105,7 +105,7 @@ dependencies = [
  "how-far",
  "imij",
  "multipass-validation",
- "zencodec 0.1.27",
+ "zencodec 0.2.0",
  "zencodec-io",
  "zenpixels",
 ]
@@ -115,7 +115,7 @@ name = "multipass-validation"
 version = "0.0.0"
 dependencies = [
  "enough",
- "zencodec 0.1.27",
+ "zencodec 0.2.0",
  "zencodec-io",
  "zenpixels",
 ]
@@ -187,7 +187,7 @@ checksum = "d107c80dd656e1a2c254dfb1d57ece73b7f515b8a8684c270c23cab68f4a440d"
 
 [[package]]
 name = "zencodec"
-version = "0.1.27"
+version = "0.2.0"
 dependencies = [
  "almost-enough",
  "enough",
@@ -215,7 +215,7 @@ version = "0.1.0"
 dependencies = [
  "enough",
  "how-far",
- "zencodec 0.1.27",
+ "zencodec 0.2.0",
  "zenpixels",
 ]
 

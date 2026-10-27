@@ -105,7 +105,7 @@ checksum = "ab90f361db038ba3135da12c938c328fb43a012992101879e3d6ebccb4d7eba8"
 
 [[package]]
 name = "zencodec"
-version = "0.1.27"
+version = "0.2.0"
 dependencies = [
  "almost-enough",
  "enough",

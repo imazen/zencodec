@@ -179,6 +179,11 @@
 
 ### QUEUED BREAKING CHANGES
 
+- The review development version is now 0.2.0: required Pulse methods introduced
+  in `f51b6d22` cannot ship as a 0.1 patch. Workspace consumers require that
+  contract. Legacy cancellation adapters remain deprecated; no release has
+  been published. The published-baseline semver gates remain enforced.
+
 - Review API: borrowed codec, I/O, policy and media controls now accept `Pulse`;
   jobs require `with_pulse(SharedPulse)` / `set_pulse`, and collection contexts
   retain the complete pulse. Cancellation-only setters remain deprecated adapters.
