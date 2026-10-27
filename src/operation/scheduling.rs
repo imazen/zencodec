@@ -49,6 +49,8 @@ impl OutputScheduleFacts {
 pub struct OutputScheduleOffer {
     /// Mechanism executed if this route is selected.
     pub schedule: OutputSchedule,
+    /// Actual compressed-output store; None means no staging evidence.
+    pub staging: Option<super::StagingFacts>,
     /// Qualified upper bound on all route-retained memory during destination
     /// waits: source, codec, conversion, metadata, scratch and compressed data.
     /// Include caller input retained by the route's borrows. Excludes unrelated
@@ -61,6 +63,7 @@ impl OutputScheduleOffer {
     pub const fn new(schedule: OutputSchedule) -> Self {
         Self {
             schedule,
+            staging: None,
             wait_retained_upper_bound: None,
         }
     }

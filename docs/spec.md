@@ -2679,6 +2679,21 @@ This replaces the private JPEG scheduling loop. `encode_to_writer` is now
 deprecated; one-shot-only encoding remains `Encoder::encode` followed by writing
 its output. Native workspace, source allocations and queue bookkeeping are
 outside payload admission. A blocking OS operation cannot be interrupted by a
-cooperative stop. Disk staging and qualified native total-retention bounds
-remain separate work. This fixed-interpretation driver preserves supplied
+cooperative stop. Qualified native total-retention bounds remain separate work. This fixed-interpretation driver preserves supplied
 context; it does not perform color conversion or metadata/privacy resolution.
+
+
+`Options::with_disk_staging(file, replay_bytes)` explicitly replaces in-memory
+compressed staging for finish-first execution. It takes ownership of a private
+scratch file positioned at EOF, preserves its prefix, and uses the output-byte
+limit as the spool payload cap. Replay admits a bounded chunk from the same
+storage pool after the encoder and source are released. Construction seeks but
+does not write. The caller owns permissions, path retention and deletion; file
+aliases and concurrent modification are unsupported. Live selection leaves the
+scratch unused. Spool I/O can block while native encoder state remains alive.
+
+`OutputScheduleOffer::staging` exposes the actual `StagingFacts` through the
+existing callback and selected report: memory/disk, current payload and limit.
+A live offer has no staging. No new policy callback or automatic fallback is
+introduced. `Stage::Replay` distinguishes spool reads/admission from destination
+writes; late failures retain confirmed destination appends and concrete causes.

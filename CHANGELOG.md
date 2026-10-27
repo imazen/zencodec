@@ -2,6 +2,10 @@
 
 ## Native image selection (unreleased experiment)
 
+- Add explicit private disk staging to row encoding, with admitted chunk replay
+  after native release and staging facts in the existing schedule policy.
+  Preserve scratch prefixes, typed failures and confirmed destination appends.
+
 - Revalidate retained row-source interpretation and acquisition across policy
   and writer callbacks; reject drift before reading rows and retain confirmed
   output effects and selected decisions in the failure.

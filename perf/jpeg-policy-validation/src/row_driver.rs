@@ -483,3 +483,143 @@ fn public_row_driver_revalidates_source_across_policy_and_writer_callbacks() {
         assert!(!live.get());
     }
 }
+
+#[test]
+fn public_row_driver_disk_staging_preserves_pixels_prefix_policy_and_failure_effects() {
+    use std::{
+        fs::OpenOptions,
+        io::{Seek, SeekFrom},
+        num::NonZeroUsize,
+    };
+    use zencodec::operation::{Decision, Question, StagingKind};
+    let root = std::path::PathBuf::from(
+        std::env::var_os("JPEG_POLICY_ARTIFACTS").expect("set JPEG_POLICY_ARTIFACTS"),
+    );
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let root = root.join(format!("row-disk-{}-{nonce}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    for progressive in [false, true] {
+        for optimized in [false, true] {
+            for fault in [
+                "none", "readonly", "replay", "limit", "writer", "policy", "source", "cancel",
+            ] {
+                let path = root.join(format!("{progressive}-{optimized}-{fault}.spool"));
+                let mut file = OpenOptions::new()
+                    .create_new(true)
+                    .read(true)
+                    .write(true)
+                    .open(&path)
+                    .unwrap();
+                file.write_all(b"prefix").unwrap();
+                if fault == "readonly" {
+                    drop(file);
+                    file = OpenOptions::new().read(true).open(&path).unwrap();
+                    file.seek(SeekFrom::End(0)).unwrap();
+                }
+                let budget = StorageBudget::new(5000, 1024);
+                let options =
+                    Options::new(budget.clone(), if fault == "limit" { 1 } else { 1 << 20 })
+                        .with_disk_staging(
+                            file,
+                            NonZeroUsize::new(if fault == "replay" { 100_000 } else { 7 }).unwrap(),
+                        )
+                        .unwrap();
+                let enc_live = Rc::new(Cell::new(true));
+                let src_live = Rc::new(Cell::new(true));
+                let calls = Rc::new(Cell::new(0));
+                let flag = Arc::new(AtomicBool::new(false));
+                let stop = Cancel(flag.clone());
+                let config = fixtures::config(progressive, optimized);
+                let mut bytes = Vec::new();
+                let result = row_encode::encode(
+                    Native {
+                        inner: Some(config.clone().job().encoder().unwrap()),
+                        live: enc_live.clone(),
+                        expected_context: None,
+                    },
+                    Rows {
+                        live: src_live.clone(),
+                        calls: calls.clone(),
+                        random: 0x12345678,
+                        fault,
+                        stop: flag,
+                        changed: false,
+                    },
+                    Writer {
+                        bytes: &mut bytes,
+                        source: src_live.clone(),
+                        encoder: enc_live.clone(),
+                        schedule: OutputSchedule::FinishFirst,
+                        fail: fault == "writer",
+                    },
+                    |q: Question<'_>| -> Result<Decision, zencodec::At<io::Error>> {
+                        let Question::OutputSchedule { choices, .. } = q else {
+                            panic!("unexpected question")
+                        };
+                        let offer = choices.first().unwrap();
+                        assert_eq!(offer.value().staging.unwrap().kind, StagingKind::Disk);
+                        assert_eq!(offer.value().staging.unwrap().payload_bytes, 0);
+                        if fault == "policy" {
+                            return Err(zencodec::At::wrap(io::Error::other(
+                                "private policy detail",
+                            )));
+                        }
+                        Ok(Decision::choose(offer))
+                    },
+                    options,
+                    &stop,
+                );
+                assert!(!enc_live.get());
+                assert!(!src_live.get());
+                assert_eq!(budget.reserved_bytes(), 0);
+                let spool = std::fs::read(path).unwrap();
+                assert_eq!(&spool[..6], b"prefix");
+                if fault == "none" {
+                    let completed = result.unwrap();
+                    assert_eq!(completed.emitted as usize, bytes.len());
+                    assert_eq!(&spool[6..], bytes);
+                    let reference = config.encode(fixtures::pixels(&fixtures::raw())).unwrap();
+                    assert_eq!(bytes, reference.data());
+                    assert_eq!(fixtures::oracle(&bytes), fixtures::oracle(reference.data()));
+                } else {
+                    let error = result.unwrap_err();
+                    assert_eq!(error.error().emitted as usize, bytes.len());
+                    assert_eq!(error.error().report.decisions().count(), 1);
+                    if fault == "writer" {
+                        assert_eq!(bytes.len(), 13);
+                        assert_eq!(error.error().stage, Stage::Write);
+                        assert_eq!(
+                            zencodec::find_cause::<io::Error>(&error).unwrap().kind(),
+                            io::ErrorKind::BrokenPipe
+                        );
+                    } else {
+                        assert!(bytes.is_empty());
+                        if fault == "policy" {
+                            assert_eq!(error.error().stage, Stage::Policy);
+                            assert_eq!(calls.get(), 0);
+                            assert_eq!(spool.len(), 6);
+                        }
+                        if fault == "source" {
+                            assert_eq!(error.error().stage, Stage::Read);
+                        }
+                        if fault == "replay" {
+                            assert_eq!(error.error().stage, Stage::Replay);
+                        }
+                        if fault == "readonly" {
+                            assert!(zencodec::find_cause::<io::Error>(&error).is_some());
+                        }
+                        if fault == "limit" {
+                            assert_eq!(
+                                zencodec::find_cause::<Refusal>(&error),
+                                Some(&Refusal::OutputLimit)
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

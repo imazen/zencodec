@@ -22,7 +22,7 @@ export const api = {
   rowDescription: {path:'zencodec_io::row_encode::Description',file:'zencodec-io/src/row_encode.rs',scope:'pub struct Description',methods:[],item:true},
   rowRaster: {path:'zencodec_io::row_encode::Raster',file:'zencodec-io/src/row_encode.rs',scope:"impl<'a> Raster<'a>",methods:['new']},
   rowSource: {path:'zencodec_io::row_encode::Source',file:'zencodec-io/src/row_encode.rs',scope:'pub trait Source',methods:['description','mechanism','read_rows']},
-  rowEncodeOptions: {path:'zencodec_io::row_encode::Options',file:'zencodec-io/src/row_encode.rs',scope:'impl Options',methods:['new','with_batch_rows','with_policy_set']},
+  rowEncodeOptions: {path:'zencodec_io::row_encode::Options',file:'zencodec-io/src/row_encode.rs',scope:'impl Options',methods:['new','with_batch_rows','with_policy_set','with_disk_staging']},
   rowEncodeFailure: {path:'zencodec_io::row_encode::Failure',file:'zencodec-io/src/row_encode.rs',scope:'pub struct Failure',methods:[],item:true},
   outputSchedule: {path:'zencodec::operation::resolve_output_schedule',file:'src/operation/scheduling.rs',methods:['resolve_output_schedule']},
   outputScheduleOffer: {path:'zencodec::operation::OutputScheduleOffer',file:'src/operation/scheduling.rs',scope:'pub struct OutputScheduleOffer',methods:[],item:true},

@@ -22,15 +22,22 @@
 //! }
 //! ```
 use alloc::{boxed::Box, collections::VecDeque, sync::Arc};
-use core::{error::Error, fmt, num::NonZeroU32};
+use core::{
+    error::Error,
+    fmt,
+    num::{NonZeroU32, NonZeroUsize},
+};
 use enough::Stop;
-use std::io::{self, Write};
+use std::{
+    fs::File,
+    io::{self, Read, Seek, SeekFrom, Write},
+};
 use zencodec::{
     At,
     encode::Encoder,
     operation::{
         OperationReport, OutputSchedule, OutputScheduleFacts, OutputScheduleOffer, OutputSource,
-        PolicyResolver, PolicySet, resolve_output_schedule,
+        PolicyResolver, PolicySet, StagingFacts, StagingKind, resolve_output_schedule,
     },
     storage::{OwnedStorage, StorageBudget},
 };
@@ -135,6 +142,7 @@ pub struct Options {
     max_output_bytes: u64,
     batch_rows: NonZeroU32,
     preset: PolicySet,
+    disk: Option<Disk>,
 }
 impl Options {
     /// Row buffers and compressed staging share this admission pool.
@@ -145,7 +153,34 @@ impl Options {
             max_output_bytes,
             batch_rows: NonZeroU32::new(16).unwrap(),
             preset: PolicySet::new(),
+            disk: None,
         }
+    }
+    /// Stage finish-first output in an owned private scratch file at its end.
+    /// Existing prefixes are preserved. The output limit also caps disk payload.
+    /// Replay admits at most `replay_bytes` from the shared storage budget.
+    /// Spool writes may block with native state alive. The caller owns path,
+    /// permissions and deletion; aliases/external mutation are unsupported.
+    /// No fallback, file creation or deletion occurs. Live selection ignores
+    /// the scratch file and writes directly to the final destination.
+    pub fn with_disk_staging(
+        mut self,
+        mut file: File,
+        replay_bytes: NonZeroUsize,
+    ) -> io::Result<Self> {
+        let origin = file.stream_position()?;
+        if file.seek(SeekFrom::End(0))? != origin {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "scratch must start at its end",
+            ));
+        }
+        self.disk = Some(Disk {
+            file,
+            origin,
+            replay_bytes,
+        });
+        Ok(self)
     }
     /// Maximum rows requested at once; native row preferences do not override it.
     pub fn with_batch_rows(mut self, rows: NonZeroU32) -> Self {
@@ -172,6 +207,8 @@ pub enum Stage {
     Encode,
     /// Finish and release the encoder.
     Finish,
+    /// Flush or read staged compressed output, or admit its replay buffer.
+    Replay,
     /// Write or flush the final destination.
     Write,
 }
@@ -287,6 +324,45 @@ fn write_all(
     }
     check(stop)
 }
+struct Disk {
+    file: File,
+    origin: u64,
+    replay_bytes: NonZeroUsize,
+}
+impl Disk {
+    fn append(&mut self, bytes: &[u8], stop: &dyn Stop) -> Result<(), Cause> {
+        let mut written = 0;
+        write_all(&mut self.file, bytes, &mut written, stop)
+    }
+    fn replay(
+        &mut self,
+        total: u64,
+        storage: &StorageBudget,
+        writer: &mut impl Write,
+        emitted: &mut u64,
+        boundary: &mut Stage,
+        stop: &dyn Stop,
+    ) -> Result<(), Cause> {
+        *boundary = Stage::Replay;
+        check(stop)?;
+        self.file.flush()?;
+        self.file.seek(SeekFrom::Start(self.origin))?;
+        let size = total.min(self.replay_bytes.get() as u64) as usize;
+        let mut buffer = storage.bytes(size)?;
+        let mut remaining = total;
+        while remaining != 0 {
+            *boundary = Stage::Replay;
+            check(stop)?;
+            let n = remaining.min(size as u64) as usize;
+            self.file.read_exact(&mut buffer.as_mut_slice()[..n])?;
+            check(stop)?;
+            *boundary = Stage::Write;
+            write_all(writer, &buffer.as_slice()[..n], emitted, stop)?;
+            remaining -= n as u64;
+        }
+        Ok(())
+    }
+}
 fn stage(
     bytes: &[u8],
     storage: &StorageBudget,
@@ -318,7 +394,7 @@ pub fn encode<E: Encoder, S: Source, W: Write, R: PolicyResolver>(
     mut source: S,
     mut writer: W,
     mut resolver: R,
-    options: Options,
+    mut options: Options,
     stop: &dyn Stop,
 ) -> Result<Completed, At<Failure>> {
     let mut boundary = Stage::Prepare;
@@ -339,10 +415,21 @@ pub fn encode<E: Encoder, S: Source, W: Write, R: PolicyResolver>(
         let mut buffer = options.storage.bytes(len)?;
         let timing = encoder.begin(desc.width, desc.height, desc.descriptor)?;
         check(stop)?;
-        let offers = [
-            OutputScheduleOffer::new(OutputSchedule::FinishFirst),
-            OutputScheduleOffer::new(OutputSchedule::Live),
-        ];
+        let mut finish_first = OutputScheduleOffer::new(OutputSchedule::FinishFirst);
+        finish_first.staging = Some(StagingFacts::new(
+            if options.disk.is_some() {
+                StagingKind::Disk
+            } else {
+                StagingKind::Memory
+            },
+            0,
+            if options.disk.is_some() {
+                options.max_output_bytes
+            } else {
+                options.storage.max_bytes() as u64
+            },
+        ));
+        let offers = [finish_first, OutputScheduleOffer::new(OutputSchedule::Live)];
         let offers = &offers[..if timing.streams() { 2 } else { 1 }];
         boundary = Stage::Policy;
         let (index, record) = match resolve_output_schedule(
@@ -380,7 +467,12 @@ pub fn encode<E: Encoder, S: Source, W: Write, R: PolicyResolver>(
                 write_all(&mut writer, pending, &mut emitted, stop)?;
             } else {
                 boundary = Stage::Encode;
-                stage(pending, &options.storage, &mut staged)?;
+                if let Some(disk) = &mut options.disk {
+                    disk.origin.checked_add(produced).ok_or(Refusal::Overflow)?;
+                    disk.append(pending, stop)?;
+                } else {
+                    stage(pending, &options.storage, &mut staged)?;
+                }
             }
             encoder.consume_output(pending.len());
             let count = rows.min(desc.height - y);
@@ -425,17 +517,32 @@ pub fn encode<E: Encoder, S: Source, W: Write, R: PolicyResolver>(
         check(stop)?;
         count(&mut produced, rest.len(), options.max_output_bytes)?;
         if schedule == OutputSchedule::FinishFirst {
-            stage(rest.data(), &options.storage, &mut staged)?;
-            drop(rest);
-            boundary = Stage::Write;
-            while let Some(bytes) = staged.pop_front() {
-                write_all(&mut writer, bytes.as_slice(), &mut emitted, stop)?;
+            if let Some(disk) = &mut options.disk {
+                disk.origin.checked_add(produced).ok_or(Refusal::Overflow)?;
+                disk.append(rest.data(), stop)?;
+                drop(rest);
+                disk.replay(
+                    produced,
+                    &options.storage,
+                    &mut writer,
+                    &mut emitted,
+                    &mut boundary,
+                    stop,
+                )?;
+            } else {
+                stage(rest.data(), &options.storage, &mut staged)?;
+                drop(rest);
+                boundary = Stage::Write;
+                while let Some(bytes) = staged.pop_front() {
+                    write_all(&mut writer, bytes.as_slice(), &mut emitted, stop)?;
+                }
             }
         } else {
             boundary = Stage::Write;
             write_all(&mut writer, rest.data(), &mut emitted, stop)?;
         }
         check(stop)?;
+        boundary = Stage::Write;
         writer.flush()?;
         check(stop)?;
         Ok(schedule)

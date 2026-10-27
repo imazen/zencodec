@@ -1270,7 +1270,8 @@ row-encode-sync export:
     cp zencodec-io/tests/encode_write.rs "{{export}}/zencodec-io/tests/"
     cp zencodec-io/examples/io_contract_probes.rs "{{export}}/zencodec-io/examples/"
 
-row-encode-check:
-    cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked row_driver -- --nocapture
+row-encode-check artifacts:
+    mkdir -p "{{artifacts}}"
+    JPEG_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked row_driver -- --nocapture
     cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
     cargo clippy -p zencodec-io --all-targets --features std --locked -- -D warnings

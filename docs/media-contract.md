@@ -500,7 +500,7 @@ writes on runtime failures. Native JPEG tests cover both schedules, strided
 rasters, context retention, fixed/optimized/progressive configurations, source
 failure/drift/unwind, cancellation, output/storage refusal and partial writes.
 The shared memory bound remains unknown; this driver does not qualify native
-workspace or add disk staging for raster output.
+workspace. Raster disk staging is described below.
 
 Row-driver validation on 2026-10-27: all 32 then-existing native JPEG cases
 passed with strict lint; the added compressed-staging admission control and all
@@ -517,3 +517,28 @@ confirmed appends, the selected decision and the original typed refusal.
 All five row-driver tests and strict native/driver lint pass. Resource receipt:
 `rc=0 3s | peak-RSS 0.53GiB | min-avail 12843MiB | peak-load 0.31`.
 This correctness run does not establish a codec memory or performance bound.
+
+
+Raster disk staging uses `Options::with_disk_staging(file, replay_bytes)` and
+reports its actual store through `OutputScheduleOffer::staging`. It shares the
+existing policy question rather than introducing another resolver. The file
+must be private, exclusively owned and positioned at EOF; prefixes survive.
+The output limit bounds spooled payload; replay allocates an admitted chunk
+only after source/native release. Spool writes themselves may block with native
+state alive. Final-destination appends and original causes survive replay/write
+failure. Caller path privacy and cleanup remain explicit responsibilities.
+
+This byte-stream replay does not need a per-chunk index. Video packets retain
+metadata and require an index plus admitted packet owners; the two currently
+have separate internal storage implementations. Unifying those internals does
+not require callers to adopt a new policy mechanism.
+
+Native raster-disk validation on 2026-10-27 covers 32 combinations: fixed/optimized
+Huffman × sequential/progressive × success, read-only spool, replay admission,
+output cap, destination failure, policy failure, source failure and cancellation.
+Success preserves exact encoded bytes, independent JPEG pixels and scratch
+prefixes; destination waits observe released source/encoder owners. All six
+row-driver tests and strict lint pass. Resource receipt:
+`rc=0 3s | peak-RSS 0.53GiB | min-avail 13068MiB | peak-load 0.59`.
+Workspace all-feature tests/doctests pass. These are correctness runs, not
+memory-bound or throughput measurements. No zenpixels change is required.
