@@ -6,13 +6,13 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2140 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 120 lines (120 hidden + 0 excluded-feature)
+# files: zencodec.txt 2148 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 120 lines (120 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                14
 #   pub types (struct/enum/trait/alias)       229
-#   pub consts/statics                        252
+#   pub consts/statics                        260
 #   free functions                             75
 #   inherent methods                          911
 #   struct fields                             250
@@ -24,7 +24,7 @@
 #   auto-trait exceptions                      17
 #
 # per-module pub lines:
-#   (root)                          893
+#   (root)                          901
 #   animation                        11
 #   decode                          238
 #   encode                          186
@@ -39,7 +39,7 @@
 #   source                           37
 #   time                             22
 
-## items (1983 lines)
+## items (1991 lines)
 
 pub mod zencodec
 pub use At
@@ -132,6 +132,7 @@ pub const fn decode::DecodeCapabilities::access_pattern(&self) -> source::Access
 pub const fn decode::DecodeCapabilities::animation(&self) -> bool
 pub const fn decode::DecodeCapabilities::cheap_probe(&self) -> bool
 pub const fn decode::DecodeCapabilities::cicp(&self) -> bool
+pub const fn decode::DecodeCapabilities::content_light_level(&self) -> bool
 pub const fn decode::DecodeCapabilities::decode_into(&self) -> bool
 pub const fn decode::DecodeCapabilities::enforces_max_input_bytes(&self) -> bool
 pub const fn decode::DecodeCapabilities::enforces_max_memory(&self) -> bool
@@ -142,6 +143,7 @@ pub const fn decode::DecodeCapabilities::hdr(&self) -> bool
 pub const fn decode::DecodeCapabilities::icc(&self) -> bool
 pub const fn decode::DecodeCapabilities::incremental(&self) -> bool
 pub const fn decode::DecodeCapabilities::inventory(&self) -> bool
+pub const fn decode::DecodeCapabilities::mastering_display(&self) -> bool
 pub const fn decode::DecodeCapabilities::multi_image(&self) -> bool
 pub const fn decode::DecodeCapabilities::native_16bit(&self) -> bool
 pub const fn decode::DecodeCapabilities::native_alpha(&self) -> bool
@@ -158,6 +160,7 @@ pub const fn decode::DecodeCapabilities::with_access_pattern(self, source::Acces
 pub const fn decode::DecodeCapabilities::with_animation(self, bool) -> Self
 pub const fn decode::DecodeCapabilities::with_cheap_probe(self, bool) -> Self
 pub const fn decode::DecodeCapabilities::with_cicp(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_content_light_level(self, bool) -> Self
 pub const fn decode::DecodeCapabilities::with_decode_into(self, bool) -> Self
 pub const fn decode::DecodeCapabilities::with_enforces_max_input_bytes(self, bool) -> Self
 pub const fn decode::DecodeCapabilities::with_enforces_max_memory(self, bool) -> Self
@@ -168,6 +171,7 @@ pub const fn decode::DecodeCapabilities::with_hdr(self, bool) -> Self
 pub const fn decode::DecodeCapabilities::with_icc(self, bool) -> Self
 pub const fn decode::DecodeCapabilities::with_incremental(self, bool) -> Self
 pub const fn decode::DecodeCapabilities::with_inventory(self, bool) -> Self
+pub const fn decode::DecodeCapabilities::with_mastering_display(self, bool) -> Self
 pub const fn decode::DecodeCapabilities::with_multi_image(self, bool) -> Self
 pub const fn decode::DecodeCapabilities::with_native_16bit(self, bool) -> Self
 pub const fn decode::DecodeCapabilities::with_native_alpha(self, bool) -> Self
@@ -232,11 +236,11 @@ pub fn gainmap::DecodedGainMap::height(&self) -> u32
 pub fn gainmap::DecodedGainMap::new(zenpixels::buffer::PixelBuffer, gainmap::GainMapInfo) -> Self
 pub fn gainmap::DecodedGainMap::width(&self) -> u32
 #[non_exhaustive] pub struct decode::EmbeddedMetadata
-pub decode::EmbeddedMetadata::exif: core::option::Option<alloc::sync::Arc<[u8]>>
-pub decode::EmbeddedMetadata::xmp: core::option::Option<alloc::sync::Arc<[u8]>>
+pub decode::EmbeddedMetadata::exif: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
+pub decode::EmbeddedMetadata::xmp: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
 pub fn decode::EmbeddedMetadata::is_empty(&self) -> bool
-pub fn decode::EmbeddedMetadata::with_exif(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
-pub fn decode::EmbeddedMetadata::with_xmp(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn decode::EmbeddedMetadata::with_exif(self, impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
+pub fn decode::EmbeddedMetadata::with_xmp(self, impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
 pub struct decode::ErasedError(_)
 pub fn decode::ErasedError::get_ref(&self) -> &(dyn core::error::Error + core::marker::Send + core::marker::Sync + 'static)
 pub fn decode::ErasedError::into_inner(self) -> encode::BoxedError
@@ -295,7 +299,7 @@ pub decode::SourceColor::cicp: core::option::Option<zenpixels::cicp::Cicp>
 pub decode::SourceColor::color_authority: zenpixels::color::ColorAuthority
 pub decode::SourceColor::content_light_level: core::option::Option<zenpixels::hdr::ContentLightLevel>
 pub decode::SourceColor::diffuse_white: core::option::Option<zenpixels::hdr::DiffuseWhite>
-pub decode::SourceColor::icc_profile: core::option::Option<alloc::sync::Arc<[u8]>>
+pub decode::SourceColor::icc_profile: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
 pub decode::SourceColor::mastering_display: core::option::Option<zenpixels::hdr::MasteringDisplay>
 pub fn SourceColor::color_primaries(&self) -> zenpixels::descriptor::ColorPrimaries
 pub fn SourceColor::has_hdr_transfer(&self) -> bool
@@ -306,7 +310,7 @@ pub fn SourceColor::with_channel_count(self, u8) -> Self
 pub fn SourceColor::with_cicp(self, zenpixels::cicp::Cicp) -> Self
 pub fn SourceColor::with_color_authority(self, zenpixels::color::ColorAuthority) -> Self
 pub fn SourceColor::with_content_light_level(self, zenpixels::hdr::ContentLightLevel) -> Self
-pub fn SourceColor::with_icc_profile(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn SourceColor::with_icc_profile(self, impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
 pub fn SourceColor::with_mastering_display(self, zenpixels::hdr::MasteringDisplay) -> Self
 pub trait decode::AnimationFrameDecoder: core::marker::Sized [also: prelude]
 pub type decode::AnimationFrameDecoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
@@ -474,6 +478,7 @@ pub const fn encode::EncodeCapabilities::animation_timing(&self) -> bool
 pub const fn encode::EncodeCapabilities::cicp(&self) -> bool
 pub const fn encode::EncodeCapabilities::cicp_is_valid_carrier(&self) -> bool
 pub const fn encode::EncodeCapabilities::cicp_safe_sole_carrier(&self) -> bool
+pub const fn encode::EncodeCapabilities::content_light_level(&self) -> bool
 pub const fn encode::EncodeCapabilities::effort_range(&self) -> core::option::Option<[i32; 2]>
 pub const fn encode::EncodeCapabilities::encode_from(&self) -> bool
 pub const fn encode::EncodeCapabilities::enforces_max_memory(&self) -> bool
@@ -484,6 +489,7 @@ pub const fn encode::EncodeCapabilities::hdr(&self) -> bool
 pub const fn encode::EncodeCapabilities::icc(&self) -> bool
 pub const fn encode::EncodeCapabilities::lossless(&self) -> bool
 pub const fn encode::EncodeCapabilities::lossy(&self) -> bool
+pub const fn encode::EncodeCapabilities::mastering_display(&self) -> bool
 pub const fn encode::EncodeCapabilities::native_16bit(&self) -> bool
 pub const fn encode::EncodeCapabilities::native_alpha(&self) -> bool
 pub const fn encode::EncodeCapabilities::native_f32(&self) -> bool
@@ -500,6 +506,7 @@ pub const fn encode::EncodeCapabilities::with_animation_timing(self, bool) -> Se
 pub const fn encode::EncodeCapabilities::with_cicp(self, bool) -> Self
 pub const fn encode::EncodeCapabilities::with_cicp_is_valid_carrier(self, bool) -> Self
 pub const fn encode::EncodeCapabilities::with_cicp_safe_sole_carrier(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_content_light_level(self, bool) -> Self
 pub const fn encode::EncodeCapabilities::with_effort_range(self, i32, i32) -> Self
 pub const fn encode::EncodeCapabilities::with_encode_from(self, bool) -> Self
 pub const fn encode::EncodeCapabilities::with_enforces_max_memory(self, bool) -> Self
@@ -510,6 +517,7 @@ pub const fn encode::EncodeCapabilities::with_hdr(self, bool) -> Self
 pub const fn encode::EncodeCapabilities::with_icc(self, bool) -> Self
 pub const fn encode::EncodeCapabilities::with_lossless(self, bool) -> Self
 pub const fn encode::EncodeCapabilities::with_lossy(self, bool) -> Self
+pub const fn encode::EncodeCapabilities::with_mastering_display(self, bool) -> Self
 pub const fn encode::EncodeCapabilities::with_native_16bit(self, bool) -> Self
 pub const fn encode::EncodeCapabilities::with_native_alpha(self, bool) -> Self
 pub const fn encode::EncodeCapabilities::with_native_f32(self, bool) -> Self
@@ -892,7 +900,7 @@ pub gainmap::GainMapChannel::min: f64
 pub fn gainmap::GainMapChannel::linear_max(&self) -> f64
 pub fn gainmap::GainMapChannel::linear_min(&self) -> f64
 pub gainmap::GainMapInfo::alternate_cicp: core::option::Option<zenpixels::cicp::Cicp>
-pub gainmap::GainMapInfo::alternate_icc: core::option::Option<alloc::sync::Arc<[u8]>>
+pub gainmap::GainMapInfo::alternate_icc: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
 pub gainmap::GainMapInfo::bit_depth: u8
 pub gainmap::GainMapInfo::channels: u8
 pub gainmap::GainMapInfo::height: u32
@@ -900,7 +908,7 @@ pub gainmap::GainMapInfo::params: gainmap::GainMapParams
 pub gainmap::GainMapInfo::width: u32
 pub fn gainmap::GainMapInfo::new(gainmap::GainMapParams, u32, u32, u8) -> Self
 pub fn gainmap::GainMapInfo::with_alternate_cicp(self, zenpixels::cicp::Cicp) -> Self
-pub fn gainmap::GainMapInfo::with_alternate_icc(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn gainmap::GainMapInfo::with_alternate_icc(self, impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
 pub fn gainmap::GainMapInfo::with_bit_depth(self, u8) -> Self
 pub gainmap::GainMapParams::alternate_hdr_headroom: f64
 pub gainmap::GainMapParams::backward_direction: bool
@@ -1774,7 +1782,7 @@ pub fn gainmap::GainMapChannel::linear_max(&self) -> f64
 pub fn gainmap::GainMapChannel::linear_min(&self) -> f64
 #[non_exhaustive] pub struct GainMapInfo [also: gainmap]
 pub GainMapInfo::alternate_cicp: core::option::Option<zenpixels::cicp::Cicp>
-pub GainMapInfo::alternate_icc: core::option::Option<alloc::sync::Arc<[u8]>>
+pub GainMapInfo::alternate_icc: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
 pub GainMapInfo::bit_depth: u8
 pub GainMapInfo::channels: u8
 pub GainMapInfo::height: u32
@@ -1782,7 +1790,7 @@ pub GainMapInfo::params: gainmap::GainMapParams
 pub GainMapInfo::width: u32
 pub fn gainmap::GainMapInfo::new(gainmap::GainMapParams, u32, u32, u8) -> Self
 pub fn gainmap::GainMapInfo::with_alternate_cicp(self, zenpixels::cicp::Cicp) -> Self
-pub fn gainmap::GainMapInfo::with_alternate_icc(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn gainmap::GainMapInfo::with_alternate_icc(self, impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
 pub fn gainmap::GainMapInfo::with_bit_depth(self, u8) -> Self
 #[non_exhaustive] pub struct GainMapParams [also: gainmap]
 pub GainMapParams::alternate_hdr_headroom: f64
@@ -1830,7 +1838,7 @@ pub ImageInfo::orientation: zenpixels::orientation::Orientation
 pub ImageInfo::resolution: core::option::Option<Resolution>
 pub ImageInfo::sequence: ImageSequence
 pub ImageInfo::source_color: SourceColor
-pub ImageInfo::source_encoding: core::option::Option<alloc::sync::Arc<dyn SourceEncodingDetails>>
+pub ImageInfo::source_encoding: core::option::Option<alloc::rcs::arc::Arc<dyn SourceEncodingDetails>>
 pub ImageInfo::supplements: Supplements
 pub ImageInfo::warnings: alloc::vec::Vec<alloc::string::String>
 pub ImageInfo::width: u32
@@ -1854,9 +1862,9 @@ pub fn ImageInfo::with_cicp(self, zenpixels::cicp::Cicp) -> Self
 pub fn ImageInfo::with_color_authority(self, zenpixels::color::ColorAuthority) -> Self
 pub fn ImageInfo::with_content_light_level(self, zenpixels::hdr::ContentLightLevel) -> Self
 pub fn ImageInfo::with_embedded_metadata(self, decode::EmbeddedMetadata) -> Self
-pub fn ImageInfo::with_exif(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn ImageInfo::with_exif(self, impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
 pub fn ImageInfo::with_gain_map(self, gainmap::GainMapPresence) -> Self
-pub fn ImageInfo::with_icc_profile(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn ImageInfo::with_icc_profile(self, impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
 pub fn ImageInfo::with_mastering_display(self, zenpixels::hdr::MasteringDisplay) -> Self
 pub fn ImageInfo::with_orientation(self, zenpixels::orientation::Orientation) -> Self
 pub fn ImageInfo::with_progressive(self, bool) -> Self
@@ -1867,16 +1875,16 @@ pub fn ImageInfo::with_source_encoding_details<T: SourceEncodingDetails + 'stati
 pub fn ImageInfo::with_supplements(self, Supplements) -> Self
 pub fn ImageInfo::with_warning(self, alloc::string::String) -> Self
 pub fn ImageInfo::with_warnings(self, alloc::vec::Vec<alloc::string::String>) -> Self
-pub fn ImageInfo::with_xmp(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn ImageInfo::with_xmp(self, impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
 #[non_exhaustive] pub struct Metadata
 pub Metadata::cicp: core::option::Option<zenpixels::cicp::Cicp>
 pub Metadata::content_light_level: core::option::Option<zenpixels::hdr::ContentLightLevel>
 pub Metadata::diffuse_white: core::option::Option<zenpixels::hdr::DiffuseWhite>
-pub Metadata::exif: core::option::Option<alloc::sync::Arc<[u8]>>
-pub Metadata::icc_profile: core::option::Option<alloc::sync::Arc<[u8]>>
+pub Metadata::exif: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
+pub Metadata::icc_profile: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
 pub Metadata::mastering_display: core::option::Option<zenpixels::hdr::MasteringDisplay>
 pub Metadata::orientation: zenpixels::orientation::Orientation
-pub Metadata::xmp: core::option::Option<alloc::sync::Arc<[u8]>>
+pub Metadata::xmp: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
 pub fn Metadata::clear_diffuse_white(self) -> Self
 pub fn Metadata::color_primaries(&self) -> zenpixels::descriptor::ColorPrimaries
 pub fn Metadata::filtered(&self, &MetadataPolicy) -> Metadata
@@ -1888,11 +1896,11 @@ pub fn Metadata::with_cicp(self, zenpixels::cicp::Cicp) -> Self
 pub fn Metadata::with_content_light_level(self, zenpixels::hdr::ContentLightLevel) -> Self
 pub fn Metadata::with_copyright(self, &str) -> Self
 pub fn Metadata::with_diffuse_white(self, zenpixels::hdr::DiffuseWhite) -> Self
-pub fn Metadata::with_exif(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
-pub fn Metadata::with_icc(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn Metadata::with_exif(self, impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
+pub fn Metadata::with_icc(self, impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
 pub fn Metadata::with_mastering_display(self, zenpixels::hdr::MasteringDisplay) -> Self
 pub fn Metadata::with_orientation(self, zenpixels::orientation::Orientation) -> Self
-pub fn Metadata::with_xmp(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn Metadata::with_xmp(self, impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
 #[non_exhaustive] pub struct MetadataFields
 pub MetadataFields::cicp: exif::Retention
 pub MetadataFields::exif: exif::ExifPolicy
@@ -1971,7 +1979,7 @@ pub SourceColor::cicp: core::option::Option<zenpixels::cicp::Cicp>
 pub SourceColor::color_authority: zenpixels::color::ColorAuthority
 pub SourceColor::content_light_level: core::option::Option<zenpixels::hdr::ContentLightLevel>
 pub SourceColor::diffuse_white: core::option::Option<zenpixels::hdr::DiffuseWhite>
-pub SourceColor::icc_profile: core::option::Option<alloc::sync::Arc<[u8]>>
+pub SourceColor::icc_profile: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
 pub SourceColor::mastering_display: core::option::Option<zenpixels::hdr::MasteringDisplay>
 pub fn SourceColor::color_primaries(&self) -> zenpixels::descriptor::ColorPrimaries
 pub fn SourceColor::has_hdr_transfer(&self) -> bool
@@ -1982,7 +1990,7 @@ pub fn SourceColor::with_channel_count(self, u8) -> Self
 pub fn SourceColor::with_cicp(self, zenpixels::cicp::Cicp) -> Self
 pub fn SourceColor::with_color_authority(self, zenpixels::color::ColorAuthority) -> Self
 pub fn SourceColor::with_content_light_level(self, zenpixels::hdr::ContentLightLevel) -> Self
-pub fn SourceColor::with_icc_profile(self, impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> Self
+pub fn SourceColor::with_icc_profile(self, impl core::convert::Into<alloc::rcs::arc::Arc<[u8]>>) -> Self
 pub fn SourceColor::with_mastering_display(self, zenpixels::hdr::MasteringDisplay) -> Self
 pub struct StreamOffset(pub u64)
 #[non_exhaustive] pub struct Supplements

@@ -123,6 +123,15 @@ reads the envelope off `Metadata`. Skipping this silently drops the envelope on 
 gain-map → native-HDR transcode. (Gain-map → *gain-map* transcode is
 `GainMapRender::Components` and reconstructs nothing — no envelope step.)
 
+Native HDR signal support and optional envelope retention have separate
+capabilities. `hdr` promises HDR pixels with correct transfer and primaries;
+`content_light_level` promises the complete MaxCLL/MaxFALL tuple, and
+`mastering_display` promises the mastering values within container precision.
+Callers requiring a complete envelope must select those capabilities at both
+ends. A partial native peak does not declare complete CLLI support.
+Capability honesty probes each optional channel with SDR input as well, so
+metadata retention is checked independently of native HDR pixels.
+
 ## Colour on the decoded buffer: attached, class-gated, identical on every path
 
 The descriptor folds transfer/primaries into enums; the raw H.273 code points and
@@ -175,12 +184,12 @@ codec crate adds it as a `dev-dependency` and runs the checks against its own
   paths. Lenient about whether one is attached at all, so it is in `check_all`;
   `check_color_context_attached` is the strict, opt-in positive direction (a
   decoder that read colour back must attach the authoritative field).
-- `check_native_hdr_roundtrip` — when both ends declare `hdr`, BT.2100 PQ and
-  HLG survive `PreserveExact`: CICP, the HDR envelope (CLLI exactly, MDCV within
-  container fixed-point precision), 16-bit pixels where both ends declare
-  `native_16bit`, and the decoded descriptor is labelled PQ/HLG, not sRGB. This
-  is what makes the "envelope on the info" contract above testable — a codec
-  that declares `hdr` and drops MaxCLL/MDCV fails here, not in production.
+- `check_native_hdr_roundtrip` — when both ends declare `hdr`, RGB BT.2020 PQ
+  and HLG survive `PreserveExact`: identity-matrix CICP, exact pixels (16-bit
+  where both ends declare `native_16bit`), and a descriptor labelled PQ/HLG.
+  Each optional envelope channel is required when both ends declare its own
+  capability: CLLI exactly, MDCV within container fixed-point precision.
+  Declaring a metadata channel and dropping or changing it fails the check.
 - `check_gain_map_roundtrip` — the gain-map encode/decode contract. An encoder
   without `gain_map` rejects `with_gain_map_pixels` / `with_gain_map_encoded`
   with `UnsupportedOperation::GainMapEncode`; a declared one embeds 1-channel,

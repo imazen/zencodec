@@ -11,6 +11,8 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 - Compare discarded ICC/CICP against a clean same-policy encode in the testkit, distinguishing native/default color from retained optional metadata; unexpected color values and discarded descriptive metadata still fail.
 - Probe metadata capability flags with separate ICC, EXIF, XMP and CICP inputs, allowing mutually exclusive color carriers while retaining the mixed-carrier authority checks. Regressions still reject dropped declared channels and hidden write capabilities.
 - Declare the reference decoder's existing ICC, EXIF, XMP and CICP readers so its conformance tests actually exercise metadata capability honesty.
+- Use identity-matrix CICP for RGB PQ/HLG fixtures. Native HDR still requires exact pixels, depth, primaries and transfer; complete CLLI and MDCV retention is required through its independently declared capability. Regressions reject dropped or changed declared channels.
+- Probe declared CLLI/MDCV retention with independent SDR inputs too, so optional metadata support is checked even without native HDR pixel support.
 
 
 #### QUEUED BREAKING CHANGES
@@ -282,6 +284,7 @@ removes that whole class).
 
 ### Added
 
+- `content_light_level` and `mastering_display` getters and `with_*` builders on both encode and decode capabilities distinguish complete optional HDR metadata support from native HDR pixels and color signaling. Both default to false; a native peak alone does not promise complete MaxCLL/MaxFALL retention.
 - `EncodePolicy::strict` (`with_strict`, `resolve_strict`), the encode-side
   twin of `DecodePolicy::strict`: when set, an encode the target can only
   approximate fails instead of being approximated. zencodecs uses it for a
