@@ -159,6 +159,17 @@ retroactively. Native workspace and small owner/metadata allocations are outside
 a managed payload allowance. [Native qualification](../perf/spatial-validation/README.md#packed-output-admission)
 exercises release on refusal/cancellation and retention through clones.
 
+`Values` and `ValueSlice` carry `AuxiliaryGrid`, defaulting to `Unknown`.
+An adapter can declare `ColorSamples` only when each emitted auxiliary sample
+has the same center as the color sample at the corresponding row and column
+throughout the selected stored region. Adoption checks matching dimensions;
+mapping freezes the claim, including through independent auxiliary ownership
+and color replacement. Equal sizes, source precision and `source_dim_shift`
+never establish registration. `with_grid` changes no samples and performs no
+resampling. This initial positive case qualifies same-grid geometry operations;
+arbitrary offsets, sampling steps and phases still need a separate representation
+before general auxiliary resampling can be offered.
+
 `replace_packed_color` composes converted color with the original auxiliary
 mapping guards. The replacement must cover the same stored coordinates. It
 retains geometry, placement, orientation, timing, auxiliary roles and original

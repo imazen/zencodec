@@ -53,6 +53,7 @@ struct ValueLayout {
     height: u32,
     stride: usize,
     channel: ChannelType,
+    grid: AuxiliaryGrid,
 }
 impl From<ValueSlice<'_>> for ValueLayout {
     fn from(value: ValueSlice<'_>) -> Self {
@@ -61,6 +62,7 @@ impl From<ValueSlice<'_>> for ValueLayout {
             height: value.height,
             stride: value.stride,
             channel: value.channel,
+            grid: value.grid,
         }
     }
 }
@@ -122,6 +124,7 @@ impl ImageOutput {
             let values = owner
                 .auxiliary(index)?
                 .ok_or_else(|| fail(OutputError::MissingPlane))?;
+            check_auxiliary_grid(index, values, (width, height))?;
             extras.push((Meaning::Auxiliary(role), ValueLayout::from(values)));
         }
         Ok(Self {
@@ -145,6 +148,15 @@ impl<P: PackedImageOwner> Held<P> {
             .owner
             .auxiliary(index)?
             .ok_or_else(|| fail(OutputError::MissingPlane))?;
+        if values.grid != self.extras[index].1.grid {
+            return Err(fail(OutputError::AuxiliaryGrid {
+                index,
+                expected: self.extras[index].1.grid,
+                actual: values.grid,
+                color_dimensions: (self.width, self.height),
+                auxiliary_dimensions: (values.width, values.height),
+            }));
+        }
         if ValueLayout::from(values) != self.extras[index].1 {
             return Err(fail(OutputError::Geometry));
         }
@@ -165,6 +177,7 @@ impl<P: PackedImageOwner> ImageStorage for Held<P> {
             storage: Arc::new(AuxiliaryOnly {
                 owner,
                 extras: self.extras.clone(),
+                color_dimensions: (self.width, self.height),
             }),
             first: 0,
         }))
@@ -217,6 +230,7 @@ impl<P: PackedImageOwner> ImageStorage for Held<P> {
 struct AuxiliaryOnly {
     owner: Arc<dyn AuxiliaryImageOwner>,
     extras: Arc<Vec<(Meaning, ValueLayout)>>,
+    color_dimensions: (u32, u32),
 }
 impl AuxiliaryOnly {
     fn values(&self, index: usize) -> Result<ValueSlice<'_>, Failure> {
@@ -224,6 +238,15 @@ impl AuxiliaryOnly {
             .owner
             .auxiliary(index)?
             .ok_or_else(|| fail(OutputError::MissingPlane))?;
+        if values.grid != self.extras[index].1.grid {
+            return Err(fail(OutputError::AuxiliaryGrid {
+                index,
+                expected: self.extras[index].1.grid,
+                actual: values.grid,
+                color_dimensions: self.color_dimensions,
+                auxiliary_dimensions: (values.width, values.height),
+            }));
+        }
         if ValueLayout::from(values) != self.extras[index].1 {
             return Err(fail(OutputError::Geometry));
         }

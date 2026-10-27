@@ -2,6 +2,11 @@
 
 ## Native image selection (unreleased experiment)
 
+- Retain explicit emitted auxiliary registration through owned/native planes,
+  clones and separate color replacement. Registration defaults to unknown;
+  equal dimensions and source reduction factors never imply alignment.
+  `ColorSamples` checks dimensions and freezes the adapter's sample-center claim.
+
 - Retain the collection's selected composition view with each checked output
   before publication policy. Preserve storage and existing clones; reject a
   changed adapter view or conflicting owner claim with expected/actual facts.

@@ -172,6 +172,21 @@ pub enum Meaning {
     Auxiliary(Auxiliary),
 }
 
+/// Registration of emitted auxiliary samples with the emitted color samples.
+/// Source dimensions or reduction factors do not establish this relationship.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum AuxiliaryGrid {
+    /// Registration has not been established. Equal dimensions do not change it.
+    #[default]
+    Unknown,
+    /// Each auxiliary sample has the same center as the color sample at the
+    /// same row and column, throughout the selected stored region. Dimensions
+    /// must match color. This describes emitted samples, including any native
+    /// upsampling; it does not authorize changing their numerical values.
+    ColorSamples,
+}
+
 /// Owned strided scalar values without implied color or normalization.
 #[derive(Debug)]
 pub struct Values {
@@ -180,6 +195,7 @@ pub struct Values {
     height: u32,
     stride: usize,
     channel: ChannelType,
+    grid: AuxiliaryGrid,
 }
 
 /// Borrowed strided scalar values, without implied color or normalization.
@@ -191,6 +207,7 @@ pub struct ValueSlice<'a> {
     height: u32,
     stride: usize,
     channel: ChannelType,
+    grid: AuxiliaryGrid,
 }
 impl<'a> ValueSlice<'a> {
     /// Check a nonempty scalar plane's active extent. Padding is preserved;
@@ -219,7 +236,18 @@ impl<'a> ValueSlice<'a> {
             height,
             stride,
             channel,
+            grid: AuxiliaryGrid::Unknown,
         })
+    }
+    /// Declare registration established by the adapter. This does not move or
+    /// resample values. Image adoption checks dimensions for `ColorSamples`.
+    pub fn with_grid(mut self, grid: AuxiliaryGrid) -> Self {
+        self.grid = grid;
+        self
+    }
+    /// Registration of these emitted samples, not inferred from their shape.
+    pub fn grid(&self) -> AuxiliaryGrid {
+        self.grid
     }
     /// Borrow storage including inter-row padding, without copying it.
     pub fn as_strided_bytes(&self) -> &'a [u8] {
@@ -239,6 +267,7 @@ impl Values {
             height: self.height,
             stride: self.stride,
             channel: self.channel,
+            grid: self.grid,
         }
     }
     /// Adopt one nonempty scalar plane, checking stride and active extent.
@@ -258,8 +287,37 @@ impl Values {
             height,
             stride,
             channel,
+            grid: AuxiliaryGrid::Unknown,
         })
     }
+    /// Declare registration established by the adapter without changing values.
+    pub fn with_grid(mut self, grid: AuxiliaryGrid) -> Self {
+        self.grid = grid;
+        self
+    }
+    /// Registration retained when borrowing this owned plane.
+    pub fn grid(&self) -> AuxiliaryGrid {
+        self.grid
+    }
+}
+
+fn check_auxiliary_grid(
+    index: usize,
+    values: ValueSlice<'_>,
+    color_dimensions: (u32, u32),
+) -> Result<(), Failure> {
+    if values.grid == AuxiliaryGrid::ColorSamples
+        && (values.width, values.height) != color_dimensions
+    {
+        return Err(fail(OutputError::AuxiliaryGrid {
+            index,
+            expected: AuxiliaryGrid::ColorSamples,
+            actual: values.grid,
+            color_dimensions,
+            auxiliary_dimensions: (values.width, values.height),
+        }));
+    }
+    Ok(())
 }
 
 /// Borrowed samples tied to the mapping and their declared interpretation.
@@ -467,6 +525,9 @@ impl ImageOutput {
         {
             return Err(fail(OutputError::Interpretation));
         }
+        for (index, (_, values)) in extras.iter().enumerate() {
+            check_auxiliary_grid(index, values.as_slice(), (pixels.width(), pixels.height()))?;
+        }
         Ok(Self {
             storage: Arc::new(Packed {
                 pixels,
@@ -581,6 +642,19 @@ pub enum OutputError {
         /// Conflicting view reported by the adapter or returned owner.
         actual: crate::collection::Composition,
     },
+    /// Auxiliary registration contradicts its shape or changes after adoption.
+    AuxiliaryGrid {
+        /// Zero-based auxiliary index (packed color is not counted).
+        index: usize,
+        /// Registration required by the held interpretation.
+        expected: AuxiliaryGrid,
+        /// Registration supplied by this mapping.
+        actual: AuxiliaryGrid,
+        /// Emitted packed color dimensions.
+        color_dimensions: (u32, u32),
+        /// Emitted auxiliary dimensions.
+        auxiliary_dimensions: (u32, u32),
+    },
 }
 impl fmt::Debug for OutputError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -614,6 +688,20 @@ impl fmt::Debug for OutputError {
                 .field("expected", expected)
                 .field("actual", actual)
                 .finish(),
+            Self::AuxiliaryGrid {
+                index,
+                expected,
+                actual,
+                color_dimensions,
+                auxiliary_dimensions,
+            } => f
+                .debug_struct("AuxiliaryGrid")
+                .field("index", index)
+                .field("expected", expected)
+                .field("actual", actual)
+                .field("color_dimensions", color_dimensions)
+                .field("auxiliary_dimensions", auxiliary_dimensions)
+                .finish(),
         }
     }
 }
@@ -623,6 +711,18 @@ impl fmt::Display for OutputError {
             Self::Region(e) => return e.fmt(f),
             Self::Mapping(_) => return f.write_str("native image mapping failed"),
             Self::Placement(e) => return e.fmt(f),
+            Self::AuxiliaryGrid {
+                index,
+                expected,
+                actual,
+                color_dimensions,
+                auxiliary_dimensions,
+            } => {
+                return write!(
+                    f,
+                    "auxiliary {index} requires {expected:?}, mapped {actual:?}; color {color_dimensions:?}, auxiliary {auxiliary_dimensions:?}"
+                );
+            }
             Self::Composition { expected, actual } => {
                 return write!(
                     f,
@@ -632,7 +732,11 @@ impl fmt::Display for OutputError {
             _ => {}
         }
         f.write_str(match self {
-            Self::Region(_) | Self::Mapping(_) | Self::Placement(_) | Self::Composition { .. } => {
+            Self::Region(_)
+            | Self::Mapping(_)
+            | Self::Placement(_)
+            | Self::Composition { .. }
+            | Self::AuxiliaryGrid { .. } => {
                 unreachable!()
             }
             Self::Geometry => "invalid sample plane geometry",

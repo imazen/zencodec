@@ -599,6 +599,10 @@ image-owner-integration:
     just doc-default
     just api-doc
 
+auxiliary-grid-check:
+    cargo test -p zencodec --test auxiliary_registration --test packed_color_replacement
+    just image-owner-integration
+
 # Core requirement forwarding, ownership and every workspace contract.
 collection-context-integration:
     cargo fmt -p zencodec
