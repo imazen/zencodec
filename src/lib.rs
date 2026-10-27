@@ -85,6 +85,8 @@ pub mod operation;
 mod orientation;
 mod output;
 mod output_buffer;
+/// Shared sans-I/O finish patches for image and container output.
+pub mod output_patch;
 mod policy;
 mod set;
 mod sink;

@@ -236,7 +236,7 @@ operation-sync export:
     test ! -e "{{export}}/.jj"
     mkdir -p "{{export}}/src/operation" "{{export}}/src/collection" "{{export}}/src/image"
     cp Cargo.toml "{{export}}/Cargo.toml"
-    cp src/storage.rs src/operation.rs src/lib.rs src/set.rs src/info.rs src/frame.rs src/frame_storage.rs src/image.rs src/resolution.rs src/collection.rs "{{export}}/src/"
+    cp src/storage.rs src/output_patch.rs src/operation.rs src/lib.rs src/set.rs src/info.rs src/frame.rs src/frame_storage.rs src/image.rs src/resolution.rs src/collection.rs "{{export}}/src/"
     cp src/collection/*.rs "{{export}}/src/collection/"
     cp src/image/*.rs "{{export}}/src/image/"
     cp src/operation/*.rs "{{export}}/src/operation/"
@@ -1269,7 +1269,7 @@ output-schedule-check:
 
 row-encode-sync export:
     just jpeg-policy-sync "{{export}}"
-    cp zencodec-io/src/row_encode.rs zencodec-io/src/lib.rs zencodec-io/src/encode_write.rs "{{export}}/zencodec-io/src/"
+    cp zencodec-io/src/destination.rs zencodec-io/src/row_encode.rs zencodec-io/src/lib.rs zencodec-io/src/encode_write.rs "{{export}}/zencodec-io/src/"
     cp zencodec-io/tests/encode_write.rs "{{export}}/zencodec-io/tests/"
     cp zencodec-io/examples/io_contract_probes.rs "{{export}}/zencodec-io/examples/"
 
@@ -1281,3 +1281,14 @@ row-encode-check artifacts:
 
 compile-adapters-report root log receipt:
     python3 perf/compile-adapters-report.py "{{root}}" "{{log}}" "{{receipt}}"
+
+# One patch representation and actual destination wrappers for raster/media output.
+output-patch-sync export:
+    just av1-policy-sync "{{export}}"
+    cp src/output_patch.rs "{{export}}/src/"
+    cp zencodec-io/src/lib.rs zencodec-io/src/destination.rs "{{export}}/zencodec-io/src/"
+
+output-patch-check artifacts:
+    cargo test --workspace --all-features --locked
+    cargo clippy -p zencodec -p zencodec-io -p zencodec-media --all-targets --all-features --locked -- -D warnings
+    AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked mux_native_ -- --nocapture --test-threads=1

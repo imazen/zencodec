@@ -2697,3 +2697,27 @@ existing callback and selected report: memory/disk, current payload and limit.
 A live offer has no staging. No new policy callback or automatic fallback is
 introduced. `Stage::Replay` distinguishes spool reads/admission from destination
 writes; late failures retain confirmed destination appends and concrete causes.
+
+
+### Shared output completion and destinations
+
+`zencodec::output_patch::{OutputFinish, Patch, PatchError}` owns the common
+sans-I/O completion contract. `OutputFinish::validate(emitted_bytes)` checks the
+entire ordered patch set against the final stream extent, including the tail,
+before any final effect. `apply_to(&mut Vec<u8>)` preserves contents and length
+on validation or reservation failure. Overlaps apply in list order. A zero-byte
+patch is legal at the end; out-of-extent offsets and arithmetic overflow refuse.
+External I/O remains non-transactional after successful preflight.
+
+`zencodec_io::destination::{Destination, Forward, SeekBack}` binds writer access
+and output origin. The trait is sealed; seek support cannot be claimed separately
+from a `Write + Seek` writer. SeekBack offsets are relative to its captured
+initial position, with checked addition and verification of the returned seek
+position. Neither wrapper admits memory or authorizes encoder backpressure.
+
+Media retains `container::{MuxFinish, Patch, PatchError}` and
+`output::{Destination, Forward, SeekBack}` as aliases to these exact types.
+Existing native muxers and consumers therefore use the shared implementation
+without a migration. This removes the dependency obstacle for raster patch
+support; it does **not** yet add patch negotiation or execution to `Encoder` or
+`row_encode`, nor add bounded multi-pass source requests.

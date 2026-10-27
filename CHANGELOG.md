@@ -2,6 +2,9 @@
 
 ## Native image selection (unreleased experiment)
 
+- Share output finish/patch types in the core and actual writer wrappers in
+  zencodec-io. Media aliases preserve existing native muxer/consumer paths.
+
 - Add explicit private disk staging to row encoding, with admitted chunk replay
   after native release and staging facts in the existing schedule policy.
   Preserve scratch prefixes, typed failures and confirmed destination appends.

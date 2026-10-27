@@ -99,3 +99,7 @@ pub use pump::{PumpError, pump_read_to_sink};
 pub use read_at_reader::ReadAtReader;
 #[cfg(feature = "std")]
 pub use std_source_error::StdSourceError;
+
+/// Actual writer access for synchronous image and container output.
+#[cfg(feature = "std")]
+pub mod destination;

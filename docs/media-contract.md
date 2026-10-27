@@ -542,3 +542,21 @@ row-driver tests and strict lint pass. Resource receipt:
 `rc=0 3s | peak-RSS 0.53GiB | min-avail 13068MiB | peak-load 0.59`.
 Workspace all-feature tests/doctests pass. These are correctness runs, not
 memory-bound or throughput measurements. No zenpixels change is required.
+
+
+The patch representation and writer wrappers now live below media:
+`zencodec::output_patch::OutputFinish` and `zencodec_io::destination`.
+Media re-exports identical types under the existing names, including MuxFinish.
+No native muxer migration is required. This prepares a common raster/container
+patch contract without adding a second range validator or seek-origin policy.
+Raster Encoder negotiation/execution remains a separate unimplemented step.
+
+Shared-output relocation validation (2026-10-27): all workspace feature tests,
+strict core/I/O/media lint, and all 13 native mux-output tests pass. The native
+controls include forward and prefixed seek-back output in three containers,
+independent AV1 sample/timing inspection, malformed patches before final effects,
+partial writes and terminal cancellation. Receipt:
+`rc=0 36s | peak-RSS 0.58GiB | min-avail 12542MiB | peak-load 0.93`.
+Strict default Rustdoc and the API-documentation gate also pass. This qualifies
+the common implementation through media; it is not native raster-patch support
+or a new performance/memory measurement. No zenpixels changes were needed.
