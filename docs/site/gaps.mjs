@@ -38,7 +38,7 @@ const gaps = [
     'TIFF is not yet a packaged factory. No universal efficient pyramid/region route, common blend/reference graph or full required-configuration coverage. A valid region request does not establish proportional decode work or memory.',
     'Codec packages and explicit realizable selection offers.', 'docs/collection-contract.md'],
   ['Conversion effects and ownership', 'OutputPlan::new_with_descriptor · ImageOutput::replace_packed_color · PackedImageOwner::retain_auxiliaries',
-    'Required packed descriptors, native float RGB/RGBA CMS cases, same-coordinate color replacement and separately retained auxiliary allocations.',
+    'Required packed descriptors, sample-exact planning without CMS, native float RGB/RGBA CMS cases, same-coordinate color replacement and separately retained auxiliary allocations.',
     'No geometry-changing replacement preserving all auxiliary coordinates; component codes refuse packed replacement. General ICC/LUT and float CMYK conversion remain unqualified. forbid_lossy still needs explicit clip_out_of_gamut(false) for the qualified unclipped route.',
     'zenpixels-convert effects contract and output adapters.', 'docs/ideal-api.md'],
   ['Required metadata and settings', 'DecodeRequest::decode · EncodeRequest::prepare · EncodeRequest::encode_with',

@@ -141,6 +141,14 @@ destination coexist during conversion. General ICC conformance remains open.
 `PublicationOffer::ReturnHeld` replaces the review-only `PreserveNative` name
 so publication does not claim that converted samples are still original.
 
+`OutputPlan::new_preserving_samples` now supplies a separate exact-output
+contract. It requires matching current/target profiles and proves reversible
+representation changes without consulting a CMS. The native JXL consumer
+borrows unchanged rows and adds opaque alpha while checking every original
+color byte. Transfer/gamut changes, alpha reassociation, sample removal and
+depth reduction refuse before execution. This is an exactness requirement,
+not a claim that ordinary color conversion can be lossless.
+
 The validation also exposed a naming problem: `ConvertOptions::forbid_lossy()`
 still enables clipping. The native preservation example adds
 `with_clip_out_of_gamut(false)`. Before 0.3, presets must distinguish forbidden

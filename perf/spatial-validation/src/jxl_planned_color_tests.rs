@@ -892,3 +892,76 @@ fn native_output_plan_late_backend_failure_or_unwind_drops_unpublished_storage()
         .unwrap();
     jxl_packaged_storage::assert_charges(&input_pool, &[&image]);
 }
+
+#[test]
+fn native_output_plan_exact_samples_never_require_a_cms() {
+    let bytes = fixture("conformance_test_images/animation_spline.jxl");
+    let mut source = ReadAtShim(SliceReadAt::new(&bytes));
+    let (codecs, pool) = jxl_packaged_storage::factories(64, 64);
+    let mut images = jxl_packaged_storage::open_admitted(
+        &codecs,
+        &mut source,
+        Composition::Composited,
+        64,
+        &pool,
+    )
+    .unwrap();
+    let image = images
+        .first_image(&ImageRequest::new())
+        .unwrap()
+        .unwrap()
+        .into_output();
+    image
+        .with_pixels(|pixels| {
+            let profile = pixels.color_context().unwrap().icc.clone().unwrap();
+            let current = pixels.color_context().cloned();
+            let descriptor = pixels.descriptor();
+            let mut identity = OutputPlan::new_preserving_samples(
+                descriptor,
+                current.clone(),
+                &ColorOrigin::assumed(),
+                OutputProfile::Icc(profile.clone()),
+                descriptor,
+            )
+            .unwrap();
+            identity.prepare(pixels.width()).unwrap();
+            let borrowed = identity.borrow_rows(pixels.clone()).unwrap().unwrap();
+            assert_eq!(borrowed.row(0).as_ptr(), pixels.row(0).as_ptr());
+            for row in 0..pixels.rows() {
+                assert_eq!(borrowed.row(row), pixels.row(row));
+            }
+            let output = zenpixels::PixelFormat::RgbaF32
+                .descriptor()
+                .with_primaries(descriptor.primaries)
+                .with_transfer(descriptor.transfer());
+            let mut expanded = OutputPlan::new_preserving_samples(
+                descriptor,
+                current,
+                &ColorOrigin::assumed(),
+                OutputProfile::Icc(profile),
+                output,
+            )
+            .unwrap();
+            let storage = StorageBudget::new(256 * 1024 * 1024, 1);
+            let converted = convert(pixels.clone(), &mut expanded, &storage).unwrap();
+            let view = converted.pixels();
+            for y in 0..pixels.rows() {
+                for (before, after) in pixels
+                    .row(y)
+                    .as_chunks::<12>()
+                    .0
+                    .iter()
+                    .zip(view.row(y).as_chunks::<16>().0.iter())
+                {
+                    assert_eq!(before, &after[..12]);
+                    assert_eq!(&after[12..], &1f32.to_ne_bytes());
+                }
+            }
+            drop(converted);
+            assert_eq!(
+                (storage.reserved_bytes(), storage.reserved_objects()),
+                (0, 0)
+            );
+        })
+        .unwrap();
+}

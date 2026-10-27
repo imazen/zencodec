@@ -2436,3 +2436,15 @@ Fallback `render_next_frame_to_sink` implementation via `render_next_frame` + co
 ### `negotiate_pixel_format()` / `best_encode_format()` / `is_format_available()`
 
 Format negotiation helpers for matching preferred descriptors to codec capabilities.
+
+### Sample-exact output planning
+
+The conversion dependency exposes `OutputPlan::new_preserving_samples(source,
+current, origin, target_profile, required_descriptor)`. Matching current/target
+profiles and a reversible representation proof are required. Identity, supported
+channel reorder/expansion and U8-to-U16 widening preserve represented samples;
+color arithmetic, reassociation, depth reduction and channel removal refuse
+before execution. No CMS is consulted. This is distinct from unclipped color
+conversion, whose arithmetic is not bit-exact. The native JXL example in
+`perf/spatial-validation/src/jxl_planned_color_tests.rs` exercises borrowing and
+opaque-alpha addition against actual decoded samples.

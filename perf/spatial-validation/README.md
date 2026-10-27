@@ -1555,3 +1555,17 @@ Run `just spatial-tiff-inventory-check <fresh-artifact-directory>` for the
 focused controls. The documentation workflow also runs them with the full native
 spatial suite and retains their JSON receipts. See
 [the native inventory receipt](../../benchmarks/native_tiff_inventory_2026-10-27.json).
+
+## Required exact samples
+
+`native_output_plan_exact_samples_never_require_a_cms` decodes a real JXL
+presentation and uses `OutputPlan::new_preserving_samples` for two operations:
+borrow unchanged pixels and add opaque alpha into admitted strided storage.
+Every original color byte must match; added alpha is exactly one and dropping
+the result releases its storage charge. The shared constructor refuses color
+arithmetic and non-reversible representation changes before accepting rows.
+It does not preserve encoded file bytes or perform descriptive-metadata policy.
+
+Run `just spatial-output-plan-check` for this and the existing conversion
+contracts. Full qualification uses `just spatial-ci-check` with the documented
+independent readers. No throughput or compile-time comparison is implied.

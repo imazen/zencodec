@@ -314,6 +314,12 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### [Unreleased]
 
+- Native JXL now exercises the shared `OutputPlan::new_preserving_samples`:
+  unchanged rows borrow and opaque-alpha expansion preserves original sample
+  bits. The pinned conversion API and guide distinguish exact representation
+  changes from approximate unclipped color conversion.
+
+
 ### Fixed
 
 - Compare discarded ICC/CICP against a clean same-policy encode in the testkit, distinguishing native/default color from retained optional metadata; unexpected color values and discarded descriptive metadata still fail.

@@ -105,6 +105,7 @@ test('checked API page links executable examples and actual signatures for each 
   const outputApi=JSON.parse(await readFile(new URL('../output-plan-api.json',import.meta.url),'utf8'));
   assert.ok(page.includes(`/blob/${outputApi.revision}/${outputApi.path}#L${outputApi.line}`));
   assert.match(outputApi.surface,/pub fn new_with_descriptor\(/);
+  assert.match(outputApi.surface,/pub fn new_preserving_samples\(/);
   assert.match(outputApi.surface,/pub fn borrow_rows<'a>/);
   for(const entry of improvements) {
     assert.ok(ids.includes(`change-${entry.id}`));

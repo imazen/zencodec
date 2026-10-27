@@ -8,7 +8,7 @@ if(!checkout||!revision?.match(/^[0-9a-f]{40}$/))throw Error('usage: capture-out
 const file='zenpixels-convert/src/output/plan.rs';
 const source=execFileSync('git',['-C',checkout,'show',`${revision}:${file}`],{encoding:'utf8'});
 const {code,line}=declarations(source,{scope:'impl OutputPlan {',methods:[
-  'new','new_with_descriptor','output_descriptor','metadata','prepare','borrow_rows','convert_rows',
+  'new','new_with_descriptor','new_preserving_samples','output_descriptor','metadata','prepare','borrow_rows','convert_rows',
 ]});
 const surface=`use alloc::sync::Arc;
 use zenpixels::{ColorContext, ColorOrigin, PixelDescriptor, PixelFormat, PixelSlice, PixelSliceMut};

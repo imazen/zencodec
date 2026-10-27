@@ -1,0 +1,58 @@
+{
+  "date_utc": "2026-10-27",
+  "kind": "correctness qualification; no performance or compile-time comparison",
+  "base": "2c94d9e414f639efa55d37369a2c8d973e2f18a5",
+  "zenpixels_revision": "069e9b6404e613d5d9b176f2a621539d17beb75d",
+  "contract": "OutputPlan::new_preserving_samples requires matching profiles and a reversible representation proof without CMS delegation.",
+  "native": "Actual JXL identity borrows original rows; opaque alpha expansion preserves every color byte and releases destination storage charges.",
+  "validation": [
+    {
+      "command": "zenpixels: just output-plan-check output-borrow-compat",
+      "log": "/home/lilith/tmp/zenpixels-output-exact-check-20261027.log",
+      "exit_code": 0,
+      "resources": "8s | peak-RSS 0.32GiB | min-avail 11293MiB | peak-load 0.39",
+      "log_sha256": "75c39816af0f2b166d25725e1b6753b6ab0381c54572c0e8b6a4b7515c3d8064"
+    },
+    {
+      "command": "zenpixels: just test clippy",
+      "log": "/home/lilith/tmp/zenpixels-output-exact-workspace-20261027.log",
+      "exit_code": 0,
+      "resources": "45s | peak-RSS 2.64GiB | min-avail 8822MiB | peak-load 1.72",
+      "log_sha256": "8142abda9aa954446c5d601855efa7da5a14d6e8b39fba081dfe8eecfae4e520"
+    },
+    {
+      "command": "just spatial-ci-check <fresh-artifacts> cms_oracle,old_jpeg",
+      "log": "/home/lilith/tmp/zencodec-exact-native-full-20261027.log",
+      "exit_code": 101,
+      "result": "146 native tests passed, 0 failed, 0 ignored. Subsequent strict lint rejected chunks_exact in the new test.",
+      "resources": "134s | peak-RSS 0.80GiB | min-avail 10602MiB | peak-load 1.80",
+      "log_sha256": "495de6a01fe3a6750d1f800b88c6327ef5eceb791aaccadd32be2792775647c8"
+    },
+    {
+      "command": "focused exact native test; full-feature strict lint; just docs-site-browser-check 3547",
+      "log": "/home/lilith/tmp/zencodec-exact-final-check-20261027.log",
+      "exit_code": 0,
+      "result": "Replaced fixed-size chunks_exact with as_chunks; exact test, strict lint and guide/browser gates pass.",
+      "resources": "14s | peak-RSS 0.46GiB | min-avail 11155MiB | peak-load 1.20",
+      "log_sha256": "9a89a93defec6e6741d8a8a3254d9bdbf8ddc396b9e328ed6275e912e92ec215"
+    }
+  ],
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/exact-output-full",
+  "api_delta": {
+    "public_methods": 1,
+    "new_types": 0,
+    "new_dependencies": 0,
+    "new_features": 0
+  },
+  "remaining": [
+    "forbid_lossy preset replacement/deprecation",
+    "unclipped conversion requirements across non-sRGB/backend paths",
+    "numerical-model and approximation guarantees",
+    "whole-operation memory, runtime and compile-time comparisons"
+  ],
+  "source_sha256": {
+    "perf/spatial-validation/src/jxl_planned_color_tests.rs": "ab06c57675633df21c628c9cce80ced5cf7f46949ec262d4ca94aff31d428dc6",
+    "perf/spatial-validation/dependencies.lock": "47edfb9c281633f0840ef36835e249c804637c358a30a1700ec12bc9b99a5846",
+    "docs/output-plan-api.json": "6986f52f92b8ad718a44037fb948179bcc7fdbb88698de3a045266c377a57001"
+  }
+}
