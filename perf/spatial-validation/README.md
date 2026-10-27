@@ -1436,3 +1436,23 @@ unchanged. `just spatial-jxl-oracle-relink <pinned-build> <fresh-output>` can
 rebuild the helpers against an existing libjxl 0.11.1 library while retaining the
 old binaries and recording source/binary hashes. The ordinary helper modes are
 unchanged; `samples-oriented` enables libjxl's own orientation for this oracle.
+
+### Current TIFF parity fork
+
+The spatial harness now pins [image-tiff `10a3b6b2`](https://github.com/lilith/image-tiff/tree/10a3b6b2fa88eb5943525066a989ea9e64e644d5),
+the parity work on that fork's main branch. The unchanged 133-case native gate
+and strict lint pass with the harness's `lzw,deflate` configuration; see
+[the qualification receipt](../../benchmarks/native_tiff_parity_pin_2026-10-27.json).
+This does **not** exercise old-style JPEG: that decoder requires the `jpeg`
+feature. The fork's Rust 1.99 requirement and additional LERC/LZMA dependencies
+apply to this private adapter experiment; the shared crates keep their own MSRV.
+
+The parity session exposed a separate inventory requirement:
+[issue 171](https://github.com/imazen/zencodec/issues/171). JPEG table tags
+519–521 reference bytes outside the tag values. JPEGInterchangeFormat may read
+through EOF when its length is zero; multiple chunks can depend on one shared
+stream. A region request must not imply independent chunk decoding or bounded
+region-sized work. Inventory must distinguish reachable data, actual decoder
+consumption, and privacy evidence. Predictor interpretation also depends on the
+compression method. The consumer rollout in zenextras is not established by
+this harness's passing tests.

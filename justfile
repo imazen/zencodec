@@ -373,6 +373,9 @@ spatial-validation-sync export:
 spatial-layer-resolve:
     cargo update --manifest-path perf/spatial-validation/Cargo.toml -p zenjxl-decoder
 
+spatial-tiff-resolve:
+    cargo update --manifest-path perf/spatial-validation/Cargo.toml -p tiff
+
 spatial-validation-resolve:
     cargo metadata --manifest-path perf/spatial-validation/Cargo.toml --format-version 1 > /dev/null
 
