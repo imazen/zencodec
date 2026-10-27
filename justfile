@@ -265,6 +265,9 @@ plane-view-check:
 compile-time-prepare root main ideal:
     python3 perf/compile-time.py prepare "{{root}}" "{{main}}" "{{ideal}}"
 
+compile-adapters-prepare root main ideal:
+    python3 perf/compile-time.py prepare-adapters "{{root}}" "{{main}}" "{{ideal}}"
+
 compile-time-run zenbench root:
     "{{zenbench}}" pair "{{root}}/plan.json" --dry-run > "{{root}}/dry-run.json"
     "{{zenbench}}" pair "{{root}}/plan.json" --mode iterate --output "{{root}}/attempt"
@@ -1275,3 +1278,6 @@ row-encode-check artifacts:
     JPEG_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked row_driver -- --nocapture
     cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
     cargo clippy -p zencodec-io --all-targets --features std --locked -- -D warnings
+
+compile-adapters-report root log receipt:
+    python3 perf/compile-adapters-report.py "{{root}}" "{{log}}" "{{receipt}}"

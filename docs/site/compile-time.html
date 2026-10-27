@@ -9,3 +9,12 @@
 <p>Resource wrapper: rc=0, 180 s, peak RSS 0.30 GiB, minimum available 11360 MiB, peak load 1.98. This is the whole compile experiment, not codec memory. <a href="https://github.com/imazen/zencodec/blob/ideal-api/benchmarks/compile_time_2026-10-27.md">Method, evidence and reproduction</a>.</p>
 
 <p><a href="https://github.com/imazen/zencodec/blob/ideal-api/benchmarks/compile_time_2026-10-26.md">Earlier observation and its source revisions</a>.</p>
+
+<h3>Core plus I/O and media companions</h3>
+<p>The newer experiment includes zencodec-io and zencodec-media at review ec5d5089. It still excludes codecs, rendering/CMS and application monomorphization. Main media has no std feature; the review std case includes its new output/staging drivers. This measures the expanded surface rather than identical supported operations.</p>
+<div class="table-scroll"><table><thead><tr><th>Median of five builds</th><th>Main a20e4dd3</th><th>Review ec5d5089</th></tr></thead><tbody>
+<tr><th>Debug, no requested std</th><td>2.44 s</td><td>2.86 s</td></tr>
+<tr><th>Debug, available std</th><td>2.44 s</td><td>2.95 s</td></tr>
+<tr><th>Release, available std</th><td>3.19 s</td><td>4.20 s</td></tr>
+</tbody></table></div>
+<p>Exploratory only: 45 interleaved builds with A/A controls; all 45 had CPU-load observations above 5%, and six had heavy-process observations. No observations were discarded. Resource wrapper: rc=0, 157 s, peak RSS 0.30 GiB, minimum available 12552 MiB, peak load 1.56. These are compilation observations, not runtime or codec memory bounds. <a href="https://github.com/imazen/zencodec/blob/ideal-api/benchmarks/compile_adapters_2026-10-27.md">Complete method, unit timings and retained evidence</a>.</p>

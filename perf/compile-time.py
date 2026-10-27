@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import subprocess
 import tarfile
+import tomllib
 
 
 def run(args, **kwargs):
@@ -72,6 +73,65 @@ def prepare(root, main, ideal):
     print(root / "plan.json")
 
 
+def prepare_adapters(root, main, ideal):
+    """Compare the same io/media consumer on main and review; no registry fiction."""
+    root.mkdir(parents=True, exist_ok=False)
+    runner = root / "runner-measured.py"
+    runner.write_bytes(Path(__file__).read_bytes())
+    revisions = {name: run(["git", "rev-parse", rev], capture_output=True,
+                          text=True).stdout.strip()
+                 for name, rev in [("main", main), ("ideal", ideal)]}
+    for name, revision in revisions.items():
+        archive = root / f"{name}.tar"
+        with archive.open("wb") as output:
+            run(["git", "archive", revision], stdout=output)
+        source = root / f"{name}-source"
+        source.mkdir()
+        with tarfile.open(archive) as bundle:
+            bundle.extractall(source, filter="data")
+        for feature in ["default", "std"]:
+            project = root / name / feature
+            (project / "src").mkdir(parents=True)
+            (project / "src/lib.rs").write_text("pub use zencodec;\npub use zencodec_io;\npub use zencodec_media;\n")
+            manifest = '[package]\nname="adapter-consumer"\nversion="0.0.0"\nedition="2024"\n[workspace]\n[dependencies]\n'
+            for package, directory in [("zencodec", source), ("zencodec-io", source / "zencodec-io"),
+                                       ("zencodec-media", source / "zencodec-media")]:
+                available = tomllib.loads((directory / "Cargo.toml").read_text()).get("features", {})
+                flags = ', features=["std"]' if feature == "std" and "std" in available else ''
+                manifest += f'{package} = {{ path={json.dumps(str(directory))}, default-features=false{flags} }}\n'
+            (project / "Cargo.toml").write_text(manifest)
+            run(["cargo", "generate-lockfile", "--manifest-path", str(project / "Cargo.toml")])
+            run(["cargo", "fetch", "--locked", "--manifest-path", str(project / "Cargo.toml")])
+            with (project / "tree.txt").open("w") as output:
+                run(["cargo", "tree", "--locked", "--manifest-path", str(project / "Cargo.toml")], stdout=output)
+    cases = []
+    for profile, feature in [("dev", "default"), ("dev", "std"), ("release", "std")]:
+        config = root / f"{profile}-{feature}.json"
+        config.write_text(json.dumps({"profile": profile, "feature": feature}) + "\n")
+        inputs = {"configuration": str(config), "runner": str(runner)}
+        for name in revisions:
+            inputs[f"{name}_lock"] = str(root / name / feature / "Cargo.lock")
+            inputs[f"{name}_archive"] = str(root / f"{name}.tar")
+        cases.append({"id": f"{profile}-{feature}", "inputs": inputs})
+    arms = [{"id": name, "program": "/usr/bin/python3", "revision": revision,
+             "args": [str(runner), "build", str(root / name), "${configuration}", "${output}"],
+             "timeout_seconds": 120,
+             "env": {"CARGO_INCREMENTAL": "0", "CARGO_BUILD_JOBS": "2", "RUSTFLAGS": "",
+                     "RUSTC_WRAPPER": None, "RUSTC_WORKSPACE_WRAPPER": None,
+                     "TMPDIR": str(Path.home() / "tmp")}} for name, revision in revisions.items()]
+    plan = {"schema": 1, "baseline": arms[0], "candidates": arms[1:], "cases": cases,
+            "metric": {"extract": {"kind": "prefix", "prefix": "compile_ms="},
+                       "unit": "ms", "expected": 1, "divide_by": 1, "resolution": 10},
+            "check": {"kind": "json", "prefix": "result=", "pointers": ["/compiled"]},
+            "warmup": "Prefetched dependencies; empty target; warm OS cache; io/media re-export consumer; two jobs.",
+            "blocks": 5, "aa": True, "deadline_seconds": 1200}
+    (root / "plan.json").write_text(json.dumps(plan, indent=2) + "\n")
+    with (root / "toolchain.txt").open("w") as output:
+        for command in [["rustc", "-Vv"], ["cargo", "-V"], ["uname", "-a"]]:
+            run(command, stdout=output)
+    print(root / "plan.json")
+
+
 def build(project, config_path, output):
     config = json.loads(config_path.read_text())
     project = project / config["feature"]
@@ -101,6 +161,10 @@ if __name__ == "__main__":
     p.add_argument("root", type=Path)
     p.add_argument("main")
     p.add_argument("ideal")
+    p = sub.add_parser("prepare-adapters")
+    p.add_argument("root", type=Path)
+    p.add_argument("main")
+    p.add_argument("ideal")
     p = sub.add_parser("build")
     p.add_argument("project", type=Path)
     p.add_argument("configuration", type=Path)
@@ -108,5 +172,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.action == "prepare":
         prepare(args.root.resolve(), args.main, args.ideal)
+    elif args.action == "prepare-adapters":
+        prepare_adapters(args.root.resolve(), args.main, args.ideal)
     else:
         build(args.project, args.configuration, args.output)
