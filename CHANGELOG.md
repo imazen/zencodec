@@ -2,6 +2,10 @@
 
 ## Native image selection (unreleased experiment)
 
+- Refuse final interpretation adoption when a built-in preset has unproven
+  metadata, memory, range or output obligations. Provisional discovery remains
+  permitted; final facts no longer bypass requirements before sink output.
+
 - Deprecate generic and erased best-effort policy setters in favor of checked
   policy methods or operation requests. Legacy behavior and its tests remain.
 

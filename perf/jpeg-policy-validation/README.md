@@ -85,3 +85,25 @@ Receipt: `just jpeg-policy-check <artifacts>`; log
 `/mnt/v/output/zencodec/platform-regions-20261026-run/profile-evidence-native`.
 Resource wrapper: `rc=0 17s | peak-RSS 0.69GiB | min-avail 10109MiB | peak-load 0.82`.
 These are build/test process measurements, not codec performance bounds.
+
+### Final interpretation preset enforcement
+
+A native baseline/progressive JPEG regression exercises seven required preset
+constraints, both directly and through `UsePreset` delegation (28 combinations).
+Discovery may continue, but final interpretation adoption refuses when the
+question cannot establish the configured constraint. No sink begin, row or finish
+occurs, and managed storage returns to zero. Before the fix the first case
+accepted an unproven descriptive-metadata requirement.
+
+Validation (2026-10-27): `just jpeg-policy-check <artifacts>`,
+`just operation-policy-check`, coroutine integration tests and strict core lint
+passed. The JPEG suite contains 36 tests. Combined wrapper receipt:
+`rc=0 21s | peak-RSS 0.69GiB | min-avail 9659MiB | peak-load 1.45`.
+This is build/test resource usage, not a codec memory bound. Logs:
+`~/tmp/zencodec-boundary-preset-before-20261027.log` and
+`~/tmp/zencodec-boundary-preset-after-20261027.log`.
+
+Scope: this closes enforcement inside the built-in resolver. A custom callback
+selecting a route directly still bypasses preset constraints in the current
+contract. Mandatory requirements shared by callbacks and presets need a separate
+admission rule; this regression does not claim to provide it.

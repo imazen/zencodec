@@ -315,6 +315,9 @@ where
 
 /// Configurable built-in policy; applications can use it directly or delegate
 /// selected questions to it with `Decision::UsePreset`.
+/// Requirements need evidence in the question that authorizes their effects.
+/// Interpretation discovery may continue, but final adoption refuses unrelated
+/// unproven requirements because it can immediately enable native sink output.
 #[derive(Clone, Copy, Debug)]
 pub struct PolicySet {
     output_schedule: Option<super::OutputSchedule>,
@@ -585,10 +588,29 @@ impl PolicyResolver for PolicySet {
                 choices
             }
             Question::Boundary { choices, .. } => {
+                // Discovery may continue, but adopting interpretation permits
+                // native output immediately. There need not be another policy
+                // question before rows reach a sink, so requirements lacking
+                // evidence here must not silently disappear at adoption.
+                let unproven = self.metadata.is_some()
+                    || !self.allow_opaque_profiles
+                    || self.workspace_limit.is_some()
+                    || self.require_extended_range
+                    || self.output_schedule.is_some()
+                    || self.output_wait_limit.is_some();
                 return Ok(choices
-                    .first()
+                    .iter()
+                    .find(|choice| {
+                        !unproven || choice.value().action == BoundaryAction::ContinueReading
+                    })
                     .map(Decision::choose)
-                    .unwrap_or_else(|| Decision::decline(Decline::NoPreferredChoice)));
+                    .unwrap_or_else(|| {
+                        Decision::decline(if unproven {
+                            Decline::UnsupportedQuestion
+                        } else {
+                            Decline::NoPreferredChoice
+                        })
+                    }));
             }
         };
         let choice = if self.prefer_lossless {

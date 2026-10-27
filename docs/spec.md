@@ -2765,3 +2765,17 @@ The operation request builders store requirements; execution reports rejection.
 Deprecation does not change existing codec behavior, and legacy `CodecSet`
 conveniences retain their previous best-effort semantics. Their presence is not
 a guarantee that a requested policy was honored.
+
+### Preset obligations at interpretation adoption
+
+A provisional boundary may select `ContinueReading` while requirements remain
+unresolved. `AdoptInterpretation` can immediately permit native sink output;
+there is no guaranteed later conversion or publication question. The built-in
+preset therefore refuses adoption if metadata retention, opaque-profile
+exclusion, workspace bounds, extended-range preservation, output scheduling or
+output-wait bounds remain unproven. A final descriptor is not evidence for those
+separate obligations. A coupled adapter can prepare the relevant routes and
+resolve their question before explicitly adopting the same held interpretation.
+This refuses unsupported requirements; it does not turn discovery into a
+whole-operation allocation cap. Custom callbacks retain decision authority and
+must discharge any requirements they accept without delegating to the preset.

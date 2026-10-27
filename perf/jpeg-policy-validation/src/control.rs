@@ -194,6 +194,64 @@ fn registered_native_refusal_preserves_reason_without_output_or_owned_storage() 
     }
 }
 
+#[test]
+fn native_final_boundary_cannot_bypass_unproven_preset_requirements() {
+    use zencodec::{
+        CodecSet,
+        operation::{
+            DecisionCode, DecisionContext, DecodeRequest, MetadataTransfer, OutputSchedule,
+        },
+    };
+    let codecs = CodecSet::new().with_decoder(JpegDecoderConfig::new());
+    let requirements = [
+        PolicySet::new().require_metadata(MetadataTransfer::DiscardDescriptive),
+        PolicySet::new().require_metadata(MetadataTransfer::PreserveReported),
+        PolicySet::new().allow_opaque_profiles(false),
+        PolicySet::new().with_workspace_limit(u64::MAX),
+        PolicySet::new().require_extended_range(true),
+        PolicySet::new().require_output_schedule(OutputSchedule::FinishFirst),
+        PolicySet::new().with_output_wait_limit(u64::MAX),
+    ];
+    for progressive in [false, true] {
+        let bytes = fixtures::fixture(progressive, fixtures::Placement::Header);
+        for preset in requirements {
+            for delegated in [false, true] {
+                let budget = StorageBudget::new(64 * 1024, 4);
+                let native = DecodeRequest::new()
+                    .start_controlled(&codecs, budget.clone())
+                    .unwrap();
+                let mut direct = preset;
+                let resolver = move |q: Question<'_>| -> Result<Decision, At<Infallible>> {
+                    if delegated {
+                        Ok(Decision::UsePreset)
+                    } else {
+                        zencodec::operation::PolicyResolver::resolve(&mut direct, q)
+                    }
+                };
+                let mut session = PolicyDecoder::new(native, resolver).with_policy_set(preset);
+                let mut sink = Sink::default();
+                let result = drive_from_slice(&mut session, &bytes, &mut sink, None, 13);
+                assert!(result.is_err(), "unproven preset accepted: {preset:?}");
+                let error = result.unwrap_err();
+                assert!(
+                    zencodec::find_cause::<zencodec::operation::PolicyFailure>(&error).is_some()
+                );
+                let records: Vec<_> = session.report().decisions().collect();
+                assert_eq!(records.len(), 2, "discovery must remain permitted");
+                assert_eq!(records[0].code, DecisionCode::Selected);
+                assert_eq!(records[1].code, DecisionCode::Declined);
+                let DecisionContext::Boundary(facts) = records[1].context else {
+                    panic!()
+                };
+                assert_eq!(facts.state, InterpretationState::Final);
+                assert_eq!(records[1].used_preset, delegated);
+                assert_eq!((sink.begin, sink.rows, sink.finish), (0, 0, 0));
+                assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 enum Error {
     Coroutine(CoroutineError),

@@ -1296,3 +1296,7 @@ output-patch-check artifacts:
 raster-output-native-check artifacts:
     AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked mux_native_raster_ -- --nocapture
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# Final interpretation cannot discharge unrelated required policy obligations.
+boundary-preset-native-check artifacts:
+    JPEG_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked native_final_boundary_cannot_bypass_unproven_preset_requirements -- --nocapture

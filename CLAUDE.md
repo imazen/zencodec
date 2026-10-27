@@ -485,3 +485,11 @@ The review API originally defaulted `TranscodeOffer::retains_opaque_profile` to
 It now defaults to `None`; strict exclusion accepts only `Some(false)`. This
 fix qualifies the policy decision, not whole-container PII removal or native
 adapter postconditions.
+
+## Final interpretation preset bypass (2026-10-27)
+
+The review preset previously accepted a final `Question::Boundary` even when
+metadata, memory, range or output requirements were configured. `PolicyDecoder`
+can publish rows after adoption without another question. Adoption now refuses
+these unproven obligations; provisional discovery remains permitted. Native
+JPEG regression: `native_final_boundary_cannot_bypass_unproven_preset_requirements`.
