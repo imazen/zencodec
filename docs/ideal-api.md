@@ -44,6 +44,14 @@ methods suffice for replacement between segments; this does not implement
 continuous-container reconfiguration or planar conversion. See the
 [native witness and limits](../perf/av1-policy-validation/README.md#prepared-output-transitions).
 
+The fixed-output guard also rejects equal-size frames whose CICP,
+depth/subsampling or timestamp clock changes after header publication. It keeps
+earlier frame owners valid and does not prepare an unusable replacement encoder.
+Combining conversion with encoding still needs an executable contract: policy
+must see conversion effects alongside encoder fidelity, and the adapter must
+retain both selected mechanisms through execution. A lossless encoder alone
+does not establish lossless transcoding.
+
 ## What still needs production implementation
 
 The current priority is the API/native-codec validation loop. The shared collection

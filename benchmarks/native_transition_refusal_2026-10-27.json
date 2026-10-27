@@ -1,0 +1,26 @@
+{
+  "base_commit": "539e19b32254fe135d527728d837dc7ee49d1d4c",
+  "kind": "native same-size transition refusal qualification; no performance claim",
+  "command": "just av1-policy-check /mnt/v/output/zencodec/platform-regions-20261026-run/transition-interpretation",
+  "log": "/home/lilith/tmp/zencodec-transition-interpretation-fixed-20261027.log",
+  "log_sha256": "dbeb28d8a0d6ce2e235f4878c68d8215c21b7f7f2ea55d39b48c9964fe13b496",
+  "source_sha256": {
+    "perf/av1-policy-validation/src/epoch_route_tests.rs": "9aad83fad2a0078550c0056bce6693896432e199e17d15d6cd99e5a91a85952d",
+    "perf/av1-policy-validation/src/epoch_route.rs": "bb49e1729c56badada5cc1b377ef102e5bb93a94708e96ca492e4e667a93f4b1",
+    "perf/av1-policy-validation/dependencies.lock": "b5d268d8eee7cf4c1c31097566da27af1bf399eae57b7bc9b0dd413f4ef6b588"
+  },
+  "result": "31 native tests, strict lint and independent Gamma22 saved-trace checks passed",
+  "resource_line": "run-heavy: done rc=0 42s | peak-RSS 0.56GiB | min-avail 11470MiB | peak-load 0.60",
+  "coverage": [
+    "Same-size CICP change after header commitment refuses with no offered route.",
+    "Same-size combined bit-depth/subsampling change after header commitment refuses with no offered route.",
+    "Same-size timestamp-clock change after header commitment refuses with no offered route.",
+    "Each refusal is terminal, releases native encoder and staged packet admissions, preserves published configuration and earlier decoded frames."
+  ],
+  "limits": [
+    "Refusal qualification, not coupled conversion/encoding implementation.",
+    "Bit depth and subsampling change together in this fixture; their individual isolation is not established here.",
+    "Published CodecConfig is retained externally; prior test covers actual IVF header bytes.",
+    "No whole-operation memory or comparative performance claim."
+  ]
+}

@@ -133,6 +133,15 @@ Header publication can itself block and has no sequential-memory qualification.
 Continuous muxer reconfiguration, planar conversion and live sequential output
 are not implemented by this witness.
 
+The fixed-header regression also exercises equal-size decoded frames that change
+CICP, bit depth/subsampling, or timestamp clock. Each change offers no route,
+terminates before accepting the new frame, releases the old encoder and staged
+packets, and preserves both the published configuration and previously returned
+frame samples/interpretation. This is refusal coverage, not conversion support:
+a future normalize-to-fixed-output route must retain its actual converter and
+encoder together and expose the conversion effects to policy before acceptance.
+An encoder's lossless setting alone cannot certify that combined route.
+
 Run `just av1-policy-check <fresh-artifacts>`; the
 [qualification receipt](../../benchmarks/native_frame_route_2026-10-27.json)
 records source identities and the native and shared API gates.

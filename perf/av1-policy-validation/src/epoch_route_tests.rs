@@ -246,6 +246,87 @@ fn epoch_route_fixed_committed_output_refuses_before_new_frame_acceptance() {
     assert_eq!(published, header);
 }
 
+#[test]
+fn epoch_route_fixed_header_refuses_same_size_interpretation_and_clock_changes() {
+    let frames = native_stream(1);
+    // These are actual decoded frames, not relabeled synthetic owners. All
+    // pairs have equal geometry: dimensions alone cannot authorize Continue.
+    for (before, after) in [(6, 9), (9, 12), (12, 15)] {
+        let old = &frames[before];
+        let incoming = &frames[after];
+        assert_eq!(
+            old.interpretation().geometry,
+            incoming.interpretation().geometry
+        );
+        let old_pixels = samples(old);
+        let old_interpretation = old.interpretation().clone();
+        let storage = StorageBudget::new(1 << 20, 64);
+        let live = Arc::new(AtomicUsize::new(0));
+        let calls = Cell::new(0);
+        let mut operation = Candidate::new(
+            |question: Question<'_>| -> Result<Decision, At<Infallible>> {
+                calls.set(calls.get() + 1);
+                let Question::FrameRoute {
+                    interpretation,
+                    facts,
+                    choices,
+                } = question
+                else {
+                    panic!("frame route expected")
+                };
+                if calls.get() == 2 {
+                    assert_eq!(interpretation, incoming.interpretation().as_ref());
+                    assert_eq!(
+                        facts.output.previous,
+                        Some(FrameFacts::new(old.interpretation(), old.timing(),))
+                    );
+                    assert!(facts.output.output_committed);
+                    assert_eq!(choices.iter().count(), 0);
+                    // No replacement encoder may be prepared for this fixed
+                    // destination, even if the callback would prefer one.
+                    assert_eq!(live.load(Ordering::SeqCst), 1);
+                }
+                Ok(Decision::UsePreset)
+            },
+            false,
+            false,
+            storage.clone(),
+            live.clone(),
+        );
+        operation.push(old, &Unstoppable).unwrap();
+        let mut published = None;
+        operation
+            .publish_header(
+                |config| {
+                    published = Some(config.clone());
+                    Ok(())
+                },
+                &Unstoppable,
+            )
+            .unwrap();
+        let published = published.unwrap();
+        let error = operation.push(incoming, &Unstoppable).unwrap_err();
+        let failure = zencodec::find_cause::<PolicyFailure>(&*error).unwrap();
+        assert_eq!(failure.record().offered, 0);
+        assert_eq!(failure.record().code, DecisionCode::Declined);
+        assert!(operation.is_failed());
+        assert!(operation.push(old, &Unstoppable).is_err());
+        assert_eq!(calls.get(), 2);
+        assert_eq!(live.load(Ordering::SeqCst), 0);
+        assert_eq!(
+            (storage.reserved_bytes(), storage.reserved_objects()),
+            (0, 0)
+        );
+        assert_eq!(
+            published.video.unwrap().color,
+            old.interpretation().color.resolved
+        );
+        assert_eq!(published.time_base, old.timing().pts.unwrap().base());
+        assert_eq!(old.interpretation(), &old_interpretation);
+        assert_eq!(samples(old), old_pixels);
+    }
+}
+
 struct StopAt {
     stopped: AtomicBool,
     reason: StopReason,
