@@ -20,8 +20,10 @@ export async function checkIdeal(browser,url,output) {
     assert.ok((await page.locator('h1').textContent()).includes('executes today'));
     assert.equal(await page.locator('.ideal-step').count(),5);
     const changes=page.locator('.api-change');
-    assert.equal(await page.locator('.api-change:not(#change-operation-storage):not(#change-float-color):not(#change-output-descriptor):not(#change-strided-plane):not(#change-auxiliary-grid):not(#change-frame-route):not(#change-mux-finish):not(#change-mux-timing)').count(),12);
-    assert.equal(await page.locator('.api-change:not(#change-float-color):not(#change-output-descriptor):not(#change-strided-plane):not(#change-auxiliary-grid):not(#change-frame-route):not(#change-mux-finish):not(#change-mux-timing)').count(),13);
+    assert.equal(await page.locator('.api-change:not(#change-operation-storage):not(#change-float-color):not(#change-output-descriptor):not(#change-strided-plane):not(#change-auxiliary-grid):not(#change-frame-route):not(#change-mux-finish):not(#change-mux-timing):not(#change-combined-render)').count(),12);
+    assert.equal(await page.locator('.api-change:not(#change-float-color):not(#change-output-descriptor):not(#change-strided-plane):not(#change-auxiliary-grid):not(#change-frame-route):not(#change-mux-finish):not(#change-mux-timing):not(#change-combined-render)').count(),13);
+    assert.equal(await page.locator('#change-combined-render').count(),1);
+    for(const required of ['pub struct Request','pub enum Target','pub fn render','Private implementation','descriptor-only','planar video']) assert.ok((await page.locator('#change-combined-render').textContent()).includes(required),required);
     assert.equal(await page.locator('#change-mux-timing').count(),1);
     assert.match(await page.locator('#change-mux-timing').textContent(), /begin_exact_timing/);
     assert.equal(await page.locator('#change-auxiliary-grid').count(),1);

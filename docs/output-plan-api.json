@@ -1,9 +1,9 @@
 {
   "repository": "imazen/zenpixels",
-  "revision": "4e59d3c04dc74b4d78a98f0b5310363644f9ac82",
+  "revision": "02ccdfb0810dd577a196997ad0bbf9e7bf7c8eb8",
   "path": "zenpixels-convert/src/output/plan.rs",
   "line": 68,
-  "source_sha256": "7a089bd90a3c71dcff76c90fce7250ad3a68c64d29161b81c6b282356404b117",
+  "source_sha256": "41d32b94603596b53777cc3f76d24fc6f3f59f0cf6d29d00359ef7d54c2e5d66",
   "surface": "use alloc::sync::Arc;\nuse zenpixels::{ColorContext, ColorOrigin, PixelDescriptor, PixelFormat, PixelSlice, PixelSliceMut};\nuse zenpixels_convert::{ConvertError, ConvertOptions, OutputPlan, output::{OutputMetadata, OutputProfile}};\nuse whereat::At;\n\nimpl OutputPlan {\n    pub fn new(\n        source_desc: PixelDescriptor,\n        current: Option<Arc<ColorContext>>,\n        origin: &ColorOrigin,\n        target: OutputProfile,\n        pixel_format: PixelFormat,\n        options: &ConvertOptions,\n        cms: Option<&dyn zenpixels_convert::cms::PluggableCms>,\n    ) -> Result<Self, At<ConvertError>>;\n\n    pub fn new_with_descriptor(\n        source_desc: PixelDescriptor,\n        current: Option<Arc<ColorContext>>,\n        origin: &ColorOrigin,\n        target: OutputProfile,\n        output: PixelDescriptor,\n        options: &ConvertOptions,\n        cms: Option<&dyn zenpixels_convert::cms::PluggableCms>,\n    ) -> Result<Self, At<ConvertError>>;\n\n    pub fn output_descriptor(&self) -> PixelDescriptor;\n\n    pub fn metadata(&self) -> &OutputMetadata;\n\n    pub fn prepare(&mut self, max_width: u32) -> Result<(), At<ConvertError>>;\n\n    pub fn borrow_rows<'a>(\n        &self,\n        source: PixelSlice<'a>,\n    ) -> Result<Option<PixelSlice<'a>>, At<ConvertError>>;\n\n    pub fn convert_rows<'a>(\n        &mut self,\n        source: PixelSlice<'_>,\n        mut destination: PixelSliceMut<'a>,\n    ) -> Result<PixelSliceMut<'a>, At<ConvertError>>;\n}\n",
   "sha256": "ba102a970f1637a937d27a789fa929c8e0795361ec3bc0ef62bbe1739b2603d4"
 }

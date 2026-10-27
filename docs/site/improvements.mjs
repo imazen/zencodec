@@ -2,6 +2,19 @@
 // Signatures come from Rust through apiPanels; examples remain executable files.
 export const improvements = [
   {
+    id:'combined-render', title:'Resolve color and canvas geometry before publishing an image',
+    state:'Private implementation qualified · shared render entry point remains open', date:'2026-10-27',
+    summary:'One held-image operation prepares the requested color, projects the oriented canvas region, preserves aligned auxiliary values and resolves publication on the finished owner.',
+    why:'Composited packed samples can still have unapplied orientation or a different color profile. Assembling those steps exposed a one-bit same-profile TIFF change that isolated color and geometry tests missed.',
+    consumer:'Require an output descriptor and current, named or ICC color. None for the region means the complete oriented canvas. Native layers remain explicit. Errors retain the failing stage and traced cause; policy sees the final color and geometry.',
+    adapter:'Bind OutputPlan to the held descriptor/context, project only the requested canvas region, release native color before replacement and check cancellation between rows. Preserve scalar auxiliary values and original spot-color parameters; never silently reinterpret them as display color.',
+    implementor:'Native TIFF and BigTIFF exercise all eight orientations with U8/U16/F32 samples. Seventeen TIFF/JXL selections match independent Little CMS plus a separate coordinate table. The resulting zenpixels fix adds no public items, signatures or dependencies.',
+    open:'This starts after native reconstruction. Collection-level rendering, one publication boundary, native/CMS workspace, planar video, HDR display mapping, resize and privacy remain open. Geometry currently copies even for identity, and descriptor-only normalization can require another color owner; the output pool must admit both.',
+    signatures:['canvasRenderTarget','canvasRenderRequest','canvasRenderer'],
+    flow:[['consumer','Require color and region','oriented canvas coordinates'],['adapter','Prepare actual color plan','bind the held source'],['implementor','Project and convert','admit owned samples'],['consumer','Resolve finished output','same policy interface']],
+    evidence:[['Implementation, reproduction and limits','perf/spatial-validation/README.md#combined-held-image-rendering'],['Native evidence and costs','benchmarks/native_combined_render_2026-10-27.json'],['Same-profile correction','https://github.com/imazen/zenpixels/commit/02ccdfb0810dd577a196997ad0bbf9e7bf7c8eb8'],['Shared rendering follow-up','https://github.com/imazen/zencodec/issues/170']],
+  },
+  {
     id:'mux-timing', title:'Ask for exact packet timing before publishing a header',
     state:'Shared hook implemented · native MP4 qualified through adapter', date:'2026-10-27',
     summary:'begin_exact_timing prepares the actual muxer. Unsupported implementations refuse before legacy setup. Later unrepresentable packets fail before their output changes.',
