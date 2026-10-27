@@ -1,0 +1,39 @@
+[package]
+name = "multipass-native"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Native IMI gates for the multi-pass raster input prototype (private codec)"
+
+[workspace]
+
+[dependencies]
+multipass-validation = { path = ".." }
+zencodec = { path = "../../..", features = ["std"] }
+zencodec-io = { path = "../../../zencodec-io", features = ["std"] }
+zenpixels = ">=0.2.14, <0.4.0"
+enough = "0.4.4"
+# Private repository (imazen/zqi); fetch with CARGO_NET_GIT_FETCH_WITH_CLI=true.
+# imij brings its own zencodec copy; no types cross between the two.
+imij = { git = "https://github.com/imazen/zqi", rev = "70401e2487f5cb2e33ea55f6b96dfc009025f473", default-features = false, features = ["std", "encode"] }
+# The how-far release imij is built against, for its native progress argument.
+how-far = { git = "https://github.com/imazen/how-far", rev = "571bf1a2fc92e5b99c3777f8ff81bafab7666a75" }
+
+[profile.release]
+debug = 1
+lto = "thin"
+
+# The native encoder is slow unoptimized; keep correctness checks enabled.
+[profile.test]
+opt-level = 1
+debug-assertions = true
+overflow-checks = true
+
+[profile.dev.package.imij]
+opt-level = 2
+
+# imij is built against these exact revisions (its own workspace patches);
+# mirror them so imij's zencodec copy and its zenpixels/how-far unify.
+[patch.crates-io]
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "789d69dbc314e748676b7f2f19542c17473ba40b" }
+how-far = { git = "https://github.com/imazen/how-far", rev = "571bf1a2fc92e5b99c3777f8ff81bafab7666a75" }
