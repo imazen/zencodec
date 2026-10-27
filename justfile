@@ -1378,3 +1378,8 @@ pulse-check:
 pulse-test:
     cargo test --workspace --all-features --locked
     cargo clippy --workspace --all-features --all-targets --locked -- -D warnings
+
+# Complete declaration preflight, dyn forwarding and startup drift; isolated export.
+encode-plan-check:
+    cargo test -p zencodec --lib --locked
+    cargo clippy -p zencodec --all-targets --locked -- -D warnings

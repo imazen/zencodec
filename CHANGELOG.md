@@ -2,6 +2,12 @@
 
 ## Native image selection (unreleased experiment)
 
+- Add explicit effective-job encode planning and declared startup, including
+  current color, actual destination access, input acquisition, bounded source
+  passes and materialized carrier evidence. Defaults refuse; erased forwarding
+  preserves native errors. Checked destination execution and native adoption
+  remain separate validation gates.
+
 - Refuse final interpretation adoption when a built-in preset has unproven
   metadata, memory, range or output obligations. Provisional discovery remains
   permitted; final facts no longer bypass requirements before sink output.

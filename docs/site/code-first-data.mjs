@@ -1,5 +1,12 @@
 // Every code body is extracted from a compiled source file, never transcribed.
 export const codeFlows = [
+  {id:'adapter-declaration',role:'adapter',title:'Declare color → plan without startup → verify start',note:'Shared trait hooks are implemented and tested. Native JPEG/PNG adoption and the checked request-to-destination driver remain in progress. Carrier evidence can be unknown; planning does not establish a native memory bound.',steps:[
+    {scope:'fn erased_preflight_retains_job_color_access_and_native_error()',file:'src/traits/dyn_encoding.rs',api:['encodeDeclaration','encodePlan','encodePreflight','declaredBegin'],state:'Shared contract test; scripted codec, not native qualification'},
+  ]},
+  {id:'codec-preflight',role:'implementor',title:'One effective plan → declared startup',steps:[
+    {scope:'impl EncodeJob for Job',file:'src/traits/dyn_encoding.rs',api:['encodePreflight'],state:'Shared contract fixture: planning without encoder construction'},
+    {scope:'impl Encoder for Declared',file:'src/traits/dyn_encoding.rs',api:['declaredBegin'],state:'Shared contract fixture: current color reaches startup'},
+  ]},
   {id:'app-start',role:'consumer',title:'Register → decode → transcode',steps:[
     {example:'checked_registry',file:'docs/examples/checked_operations.rs',api:['operationRegistration']},
     {example:'checked_decode',file:'docs/examples/checked_operations.rs',api:['operationDecode']},
@@ -133,6 +140,11 @@ export const roleStories = {
   implementor: 'Expose an existing codec: start with a still image, then add byte acquisition, row output, collections or video where the codec can honor the contract.',
 };
 const lessons = {
+  'adapter-declaration': [['Keep one job across admission', 'Declare actual color and destination access before native startup. Plan the retained job, admit the route, then compare every startup fact before reading pixels or publishing bytes. This fixture checks forwarding; the checked driver must enforce the sequence for callers.']],
+  'codec-preflight': [
+    ['Plan without native image state', 'Use the effective job settings and the complete declaration. Return native errors intact; a codec without preflight explicitly refuses.'],
+    ['Start with the same interpretation', 'Share the effective planning implementation with startup. A matching lag alone cannot prove matching input acquisition or color carriers.'],
+  ],
   'app-start': [
     ['Choose the formats once', 'The gallery accepts JPEG and PNG and writes PNG. Register those implementations once; pass the set to each operation.'],
     ['Open one upload', 'The caller has encoded bytes and wants their native pixels. DecodeRequest detects the format; the result retains pixel interpretation and the operation report.'],

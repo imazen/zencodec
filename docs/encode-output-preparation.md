@@ -200,3 +200,20 @@ wall-clock performance measurement.
 ```text
 profile: rc=0 2s | peak-RSS 0.13GiB | min-avail 8608MiB | peak-load 0.49
 ```
+
+## Shared declaration hooks (2026-10-27)
+
+The review API now has `EncodeJob::plan_encode` and `Encoder::begin_declared`,
+including erased forwarding. Both default to refusal. The declaration binds
+current color before header construction; the plan separates input acquisition,
+source-pass bounds, output phase, byte timing and materialized color carriers.
+The [specification](spec.md#encode-declaration-and-preflight-review-api) gives the
+exact signatures and evidence meanings. The code-first page shows the tested
+adapter sequence and codec implementations. These are shared contract fixtures;
+they do not replace native qualification or complete the checked destination
+driver.
+
+`just encode-plan-check` passed the library suite and strict Clippy. Receipt:
+`rc=0 3s | peak-RSS 0.41GiB | min-avail 7426MiB | peak-load 0.60`.
+Log: `~/tmp/zencodec-encode-plan-20261027-final.log`. These are test resources, not
+encoder performance or memory bounds.

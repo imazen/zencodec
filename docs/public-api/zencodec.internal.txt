@@ -9,15 +9,15 @@
 
 ## summary
 #
-#   inherent methods                           80
-#   trait roster entries (type × trait)       141
+#   inherent methods                           85
+#   trait roster entries (type × trait)       146
 #
 # per-module pub lines:
 #   (root)                           18
 #   animation                         1
 #   collection                        5
 #   decode                           12
-#   encode                            4
+#   encode                            9
 #   estimate                          2
 #   exif                              3
 #   frame                             7
@@ -30,7 +30,7 @@
 #   source                            2
 #   time                              2
 
-## items (80 lines)
+## items (85 lines)
 
 pub fn CodecIoKind::assert_fields_are_eq(&self)
 pub fn ColorEmitFields::assert_fields_are_eq(&self)
@@ -69,9 +69,14 @@ pub fn decode::InterpretationFacts::assert_fields_are_eq(&self)
 pub fn decode::OutputInfo::assert_fields_are_eq(&self)
 pub fn decode::Progress::assert_fields_are_eq(&self)
 pub fn encode::AnimationOutputTiming::assert_fields_are_eq(&self)
+pub fn encode::ColorCarriers::assert_fields_are_eq(&self)
+pub fn encode::EncodeDeclaration<'a>::assert_fields_are_eq(&self)
+pub fn encode::EncodePlan::assert_fields_are_eq(&self)
 pub fn encode::EncodePolicy::assert_fields_are_eq(&self)
+pub fn encode::InputRequirement::assert_fields_are_eq(&self)
 pub fn encode::OutputBuffer::assert_fields_are_eq(&self)
 pub fn encode::OutputTiming::assert_fields_are_eq(&self)
+pub fn encode::SourcePasses::assert_fields_are_eq(&self)
 pub fn estimate::ComputeEnvironment::assert_fields_are_eq(&self)
 pub fn estimate::ImageCharacteristics::assert_fields_are_eq(&self)
 pub fn exif::EntryRef<'e>::assert_fields_are_eq(&self)
@@ -113,7 +118,7 @@ pub fn source::SourceError::assert_fields_are_eq(&self)
 pub fn time::TimeBase::assert_fields_are_eq(&self)
 pub fn time::Timestamp::assert_fields_are_eq(&self)
 
-## trait impls (141 types)
+## trait impls (146 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -167,12 +172,17 @@ decode::InterpretationState: TrivialClone
 decode::InterpretationUnavailable: TrivialClone
 decode::MetadataUpdate: TrivialClone
 encode::AnimationOutputTiming: TrivialClone
+encode::EncodeDeclaration<'a>: TrivialClone
+encode::EncodePlanError: TrivialClone
 encode::EncodePolicy: TrivialClone
 encode::Fidelity: TrivialClone
 encode::FidelityRejection: TrivialClone
 encode::FidelityTargetError: TrivialClone
+encode::InputRequirement: TrivialClone
 encode::LossyTarget: TrivialClone
+encode::OutputPhase: TrivialClone
 encode::OutputTiming: TrivialClone
+encode::SourcePasses: TrivialClone
 estimate::ComputeEnvironment: TrivialClone
 estimate::ResourceEstimate: TrivialClone
 estimate::SimdTier: TrivialClone

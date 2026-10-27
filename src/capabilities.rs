@@ -60,6 +60,8 @@ pub enum UnsupportedOperation {
     /// Pull-based decoding from a random-access source
     /// ([`DecodeJob::push_decoder_from_source`](crate::decode::DecodeJob::push_decoder_from_source)).
     SeekableDecode,
+    /// Preflight or startup with a complete encode declaration.
+    EncodePlanning,
 }
 
 impl UnsupportedOperation {
@@ -81,6 +83,7 @@ impl UnsupportedOperation {
             Self::Inventory => "inventory",
             Self::IncrementalDecode => "incremental_decode",
             Self::SeekableDecode => "seekable_decode",
+            Self::EncodePlanning => "encode_planning",
         }
     }
 }
@@ -383,7 +386,8 @@ impl EncodeCapabilities {
             | UnsupportedOperation::MultiImageDecode
             | UnsupportedOperation::PixelFormat
             | UnsupportedOperation::IncrementalDecode
-            | UnsupportedOperation::SeekableDecode => false,
+            | UnsupportedOperation::SeekableDecode
+            | UnsupportedOperation::EncodePlanning => false,
         }
     }
 
@@ -834,6 +838,7 @@ impl DecodeCapabilities {
             UnsupportedOperation::RowLevelDecode => self.streaming,
             UnsupportedOperation::IncrementalDecode => self.incremental,
             UnsupportedOperation::SeekableDecode => self.seekable,
+            UnsupportedOperation::EncodePlanning => false,
             UnsupportedOperation::AnimationDecode => self.animation,
             UnsupportedOperation::MultiImageDecode => self.multi_image,
             UnsupportedOperation::Inventory => self.inventory,

@@ -573,6 +573,27 @@ pub trait EncodeJob: Sized {
         None
     }
 
+    /// Plan the exact configured job without constructing its native encoder.
+    ///
+    /// Bind the full image interpretation and actual destination access. Do not
+    /// read pixels, publish bytes, allocate native image state or start workers.
+    /// The caller must retain this same job and declaration through admission,
+    /// then compare the result of `Encoder::begin_declared` before any effects.
+    /// Unknown carrier evidence is not proof of absence or privacy compliance.
+    ///
+    /// The default explicitly refuses. Planning uses the existing boxed error
+    /// envelope so even jobs with no single-image encoder need no new associated
+    /// type or error conversion. Preserve native errors and location traces in
+    /// the box; never stringify them. Successful planning allocates no error box.
+    fn plan_encode(
+        &self,
+        _declaration: &crate::encode::EncodeDeclaration<'_>,
+    ) -> Result<crate::encode::EncodePlan, super::BoxedError> {
+        Err(alloc::boxed::Box::new(
+            crate::UnsupportedOperation::EncodePlanning,
+        ))
+    }
+
     /// Create a one-shot encoder for a single image.
     fn encoder(self) -> Result<Self::Enc, Self::Error>;
 

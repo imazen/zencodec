@@ -782,6 +782,16 @@ pub type zencodec::decode::DynIncrementalDecoder = (dyn zencodec::decode::Increm
 pub type zencodec::decode::Request = zencodec::decode::InputRequest
 pub type zencodec::decode::SinkError = alloc::boxed::Box<(dyn core::error::Error + core::marker::Send + core::marker::Sync)>
 pub mod zencodec::encode
+#[non_exhaustive] pub enum zencodec::encode::EncodePlanError
+pub zencodec::encode::EncodePlanError::Changed
+pub zencodec::encode::EncodePlanError::DestinationAccess
+pub zencodec::encode::EncodePlanError::Dimensions
+pub zencodec::encode::EncodePlanError::InputProtocol
+pub zencodec::encode::EncodePlanError::OutputLag
+pub zencodec::encode::EncodePlanError::PassRange
+impl core::error::Error for zencodec::encode::EncodePlanError
+impl core::fmt::Display for zencodec::encode::EncodePlanError
+pub fn zencodec::encode::EncodePlanError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 #[non_exhaustive] pub enum zencodec::encode::Fidelity
 pub zencodec::encode::Fidelity::Lossless
 pub zencodec::encode::Fidelity::Lossy(zencodec::encode::LossyTarget)
@@ -809,11 +819,18 @@ pub zencodec::encode::FidelityTargetError::Unreported
 impl core::error::Error for zencodec::encode::FidelityTargetError
 impl core::fmt::Display for zencodec::encode::FidelityTargetError
 pub fn zencodec::encode::FidelityTargetError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub enum zencodec::encode::InputRequirement
+pub zencodec::encode::InputRequirement::Replay(zencodec::encode::SourcePasses)
+pub zencodec::encode::InputRequirement::Rows
+pub zencodec::encode::InputRequirement::WholeRaster
 #[non_exhaustive] pub enum zencodec::encode::LossyTarget
 pub zencodec::encode::LossyTarget::ApproxButteraugli(f32)
 pub zencodec::encode::LossyTarget::ApproxSsim2(f32)
 pub zencodec::encode::LossyTarget::ApproxZensimB(f32)
 pub zencodec::encode::LossyTarget::CodecSpecificQuality(f32)
+#[non_exhaustive] pub enum zencodec::encode::OutputPhase
+pub zencodec::encode::OutputPhase::AnyPass
+pub zencodec::encode::OutputPhase::FinalPass
 pub struct zencodec::encode::AnimationOutputTiming
 impl zencodec::encode::AnimationOutputTiming
 pub const zencodec::encode::AnimationOutputTiming::AT_FINISH: Self
@@ -822,6 +839,13 @@ pub const fn zencodec::encode::AnimationOutputTiming::streaming(lag_frames: u32)
 pub const fn zencodec::encode::AnimationOutputTiming::streams(&self) -> bool
 impl core::default::Default for zencodec::encode::AnimationOutputTiming
 pub fn zencodec::encode::AnimationOutputTiming::default() -> Self
+#[non_exhaustive] pub struct zencodec::encode::ColorCarriers
+pub zencodec::encode::ColorCarriers::cicp: core::option::Option<zenpixels::cicp::Cicp>
+pub zencodec::encode::ColorCarriers::icc: core::option::Option<alloc::rcs::arc::Arc<[u8]>>
+impl zencodec::encode::ColorCarriers
+pub fn zencodec::encode::ColorCarriers::new(icc: core::option::Option<alloc::rcs::arc::Arc<[u8]>>, cicp: core::option::Option<zenpixels::cicp::Cicp>) -> Self
+impl core::fmt::Debug for zencodec::encode::ColorCarriers
+pub fn zencodec::encode::ColorCarriers::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 #[non_exhaustive] pub struct zencodec::encode::EncodeCapabilities
 impl zencodec::encode::EncodeCapabilities
 pub const zencodec::encode::EncodeCapabilities::EMPTY: Self
@@ -881,6 +905,18 @@ impl core::default::Default for zencodec::encode::EncodeCapabilities
 pub fn zencodec::encode::EncodeCapabilities::default() -> Self
 impl core::fmt::Debug for zencodec::encode::EncodeCapabilities
 pub fn zencodec::encode::EncodeCapabilities::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub struct zencodec::encode::EncodeDeclaration<'a>
+pub zencodec::encode::EncodeDeclaration::access: zencodec::output_patch::OutputAccess
+pub zencodec::encode::EncodeDeclaration::color: core::option::Option<&'a zenpixels::color::ColorContext>
+pub zencodec::encode::EncodeDeclaration::descriptor: zenpixels::descriptor::PixelDescriptor
+pub zencodec::encode::EncodeDeclaration::height: u32
+pub zencodec::encode::EncodeDeclaration::width: u32
+impl<'a> zencodec::encode::EncodeDeclaration<'a>
+pub const fn zencodec::encode::EncodeDeclaration<'a>::new(width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor) -> Self
+pub const fn zencodec::encode::EncodeDeclaration<'a>::with_access(self, access: zencodec::output_patch::OutputAccess) -> Self
+pub const fn zencodec::encode::EncodeDeclaration<'a>::with_color(self, color: &'a zenpixels::color::ColorContext) -> Self
+impl core::fmt::Debug for zencodec::encode::EncodeDeclaration<'_>
+pub fn zencodec::encode::EncodeDeclaration<'_>::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 #[non_exhaustive] pub struct zencodec::encode::EncodeOutput
 impl zencodec::encode::EncodeOutput
 pub fn zencodec::encode::EncodeOutput::data(&self) -> &[u8]
@@ -907,6 +943,18 @@ impl core::convert::AsRef<[u8]> for zencodec::encode::EncodeOutput
 pub fn zencodec::encode::EncodeOutput::as_ref(&self) -> &[u8]
 impl core::fmt::Debug for zencodec::encode::EncodeOutput
 pub fn zencodec::encode::EncodeOutput::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+#[non_exhaustive] pub struct zencodec::encode::EncodePlan
+pub zencodec::encode::EncodePlan::carriers: core::option::Option<zencodec::encode::ColorCarriers>
+pub zencodec::encode::EncodePlan::input: zencodec::encode::InputRequirement
+pub zencodec::encode::EncodePlan::output_phase: zencodec::encode::OutputPhase
+pub zencodec::encode::EncodePlan::timing: zencodec::encode::OutputTiming
+impl zencodec::encode::EncodePlan
+pub const fn zencodec::encode::EncodePlan::replay(passes: zencodec::encode::SourcePasses, timing: zencodec::encode::OutputTiming, output_phase: zencodec::encode::OutputPhase) -> Self
+pub const fn zencodec::encode::EncodePlan::rows(timing: zencodec::encode::OutputTiming) -> Self
+pub fn zencodec::encode::EncodePlan::validate(&self, declaration: &zencodec::encode::EncodeDeclaration<'_>) -> core::result::Result<(), zencodec::encode::EncodePlanError>
+pub fn zencodec::encode::EncodePlan::validate_started(&self, observed: &Self) -> core::result::Result<(), zencodec::encode::EncodePlanError>
+pub const fn zencodec::encode::EncodePlan::whole_raster() -> Self
+pub fn zencodec::encode::EncodePlan::with_carriers(self, carriers: zencodec::encode::ColorCarriers) -> Self
 #[non_exhaustive] pub struct zencodec::encode::EncodePolicy
 pub zencodec::encode::EncodePolicy::color: core::option::Option<zencodec::ColorEmitPolicy>
 pub zencodec::encode::EncodePolicy::embed_exif: core::option::Option<bool>
@@ -956,6 +1004,13 @@ pub const fn zencodec::encode::OutputTiming::streams(&self) -> bool
 pub const fn zencodec::encode::OutputTiming::with_patches(self) -> Self
 impl core::default::Default for zencodec::encode::OutputTiming
 pub fn zencodec::encode::OutputTiming::default() -> Self
+pub struct zencodec::encode::SourcePasses
+impl zencodec::encode::SourcePasses
+pub const zencodec::encode::SourcePasses::ONCE: Self
+pub const fn zencodec::encode::SourcePasses::fits(self, budget: u32) -> bool
+pub const fn zencodec::encode::SourcePasses::max(self) -> core::option::Option<u32>
+pub const fn zencodec::encode::SourcePasses::min(self) -> u32
+pub const fn zencodec::encode::SourcePasses::new(min: u32, max: core::option::Option<u32>) -> core::result::Result<Self, zencodec::encode::EncodePlanError>
 pub trait zencodec::encode::AnimationFrameEncoder: core::marker::Sized
 pub type zencodec::encode::AnimationFrameEncoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn zencodec::encode::AnimationFrameEncoder::begin(&mut self, width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor, frame_count: core::option::Option<u32>) -> core::result::Result<zencodec::encode::AnimationOutputTiming, Self::Error>
@@ -996,6 +1051,7 @@ pub fn zencodec::encode::DynEncodeJob::extensions(&self) -> core::option::Option
 pub fn zencodec::encode::DynEncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
 pub fn zencodec::encode::DynEncodeJob::into_animation_frame_encoder(self: alloc::boxed::Box<Self>) -> core::result::Result<alloc::boxed::Box<dyn zencodec::encode::DynAnimationFrameEncoder>, zencodec::encode::BoxedError>
 pub fn zencodec::encode::DynEncodeJob::into_encoder(self: alloc::boxed::Box<Self>) -> core::result::Result<alloc::boxed::Box<dyn zencodec::encode::DynEncoder>, zencodec::encode::BoxedError>
+pub fn zencodec::encode::DynEncodeJob::plan_encode(&self, _declaration: &zencodec::encode::EncodeDeclaration<'_>) -> core::result::Result<zencodec::encode::EncodePlan, zencodec::encode::BoxedError>
 pub fn zencodec::encode::DynEncodeJob::set_canvas_size(&mut self, width: u32, height: u32)
 pub fn zencodec::encode::DynEncodeJob::set_limits(&mut self, limits: zencodec::ResourceLimits)
 pub fn zencodec::encode::DynEncodeJob::set_loop_count(&mut self, count: core::option::Option<u32>)
@@ -1008,6 +1064,7 @@ pub fn zencodec::encode::DynEncodeJob::try_set_policy(&mut self, policy: zencode
 pub fn zencodec::encode::DynEncodeJob::try_set_resolution(&mut self, resolution: zencodec::Resolution) -> core::result::Result<(), zencodec::encode::BoxedError>
 pub trait zencodec::encode::DynEncoder: core::marker::Send
 pub fn zencodec::encode::DynEncoder::begin(&mut self, width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor) -> core::result::Result<zencodec::encode::OutputTiming, zencodec::encode::BoxedError>
+pub fn zencodec::encode::DynEncoder::begin_declared(&mut self, _declaration: &zencodec::encode::EncodeDeclaration<'_>) -> core::result::Result<zencodec::encode::EncodePlan, zencodec::encode::BoxedError>
 pub fn zencodec::encode::DynEncoder::begin_output(&mut self, width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor, access: zencodec::output_patch::OutputAccess) -> core::result::Result<zencodec::encode::OutputTiming, zencodec::encode::BoxedError>
 pub fn zencodec::encode::DynEncoder::consume_output(&mut self, n: usize)
 pub fn zencodec::encode::DynEncoder::encode(self: alloc::boxed::Box<Self>, pixels: zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<zencodec::encode::EncodeOutput, zencodec::encode::BoxedError>
@@ -1050,6 +1107,7 @@ pub fn zencodec::encode::EncodeJob::encode(self, pixels: zenpixels::buffer::Pixe
 pub fn zencodec::encode::EncodeJob::encoder(self) -> core::result::Result<Self::Enc, Self::Error>
 pub fn zencodec::encode::EncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn zencodec::encode::EncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn zencodec::encode::EncodeJob::plan_encode(&self, _declaration: &zencodec::encode::EncodeDeclaration<'_>) -> core::result::Result<zencodec::encode::EncodePlan, zencodec::encode::BoxedError>
 pub fn zencodec::encode::EncodeJob::try_set_policy(&mut self, policy: zencodec::encode::EncodePolicy) -> core::result::Result<(), zencodec::UnsupportedOperation>
 pub fn zencodec::encode::EncodeJob::try_set_resolution(&mut self, resolution: zencodec::Resolution) -> core::result::Result<(), zencodec::ResolutionError>
 pub fn zencodec::encode::EncodeJob::try_with_policy(self, policy: zencodec::encode::EncodePolicy) -> core::result::Result<Self, zencodec::UnsupportedOperation>
@@ -1067,6 +1125,7 @@ pub fn zencodec::encode::EncodeJob::with_stop(self, stop: almost_enough::stop_to
 pub trait zencodec::encode::Encoder: core::marker::Sized
 pub type zencodec::encode::Encoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn zencodec::encode::Encoder::begin(&mut self, width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor) -> core::result::Result<zencodec::encode::OutputTiming, Self::Error>
+pub fn zencodec::encode::Encoder::begin_declared(&mut self, _declaration: &zencodec::encode::EncodeDeclaration<'_>) -> core::result::Result<zencodec::encode::EncodePlan, Self::Error>
 pub fn zencodec::encode::Encoder::begin_output(&mut self, width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor, access: zencodec::output_patch::OutputAccess) -> core::result::Result<zencodec::encode::OutputTiming, Self::Error>
 pub fn zencodec::encode::Encoder::consume_output(&mut self, n: usize)
 pub fn zencodec::encode::Encoder::encode(self, pixels: zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<zencodec::encode::EncodeOutput, Self::Error>
@@ -2448,6 +2507,7 @@ pub fn zencodec::prelude::DynEncodeJob::extensions(&self) -> core::option::Optio
 pub fn zencodec::prelude::DynEncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
 pub fn zencodec::prelude::DynEncodeJob::into_animation_frame_encoder(self: alloc::boxed::Box<Self>) -> core::result::Result<alloc::boxed::Box<dyn zencodec::encode::DynAnimationFrameEncoder>, zencodec::encode::BoxedError>
 pub fn zencodec::prelude::DynEncodeJob::into_encoder(self: alloc::boxed::Box<Self>) -> core::result::Result<alloc::boxed::Box<dyn zencodec::encode::DynEncoder>, zencodec::encode::BoxedError>
+pub fn zencodec::prelude::DynEncodeJob::plan_encode(&self, _declaration: &zencodec::encode::EncodeDeclaration<'_>) -> core::result::Result<zencodec::encode::EncodePlan, zencodec::encode::BoxedError>
 pub fn zencodec::prelude::DynEncodeJob::set_canvas_size(&mut self, width: u32, height: u32)
 pub fn zencodec::prelude::DynEncodeJob::set_limits(&mut self, limits: zencodec::ResourceLimits)
 pub fn zencodec::prelude::DynEncodeJob::set_loop_count(&mut self, count: core::option::Option<u32>)
@@ -2460,6 +2520,7 @@ pub fn zencodec::prelude::DynEncodeJob::try_set_policy(&mut self, policy: zencod
 pub fn zencodec::prelude::DynEncodeJob::try_set_resolution(&mut self, resolution: zencodec::Resolution) -> core::result::Result<(), zencodec::encode::BoxedError>
 pub trait zencodec::prelude::DynEncoder: core::marker::Send
 pub fn zencodec::prelude::DynEncoder::begin(&mut self, width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor) -> core::result::Result<zencodec::encode::OutputTiming, zencodec::encode::BoxedError>
+pub fn zencodec::prelude::DynEncoder::begin_declared(&mut self, _declaration: &zencodec::encode::EncodeDeclaration<'_>) -> core::result::Result<zencodec::encode::EncodePlan, zencodec::encode::BoxedError>
 pub fn zencodec::prelude::DynEncoder::begin_output(&mut self, width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor, access: zencodec::output_patch::OutputAccess) -> core::result::Result<zencodec::encode::OutputTiming, zencodec::encode::BoxedError>
 pub fn zencodec::prelude::DynEncoder::consume_output(&mut self, n: usize)
 pub fn zencodec::prelude::DynEncoder::encode(self: alloc::boxed::Box<Self>, pixels: zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<zencodec::encode::EncodeOutput, zencodec::encode::BoxedError>
@@ -2505,6 +2566,7 @@ pub fn zencodec::prelude::EncodeJob::encode(self, pixels: zenpixels::buffer::Pix
 pub fn zencodec::prelude::EncodeJob::encoder(self) -> core::result::Result<Self::Enc, Self::Error>
 pub fn zencodec::prelude::EncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn zencodec::prelude::EncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn zencodec::prelude::EncodeJob::plan_encode(&self, _declaration: &zencodec::encode::EncodeDeclaration<'_>) -> core::result::Result<zencodec::encode::EncodePlan, zencodec::encode::BoxedError>
 pub fn zencodec::prelude::EncodeJob::try_set_policy(&mut self, policy: zencodec::encode::EncodePolicy) -> core::result::Result<(), zencodec::UnsupportedOperation>
 pub fn zencodec::prelude::EncodeJob::try_set_resolution(&mut self, resolution: zencodec::Resolution) -> core::result::Result<(), zencodec::ResolutionError>
 pub fn zencodec::prelude::EncodeJob::try_with_policy(self, policy: zencodec::encode::EncodePolicy) -> core::result::Result<Self, zencodec::UnsupportedOperation>
@@ -2522,6 +2584,7 @@ pub fn zencodec::prelude::EncodeJob::with_stop(self, stop: almost_enough::stop_t
 pub trait zencodec::prelude::Encoder: core::marker::Sized
 pub type zencodec::prelude::Encoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn zencodec::prelude::Encoder::begin(&mut self, width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor) -> core::result::Result<zencodec::encode::OutputTiming, Self::Error>
+pub fn zencodec::prelude::Encoder::begin_declared(&mut self, _declaration: &zencodec::encode::EncodeDeclaration<'_>) -> core::result::Result<zencodec::encode::EncodePlan, Self::Error>
 pub fn zencodec::prelude::Encoder::begin_output(&mut self, width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor, access: zencodec::output_patch::OutputAccess) -> core::result::Result<zencodec::encode::OutputTiming, Self::Error>
 pub fn zencodec::prelude::Encoder::consume_output(&mut self, n: usize)
 pub fn zencodec::prelude::Encoder::encode(self, pixels: zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<zencodec::encode::EncodeOutput, Self::Error>
@@ -3130,6 +3193,7 @@ pub zencodec::UnsupportedOperation::AnimationEncode
 pub zencodec::UnsupportedOperation::AnimationTiming
 pub zencodec::UnsupportedOperation::DecodeInto
 pub zencodec::UnsupportedOperation::DecodePolicy
+pub zencodec::UnsupportedOperation::EncodePlanning
 pub zencodec::UnsupportedOperation::EncodePolicy
 pub zencodec::UnsupportedOperation::GainMapEncode
 pub zencodec::UnsupportedOperation::IncrementalDecode

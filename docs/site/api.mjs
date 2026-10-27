@@ -1,5 +1,9 @@
 // Paths and method selections only. Signatures are extracted from current Rust source.
 export const api = {
+  encodeDeclaration: {path:'zencodec::encode::EncodeDeclaration',file:'src/encode_plan.rs',scope:"pub struct EncodeDeclaration<'a>",methods:[],item:true},
+  encodePlan: {path:'zencodec::encode::EncodePlan',file:'src/encode_plan.rs',scope:'pub struct EncodePlan {',methods:[],item:true},
+  encodePreflight: {path:'zencodec::encode::EncodeJob',file:'src/traits/encoding.rs',scope:'pub trait EncodeJob: Sized',methods:['plan_encode']},
+  declaredBegin: {path:'zencodec::encode::Encoder',file:'src/traits/encoder.rs',scope:'pub trait Encoder',methods:['begin_declared']},
   metadataAudit: {path:'zenmeta::audit::Report',file:'zenmeta/src/audit.rs',scope:'impl Report {',methods:['exif','xmp','entries','findings','diff']},
   xmpPacket: {path:'zenmeta::xmp::Packet',file:'zenmeta/src/xmp.rs',scope:"impl<'a> Packet<'a>",methods:['parse','property']},
   demuxer: {path:'zencodec_media::container::Demuxer',file:'zencodec-media/src/container.rs',scope:'pub trait Demuxer {',methods:['step','seek']},

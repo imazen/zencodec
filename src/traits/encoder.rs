@@ -172,6 +172,22 @@ pub trait Encoder: Sized {
         Err(Self::reject(crate::UnsupportedOperation::RowLevelEncode))
     }
 
+    /// Start with the same complete declaration admitted during job planning.
+    ///
+    /// Validate current color before creating headers; job metadata must not
+    /// override the supplied interpretation. Return the actual plan so the
+    /// driver can reject drift before source reads or output publication.
+    /// A failed call leaves the encoder unchanged, as with `begin`.
+    ///
+    /// Default: explicit refusal, including descriptor-only declarations. A
+    /// legacy `begin_output` cannot establish this complete planning contract.
+    fn begin_declared(
+        &mut self,
+        _declaration: &crate::encode::EncodeDeclaration<'_>,
+    ) -> Result<crate::encode::EncodePlan, Self::Error> {
+        Err(Self::reject(crate::UnsupportedOperation::EncodePlanning))
+    }
+
     /// Prepare row encoding for actual destination access. The default uses
     /// the existing forward-only begin path without changing configuration.
     /// A patching implementation must refuse Forward before exposing bytes,

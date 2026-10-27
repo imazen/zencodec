@@ -2815,3 +2815,41 @@ resolve their question before explicitly adopting the same held interpretation.
 This refuses unsupported requirements; it does not turn discovery into a
 whole-operation allocation cap. Custom callbacks retain decision authority and
 must discharge any requirements they accept without delegating to the preset.
+
+## Encode declaration and preflight (review API)
+
+```rust
+EncodeDeclaration::new(width, height, descriptor)
+    .with_color(current_color_context)
+    .with_access(destination_access);
+
+// Typed and erased jobs preserve native errors in the existing boxed envelope.
+fn plan_encode(&self, declaration: &EncodeDeclaration<'_>)
+    -> Result<EncodePlan, BoxedError>;
+
+// Typed Encoder returns its own error; DynEncoder boxes it without stringifying.
+fn begin_declared(&mut self, declaration: &EncodeDeclaration<'_>)
+    -> Result<EncodePlan, Self::Error>;
+```
+
+Both hooks default to explicit `UnsupportedOperation::EncodePlanning`, without
+constructing or invoking a legacy encoder. Planning cannot start native image
+state or workers. A driver retains the exact job and declaration, admits the
+route, starts only that job, and validates startup against the admitted plan
+before reads or publication. The hooks themselves do not execute that driver.
+
+`EncodePlan` separates `InputRequirement::{Rows, WholeRaster, Replay}` from
+`OutputTiming` and `OutputPhase::{AnyPass, FinalPass}`. Rows can still buffer the
+whole image internally. `SourcePasses` requires a positive range; finite budgets
+compare its maximum, never just its minimum. Replay execution remains in the
+qualified experiment until shared-driver integration.
+
+`ColorCarriers` holds exact materialized ICC bytes and native CICP. `None` in the
+plan means unreported evidence; `Some(ColorCarriers::default())` means confirmed
+absence. Neither certifies PII removal. Startup comparison covers the complete
+plan, including actual carrier bytes. No native memory bound is inferred.
+
+The core preflight tests cover unsupported defaults, animation-only jobs, typed
+and erased forwarding, no construction during planning, original error recovery,
+current color/access binding, invalid lag/access and startup fact drift. Native
+JPEG/PNG implementations and checked destination integration are separate gates.
