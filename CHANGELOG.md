@@ -2,6 +2,10 @@
 
 ## Native image selection (unreleased experiment)
 
+- Default opaque-profile retention evidence to unknown in transcode offers.
+  Strict profile exclusion requires explicit negative evidence from the route;
+  descriptive metadata stripping alone cannot establish profile exclusion.
+
 - Negotiate actual raster output access through typed/dyn Encoder methods;
   retain tail metadata and ordered patches. Execute seek-back through the row
   driver with preflight and separate confirmed append/overwrite accounting.

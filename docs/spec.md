@@ -663,7 +663,7 @@ struct TranscodeOffer { // non_exhaustive; fields public
     encoder: EncodeOffer,
     output: PixelDescriptor,
     metadata: MetadataTransfer,
-    retains_opaque_profile: bool,
+    retains_opaque_profile: Option<bool>,
     admitted_bytes: usize,
     workspace_upper_bound: Option<u64>,
 }
@@ -677,6 +677,10 @@ The adapter retains actual conversion/encoder objects across the callback and
 executes the selected index. The source must be suspended with final usable
 interpretation; provisional or unavailable facts offer no route. This function
 checks choice authority, not the truth of an adapter's resource claims.
+`retains_opaque_profile` defaults to `None` (unknown). A preset forbidding opaque
+profiles accepts only `Some(false)` supplied by the executing adapter; absence
+of inspection is not evidence of absence. This does not certify unknown packets,
+nested images, XML, or personal information visible in the pixels.
 `admitted_bytes` is the route's managed row/conversion storage; alternatives may
 share it. `workspace_upper_bound: None` means unknown. The built-in workspace
 limit rejects unknown bounds and excludes source, managed and encoded storage.

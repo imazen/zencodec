@@ -14,7 +14,7 @@ const gaps = [
     'The shared CodePlane and YcbcrToRgbF32 now replace the private float kernel, with typed pre-write refusals and identical native output. OutputPlan processes that result. Other matrices/siting, integer/mono/GBR output, sample-type consolidation, numerical-model guarantees, broader converter/encoder transitions and native workspace admission remain open. Native preparation still scans all active source words even for small crops.',
     'zenpixels-convert and video adapters; shared facts/decisions in zencodec.', 'perf/av1-policy-validation/README.md'],
   ['Opaque and nested privacy', 'PolicyResolver::resolve · Question::Transcode · MetadataTransfer',
-    'One fallible callback, scoped offers and reported metadata/color treatment.',
+    'One fallible callback, scoped offers and reported metadata/color treatment. Opaque-profile retention defaults to unknown; strict exclusion requires explicit absence evidence from the executing route.',
     'No whole-container PII guarantee over unknown packets, unparsed XML, reconstruction data and nested items. Missing inspection evidence cannot authorize pass-through under a strict exclusion requirement. Need explicit inspection scope and prepared preserve/drop/refuse mechanisms.',
     'Shared evidence and offers; format inspectors and rewrite adapters.', 'docs/ideal-api.md'],
   ['Native interpretation suspension', 'DecodeRequest::start_controlled · Question::Boundary',

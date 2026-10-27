@@ -37,7 +37,9 @@ pub struct TranscodeOffer {
     pub metadata: MetadataTransfer,
     /// Whether the output retains an opaque source color profile. Preserving
     /// such a profile does not certify its descriptive contents as PII-free.
-    pub retains_opaque_profile: bool,
+    /// `None` means uninspected or otherwise unknown; a strict exclusion policy
+    /// requires `Some(false)` from the retained executing route.
+    pub retains_opaque_profile: Option<bool>,
     /// Managed row/conversion storage retained by this route after selection.
     /// Alternatives may share these same allocations; do not sum their offers.
     /// Excludes common input storage and unqualified native workspace.
@@ -60,7 +62,7 @@ impl TranscodeOffer {
             encoder,
             output,
             metadata,
-            retains_opaque_profile: false,
+            retains_opaque_profile: None,
             admitted_bytes: 0,
             workspace_upper_bound: None,
         }
@@ -118,7 +120,7 @@ mod tests {
         .unwrap()
     }
     fn offer() -> TranscodeOffer {
-        TranscodeOffer::new(
+        let mut offer = TranscodeOffer::new(
             super::super::EncodeOffer {
                 format: ImageFormat::Png,
                 fidelity: Some(Fidelity::Lossless),
@@ -127,7 +129,32 @@ mod tests {
             },
             PixelDescriptor::RGB8_SRGB,
             MetadataTransfer::DiscardDescriptive,
-        )
+        );
+        offer.retains_opaque_profile = Some(false);
+        offer
+    }
+    #[test]
+    fn strict_profile_exclusion_requires_explicit_evidence() {
+        let known = offer();
+        let unknown = TranscodeOffer::new(known.encoder, known.output, known.metadata);
+        assert_eq!(unknown.retains_opaque_profile, None);
+        for retention in [None, Some(true), Some(false)] {
+            let mut candidate = unknown;
+            candidate.retains_opaque_profile = retention;
+            for allowed in [false, true] {
+                let result = resolve_transcode(
+                    boundary(InterpretationState::Final),
+                    &[candidate],
+                    &mut PolicySet::new().allow_opaque_profiles(allowed),
+                    PolicySet::new(),
+                    &enough::Unstoppable,
+                );
+                assert_eq!(result.is_ok(), allowed || retention == Some(false));
+                if let Err(error) = result {
+                    assert_eq!(error.error().record().code, DecisionCode::Declined);
+                }
+            }
+        }
     }
     #[test]
     fn constraints_filter_complete_routes_and_never_treat_unknown_workspace_as_zero() {
@@ -135,7 +162,7 @@ mod tests {
         preserved.metadata = MetadataTransfer::PreserveReported;
         preserved.workspace_upper_bound = Some(12);
         let mut opaque = offer();
-        opaque.retains_opaque_profile = true;
+        opaque.retains_opaque_profile = Some(true);
         opaque.workspace_upper_bound = Some(12);
         let unknown = offer();
         let mut over = offer();

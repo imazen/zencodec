@@ -477,3 +477,11 @@ The resolver now ranks complete conversion/encoder preservation first, retaining
 required workspace gates and the legacy encoder-only fallback. The frame-policy
 regression reproduces the old selection and checks both required-bound refusal
 and explicit request-order behavior.
+
+## Transcode profile evidence regression (2026-10-27)
+
+The review API originally defaulted `TranscodeOffer::retains_opaque_profile` to
+`false`, allowing a strict preset to accept a route without inspection evidence.
+It now defaults to `None`; strict exclusion accepts only `Some(false)`. This
+fix qualifies the policy decision, not whole-container PII removal or native
+adapter postconditions.
