@@ -85,6 +85,7 @@ def main():
     parser.add_argument("executable", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--source-revision", required=True)
+    parser.add_argument("--native-patch", type=Path)
     parser.add_argument("--heaptrack-lib", type=Path,
                         default=Path("/usr/lib/heaptrack/libheaptrack_preload.so"))
     parser.add_argument("--interpreter", type=Path,
@@ -99,10 +100,15 @@ def main():
               "dimensions": [2048, 2048], "format": "RGB8_SRGB",
               "native_revision": "4535ec499d88b04f58882df03e61761526c35756",
               "started": datetime.now(timezone.utc).isoformat(), "cells": []}
+    if args.native_patch:
+        report["native_patch_sha256"] = hashlib.sha256(args.native_patch.read_bytes()).hexdigest()
+        report["configuration_scope"] = "direct native jobs, identical default quality; no registry"
     (output / "progress.json").write_text(json.dumps(report, indent=2) + "\n")
     for configuration in ["fixed", "progressive"]:
-        for stage, count in [(s, n) for s in ["prepare", "construct", "begin"]
-                             for n in [1, 4]] + [("refuse", 1)]:
+        cases = ([(s, n) for s in ["native-prepare", "native-plan", "native-begin"] for n in [1, 4]]
+                 if args.native_patch else
+                 [(s, n) for s in ["prepare", "construct", "begin"] for n in [1, 4]] + [("refuse", 1)])
+        for stage, count in cases:
             name = f"{configuration}-{stage}-{count}"
             print(name, flush=True)
             raw = output / f"{name}.raw"

@@ -42,3 +42,6 @@ mod requirement_scope;
 
 #[cfg(test)]
 mod preparation;
+
+#[cfg(all(test, feature = "native-preflight"))]
+mod native_preflight;

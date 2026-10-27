@@ -954,6 +954,21 @@ jpeg-preparation-check:
     cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked preparation:: -- --test-threads=1
     cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
 
+# Requires an isolated export configured by prepare-native-preflight.py.
+jpeg-preflight-setup export native_repository native_directory: (jpeg-policy-sync export)
+    python3 perf/jpeg-policy-validation/prepare-native-preflight.py "{{export}}" "{{native_repository}}" "{{native_directory}}"
+
+jpeg-preflight-check:
+    cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --features native-preflight --locked native_preflight:: -- --test-threads=1
+    cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --features native-preflight --all-targets --locked -- -D warnings
+
+jpeg-preflight-build:
+    cargo build --manifest-path perf/jpeg-policy-validation/Cargo.toml --features native-preflight --bin encode_preparation --locked
+
+jpeg-preflight-profile executable output revision:
+    python3 -m unittest discover -s perf/jpeg-policy-validation -p test_preparation_profile.py
+    python3 perf/jpeg-policy-validation/profile-preparation.py "{{executable}}" "{{output}}" --source-revision "{{revision}}" --native-patch perf/jpeg-policy-validation/native-preflight.patch
+
 jpeg-preparation-profile executable output revision:
     python3 -m unittest discover -s perf/jpeg-policy-validation -p test_preparation_profile.py
     python3 perf/jpeg-policy-validation/profile-preparation.py "{{executable}}" "{{output}}" --source-revision "{{revision}}"

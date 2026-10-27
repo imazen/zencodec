@@ -6,6 +6,10 @@ publish = false
 
 [workspace]
 
+[features]
+# Explicitly requires the native-preflight.patch experiment; never silently skip.
+native-preflight = []
+
 [dependencies]
 zencodec = { path = "../..", version = ">=0.1.27, <0.3.0", features = ["std"] }
 zencodec-io = { path = "../../zencodec-io", features = ["std"] }

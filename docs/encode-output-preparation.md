@@ -108,3 +108,67 @@ in the prepared standalone export, under the normal resource wrapper. Raw and
 interpreted captures are preserved under the run directory; the compact JSON
 contains capture hashes. Track admission in [issue 173](https://github.com/imazen/zencodec/issues/173)
 and output scheduling in [issue 160](https://github.com/imazen/zencodec/issues/160).
+
+## Native preflight implementation experiment
+
+The [pinned native patch](../perf/jpeg-policy-validation/native-preflight.patch)
+adds an experimental effective-job primitive inside zenjpeg:
+
+```rust
+let job = config.job();
+let timing = job.plan_rows(width, height, descriptor, current_color_context, access)?;
+// Retain this exact job; a shared checked adapter must freeze it across policy.
+let mut encoder = job.encoder()?;
+let observed = encoder.begin_output(width, height, descriptor, access)?;
+assert_eq!(timing, observed); // The eventual adapter must return an error here.
+```
+
+The patch uses the actual adapter configuration, metadata handling and native
+builder. Geometry normalization and streaming eligibility are shared with
+startup. It performs no native pixel/coefficient startup; cloning configuration
+and preparing metadata can still allocate. It returns byte-availability timing,
+not privacy evidence, a workspace bound or permission to apply backpressure.
+This method is an experiment in an isolated source export, not a shipped method
+on zencodec or the pinned unpatched zenjpeg dependency.
+
+The [executing controls](../perf/jpeg-policy-validation/src/native_preflight.rs)
+compare planning with actual startup over 952 combinations: 17 configurations,
+two widths, seven heights, RGB/gray input and forward/seek-back destinations.
+They cover 4:4:4, 4:2:2 and 4:2:0, progressive/sequential, fixed/optimized Huffman,
+streaming preferences, and native RGB/XYB overrides. Repeated planning preserves
+the same strided encode bytes. Invalid dimensions, canvas mismatch, resource
+limits, oversized EXIF, contradictory current color context and cancellation
+refuse during planning. The existing native policy suite and independent JPEG
+reader checks also pass with the patch applied.
+
+```text
+native preflight + existing native suite + strict lint + probe build:
+rc=0 17s | peak-RSS 0.69GiB | min-avail 8303MiB | peak-load 0.66
+```
+
+The replacement public contract is still open: timing alone omits input replay
+requirements, total memory evidence and effect-specific policy obligations.
+The checked adapter must own/freeze the planned job and current source facts;
+calling a query and then mutating the job is not an admitted execution route.
+Target-quality search, MPF output and other codecs are not qualified here.
+No zenpixels source changes were required; current descriptor and ColorContext
+types suffice for this JPEG timing experiment.
+
+Reproduce from a synchronized standalone framework export:
+
+```sh
+just jpeg-preflight-setup EXPORT PINNED_JPEG_REPOSITORY NEW_NATIVE_DIRECTORY
+# In EXPORT, using its patched native dependency:
+just jpeg-preflight-check
+just jpeg-policy-check NEW_ORACLE_DIRECTORY
+just jpeg-preflight-build
+# In the source checkout (retains the exact patch and profiling runner):
+just jpeg-preflight-profile EXPORT/perf/jpeg-policy-validation/target/debug/encode_preparation NEW_CAPTURE_DIRECTORY SOURCE_REVISION
+```
+
+Run these commands under the resource wrapper. Setup verifies current framework
+sources, exports the immutable native revision, checks/applies the patch, and
+retains the resolved graph and patch identity. It never edits the native working
+checkout. The patch replaces the disabled optional sibling zenpredict path with
+its pinned git source to make the isolated export resolvable; that feature is
+not part of this qualification.

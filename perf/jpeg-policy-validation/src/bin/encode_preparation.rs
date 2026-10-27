@@ -62,6 +62,42 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
             .with_huffman(true),
         _ => return Err("expected fixed or progressive".into()),
     };
+    #[cfg(feature = "native-preflight")]
+    if args[1].starts_with("native-") {
+        use zencodec::encode::Encoder;
+        let jobs: Vec<_> = (0..count).map(|_| config.clone().job()).collect();
+        match args[1].as_str() {
+            "native-prepare" => {
+                black_box(jobs);
+            }
+            "native-plan" => {
+                for job in &jobs {
+                    let timing = job.plan_rows(
+                        WIDTH,
+                        HEIGHT,
+                        PixelDescriptor::RGB8_SRGB,
+                        None,
+                        zencodec::output_patch::OutputAccess::Forward,
+                    )?;
+                    assert_eq!(timing.streams(), args[3] == "fixed");
+                    black_box(timing);
+                }
+                black_box(jobs);
+            }
+            "native-begin" => {
+                let mut encoders = Vec::new();
+                for job in jobs {
+                    let mut encoder = job.encoder()?;
+                    let timing = encoder.begin(WIDTH, HEIGHT, PixelDescriptor::RGB8_SRGB)?;
+                    assert_eq!(timing.streams(), args[3] == "fixed");
+                    encoders.push(encoder);
+                }
+                black_box(encoders);
+            }
+            _ => return Err("unknown native preparation stage".into()),
+        }
+        return Ok(());
+    }
     if args[1] == "refuse" {
         if count != 1 {
             return Err("refusal probe retains exactly one encoder".into());
