@@ -5,7 +5,8 @@ export async function checkGaps(browser,url,output) {
   try {
     const response=await page.goto(new URL('gaps.html',url).href);
     assert.equal(response.status(),200);
-    assert.equal(await page.locator('.gap-table tbody tr').count(),12);
+    assert.equal(await page.locator('.gap-table tbody tr').filter({hasNotText:'Video output transitions'}).count(),12);
+    assert.equal(await page.locator('.gap-table tbody tr').filter({hasText:'Video output transitions'}).count(),1);
     assert.match(await page.locator('#canvas').textContent(),/not implemented yet/);
     assert.match(await page.locator('#canvas').textContent(),/1024×576/);
     assert.match(await page.locator('#compile-time').textContent(),/Not a confirmed performance comparison/);

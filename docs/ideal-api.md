@@ -36,6 +36,14 @@ before output admission. [Native tests](../benchmarks/native_auxiliary_registrat
 cover odd-origin crops of reconstructed extras at source shifts 1/2/3. General
 origins, phases and resampling remain open; this is not a complete render API.
 
+The prepared video transition boundary now uses the same resolver through
+`Question::FrameRoute`. A private native adapter qualifies independent segments,
+fixed-output refusal after header publication, and terminal cleanup on partial
+publication, cancellation and callback failure. The existing encoder session
+methods suffice for replacement between segments; this does not implement
+continuous-container reconfiguration or planar conversion. See the
+[native witness and limits](../perf/av1-policy-validation/README.md#prepared-output-transitions).
+
 ## What still needs production implementation
 
 The current priority is the API/native-codec validation loop. The shared collection

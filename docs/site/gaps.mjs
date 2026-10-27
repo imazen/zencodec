@@ -1,6 +1,10 @@
 // Scope audit for the API review. Entries name existing interfaces; missing
 // behavior is not presented as an implemented method or a released promise.
 const gaps = [
+  ['Video output transitions', 'Question::FrameRoute · FrameRouteOffer · resolve_frame_route',
+    'Prepared native encoders share the fallible resolver. Independent segments preserve exact AV1 samples; fixed output refuses changed dimensions after header publication. Cancellation, partial publication and unwind are terminal.',
+    'No in-band muxer reconfiguration or coupled converter transition. Committed-output facts do not reserve destination support. Finite compressed staging does not establish live sequential-output or complete workspace bounds.',
+    'Prepared adapters, destination admission and native sessions.', 'https://github.com/imazen/zencodec/issues/166'],
   ['Display rendering', 'CodecSet::open_collection · OpenRequest · ImageRequest · Placement::visible',
     'Explicit native composited/raw selection retained before policy, contradiction checks and checked placement intersection. A private projection validates all eight orientations and display-coordinate regions on native TIFF/JXL, requiring explicit ColorSamples registration for auxiliaries.',
     'No shared render convenience guaranteeing the presentation canvas, applied orientation, requested color and aligned auxiliaries. Composited and packed do not mean display-ready.',

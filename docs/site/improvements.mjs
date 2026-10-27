@@ -2,6 +2,19 @@
 // Signatures come from Rust through apiPanels; examples remain executable files.
 export const improvements = [
   {
+    id:'frame-route', title:'Decide output transitions before accepting a changed frame',
+    state:'Shared resolver implemented · native segmented witness remains private', date:'2026-10-27',
+    summary:'FrameRoute offers Continue or BeginSegment through the existing policy callback. Input configuration epochs remain provenance; they do not control output segment numbering.',
+    why:'A decoder can discover new dimensions, color or clocks after output headers have escaped. Replacing the encoder alone cannot authorize a different destination representation.',
+    consumer:'A fixed destination refuses an unsupported change. An explicitly segmented request can select a prepared replacement. There is no mandatory capability-query dance and no retry after execution failure.',
+    adapter:'Retain the actual new encoder and held frame through policy, drain the old encoder in order, and record the decision. Count header publication as committed output even when no picture bytes have escaped.',
+    implementor:'Existing send, receive, end_input and output_config methods suffice for independent segments. The native AV1 witness preserves exact components through dimension, color, depth/layout and clock changes, checked by FFmpeg/libdav1d.',
+    open:'This does not implement in-band muxer reconfiguration, planar conversion, a general spool or live sequential-output bounds. The finite witness drops native encoders before handing compressed output to the writer; native workspace and input owners remain outside payload admission.',
+    signatures:['frameRoute','frameRouteOffer','frameRouteState'],
+    flow:[['implementor','Hold the actual frame','source facts and timing'],['adapter','Prepare permitted route','retain real encoder'],['consumer','Resolve or refuse','one fallible callback'],['adapter','Drain then change','respect committed output']],
+    evidence:[['Native qualification','benchmarks/native_frame_route_2026-10-27.json'],['Implementation and limits','perf/av1-policy-validation/README.md#prepared-output-transitions'],['Streaming effect boundary','https://github.com/imazen/zencodec/issues/166']],
+  },
+  {
     id:'auxiliary-grid', title:'Establish sample alignment before moving auxiliary planes',
     state:'Shared contract and JXL adapter implemented · projection remains private', date:'2026-10-27',
     summary:'AuxiliaryGrid distinguishes unknown registration from emitted samples aligned with color. Equal dimensions and source dim_shift do not establish alignment.',
