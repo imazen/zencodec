@@ -54,3 +54,13 @@ Rewrite requests carry policy, services and budgets but do not execute them.
 bounded plan assembly also live here. `PreserveExact` can retain XMP without an
 editor. Explicit XMP editing still requires a service, and keeping descriptive
 bytes does not certify their privacy or make unsupported container edits valid.
+
+The TIFF inventory walker follows external old-style JPEG tables (519–521).
+Quantization tables have 64 bytes; Huffman extents use the 16 code counts and
+their declared symbol lengths, under the walk's scan budget. Null and shared
+offsets, Classic TIFF/BigTIFF, relative bases and truncation are handled without
+decoding pixels. `Rules::jpeg_table` defaults to `Unknown`: a structural reference
+does not prove decoder consumption, JPEG validity or privacy. Codec rules must
+match their enabled decoder and its actual use of external versus embedded tables.
+The remaining consumer and shared-stream requirements are tracked in
+[issue 171](https://github.com/imazen/zencodec/issues/171).

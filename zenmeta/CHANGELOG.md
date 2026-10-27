@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- TIFF inventories locate external old-style JPEG tables (519–521) instead of
+  leaving referenced bytes as unreferenced gaps. Derived lengths obey scan and
+  extent budgets, preserve null/shared offsets and report truncated ranges.
+  Decoder consumption remains unknown unless codec-specific rules establish it.
+
 - `xmp::Packet::parse` (and every XMP reader built on it: `xmp::gainmap::parse_xmp`,
   `parse_xmp_full`, `xmp::container::Directory::parse`) rejects a packet nesting
   more than 64 elements before roxmltree parses it. roxmltree's parser recurses

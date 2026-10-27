@@ -1,0 +1,35 @@
+{
+  "date_utc": "2026-10-27",
+  "source_base": "d09e80f888aac62a95c437cf73f5ca3c7888fc47",
+  "kind": "inventory correctness regression, not a benchmark",
+  "tracking": "https://github.com/imazen/zencodec/issues/171",
+  "reproduction": {
+    "log": "/home/lilith/tmp/zencodec-tiff-table-red-20261027.log",
+    "result": "failed: referenced JPEG tables reported Unreferenced"
+  },
+  "focused_gate": {
+    "command": "just metadata-tiff-tables",
+    "log": "/home/lilith/tmp/zencodec-tiff-table-green-2-20261027.log",
+    "result": "all focused tests, strict all-target/all-feature lint, Rust 1.88 no-default inventory and wasm32-wasip1 checks pass",
+    "resource_line": "run-heavy: done rc=0 7s | peak-RSS 0.31GiB | min-avail 11222MiB | peak-load 0.18"
+  },
+  "regression_gate": {
+    "command": "cargo test -p zenmeta --all-features",
+    "log": "/home/lilith/tmp/zencodec-zenmeta-regression-20261027.log",
+    "result": "all unit, integration and doc tests pass",
+    "resource_line": "run-heavy: done rc=0 4s | peak-RSS 0.29GiB | min-avail 11151MiB | peak-load 0.11"
+  },
+  "coverage": [
+    "Classic TIFF and BigTIFF, little and big endian, embedded relative bases",
+    "64-byte quantization and length-prefixed Huffman table extents",
+    "null and shared offsets, every nonempty truncation of representative tables",
+    "maximum declared Huffman symbol length, overflow and beyond-input references",
+    "per-table-kind decoder fate, independent of JPEG stream and strip fate",
+    "metadata overlap precedence, scan exhaustion and cancellation"
+  ],
+  "limits": [
+    "Structural references do not establish decoder consumption, valid JPEG tables or privacy.",
+    "Native read-trace and zenextras consumer integration remain separate requirements.",
+    "No JPEGInterchangeFormat zero-length/EOF behavior change in this patch."
+  ]
+}

@@ -179,6 +179,12 @@ animation-policy-check:
 metadata-clippy:
     cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+metadata-tiff-tables:
+    cargo test -p zenmeta --features inventory --test tiff_jpeg_tables
+    cargo clippy -p zenmeta --all-features --all-targets -- -D warnings
+    cargo +1.88.0 check -p zenmeta --no-default-features --features inventory
+    cargo check -p zenmeta --no-default-features --features inventory --target wasm32-wasip1
+
 # Adversarial review cases for the shared timing/rewrite boundary.
 review-contract-check:
     cargo test -p zenmeta --features rewrite --test rewrite

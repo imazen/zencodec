@@ -231,6 +231,13 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- TIFF parity fork integration (2026-10-27): shared inventory now follows
+  external JPEG tables 519–521 conservatively, but zentiff's codec-specific
+  old-JPEG and predictor consumption rules still need qualification against
+  image-tiff `10a3b6b2`. The spatial gate's lzw/deflate configuration does not
+  exercise old JPEG. Track decoder read traces, EOF/shared-stream costs and
+  consumer rollout in https://github.com/imazen/zencodec/issues/171.
+
 - Fixed during the output-owner guide update (2026-10-26): four-stage flow
   diagrams used a three-stage SVG viewport and omitted the final connector.
   Viewport and connectors now follow the stage count. Browser checks require

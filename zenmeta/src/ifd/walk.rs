@@ -54,6 +54,9 @@ pub const TILE_BYTE_COUNTS: u16 = 325;
 pub const SUB_IFDS: u16 = 330;
 pub const JPEG_IF_OFFSET: u16 = 513;
 pub const JPEG_IF_LENGTH: u16 = 514;
+pub const JPEG_Q_TABLES: u16 = 519;
+pub const JPEG_DC_TABLES: u16 = 520;
+pub const JPEG_AC_TABLES: u16 = 521;
 pub const EXIF_IFD: u16 = 34665;
 pub const GPS_IFD: u16 = 34853;
 pub const INTEROP_IFD: u16 = 40965;
@@ -631,6 +634,13 @@ pub enum Count {
     ToEnd,
     /// One extent of this many bytes from the first offset.
     Bytes(u64),
+    /// A 64-byte old-style JPEG quantization table at each nonzero offset.
+    /// Zero means no separate table; repeated offsets may share a table.
+    JpegQuantization,
+    /// An old-style JPEG Huffman table at each nonzero offset: 16 code-count
+    /// bytes followed by their sum in symbol bytes. Reading the counts uses
+    /// the walk's scan budget. Zero means no separate table.
+    JpegHuffman,
 }
 
 /// An offset tag with the lengths of the extents it locates.
@@ -718,6 +728,20 @@ pub trait Rules {
     /// A JPEG stream located by JPEGInterchangeFormat (513/514).
     fn jpeg_stream(&self, w: &Walk<'_>, ifd: &Ifd) -> Fate;
 
+    /// External old-style JPEG tables (519, 520 or 521). Locating a table
+    /// does not establish that the decoder uses it: an embedded JPEG header
+    /// can supply tables instead. The default deliberately leaves consumption
+    /// unknown, independently of strips and JPEGInterchangeFormat streams.
+    ///
+    /// Override only when the codec's rules establish the same disposition
+    /// for every table reached by this tag. This is not privacy evidence.
+    fn jpeg_table(&self, _w: &Walk<'_>, _ifd: &Ifd, _tag: u16) -> Fate {
+        Fate::because(
+            Disposition::Unknown,
+            "referenced JPEG table; decoder consumption is not established",
+        )
+    }
+
     /// Whether the caller's stop token asks the walk to end early.
     fn cancelled(&self) -> bool {
         false
@@ -731,7 +755,7 @@ pub trait Rules {
     }
 
     /// Extents `ifd` locates. The default covers strips, tiles, free space
-    /// and JPEGInterchangeFormat streams of image IFDs.
+    /// and JPEGInterchangeFormat streams and external JPEG tables of image IFDs.
     fn extents(&self, w: &Walk<'_>, ifd: &Ifd) -> Vec<ExtentRule> {
         if !ifd.holds_image() {
             return Vec::new();
@@ -765,8 +789,58 @@ pub trait Rules {
                 kind: PartKind::EmbeddedImage,
                 fate: self.jpeg_stream(w, ifd),
             },
+            ExtentRule {
+                offsets: JPEG_Q_TABLES,
+                counts: Count::JpegQuantization,
+                what: "JPEG quantization table",
+                kind: PartKind::Extent,
+                fate: self.jpeg_table(w, ifd, JPEG_Q_TABLES),
+            },
+            ExtentRule {
+                offsets: JPEG_DC_TABLES,
+                counts: Count::JpegHuffman,
+                what: "JPEG DC Huffman table",
+                kind: PartKind::Extent,
+                fate: self.jpeg_table(w, ifd, JPEG_DC_TABLES),
+            },
+            ExtentRule {
+                offsets: JPEG_AC_TABLES,
+                counts: Count::JpegHuffman,
+                what: "JPEG AC Huffman table",
+                kind: PartKind::Extent,
+                fate: self.jpeg_table(w, ifd, JPEG_AC_TABLES),
+            },
         ]
     }
+}
+
+/// Table lengths describe structural references, not JPEG validity or use.
+/// No table payload is allocated or copied. A truncated count prefix still
+/// claims its 16 bytes so placement marks the available part malformed.
+fn jpeg_table_counts(
+    w: &Walk<'_>,
+    offsets: &[u64],
+    huffman: bool,
+    rules: &dyn Rules,
+) -> (Vec<u64>, bool, bool) {
+    let mut lengths = Vec::new();
+    for &offset in offsets {
+        if rules.cancelled() {
+            return (lengths, false, true);
+        }
+        if offset == 0 {
+            lengths.push(0);
+        } else if !huffman {
+            lengths.push(64);
+        } else {
+            if !w.take_scan(16) {
+                return (lengths, true, false);
+            }
+            let counts = w.abs(offset).and_then(|at| get(w.d, at, 16));
+            lengths.push(16 + counts.map_or(0, |v| v.iter().map(|&n| u64::from(n)).sum()));
+        }
+    }
+    (lengths, false, false)
 }
 
 /// How much of one strip or tile the decoder reads.
@@ -1911,6 +1985,14 @@ pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<Cand>) -> Placement
                     .map(|a| alloc::vec![limit.saturating_sub(a)])
                     .unwrap_or_default(),
                 Count::Bytes(n) => alloc::vec![n],
+                Count::JpegQuantization | Count::JpegHuffman => {
+                    let huffman = matches!(rule.counts, Count::JpegHuffman);
+                    let (lengths, exhausted, cancelled) =
+                        jpeg_table_counts(w, &offs, huffman, rules);
+                    w.budget_hit |= exhausted || oe.count > max as u64;
+                    w.cancelled |= cancelled;
+                    lengths
+                }
             };
             let oi = ifd
                 .entries
@@ -1979,7 +2061,13 @@ pub fn place(w: &mut Walk<'_>, rules: &dyn Rules, first: Vec<Cand>) -> Placement
             // Merge index-consecutive extents that are also byte-contiguous.
             let mut run: Option<(Range<u64>, usize, usize)> = None;
             for (k, (&o, &n)) in offs.iter().zip(cnts.iter()).enumerate() {
-                let Some(start) = w.abs(o) else { continue };
+                let Some(start) = w.abs(o) else {
+                    notes.push((
+                        oi,
+                        format!("{} {k}: offset overflows the TIFF base", rule.what),
+                    ));
+                    continue;
+                };
                 if n == 0 || uses.get(k).is_some_and(|u| u.covered) {
                     continue;
                 }
