@@ -6,6 +6,7 @@ import { entries } from './api.mjs';
 import { checkMigration } from './migration-browser.mjs';
 import { checkIdeal } from './ideal-browser.mjs';
 import { checkGaps } from './gaps-browser.mjs';
+import { checkCodeFirst } from './code-first-browser.mjs';
 const examples=await readFile(new URL('../examples/journeys.rs',import.meta.url),'utf8');
 const policyExamples=await readFile(new URL('../examples/policy.rs',import.meta.url),'utf8');
 const jpegExamples=await readFile(new URL('../examples/jpeg_policy.rs',import.meta.url),'utf8');
@@ -155,5 +156,6 @@ try {
   await checkMigration(browser,url,output);
   await checkIdeal(browser,url,output);
   await checkGaps(browser,url,output);
+  await checkCodeFirst(browser,url,output);
   console.log('Browser checks passed: 15 chapters with signatures, 7 entry points, exact full-example clipboard contents, independent inline context, deep links, 8 lab combinations, keyboard, 390/768/1440px layouts.');
 } finally {await browser.close();}

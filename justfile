@@ -1011,9 +1011,12 @@ io-transport-model:
     cargo run --manifest-path perf/io-validation/Cargo.toml -p io-validation --bin transport_contracts --locked
 
 # Documentation source stays under docs/ on main; only its artifact is deployed.
+code-catalog export:
+    python3 docs/generate-code-catalog.py "{{export}}" --source-root "{{justfile_directory()}}" --output docs/code-api
+
 docs-site-check:
     node docs/build-site.mjs
-    node --test docs/site/site.test.mjs docs/site/source.test.mjs
+    node --test docs/site/site.test.mjs docs/site/source.test.mjs docs/site/code-first.test.mjs
 
 docs-site-serve:
     python3 -m http.server 3537 --bind 0.0.0.0 --directory docs/_site
