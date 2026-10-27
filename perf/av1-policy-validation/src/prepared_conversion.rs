@@ -694,9 +694,10 @@ mod tests {
             assert_eq!(error.error().stage, Stage::Policy);
             let record = error.error().report.decisions().next().unwrap();
             assert_eq!(record.code, DecisionCode::Declined);
-            assert!(!record.used_preset);
-            assert_eq!(record.admitted, 0);
-            assert!(!record.unmet_requirements.is_empty());
+            // A disallowed siting assumption is situational; it still reaches
+            // the preset. Mandatory guarantees refuse before delegation.
+            assert_eq!(record.used_preset, record.unmet_requirements.is_empty());
+            assert_eq!(record.admitted, u8::from(record.used_preset));
             assert!(record.selected.is_none());
             assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
         }
