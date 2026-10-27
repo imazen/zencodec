@@ -1122,3 +1122,15 @@ resolution-oracle-sync export:
     just operation-sync "{{export}}"
     cp examples/resolution_probe.rs "{{export}}/examples/"
     cp scripts/check-resolution-oracle.py "{{export}}/scripts/"
+
+# Preflight every finish patch before publication or in-memory mutation.
+mux-finish-sync export:
+    cp zencodec-media/src/container.rs "{{export}}/zencodec-media/src/"
+    cp zencodec-media-testkit/src/checks.rs "{{export}}/zencodec-media-testkit/src/"
+    cp zencodec-media-testkit/tests/contracts.rs zencodec-media-testkit/tests/checks.rs "{{export}}/zencodec-media-testkit/tests/"
+    cp justfile "{{export}}/justfile"
+
+mux-finish-check:
+    cargo test -p zencodec-media-testkit --locked
+    cargo clippy -p zencodec-media -p zencodec-media-testkit --all-targets --locked -- -D warnings
+    cargo check -p zencodec-media --no-default-features --target wasm32-unknown-unknown --locked

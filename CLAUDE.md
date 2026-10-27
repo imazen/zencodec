@@ -231,6 +231,14 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed during destination-contract validation (2026-10-27): the former
+  `apply_finish` appended its tail and applied earlier patches before rejecting
+  a later invalid range. A native-output regression observed changed bytes on
+  error. `MuxFinish::validate` checks the complete result before effects;
+  `apply_to` reserves fallibly before mutation. The old helper is deprecated
+  and delegates to the corrected implementation. External I/O can still fail
+  after partial publication; validation is not a rollback guarantee.
+
 - TIFF parity fork integration (2026-10-27): shared inventory now follows
   external JPEG tables 519–521 conservatively, but zentiff's codec-specific
   old-JPEG and predictor consumption rules still need qualification against

@@ -383,24 +383,61 @@ impl MuxFinish {
     pub fn new(tail: Vec<u8>, patches: Vec<Patch>) -> Self {
         Self { tail, patches }
     }
+
+    /// Validate the complete finish before appending its tail or applying any
+    /// patch. Offsets are relative to this muxed stream, not a surrounding file.
+    /// Returns the final stream length, including the tail.
+    ///
+    /// This checks ranges and arithmetic only. A writer must separately enforce
+    /// its output allowance and whether its chosen layout permits patches.
+    /// Overlapping patches apply in their listed order. Successful validation
+    /// cannot make an external writer's later I/O failures atomic.
+    pub fn validate(&self, emitted_bytes: u64) -> Result<u64, PatchError> {
+        let tail = u64::try_from(self.tail.len()).map_err(|_| PatchError::OutOfRange)?;
+        let total = emitted_bytes
+            .checked_add(tail)
+            .ok_or(PatchError::OutOfRange)?;
+        for patch in &self.patches {
+            let length = u64::try_from(patch.bytes.len()).map_err(|_| PatchError::OutOfRange)?;
+            let end = patch
+                .offset
+                .checked_add(length)
+                .ok_or(PatchError::OutOfRange)?;
+            if end > total {
+                return Err(PatchError::OutOfRange);
+            }
+        }
+        Ok(total)
+    }
+
+    /// Append the tail and apply validated patches to an in-memory stream.
+    /// Validation or allocation failure leaves its length and contents unchanged.
+    /// Capacity may grow on success; this does not impose a memory allowance.
+    pub fn apply_to(self, file: &mut Vec<u8>) -> Result<(), PatchError> {
+        self.validate(u64::try_from(file.len()).map_err(|_| PatchError::OutOfRange)?)?;
+        file.try_reserve(self.tail.len())
+            .map_err(|_| PatchError::AllocationFailed)?;
+        file.extend_from_slice(&self.tail);
+        for patch in self.patches {
+            // Successful reservation proves the complete extent fits usize.
+            // validate checked every range against that same extent.
+            let start = patch.offset as usize;
+            file[start..start + patch.bytes.len()].copy_from_slice(&patch.bytes);
+        }
+        Ok(())
+    }
 }
 
 /// Apply a finish to an in-memory file: append the tail, then patch.
 ///
 /// # Errors
 ///
-/// [`PatchError::OutOfRange`] for a patch outside the file.
+/// See [`MuxFinish::apply_to`].
+#[deprecated(
+    note = "use finish.apply_to(file); use finish.validate(emitted_bytes) before external writes"
+)]
 pub fn apply_finish(file: &mut Vec<u8>, finish: MuxFinish) -> Result<(), PatchError> {
-    file.extend_from_slice(&finish.tail);
-    for p in finish.patches {
-        let start = usize::try_from(p.offset).map_err(|_| PatchError::OutOfRange)?;
-        let end = start
-            .checked_add(p.bytes.len())
-            .ok_or(PatchError::OutOfRange)?;
-        let dst = file.get_mut(start..end).ok_or(PatchError::OutOfRange)?;
-        dst.copy_from_slice(&p.bytes);
-    }
-    Ok(())
+    finish.apply_to(file)
 }
 
 /// A patch that does not fit the file.
@@ -409,11 +446,16 @@ pub fn apply_finish(file: &mut Vec<u8>, finish: MuxFinish) -> Result<(), PatchEr
 pub enum PatchError {
     /// The patch lies outside the written bytes.
     OutOfRange,
+    /// The in-memory destination could not reserve the remaining output.
+    AllocationFailed,
 }
 
 impl core::fmt::Display for PatchError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str("patch lies outside the written file")
+        f.write_str(match self {
+            Self::OutOfRange => "patch or final length lies outside the written stream",
+            Self::AllocationFailed => "cannot reserve remaining muxed output",
+        })
     }
 }
 impl core::error::Error for PatchError {}

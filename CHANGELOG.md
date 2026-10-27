@@ -2,6 +2,11 @@
 
 ## Native image selection (unreleased experiment)
 
+- Add `MuxFinish::validate` and `MuxFinish::apply_to`; immediately deprecate
+  `apply_finish` in favor of the method. Validate every patch before appending
+  the tail or changing bytes, and reserve output fallibly. Existing testkit
+  consumers use the replacement; the compatibility helper retains the fix.
+
 - Resolve prepared native frame encoding transitions through the existing
   fallible policy resolver. Keep input epochs separate from output segments,
   refuse fixed-output changes, preserve terminal failure/cancellation behavior,

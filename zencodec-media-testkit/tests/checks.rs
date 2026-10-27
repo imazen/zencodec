@@ -8,7 +8,7 @@ use zencodec::time::{FrameDuration, TimeBase, Timestamp};
 use zencodec_media::adapt::{CaptureFrame, Gray8};
 use zencodec_media::container::{
     DemuxProgress, Demuxer, Input, MuxFinish, MuxHint, MuxTiming, Muxer, Request, SeekMode,
-    SeekScope, SeekTarget, apply_finish,
+    SeekScope, SeekTarget,
 };
 use zencodec_media::frame::{Frame, FrameTiming};
 use zencodec_media::limits::MediaLimits;
@@ -102,7 +102,7 @@ fn toy_file(n: u32, keyint: u32, write_count: bool) -> Vec<u8> {
         m.write_packet(p, &Unstoppable).unwrap();
         m.take_output(&mut out);
     }
-    apply_finish(&mut out, m.finish(&Unstoppable).unwrap()).unwrap();
+    m.finish(&Unstoppable).unwrap().apply_to(&mut out).unwrap();
     out
 }
 

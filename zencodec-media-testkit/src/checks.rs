@@ -18,7 +18,7 @@ use zencodec_media::adapt::{
     AnimationVideoEncoder, CaptureFrame, RenderFrame, VideoAnimationDecoder,
 };
 use zencodec_media::container::{
-    DemuxEvent, DemuxStage, Demuxer, MuxHint, Muxer, SeekStatus, SeekTarget, apply_finish,
+    DemuxEvent, DemuxStage, Demuxer, MuxHint, Muxer, SeekStatus, SeekTarget,
 };
 use zencodec_media::frame::{Frame, PlaneSamples};
 use zencodec_media::packet::{Discard, Packet, RandomAccess};
@@ -757,7 +757,8 @@ where
                 "patches from a muxer whose timing said it would not patch",
             ));
         }
-        apply_finish(&mut out, fin).map_err(|e| fail(CHECK, e.to_string()))?;
+        fin.apply_to(&mut out)
+            .map_err(|e| fail(CHECK, e.to_string()))?;
         Ok(out)
     };
     let hint = MuxHint::default();

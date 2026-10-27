@@ -87,6 +87,24 @@ the fused-session terminal rules.
 
 ## Muxers
 
+Use `finish.apply_to(&mut bytes)` to finalize an in-memory stream; the free
+`apply_finish` helper is deprecated. Validation or allocation failure leaves
+its contents and length unchanged. All patch ranges are checked before any
+mutation, including when a valid first patch precedes an invalid later one.
+
+External writers call `finish.validate(emitted_bytes)` before writing the tail
+or patches. The returned length includes the tail. Offsets are relative to this
+muxed stream; a writer embedding it in a larger file adds its captured start
+position and checks that arithmetic separately. Overlapping patches apply in
+listed order. Destination patch support, output allowance and actual I/O remain
+the driver's responsibility; an I/O error may leave a partially written file.
+
+The shared media testkit regression failed before the fix and passes with the
+replacement and deprecated compatibility path. `just mux-finish-check` passes
+media tests, strict lint and the no-default-features WASM check (2026-10-27):
+run-heavy rc=0, 3 s, peak RSS 0.30 GiB, minimum available 11336 MiB, peak load
+0.19. These are validation-process observations, not muxer memory bounds.
+
 - `begin` once (`BeginTwice` otherwise, checked); its `MuxTiming` says whether
   bytes stream and whether `finish` patches earlier bytes. With
   `MuxHint::forward_only`, a layout that would patch refuses

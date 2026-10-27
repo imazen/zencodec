@@ -13,7 +13,7 @@ use zenpixels::{PixelBuffer, PixelDescriptor};
 use zencodec_media::adapt::{AdaptError, AnimationVideoEncoder, Gray8, VideoAnimationDecoder};
 use zencodec_media::container::{
     DemuxEvent, DemuxStage, Demuxer, DynMuxer, Input, MuxHint, MuxTiming, Muxer, SeekMode,
-    SeekScope, SeekStatus, SeekTarget, apply_finish, erase_muxer,
+    SeekScope, SeekStatus, SeekTarget, erase_muxer,
 };
 use zencodec_media::frame::Frame;
 use zencodec_media::limits::MediaLimits;
@@ -98,7 +98,7 @@ fn toy_file(n: u32, keyint: u32, write_count: bool) -> Vec<u8> {
         m.write_packet(p, &Unstoppable).unwrap();
         m.take_output(&mut out);
     }
-    apply_finish(&mut out, m.finish(&Unstoppable).unwrap()).unwrap();
+    m.finish(&Unstoppable).unwrap().apply_to(&mut out).unwrap();
     out
 }
 
@@ -467,7 +467,7 @@ fn muxer_bytes_do_not_depend_on_how_they_are_drained() {
                 _ => m.take_output(&mut out),
             }
         }
-        apply_finish(&mut out, m.finish(&Unstoppable).unwrap()).unwrap();
+        m.finish(&Unstoppable).unwrap().apply_to(&mut out).unwrap();
         out
     };
     let undrained = run(0);
@@ -508,6 +508,39 @@ fn muxer_bytes_do_not_depend_on_how_they_are_drained() {
         m.write_packet(wrong, &Unstoppable),
         Err(SessionError::Protocol(_))
     ));
+}
+
+#[test]
+fn malformed_finish_does_not_partially_modify_the_output() {
+    use zencodec_media::container::{MuxFinish, Patch, PatchError};
+    let original = b"prefix".to_vec();
+    for bad in [
+        Patch {
+            offset: 99,
+            bytes: vec![1],
+        },
+        Patch {
+            offset: u64::MAX,
+            bytes: vec![1, 2],
+        },
+    ] {
+        let mut output = original.clone();
+        let finish = MuxFinish::new(
+            b"tail".to_vec(),
+            vec![
+                Patch {
+                    offset: 0,
+                    bytes: b"BAD".to_vec(),
+                },
+                bad,
+            ],
+        );
+        assert_eq!(finish.apply_to(&mut output), Err(PatchError::OutOfRange));
+        assert_eq!(
+            output, original,
+            "validate every patch before applying any effect"
+        );
+    }
 }
 
 // ----------------------------------------------------------------- seek ---
@@ -711,4 +744,60 @@ fn declared_frame_count_is_binding() {
         a.finish(None),
         Err(AdaptError::FrameCountMismatch)
     ));
+}
+
+#[test]
+fn finish_preflight_supports_tail_patches_and_ordered_overlaps_and_rejects_overflow() {
+    use zencodec_media::container::{MuxFinish, Patch, PatchError};
+    let finish = MuxFinish::new(
+        b"tail".to_vec(),
+        vec![
+            Patch {
+                offset: 3,
+                bytes: b"XYZ".to_vec(),
+            },
+            Patch {
+                offset: 4,
+                bytes: b"!".to_vec(),
+            },
+            Patch {
+                offset: 7,
+                bytes: vec![],
+            },
+        ],
+    );
+    assert_eq!(finish.validate(3), Ok(7));
+    let mut output = b"pre".to_vec();
+    finish.apply_to(&mut output).unwrap();
+    assert_eq!(&output, b"preX!Zl");
+    assert_eq!(
+        MuxFinish::new(vec![1], vec![]).validate(u64::MAX),
+        Err(PatchError::OutOfRange)
+    );
+    let finish = MuxFinish::new(
+        vec![],
+        vec![Patch {
+            offset: 4,
+            bytes: vec![],
+        }],
+    );
+    assert_eq!(finish.validate(3), Err(PatchError::OutOfRange));
+}
+
+#[test]
+#[allow(deprecated)]
+fn deprecated_finish_helper_uses_the_same_transactional_validation() {
+    use zencodec_media::container::{MuxFinish, Patch, PatchError, apply_finish};
+    let mut output = b"keep".to_vec();
+    let bad = MuxFinish::new(
+        b"tail".to_vec(),
+        vec![Patch {
+            offset: 9,
+            bytes: vec![0],
+        }],
+    );
+    assert_eq!(apply_finish(&mut output, bad), Err(PatchError::OutOfRange));
+    assert_eq!(&output, b"keep");
+    apply_finish(&mut output, MuxFinish::new(b"tail".to_vec(), vec![])).unwrap();
+    assert_eq!(&output, b"keeptail");
 }
