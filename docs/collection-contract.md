@@ -52,6 +52,32 @@ color gates remain unchanged.
 
 ## Register once; open a checked operation
 
+### Process a selected owner before its single publication decision
+
+`CheckedCollection::decode_with(id, native_request, transform)` is the adapter
+hook for operations that finish color or geometry after reconstruction. It
+checks the fixed collection view, reconstructs and binds the owned image, then
+passes that owner and the same latched cancellation token to the transform.
+Only the completed result reaches `Question::Image`. Ordinary `decode` uses
+this same path with an identity transform; no second resolver is required.
+
+The transform must honor its configured requirements and keep interpretation
+consistent with its returned samples. This hook does not prove transform math,
+admit native/CMS workspace or silently retry a different route. It accepts a
+concrete traced error; `CollectionStage::Transform` identifies that boundary.
+Refusal remains request-local, and a corrected request can reuse the image ID.
+Cancellation or unwind terminates the opened collection. A coincident stop
+remains visible even when the transform's original cause takes precedence.
+
+The private native renderer uses it in `render_selected(&mut images, &id)`.
+Its output descriptor, target color, display region and destination pool are
+configured once. TIFF, BigTIFF, SubIFD and JXL tests verify that the existing
+resolver sees only the final color/orientation/region and runs once per accepted
+request. The candidate still requests full native reconstruction: its display
+crop is not a proportional decode-work or whole-memory promise.
+
+### Register and open
+
 The same [executing example](../perf/spatial-validation/src/collection.rs) now
 builds a `CodecSet` with the packaged JXL factory and a private TIFF candidate. The caller uses:
 

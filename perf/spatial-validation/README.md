@@ -1422,15 +1422,24 @@ subsampled auxiliaries also go through the combined color/geometry operation.
 Tests inject cancellation/timeout at every observed seam, destination byte and
 object refusal, traced callback failure, policy refusal and unwind.
 
-This candidate is not yet the shared selected-image render entry point. It
-starts from an already reconstructed owner, so native decode and its existing
-publication boundary precede this call. Its explicit cost is a projected
+The renderer remains private, but now exposes `render_selected(&mut images,
+&id)` through the shared `CheckedCollection::decode_with` adapter hook. Native
+reconstruction, transformation and one final publication decision happen inside
+the same checked operation. The already-held `render` entry remains available
+for direct owner processing. Native TIFF, BigTIFF and JXL controls verify one
+policy call per result, no policy call after color-plan refusal and successful
+reuse after a corrected request. Classic/BigTIFF SubIFDs independently verify
+child identity, child orientation, exact color samples and final policy facts.
+The [collection contract](../../docs/collection-contract.md#process-a-selected-owner-before-its-single-publication-decision)
+defines traced transform failure and terminal cancellation/unwind.
+
+Its explicit cost is a projected
 payload, then a replacement color payload when needed; even identity geometry
 copies, and descriptor-only normalization currently also copies. One test
 admits geometry but denies the second object and observes a Color-stage error
 with all charges released. This establishes payload accounting, not peak RSS
-or a whole-operation budget. Prepared native decode/ROI, one collection-level
-publication boundary, coupled privacy/metadata decisions, resize, HDR display
+or a whole-operation budget. Prepared native decode/ROI,
+coupled privacy/metadata decisions, resize, HDR display
 mapping and planar video remain required before promoting a complete render
 contract. No conversion kernel or CMS dependency was added to zencodec itself.
 

@@ -36,6 +36,8 @@ pub enum CollectionStage {
     Finished,
     /// Establishing and validating selected geometry before reconstruction.
     Describe,
+    /// Adapter processing of the held output before publication policy.
+    Transform,
 }
 
 /// Safe default formatting; concrete causes and prior decisions remain available.
@@ -280,6 +282,26 @@ impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
         image: &ImageId,
         request: &ImageRequest,
     ) -> Result<Outcome<ImageOutput>, At<CollectionOperationError>> {
+        self.decode_with(image, request, |image, _| Ok::<_, Cause>(image))
+    }
+    /// Adapter hook: reconstruct, transform the held owner, then resolve policy
+    /// once on the completed output. Ordinary native decode uses the same path
+    /// with an identity transform. A render adapter can bind its own prepared
+    /// color/geometry request here without publishing an intermediate raster.
+    ///
+    /// The transform receives the operation's latched stop token. It must honor
+    /// its configured requirements, preserve or update interpretation together
+    /// with the samples, and return a fully owned output or a concrete error.
+    /// This wrapper does not prove arbitrary transform math, admit its workspace
+    /// or turn native decode into a bounded region operation. Transform errors
+    /// are request-local; cancellation and unwind terminate the collection.
+    /// No fallback, retry or policy callback runs on a failed transform.
+    pub fn decode_with<E: Into<Cause>>(
+        &mut self,
+        image: &ImageId,
+        request: &ImageRequest,
+        transform: impl FnOnce(ImageOutput, &dyn Stop) -> Result<ImageOutput, E>,
+    ) -> Result<Outcome<ImageOutput>, At<CollectionOperationError>> {
         let view = self.view;
         self.run(|c, resolver, preset, stop, report| {
             let check_view = |actual| {
@@ -304,6 +326,10 @@ impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
             let image = image
                 .in_collection_view(view)
                 .map_err(|e| failure(CollectionStage::Decode, report, e))?;
+            check(stop, report)?;
+            let image = transform(image, stop)
+                .map_err(|e| failure(CollectionStage::Transform, report, e))?;
+            check(stop, report)?;
             match resolve_image(image, resolver, preset, stop) {
                 Ok(output) => {
                     for &record in output.report().decisions() {

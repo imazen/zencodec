@@ -9,7 +9,7 @@ use zencodec::{
     Unstoppable,
     collection::{Composition, ImageRequest},
     image::{Row, Samples},
-    operation::{Decision, Decline, Question},
+    operation::{CollectionStage, Decision, Decline, Question},
 };
 use zenpixels::{ColorPrimaries, Orientation, TransferFunction};
 use zenpixels_convert::{cms_moxcms::MoxCms, icc_profiles::display_p3_icc};
@@ -41,7 +41,7 @@ fn tiff<C: colortype::ColorType, K: TiffKind>(
         .unwrap();
     image.write_data(samples).unwrap();
 }
-fn native_tiff(exif: u8, big: bool, depth: u8) -> ImageOutput {
+fn native_tiff_bytes(exif: u8, big: bool, depth: u8) -> Vec<u8> {
     let mut file = Cursor::new(Vec::new());
     macro_rules! encode {
         ($color:ty, $samples:expr) => {
@@ -69,12 +69,15 @@ fn native_tiff(exif: u8, big: bool, depth: u8) -> ImageOutput {
         ),
         _ => panic!("invalid depth"),
     }
+    file.into_inner()
+}
+fn native_tiff(exif: u8, big: bool, depth: u8) -> ImageOutput {
     let mut images = zencodec::operation::CheckedCollection::open(
         zencodec::StopToken::new(Unstoppable),
         PolicySet::new(),
         |stop| {
             Ok(crate::tiff_items::TiffCollection::open_with_stop(
-                Cursor::new(file.into_inner()),
+                Cursor::new(native_tiff_bytes(exif, big, depth)),
                 Composition::Composited,
                 crate::tiff_region::Allowances::default(),
                 stop,
@@ -87,6 +90,199 @@ fn native_tiff(exif: u8, big: bool, depth: u8) -> ImageOutput {
         .unwrap()
         .unwrap()
         .into_output()
+}
+
+fn qualify_selected<C: Collection>(
+    expected: &ImageOutput,
+    open: impl FnOnce(zencodec::StopToken) -> Result<C, Cause>,
+) {
+    use std::cell::Cell;
+    let region = Rect {
+        x: 1,
+        y: 1,
+        width: 3,
+        height: 2,
+    };
+    let calls = Cell::new(0);
+    let mut renderer = renderer(expected, Some(region));
+    let required = renderer.request.required;
+    let mut images = CheckedCollection::open(
+        zencodec::StopToken::new(Unstoppable),
+        |question: Question<'_>| -> Result<Decision, At<Infallible>> {
+            calls.set(calls.get() + 1);
+            let Question::Image { image, facts, .. } = question else {
+                panic!()
+            };
+            assert_eq!(facts.orientation, Some(Orientation::Identity));
+            assert_eq!(facts.geometry.region, region);
+            assert_eq!(facts.packed, Some(required));
+            exact(expected, image, false);
+            Ok(Decision::UsePreset)
+        },
+        open,
+    )
+    .unwrap();
+    let mut cursor = images.images().unwrap();
+    let id = images.next(&mut cursor).unwrap().unwrap();
+    for i in 1..=2 {
+        let output = renderer.render_selected(&mut images, &id).unwrap();
+        assert_eq!(calls.get(), i);
+        assert_eq!(output.report().decisions().count(), 1);
+        assert_eq!(images.report().decisions().count(), i);
+        drop(output);
+        assert_eq!(renderer.storage.reserved_bytes(), 0);
+    }
+    renderer.request.required = required.with_primaries(ColorPrimaries::Bt2020);
+    let failure = renderer.render_selected(&mut images, &id).unwrap_err();
+    assert_eq!(failure.error().stage, CollectionStage::Transform);
+    assert_eq!(
+        zencodec::find_cause::<Failure>(&failure).unwrap().stage,
+        Stage::ColorPlan
+    );
+    assert_eq!(calls.get(), 2);
+    assert!(!images.is_finished());
+    renderer.request.required = required;
+    drop(renderer.render_selected(&mut images, &id).unwrap());
+    assert_eq!(calls.get(), 3);
+    assert_eq!(renderer.storage.reserved_bytes(), 0);
+}
+
+#[test]
+fn canvas_render_selected_native_tiff_and_jxl_publish_only_the_final_owner() {
+    for big in [false, true] {
+        let expected = native_tiff(6, big, 32);
+        qualify_selected(&expected, |stop| {
+            Ok(crate::tiff_items::TiffCollection::open_with_stop(
+                Cursor::new(native_tiff_bytes(6, big, 32)),
+                Composition::Composited,
+                crate::tiff_region::Allowances::default(),
+                stop,
+            )?)
+        });
+    }
+    for name in [
+        "orientation6_rotate_90_cw.jxl",
+        "conformance_test_images/animation_spline.jxl",
+    ] {
+        let expected = native_jxl(name, Composition::Composited);
+        let bytes = fixture(name);
+        qualify_selected(&expected, |stop| {
+            crate::jxl_items::JxlItems::open_with_stop(&bytes, Composition::Composited, 64, stop)
+        });
+    }
+}
+
+#[test]
+fn canvas_render_selected_subifd_keeps_child_color_orientation_and_identity() {
+    fn directory<K: TiffKind>(
+        mut dir: tiff::encoder::DirectoryEncoder<'_, &mut Cursor<Vec<u8>>, K>,
+        orientation: u16,
+        seed: usize,
+        child: Option<u32>,
+    ) -> u32 {
+        let samples: Vec<f32> = (0..7 * 5 * 4)
+            .map(|i| ((i + seed) % 16) as f32 / 16.0)
+            .collect();
+        let offset = u32::try_from(dir.write_data(samples.as_slice()).unwrap()).unwrap();
+        dir.write_tag(Tag::ImageWidth, 7u32).unwrap();
+        dir.write_tag(Tag::ImageLength, 5u32).unwrap();
+        dir.write_tag(Tag::SamplesPerPixel, 4u16).unwrap();
+        dir.write_tag(Tag::BitsPerSample, &[32u16; 4][..]).unwrap();
+        dir.write_tag(Tag::SampleFormat, &[3u16; 4][..]).unwrap();
+        dir.write_tag(Tag::ExtraSamples, &[2u16][..]).unwrap();
+        dir.write_tag(Tag::PhotometricInterpretation, 2u16).unwrap();
+        dir.write_tag(Tag::Compression, 1u16).unwrap();
+        dir.write_tag(Tag::RowsPerStrip, 5u32).unwrap();
+        dir.write_tag(Tag::StripOffsets, &[offset][..]).unwrap();
+        dir.write_tag(Tag::StripByteCounts, &[7 * 5 * 4 * 4u32][..])
+            .unwrap();
+        dir.write_tag(Tag::Orientation, orientation).unwrap();
+        dir.write_tag(Tag::IccProfile, display_p3_icc(false))
+            .unwrap();
+        if let Some(child) = child {
+            dir.write_tag(Tag::SubIfd, &[child][..]).unwrap();
+        }
+        u32::try_from(dir.finish_with_offsets().unwrap().pointer.0).unwrap()
+    }
+    fn tree<K: TiffKind>(mut encoder: TiffEncoder<&mut Cursor<Vec<u8>>, K>) {
+        let child = directory(encoder.extra_directory().unwrap(), 6, 7, None);
+        directory(encoder.image_directory().unwrap(), 1, 0, Some(child));
+    }
+    for big in [false, true] {
+        let mut file = Cursor::new(Vec::new());
+        if big {
+            tree(TiffEncoder::new_big(&mut file).unwrap());
+        } else {
+            tree(TiffEncoder::new(&mut file).unwrap());
+        }
+        let seen = std::cell::Cell::new(0);
+        let mut images = CheckedCollection::open(
+            zencodec::StopToken::new(Unstoppable),
+            |q: Question<'_>| -> Result<Decision, At<Infallible>> {
+                let Question::Image { image, facts, .. } = q else {
+                    panic!()
+                };
+                assert_eq!(
+                    (facts.geometry.canvas_width, facts.geometry.canvas_height),
+                    (5, 7)
+                );
+                assert_eq!(facts.orientation, Some(Orientation::Identity));
+                image
+                    .with_pixels(|pixels| {
+                        for y in 0..2 {
+                            for x in 0..3 {
+                                for c in 0..4 {
+                                    // Child orientation 6: stored (x,y) -> (4-y,x).
+                                    let sx = y + 1;
+                                    let sy = 4 - (x + 1);
+                                    let expected = (((sy * 7 + sx) * 4 + c + 7) % 16) as f32 / 16.0;
+                                    let at = (x * 4 + c) as usize * 4;
+                                    assert_eq!(&pixels.row(y)[at..at + 4], &expected.to_ne_bytes());
+                                }
+                            }
+                        }
+                    })
+                    .unwrap();
+                seen.set(seen.get() + 1);
+                Ok(Decision::UsePreset)
+            },
+            |stop| {
+                Ok(crate::tiff_items::TiffCollection::open_with_stop(
+                    Cursor::new(file.into_inner()),
+                    Composition::Composited,
+                    crate::tiff_region::Allowances::default(),
+                    stop,
+                )?)
+            },
+        )
+        .unwrap();
+        let mut roots = images.images().unwrap();
+        let root = images.next(&mut roots).unwrap().unwrap();
+        let mut children = images.children(&root).unwrap();
+        let child = images.next(&mut children).unwrap().unwrap();
+        assert_ne!(root, child);
+        assert!(images.next(&mut children).unwrap().is_none());
+        let renderer = Renderer {
+            request: Request {
+                target: Target::Icc(Arc::from(display_p3_icc(false))),
+                required: PixelDescriptor::RGBAF32
+                    .with_transfer(TransferFunction::Srgb)
+                    .with_primaries(ColorPrimaries::DisplayP3),
+                region: Some(Rect {
+                    x: 1,
+                    y: 1,
+                    width: 3,
+                    height: 2,
+                }),
+                conversion: ConvertOptions::forbid_lossy(),
+            },
+            storage: StorageBudget::new(1 << 20, 2),
+            cms: Some(&MoxCms),
+        };
+        drop(renderer.render_selected(&mut images, &child).unwrap());
+        assert_eq!(seen.get(), 1);
+        assert_eq!(renderer.storage.reserved_bytes(), 0);
+    }
 }
 fn native_jxl(name: &str, view: Composition) -> ImageOutput {
     let bytes = fixture(name);

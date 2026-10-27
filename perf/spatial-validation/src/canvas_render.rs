@@ -1,13 +1,16 @@
 //! Executable candidate for one held-image render operation. Still private:
-//! selected decode, native workspace, planar video and HDR presentation remain
-//! separate contracts. Color and geometry finish before publication policy.
+//! native workspace, planar video and HDR presentation remain separate
+//! contracts. Selected decode, color and geometry finish before publication policy.
 use std::{fmt, sync::Arc};
 use zencodec::{
     At, CodecError,
-    collection::Cause,
+    collection::{Cause, Collection, ImageId, ImageRequest},
     enough::Stop,
     image::{ImageOutput, OutputError, PackedImageOwner, Rect},
-    operation::{Outcome, PolicyResolver, PolicySet, resolve_image},
+    operation::{
+        CheckedCollection, CollectionOperationError, Outcome, PolicyResolver, PolicySet,
+        resolve_image,
+    },
     storage::{SharedStorage, StorageBudget, StorageError},
 };
 use zenpixels::{Cicp, ColorContext, ColorOrigin, PixelDescriptor, PixelSlice, PixelSliceMut};
@@ -101,6 +104,19 @@ pub struct Renderer<'a> {
     pub cms: Option<&'a dyn PluggableCms>,
 }
 impl Renderer<'_> {
+    /// Consumer convenience over the shared collection operation. The current
+    /// candidate reconstructs the full native selection; its display crop does
+    /// not promise proportional native work or bypass native dimension limits.
+    pub fn render_selected<C: Collection, R: PolicyResolver>(
+        &self,
+        images: &mut CheckedCollection<C, R>,
+        image: &ImageId,
+    ) -> Result<Outcome<ImageOutput>, At<CollectionOperationError>> {
+        images.decode_with(image, &ImageRequest::new(), |held, stop| {
+            self.apply(held, stop)
+        })
+    }
+
     pub fn render<R: PolicyResolver + ?Sized>(
         &self,
         image: ImageOutput,
@@ -108,6 +124,11 @@ impl Renderer<'_> {
         preset: PolicySet,
         stop: &dyn Stop,
     ) -> Result<Outcome<ImageOutput>, At<Failure>> {
+        let output = self.apply(image, stop)?;
+        resolve_image(output, resolver, preset, stop).map_err(|e| fail(Stage::Publication, e))
+    }
+
+    fn apply(&self, image: ImageOutput, stop: &dyn Stop) -> Result<ImageOutput, At<Failure>> {
         check(stop).map_err(|e| fail(Stage::ColorPlan, e))?;
         // Prepare the actual transform before allocating projected samples.
         let mut plan = image
@@ -157,7 +178,7 @@ impl Renderer<'_> {
                 .replace_packed_color(color)
                 .map_err(|e| fail(Stage::Color, e))?
         };
-        resolve_image(output, resolver, preset, stop).map_err(|e| fail(Stage::Publication, e))
+        Ok(output)
     }
 
     fn convert(

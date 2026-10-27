@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 2954 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 203 lines (203 hidden + 0 excluded-feature)
+# files: zencodec.txt 2956 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 203 lines (203 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -14,9 +14,9 @@
 #   pub types (struct/enum/trait/alias)       345
 #   pub consts/statics                        303
 #   free functions                             84
-#   inherent methods                         1062
+#   inherent methods                         1063
 #   struct fields                             442
-#   enum variants                             484
+#   enum variants                             485
 #   re-exports                                 15
 #   trait roster entries (type × trait)      1000
 #   conditional trait impls (verbatim)          8
@@ -38,13 +38,13 @@
 #   image                           135
 #   inventory                       103
 #   metadata_rewrite                 58
-#   operation                       205
+#   operation                       207
 #   prelude                         233
 #   source                           37
 #   storage                          34
 #   time                             22
 
-## items (2674 lines)
+## items (2676 lines)
 
 pub mod zencodec
 pub use At
@@ -1537,6 +1537,7 @@ pub operation::CollectionStage::Finished
 pub operation::CollectionStage::Open
 pub operation::CollectionStage::Policy
 pub operation::CollectionStage::Stopped
+pub operation::CollectionStage::Transform
 #[non_exhaustive] pub enum operation::Decision
 pub operation::Decision::Choose(operation::ChoiceId)
 pub operation::Decision::Decline(whereat::at::At<operation::Decline>)
@@ -1621,6 +1622,7 @@ pub operation::BoundaryOffer::action: decode::BoundaryAction
 pub struct operation::CheckedCollection<C, R>
 pub fn operation::CheckedCollection<C, R>::children(&mut self, &collection::ImageId) -> core::result::Result<<C as collection::Collection>::Cursor, whereat::at::At<operation::CollectionOperationError>>
 pub fn operation::CheckedCollection<C, R>::decode(&mut self, &collection::ImageId, &collection::ImageRequest) -> core::result::Result<operation::Outcome<image::ImageOutput>, whereat::at::At<operation::CollectionOperationError>>
+pub fn operation::CheckedCollection<C, R>::decode_with<E: core::convert::Into<collection::Cause>>(&mut self, &collection::ImageId, &collection::ImageRequest, impl core::ops::function::FnOnce(image::ImageOutput, &dyn enough::Stop) -> core::result::Result<image::ImageOutput, E>) -> core::result::Result<operation::Outcome<image::ImageOutput>, whereat::at::At<operation::CollectionOperationError>>
 pub fn operation::CheckedCollection<C, R>::describe(&mut self, &collection::ImageId) -> core::result::Result<collection::ImageDescription, whereat::at::At<operation::CollectionOperationError>>
 pub fn operation::CheckedCollection<C, R>::first_image(&mut self, &collection::ImageRequest) -> core::result::Result<core::option::Option<operation::Outcome<image::ImageOutput>>, whereat::at::At<operation::CollectionOperationError>>
 pub fn operation::CheckedCollection<C, R>::images(&mut self) -> core::result::Result<<C as collection::Collection>::Cursor, whereat::at::At<operation::CollectionOperationError>>

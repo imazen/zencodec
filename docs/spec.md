@@ -249,6 +249,15 @@ calls. Coincident cancellation does not replace the original failure. `None`
 means no stop was observed through that token, rather than classifying all native
 or application errors as non-cancellation.
 
+`CheckedCollection::decode_with(image, native_request, transform)` adds an
+adapter processing boundary before that single publication decision. It passes
+the bound owned image and the same latched stop token to a fallible `FnOnce`.
+The completed `ImageOutput` reaches the resolver; a failed transform does not.
+`CollectionStage::Transform` preserves the original traced processing cause.
+The transform must honor its configured requirements and update interpretation
+with its samples; the hook does not independently prove its math or workspace.
+Native `decode` delegates through the same path with an identity transform.
+
 `CodecSet::with_collection(factory)` registers immutable `CollectionFactory`
 configurations. `open_collection(format, source, request, resolver, stop)` returns
 `CheckedCollection<Discovery<ErasedCollection<'a>>, R>`, borrowing the positional
