@@ -1,0 +1,69 @@
+{
+  "generator": "cargo public-api --all-features -sss -v",
+  "packages": [
+    {
+      "name": "zencodec",
+      "directory": ".",
+      "features": "all",
+      "fingerprint": "de150276bae334821b0ab73ec0ef7e38288ea3bd651f0d477595ebb47af53e8d",
+      "surface_sha256": "0d191fc7f899338469688df5c3f5cd1b7341011f8241cba41953969f6502d123",
+      "details_sha256": "3ca3086c45245c52f8264e8df1e496491057dd3a5bfdaa6572fc866450ad3661"
+    },
+    {
+      "name": "zencodec-io",
+      "directory": "zencodec-io",
+      "features": "all",
+      "fingerprint": "71e9853f22c03ec08278f073367a31941540eace5f59e0e87a634ba802d65020",
+      "surface_sha256": "30f16950321c2fb4dc78d41c1c320800014ff33397c50455fe39c9e2380d8bdc",
+      "details_sha256": "4ed90be5af4815545b96c155784acbaa9f24d38cf65ac6a2dd2dd4647dda6596"
+    },
+    {
+      "name": "zencodec-coroutine",
+      "directory": "zencodec-coroutine",
+      "features": "all",
+      "fingerprint": "1244f3bc90c8896d27aeb4d6d169c8970056cafbe25fdb4835c7fa72f825c7fe",
+      "surface_sha256": "a11d57a65c99fd38de71132716bc3d9646a6a997fd739172d2d67018929eb499",
+      "details_sha256": "fd6d3150df401f0947e4a1edd69ba30624e8466db1f39408ff47b3d98633e366"
+    },
+    {
+      "name": "zencodec-media",
+      "directory": "zencodec-media",
+      "features": "all",
+      "fingerprint": "9cd096b49f3d402575f5fee46b916c94af85810ad82664062712a6d513d91d55",
+      "surface_sha256": "912e3472e640309f65bb4bc3db4ec05ecb3f17c80ac09582eead8f5a84c2f946",
+      "details_sha256": "1694807331ee8bcf42a7af514bb4b95195cec96898054e3ba4fac94e9bce62f5"
+    },
+    {
+      "name": "zencodec-testkit",
+      "directory": "zencodec-testkit",
+      "features": "all",
+      "fingerprint": "5d1c8cfffc2c47d7f5063482f6bd4b13fd3ea1a7c47446fc90bb000073a9cef2",
+      "surface_sha256": "2a64621a2ab656580f4bcba90ff769c7a60d734bd9be1bc77ad32861351465a1",
+      "details_sha256": "ef46df66111d9f6081fc5c692c7e3d82a0b516345c461a478140f9e6e03df4a5"
+    },
+    {
+      "name": "zencodec-media-testkit",
+      "directory": "zencodec-media-testkit",
+      "features": "all",
+      "fingerprint": "fdd987d661d35ebebb8c6f55c1fdef5f8277a6f9203923395b1328fe530531d7",
+      "surface_sha256": "93dfdc2af148b74ff811a3c2f1c1f22e43390b247644238877cf7c57839b41fe",
+      "details_sha256": "0537f16ab67912d6adc4dc2718b6bbb6ed6e4d13460300159d9a0f30443f2195"
+    },
+    {
+      "name": "zenmeta",
+      "directory": "zenmeta",
+      "features": "all",
+      "fingerprint": "66e37261bda9ed5259dff296f2f37b5c635a162da54d3653df14d68f1696360e",
+      "surface_sha256": "215784cbdafccaf81c3314a102c8233322f9260ef304392ef9c213dd08758488",
+      "details_sha256": "0dc978732939d8dd75b7b053478cb5df2e42445f3e9a1aad9b46a63d287f3dd0"
+    },
+    {
+      "name": "zencodec-render",
+      "directory": "zencodec-render",
+      "features": "all",
+      "fingerprint": "e08612c5979d6da274b47a7f38e46b9d482f7d8ccc81c2bab87fa32ae6643ec5",
+      "surface_sha256": "f10a5524d510103fbef73a7297bf45250f354490b616f6b06f278098e569b520",
+      "details_sha256": "45616386286160ad2e2eb872b7b7461f425f5b36cc9096f47a9613f79b50c230"
+    }
+  ]
+}

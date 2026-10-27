@@ -1,0 +1,60 @@
+pub mod zencodec_render
+pub mod zencodec_render::geometry
+#[non_exhaustive] pub enum zencodec_render::geometry::Refusal
+pub zencodec_render::geometry::Refusal::AuxiliaryGrid
+pub zencodec_render::geometry::Refusal::AuxiliaryGrid::dimensions: (usize, usize)
+pub zencodec_render::geometry::Refusal::AuxiliaryGrid::index: usize
+pub zencodec_render::geometry::Refusal::AuxiliaryGrid::registration: zencodec::image::AuxiliaryGrid
+pub zencodec_render::geometry::Refusal::Composition(core::option::Option<zencodec::collection::Composition>)
+pub zencodec_render::geometry::Refusal::Interpretation
+pub zencodec_render::geometry::Refusal::MissingStoredRegion
+pub zencodec_render::geometry::Refusal::MissingStoredRegion::available: zencodec::image::Rect
+pub zencodec_render::geometry::Refusal::MissingStoredRegion::required: zencodec::image::Rect
+pub zencodec_render::geometry::Refusal::Placement
+impl core::error::Error for zencodec_render::geometry::Refusal
+impl core::fmt::Display for zencodec_render::geometry::Refusal
+pub fn zencodec_render::geometry::Refusal::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct zencodec_render::geometry::ProjectionSource
+pub zencodec_render::geometry::ProjectionSource::geometry: zencodec::image::ImageGeometry
+pub zencodec_render::geometry::ProjectionSource::orientation: zenpixels::orientation::Orientation
+pub fn zencodec_render::geometry::project(image: &zencodec::image::ImageOutput, region: core::option::Option<zencodec::image::Rect>, storage: &zencodec::storage::StorageBudget, stop: &dyn enough::Stop) -> core::result::Result<zencodec::image::ImageOutput, zencodec::collection::Cause>
+#[non_exhaustive] pub enum zencodec_render::ColorTarget
+pub zencodec_render::ColorTarget::Current
+pub zencodec_render::ColorTarget::Icc(alloc::rcs::arc::Arc<[u8]>)
+pub zencodec_render::ColorTarget::Named(zenpixels::cicp::Cicp)
+#[non_exhaustive] pub enum zencodec_render::RenderStage
+pub zencodec_render::RenderStage::Color
+pub zencodec_render::RenderStage::ColorPlan
+pub zencodec_render::RenderStage::Geometry
+pub zencodec_render::RenderStage::Publication
+pub struct zencodec_render::RenderFailure
+pub zencodec_render::RenderFailure::stage: zencodec_render::RenderStage
+impl core::error::Error for zencodec_render::RenderFailure
+pub fn zencodec_render::RenderFailure::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for zencodec_render::RenderFailure
+pub fn zencodec_render::RenderFailure::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for zencodec_render::RenderFailure
+pub fn zencodec_render::RenderFailure::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct zencodec_render::RenderRequest
+pub zencodec_render::RenderRequest::conversion: zenpixels::policy::ConvertOptions
+pub zencodec_render::RenderRequest::region: core::option::Option<zencodec::image::Rect>
+pub zencodec_render::RenderRequest::required: zenpixels::descriptor::PixelDescriptor
+pub zencodec_render::RenderRequest::target: zencodec_render::ColorTarget
+impl zencodec_render::RenderRequest
+pub fn zencodec_render::RenderRequest::new(required: zenpixels::descriptor::PixelDescriptor) -> Self
+pub fn zencodec_render::RenderRequest::with_conversion(self, conversion: zenpixels::policy::ConvertOptions) -> Self
+pub fn zencodec_render::RenderRequest::with_region(self, region: core::option::Option<zencodec::image::Rect>) -> Self
+pub fn zencodec_render::RenderRequest::with_target(self, target: zencodec_render::ColorTarget) -> Self
+impl core::default::Default for zencodec_render::RenderRequest
+pub fn zencodec_render::RenderRequest::default() -> Self
+pub struct zencodec_render::Renderer<'a>
+pub zencodec_render::Renderer::cms: core::option::Option<&'a dyn zenpixels_convert::cms::PluggableCms>
+pub zencodec_render::Renderer::request: zencodec_render::RenderRequest
+pub zencodec_render::Renderer::storage: zencodec::storage::StorageBudget
+impl<'a> zencodec_render::Renderer<'a>
+pub fn zencodec_render::Renderer<'a>::new(storage: zencodec::storage::StorageBudget) -> Self
+pub fn zencodec_render::Renderer<'a>::render<R: zencodec::operation::policy::PolicyResolver + ?core::marker::Sized>(&self, image: zencodec::image::ImageOutput, resolver: &mut R, preset: zencodec::operation::policy::PolicySet, stop: &dyn enough::Stop) -> core::result::Result<zencodec::operation::Outcome<zencodec::image::ImageOutput>, whereat::at::At<zencodec_render::RenderFailure>>
+pub fn zencodec_render::Renderer<'a>::render_first<C: zencodec::collection::Collection, R: zencodec::operation::policy::PolicyResolver>(&self, images: &mut zencodec::operation::collection::CheckedCollection<C, R>) -> core::result::Result<core::option::Option<zencodec::operation::Outcome<zencodec::image::ImageOutput>>, whereat::at::At<zencodec::operation::collection::CollectionOperationError>>
+pub fn zencodec_render::Renderer<'a>::render_selected<C: zencodec::collection::Collection, R: zencodec::operation::policy::PolicyResolver>(&self, images: &mut zencodec::operation::collection::CheckedCollection<C, R>, image: &zencodec::collection::ImageId) -> core::result::Result<zencodec::operation::Outcome<zencodec::image::ImageOutput>, whereat::at::At<zencodec::operation::collection::CollectionOperationError>>
+pub fn zencodec_render::Renderer<'a>::with_cms(self, cms: &'a dyn zenpixels_convert::cms::PluggableCms) -> Self
+pub fn zencodec_render::Renderer<'a>::with_request(self, request: zencodec_render::RenderRequest) -> Self
