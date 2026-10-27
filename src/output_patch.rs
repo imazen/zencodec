@@ -15,16 +15,16 @@ pub struct Patch {
 #[derive(Debug, Default)]
 #[non_exhaustive]
 /// Remaining output and ordered replacements returned by a producer.
-pub struct OutputFinish {
+pub struct OutputFinish<T = Vec<u8>> {
     /// Bytes not yet consumed through `pending_output`.
-    pub tail: Vec<u8>,
+    pub tail: T,
     /// Earlier bytes to overwrite; empty for a forward-only layout.
     pub patches: Vec<Patch>,
 }
 
-impl OutputFinish {
+impl<T: AsRef<[u8]>> OutputFinish<T> {
     /// The remaining bytes and the patches to apply after them.
-    pub fn new(tail: Vec<u8>, patches: Vec<Patch>) -> Self {
+    pub fn new(tail: T, patches: Vec<Patch>) -> Self {
         Self { tail, patches }
     }
 
@@ -37,7 +37,7 @@ impl OutputFinish {
     /// Overlapping patches apply in their listed order. Successful validation
     /// cannot make an external writer's later I/O failures atomic.
     pub fn validate(&self, emitted_bytes: u64) -> Result<u64, PatchError> {
-        let tail = u64::try_from(self.tail.len()).map_err(|_| PatchError::OutOfRange)?;
+        let tail = u64::try_from(self.tail.as_ref().len()).map_err(|_| PatchError::OutOfRange)?;
         let total = emitted_bytes
             .checked_add(tail)
             .ok_or(PatchError::OutOfRange)?;
@@ -53,7 +53,9 @@ impl OutputFinish {
         }
         Ok(total)
     }
+}
 
+impl OutputFinish {
     /// Append the tail and apply validated patches to an in-memory stream.
     /// Validation or allocation failure leaves its length and contents unchanged.
     /// Capacity may grow on success; this does not impose a memory allowance.
@@ -91,3 +93,13 @@ impl core::fmt::Display for PatchError {
     }
 }
 impl core::error::Error for PatchError {}
+
+/// Actual output access offered to a retained encoder before any publication.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum OutputAccess {
+    /// No earlier byte can be overwritten.
+    Forward,
+    /// The retained destination supports stream-relative overwrites.
+    SeekBack,
+}

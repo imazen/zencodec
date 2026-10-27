@@ -2718,6 +2718,35 @@ position. Neither wrapper admits memory or authorizes encoder backpressure.
 Media retains `container::{MuxFinish, Patch, PatchError}` and
 `output::{Destination, Forward, SeekBack}` as aliases to these exact types.
 Existing native muxers and consumers therefore use the shared implementation
-without a migration. This removes the dependency obstacle for raster patch
-support; it does **not** yet add patch negotiation or execution to `Encoder` or
-`row_encode`, nor add bounded multi-pass source requests.
+without a migration. Raster negotiation and execution now use these shared types, as described below.
+Bounded multi-pass source requests remain unimplemented.
+
+
+### Negotiated raster seek-back
+
+`Encoder::begin_output(width, height, descriptor, OutputAccess)` binds a framing
+choice to actual destination access. Its default calls the existing forward
+`begin`; it does not change quality or metadata settings. Patching implementations
+must accept SeekBack, return `OutputTiming::with_patches()`, and complete through
+`finish_output`. Legacy begin/finish paths must never silently lose required
+patches. DynEncoder exposes both methods and the shared shim forwards overrides.
+
+`finish_output` returns `OutputFinish<EncodeOutput>`: the tail retains format,
+MIME, extensions and codec statistics. Container `OutputFinish` defaults to a
+byte vector. Both validate with the same range checks. Existing encoders use a
+provided finish adapter that transfers the original EncodeOutput without copying.
+
+For callers, `row_encode::encode` remains the forward-writer convenience;
+`encode_to_destination(..., SeekBack::new(writer)?, ...)` enables real seek-back.
+An incompatible declared layout refuses before policy, row reads or output.
+The driver preflights every final patch before tail/staged publication, rejects
+unannounced patches, then writes the tail and applies patches in order. Successful
+completion restores the final end position. `patched_bytes` reports confirmed
+overwrites separately from `emitted` appends, including partial patch failure;
+`Stage::Patch` covers seeks and overwrites. External writes are not transactional.
+
+Qualification uses a private one-frame adapter over native AV1 and IVF. It
+buffers the input raster explicitly, negotiates forward versus count-patched
+IVF, preserves a destination prefix, and independently verifies decoded samples.
+This is transport qualification, not a bounded/native streaming raster encoder.
+Production raster codec adoption and repeated-input execution remain open.

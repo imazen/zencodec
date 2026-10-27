@@ -21,6 +21,7 @@
 //!     )?)
 //! }
 //! ```
+use crate::destination::{Destination, Forward};
 use alloc::{boxed::Box, collections::VecDeque, sync::Arc};
 use core::{
     error::Error,
@@ -32,6 +33,7 @@ use std::{
     fs::File,
     io::{self, Read, Seek, SeekFrom, Write},
 };
+use zencodec::output_patch::OutputAccess;
 use zencodec::{
     At,
     encode::Encoder,
@@ -211,6 +213,8 @@ pub enum Stage {
     Replay,
     /// Write or flush the final destination.
     Write,
+    /// Seek or overwrite final patches, including restoration to the output end.
+    Patch,
 }
 /// Driver contract refusal.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -224,6 +228,8 @@ pub enum Refusal {
     SourceChanged,
     /// Total encoded bytes exceed the supplied output allowance.
     OutputLimit,
+    /// Layout requires unavailable or unannounced seek-back writes.
+    Patches,
 }
 impl fmt::Display for Refusal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -238,6 +244,8 @@ pub struct Failure {
     pub stage: Stage,
     /// Confirmed destination appends, including partial writes.
     pub emitted: u64,
+    /// Confirmed overwritten bytes, separate from appended extent.
+    pub patched_bytes: u64,
     /// Bounded policy history, including after later source/codec/I/O failure.
     pub report: Box<OperationReport>,
     cause: Cause,
@@ -247,6 +255,7 @@ impl fmt::Debug for Failure {
         f.debug_struct("RowEncodeFailure")
             .field("stage", &self.stage)
             .field("emitted", &self.emitted)
+            .field("patched_bytes", &self.patched_bytes)
             .field("report", &self.report)
             .finish_non_exhaustive()
     }
@@ -270,6 +279,8 @@ impl Error for Failure {
 pub struct Completed {
     /// Confirmed appended bytes.
     pub emitted: u64,
+    /// Confirmed overwritten bytes, separate from appended extent.
+    pub patched_bytes: u64,
     /// Executed schedule.
     pub schedule: OutputSchedule,
     /// Decisions made before source reads and final output writes.
@@ -390,15 +401,32 @@ fn stage(
 /// Cancellation is checked around native calls and each writer operation; it
 /// cannot interrupt a blocking OS write. No retries or implicit finish on drop.
 pub fn encode<E: Encoder, S: Source, W: Write, R: PolicyResolver>(
+    encoder: E,
+    source: S,
+    writer: W,
+    resolver: R,
+    options: Options,
+    stop: &dyn Stop,
+) -> Result<Completed, At<Failure>> {
+    encode_to_destination(encoder, source, Forward(writer), resolver, options, stop)
+}
+
+/// Encode to an actual forward or seek-back destination. Layout admission occurs
+/// before policy, source reads and output publication. Patches are fully checked
+/// before final tail writes. I/O failure can leave partial overwrites; their
+/// confirmed byte count is distinct from appended extent. No automatic spooling
+/// converts a forward destination into a seekable one.
+pub fn encode_to_destination<E: Encoder, S: Source, D: Destination, R: PolicyResolver>(
     mut encoder: E,
     mut source: S,
-    mut writer: W,
+    mut writer: D,
     mut resolver: R,
     mut options: Options,
     stop: &dyn Stop,
 ) -> Result<Completed, At<Failure>> {
     let mut boundary = Stage::Prepare;
     let mut emitted = 0;
+    let mut patched_bytes = 0;
     let mut report = OperationReport::default();
     let run = || -> Result<OutputSchedule, Cause> {
         check(stop)?;
@@ -413,7 +441,15 @@ pub fn encode<E: Encoder, S: Source, W: Write, R: PolicyResolver>(
         let rows = options.batch_rows.get().min(desc.height);
         let len = stride.checked_mul(rows as usize).ok_or(Refusal::Overflow)?;
         let mut buffer = options.storage.bytes(len)?;
-        let timing = encoder.begin(desc.width, desc.height, desc.descriptor)?;
+        let access = if writer.can_patch() {
+            OutputAccess::SeekBack
+        } else {
+            OutputAccess::Forward
+        };
+        let timing = encoder.begin_output(desc.width, desc.height, desc.descriptor, access)?;
+        if timing.patches_at_finish() && !writer.can_patch() {
+            return Err(Refusal::Patches.into());
+        }
         check(stop)?;
         let mut finish_first = OutputScheduleOffer::new(OutputSchedule::FinishFirst);
         finish_first.staging = Some(StagingFacts::new(
@@ -513,8 +549,14 @@ pub fn encode<E: Encoder, S: Source, W: Write, R: PolicyResolver>(
         drop(desc);
         boundary = Stage::Finish;
         check(stop)?;
-        let rest = encoder.finish()?;
+        let finished = encoder.finish_output()?;
         check(stop)?;
+        finished.validate(produced)?;
+        if !finished.patches.is_empty() && (!writer.can_patch() || !timing.patches_at_finish()) {
+            return Err(Refusal::Patches.into());
+        }
+        let patches = finished.patches;
+        let rest = finished.tail;
         count(&mut produced, rest.len(), options.max_output_bytes)?;
         if schedule == OutputSchedule::FinishFirst {
             if let Some(disk) = &mut options.disk {
@@ -542,6 +584,15 @@ pub fn encode<E: Encoder, S: Source, W: Write, R: PolicyResolver>(
             write_all(&mut writer, rest.data(), &mut emitted, stop)?;
         }
         check(stop)?;
+        if !patches.is_empty() {
+            boundary = Stage::Patch;
+            for patch in patches {
+                check(stop)?;
+                writer.position(patch.offset)?;
+                write_all(&mut writer, &patch.bytes, &mut patched_bytes, stop)?;
+            }
+            writer.position(produced)?;
+        }
         boundary = Stage::Write;
         writer.flush()?;
         check(stop)?;
@@ -550,12 +601,14 @@ pub fn encode<E: Encoder, S: Source, W: Write, R: PolicyResolver>(
     match run() {
         Ok(schedule) => Ok(Completed {
             emitted,
+            patched_bytes,
             schedule,
             report,
         }),
         Err(cause) => Err(At::wrap(Failure {
             stage: boundary,
             emitted,
+            patched_bytes,
             report: Box::new(report),
             cause,
         })),
@@ -582,5 +635,168 @@ mod tests {
             .with_color_context(context);
         source.read_rows(0, view, &enough::Unstoppable).unwrap();
         assert_eq!(output, [1, 2, 3, 77, 77, 77, 77, 77, 77, 4, 5, 6]);
+    }
+}
+
+#[cfg(test)]
+mod patch_tests {
+    use super::*;
+    use crate::destination::SeekBack;
+    use zencodec::{
+        encode::{EncodeOutput, OutputTiming},
+        output_patch::{OutputFinish, Patch, PatchError},
+    };
+    struct Patching {
+        pending: bool,
+        bad: bool,
+    }
+    impl Encoder for Patching {
+        type Error = io::Error;
+        fn reject(op: zencodec::UnsupportedOperation) -> Self::Error {
+            io::Error::other(op)
+        }
+        fn encode(self, _: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error> {
+            Err(io::Error::other("negotiated path only"))
+        }
+        fn begin_output(
+            &mut self,
+            _: u32,
+            _: u32,
+            _: PixelDescriptor,
+            _: OutputAccess,
+        ) -> Result<OutputTiming, Self::Error> {
+            self.pending = true;
+            Ok(OutputTiming::streaming(0).with_patches())
+        }
+        fn pending_output(&self) -> &[u8] {
+            if self.pending { &[0, 0] } else { &[] }
+        }
+        fn consume_output(&mut self, _: usize) {
+            self.pending = false;
+        }
+        fn push_rows(&mut self, _: PixelSlice<'_>) -> Result<(), Self::Error> {
+            Ok(())
+        }
+        fn finish_output(self) -> Result<OutputFinish<EncodeOutput>, Self::Error> {
+            Ok(OutputFinish::new(
+                EncodeOutput::new(alloc::vec![3], zencodec::ImageFormat::Unknown),
+                alloc::vec![Patch {
+                    offset: if self.bad { u64::MAX } else { 0 },
+                    bytes: alloc::vec![1, 2],
+                }],
+            ))
+        }
+    }
+    struct Short {
+        cursor: io::Cursor<alloc::vec::Vec<u8>>,
+        patch: bool,
+        fail: bool,
+    }
+    impl Write for Short {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            if self.patch && self.fail && self.cursor.position() == 7 {
+                return Err(io::ErrorKind::BrokenPipe.into());
+            }
+            self.cursor.write(&bytes[..bytes.len().min(1)])
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+    impl Seek for Short {
+        fn seek(&mut self, from: SeekFrom) -> io::Result<u64> {
+            if matches!(from, SeekFrom::Start(6)) {
+                self.patch = true;
+            }
+            self.cursor.seek(from)
+        }
+    }
+    fn source() -> Raster<'static> {
+        Raster::new(PixelSlice::new(&[7, 8, 9], 1, 1, 3, PixelDescriptor::RGB8_SRGB).unwrap())
+    }
+    fn options() -> Options {
+        Options::new(StorageBudget::new(1024, 16), 1024)
+    }
+    #[test]
+    fn incompatible_destination_refuses_before_policy_or_any_output() {
+        let mut bytes = alloc::vec::Vec::new();
+        let error =
+            encode(
+                Patching {
+                    pending: false,
+                    bad: false,
+                },
+                source(),
+                &mut bytes,
+                |_: zencodec::operation::Question<'_>| -> Result<
+                    zencodec::operation::Decision,
+                    zencodec::At<core::convert::Infallible>,
+                > { panic!("must refuse before policy") },
+                options(),
+                &enough::Unstoppable,
+            )
+            .unwrap_err();
+        assert!(bytes.is_empty());
+        assert_eq!(
+            zencodec::find_cause::<Refusal>(&error),
+            Some(&Refusal::Patches)
+        );
+        assert_eq!(error.error().emitted, 0);
+    }
+    #[test]
+    fn patches_preflight_all_ranges_and_report_partial_overwrites_separately() {
+        for schedule in [OutputSchedule::FinishFirst, OutputSchedule::Live] {
+            for (bad, fail) in [(false, false), (true, false), (false, true)] {
+                let mut writer = Short {
+                    cursor: io::Cursor::new(b"prefix".to_vec()),
+                    patch: false,
+                    fail,
+                };
+                writer.cursor.set_position(6);
+                let result = encode_to_destination(
+                    Patching {
+                        pending: false,
+                        bad,
+                    },
+                    source(),
+                    SeekBack::new(&mut writer).unwrap(),
+                    PolicySet::new().require_output_schedule(schedule),
+                    options(),
+                    &enough::Unstoppable,
+                );
+                assert_eq!(&writer.cursor.get_ref()[..6], b"prefix");
+                if bad {
+                    let error = result.unwrap_err();
+                    assert_eq!(
+                        zencodec::find_cause::<PatchError>(&error),
+                        Some(&PatchError::OutOfRange)
+                    );
+                    let prior = if schedule == OutputSchedule::Live {
+                        2
+                    } else {
+                        0
+                    };
+                    assert_eq!(error.error().emitted, prior);
+                    assert_eq!(writer.cursor.get_ref().len(), 6 + prior as usize);
+                    assert_eq!(error.error().patched_bytes, 0);
+                } else if fail {
+                    let error = result.unwrap_err();
+                    assert_eq!(error.error().stage, Stage::Patch);
+                    assert_eq!(error.error().emitted, 3);
+                    assert_eq!(error.error().patched_bytes, 1);
+                    assert_eq!(
+                        zencodec::find_cause::<io::Error>(&error).unwrap().kind(),
+                        io::ErrorKind::BrokenPipe
+                    );
+                    assert_eq!(&writer.cursor.get_ref()[6..], &[1, 0, 3]);
+                } else {
+                    let completed = result.unwrap();
+                    assert_eq!(completed.emitted, 3);
+                    assert_eq!(completed.patched_bytes, 2);
+                    assert_eq!(writer.cursor.position(), 9);
+                    assert_eq!(&writer.cursor.get_ref()[6..], &[1, 2, 3]);
+                }
+            }
+        }
     }
 }

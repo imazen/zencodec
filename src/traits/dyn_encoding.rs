@@ -82,6 +82,27 @@ pub trait DynEncoder: Send {
         Err(Box::new(crate::UnsupportedOperation::RowLevelEncode))
     }
 
+    /// Prepare actual destination access; see [`Encoder::begin_output`].
+    fn begin_output(
+        &mut self,
+        width: u32,
+        height: u32,
+        descriptor: PixelDescriptor,
+        access: crate::output_patch::OutputAccess,
+    ) -> Result<crate::encode::OutputTiming, BoxedError> {
+        let _ = access;
+        self.begin(width, height, descriptor)
+    }
+    /// Complete negotiated bytes and patches; see [`Encoder::finish_output`].
+    fn finish_output(
+        self: Box<Self>,
+    ) -> Result<crate::output_patch::OutputFinish<EncodeOutput>, BoxedError> {
+        Ok(crate::output_patch::OutputFinish::new(
+            self.finish()?,
+            alloc::vec::Vec::new(),
+        ))
+    }
+
     /// Encoded bytes ready to send; see
     /// [`Encoder::pending_output`](super::Encoder::pending_output).
     fn pending_output(&self) -> &[u8] {
@@ -122,6 +143,25 @@ impl core::fmt::Debug for dyn DynEncoder + '_ {
 pub(super) struct EncoderShim<E>(pub(super) E);
 
 impl<E: Encoder + Send> DynEncoder for EncoderShim<E> {
+    fn begin_output(
+        &mut self,
+        width: u32,
+        height: u32,
+        descriptor: PixelDescriptor,
+        access: crate::output_patch::OutputAccess,
+    ) -> Result<crate::encode::OutputTiming, BoxedError> {
+        self.0
+            .begin_output(width, height, descriptor, access)
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+    fn finish_output(
+        self: Box<Self>,
+    ) -> Result<crate::output_patch::OutputFinish<EncodeOutput>, BoxedError> {
+        self.0
+            .finish_output()
+            .map_err(|e| Box::new(e) as BoxedError)
+    }
+
     fn preferred_strip_height(&self) -> u32 {
         self.0.preferred_strip_height()
     }
@@ -920,5 +960,66 @@ mod timing_dispatch_tests {
             generic.finish(None).unwrap().data(),
             erased.finish(None).unwrap().data()
         );
+    }
+}
+
+#[cfg(test)]
+mod negotiated_output_tests {
+    use super::*;
+    use crate::output_patch::{OutputAccess, OutputFinish, Patch};
+    struct Patching(bool);
+    impl Encoder for Patching {
+        type Error = crate::UnsupportedOperation;
+        fn reject(op: Self::Error) -> Self::Error {
+            op
+        }
+        fn encode(self, _: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error> {
+            Err(crate::UnsupportedOperation::RowLevelEncode)
+        }
+        fn begin_output(
+            &mut self,
+            _: u32,
+            _: u32,
+            _: PixelDescriptor,
+            access: OutputAccess,
+        ) -> Result<crate::encode::OutputTiming, Self::Error> {
+            if access != OutputAccess::SeekBack {
+                return Err(crate::UnsupportedOperation::RowLevelEncode);
+            }
+            self.0 = true;
+            Ok(crate::encode::OutputTiming::AT_FINISH.with_patches())
+        }
+        fn finish_output(self) -> Result<OutputFinish<EncodeOutput>, Self::Error> {
+            assert!(self.0);
+            Ok(OutputFinish::new(
+                EncodeOutput::new(alloc::vec![0], ImageFormat::Jpeg)
+                    .with_extras(7u32)
+                    .with_extension("qualified"),
+                alloc::vec![Patch {
+                    offset: 0,
+                    bytes: alloc::vec![9]
+                }],
+            ))
+        }
+    }
+    #[test]
+    fn erased_encoder_forwards_negotiation_patches_and_output_metadata() {
+        let mut encoder: Box<dyn DynEncoder> = Box::new(EncoderShim(Patching(false)));
+        assert!(
+            encoder
+                .begin_output(1, 1, PixelDescriptor::RGB8_SRGB, OutputAccess::Forward)
+                .is_err()
+        );
+        assert!(
+            encoder
+                .begin_output(1, 1, PixelDescriptor::RGB8_SRGB, OutputAccess::SeekBack)
+                .unwrap()
+                .patches_at_finish()
+        );
+        let finish = encoder.finish_output().unwrap();
+        assert_eq!(finish.validate(0).unwrap(), 1);
+        assert_eq!(finish.tail.extras::<u32>(), Some(&7));
+        assert_eq!(finish.tail.extension(), "qualified");
+        assert_eq!(finish.patches[0].bytes, [9]);
     }
 }

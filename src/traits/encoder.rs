@@ -172,6 +172,33 @@ pub trait Encoder: Sized {
         Err(Self::reject(crate::UnsupportedOperation::RowLevelEncode))
     }
 
+    /// Prepare row encoding for actual destination access. The default uses
+    /// the existing forward-only begin path without changing configuration.
+    /// A patching implementation must refuse Forward before exposing bytes,
+    /// report `OutputTiming::with_patches`, and complete with `finish_output`.
+    /// Legacy `begin`/`finish` must never silently discard required patches.
+    /// Access permits framing choices, never implicit quality/metadata changes.
+    fn begin_output(
+        &mut self,
+        width: u32,
+        height: u32,
+        descriptor: PixelDescriptor,
+        access: crate::output_patch::OutputAccess,
+    ) -> Result<crate::encode::OutputTiming, Self::Error> {
+        let _ = access;
+        self.begin(width, height, descriptor)
+    }
+
+    /// Complete negotiated output, retaining ordered patches for the driver.
+    /// The default transfers the legacy finish allocation without copying.
+    /// The tail retains EncodeOutput format, MIME and extension/statistics data.
+    fn finish_output(self) -> Result<crate::output_patch::OutputFinish<EncodeOutput>, Self::Error> {
+        Ok(crate::output_patch::OutputFinish::new(
+            self.finish()?,
+            Vec::new(),
+        ))
+    }
+
     /// Encoded bytes ready to send, not yet consumed.
     ///
     /// Encoders whose [`begin`](Self::begin) reported a streaming

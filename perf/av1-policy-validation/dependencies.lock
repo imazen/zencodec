@@ -150,6 +150,7 @@ dependencies = [
  "rav1d-safe",
  "zenavif",
  "zencodec",
+ "zencodec-io",
  "zencodec-media",
  "zenivf",
  "zenmp4",

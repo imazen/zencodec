@@ -2,6 +2,10 @@
 
 ## Native image selection (unreleased experiment)
 
+- Negotiate actual raster output access through typed/dyn Encoder methods;
+  retain tail metadata and ordered patches. Execute seek-back through the row
+  driver with preflight and separate confirmed append/overwrite accounting.
+
 - Share output finish/patch types in the core and actual writer wrappers in
   zencodec-io. Media aliases preserve existing native muxer/consumer paths.
 

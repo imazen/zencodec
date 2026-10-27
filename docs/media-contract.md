@@ -560,3 +560,28 @@ partial writes and terminal cancellation. Receipt:
 Strict default Rustdoc and the API-documentation gate also pass. This qualifies
 the common implementation through media; it is not native raster-patch support
 or a new performance/memory measurement. No zenpixels changes were needed.
+
+
+Raster output negotiation now executes through the shared completion types:
+`Encoder::{begin_output, finish_output}` and their dyn equivalents,
+`OutputTiming::{with_patches, patches_at_finish}`, and
+`row_encode::encode_to_destination`. Generic OutputFinish retains EncodeOutput
+metadata for raster tails and defaults to Vec for media compatibility. The row
+driver separates confirmed overwrite bytes from appends and preflights all
+patch ranges before final effects. Its ordinary encode convenience stays forward.
+
+Reasoning: actual destination access is an execution input, not an advisory
+capability query. Final patches must survive type erasure and completion; placing
+them in opaque extras would let existing callers silently discard required work.
+A single shared validator avoids separate raster/container range semantics.
+No source-replay, quality change or disk fallback is inferred from seek support.
+
+Validation on 2026-10-27: workspace tests and strict lint pass, including typed
+patch refusal before policy, invalid-range preflight under both schedules,
+partial overwrite accounting and dyn preservation of tail metadata/patches.
+All 14 native mux-output tests pass. The added private single-raster adapter
+runs native AV1 plus IVF's real count patch; independent readback matches the
+input and prefixed seek-back output returns to its end. This adapter buffers
+its raster: no bounded-memory claim or production raster-codec adoption follows.
+Resource receipt: `rc=0 27s | peak-RSS 0.58GiB | min-avail 12708MiB | peak-load 0.59`.
+No zenpixels changes were needed.

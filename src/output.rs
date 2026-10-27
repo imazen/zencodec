@@ -49,13 +49,17 @@ const _: () = assert!(core::mem::size_of::<EncodeOutput>() == 96);
 pub struct OutputTiming {
     /// `None`: everything arrives from `finish`.
     lag_rows: Option<u32>,
+    patches: bool,
 }
 
 impl OutputTiming {
     /// All encoded bytes arrive from
     /// [`Encoder::finish`](crate::encode::Encoder::finish);
     /// [`pending_output`](crate::encode::Encoder::pending_output) stays empty.
-    pub const AT_FINISH: Self = Self { lag_rows: None };
+    pub const AT_FINISH: Self = Self {
+        lag_rows: None,
+        patches: false,
+    };
 
     /// Encoded bytes stream through
     /// [`pending_output`](crate::encode::Encoder::pending_output) as rows
@@ -73,7 +77,20 @@ impl OutputTiming {
     pub const fn streaming(lag_rows: u32) -> Self {
         Self {
             lag_rows: Some(lag_rows),
+            patches: false,
         }
+    }
+
+    /// Require ordered finish patches. Only `Encoder::begin_output` may return
+    /// this layout, and only after accepting a seek-back destination.
+    pub const fn with_patches(mut self) -> Self {
+        self.patches = true;
+        self
+    }
+
+    /// Whether finalization may overwrite earlier bytes.
+    pub const fn patches_at_finish(&self) -> bool {
+        self.patches
     }
 
     /// Whether bytes become available before `finish`.

@@ -236,11 +236,11 @@ operation-sync export:
     test ! -e "{{export}}/.jj"
     mkdir -p "{{export}}/src/operation" "{{export}}/src/collection" "{{export}}/src/image"
     cp Cargo.toml "{{export}}/Cargo.toml"
-    cp src/storage.rs src/output_patch.rs src/operation.rs src/lib.rs src/set.rs src/info.rs src/frame.rs src/frame_storage.rs src/image.rs src/resolution.rs src/collection.rs "{{export}}/src/"
+    cp src/output.rs src/storage.rs src/output_patch.rs src/operation.rs src/lib.rs src/set.rs src/info.rs src/frame.rs src/frame_storage.rs src/image.rs src/resolution.rs src/collection.rs "{{export}}/src/"
     cp src/collection/*.rs "{{export}}/src/collection/"
     cp src/image/*.rs "{{export}}/src/image/"
     cp src/operation/*.rs "{{export}}/src/operation/"
-    cp src/traits/encoding.rs src/traits/dyn_encoding.rs src/traits/mod.rs "{{export}}/src/traits/"
+    cp src/traits/encoder.rs src/traits/encoding.rs src/traits/dyn_encoding.rs src/traits/mod.rs "{{export}}/src/traits/"
     cp zencodec-testkit/tests/operation_*.rs "{{export}}/zencodec-testkit/tests/"
     cp justfile "{{export}}/justfile"
 
@@ -1286,9 +1286,13 @@ compile-adapters-report root log receipt:
 output-patch-sync export:
     just av1-policy-sync "{{export}}"
     cp src/output_patch.rs "{{export}}/src/"
-    cp zencodec-io/src/lib.rs zencodec-io/src/destination.rs "{{export}}/zencodec-io/src/"
+    cp zencodec-io/src/row_encode.rs zencodec-io/src/lib.rs zencodec-io/src/destination.rs "{{export}}/zencodec-io/src/"
 
 output-patch-check artifacts:
     cargo test --workspace --all-features --locked
     cargo clippy -p zencodec -p zencodec-io -p zencodec-media --all-targets --all-features --locked -- -D warnings
     AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked mux_native_ -- --nocapture --test-threads=1
+
+raster-output-native-check artifacts:
+    AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked mux_native_raster_ -- --nocapture
+    cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings

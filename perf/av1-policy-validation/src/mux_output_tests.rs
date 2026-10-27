@@ -1106,3 +1106,179 @@ fn mux_native_coupled_policy_refusal_drops_prepared_destination_without_publicat
 
 #[path = "staged_encode_tests.rs"]
 mod staged_encode;
+
+// A qualification adapter: one packed raster becomes one native AV1 frame in
+// IVF. It buffers the raster explicitly; this tests patch transport, not bounded
+// encoding or an efficient native raster implementation.
+struct RasterIvf {
+    settings: zenavif::media::Av1EncodeSettings,
+    bytes: Vec<u8>,
+    seek: bool,
+}
+impl zencodec::encode::Encoder for RasterIvf {
+    type Error = io::Error;
+    fn reject(op: zencodec::UnsupportedOperation) -> Self::Error {
+        io::Error::other(op)
+    }
+    fn encode(
+        self,
+        _: zenpixels::PixelSlice<'_>,
+    ) -> Result<zencodec::encode::EncodeOutput, Self::Error> {
+        Err(io::Error::other("qualification uses negotiated rows"))
+    }
+    fn begin_output(
+        &mut self,
+        w: u32,
+        h: u32,
+        desc: zenpixels::PixelDescriptor,
+        access: zencodec::output_patch::OutputAccess,
+    ) -> Result<zencodec::encode::OutputTiming, Self::Error> {
+        if w != self.settings.width
+            || h != self.settings.height
+            || desc != zenpixels::PixelDescriptor::RGB8_SRGB
+        {
+            return Err(io::Error::other("unexpected raster declaration"));
+        }
+        self.seek = access == zencodec::output_patch::OutputAccess::SeekBack;
+        Ok(if self.seek {
+            zencodec::encode::OutputTiming::AT_FINISH.with_patches()
+        } else {
+            zencodec::encode::OutputTiming::AT_FINISH
+        })
+    }
+    fn push_rows(&mut self, rows: zenpixels::PixelSlice<'_>) -> Result<(), Self::Error> {
+        for y in 0..rows.rows() {
+            self.bytes.extend_from_slice(rows.row(y));
+        }
+        Ok(())
+    }
+    fn finish_output(
+        self,
+    ) -> Result<zencodec::output_patch::OutputFinish<zencodec::encode::EncodeOutput>, Self::Error>
+    {
+        let frame = rgb_frame(&self.settings, &self.bytes);
+        let (config, packets) = encode(self.settings, &[frame]);
+        let mut mux = zenivf::IvfMuxer::new().with_count_patch();
+        mux.begin(
+            &[track(&config)],
+            if self.seek {
+                MuxHint::default()
+            } else {
+                MuxHint::forward_only()
+            },
+        )
+        .map_err(io::Error::other)?;
+        let mut bytes = Vec::new();
+        mux.take_output(&mut bytes);
+        for packet in packets {
+            mux.write_packet(packet, &Unstoppable)
+                .map_err(io::Error::other)?;
+            mux.take_output(&mut bytes);
+        }
+        let finish = mux.finish(&Unstoppable).map_err(io::Error::other)?;
+        bytes.extend_from_slice(&finish.tail);
+        Ok(zencodec::output_patch::OutputFinish::new(
+            zencodec::encode::EncodeOutput::new(bytes, zencodec::ImageFormat::Unknown)
+                .with_extension("ivf")
+                .with_mime_type("video/x-ivf"),
+            finish.patches,
+        ))
+    }
+}
+fn rgb_frame(s: &zenavif::media::Av1EncodeSettings, rgb: &[u8]) -> zencodec_media::frame::Frame {
+    use std::sync::Arc;
+    use zencodec_media::frame::*;
+    assert_eq!(rgb.len(), s.width as usize * s.height as usize * 3);
+    let encoding = SampleEncoding::new(zenpixels::ChannelType::U8, 8, 0).unwrap();
+    let planes = [1, 2, 0]
+        .into_iter()
+        .map(|c| OwnedPlane {
+            data: PlaneData::U8(rgb.as_chunks::<3>().0.iter().map(|p| p[c]).collect()),
+            width: s.width as usize,
+            height: s.height as usize,
+            stride_bytes: s.width as usize,
+        })
+        .collect();
+    let mut interpretation = FrameInterpretation::new(
+        FrameGeometry::full(s.width, s.height),
+        Subsampling::Yuv444,
+        s.siting,
+        encoding,
+        vec![PlaneRole::Green, PlaneRole::Blue, PlaneRole::Red],
+    );
+    interpretation.color = zencodec::frame::ColorClaim::new(None, None, Some(s.color));
+    Frame::new(
+        Arc::new(OwnedPlanes::new(planes, encoding).unwrap()),
+        Arc::new(interpretation),
+        FrameTiming::at(zencodec::time::Timestamp::new(0, TB)).with_duration_ticks(40),
+        Presentation::default(),
+    )
+}
+#[test]
+fn mux_native_raster_destination_negotiates_and_applies_real_ivf_count_patch() {
+    use zencodec::{operation::PolicySet, storage::StorageBudget};
+    use zencodec_io::row_encode::{self, Options, Raster};
+    let s = settings(8, Subsampling::Yuv444, true);
+    let stride = s.width as usize * 3 + 6;
+    let mut data = vec![0xa5; stride * s.height as usize];
+    let mut packed = Vec::new();
+    for y in 0..s.height as usize {
+        for x in 0..s.width as usize * 3 {
+            data[y * stride + x] = (x * 19 + y * 37) as u8;
+            packed.push(data[y * stride + x]);
+        }
+    }
+    let expected = rgb_frame(&s, &packed);
+    let view = || {
+        zenpixels::PixelSlice::new(
+            &data,
+            s.width,
+            s.height,
+            stride,
+            zenpixels::PixelDescriptor::RGB8_SRGB,
+        )
+        .unwrap()
+    };
+    let options = || Options::new(StorageBudget::new(1 << 20, 1024), 1 << 20);
+    let encoder = || RasterIvf {
+        settings: s.clone(),
+        bytes: Vec::new(),
+        seek: false,
+    };
+    let mut forward = Vec::new();
+    let result = row_encode::encode(
+        encoder(),
+        Raster::new(view()),
+        &mut forward,
+        PolicySet::new(),
+        options(),
+        &Unstoppable,
+    )
+    .unwrap();
+    assert_eq!(result.patched_bytes, 0);
+    let mut disk = io::Cursor::new(b"prefix".to_vec());
+    disk.set_position(6);
+    let result = row_encode::encode_to_destination(
+        encoder(),
+        Raster::new(view()),
+        SeekBack::new(&mut disk).unwrap(),
+        PolicySet::new(),
+        options(),
+        &Unstoppable,
+    )
+    .unwrap();
+    assert_eq!(result.patched_bytes, 4);
+    assert_eq!(disk.position(), 6 + result.emitted);
+    let bytes = disk.into_inner();
+    assert_eq!(&bytes[..6], b"prefix");
+    assert_eq!(u32::from_le_bytes(bytes[30..34].try_into().unwrap()), 1);
+    oracle_container(
+        &root(),
+        "raster-forward",
+        "ivf",
+        &s,
+        &forward,
+        std::slice::from_ref(&expected),
+    );
+    oracle_container(&root(), "raster-seek", "ivf", &s, &bytes[6..], &[expected]);
+}
