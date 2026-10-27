@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 zencodec = { path = "../..", version = ">=0.1.27, <0.3.0", features = ["std"] }
-zencodec-media = { path = "../../zencodec-media" }
+zencodec-media = { path = "../../zencodec-media", features = ["std"] }
 zenpixels = ">=0.2.16, <0.4.0"
 zenpixels-convert = { version = ">=0.2.16, <0.4.0", default-features = false }
 enough = "0.4.4"

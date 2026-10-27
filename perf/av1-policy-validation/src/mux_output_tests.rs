@@ -34,7 +34,7 @@ fn track(config: &CodecConfig) -> TrackInfo {
 #[test]
 fn mux_native_checked_legacy_support_refuses_before_header() {
     let mut bytes = Vec::new();
-    let failure = match Output::new_checked(
+    let failure = match Output::new(
         zenivf::IvfMuxer::new(),
         Forward(&mut bytes),
         &[],
@@ -164,7 +164,7 @@ impl Muxer for ExactMp4 {
 }
 
 fn write_exact<D: Destination>(destination: D, info: &TrackInfo, packets: &[Packet]) -> Stats {
-    let mut output = Output::new_checked(
+    let mut output = Output::new(
         ExactMp4(zenmp4::Mp4Muxer::new()),
         destination,
         std::slice::from_ref(info),
@@ -303,14 +303,14 @@ fn mux_native_exact_timing_packet_refusal_is_terminal_with_prior_progress() {
         packets[0].clone().with_duration_ticks(u64::MAX),
     ] {
         let mut bytes = Vec::new();
-        let mut output = Output::new_checked(
+        let mut output = Output::new(
             ExactMp4(zenmp4::Mp4Muxer::new()),
             Forward(&mut bytes),
             &[track(&config)],
             &Unstoppable,
         )
         .unwrap();
-        let before = output.stats.emitted;
+        let before = output.stats().emitted;
         let failure = output.send(invalid, &Unstoppable).unwrap_err();
         assert!(matches!(failure.stage, Stage::Packet));
         assert_eq!(failure.emitted, before);
@@ -359,7 +359,8 @@ fn run<M: Muxer>(make: impl Fn() -> M, extension: &str, forward: bool, bits: u8)
             writer: &mut bytes,
             interrupted: false,
         });
-        let mut output = Output::new(make(), destination, &[track], &Unstoppable).unwrap();
+        let mut output =
+            Output::with_container_timing(make(), destination, &[track], &Unstoppable).unwrap();
         for packet in packets {
             output.send(packet, &Unstoppable).unwrap();
         }
@@ -381,7 +382,8 @@ fn run<M: Muxer>(make: impl Fn() -> M, extension: &str, forward: bool, bits: u8)
             interrupted: false,
         })
         .unwrap();
-        let mut output = Output::new(make(), destination, &[track], &Unstoppable).unwrap();
+        let mut output =
+            Output::with_container_timing(make(), destination, &[track], &Unstoppable).unwrap();
         for packet in packets {
             output.send(packet, &Unstoppable).unwrap();
         }
@@ -440,9 +442,14 @@ fn mismatched<M: Muxer>(make: impl Fn() -> M) {
     let (config, packets) = encode(settings, &frames);
     for epoch in [false, true] {
         let mut bytes = Vec::new();
-        let mut output =
-            Output::new(make(), Forward(&mut bytes), &[track(&config)], &Unstoppable).unwrap();
-        let before = output.stats.emitted;
+        let mut output = Output::with_container_timing(
+            make(),
+            Forward(&mut bytes),
+            &[track(&config)],
+            &Unstoppable,
+        )
+        .unwrap();
+        let before = output.stats().emitted;
         let bad = if epoch {
             packets[0].clone().with_config_epoch(config.epoch + 1)
         } else {
@@ -499,7 +506,7 @@ fn partial_header<M: Muxer>(make: impl Fn() -> M) {
     let settings = settings(8, Subsampling::Yuv420, false);
     let (config, _) = encode(settings.clone(), &[frame(&settings, 0)]);
     let mut bytes = Vec::new();
-    let error = match Output::new(
+    let error = match Output::with_container_timing(
         make(),
         Forward(Broken {
             bytes: &mut bytes,
@@ -579,7 +586,7 @@ fn mux_native_invalid_final_patch_changes_neither_tail_nor_previous_bytes() {
         .create_new(true)
         .open(&path)
         .unwrap();
-    let mut output = Output::new(
+    let mut output = Output::with_container_timing(
         BadFinish(zenmp4::Mp4Muxer::new()),
         SeekBack::new(&mut file).unwrap(),
         &[track(&config)],
@@ -616,7 +623,7 @@ fn shifted_origin<M: Muxer>(make: impl Fn() -> M, extension: &str, forward: bool
         .collect();
     let mut writer = std::io::Cursor::new(Vec::new());
     let result = if forward {
-        let mut output = Output::new(
+        let mut output = Output::with_container_timing(
             make(),
             Forward(&mut writer),
             &[track(&config)],
@@ -628,7 +635,7 @@ fn shifted_origin<M: Muxer>(make: impl Fn() -> M, extension: &str, forward: bool
         }
         output.finish(&Unstoppable)
     } else {
-        let mut output = Output::new(
+        let mut output = Output::with_container_timing(
             make(),
             SeekBack::new(&mut writer).unwrap(),
             &[track(&config)],
@@ -736,7 +743,7 @@ fn mux_native_stop_during_packet_write_keeps_reason_and_cannot_resume() {
             reason,
         };
         let mut bytes = Vec::new();
-        let mut output = Output::new(
+        let mut output = Output::with_container_timing(
             zenivf::IvfMuxer::new(),
             Forward(TrippingWriter {
                 bytes: &mut bytes,
@@ -746,7 +753,7 @@ fn mux_native_stop_during_packet_write_keeps_reason_and_cannot_resume() {
             &stop,
         )
         .unwrap();
-        let header = output.stats.emitted;
+        let header = output.stats().emitted;
         stop.armed.store(true, std::sync::atomic::Ordering::SeqCst);
         let error = output.send(packets[0].clone(), &stop).unwrap_err();
         assert_eq!(error.emitted, header + 7);
@@ -830,7 +837,7 @@ fn mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing() {
                 Some(offer),
                 |config| {
                     if i == 0 {
-                        let output = PreparedOutput::new_checked(
+                        let output = PreparedOutput::new(
                             ExactMp4(zenmp4::Mp4Muxer::new()),
                             Forward(Short {
                                 writer: writer.take().unwrap(),
@@ -839,6 +846,7 @@ fn mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing() {
                             &[track(config)],
                             &Unstoppable,
                         )?;
+                        assert!(!output.timing().patches_at_finish());
                         preparations.set(preparations.get() + 1);
                         Ok(Some(output))
                     } else {
@@ -910,7 +918,7 @@ fn mux_native_coupled_partial_header_failure_terminates_encoder_and_retains_caus
     let failure = operation
         .publish_header(
             |config| {
-                let _output = Output::new_checked(
+                let _output = Output::new(
                     ExactMp4(zenmp4::Mp4Muxer::new()),
                     Forward(Broken {
                         bytes: &mut bytes,
@@ -982,7 +990,7 @@ fn mux_native_coupled_destination_refusal_precedes_policy_and_conversion() {
         (input.interpretation(), input.timing()),
         None,
         |config| {
-            Ok(PreparedOutput::new_checked(
+            Ok(PreparedOutput::new(
                 zenivf::IvfMuxer::new(),
                 Forward(&mut bytes),
                 &[track(config)],
@@ -1041,7 +1049,7 @@ fn mux_native_coupled_policy_refusal_drops_prepared_destination_without_publicat
         (input.interpretation(), input.timing()),
         None,
         |config| {
-            let output = PreparedOutput::new_checked(
+            let output = PreparedOutput::new(
                 ExactMp4(zenmp4::Mp4Muxer::new()),
                 Forward(&mut bytes),
                 &[track(config)],

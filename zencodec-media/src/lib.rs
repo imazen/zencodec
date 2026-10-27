@@ -27,11 +27,16 @@
 #![forbid(unsafe_code)]
 
 extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
 
 pub mod adapt;
 pub mod container;
 pub mod frame;
 pub mod limits;
+/// Checked synchronous output drivers (requires `std`).
+#[cfg(feature = "std")]
+pub mod output;
 pub mod packet;
 pub mod policy;
 pub mod session;

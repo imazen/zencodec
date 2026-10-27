@@ -606,3 +606,37 @@ Run-heavy: `rc=0 37s | peak-RSS 0.05GiB | min-avail 11739MiB | peak-load 0.57`.
 Artifacts on r7900x:
 `/mnt/v/output/zencodec/platform-regions-20261026-run/prepared-mp4-full-20261027`.
 Full log: `/home/lilith/tmp/zencodec-prepared-mp4-full-20261027.log`.
+
+## Shared public output driver
+
+The native suite now imports `zencodec_media::output` with the `std` feature.
+The private driver copy has been removed. `Output::new` and
+`PreparedOutput::new` require exact timing; the previous ordinary-timing path is
+explicitly named `Output::with_container_timing`. `Forward` and `SeekBack` wrap
+actual writers; the sealed destination interface prevents independent claims of
+seek capability. `SeekBack` captures the current position and scopes patches to
+that output, preserving existing prefixes. `PreparedOutput::publish` consumes
+the retained muxer/writer. `Output::stats` exposes progress without exposing
+mutable internal state.
+
+All 40 native cases and strict lint passed against the shared implementation,
+including the three-container forward/disk matrix, exact MP4 variable timing,
+retiming without packet rewrites, unsupported exact timing, policy rejection,
+partial publication, terminal cancellation and invalid final patches. The
+independent gamma verifier also passed. Full log:
+`/home/lilith/tmp/zencodec-public-output-fixed-20261027.log`; artifacts on r7900x:
+`/mnt/v/output/zencodec/platform-regions-20261026-run/public-output-20261027-2`.
+Run-heavy: `rc=0 44s | peak-RSS 0.57GiB | min-avail 11493MiB | peak-load 0.86`.
+
+The workspace all-feature tests (including the new output doctest), default
+no_std check, lint and existing API snapshot generator passed:
+`rc=0 15s | peak-RSS 0.31GiB | min-avail 11165MiB | peak-load 0.89`.
+The snapshot generator does not inventory the unpublished media crate; the site
+extracts the driver signatures directly from source. No dependency declaration
+or zenpixels API was added; media gains an opt-in `std` feature. The no_std
+sans-I/O traits remain available without it.
+
+This synchronous adapter does not qualify a live async encoder-output pipeline
+or a whole-operation allocation bound. It preflights patches but cannot roll
+back a writer that fails after partial overwrite. Native encoder/converter route
+ownership and destination-specific policy diagnostics remain separate work.

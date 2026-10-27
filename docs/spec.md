@@ -2483,3 +2483,45 @@ AV1-derived samples. Internal extended steps now preserve that range while
 retaining positive in-range and default-clipped results. Raw native traces and
 an independent reader qualify the existing Adobe-exponent model. This does not
 establish universal numerical, HDR or CMS guarantees; see the native AV1 README.
+
+## Synchronous container output (`zencodec-media/std`)
+
+The sans-I/O `Muxer` remains unchanged. `zencodec_media::output` adds checked
+synchronous writer ownership as an opt-in adapter:
+
+```rust
+impl<M: Muxer, D: Destination> PreparedOutput<M, D> {
+    pub fn new(mux: M, destination: D, tracks: &[TrackInfo], stop: &dyn Stop)
+        -> Result<Self, Failure>;
+    pub const fn timing(&self) -> MuxTiming;
+    pub fn publish(self, stop: &dyn Stop) -> Result<Output<M, D>, Failure>;
+}
+impl<M: Muxer, D: Destination> Output<M, D> {
+    pub fn new(mux: M, destination: D, tracks: &[TrackInfo], stop: &dyn Stop)
+        -> Result<Self, Failure>;
+    pub fn with_container_timing(mux: M, destination: D, tracks: &[TrackInfo], stop: &dyn Stop)
+        -> Result<Self, Failure>;
+    pub const fn stats(&self) -> &Stats;
+    pub fn is_failed(&self) -> bool;
+    pub fn send(&mut self, packet: Packet, stop: &dyn Stop) -> Result<(), Failure>;
+    pub fn finish(self, stop: &dyn Stop) -> Result<Stats, Failure>;
+}
+```
+
+Both `new` constructors require `begin_exact_timing`; only
+`with_container_timing` opts into ordinary native timing. Prepared output owns
+its muxer and destination but writes nothing until consumed by `publish`.
+`Forward<W: Write>` and `SeekBack<W: Write + Seek>` implement the sealed
+`Destination` interface. Seek-back offsets are relative to the initial position;
+finish restores the final position after applying validated patches.
+
+`Failure` exposes its `Stage`, confirmed appended `emitted` bytes and owned
+original `cause`. Stages are `Prepare`, `Packet`, `Drain`, `Finish` and `Patch`.
+`Stats` reports emitted bytes, completed patches, patch bytes and maximum pending
+slice length. These are progress observations, not memory bounds. A failed
+patch may leave partial overwrite effects. Send errors and unwind make the
+operation terminal; dropping never publishes or finishes implicitly.
+
+Native validation uses this public driver directly. The complete frame-route
+facade and destination evidence in the shared policy record remain open. These
+blocking writers do not establish safe backpressure against a live encoder.

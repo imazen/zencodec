@@ -680,6 +680,15 @@ None.
 
 #### Added
 
+- Add `std`-enabled checked output drivers: `output::PreparedOutput` retains
+  the actual muxer/writer without publishing, and `output::Output` validates
+  packet clocks/epochs and finish patches with terminal failure semantics.
+  Exact timing is the default; `with_container_timing` explicitly opts into
+  the native muxer's ordinary timing. `Forward` and `SeekBack` derive access
+  from actual writers and preserve file prefixes. Native qualification now
+  imports this shared implementation instead of keeping a private copy.
+
+
 - `PumpError::source()` exposes upstream and downstream failures to standard
   error-chain inspection. Typed and erased pump regressions also retain native
   causes and terminal-session behavior.

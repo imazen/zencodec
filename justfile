@@ -247,6 +247,7 @@ operation-sync export:
 # Native frame facts and policy publication guard share the still-image resolver.
 frame-policy-sync export:
     just operation-sync "{{export}}"
+    cp zencodec-media/Cargo.toml "{{export}}/zencodec-media/"
     cp zencodec-media/src/*.rs "{{export}}/zencodec-media/src/"
     cp zencodec-media-testkit/tests/storage_ownership.rs zencodec-media-testkit/tests/frame_policy.rs zencodec-media-testkit/tests/image_output.rs "{{export}}/zencodec-media-testkit/tests/"
 
@@ -367,6 +368,7 @@ shared-output-check artifacts:
 spatial-validation-sync export:
     just io-core-sync "{{export}}"
     cp zenmeta/src/ifd/walk.rs "{{export}}/zenmeta/src/ifd/"
+    cp zencodec-media/Cargo.toml "{{export}}/zencodec-media/"
     cp zencodec-media/src/*.rs "{{export}}/zencodec-media/src/"
     test ! -e "{{export}}/.git"
     test ! -e "{{export}}/.jj"

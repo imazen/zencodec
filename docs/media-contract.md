@@ -279,3 +279,24 @@ these publication checks from native allocation or conversion guarantees.
 conformance and error-chain controls, strict Clippy, no_std WASM, and API capture.
 run-heavy rc=0, 10 s, peak RSS 0.33 GiB, minimum available 15907 MiB, peak load
 0.63. This is test/build-process usage, not a codec memory bound.
+
+## Checked output ownership (`std`)
+
+`zencodec_media::output::PreparedOutput::new` retains the actual muxer and
+`Forward`/`SeekBack` destination without writing. Preparation requires the native
+`begin_exact_timing` contract; unsupported timing fails rather than silently
+falling back. `publish` consumes that preparation. `Output::new` is the immediate
+prepare-and-publish convenience; `with_container_timing` is the explicit weaker
+alternative. These are synchronous adapters over the sans-I/O `Muxer`, not new
+requirements on the no_std codec interfaces.
+
+`send` checks track, clock and epoch before native packet effects. A failure or
+unwind leaves the operation terminal. `finish` validates the complete tail/patch
+plan before writing, applies offsets relative to the captured output origin,
+restores the final position and flushes. I/O failure can leave partial writes or
+patches; `Failure` preserves stage, confirmed appended bytes and original cause.
+Dropping a prepared or active output never implicitly finishes it.
+
+A slow writer may block these methods. Callers must finish the encoder or use a
+separately qualified configuration before allowing writer pressure to retain
+raw/reference buffers. `MuxTiming::streams` alone is not such qualification.
