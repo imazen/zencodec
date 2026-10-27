@@ -1201,3 +1201,25 @@ av1-gamma-verify artifacts report:
 av1-coupled-check artifacts:
     AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked coupled_native_ -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# Build only the unchanged fixed-work policy probe for retained counter captures.
+frame-cost-probe-build target:
+    test ! -e "{{target}}"
+    CARGO_TARGET_DIR="{{target}}" CARGO_PROFILE_RELEASE_DEBUG=1 CARGO_PROFILE_RELEASE_LTO=thin cargo build --release --example frame_policy_probe --locked
+
+frame-cost-saved-heap executable output count="1000000":
+    test ! -e "{{output}}.zst"
+    heaptrack --record-only -o "{{output}}" "{{executable}}" combined "{{count}}"
+    heaptrack_print -f "{{output}}.zst" > "{{output}}.txt"
+
+frame-cost-saved-sample executable output count="10000000" cpus="2,3":
+    test ! -e "{{output}}"
+    taskset -c "{{cpus}}" perf record --call-graph dwarf -F 997 -o "{{output}}" "{{executable}}" combined "{{count}}"
+    perf report --stdio -i "{{output}}" --percent-limit 2 --sort symbol > "{{output}}.txt"
+
+frame-cost-pair-plan root before after:
+    python3 perf/frame-policy-pair.py prepare "{{root}}" "{{before}}" "{{after}}"
+
+frame-cost-pair-run zenbench root:
+    "{{zenbench}}" pair "{{root}}/pair-plan.json" --dry-run > "{{root}}/pair-dry-run.json"
+    "{{zenbench}}" pair "{{root}}/pair-plan.json" --mode iterate --output "{{root}}/pair-attempt"
