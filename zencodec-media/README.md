@@ -3,7 +3,14 @@
 Shared packets, tracks, frame ownership, codec sessions and sans-I/O container
 traits. `no_std + alloc` by default; this review crate is not yet published.
 
-With the `std` feature, `output` provides checked synchronous container output:
+With `std`, `staged::StagedEncode::new(encoder, muxer, destination, resolver,
+storage, stop)` provides finite video encoding: push frames, then finish. It
+holds conversion through policy and stages compressed payloads, releasing the
+encoder before the first writer call. It retains decision history on success
+and failure. The managed payload budget excludes native workspace and
+caller-owned pictures; this is not a live streaming or spill-to-disk operation.
+
+For existing encoded packets, `output` provides checked synchronous output:
 
 - `Output::new(muxer, Forward(writer), tracks, stop)` prepares and publishes,
   requiring exact packet timing. Send packets, then consume it with `finish`.

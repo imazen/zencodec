@@ -1103,3 +1103,6 @@ fn mux_native_coupled_policy_refusal_drops_prepared_destination_without_publicat
     assert_eq!(live.load(Ordering::SeqCst), 0);
     assert_eq!(storage.reserved_bytes(), 0);
 }
+
+#[path = "staged_encode_tests.rs"]
+mod staged_encode;

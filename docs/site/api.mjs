@@ -17,6 +17,8 @@ export const api = {
   preparedStorage: {path:'zencodec::storage::PreparedStorage<T>',file:'src/storage.rs',scope:'impl<T: Copy> PreparedStorage<T>',methods:['allocate']},
   imageResolution: {path:'zencodec::operation::resolve_image',file:'src/operation/image.rs',methods:['resolve_image']},
   muxFinish: {path:'zencodec_media::container::MuxFinish',file:'zencodec-media/src/container.rs',scope:'impl MuxFinish {',methods:['validate','apply_to']},
+  stagedEncode: {path:'zencodec_media::staged::StagedEncode (std)',file:'zencodec-media/src/staged.rs',scope:'impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<E, M, D, R>',methods:['new','with_policy_set','report','is_failed','push','push_converted','finish']},
+  stagedEncodeRefusal: {path:'zencodec_media::staged::Refusal',file:'zencodec-media/src/staged.rs',scope:'pub enum Refusal',methods:[],item:true},
   preparedMuxOutput: {path:'zencodec_media::output::PreparedOutput (std)',file:'zencodec-media/src/output.rs',scope:'impl<M: Muxer, D: Destination> PreparedOutput<M, D>',methods:['new','timing','facts','publish']},
   muxOutput: {path:'zencodec_media::output::Output (std)',file:'zencodec-media/src/output.rs',scope:'impl<M: Muxer, D: Destination> Output<M, D>',methods:['new','with_container_timing','facts','stats','send','finish']},
   seekBackOutput: {path:'zencodec_media::output::SeekBack (std)',file:'zencodec-media/src/output.rs',scope:'impl<W: Write + Seek> SeekBack<W>',methods:['new']},

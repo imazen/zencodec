@@ -209,6 +209,9 @@ impl<M: Muxer, D: Destination> PreparedOutput<M, D> {
     pub fn facts(&self) -> DestinationFacts {
         self.0.facts()
     }
+    pub(crate) fn validate_packet(&self, packet: &Packet) -> Result<(), Cause> {
+        self.0.validate_packet(packet)
+    }
     /// Publish the retained header; any failure consumes the preparation.
     pub fn publish(self, stop: &dyn Stop) -> Result<Output<M, D>, Failure> {
         let mut output = self.0;
@@ -342,6 +345,22 @@ impl<M: Muxer, D: Destination> Output<M, D> {
             self.exact_timing,
         )
     }
+    fn validate_packet(&self, packet: &Packet) -> Result<(), Cause> {
+        let track = self
+            .tracks
+            .iter()
+            .find(|track| track.index() == packet.track())
+            .ok_or_else(|| protocol(ProtocolViolation::NotConfigured))?;
+        if packet.config_epoch() != track.config_epoch() {
+            return Err(protocol(ProtocolViolation::EpochMismatch));
+        }
+        for timestamp in [packet.pts(), packet.dts()].into_iter().flatten() {
+            if timestamp.base() != track.time_base() {
+                return Err(protocol(ProtocolViolation::ClockMismatch));
+            }
+        }
+        Ok(())
+    }
     fn failure(&self, stage: Stage, cause: Cause) -> Failure {
         Failure {
             stage,
@@ -374,19 +393,7 @@ impl<M: Muxer, D: Destination> Output<M, D> {
         })?;
         let work = || -> Result<(), Cause> {
             stopped(stop)?;
-            let track = self
-                .tracks
-                .iter()
-                .find(|track| track.index() == packet.track())
-                .ok_or_else(|| protocol(ProtocolViolation::NotConfigured))?;
-            if packet.config_epoch() != track.config_epoch() {
-                return Err(protocol(ProtocolViolation::EpochMismatch));
-            }
-            for timestamp in [packet.pts(), packet.dts()].into_iter().flatten() {
-                if timestamp.base() != track.time_base() {
-                    return Err(protocol(ProtocolViolation::ClockMismatch));
-                }
-            }
+            self.validate_packet(&packet)?;
             mux.write_packet(packet, stop)?;
             self.drain(&mut mux, stop)?;
             Ok(())

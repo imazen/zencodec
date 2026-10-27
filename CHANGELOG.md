@@ -2,6 +2,10 @@
 
 ## Native image selection (unreleased experiment)
 
+- Add owned finite `StagedEncode`: retain encoder, conversion and prepared
+  destination through policy; stage compressed payloads and drop the encoder
+  before writer I/O. Preserve decision reports and concrete partial-write errors.
+
 - Expose retained destination layout/access/timing facts to frame-route policy
   and its selected report. Derive them from prepared/active output drivers; byte
   streaming does not imply safe encoder backpressure or bounded memory.

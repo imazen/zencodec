@@ -1247,3 +1247,10 @@ render-check:
 render-msrv-check:
     cp zencodec-render/dependencies.lock zencodec-render/Cargo.lock
     cargo +1.89.0 check --manifest-path zencodec-render/Cargo.toml --no-default-features --locked
+
+# Owned finite encoder/destination path, with real AV1 and an independent reader.
+staged-encode-check artifacts:
+    cargo test -p zencodec-media --features std --locked
+    cargo clippy -p zencodec-media --all-targets --features std --locked -- -D warnings
+    AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked staged_native_ -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings

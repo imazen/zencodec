@@ -326,3 +326,47 @@ log `/home/lilith/tmp/zencodec-destination-facts-full-2-20261027.log`.
 Run-heavy: `rc=0 42s | peak-RSS 0.57GiB | min-avail 11580MiB | peak-load 1.21`.
 This change requires no zenpixels changes. Earlier policy-cost measurements
 predate the added destination field and are not measurements of this revision.
+
+### Owned finite encoder-to-destination operation
+
+`staged::StagedEncode` owns the encoder and the exact prepared muxer/writer.
+It offers the held frame and actual destination facts to the shared resolver,
+retains conversion until selection, checks its returned interpretation/timing,
+and stages native packet payloads under `StorageBudget`. Packet additions are
+also charged; copying changes storage ownership without rebuilding or dropping
+packet metadata. Failed partial admission releases all reservations.
+
+Only `finish` writes: it drains and drops the encoder before publishing the
+prepared header, packets and finish patches. This makes the lifetime boundary
+structural instead of relying on the caller remembering to drop an encoder
+before a slow writer. Source pictures retained by the caller are outside this
+ownership guarantee. The native workspace is not budgeted by this API.
+
+Every failure/unwind is terminal, and conversion/policy refusal writes nothing.
+The error retains stage, bounded decisions and its concrete cause, including
+partial destination effects. Success returns output stats and the decision
+report. Explicit configuration changes fail; the operation handles one finite
+fixed-configuration video sequence, not implicit segmentation or live streaming.
+It stages the entire compressed sequence; spill-to-disk and independently
+qualified sequential backpressure remain separate mechanisms to implement.
+
+The executable usage is the module doctest in `zencodec-media/src/staged.rs`.
+Native AV1/MP4 validation lives in
+`perf/av1-policy-validation/src/staged_encode_tests.rs`, including an independent
+pixel reader and a writer that asserts the native encoder has already dropped.
+No zenpixels change or dependency addition was required.
+
+Validation on 2026-10-27: all 42 native AV1 cases, strict lint and the independent
+gamma verifier passed. The owned-path cases check identity/conversion execution,
+independently decoded MP4 pixels, encoder-drop-before-write, policy refusal,
+conversion target drift/unwind, cancellation, exhausted compressed storage,
+wrong native packet epoch before publication, and a 13-byte partial writer
+failure. Packet accounting separately checks side-data retention, shared charge
+lifetime and cleanup after partial admission. These are correctness/lifetime
+checks, not throughput or whole-pipeline memory measurements.
+Artifacts on r7900x:
+`/mnt/v/output/zencodec/platform-regions-20261026-run/owned-staged-20261027-complete`;
+log `/home/lilith/tmp/zencodec-owned-staged-complete-20261027.log`.
+Run-heavy: `rc=0 45s | peak-RSS 0.57GiB | min-avail 11569MiB | peak-load 0.64`.
+Reproduce with `just staged-encode-check <fresh-artifact-directory>` or the full
+`just av1-policy-check <fresh-artifact-directory>`.

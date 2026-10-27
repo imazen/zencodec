@@ -2565,3 +2565,26 @@ not capability coordination required of callers: unsupported layouts still fail
 at preparation. Adapters must retain the objects described by their offer. Byte
 streaming says nothing about encoder raw-buffer ownership and never establishes
 safe backpressure or a whole-operation memory bound.
+
+## Owned finite video encoding
+
+`zencodec_media::staged::StagedEncode::new(encoder, muxer, destination, resolver,
+storage, stop)` prepares exact-timing single-track output from the retained
+encoder configuration. `push(Frame, stop)` retains the exact picture through
+policy. `push_converted(Frame, &FrameInterpretation, FrameConversionOffer,
+FnOnce(Frame) -> Result<Frame, Cause>, stop)` retains a prepared conversion,
+executes it once after selection and checks full output interpretation/timing.
+
+`finish(stop)` consumes the operation, drains and drops its encoder, then writes
+the retained destination. It returns `Completed { stats, report }`. Failure or
+unwind is terminal; `report()` remains readable after a failed push. Located
+`Failure` retains its `Stage`, decision report and concrete cause. `Refusal`
+provides typed staging/protocol failures. Underlying output failures retain
+confirmed partial effects. Dropping performs no implicit finish or publication.
+
+This std convenience stages the full compressed sequence in managed payload
+storage, including packet additions. It preserves packet timing and side data.
+Bookkeeping, native workspace and caller-owned pictures are outside that budget.
+It requires output configuration before input and a fixed configuration; it does
+not segment, spill to disk, infer fidelity or provide live encoder backpressure.
+The underlying encoder and muxer mechanisms remain sans-I/O.
