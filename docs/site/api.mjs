@@ -1,5 +1,11 @@
 // Paths and method selections only. Signatures are extracted from current Rust source.
 export const api = {
+  metadataAudit: {path:'zenmeta::audit::Report',file:'zenmeta/src/audit.rs',scope:'impl Report {',methods:['exif','xmp','entries','findings','diff']},
+  xmpPacket: {path:'zenmeta::xmp::Packet',file:'zenmeta/src/xmp.rs',scope:"impl<'a> Packet<'a>",methods:['parse','property']},
+  demuxer: {path:'zencodec_media::container::Demuxer',file:'zencodec-media/src/container.rs',scope:'pub trait Demuxer {',methods:['step','seek']},
+  muxer: {path:'zencodec_media::container::Muxer',file:'zencodec-media/src/container.rs',scope:'pub trait Muxer {',methods:['begin','begin_exact_timing','write_packet','pending_output','consume_output','finish']},
+  coroutine: {path:'zencodec_coroutine::CoroutineContext',file:'zencodec-coroutine/src/context.rs',scope:'impl CoroutineContext {',methods:['read_exact_at','read_many_at','write_rows','interpretation']},
+  operationStorage: {path:'zencodec::storage::StorageBudget',file:'src/storage.rs',scope:'impl StorageBudget {',methods:['new','bytes','reserved_bytes','reserved_objects']},
   pendingPolicyPlan: {path:'policy::plan::PendingPlan (private contract experiment)',file:'perf/io-validation/src/policy/plan.rs',scope:'impl PendingPlan {',methods:['new','accept','remaining','finish']},
   multipassInput: {path:'multipass_validation::Input (contract experiment)',file:'perf/multipass-validation/src/lib.rs',scope:"pub enum Input<'a, S = NoSource>",methods:[],item:true},
   multipassEncode: {path:'multipass_validation::encode_passes (contract experiment)',file:'perf/multipass-validation/src/lib.rs',methods:['encode_passes']},
