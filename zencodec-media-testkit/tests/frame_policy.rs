@@ -63,6 +63,56 @@ fn frame(budget: &StorageBudget, i: u16) -> Frame {
     )
 }
 
+#[test]
+fn frame_route_preset_does_not_trade_required_workspace_for_preferred_fidelity() {
+    use zencodec::{
+        encode::Fidelity,
+        operation::{FrameRoute, FrameRouteOffer, FrameRouteState, resolve_frame_route},
+    };
+    let budget = StorageBudget::new(16, 1);
+    let held = frame(&budget, 0);
+    let mut unknown = FrameRouteOffer::new(FrameRoute::Continue);
+    unknown.fidelity = Some(Fidelity::Lossless);
+    let mut bounded = FrameRouteOffer::new(FrameRoute::Continue);
+    bounded.workspace_upper_bound = Some(64);
+    let mut larger = unknown;
+    larger.workspace_upper_bound = Some(128);
+    let offers = [unknown, bounded, larger];
+    for (limit, expected) in [(64, 1), (128, 2)] {
+        let (selected, record) = resolve_frame_route(
+            held.interpretation(),
+            held.timing(),
+            FrameRouteState::default(),
+            &offers,
+            &mut PolicySet::new()
+                .prefer_lossless(true)
+                .with_workspace_limit(limit),
+            PolicySet::new(),
+            &Unstoppable,
+        )
+        .unwrap();
+        assert_eq!(selected, expected);
+        assert_eq!(record.offered, 3);
+    }
+    for mut preset in [
+        PolicySet::new().with_workspace_limit(63),
+        PolicySet::new().allow_opaque_profiles(false),
+        PolicySet::new().require_metadata(MetadataTransfer::PreserveReported),
+    ] {
+        let error = resolve_frame_route(
+            held.interpretation(),
+            held.timing(),
+            FrameRouteState::default(),
+            &offers,
+            &mut preset,
+            PolicySet::new(),
+            &Unstoppable,
+        )
+        .unwrap_err();
+        assert_eq!(error.error().record().code, DecisionCode::Declined);
+    }
+}
+
 #[derive(Debug)]
 struct Native(u8);
 impl std::fmt::Display for Native {

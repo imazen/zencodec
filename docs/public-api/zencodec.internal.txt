@@ -9,8 +9,8 @@
 
 ## summary
 #
-#   inherent methods                           74
-#   trait roster entries (type × trait)       122
+#   inherent methods                           76
+#   trait roster entries (type × trait)       127
 #
 # per-module pub lines:
 #   (root)                           18
@@ -25,11 +25,11 @@
 #   image                             6
 #   inventory                         6
 #   metadata_rewrite                  2
-#   operation                         2
+#   operation                         4
 #   source                            2
 #   time                              2
 
-## items (74 lines)
+## items (76 lines)
 
 pub fn CodecIoKind::assert_fields_are_eq(&self)
 pub fn ColorEmitFields::assert_fields_are_eq(&self)
@@ -101,12 +101,14 @@ pub fn metadata_rewrite::Entry::assert_fields_are_eq(&self)
 pub fn metadata_rewrite::Error::assert_fields_are_eq(&self)
 pub fn operation::ChoiceId::assert_fields_are_eq(&self)
 pub fn operation::FrameFacts::assert_fields_are_eq(&self)
+pub fn operation::FrameRouteFacts::assert_fields_are_eq(&self)
+pub fn operation::FrameRouteState::assert_fields_are_eq(&self)
 pub fn source::AccessPattern::assert_fields_are_eq(&self)
 pub fn source::SourceError::assert_fields_are_eq(&self)
 pub fn time::TimeBase::assert_fields_are_eq(&self)
 pub fn time::Timestamp::assert_fields_are_eq(&self)
 
-## trait impls (122 types)
+## trait impls (127 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -196,6 +198,7 @@ gainmap::GainMapRender: TrivialClone
 gainmap::Iso21496Format: TrivialClone
 gainmap::UFraction: TrivialClone
 helpers::IccMatchTolerance: TrivialClone
+image::AuxiliaryGrid: TrivialClone
 image::ColorContribution: TrivialClone
 image::GeometryError: TrivialClone
 image::ImageGeometry: TrivialClone
@@ -219,6 +222,10 @@ operation::Decline: TrivialClone
 operation::EncodeFacts: TrivialClone
 operation::EncodeOffer: TrivialClone
 operation::FrameFacts: TrivialClone
+operation::FrameRoute: TrivialClone
+operation::FrameRouteFacts: TrivialClone
+operation::FrameRouteOffer: TrivialClone
+operation::FrameRouteState: TrivialClone
 operation::ImageFacts: TrivialClone
 operation::MetadataTransfer: TrivialClone
 operation::PolicySet: TrivialClone

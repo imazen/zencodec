@@ -2,6 +2,13 @@
 
 ## Native image selection (unreleased experiment)
 
+- Resolve prepared native frame encoding transitions through the existing
+  fallible policy resolver. Keep input epochs separate from output segments,
+  refuse fixed-output changes, preserve terminal failure/cancellation behavior,
+  and qualify exact native AV1 output with independent readback. Segmented
+  replacement does not establish continuous-container reconfiguration or a
+  whole-operation memory bound.
+
 - Require declared auxiliary alignment in the private canvas projection and
   qualify the packaged JXL adapter with subsampled source extras and exact
   odd-origin crops. Unknown alignment refuses before output admission.

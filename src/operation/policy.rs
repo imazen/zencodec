@@ -111,6 +111,8 @@ pub struct EncodeOffer {
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum Selection {
+    /// Prepared frame encoding and output continuity.
+    FrameRoute(super::FrameRouteOffer),
     /// Publication of the exact held selected-image output.
     /// Output facts are retained once in `DecisionContext::Image`.
     Image(PublicationOffer),
@@ -131,6 +133,8 @@ pub enum Selection {
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum DecisionContext {
+    /// Held frame and output state before an encoding transition.
+    FrameRoute(super::FrameRouteFacts),
     /// Selected native output before publication to the application.
     Image(ImageFacts),
     /// Native presentation before it reaches conversion or application output.
@@ -171,6 +175,16 @@ pub struct EncodeFacts {
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum Question<'a> {
+    /// Choose among prepared encoding routes before accepting this frame or
+    /// changing the destination's output sequence.
+    FrameRoute {
+        /// Full immutable interpretation of the held input.
+        interpretation: &'a FrameInterpretation,
+        /// Input provenance and current output state, without payloads.
+        facts: &'a super::FrameRouteFacts,
+        /// Only request- and destination-compatible prepared routes.
+        choices: Choices<'a, super::FrameRouteOffer>,
+    },
     /// Decide before publishing this exact held selected output. It can be
     /// inspected or mapped; source names/profiles remain unfiltered data.
     Image {
@@ -341,6 +355,33 @@ impl PolicyResolver for PolicySet {
     type Error = Infallible;
     fn resolve(&mut self, question: Question<'_>) -> Result<Decision, At<Infallible>> {
         let choices = match question {
+            Question::FrameRoute { choices, .. } => {
+                // Encoding continuity does not establish metadata treatment or
+                // whole-container disclosure evidence.
+                if self.metadata.is_some() || !self.allow_opaque_profiles {
+                    return Ok(Decision::decline(Decline::UnsupportedQuestion));
+                }
+                let permitted = || {
+                    choices.iter().filter(|choice| {
+                        self.workspace_limit.is_none_or(|limit| {
+                            choice
+                                .value()
+                                .workspace_upper_bound
+                                .is_some_and(|bound| bound <= limit)
+                        })
+                    })
+                };
+                let selected = if self.prefer_lossless {
+                    permitted()
+                        .find(|choice| choice.value().fidelity == Some(Fidelity::Lossless))
+                        .or_else(|| permitted().next())
+                } else {
+                    permitted().next()
+                };
+                return Ok(selected
+                    .map(Decision::choose)
+                    .unwrap_or_else(|| Decision::decline(Decline::NoPreferredChoice)));
+            }
             Question::Frame { choices, .. } | Question::Image { choices, .. } => {
                 // Native publication has no evidence for these transcode-only
                 // obligations. A preset must not silently ignore them.

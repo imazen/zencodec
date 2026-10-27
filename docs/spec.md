@@ -401,6 +401,8 @@ trait PolicyResolver {
     fn resolve(&mut self, question: Question<'_>) -> Result<Decision, At<Self::Error>>;
 }
 enum Question<'a> { // non_exhaustive
+    FrameRoute { interpretation: &'a frame::FrameInterpretation,
+        facts: &'a FrameRouteFacts, choices: Choices<'a, FrameRouteOffer> },
     Image { image: &'a image::ImageOutput, facts: ImageFacts,
         choices: Choices<'a, PublicationOffer> },
     Transcode { facts: InterpretationFacts, choices: Choices<'a, TranscodeOffer> },
@@ -481,6 +483,63 @@ The full implementation target and current gaps are recorded in
 [ideal-api.md](ideal-api.md). The resolver serves prepared encoder configuration, mandatory interpretation
 boundaries, native frame publication and complete pixel-transcode routes. The executing transcode adapter
 is in zencodecs; each native route still needs qualification.
+
+### Prepared frame encoding transitions
+
+`Question::FrameRoute` asks the same fallible resolver before accepting a held
+frame into a prepared encoder. The adapter retains the actual candidate encoder,
+held input and old encoder during the decision. It drains old output before
+installing a replacement. Input epochs remain provenance; output segments have
+independent configuration epochs. Changing only the input epoch does not imply
+an output transition.
+
+```rust
+enum FrameRoute { Continue, BeginSegment } // non_exhaustive
+struct FrameRouteState {
+    previous: Option<FrameFacts>,
+    completed_segments: u64,
+    output_committed: bool,
+}
+struct FrameRouteFacts { input: FrameFacts, output: FrameRouteState }
+struct FrameRouteOffer {
+    route: FrameRoute,
+    fidelity: Option<Fidelity>,
+    admitted_encoded_bytes: usize,
+    workspace_upper_bound: Option<u64>,
+}
+fn resolve_frame_route<R: PolicyResolver + ?Sized>(
+    interpretation: &frame::FrameInterpretation,
+    timing: frame::FrameTiming,
+    output: FrameRouteState,
+    offers: &[FrameRouteOffer],
+    resolver: &mut R,
+    preset: PolicySet,
+    stop: &dyn enough::Stop,
+) -> Result<(usize, DecisionRecord), At<PolicyFailure>>;
+```
+
+The destination registration is already fixed by the request. `Continue` keeps
+its current interpretation; `BeginSegment` starts an independently configured
+segment only when the request and destination permit it. Neither authorizes
+in-band container reconfiguration. The callback cannot manufacture an unsupported
+route. `Selection::FrameRoute` and `DecisionContext::FrameRoute` retain the selected
+contract and before-decision facts in the bounded report.
+
+`output_committed` includes externally visible headers or representation choices,
+not just encoded body bytes. It is adapter evidence, not a reservation or proof
+of destination support. A publication attempt that fails after partial effects
+must terminate the operation; private storage cleanup cannot undo those effects.
+Unknown workspace refuses a required workspace limit, and lossless preference
+never overrides that limit. This offer has no privacy evidence: presets requiring
+metadata treatment or excluding opaque profiles refuse it.
+
+The [native AV1 witness](../perf/av1-policy-validation/README.md#prepared-output-transitions)
+qualifies fixed output refusal and finite segmented encoding. It releases native
+encoders before returning staged compressed packets to a possibly slow writer.
+The admitted bytes cover compressed payloads, not codec workspace, metadata,
+packet bookkeeping or transient native output. This is not a general bounded
+spool or a live sequential-output qualification. Prepared planar conversion and
+continuous-container configuration changes remain separate contracts.
 
 ### Coupled transcode offers
 

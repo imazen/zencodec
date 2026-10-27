@@ -21,6 +21,7 @@ mod frame;
 mod image;
 mod policy;
 mod transcode;
+mod transition;
 pub use collection::{CheckedCollection, CollectionOperationError, CollectionStage};
 pub use frame::{FrameFacts, PublicationOffer, resolve_frame};
 pub use image::{ImageFacts, resolve_image};
@@ -30,6 +31,9 @@ pub use policy::{
     PolicyResolver, PolicySet, Question, Selection, resolve_boundary,
 };
 pub use transcode::{MetadataTransfer, TranscodeOffer, resolve_transcode};
+pub use transition::{
+    FrameRoute, FrameRouteFacts, FrameRouteOffer, FrameRouteState, resolve_frame_route,
+};
 
 /// Successful output and the decisions that selected its permitted contract.
 /// Dereferences to the ordinary codec output; reports never replace errors for
