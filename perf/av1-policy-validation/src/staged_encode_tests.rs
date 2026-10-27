@@ -256,3 +256,124 @@ fn staged_native_refusal_conversion_drift_and_unwind_never_publish_or_resume() {
         }
     }
 }
+
+#[test]
+fn staged_native_changing_ycbcr_converts_to_fixed_rgb_before_owned_output() {
+    use crate::coupled_route;
+    use zencodec::operation::{PolicyFailure, Selection};
+    for require_range in [false, true] {
+        let inputs = coupled_route::sources();
+        let live = Rc::new(Cell::new(true));
+        let writes = Rc::new(Cell::new(0));
+        let calls = Cell::new(0);
+        let executions = Cell::new(0);
+        let converted = StorageBudget::new(1 << 20, 64);
+        let encoded = StorageBudget::new(1 << 20, 64);
+        let retained = Cell::new(0);
+        let mut bytes = Vec::new();
+        let settings = settings(8, Subsampling::Yuv444, true)
+            .with_siting(zencodec::frame::ChromaSiting::Unknown);
+        let native = OwnedEncoder {
+            native: zenavif::media::Av1VideoEncoder::new(settings.clone(), TB).unwrap(),
+            live: live.clone(),
+            corrupt_epoch: false,
+        };
+        let mut operation = StagedEncode::new(
+            native,
+            ExactMp4(zenmp4::Mp4Muxer::new()),
+            Forward(Writer {
+                bytes: &mut bytes,
+                live: live.clone(),
+                calls: writes.clone(),
+                fail: false,
+            }),
+            |q: Question<'_>| -> Result<Decision, At<std::convert::Infallible>> {
+                let Question::FrameRoute { facts, choices, .. } = q else {
+                    panic!()
+                };
+                let i = calls.get();
+                assert_eq!(executions.get(), i);
+                assert_eq!(
+                    facts.input,
+                    FrameFacts::new(inputs[i].interpretation(), inputs[i].timing())
+                );
+                assert!(!facts.output.output_committed);
+                let choice = choices.first().unwrap();
+                let offer = choice.value();
+                assert!(offer.destination.unwrap().exact_timing);
+                // The generic VideoEncoder trait does not yet qualify fidelity.
+                assert_eq!(offer.fidelity, None);
+                let conversion = offer.conversion.unwrap();
+                assert!(!conversion.preserves_samples);
+                assert!(!conversion.preserves_extended_range);
+                assert_eq!(
+                    conversion.encoder_input.color.resolved,
+                    Some(zenpixels::Cicp::new(1, 13, 0, true))
+                );
+                assert_eq!(
+                    conversion.admitted_bytes,
+                    converted.reserved_bytes() - retained.get()
+                );
+                calls.set(i + 1);
+                Ok(Decision::UsePreset)
+            },
+            encoded.clone(),
+            &Unstoppable,
+        )
+        .unwrap()
+        .with_policy_set(
+            PolicySet::new()
+                .allow_assumed_chroma_siting(true)
+                .require_extended_range(require_range),
+        );
+        let mut expected = Vec::new();
+        for input in &inputs {
+            let result = coupled_route::push(
+                &mut operation,
+                input,
+                &converted,
+                &executions,
+                &mut expected,
+            );
+            if require_range {
+                let error = result.unwrap_err();
+                assert!(zencodec::find_cause::<PolicyFailure>(&*error).is_some());
+                assert!(operation.is_failed());
+                assert_eq!(executions.get(), 0);
+                assert_eq!(writes.get(), 0);
+                break;
+            }
+            result.unwrap();
+            assert_eq!(writes.get(), 0);
+            retained.set(converted.reserved_bytes());
+        }
+        if require_range {
+            drop(operation);
+            assert!(bytes.is_empty());
+        } else {
+            let completed = operation.finish(&Unstoppable).unwrap();
+            assert_eq!(calls.get(), inputs.len());
+            assert_eq!(executions.get(), inputs.len());
+            assert_eq!(completed.stats.emitted as usize, bytes.len());
+            for record in completed.report.decisions() {
+                let Some(Selection::FrameRoute(offer)) = record.selected else {
+                    panic!()
+                };
+                assert!(!offer.conversion.unwrap().preserves_samples);
+                assert!(offer.destination.unwrap().exact_timing);
+            }
+            oracle_container(
+                &root(),
+                "owned-converted-rgb",
+                "mp4",
+                &settings,
+                &bytes,
+                &expected,
+            );
+        }
+        assert!(!live.get());
+        drop(expected);
+        assert_eq!(converted.reserved_bytes(), 0);
+        assert_eq!(encoded.reserved_bytes(), 0);
+    }
+}

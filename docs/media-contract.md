@@ -370,3 +370,23 @@ log `/home/lilith/tmp/zencodec-owned-staged-complete-20261027.log`.
 Run-heavy: `rc=0 45s | peak-RSS 0.57GiB | min-avail 11569MiB | peak-load 0.64`.
 Reproduce with `just staged-encode-check <fresh-artifact-directory>` or the full
 `just av1-policy-check <fresh-artifact-directory>`.
+
+The public owned path now also executes the existing real YCbCr conversion
+plan over native-decoded 8/10/12-bit, 4:2:0/4:2:2/4:4:4, full/narrow inputs into
+one fixed RGB8 AV1/MP4 output. The conversion implementation is shared with the
+prototype witness, not copied. Policy observes the actual source and target,
+reserved conversion storage and non-preservation of samples/extended range;
+requiring extended range refuses before conversion or writer I/O. Independent
+container decoding matches the converted RGB samples. All 43 native cases and
+strict lint passed on 2026-10-27. Evidence on r7900x:
+`/mnt/v/output/zencodec/platform-regions-20261026-run/public-conversion-20261027`;
+log `/home/lilith/tmp/zencodec-public-conversion-20261027.log`.
+Run-heavy: `rc=0 45s | peak-RSS 0.58GiB | min-avail 12772MiB | peak-load 0.65`.
+No production API or zenpixels change was needed for this integration.
+
+This exposed a remaining contract gap: generic `VideoEncoder` reports container
+configuration, but no guarantee of the prepared encoding fidelity. The public
+operation therefore reports unknown encoder fidelity even when this native
+witness uses lossless AV1. Required/preferred fidelity must eventually be derived
+from the actual retained encoder, without caller-supplied capability coordination
+or inferring guarantees from codec identity. Conversion fidelity remains separate.

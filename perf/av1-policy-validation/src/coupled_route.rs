@@ -29,8 +29,53 @@ use zenpixels::{
 use zenpixels_convert::ycbcr::YcbcrToRgbF32;
 type Cause = Box<dyn Error + Send + Sync>;
 
-fn push<R: PolicyResolver>(
-    operation: &mut Candidate<R>,
+pub(crate) trait ConversionRoute {
+    fn push_conversion(
+        &mut self,
+        input: &Frame,
+        target: &FrameInterpretation,
+        offer: FrameConversionOffer,
+        execute: impl FnOnce() -> Result<Frame, Cause>,
+    ) -> Result<(), Cause>;
+}
+impl<R: PolicyResolver> ConversionRoute for Candidate<R> {
+    fn push_conversion(
+        &mut self,
+        input: &Frame,
+        target: &FrameInterpretation,
+        offer: FrameConversionOffer,
+        execute: impl FnOnce() -> Result<Frame, Cause>,
+    ) -> Result<(), Cause> {
+        self.push_route(
+            input,
+            (target, input.timing()),
+            Some(offer),
+            execute,
+            &Unstoppable,
+        )
+    }
+}
+impl<
+    E: zencodec_media::session::VideoEncoder,
+    M: zencodec_media::container::Muxer,
+    D: zencodec_media::output::Destination,
+    R: PolicyResolver,
+> ConversionRoute for zencodec_media::staged::StagedEncode<E, M, D, R>
+{
+    fn push_conversion(
+        &mut self,
+        input: &Frame,
+        target: &FrameInterpretation,
+        offer: FrameConversionOffer,
+        execute: impl FnOnce() -> Result<Frame, Cause>,
+    ) -> Result<(), Cause> {
+        self.push_converted(input.clone(), target, offer, |_| execute(), &Unstoppable)
+            .map_err(Into::into)
+    }
+}
+
+pub(crate) fn push(
+    operation: &mut impl ConversionRoute,
     input: &Frame,
     pool: &StorageBudget,
     executions: &Cell<usize>,
@@ -109,57 +154,51 @@ fn push<R: PolicyResolver>(
     // Float conversion followed by explicit round-to-nearest U8 saturation.
     // Lossless AV1 preserves these converted codes, not the source samples.
     let output_target = Arc::new(target.clone());
-    operation.push_route(
-        input,
-        (&target, input.timing()),
-        Some(offer),
-        move || {
-            executions.set(executions.get() + 1);
-            let [g, b, r] = planes;
-            let mut planes = [g.allocate()?, b.allocate()?, r.allocate()?];
-            let mut row = row.allocate()?;
-            for y in 0..h {
-                let dst = PixelSliceMut::new(
-                    bytemuck::cast_slice_mut(row.as_mut_slice()),
-                    w as u32,
-                    1,
-                    w * 12,
-                    plan.output_descriptor(),
-                )?;
-                plan.convert_rows(0, y, dst)?;
-                for (x, rgb) in row.as_slice().iter().enumerate() {
-                    for (c, channel) in [1, 2, 0].into_iter().enumerate() {
-                        if !rgb[channel].is_finite() {
-                            return Err(std::io::Error::other("nonfinite conversion").into());
-                        }
-                        planes[c].as_mut_slice()[y * stride + x] =
-                            (rgb[channel].clamp(0.0, 1.0) * 255.0).round() as u8;
+    operation.push_conversion(input, &target, offer, move || {
+        executions.set(executions.get() + 1);
+        let [g, b, r] = planes;
+        let mut planes = [g.allocate()?, b.allocate()?, r.allocate()?];
+        let mut row = row.allocate()?;
+        for y in 0..h {
+            let dst = PixelSliceMut::new(
+                bytemuck::cast_slice_mut(row.as_mut_slice()),
+                w as u32,
+                1,
+                w * 12,
+                plan.output_descriptor(),
+            )?;
+            plan.convert_rows(0, y, dst)?;
+            for (x, rgb) in row.as_slice().iter().enumerate() {
+                for (c, channel) in [1, 2, 0].into_iter().enumerate() {
+                    if !rgb[channel].is_finite() {
+                        return Err(std::io::Error::other("nonfinite conversion").into());
                     }
+                    planes[c].as_mut_slice()[y * stride + x] =
+                        (rgb[channel].clamp(0.0, 1.0) * 255.0).round() as u8;
                 }
             }
-            let planes = planes
-                .into_iter()
-                .map(|p| OwnedPlane {
-                    data: PlaneData::AccountedU8(p.freeze()),
-                    width: w,
-                    height: h,
-                    stride_bytes: stride,
-                })
-                .collect();
-            let converted = Frame::new(
-                Arc::new(OwnedPlanes::new(planes, output_encoding)?),
-                output_target,
-                input.timing(),
-                input.presentation(),
-            );
-            expected.push(converted.clone());
-            Ok(converted)
-        },
-        &Unstoppable,
-    )
+        }
+        let planes = planes
+            .into_iter()
+            .map(|p| OwnedPlane {
+                data: PlaneData::AccountedU8(p.freeze()),
+                width: w,
+                height: h,
+                stride_bytes: stride,
+            })
+            .collect();
+        let converted = Frame::new(
+            Arc::new(OwnedPlanes::new(planes, output_encoding)?),
+            output_target,
+            input.timing(),
+            input.presentation(),
+        );
+        expected.push(converted.clone());
+        Ok(converted)
+    })
 }
 
-fn sources() -> Vec<Frame> {
+pub(crate) fn sources() -> Vec<Frame> {
     let mut result = Vec::new();
     for (i, (bits, sub, full)) in [
         (8, Subsampling::Yuv420, true),
