@@ -93,3 +93,32 @@ The execution tests exercise real storage admission after report wrap, reject a
 child's selection without removing the pending parent obligation, and reject
 changed requirements, stale context and duplicates without overwriting accepted
 stages. Native codec allocations remain outside this driver's accounting scope.
+
+### Native JPEG witness
+
+[requirement_scope.rs](../perf/jpeg-policy-validation/src/requirement_scope.rs)
+retains the actual native metadata rewrite plan until all stages are admitted.
+The same callback selects execution before metadata inspection, then metadata and
+fidelity after inspection. Mandatory effects are never delegated to that callback.
+Twenty intervening decisions evict the execution record without releasing its
+pending obligations. Incomplete preparation and a changed source revision both
+refuse before the destination receives a byte. Requiring exact metadata alongside
+this destructive descriptive-metadata route refuses before the metadata callback.
+
+The positive matrix covers sequential/progressive JPEG with header metadata,
+metadata immediately before EOI, and split ICC chunks. The shared testkit supplies
+actual GPS EXIF; the independent EXIF reader confirms GPS exists in the source
+and is absent from the output. Orientation survives, compressed scan bytes are
+identical, and libjpeg-turbo decodes identical pixels. Unknown XMP is removed.
+ICC remains opaque and retained: this is not whole-file privacy qualification.
+
+Run `just io-policy-engine-check` and `just jpeg-policy-check <artifacts>` in the
+prepared export. Both tests and strict lint passed on 2026-10-27. Wrapper receipts:
+
+- Pending plan: `rc=0 8s | peak-RSS 0.30GiB | min-avail 8571MiB | peak-load 0.51`.
+- Native JPEG: `rc=0 8s | peak-RSS 0.57GiB | min-avail 8782MiB | peak-load 0.50`.
+
+These include compilation/testing and are not codec memory or speed benchmarks.
+The native witness excludes planning, source and destination allocation from its
+fixed-state driver's accounting. Production effect deadlines, arbitrary opaque
+metadata qualification and cross-operation NotApplicable remain unimplemented.

@@ -36,3 +36,6 @@ mod output_scheduling;
 
 #[cfg(test)]
 mod row_driver;
+
+#[cfg(test)]
+mod requirement_scope;
