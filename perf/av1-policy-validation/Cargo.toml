@@ -10,6 +10,7 @@ publish = false
 zencodec = { path = "../..", version = ">=0.1.27, <0.3.0", features = ["std"] }
 zencodec-media = { path = "../../zencodec-media" }
 zenpixels = ">=0.2.16, <0.4.0"
+zenpixels-convert = { version = ">=0.2.16, <0.4.0", default-features = false }
 enough = "0.4.4"
 bytemuck = "1.25.2"
 zenavif = { git = "https://github.com/imazen/zenavif", rev = "feadc4c94b19acdcd82ee545a02263bc67c45d7d", features = ["media-encode", "_dev"] }
@@ -20,8 +21,8 @@ zenwebm = { git = "https://github.com/imazen/zenextras", rev = "ae920c1e2ac0fe0e
 
 [patch.crates-io]
 zencodec = { path = "../.." }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "1d3ddd2131b22e9e3754c765d4ce45ce3901de59" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "1d3ddd2131b22e9e3754c765d4ce45ce3901de59" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "02ccdfb0810dd577a196997ad0bbf9e7bf7c8eb8" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "02ccdfb0810dd577a196997ad0bbf9e7bf7c8eb8" }
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "10a79c3a888dd589884fd032846eec70bc31eb13" }
 
 [patch."https://github.com/imazen/zencodec"]

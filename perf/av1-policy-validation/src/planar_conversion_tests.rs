@@ -314,7 +314,9 @@ fn planar_native_borrowed_rows_and_odd_crops_match_full_conversion() {
                             .collect::<Vec<_>>(),
                     )
                     .unwrap();
-                    let full_float = crate::prepared_conversion::float_pixels(&native);
+                    let (full_float, processing) =
+                        crate::prepared_conversion::float_pixels_with_processing(&native);
+                    std::fs::write(comparison.join(format!("processing-{index}.csv")), format!("max_iec_error,max_roundtrip_error,max_continuous_error,min_linear,max_linear,clipped_samples\n{},{},{},{},{},{}\n", processing.max_linear_error, processing.max_roundtrip_error, processing.max_model_error, processing.min_linear, processing.max_linear, processing.clipped_samples)).unwrap();
                     assert!(full_float.iter().flatten().any(|v| *v < 0.0));
                     assert!(full_float.iter().flatten().any(|v| *v > 1.0));
                     std::fs::write(

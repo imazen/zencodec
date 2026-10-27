@@ -560,8 +560,11 @@ with one coded RGB row of admitted scratch. A second explicit target executes
 unclipped RGB F32 with no managed row scratch and unchanged sRGB transfer.
 The same offer and callback suffice. Native crops are bit-identical to full-frame
 rows; independent zimg agreement has a fixed 1e-6 absolute gate for the tested
-BT.709/sRGB cases. Other matrices/transfers, HDR rendering, downstream processing
-and a public planar plan in zenpixels-convert remain unqualified. See the
+BT.709/sRGB cases. The same native frames/crops now execute existing OutputPlan
+linear-light processing and packed-owner replacement with exact row-batch agreement.
+Its continuous sRGB definition differs measurably from IEC constants; explicit
+unclipped options are required. Other matrices/transfers, HDR rendering and a
+public planar plan in zenpixels-convert remain unqualified. See the
 [native qualification](../perf/av1-policy-validation/README.md#prepared-conversion-before-allocation).
 
 ### Prepared frame encoding transitions

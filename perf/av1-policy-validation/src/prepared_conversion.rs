@@ -490,6 +490,12 @@ pub(super) fn qualify(native: &Frame, expected: &[[u16; 3]]) {
 
 /// Actual unclipped float output through the same retained-route callback.
 pub(super) fn float_pixels(native: &Frame) -> Vec<[f32; 3]> {
+    float_pixels_with_processing(native).0
+}
+
+pub(super) fn float_pixels_with_processing(
+    native: &Frame,
+) -> (Vec<[f32; 3]>, crate::float_processing::Measurements) {
     use std::{cell::Cell, convert::Infallible};
     use zencodec::operation::{Decision, Question, Selection};
     let crop = native.interpretation().geometry.crop;
@@ -532,17 +538,19 @@ pub(super) fn float_pixels(native: &Frame) -> Vec<[f32; 3]> {
         native.interpretation()
     ));
     assert_eq!(result.interpretation().timing, Some(native.timing()));
+    let processing = crate::float_processing::qualify_output(result.output());
     let output = result
         .with_pixels(|p| {
             assert_eq!(p.descriptor(), FLOAT_SRGB);
             assert_eq!(p.color_context().unwrap().cicp, Some(Cicp::SRGB));
-            (0..crop.height)
+            let samples = (0..crop.height)
                 .flat_map(|row| {
                     bytemuck::cast_slice::<u8, [f32; 3]>(p.row(row))
                         .iter()
                         .copied()
                 })
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>();
+            (samples, processing)
         })
         .unwrap();
     let retained = result.output().clone();

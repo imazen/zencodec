@@ -2,6 +2,19 @@
 // Signatures come from Rust through apiPanels; examples remain executable files.
 export const improvements = [
   {
+    id:'float-processing', title:'Keep range, precision and pixel storage distinct',
+    state:'Native workflow qualified · preset and numerical contract open', date:'2026-10-27',
+    summary:'Native AV1 component planes now pass through unclipped RGB F32, existing OutputPlan linear-light processing and shared owned-image replacement.',
+    why:'Float storage does not imply linear light or bit-exact conversion. A preset called forbid_lossy still clips by default, and the current continuous sRGB constants differ from the IEC definition.',
+    consumer:'Request the actual descriptor and target color. The executing witness uses forbid_lossy().with_clip_out_of_gamut(false); callers should eventually receive that guarantee from one operation policy.',
+    adapter:'Retain the selected OutputPlan and its returned color context. Replace packed color for unchanged coordinates; preserve original frame facts and timing separately from current linear RGB.',
+    implementor:'All 54 native presentations and 162 crops pass byte-exact row-batch agreement. Independent double-precision definitions separate continuous-curve arithmetic error from IEC disagreement. Clipped controls expose the legacy preset behavior.',
+    open:'The public planar plan, strict preset replacement and numerical model/accuracy contract remain open. This qualifies BT.709/sRGB processing, not HDR rendering or complete workspace bounds. No zenpixels source change or new dependency package was needed.',
+    signatures:['imageOutput','imageColorReplacement'], outputPlan:true,
+    flow:[['consumer','Request linear RGB','explicit range requirement'],['adapter','Prepare the actual transform','descriptor + context + options'],['implementor','Convert strided rows','keep output signaling'],['consumer','Retain the processed image','source timing survives']],
+    evidence:[['Native processing scope','perf/av1-policy-validation/README.md#process-native-float-through-outputplan'],['Measured errors and limits','benchmarks/float_processing_2026-10-27.json'],['Every presentation','benchmarks/float_processing_2026-10-27.csv']],
+  },
+  {
     id:'combined-render', title:'Resolve color and canvas geometry before publishing an image',
     state:'Private implementation qualified · shared publication hook implemented', date:'2026-10-27',
     summary:'One held-image operation prepares the requested color, projects the oriented canvas region, preserves aligned auxiliary values and resolves publication on the finished owner.',

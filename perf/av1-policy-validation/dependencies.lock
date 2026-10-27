@@ -154,6 +154,7 @@ dependencies = [
  "zenivf",
  "zenmp4",
  "zenpixels",
+ "zenpixels-convert",
  "zenwebm",
 ]
 
@@ -1229,7 +1230,7 @@ dependencies = [
 [[package]]
 name = "zenpixels"
 version = "0.2.17"
-source = "git+https://github.com/imazen/zenpixels?rev=1d3ddd2131b22e9e3754c765d4ce45ce3901de59#1d3ddd2131b22e9e3754c765d4ce45ce3901de59"
+source = "git+https://github.com/imazen/zenpixels?rev=02ccdfb0810dd577a196997ad0bbf9e7bf7c8eb8#02ccdfb0810dd577a196997ad0bbf9e7bf7c8eb8"
 dependencies = [
  "bytemuck",
  "imgref",
@@ -1240,7 +1241,7 @@ dependencies = [
 [[package]]
 name = "zenpixels-convert"
 version = "0.2.17"
-source = "git+https://github.com/imazen/zenpixels?rev=1d3ddd2131b22e9e3754c765d4ce45ce3901de59#1d3ddd2131b22e9e3754c765d4ce45ce3901de59"
+source = "git+https://github.com/imazen/zenpixels?rev=02ccdfb0810dd577a196997ad0bbf9e7bf7c8eb8#02ccdfb0810dd577a196997ad0bbf9e7bf7c8eb8"
 dependencies = [
  "archmage",
  "bytemuck",

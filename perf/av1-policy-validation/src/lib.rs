@@ -32,3 +32,6 @@ mod prepared_conversion;
 
 #[cfg(test)]
 mod planar_float;
+
+#[cfg(test)]
+mod float_processing;

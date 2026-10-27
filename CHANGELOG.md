@@ -2,6 +2,11 @@
 
 ## Native image selection (unreleased experiment)
 
+- Qualify native float processing through existing OutputPlan and owned-image
+  replacement. Preserve exact row-batch output, strided padding and video timing.
+  Measure continuous/IEC transfer differences and the clipping preset footgun
+  separately; no new public API or zenpixels source change.
+
 - Execute unclipped native AV1 float conversion through the existing policy and
   owned-image contracts. Preserve sRGB interpretation, exact crop consistency
   and admitted ownership; compare actual output with an independent float

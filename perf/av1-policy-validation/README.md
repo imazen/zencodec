@@ -388,3 +388,31 @@ Clippy. [Qualification receipt](../../benchmarks/native_picture_policy_2026-10-2
 run-heavy rc=0, 29 s, peak RSS 1.13 GiB, minimum available 15274 MiB,
 peak load 1.68. This is build/test-process usage, not a decoder memory or speed
 measurement.
+
+### Process native float through OutputPlan
+
+`float_processing.rs` executes native planar → unclipped sRGB F32 → linear RGB
+F32 → sRGB through the existing `OutputPlan`. It supplies explicit descriptors,
+current color context, named target and unclipped conversion options. The 54
+native presentations and 162 crops pass exact full-image/1/2/4-row agreement.
+Strided padding stays untouched. `replace_packed_color` adopts the processed
+owner without copying pixels and retains source facts, geometry and video timing;
+current output signaling becomes linear RGB while the source remains unchanged.
+
+Two contract issues remain visible. `ConvertOptions::forbid_lossy()` enables
+clipping: the tested route needs `with_clip_out_of_gamut(false)`. Also,
+linear-srgb 0.6.12 uses adjusted continuous constants. Its maximum error against
+that definition is 0.0000011395496919419656, but disagreement with the
+[IEC/CSS extended sRGB definition](https://www.w3.org/TR/css-color-4/#color-conversion-code)
+is 0.000056949194831901195. The original strict IEC probe failed and is recorded;
+these are separate definitions, not an accepted IEC accuracy threshold.
+Roundtrip error is at most 0.0000010728836059570312. Returning to the same color
+space is not bit-exact preservation, and F32 storage alone promises neither.
+
+The native tests gate agreement with the selected continuous curve and roundtrip
+at absolute 0.00001. Batch equivalence remains byte-exact. All per-presentation
+[measurements](../../benchmarks/float_processing_2026-10-27.csv) and the
+[receipt](../../benchmarks/float_processing_2026-10-27.json) are retained. This
+uses the reviewed OutputPlan revision without changing zenpixels source or adding
+a package to the graph. Public planar packaging, a clear strict preset and
+numerical-model contract, HDR rendering and workspace bounds remain open.
