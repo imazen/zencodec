@@ -9,7 +9,7 @@ export const improvements = [
     consumer:'Request the actual descriptor and target color. The executing witness uses forbid_lossy().with_clip_out_of_gamut(false); callers should eventually receive that guarantee from one operation policy.',
     adapter:'Retain the selected OutputPlan and its returned color context. Replace packed color for unchanged coordinates; preserve original frame facts and timing separately from current linear RGB.',
     implementor:'All 54 native presentations and 162 crops pass byte-exact row-batch agreement. Independent double-precision definitions separate continuous-curve arithmetic error from IEC disagreement. Clipped controls expose the legacy preset behavior.',
-    open:'The public planar plan, strict preset replacement and numerical model/accuracy contract remain open. This qualifies BT.709/sRGB processing, not HDR rendering or complete workspace bounds. No zenpixels source change or new dependency package was needed.',
+    open:'The shared planar plan is now implemented below. Strict preset replacement and the numerical model/accuracy contract remain open. This qualifies BT.709/sRGB processing, not HDR rendering or complete workspace bounds. No zenpixels source change or new dependency package was needed.',
     signatures:['imageOutput','imageColorReplacement'], outputPlan:true,
     flow:[['consumer','Request linear RGB','explicit range requirement'],['adapter','Prepare the actual transform','descriptor + context + options'],['implementor','Convert strided rows','keep output signaling'],['consumer','Retain the processed image','source timing survives']],
     evidence:[['Native processing scope','perf/av1-policy-validation/README.md#process-native-float-through-outputplan'],['Measured errors and limits','benchmarks/float_processing_2026-10-27.json'],['Every presentation','benchmarks/float_processing_2026-10-27.csv']],
@@ -81,16 +81,16 @@ export const improvements = [
   },
   {
     id:'strided-plane', title:'Borrow complete planes without losing their interpretation',
-    state:'Implemented conversion policy and deferred admission · native AV1 witness', date:'2026-10-27',
+    state:'Shared borrowed converter implemented · policy and native ownership qualified', date:'2026-10-27',
     summary:'The existing resolver selects an actual conversion route before its destination is allocated. PreparedStorage retains the byte allowance; the source mapping and kernel selection remain unchanged through the callback.',
     why:'A caller needs to see chroma assumptions, integer clipping and a large output reservation before paying for that output. Asking after conversion makes refusal too late; checking capability flags does not bind the actual route.',
     consumer:'Keep native decoding separate from display rendering. A subsampled stream with unknown siting needs an explicit decision before a centered kernel can be used. Packed access alone does not establish a rendered canvas.',
     adapter:'Honor stride, code bits and bit shift. Validate active words before writes; padding has no sample meaning. Keep coded coordinates through chroma upsampling and crop afterward so odd origins preserve phase. Use prepare_filled for destination/scratch, ask resolve_image_conversion, then allocate and execute the same route. Keep its decision record on failure. Adopt the actual result with from_frame_pixels; source_frame retains native interpretation while packed pixels carry current color. Exact timing/presentation and the destination charge survive publication.',
     implementor:'Return the checked native span tied to its mapping guard. No new allocation, sample conversion or storage owner is introduced by the accessor.',
-    open:'The private AV1 route checks 18 depth/subsampling/range combinations, 54 presentations and 162 crop cases. Default policy refuses undeclared subsampled siting. Explicit center permission still refuses signaled Left/TopLeft; range-preservation requirements refuse the clipping integer route. FFmpeg verifies component samples. The private unclipped F32 route now passes a fixed 1e-6 absolute zimg comparison and bit-exact crop checks. F32 remains sRGB-encoded here, not linear light. Public planar conversion, downstream processing, HDR, other matrices, coupled encoder transitions and native workspace bounds remain open. Preparation scans all active source words.',
-    signatures:['imageConversion','imageConversionOffer','operationPreset','imageStorageBudget','preparedStorage','stridedPlane','adoptPackedOwner'],
+    open:'The private AV1 route checks 18 depth/subsampling/range combinations, 54 presentations and 162 crop cases. Default policy refuses undeclared subsampled siting. Explicit center permission still refuses signaled Left/TopLeft; range-preservation requirements refuse the clipping integer route. FFmpeg verifies component samples. The pinned public CodePlane and YcbcrToRgbF32 replace the private kernel and produce byte-identical output, passing the unchanged zimg gate. The actual output also passes through OutputPlan. F32 remains sRGB-encoded until that processing stage. Other matrices/siting, integer/mono/GBR output, sample-type unification, HDR, coupled encoder transitions and native workspace bounds remain open. Native preparation scans all active source words.',
+    signatures:['imageConversion','imageConversionOffer','operationPreset','imageStorageBudget','preparedStorage','stridedPlane','adoptPackedOwner'], ycbcr:true,
     flow:[['implementor','Map and validate','retain exact source planes'],['adapter','Reserve capacity','destination + row scratch'],['consumer','Choose or refuse','assumption, clipping, cost'],['adapter','Allocate and execute','same route, retained report']],
-    evidence:[['Unclipped float qualification','benchmarks/planar_float_2026-10-27.json'],['Independent RGB observations','benchmarks/planar_rgb_inspection_2026-10-27.json'],['Prepared conversion qualification','benchmarks/prepared_conversion_2026-10-27.json'],['Converted output qualification','benchmarks/converted_video_output_2026-10-27.json'],['Native bridge receipt','benchmarks/native_planar_bridge_2026-10-26.json'],['Private implementation and limits','perf/av1-policy-validation/README.md'],['Canvas rendering gap','https://github.com/imazen/zencodec/issues/170']],
+    evidence:[['Shared converter qualification','benchmarks/public_ycbcr_2026-10-27.json'],['Unclipped float qualification','benchmarks/planar_float_2026-10-27.json'],['Independent RGB observations','benchmarks/planar_rgb_inspection_2026-10-27.json'],['Prepared conversion qualification','benchmarks/prepared_conversion_2026-10-27.json'],['Converted output qualification','benchmarks/converted_video_output_2026-10-27.json'],['Native bridge receipt','benchmarks/native_planar_bridge_2026-10-26.json'],['Private implementation and limits','perf/av1-policy-validation/README.md'],['Canvas rendering gap','https://github.com/imazen/zencodec/issues/170']],
   },
   {
     id:'output-descriptor', title:'Require the pixel interpretation, including alpha association',
@@ -295,7 +295,7 @@ export const improvements = [
 ];
 
 const escape=s=>s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
-export function improvementsSection({apiPanels,codePanel,flow,gh,outputSignatures}) {
+export function improvementsSection({apiPanels,codePanel,flow,gh,outputSignatures,ycbcrSignatures}) {
   return `<section id="changes" class="ideal-role ideal-changes" aria-labelledby="changes-title">
 <p class="section-kicker">Living implementation record / updated with the code</p>
 <h2 id="changes-title">What changed, and why?</h2>
@@ -306,7 +306,7 @@ export function improvementsSection({apiPanels,codePanel,flow,gh,outputSignature
 <dl class="change-roles">${['consumer','adapter','implementor'].map(role=>`<div class="${role}"><dt>${role[0].toUpperCase()+role.slice(1)}</dt><dd>${escape(entry[role])}</dd></div>`).join('')}</dl>
 ${entry.flow?flow(`change-${entry.id}-flow`,entry.flow):''}
 ${entry.example?codePanel(`change-${entry.id}`,entry.example,entry.exampleSource??'docs/examples/checked_operations.rs'):''}
-<details class="ideal-signatures"><summary>Exact traits and signatures</summary>${apiPanels(`change-${entry.id}`,entry.signatures)}${entry.outputPlan?outputSignatures:''}</details>
+<details class="ideal-signatures"><summary>Exact traits and signatures</summary>${apiPanels(`change-${entry.id}`,entry.signatures)}${entry.outputPlan?outputSignatures:''}${entry.ycbcr?ycbcrSignatures:''}</details>
 <p class="change-open"><b>Still open.</b> ${escape(entry.open)}</p>
 <p class="change-evidence">${entry.evidence.map(([label,target])=>`<a href="${target.startsWith('https://')?target:gh(target)}">${escape(label)} ↗</a>`).join(' · ')}</p>
 </div></details>`).join('')}</div>

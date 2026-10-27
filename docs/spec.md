@@ -563,8 +563,11 @@ rows; independent zimg agreement has a fixed 1e-6 absolute gate for the tested
 BT.709/sRGB cases. The same native frames/crops now execute existing OutputPlan
 linear-light processing and packed-owner replacement with exact row-batch agreement.
 Its continuous sRGB definition differs measurably from IEC constants; explicit
-unclipped options are required. Other matrices/transfers, HDR rendering and a
-public planar plan in zenpixels-convert remain unqualified. See the
+unclipped options are required. The float mechanism now uses the public
+`zenpixels_convert::ycbcr::YcbcrToRgbF32` and borrowed `sample::CodePlane` on
+the pinned pixel review. Its errors retain actual refusal facts. Other
+matrices/transfers, non-centered siting, integer output and HDR rendering remain
+unqualified. See the
 [native qualification](../perf/av1-policy-validation/README.md#prepared-conversion-before-allocation).
 
 ### Prepared frame encoding transitions

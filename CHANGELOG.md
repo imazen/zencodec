@@ -2,6 +2,11 @@
 
 ## Native image selection (unreleased experiment)
 
+- Replace the private float conversion kernel with the reviewed public
+  `CodePlane` / `YcbcrToRgbF32` mechanism. Preserve exact native outputs and
+  existing policy, admission and ownership behavior; capture actual shared
+  signatures and structured refusal facts in the guide.
+
 - Qualify native float processing through existing OutputPlan and owned-image
   replacement. Preserve exact row-batch output, strided padding and video timing.
   Measure continuous/IEC transfer differences and the clipping preset footgun

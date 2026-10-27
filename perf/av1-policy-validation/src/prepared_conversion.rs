@@ -1,7 +1,6 @@
 //! Executing witness: ask policy before materializing destination/scratch.
-//! The native strip kernels remain test-only, not a public planar converter.
+//! Integer strip kernels remain test-only; float uses the shared pixel converter.
 use crate::planar_conversion_tests::{Refusal, SitingChoice, conversion_facts, widen};
-use crate::planar_float::FloatPlan;
 use enough::Stop;
 use std::{error::Error, fmt, sync::Arc};
 use zenavif::yuv_convert::*;
@@ -16,6 +15,11 @@ use zencodec::{
     storage::{PreparedStorage, SharedStorage, StorageBudget, StorageError},
 };
 use zenpixels::{Cicp, ColorContext, Orientation, PixelDescriptor, PixelSlice};
+use zenpixels::{
+    PixelSliceMut,
+    sample::{ChromaSiting as PixelSiting, ChromaSubsampling, CodePlane},
+};
+use zenpixels_convert::ycbcr::YcbcrToRgbF32;
 
 impl fmt::Display for Refusal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -112,7 +116,7 @@ enum Target {
 }
 const FLOAT_SRGB: PixelDescriptor =
     PixelDescriptor::RGBF32_LINEAR.with_transfer(zenpixels::TransferFunction::Srgb);
-enum OutputStorage {
+enum OutputStorage<'a> {
     Integer {
         destination: PreparedStorage<[u16; 3]>,
         scratch: PreparedStorage<u64>,
@@ -120,7 +124,7 @@ enum OutputStorage {
     },
     Float {
         destination: PreparedStorage<[f32; 3]>,
-        plan: FloatPlan,
+        plan: YcbcrToRgbF32<'a>,
     },
 }
 
@@ -129,7 +133,7 @@ enum OutputStorage {
 struct Prepared<'a> {
     frame: &'a Frame,
     planes: [PlaneView<'a>; 3],
-    output: OutputStorage,
+    output: OutputStorage<'a>,
     stride: usize,
     offer: ImageConversionOffer,
 }
@@ -183,6 +187,7 @@ impl<'a> Prepared<'a> {
             }
             planes[i] = Some(plane);
         }
+        let planes = planes.map(Option::unwrap);
         let overflow = || failed(Stage::Prepare, &report, StorageError::SizeOverflow);
         let stride = (crop.width as usize).checked_add(5).ok_or_else(overflow)?;
         let count = stride
@@ -218,11 +223,42 @@ impl<'a> Prepared<'a> {
                     .prepare_filled(count, [f32::from_bits(0x7fc1_2345); 3])
                     .map_err(|e| failed(Stage::Prepare, &report, e))?;
                 let bytes = destination.reserved_bytes();
-                let plan = FloatPlan::new(
+                let encoding = zenpixels::sample::SampleEncoding::new(
+                    info.encoding.storage(),
                     info.encoding.code_bits(),
-                    info.color.resolved.unwrap().full_range,
-                    info.subsampling,
-                );
+                    info.encoding.bit_shift(),
+                )
+                .map_err(|e| failed(Stage::Prepare, &report, e))?;
+                let view = |p: PlaneView<'a>| {
+                    match p.as_strided_samples() {
+                        PlaneSamples::U8(s) => {
+                            CodePlane::from_u8(s, p.width(), p.height(), p.stride_bytes(), encoding)
+                        }
+                        PlaneSamples::U16(s) => CodePlane::from_u16(
+                            s,
+                            p.width(),
+                            p.height(),
+                            p.stride_bytes(),
+                            encoding,
+                        ),
+                    }
+                    .map_err(|e| failed(Stage::Prepare, &report, e))
+                };
+                let sub = match info.subsampling {
+                    Subsampling::Yuv444 => ChromaSubsampling::Yuv444,
+                    Subsampling::Yuv422 => ChromaSubsampling::Yuv422,
+                    Subsampling::Yuv420 => ChromaSubsampling::Yuv420,
+                    _ => return Err(failed(Stage::Prepare, &report, Refusal::Interpretation)),
+                };
+                // The selected fallback remains visible in the policy offer.
+                // The shared converter only receives the resolved concrete fact.
+                let plan = YcbcrToRgbF32::new(
+                    [view(planes[0])?, view(planes[1])?, view(planes[2])?],
+                    sub,
+                    PixelSiting::Center,
+                    info.color.resolved.unwrap(),
+                )
+                .map_err(|e| failed(Stage::Prepare, &report, e))?;
                 (
                     OutputStorage::Float { destination, plan },
                     FLOAT_SRGB,
@@ -251,7 +287,7 @@ impl<'a> Prepared<'a> {
         offer.admitted_bytes = admitted_bytes;
         Ok(Self {
             frame,
-            planes: planes.map(Option::unwrap),
+            planes,
             output,
             stride,
             offer,
@@ -359,23 +395,32 @@ impl<'a> Prepared<'a> {
                     .allocate()
                     .map_err(|e| failed(Stage::Allocate, &report, e))?;
                 let crop = self.frame.interpretation().geometry.crop;
+                let mut color = None;
                 for row in 0..crop.height as usize {
                     check(stop, Stage::Execute, &report)?;
-                    plan.row(
-                        &self.planes,
-                        crop.x as usize,
-                        crop.y as usize + row,
-                        &mut data.as_mut_slice()[row * self.stride..][..crop.width as usize],
-                    );
+                    let dst = PixelSliceMut::new(
+                        bytemuck::cast_slice_mut(
+                            &mut data.as_mut_slice()[row * self.stride..][..self.stride],
+                        ),
+                        crop.width,
+                        1,
+                        self.stride * 12,
+                        plan.output_descriptor(),
+                    )
+                    .map_err(|e| failed(Stage::Execute, &report, e))?;
+                    let converted = plan
+                        .convert_rows(crop.x as usize, crop.y as usize + row, dst)
+                        .map_err(|e| failed(Stage::Execute, &report, e))?;
+                    color = converted.color_context().cloned();
                 }
                 check(stop, Stage::Adopt, &report)?;
                 let owner = Owner {
                     data: data.freeze(),
-                    descriptor: FLOAT_SRGB,
+                    descriptor: plan.output_descriptor(),
                     width: crop.width,
                     height: crop.height,
                     stride: self.stride,
-                    color: Arc::new(ColorContext::from_cicp(Cicp::SRGB)),
+                    color: color.unwrap(),
                 };
                 ImageOutput::from_frame_pixels(self.frame.clone(), owner, self.offer.orientation)
                     .map_err(|e| failed(Stage::Adopt, &report, e))?

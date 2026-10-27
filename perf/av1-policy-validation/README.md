@@ -251,8 +251,9 @@ The oracle options are documented by
 
 The private prepared adapter also accepts an explicit RGB F32 target. It keeps
 the source's sRGB transfer and BT.709 primaries: **F32 storage does not mean
-linear light**. `planar_float.rs` reuses zenavif's normalization/matrix recipe
-without the final integer saturation and quantization. Centered interpolation
+linear light**. The pinned public `YcbcrToRgbF32` now replaces the original
+private kernel, retaining zenavif's normalization/matrix recipe without final
+integer saturation and quantization. Centered interpolation
 retains exact dyadic weights in coded coordinates; odd crops keep the same phase.
 
 The existing `ImageConversionOffer` suffices: this route reports extended-range
@@ -273,9 +274,10 @@ commands, binary hashes, source/output bytes and per-presentation measurements.
 Run `just av1-planar-float-verify <native-artifacts> <fresh-output>` after the
 native suite. [Receipt](../../benchmarks/planar_float_2026-10-27.json),
 [all measurements](../../benchmarks/planar_float_2026-10-27.csv).
-This adds no public API or zenpixels change. A public planar plan, the downstream
-OutputPlan processing contract, non-centered siting, other matrices/transfers,
-HDR display mapping and complete workspace accounting remain open.
+The initial private receipt predates shared packaging. The current route uses
+public borrowed conversion and downstream OutputPlan processing, qualified below.
+Non-centered siting, other matrices/transfers, HDR display mapping and complete
+workspace accounting remain open.
 
 ### Converted video uses the shared image output
 
@@ -414,5 +416,37 @@ at absolute 0.00001. Batch equivalence remains byte-exact. All per-presentation
 [measurements](../../benchmarks/float_processing_2026-10-27.csv) and the
 [receipt](../../benchmarks/float_processing_2026-10-27.json) are retained. This
 uses the reviewed OutputPlan revision without changing zenpixels source or adding
-a package to the graph. Public planar packaging, a clear strict preset and
-numerical-model contract, HDR rendering and workspace bounds remain open.
+a package to the graph. Broader planar coverage, a clear strict preset and numerical-model contract,
+HDR rendering and workspace bounds remain open.
+
+### Shared borrowed planar conversion
+
+The pinned zenpixels review now supplies `sample::CodePlane`, explicit chroma
+sampling/location and `ycbcr::YcbcrToRgbF32`. The native adapter maps its existing
+borrowed words into these views, constructs one plan before policy, then converts
+into admitted strided rows. The source mapping remains held; no source payload is
+copied. The former private float kernel has been removed.
+
+The shared plan accepts valid 8/10/12-bit code placements in U8/U16, both ranges,
+centered 4:2:0/4:2:2 or 4:4:4, and BT.709-matrix/sRGB interpretation. Its unit
+controls also exercise shifted words and nonzero code padding. The native adapter
+retains its narrower declared-source checks and siting decision. Unsupported
+color, encoding, geometry or location returns a traced error containing the
+actual facts; invalid output geometry or descriptor leaves destination unchanged.
+
+All 54 native float outputs are byte-identical to the earlier private baseline.
+The 162 crop cases, downstream OutputPlan, cancellation, callback failures and
+ownership checks pass against the committed dependency. Independent zimg
+agreement retains the existing 1e-6 gate. The pixel workspace, strict lint,
+documentation, API snapshots and no-default-feature WASM checks pass.
+
+This adds six public types and nine methods across the two pixel crates, with
+zero new features or packages. The converter prepares one shared color context;
+execution allocates no payload or scratch. Native workspace and whole-operation
+memory remain outside this statement. The adapter still translates zencodec's
+earlier plane and sample descriptions; consolidating those types remains open.
+Other matrices/transfers, non-centered siting, integer/mono/GBR output, HDR,
+strict-preset cleanup and coupled streaming reconfiguration also remain open.
+
+[Receipt](../../benchmarks/public_ycbcr_2026-10-27.json),
+[shared contract](https://github.com/imazen/zenpixels/blob/6250da2fc073150d69cbc6746ffa6cc6724b743f/docs/borrowed-ycbcr-contract.md).
