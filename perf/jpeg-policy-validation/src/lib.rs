@@ -30,3 +30,6 @@ mod checked_examples;
 #[cfg(test)]
 #[path = "../../../docs/examples/checked_operations.rs"]
 mod checked_guide;
+
+#[cfg(test)]
+mod output_scheduling;

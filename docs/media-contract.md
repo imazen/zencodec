@@ -448,3 +448,21 @@ native cases passed. Resource-wrapper receipt for the full suite:
 `rc=0 39s | peak-RSS 0.05GiB | min-avail 13102MiB | peak-load 0.56`.
 This is a validation-run resource observation, not a staging memory comparison
 or a throughput benchmark.
+
+### Live writer scheduling still requires source evidence
+
+The native JPEG scheduling matrix in
+[the JPEG qualification](../perf/jpeg-policy-validation/README.md#native-output-scheduling-qualification)
+preserves exact bytes across undrained finish, complete/partial drains and short
+writes for fixed/optimized and sequential/progressive configurations. Tiny
+images correctly report no streaming. This validates the byte protocol, not
+retained raw/intermediate allocations.
+
+A full-raster `PixelSlice` caller still owns all input during a writer wait.
+Consequently an encoder-only retention declaration cannot authorize a
+whole-operation streaming bound. A live route must bind the actual pausable
+source, configured codec state, pending-output ownership and publication
+effects together. Unknown source/native retention must stay unknown; neither
+`OutputTiming` nor a bounded output queue is a substitute. These facts belong
+to a retained route offered to the shared resolver, rather than another
+mandatory caller capability-query sequence.

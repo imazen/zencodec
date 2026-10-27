@@ -24,3 +24,34 @@ pixel dependencies do not alter the original I/O experiments.
 metadata serializers; there are no committed image binaries. The recipe supplies
 `JPEG_POLICY_ARTIFACTS` for independent ICC extraction; direct Cargo invocations
 must set it explicitly to a disk directory.
+
+### Native output scheduling qualification
+
+Run `just jpeg-output-scheduling-check`. At pinned zenjpeg revision
+`4535ec499d88b04f58882df03e61761526c35756`, the matrix covers sequential and
+progressive coding, fixed and optimized Huffman tables, and heights 8 and 65
+at width 97 with strided RGB8 input. It compares finish-first, per-row draining,
+seven-byte partial consumption and the shared three-byte short-write driver.
+Every schedule produces identical encoded bytes for the same configuration;
+libjpeg-turbo independently reads every comparison output. Repeated pending
+inspection does not advance or change output. Only the taller sequential
+fixed-table case reports streaming.
+
+This verifies byte scheduling, not memory retention. The input fixture remains
+owned by the caller throughout: even a strip-based native encoder cannot release
+a caller's complete raster. The shared `encode_to_writer(PixelSlice, ...)`
+therefore cannot establish a bounded end-to-end sequential source route.
+A qualified live route also needs pausable source ownership, bounded retained
+codec/intermediate state, and an explicit publication decision. Finite staging
+must remain a separate executable alternative, not a fallback chosen after a
+streaming requirement has already been accepted.
+
+Source inspection identifies different native mechanisms:
+`zenjpeg/src/encode/streaming.rs` selects strip storage for sequential,
+non-optimized, non-XYB/non-RGB operation; other configurations retain blocks.
+That inspection is not an allocation bound and does not qualify every metadata,
+quality-search or source configuration.
+
+Validation receipt (2026-10-27): native matrix and strict lint passed;
+`rc=0 6s | peak-RSS 0.57GiB | min-avail 12723MiB | peak-load 0.36`.
+The wrapper covers compilation and testing; it is not a codec RSS comparison.

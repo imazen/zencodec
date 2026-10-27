@@ -1254,3 +1254,8 @@ staged-encode-check artifacts:
     cargo clippy -p zencodec-media --all-targets --features std --locked -- -D warnings
     AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked staged_native_ -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+# Real JPEG scheduling, including tiny/nonstreaming configurations and short writes.
+jpeg-output-scheduling-check:
+    cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked output_scheduling -- --nocapture
+    cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
