@@ -55,3 +55,12 @@ quality-search or source configuration.
 Validation receipt (2026-10-27): native matrix and strict lint passed;
 `rc=0 6s | peak-RSS 0.57GiB | min-avail 12723MiB | peak-load 0.36`.
 The wrapper covers compilation and testing; it is not a codec RSS comparison.
+
+The prepared scheduling witness also calls the shared
+`resolve_output_schedule` before requesting any generated row or writing the
+retained destination. It executes the selected route without reconstructing the
+encoder. Fixed-table JPEG offers live and finish-first; optimized JPEG offers
+finish-first only. Required unavailable schedules and required zero wait-memory
+bounds refuse before source/destination effects. Both native routes retain
+unknown total memory evidence; a pull source is never treated as proof of a
+bound. This remains an adapter witness, not a packaged generic row-source driver.

@@ -1259,3 +1259,7 @@ staged-encode-check artifacts:
 jpeg-output-scheduling-check:
     cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked output_scheduling -- --nocapture
     cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+output-schedule-check:
+    cargo test -p zencodec --all-features --locked operation::scheduling
+    cargo clippy -p zencodec --all-targets --all-features --locked -- -D warnings

@@ -118,3 +118,130 @@ impl Write for ShortWriter {
         Ok(())
     }
 }
+
+// This is the executing adapter witness for the shared schedule resolver.
+// Source, encoder and destination stay held across selection; no re-preparation.
+fn execute_prepared<E: Encoder, R: zencodec::operation::PolicyResolver>(
+    mut encoder: E,
+    mut resolver: R,
+    source_calls: &std::cell::Cell<u32>,
+    writer_calls: &std::cell::Cell<u32>,
+    writer: &mut impl Write,
+) -> Result<(u64, zencodec::operation::DecisionRecord), Box<dyn std::error::Error>> {
+    use zencodec::operation::{
+        OutputSchedule, OutputScheduleFacts, OutputScheduleOffer, OutputSource, PolicySet,
+        resolve_output_schedule,
+    };
+    use zenpixels::PixelDescriptor;
+    let timing = encoder.begin(
+        fixtures::WIDTH,
+        fixtures::HEIGHT,
+        PixelDescriptor::RGB8_SRGB,
+    )?;
+    let mut offers = vec![OutputScheduleOffer::new(OutputSchedule::FinishFirst)];
+    if timing.streams() {
+        offers.push(OutputScheduleOffer::new(OutputSchedule::Live));
+    }
+    let (index, record) = resolve_output_schedule(
+        OutputScheduleFacts::new(timing, OutputSource::PullRows),
+        &offers,
+        &mut resolver,
+        PolicySet::new(),
+        &zencodec::enough::Unstoppable,
+    )?;
+    let schedule = offers[index].schedule;
+    let mut emitted = 0u64;
+    let mut drain = |encoder: &mut E| -> io::Result<()> {
+        if schedule == OutputSchedule::Live && !encoder.pending_output().is_empty() {
+            writer_calls.set(writer_calls.get() + 1);
+            writer.write_all(encoder.pending_output())?;
+            let len = encoder.pending_output().len();
+            encoder.consume_output(len);
+            emitted += len as u64;
+        }
+        Ok(())
+    };
+    drain(&mut encoder)?;
+    // Own only one strided source row. No borrowed complete raster enters this
+    // route. Native retained memory is still unknown, so no bound is claimed.
+    let mut row = vec![0xa5; fixtures::STRIDE];
+    let mut random = 0x12345678u32;
+    for _ in 0..fixtures::HEIGHT {
+        source_calls.set(source_calls.get() + 1);
+        for byte in &mut row[..fixtures::WIDTH as usize * 3] {
+            random ^= random << 13;
+            random ^= random >> 17;
+            random ^= random << 5;
+            *byte = random as u8;
+        }
+        encoder.push_rows(PixelSlice::new(
+            &row,
+            fixtures::WIDTH,
+            1,
+            fixtures::STRIDE,
+            PixelDescriptor::RGB8_SRGB,
+        )?)?;
+        drain(&mut encoder)?;
+    }
+    drop(row);
+    let rest = encoder.finish()?;
+    if !rest.is_empty() {
+        writer_calls.set(writer_calls.get() + 1);
+        writer.write_all(rest.data())?;
+        emitted += rest.len() as u64;
+    }
+    Ok((emitted, record))
+}
+
+#[test]
+fn native_jpeg_prepared_schedule_policy_runs_before_source_or_destination_effects() {
+    use std::cell::Cell;
+    use zencodec::operation::{OutputSchedule, PolicySet, Selection};
+    let raw = fixtures::raw();
+    for optimized in [false, true] {
+        for schedule in [OutputSchedule::FinishFirst, OutputSchedule::Live] {
+            for bound in [None, Some(0)] {
+                let source_calls = Cell::new(0);
+                let writer_calls = Cell::new(0);
+                let mut policy = PolicySet::new().require_output_schedule(schedule);
+                if let Some(bytes) = bound {
+                    policy = policy.with_output_wait_limit(bytes);
+                }
+                let config = fixtures::config(false, optimized);
+                let mut output = ShortWriter(Vec::new());
+                let result = execute_prepared(
+                    config.clone().job().encoder().unwrap(),
+                    policy,
+                    &source_calls,
+                    &writer_calls,
+                    &mut output,
+                );
+                if bound.is_some() || (optimized && schedule == OutputSchedule::Live) {
+                    let error = result.unwrap_err();
+                    assert!(
+                        zencodec::find_cause::<zencodec::operation::PolicyFailure>(error.as_ref())
+                            .is_some()
+                    );
+                    assert_eq!(source_calls.get(), 0);
+                    assert_eq!(writer_calls.get(), 0);
+                    assert!(output.0.is_empty());
+                } else {
+                    let (emitted, record) = result.unwrap();
+                    let bytes = output.0;
+                    assert_eq!(emitted as usize, bytes.len());
+                    assert!(
+                        matches!(record.selected, Some(Selection::OutputSchedule(o)) if o.schedule == schedule && o.wait_retained_upper_bound.is_none())
+                    );
+                    assert_eq!(source_calls.get(), fixtures::HEIGHT);
+                    let (reference, _, _) = run(
+                        config.job().encoder().unwrap(),
+                        &fixtures::pixels(&raw),
+                        Schedule::FinishFirst,
+                    );
+                    assert_eq!(bytes, reference);
+                    assert_eq!(fixtures::oracle(&bytes), fixtures::oracle(&reference));
+                }
+            }
+        }
+    }
+}

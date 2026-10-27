@@ -111,6 +111,8 @@ pub struct EncodeOffer {
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum Selection {
+    /// Retained source/encoder/output schedule before publication.
+    OutputSchedule(super::OutputScheduleOffer),
     /// Prepared conversion of a held image before destination writes.
     ImageConversion(super::ImageConversionOffer),
     /// Prepared frame encoding and output continuity.
@@ -135,6 +137,8 @@ pub enum Selection {
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum DecisionContext {
+    /// Actual byte availability and source ownership mechanism.
+    OutputSchedule(super::OutputScheduleFacts),
     /// Held image before executing a selected conversion route.
     ImageConversion(ImageFacts),
     /// Held frame and output state before an encoding transition.
@@ -179,6 +183,13 @@ pub struct EncodeFacts {
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum Question<'a> {
+    /// Select a retained source/encoder/output schedule before any final output.
+    OutputSchedule {
+        /// Actual prepared encoder and retained source mechanism.
+        facts: super::OutputScheduleFacts,
+        /// Executable alternatives with explicit retention uncertainty.
+        choices: Choices<'a, super::OutputScheduleOffer>,
+    },
     /// Choose a prepared conversion before its destination pixels are written.
     ImageConversion {
         /// Exact input retained by the adapter throughout this decision.
@@ -306,6 +317,8 @@ where
 /// selected questions to it with `Decision::UsePreset`.
 #[derive(Clone, Copy, Debug)]
 pub struct PolicySet {
+    output_schedule: Option<super::OutputSchedule>,
+    output_wait_limit: Option<u64>,
     prefer_lossless: bool,
     metadata: Option<MetadataTransfer>,
     allow_opaque_profiles: bool,
@@ -322,6 +335,8 @@ impl PolicySet {
     /// Choose the first prepared alternative in request order.
     pub const fn new() -> Self {
         Self {
+            output_schedule: None,
+            output_wait_limit: None,
             prefer_lossless: false,
             metadata: None,
             allow_opaque_profiles: true,
@@ -379,6 +394,32 @@ impl PolicySet {
         self.require_extended_range = required;
         self
     }
+    /// Require this executable output schedule. Other output domains cannot
+    /// establish it and refuse; interpretation discovery may still proceed.
+    pub const fn require_output_schedule(mut self, schedule: super::OutputSchedule) -> Self {
+        self.output_schedule = Some(schedule);
+        self
+    }
+    /// Require a qualified bound on route-retained memory during destination
+    /// waits. Unknown refuses, including finish-first and pull-source routes.
+    /// This is not a peak-operation or destination-allocation bound.
+    pub const fn with_output_wait_limit(mut self, bytes: u64) -> Self {
+        self.output_wait_limit = Some(bytes);
+        self
+    }
+    fn permits_output_schedule(self, offer: Option<&super::OutputScheduleOffer>) -> bool {
+        if self.output_schedule.is_none() && self.output_wait_limit.is_none() {
+            return true;
+        }
+        offer.is_some_and(|offer| {
+            self.output_schedule.is_none_or(|s| s == offer.schedule)
+                && self.output_wait_limit.is_none_or(|limit| {
+                    offer
+                        .wait_retained_upper_bound
+                        .is_some_and(|bound| bound <= limit)
+                })
+        })
+    }
     fn permits_transcode(self, offer: &TranscodeOffer) -> bool {
         self.metadata.is_none_or(|m| m == offer.metadata)
             && (self.allow_opaque_profiles || !offer.retains_opaque_profile)
@@ -392,6 +433,16 @@ impl PolicySet {
 impl PolicyResolver for PolicySet {
     type Error = Infallible;
     fn resolve(&mut self, question: Question<'_>) -> Result<Decision, At<Infallible>> {
+        if (self.output_schedule.is_some() || self.output_wait_limit.is_some())
+            && !matches!(
+                question,
+                Question::OutputSchedule { .. }
+                    | Question::FrameRoute { .. }
+                    | Question::Boundary { .. }
+            )
+        {
+            return Ok(Decision::decline(Decline::UnsupportedQuestion));
+        }
         if self.require_extended_range
             && !matches!(
                 question,
@@ -403,6 +454,27 @@ impl PolicyResolver for PolicySet {
             return Ok(Decision::decline(Decline::UnsupportedQuestion));
         }
         let choices = match question {
+            Question::OutputSchedule { choices, .. } => {
+                if self.metadata.is_some()
+                    || !self.allow_opaque_profiles
+                    || self.workspace_limit.is_some()
+                {
+                    return Ok(Decision::decline(Decline::UnsupportedQuestion));
+                }
+                return Ok(choices
+                    .iter()
+                    .find(|c| {
+                        let offer = c.value();
+                        self.output_schedule.is_none_or(|s| s == offer.schedule)
+                            && self.output_wait_limit.is_none_or(|limit| {
+                                offer
+                                    .wait_retained_upper_bound
+                                    .is_some_and(|bound| bound <= limit)
+                            })
+                    })
+                    .map(Decision::choose)
+                    .unwrap_or_else(|| Decision::decline(Decline::NoPreferredChoice)));
+            }
             Question::ImageConversion { choices, .. } => {
                 // Conversion alone does not certify metadata or opaque-profile
                 // treatment. Do not silently ignore an existing obligation.
@@ -443,6 +515,7 @@ impl PolicyResolver for PolicySet {
                             || (choice.value().fidelity == Some(Fidelity::Lossless)
                                 && conversion.is_some_and(|c| c.preserves_extended_range)));
                         conversion_permitted
+                            && self.permits_output_schedule(choice.value().output_schedule.as_ref())
                             && self.workspace_limit.is_none_or(|limit| {
                                 choice
                                     .value()

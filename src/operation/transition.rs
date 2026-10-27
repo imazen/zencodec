@@ -133,6 +133,8 @@ pub struct FrameRouteOffer {
     /// Actual compressed store; None means unqualified. Disk may block while
     /// raw encoder state is retained, independently of final writer access.
     pub staging: Option<StagingFacts>,
+    /// Actual final-destination scheduling guarantee. None is unqualified.
+    pub output_schedule: Option<super::OutputScheduleOffer>,
     /// Currently admitted encoded staging held by the operation. This excludes
     /// native input/reference/work buffers and is not a whole-operation bound.
     pub admitted_encoded_bytes: usize,
@@ -148,6 +150,7 @@ impl FrameRouteOffer {
             conversion: None,
             destination: None,
             staging: None,
+            output_schedule: None,
             admitted_encoded_bytes: 0,
             workspace_upper_bound: None,
         }

@@ -466,3 +466,27 @@ effects together. Unknown source/native retention must stay unknown; neither
 `OutputTiming` nor a bounded output queue is a substitute. These facts belong
 to a retained route offered to the shared resolver, rather than another
 mandatory caller capability-query sequence.
+
+### One resolver for actual output schedules
+
+`OutputScheduleOffer` distinguishes finish-first from live output and carries
+an optional qualified wait-retention bound. The shared question records actual
+byte timing and source mechanism. Required unknown bounds refuse; a pull source
+does not imply bounded retained storage. This is a wait-time scope, not peak
+operation memory.
+
+The owned video operation supplies finish-first evidence automatically through
+`FrameRouteOffer::output_schedule`. Native AV1 tests accept a required
+finish-first schedule, reject required live mode, and reject an unknown required
+wait bound before accepting frames or publishing bytes. JPEG executes the
+standalone question with generated strided rows and short writes. A general
+row-source facade and qualified native wait-memory bounds remain open.
+
+Validation on 2026-10-27: the JPEG schedule matrix and generated-row policy
+witness passed with strict lint; all six owned AV1 cases passed with media
+tests/doctests and native lint. Workspace all-feature tests and browser checks
+passed. Core controls cover unknown-versus-zero retention, required schedule
+refusal, contradictory live offers and stale tokens. No zenpixels change or
+dependency addition was required. Validation resource receipt for core/JPEG:
+`rc=0 18s | peak-RSS 0.70GiB | min-avail 12414MiB | peak-load 0.90`.
+This includes compilation and is not a codec memory/performance comparison.

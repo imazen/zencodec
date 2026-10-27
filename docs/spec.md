@@ -2613,3 +2613,35 @@ the header. Later read/admission failures may follow destination effects:
 `staged::Failure::emitted` retains confirmed appends and the original cause.
 Patch failures may also leave partial overwrites. These are not transactions
 or whole-operation memory guarantees.
+
+### Prepared output scheduling
+
+`Question::OutputSchedule` carries `OutputScheduleFacts { timing, source }`
+and retained `OutputScheduleOffer` alternatives. `OutputSchedule::FinishFirst`
+releases the encoder before final-destination I/O; `Live` permits waits while
+the encoder is alive. `OutputSource::{BorrowedRaster, PullRows, Unknown}`
+describes acquisition, not a memory guarantee. A pull source can itself own a
+full raster. Neither schedule implies release of caller-owned inputs.
+
+`resolve_output_schedule` uses the existing fallible resolver, scoped tokens
+and bounded records. A live offer contradicting `AT_FINISH` refuses before
+selection. Adapters keep prepared objects across selection, perform no automatic
+fallback, and retain the decision record on subsequent execution errors.
+
+`PolicySet::require_output_schedule` selects only the requested mechanism.
+`with_output_wait_limit` requires a qualified bound on all route-retained
+memory during destination waits, including source, codec, conversion, metadata,
+scratch and compressed data. Unknown refuses even for finish-first. It excludes
+unrelated application state and destination-owned allocations and is not a peak
+operation bound. These are built-in resolver rules; a custom resolver owns its
+own decision logic. Hard operation requirements must still filter offers before
+any callback.
+
+`FrameRouteOffer::output_schedule` carries the same guarantee for retained
+video routes. `StagedEncode` supplies finish-first automatically, with unknown
+wait retention, and uses the same policy before frame acceptance. Spool writes
+are separate from final-destination waits.
+
+The native JPEG adapter witness executes both schedules from generated strided
+rows with real short writes. The general shared row-source scheduling driver
+and native total-retention qualification are not implemented by this resolver.

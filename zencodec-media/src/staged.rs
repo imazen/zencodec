@@ -314,6 +314,9 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
             offer.destination = Some(state.output.facts());
             offer.admitted_encoded_bytes = state.packets.admitted_memory();
             offer.staging = Some(state.packets.facts());
+            offer.output_schedule = Some(zencodec::operation::OutputScheduleOffer::new(
+                zencodec::operation::OutputSchedule::FinishFirst,
+            ));
             let mut progress = FrameRouteState::default();
             progress.previous = state.previous;
             match resolve_frame_route(

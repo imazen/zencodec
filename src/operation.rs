@@ -21,6 +21,7 @@ mod decoding;
 mod frame;
 mod image;
 mod policy;
+mod scheduling;
 mod transcode;
 mod transition;
 pub use collection::{CheckedCollection, CollectionOperationError, CollectionStage};
@@ -31,6 +32,9 @@ pub use policy::{
     BoundaryOffer, Choice, ChoiceId, Choices, Decision, DecisionCode, DecisionContext,
     DecisionRecord, Decline, EncodeFacts, EncodeOffer, OperationReport, PolicyFailure,
     PolicyResolver, PolicySet, Question, Selection, resolve_boundary,
+};
+pub use scheduling::{
+    OutputSchedule, OutputScheduleFacts, OutputScheduleOffer, OutputSource, resolve_output_schedule,
 };
 pub use transcode::{MetadataTransfer, TranscodeOffer, resolve_transcode};
 pub use transition::{

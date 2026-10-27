@@ -632,3 +632,59 @@ fn staged_native_late_spool_failure_retains_confirmed_output_progress() {
     assert!(!live.get());
     assert_eq!(budget.reserved_bytes(), 0);
 }
+
+#[test]
+fn staged_native_schedule_requirements_use_the_owned_operation_guarantee() {
+    use zencodec::operation::OutputSchedule;
+    for (schedule, limit, succeeds) in [
+        (OutputSchedule::FinishFirst, None, true),
+        (OutputSchedule::Live, None, false),
+        (OutputSchedule::FinishFirst, Some(0), false),
+    ] {
+        let live = Rc::new(Cell::new(false));
+        let calls = Rc::new(Cell::new(0));
+        let mut bytes = Vec::new();
+        let mut policy = PolicySet::new().require_output_schedule(schedule);
+        if let Some(limit) = limit {
+            policy = policy.with_output_wait_limit(limit);
+        }
+        let mut operation = StagedEncode::new(
+            encoder(&live),
+            ExactMp4(zenmp4::Mp4Muxer::new()),
+            Forward(Writer {
+                bytes: &mut bytes,
+                live: live.clone(),
+                calls: calls.clone(),
+                fail: false,
+            }),
+            policy,
+            StorageBudget::new(1 << 20, 64),
+            &Unstoppable,
+        )
+        .unwrap();
+        let settings = settings(8, Subsampling::Yuv420, false);
+        let input = frame(&settings, 0);
+        let result = operation.push(input.clone(), &Unstoppable);
+        assert_eq!(calls.get(), 0);
+        if succeeds {
+            result.unwrap();
+            operation.finish(&Unstoppable).unwrap();
+            assert!(!live.get());
+            oracle_container(
+                &root(),
+                "owned-schedule-required",
+                "mp4",
+                &settings,
+                &bytes,
+                &[input],
+            );
+        } else {
+            let error = result.unwrap_err();
+            assert!(zencodec::find_cause::<zencodec::operation::PolicyFailure>(&error).is_some());
+            assert!(operation.is_failed());
+            assert!(!live.get());
+            drop(operation);
+            assert!(bytes.is_empty());
+        }
+    }
+}

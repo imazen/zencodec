@@ -2,6 +2,10 @@
 
 ## Native image selection (unreleased experiment)
 
+- Resolve prepared output schedules through the shared policy callback. Bind
+  actual source mechanism and byte timing, refuse unknown required wait-memory
+  bounds, and expose owned video finish-first guarantees automatically.
+
 - Add explicit disk staging for owned finite encoding with separate disk/index
   caps and admitted replay. Expose the actual store to policy; spool I/O may
   block while the encoder is alive. Preserve confirmed destination appends and
