@@ -81,6 +81,7 @@ jobs:
       CARGO_BUILD_JOBS: 4
       CARGO_INCREMENTAL: 0
       AV1_POLICY_ARTIFACTS: ${{ github.workspace }}/perf/av1-policy-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}
+      AV1_TIMING_FFPROBE: ${{ github.workspace }}/perf/av1-policy-validation/target/timing-oracle/ffmpeg-8.0.1/ffprobe
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -101,6 +102,11 @@ jobs:
           sudo timeout --kill-after=15s 2m apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update
           sudo timeout --kill-after=15s 3m apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends ffmpeg
           timeout --kill-after=5s 10s ffmpeg -version
+      - name: Build pinned container timing inspector
+        timeout-minutes: 7
+        run: |
+          timeout --kill-after=15s 6m python3 perf/av1-policy-validation/build_timing_oracle.py perf/av1-policy-validation/target/timing-oracle
+          timeout --kill-after=5s 10s "$AV1_TIMING_FFPROBE" -version
       - name: Test pinned native ownership, policy and independent readback
         run: |
           cp perf/av1-policy-validation/dependencies.lock perf/av1-policy-validation/Cargo.lock

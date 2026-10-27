@@ -154,19 +154,38 @@ fn write_all(
 
 impl<M: Muxer, D: Destination> Output<M, D> {
     pub fn new(
-        mut mux: M,
+        mux: M,
         destination: D,
         tracks: &[TrackInfo],
         stop: &dyn Stop,
     ) -> Result<Self, Failure> {
-        let mut prepare = || -> Result<_, Cause> {
+        Self::prepare(mux, destination, tracks, stop, M::begin)
+    }
+
+    pub fn new_checked(
+        mux: M,
+        destination: D,
+        tracks: &[TrackInfo],
+        stop: &dyn Stop,
+    ) -> Result<Self, Failure> {
+        Self::prepare(mux, destination, tracks, stop, M::begin_exact_timing)
+    }
+
+    fn prepare(
+        mut mux: M,
+        destination: D,
+        tracks: &[TrackInfo],
+        stop: &dyn Stop,
+        begin: impl FnOnce(&mut M, &[TrackInfo], MuxHint) -> Result<MuxTiming, SessionError<M::Error>>,
+    ) -> Result<Self, Failure> {
+        let prepare = || -> Result<_, Cause> {
             stopped(stop)?;
             let hint = if destination.can_patch() {
                 MuxHint::default()
             } else {
                 MuxHint::forward_only()
             };
-            let timing = mux.begin(tracks, hint)?;
+            let timing = begin(&mut mux, tracks, hint)?;
             if timing.patches_at_finish() && !destination.can_patch() {
                 return Err(Box::new(SessionError::<ErasedError>::Unsupported(
                     UnsupportedMedia::ForwardOnlyLayout,

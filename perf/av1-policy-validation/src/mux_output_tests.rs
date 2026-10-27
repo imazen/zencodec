@@ -31,18 +31,38 @@ fn track(config: &CodecConfig) -> TrackInfo {
     track.build().unwrap()
 }
 
+#[test]
+fn mux_native_checked_legacy_support_refuses_before_header() {
+    let mut bytes = Vec::new();
+    let failure = match Output::new_checked(
+        zenivf::IvfMuxer::new(),
+        Forward(&mut bytes),
+        &[],
+        &Unstoppable,
+    ) {
+        Ok(_) => panic!("unqualified implementation was admitted"),
+        Err(failure) => failure,
+    };
+    assert!(matches!(failure.stage, Stage::Prepare));
+    assert_eq!(failure.emitted, 0);
+    assert!(bytes.is_empty());
+    assert!(matches!(
+        zencodec::find_cause::<SessionError<zenivf::IvfError>>(&failure),
+        Some(SessionError::Unsupported(UnsupportedMedia::ExactTiming))
+    ));
+}
+
 fn inspect_timing(name: &str, extension: &str, expected: &[Packet]) -> usize {
     let dir = root().join(name);
     let result = std::process::Command::new("timeout")
+        .args(["--kill-after=5s", "30s"])
+        .arg(std::env::var_os("AV1_TIMING_FFPROBE").unwrap_or_else(|| "ffprobe".into()))
         .args([
-            "--kill-after=5s",
-            "30s",
-            "ffprobe",
             "-v",
             "error",
             // Inspect the container's timing, without parser duration rewriting
-            // or inferred timestamps. FFmpeg 6's AV1 parser otherwise clears
-            // WebM BlockDuration on packets without COMPLETE_FRAMES.
+            // or inferred timestamps. CI pins the timing inspector separately
+            // from the system decoder; FFmpeg 6 omits fragmented MP4 durations.
             "-fflags",
             "+noparse+nofillin",
             "-select_streams",
@@ -100,6 +120,206 @@ fn inspect_timing(name: &str, extension: &str, expected: &[Packet]) -> usize {
         }
     }
     durations
+}
+
+// The native repo still pins the released media-trait revision. This thin
+// integration shim connects its inherent exact-timing implementation to the
+// review trait; it makes no timing decisions and buffers no packets.
+struct ExactMp4(zenmp4::Mp4Muxer);
+impl Muxer for ExactMp4 {
+    type Error = zenmp4::Mp4Error;
+    fn begin(
+        &mut self,
+        tracks: &[TrackInfo],
+        hint: MuxHint,
+    ) -> Result<MuxTiming, SessionError<Self::Error>> {
+        self.0.begin(tracks, hint)
+    }
+    fn begin_exact_timing(
+        &mut self,
+        tracks: &[TrackInfo],
+        hint: MuxHint,
+    ) -> Result<MuxTiming, SessionError<Self::Error>> {
+        self.0.begin_exact_timing(tracks, hint)
+    }
+    fn write_packet(
+        &mut self,
+        packet: Packet,
+        stop: &dyn Stop,
+    ) -> Result<(), SessionError<Self::Error>> {
+        self.0.write_packet(packet, stop)
+    }
+    fn pending_output(&self) -> &[u8] {
+        self.0.pending_output()
+    }
+    fn consume_output(&mut self, n: usize) {
+        self.0.consume_output(n);
+    }
+    fn take_output(&mut self, into: &mut Vec<u8>) {
+        self.0.take_output(into);
+    }
+    fn finish(self, stop: &dyn Stop) -> Result<MuxFinish, SessionError<Self::Error>> {
+        self.0.finish(stop)
+    }
+}
+
+fn write_exact<D: Destination>(destination: D, info: &TrackInfo, packets: &[Packet]) -> Stats {
+    let mut output = Output::new_checked(
+        ExactMp4(zenmp4::Mp4Muxer::new()),
+        destination,
+        std::slice::from_ref(info),
+        &Unstoppable,
+    )
+    .unwrap();
+    for packet in packets {
+        output.send(packet.clone(), &Unstoppable).unwrap();
+    }
+    output.finish(&Unstoppable).unwrap()
+}
+
+#[test]
+fn mux_native_exact_timing_preserves_variable_durations_decode_clocks_and_origins() {
+    for bits in [8, 10] {
+        let settings = settings(bits, Subsampling::Yuv420, false);
+        let frames: Vec<_> = (0..6).map(|i| frame(&settings, i)).collect();
+        let (config, original) = encode(settings.clone(), &frames);
+        for scale in [1, 90] {
+            let base = TimeBase::new(1, 1000 * scale).unwrap();
+            let mut config = config.clone();
+            config.time_base = base;
+            for origin in [0, 40] {
+                let mut dts = origin;
+                let packets: Vec<_> = original
+                    .iter()
+                    .zip([17, 23, 40, 1, 70, 9])
+                    .map(|(p, duration)| {
+                        let packet = p
+                            .clone()
+                            .with_pts(zencodec::time::Timestamp::new(
+                                (dts + 3) * i64::from(scale),
+                                base,
+                            ))
+                            .with_dts(zencodec::time::Timestamp::new(dts * i64::from(scale), base))
+                            .with_duration_ticks(duration * u64::from(scale));
+                        dts += duration as i64;
+                        packet
+                    })
+                    .collect();
+                for forward in [false, true] {
+                    let name = format!("mux-exact-{bits}-{scale}-{origin}-{forward}");
+                    let mut bytes = Vec::new();
+                    let stats = if forward {
+                        write_exact(
+                            Forward(Short {
+                                writer: &mut bytes,
+                                interrupted: false,
+                            }),
+                            &track(&config),
+                            &packets,
+                        )
+                    } else {
+                        let path = root().join(format!("{name}.embedded"));
+                        let mut file = OpenOptions::new()
+                            .create_new(true)
+                            .write(true)
+                            .read(true)
+                            .open(&path)
+                            .unwrap();
+                        let prefix = b"prior content";
+                        file.write_all(prefix).unwrap();
+                        let stats = write_exact(
+                            SeekBack::new(Short {
+                                writer: &mut file,
+                                interrupted: false,
+                            })
+                            .unwrap(),
+                            &track(&config),
+                            &packets,
+                        );
+                        assert_eq!(
+                            file.stream_position().unwrap(),
+                            prefix.len() as u64 + stats.emitted
+                        );
+                        drop(file);
+                        let embedded = std::fs::read(path).unwrap();
+                        assert_eq!(&embedded[..prefix.len()], prefix);
+                        bytes.extend_from_slice(&embedded[prefix.len()..]);
+                        stats
+                    };
+                    assert_eq!(stats.patches, 0);
+                    oracle_container(&root(), &name, "mp4", &settings, &bytes, &frames);
+                    assert_eq!(inspect_timing(&name, "mp4", &packets), packets.len());
+                    let inspection =
+                        std::fs::read_to_string(root().join(&name).join("ffprobe.stdout")).unwrap();
+                    let clock = inspection
+                        .lines()
+                        .find_map(|l| l.strip_prefix("stream|time_base="))
+                        .unwrap();
+                    let (n, d) = clock.split_once('/').unwrap();
+                    let (n, d): (i128, i128) = (n.parse().unwrap(), d.parse().unwrap());
+                    for (line, packet) in inspection
+                        .lines()
+                        .filter(|l| l.starts_with("packet|"))
+                        .zip(&packets)
+                    {
+                        let actual: i128 = line
+                            .split('|')
+                            .find_map(|p| p.strip_prefix("dts="))
+                            .unwrap()
+                            .parse()
+                            .unwrap();
+                        let expected = packet.dts().unwrap();
+                        assert_eq!(
+                            actual * n * i128::from(base.denominator()),
+                            i128::from(expected.ticks()) * d
+                        );
+                    }
+                    std::fs::write(
+                        root().join(&name).join("output-counts.txt"),
+                        format!(
+                            "emitted={} patches={} max_pending={}\n",
+                            stats.emitted, stats.patches, stats.max_pending
+                        ),
+                    )
+                    .unwrap();
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn mux_native_exact_timing_packet_refusal_is_terminal_with_prior_progress() {
+    let settings = settings(8, Subsampling::Yuv420, false);
+    let frames: Vec<_> = (0..2).map(|i| frame(&settings, i)).collect();
+    let (config, packets) = encode(settings, &frames);
+    for invalid in [
+        Packet::from_vec(packets[0].bytes().to_vec())
+            .unwrap()
+            .with_pts(packets[0].pts().unwrap()),
+        packets[0]
+            .clone()
+            .with_dts(zencodec::time::Timestamp::new(-1, config.time_base)),
+        packets[0].clone().with_duration_ticks(u64::MAX),
+    ] {
+        let mut bytes = Vec::new();
+        let mut output = Output::new_checked(
+            ExactMp4(zenmp4::Mp4Muxer::new()),
+            Forward(&mut bytes),
+            &[track(&config)],
+            &Unstoppable,
+        )
+        .unwrap();
+        let before = output.stats.emitted;
+        let failure = output.send(invalid, &Unstoppable).unwrap_err();
+        assert!(matches!(failure.stage, Stage::Packet));
+        assert_eq!(failure.emitted, before);
+        assert!(zencodec::find_cause::<SessionError<zenmp4::Mp4Error>>(&failure).is_some());
+        assert!(output.is_failed());
+        assert!(output.send(packets[0].clone(), &Unstoppable).is_err());
+        drop(output);
+        assert_eq!(bytes.len() as u64, before);
+    }
 }
 
 struct Short<W> {

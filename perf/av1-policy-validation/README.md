@@ -2,6 +2,30 @@
 
 ## Container destination and timing qualification
 
+The shared `Muxer::begin_exact_timing` entry point is now exercised through
+the native MP4 implementation at `11b2b1d6`. Default implementations return
+`UnsupportedMedia::ExactTiming` before publishing a header. The private writer's
+`new_checked` requests this behavior directly and fuses later failures.
+
+The native MP4 exact route chooses fragmentation before publishing, keeps that
+actual prepared instance and requires explicit packet durations. Sixteen native
+cases cover 8/10-bit AV1, 1/1000 and 1/90000 clocks, zero and 40 ms decode origins,
+and short-writing forward/prefixed-file destinations. All six variable durations,
+distinct PTS/DTS and exact decoded components survive independent inspection.
+Missing durations, negative decode time and overflow refuse without increasing
+the writer's confirmed append count; the driver then refuses further packets.
+
+The native repository still uses its earlier shared dependency revision. A thin
+test adapter delegates the new trait hook to the native inherent method; it adds
+no packet copies, buffers or timing decisions. That hook must move into the
+native trait implementation when the shared review dependency graph is aligned.
+IVF/WebM have no qualified exact-timing implementation in this trial and refuse
+the stronger entry point. This is partial progress on issue 172, not closure:
+coupled encoder/converter/container preparation, full metadata/side-data
+requirements and bounded live output remain unimplemented. The exact MP4 disk
+route currently uses fragmentation; progressive optimization requires known
+decode-origin evidence. No new pixel APIs or kernels were required here.
+
 The private `mux_output.rs` adapter runs the same `Muxer` protocol against IVF,
 WebM and MP4. `Forward(writer)` derives a forward-only destination;
 `SeekBack::new(writer)` captures the actual initial file position. The shared
@@ -24,6 +48,15 @@ can clear packet durations. CI exposed that difference from FFmpeg 8.0.1;
 the exact-duration assertions remain unchanged. Pixel readback still uses the
 full independent decoder. The focused native gate passed with these flags
 on 2026-10-27 (run-heavy: 13 s, peak RSS 0.54 GiB).
+
+The subsequent CI-version reproduction isolated a second difference:
+FFprobe 6.1.1 omits explicit durations from these fragmented MP4 files even
+with those flags. The same inspector reads progressive MP4 and WebM durations.
+CI therefore builds FFprobe 8.0.1 for timing only, with the source checksum
+recorded beside the build. `AV1_TIMING_FFPROBE` selects that inspector; ordinary
+FFmpeg/libdav1d remains the independent pixel decoder. Every exact PTS/duration
+assertion remains required. `just av1-timing-oracle-build <directory> 6.1.1`
+reproduces the older reader; the recipe defaults to 8.0.1.
 
 Timing is a separate contract. The native IVF outputs preserve PTS but report
 no explicit packet durations; WebM and MP4 preserve all six authored durations.

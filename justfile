@@ -1139,3 +1139,6 @@ mux-finish-check:
 av1-mux-check artifacts:
     AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked mux_native_ -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+av1-timing-oracle-build directory version="8.0.1":
+    python3 perf/av1-policy-validation/build_timing_oracle.py "{{directory}}" --version "{{version}}"

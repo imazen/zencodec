@@ -13,7 +13,7 @@ zenpixels = ">=0.2.16, <0.4.0"
 enough = "0.4.4"
 zenavif = { git = "https://github.com/imazen/zenavif", rev = "feadc4c94b19acdcd82ee545a02263bc67c45d7d", features = ["media-encode", "_dev"] }
 rav1d-safe = { git = "https://github.com/imazen/rav1d-safe", rev = "b19aec6561204ff310250bf2bc1b2c6faa42c3b5", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }
-zenmp4 = { git = "https://github.com/imazen/zenavif", rev = "feadc4c94b19acdcd82ee545a02263bc67c45d7d", version = "0.1.0" }
+zenmp4 = { git = "https://github.com/imazen/zenavif", rev = "11b2b1d69ea8ee3ae80bae67b35937b970a8c9ae", version = "0.1.0" }
 zenivf = { git = "https://github.com/imazen/zenextras", rev = "ae920c1e2ac0fe0e6e2fcb709d99934ba36ea49c", version = "0.1.0" }
 zenwebm = { git = "https://github.com/imazen/zenextras", rev = "ae920c1e2ac0fe0e6e2fcb709d99934ba36ea49c", version = "0.1.0" }
 
