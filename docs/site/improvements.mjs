@@ -2,6 +2,19 @@
 // Signatures come from Rust through apiPanels; examples remain executable files.
 export const improvements = [
   {
+    id:'retained-raster-replay', title:'Replay the retained pixels, not a transferable promise',
+    state:'Native contract experiment qualified · production integration open', date:'2026-10-27',
+    summary:'Input::raster holds the actual immutable pixels across every encoder pass. A custom source cannot borrow another raster’s proof token.',
+    why:'A private token constructor did not bind callback reads to the original pixels. An adversarial source supplied different samples on later passes and still published under an exact-replay requirement.',
+    consumer:'Start with Input::raster(pixels). Use Input::source for a file, network adapter or decoder output. Exact replay then requires admitted owned staging or a refusal.',
+    adapter:'Read the retained raster directly and derive borrowed ownership from that input arm. Keep positional access, source stability, output seeking and retained memory as separate facts.',
+    implementor:'Request each pass into the codec’s own row buffer. The driver rejects incomplete passes, double fills, swallowed source failures and changed replay content.',
+    open:'The experiment still has separate replay and output-policy arguments. Production integration must use one resolver, scoped requirements, a shared checked destination path and bounded tracing. No total-memory bound is claimed.',
+    signatures:['multipassInput','multipassEncode','multipassEncoder'],
+    flow:[['consumer','Retain actual pixels','or supply an external source'],['adapter','Admit replay or staging','pass budget and evidence'],['implementor','Request each pass','codec-owned row buffer'],['adapter','Finish or refuse','preserve errors and output layout']],
+    evidence:[['Caller evolution and remaining contracts','docs/multipass-input-contract.md'],['Detached-token reproduction','docs/multipass-proof-review-2026-10-27.md'],['Adversarial replay controls','perf/multipass-validation/tests/proof_substitution.rs'],['Native parity and failure gates','perf/multipass-validation/native/tests/imi_native.rs']],
+  },
+  {
     id:'checked-policy-migration', title:'Make ignored policy requests visible to callers',
     state:'Checked replacements implemented · legacy setters deprecated', date:'2026-10-27',
     summary:'Typed with_policy and erased set_policy job methods now warn that unsupported fields can be silently ignored.',
