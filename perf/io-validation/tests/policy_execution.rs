@@ -405,3 +405,85 @@ fn cancellation_prevents_admission_and_each_later_growth() {
     ));
     assert_eq!(admitted.bytes(), 0);
 }
+
+#[test]
+fn pending_requirements_survive_report_wrap_and_cannot_be_discharged_by_a_child() {
+    let mut engine = Engine::new(PolicySet::default(), 128);
+    let selected = choices(&mut engine, req(), context());
+    let mut pending = PendingPlan::new(selected[0], context()).unwrap();
+    pending.accept(selected[2], context()).unwrap();
+    assert_eq!(pending.remaining().collect::<Vec<_>>(), [Kind::Metadata]);
+    // Produce real decisions until the original evidence has left the report.
+    for _ in 0..8 {
+        choices(&mut engine, req(), context());
+    }
+    assert!(engine.dropped_records() > 0);
+    assert!(engine.records().all(|r| r.question != selected[0].question));
+    let child = choices(&mut Engine::new(PolicySet::default(), 8), req(), context());
+    assert_eq!(
+        *pending.accept(child[1], context()).unwrap_err().error(),
+        PlanError::ForeignOperation
+    );
+    assert_eq!(pending.remaining().collect::<Vec<_>>(), [Kind::Metadata]);
+    pending.accept(selected[1], context()).unwrap();
+    let admitted = Admitted::start(
+        pending.finish(context()).unwrap(),
+        context(),
+        &storage(48),
+        &storage(8),
+        &Unstoppable,
+    )
+    .unwrap();
+    let mut output = admitted
+        .allocate(ByteRange::new(0, 1), context(), &Unstoppable)
+        .unwrap();
+    output.append(&[7]).unwrap();
+    assert_eq!(output.publish(context()).unwrap().bytes(), &[7]);
+}
+
+#[test]
+fn refused_pending_updates_are_atomic_and_incomplete_plans_cannot_start() {
+    let mut engine = Engine::new(PolicySet::default(), 32);
+    let selected = choices(&mut engine, req(), context());
+    let mut pending = PendingPlan::new(selected[0], context()).unwrap();
+    let changed = choices(
+        &mut engine,
+        Requirements {
+            ram: Some(128),
+            ..req()
+        },
+        context(),
+    );
+    assert_eq!(
+        *pending.accept(changed[1], context()).unwrap_err().error(),
+        PlanError::ChangedRequest
+    );
+    let newer = Context {
+        epoch: 3,
+        ..context()
+    };
+    let changed = choices(&mut engine, req(), newer);
+    assert_eq!(
+        *pending.accept(changed[1], newer).unwrap_err().error(),
+        PlanError::Stale
+    );
+    assert_eq!(
+        pending.remaining().collect::<Vec<_>>(),
+        [Kind::Metadata, Kind::Fidelity]
+    );
+    pending.accept(selected[1], context()).unwrap();
+    assert_eq!(
+        *pending.accept(selected[1], context()).unwrap_err().error(),
+        PlanError::Duplicate
+    );
+    pending.accept(selected[2], context()).unwrap();
+    assert_eq!(pending.finish(context()).unwrap().ram, 48);
+    assert_eq!(
+        *PendingPlan::new(selected[0], context())
+            .unwrap()
+            .finish(context())
+            .unwrap_err()
+            .error(),
+        PlanError::Missing
+    );
+}

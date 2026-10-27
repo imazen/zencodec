@@ -76,3 +76,20 @@ refusal. Extend the executing native JPEG and IMI loops to cover:
 These are adoption gates, not completed coverage claims. The replay candidate
 already demonstrates why source identity evidence must refer to the actual
 retained input rather than a transferable promise.
+
+## Fixed-state preparation experiment
+
+`PendingPlan` in the joint-plan experiment now retains the execution selection
+and two optional stage selections in private fields. Each accepted stage must
+belong to the same operation, requirements and source/route context. Validation
+precedes mutation. Finishing consumes this state and delegates final cost/effect
+checks to `Plan::combine`; no execution admission exists for an incomplete plan.
+
+This is deliberately conservative: it waits for Execution, Metadata and Fidelity
+before permitting any of the experiment's execution effects. It is not a general
+implementation of per-effect deadlines or operation-level NotApplicable.
+
+The execution tests exercise real storage admission after report wrap, reject a
+child's selection without removing the pending parent obligation, and reject
+changed requirements, stale context and duplicates without overwriting accepted
+stages. Native codec allocations remain outside this driver's accounting scope.
