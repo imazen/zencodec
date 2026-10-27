@@ -120,6 +120,29 @@ pub struct Output<M, D> {
     stats: Stats,
 }
 
+/// Owns the actual begun muxer and destination without publishing its header.
+/// Dropping it abandons only private preparation. Publication consumes the token.
+pub struct PreparedOutput<M, D>(Output<M, D>);
+impl<M: Muxer, D: Destination> PreparedOutput<M, D> {
+    pub fn new_checked(
+        mux: M,
+        destination: D,
+        tracks: &[TrackInfo],
+        stop: &dyn Stop,
+    ) -> Result<Self, Failure> {
+        Output::prepare_unpublished(mux, destination, tracks, stop, M::begin_exact_timing).map(Self)
+    }
+    pub fn publish(self, stop: &dyn Stop) -> Result<Output<M, D>, Failure> {
+        let mut output = self.0;
+        let mut mux = output.mux.take().expect("prepared muxer is retained");
+        output
+            .drain(&mut mux, stop)
+            .map_err(|cause| output.failure(Stage::Drain, cause))?;
+        output.mux = Some(mux);
+        Ok(output)
+    }
+}
+
 fn stopped(stop: &dyn Stop) -> Result<(), Cause> {
     stop.check()
         .map_err(|reason| Box::new(SessionError::<ErasedError>::Cancelled(reason)) as Cause)
@@ -172,6 +195,23 @@ impl<M: Muxer, D: Destination> Output<M, D> {
     }
 
     fn prepare(
+        mux: M,
+        destination: D,
+        tracks: &[TrackInfo],
+        stop: &dyn Stop,
+        begin: impl FnOnce(&mut M, &[TrackInfo], MuxHint) -> Result<MuxTiming, SessionError<M::Error>>,
+    ) -> Result<Self, Failure> {
+        PreparedOutput(Self::prepare_unpublished(
+            mux,
+            destination,
+            tracks,
+            stop,
+            begin,
+        )?)
+        .publish(stop)
+    }
+
+    fn prepare_unpublished(
         mut mux: M,
         destination: D,
         tracks: &[TrackInfo],
@@ -199,17 +239,13 @@ impl<M: Muxer, D: Destination> Output<M, D> {
             emitted: 0,
             cause,
         })?;
-        let mut this = Self {
-            mux: None,
+        Ok(Self {
+            mux: Some(mux),
             destination,
             tracks: tracks.to_vec(),
             timing,
             stats: Stats::default(),
-        };
-        this.drain(&mut mux, stop)
-            .map_err(|cause| this.failure(Stage::Drain, cause))?;
-        this.mux = Some(mux);
-        Ok(this)
+        })
     }
     fn failure(&self, stage: Stage, cause: Cause) -> Failure {
         Failure {

@@ -199,6 +199,19 @@ impl<R: PolicyResolver> Candidate<R> {
         execute: impl FnOnce() -> Result<Frame, Cause>,
         stop: &dyn Stop,
     ) -> Result<(), Cause> {
+        self.push_route_with_destination(frame, target, conversion, |_| Ok(()), execute, stop)
+    }
+    /// Retain the actual destination before policy, conversion or encoder input.
+    /// This preparation must not publish bytes; publication is a later operation.
+    pub(super) fn push_route_with_destination<D>(
+        &mut self,
+        frame: &Frame,
+        target: (&FrameInterpretation, FrameTiming),
+        conversion: Option<FrameConversionOffer>,
+        prepare_destination: impl FnOnce(&CodecConfig) -> Result<D, Cause>,
+        execute: impl FnOnce() -> Result<Frame, Cause>,
+        stop: &dyn Stop,
+    ) -> Result<D, Cause> {
         let mut state = self
             .state
             .take()
@@ -218,6 +231,20 @@ impl<R: PolicyResolver> Candidate<R> {
         } else {
             None
         };
+        let destination = if permitted {
+            let native = prepared
+                .as_ref()
+                .or(state.native.as_ref())
+                .ok_or_else(|| std::io::Error::other("missing prepared encoder"))?;
+            let config = native
+                .encoder
+                .output_config()
+                .ok_or_else(|| std::io::Error::other("missing prepared output config"))?;
+            Some(prepare_destination(config)?)
+        } else {
+            None
+        };
+        check(stop)?;
         let mut offer = FrameRouteOffer::new(if changed {
             FrameRoute::BeginSegment
         } else {
@@ -295,7 +322,7 @@ impl<R: PolicyResolver> Candidate<R> {
         state.previous = Some(FrameFacts::new(frame.interpretation(), frame.timing()));
         check(stop)?;
         self.state = Some(state);
-        Ok(())
+        Ok(destination.expect("selected route retains destination"))
     }
     pub fn finish(mut self, stop: &dyn Stop) -> Result<Vec<Segment>, Cause> {
         let mut state = self

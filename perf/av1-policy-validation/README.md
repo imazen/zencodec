@@ -545,8 +545,8 @@ on r7900x. Full log: `/home/lilith/tmp/zencodec-retiming-drift-20261027.log`.
 
 `mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing` connects
 native AV1 decode, the prepared retiming route, native AV1 encode and the exact
-MP4 output adapter. The actual muxer is retained from header publication after
-the first frame through finish. Later frame decisions observe committed output.
+MP4 output adapter. The actual muxer is prepared before the first frame policy decision and
+retained through header publication and finish. Later frame decisions observe committed output.
 The three native packets go directly to that muxer without timestamp rewriting.
 FFprobe 8.0.1 independently reads the 1/90000 clock and PTS/duration pairs
 9000/1800, 10800/4500 and 15300/2700. FFmpeg/libdav1d verifies exact samples.
@@ -561,9 +561,9 @@ owners, and refuses both another frame and another publication attempt.
 This is finite compressed staging: native encoders are dropped before packet
 writes. It does not qualify live sequential backpressure, a whole-operation RAM
 bound, seekable-disk retiming, audio, frame-rate conversion or in-band changes.
-Destination preparation still follows the first encoded frame; a combined
-prepared offer admitting encoder, conversion **and destination before initial
-encoding** remains an API-design gate. These tests do not close issue 172.
+The private preparation path now admits the actual muxer and destination before
+policy, conversion and initial encoder input. A public prepared-route facade and
+destination evidence in policy diagnostics remain API-design gates. These tests do not close issue 172.
 No additional public API or zenpixels change was required for this composition.
 
 Run `just av1-coupled-mux-check <fresh-artifacts>` with `AV1_TIMING_FFPROBE`
@@ -572,3 +572,37 @@ pointing to the pinned inspector. Both tests and strict lint passed on
 Artifacts on r7900x:
 `/mnt/v/output/zencodec/platform-regions-20261026-run/coupled-mp4-20261027-3`.
 Full log: `/home/lilith/tmp/zencodec-coupled-mp4-terminal-20261027.log`.
+
+## Destination preparation before encoder input
+
+The private `PreparedOutput<M, D>` owns the actual begun muxer and writer without
+draining its header. `publish(self, stop)` consumes that object and returns the
+active output driver. Existing immediate-publication constructors use the same
+implementation. Dropping a prepared output performs no writer effects.
+
+`Candidate::push_route_with_destination` prepares this destination from the
+retained native encoder's real configuration before calling the shared resolver.
+It retains the destination through policy and converter execution, and returns
+it only after accepting the selected frame. The retiming test checks that exact
+preparation ran once before policy; later frames use the same active muxer.
+The native IVF default exact-timing refusal occurs before policy or conversion,
+with zero emitted bytes. A policy rejection after successful MP4 preparation
+also leaves zero bytes and releases native/staging owners. Publication and its
+partial-write failure remain a separate, consuming operation.
+
+This is an adapter prototype, not a new published interface. Native preparation
+can allocate; no whole-operation workspace bound is claimed. The generic private
+preparation closure must obey the no-publication contract, and the frame policy
+record still lacks destination-specific facts. The next public contract must
+carry qualified destination facts and ownership without asking callers to
+reconstruct or coordinate the objects. No zenpixels changes were needed.
+
+Full native regression gate on 2026-10-27: all 40 cases, strict lint and the
+independent gamma verifier passed. This includes existing cancellation, unwind,
+partial publication, three-container disk/forward output, conversion and
+frame-transition controls; it is not coverage of every codec/configuration.
+Command: `just av1-policy-check <fresh-artifacts>` with the pinned timing inspector.
+Run-heavy: `rc=0 37s | peak-RSS 0.05GiB | min-avail 11739MiB | peak-load 0.57`.
+Artifacts on r7900x:
+`/mnt/v/output/zencodec/platform-regions-20261026-run/prepared-mp4-full-20261027`.
+Full log: `/home/lilith/tmp/zencodec-prepared-mp4-full-20261027.log`.

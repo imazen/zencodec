@@ -789,6 +789,7 @@ fn mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing() {
         FrameTiming::at(Timestamp::new(pts, clock)).with_duration_ticks(duration)
     });
     let calls = Cell::new(0usize);
+    let preparations = Cell::new(0usize);
     let storage = StorageBudget::new(1 << 20, 64);
     let live = Arc::new(AtomicUsize::new(0));
     let mut operation = Candidate::new(
@@ -797,6 +798,7 @@ fn mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing() {
                 panic!()
             };
             let i = calls.get();
+            assert_eq!(preparations.get(), 1);
             assert_eq!(facts.input.timing, inputs[i].timing());
             assert_eq!(facts.output.output_committed, i > 0);
             let choice = choices.first().unwrap();
@@ -821,11 +823,29 @@ fn mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing() {
             FrameConversionOffer::new(FrameFacts::new(input.interpretation(), timings[i]));
         offer.preserves_samples = true;
         offer.preserves_extended_range = true;
-        operation
-            .push_route(
+        let prepared = operation
+            .push_route_with_destination(
                 input,
                 (input.interpretation(), timings[i]),
                 Some(offer),
+                |config| {
+                    if i == 0 {
+                        let output = PreparedOutput::new_checked(
+                            ExactMp4(zenmp4::Mp4Muxer::new()),
+                            Forward(Short {
+                                writer: writer.take().unwrap(),
+                                interrupted: false,
+                            }),
+                            &[track(config)],
+                            &Unstoppable,
+                        )?;
+                        preparations.set(preparations.get() + 1);
+                        Ok(Some(output))
+                    } else {
+                        assert!(destination.is_some());
+                        Ok(None)
+                    }
+                },
                 || {
                     let output = input.represent(timings[i], input.presentation());
                     expected.push(output.clone());
@@ -837,17 +857,8 @@ fn mux_native_coupled_retimed_encoder_packets_preserve_exact_mp4_timing() {
         if i == 0 {
             operation
                 .publish_header(
-                    |config| {
-                        // Retain this exact destination after its header is published.
-                        destination = Some(Output::new_checked(
-                            ExactMp4(zenmp4::Mp4Muxer::new()),
-                            Forward(Short {
-                                writer: writer.take().unwrap(),
-                                interrupted: false,
-                            }),
-                            &[track(config)],
-                            &Unstoppable,
-                        )?);
+                    |_| {
+                        destination = Some(prepared.unwrap().publish(&Unstoppable)?);
                         Ok(())
                     },
                     &Unstoppable,
@@ -934,4 +945,120 @@ fn mux_native_coupled_partial_header_failure_terminates_encoder_and_retains_caus
             .is_err()
     );
     assert_eq!(bytes.len(), 13);
+}
+
+#[test]
+fn mux_native_coupled_destination_refusal_precedes_policy_and_conversion() {
+    use crate::epoch_route::Candidate;
+    use std::{
+        cell::Cell,
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
+    };
+    use zencodec::{
+        At,
+        operation::{Decision, Question},
+        storage::StorageBudget,
+    };
+    let input = frame(&settings(8, Subsampling::Yuv420, false), 0);
+    let calls = Cell::new(0usize);
+    let live = Arc::new(AtomicUsize::new(0));
+    let storage = StorageBudget::new(1 << 20, 64);
+    let mut operation = Candidate::new(
+        |_: Question<'_>| -> Result<Decision, At<std::convert::Infallible>> {
+            calls.set(calls.get() + 1);
+            Ok(Decision::UsePreset)
+        },
+        false,
+        false,
+        storage.clone(),
+        live.clone(),
+    );
+    let mut bytes = Vec::new();
+    let error = match operation.push_route_with_destination(
+        &input,
+        (input.interpretation(), input.timing()),
+        None,
+        |config| {
+            Ok(PreparedOutput::new_checked(
+                zenivf::IvfMuxer::new(),
+                Forward(&mut bytes),
+                &[track(config)],
+                &Unstoppable,
+            )?)
+        },
+        || panic!("unsupported destination executed conversion"),
+        &Unstoppable,
+    ) {
+        Ok(_) => panic!("unqualified exact timing accepted"),
+        Err(error) => error,
+    };
+    assert!(matches!(
+        zencodec::find_cause::<SessionError<zenivf::IvfError>>(&*error),
+        Some(SessionError::Unsupported(UnsupportedMedia::ExactTiming))
+    ));
+    assert_eq!(calls.get(), 0);
+    assert!(bytes.is_empty());
+    assert!(operation.is_failed());
+    assert_eq!(live.load(Ordering::SeqCst), 0);
+    assert_eq!(storage.reserved_bytes(), 0);
+}
+
+#[test]
+fn mux_native_coupled_policy_refusal_drops_prepared_destination_without_publication() {
+    use crate::epoch_route::Candidate;
+    use std::{
+        cell::Cell,
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
+    };
+    use zencodec::{
+        At,
+        operation::{Decision, Decline, PolicyFailure, Question},
+        storage::StorageBudget,
+    };
+    let input = frame(&settings(8, Subsampling::Yuv420, false), 0);
+    let prepared = Cell::new(false);
+    let live = Arc::new(AtomicUsize::new(0));
+    let storage = StorageBudget::new(1 << 20, 64);
+    let mut operation = Candidate::new(
+        |_: Question<'_>| -> Result<Decision, At<std::convert::Infallible>> {
+            assert!(prepared.get());
+            Ok(Decision::decline(Decline::NoPreferredChoice))
+        },
+        false,
+        false,
+        storage.clone(),
+        live.clone(),
+    );
+    let mut bytes = Vec::new();
+    let error = match operation.push_route_with_destination(
+        &input,
+        (input.interpretation(), input.timing()),
+        None,
+        |config| {
+            let output = PreparedOutput::new_checked(
+                ExactMp4(zenmp4::Mp4Muxer::new()),
+                Forward(&mut bytes),
+                &[track(config)],
+                &Unstoppable,
+            )?;
+            prepared.set(true);
+            Ok(output)
+        },
+        || panic!("declined route executed conversion"),
+        &Unstoppable,
+    ) {
+        Ok(_) => panic!("declined route accepted"),
+        Err(error) => error,
+    };
+    assert!(zencodec::find_cause::<PolicyFailure>(&*error).is_some());
+    assert!(bytes.is_empty());
+    assert!(operation.is_failed());
+    assert_eq!(live.load(Ordering::SeqCst), 0);
+    assert_eq!(storage.reserved_bytes(), 0);
 }

@@ -458,3 +458,19 @@ run-heavy: rc=0, 18 s, peak RSS 0.75 GiB, minimum available 15443 MiB, peak load
 full-example copying and 390/768/1440 px layouts: rc=0, 7 s, peak RSS 0.17 GiB,
 minimum available 15845 MiB, peak load 0.37. These are test-process receipts,
 not native codec memory bounds.
+
+### Prepared video destination: executing private contract
+
+The native AV1/MP4 adapter now prepares the actual destination from the actual
+encoder configuration before policy, conversion or first encoder input. A
+consuming `PreparedOutput::publish` separates admission from irreversible header
+writes. Unsupported exact timing and policy rejection leave the destination
+untouched; partial publication is terminal and retains the original error.
+The accepted retiming route preserves independently inspected MP4 timestamps,
+durations and decoded samples without rewriting packets between encoder and muxer.
+
+These names remain private adapter prototypes. The public facade still needs
+ownership of the complete route and destination-specific decision evidence;
+callers should not reproduce the preparation choreography. Native preparation
+allocation, whole-operation bounds and live sequential backpressure remain
+unqualified. [Implementation, tests and limits](../perf/av1-policy-validation/README.md#destination-preparation-before-encoder-input).
