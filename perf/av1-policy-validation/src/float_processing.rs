@@ -66,7 +66,7 @@ fn plan(source: &PixelSlice<'_>, linear: bool, clip: bool) -> OutputPlan {
         &ColorOrigin::from_cicp(Cicp::SRGB),
         OutputProfile::Named(target),
         descriptor,
-        &ConvertOptions::forbid_lossy().with_clip_out_of_gamut(clip),
+        &ConvertOptions::retain_channels().with_clip_out_of_gamut(clip),
         None,
     )
     .unwrap()
@@ -157,7 +157,7 @@ fn continuous_linear(encoded: f64) -> f64 {
 
 pub(super) fn qualify(source: PixelSlice<'_>) -> Measurements {
     let linear = convert(source.clone(), true, false, source.rows()).active();
-    assert!(ConvertOptions::forbid_lossy().clip_out_of_gamut);
+    assert!(ConvertOptions::retain_channels().clip_out_of_gamut);
     let clipped = convert(source.clone(), true, true, source.rows()).active();
     assert!(clipped.iter().flatten().all(|v| (0.0..=1.0).contains(v)));
     for batch in [1, 2, 4] {

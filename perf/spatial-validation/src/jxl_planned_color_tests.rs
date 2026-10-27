@@ -432,7 +432,7 @@ fn native_output_plan_owner_retention_requires_matching_signaling_too() {
             &ColorOrigin::assumed(),
             OutputProfile::Named(Cicp::SRGB),
             format,
-            &ConvertOptions::forbid_lossy(),
+            &ConvertOptions::retain_channels(),
             None,
         )
         .unwrap();
@@ -635,7 +635,7 @@ fn native_output_owner_required_descriptor_preserves_premultiplication() {
                 &ColorOrigin::from_icc(pixels.color_context().unwrap().icc.clone().unwrap()),
                 OutputProfile::SameAsOrigin,
                 pixels.descriptor().pixel_format(),
-                &ConvertOptions::forbid_lossy(),
+                &ConvertOptions::retain_channels(),
                 None,
             )
             .unwrap_err();
@@ -731,7 +731,7 @@ fn native_output_plan_adding_alpha_preserves_native_color_bits_with_or_without_c
                     &ColorOrigin::from_icc(profile.clone()),
                     OutputProfile::SameAsOrigin,
                     PixelFormat::RgbaF32,
-                    &ConvertOptions::forbid_lossy(),
+                    &ConvertOptions::retain_channels(),
                     cms,
                 )
                 .unwrap();
@@ -863,7 +863,7 @@ fn native_output_plan_late_backend_failure_or_unwind_drops_unpublished_storage()
                     &ColorOrigin::assumed(),
                     OutputProfile::Icc(Arc::from(&b"fault injection target"[..])),
                     pixels.descriptor().pixel_format(),
-                    &ConvertOptions::forbid_lossy(),
+                    &ConvertOptions::retain_channels(),
                     Some(&cms),
                 )
                 .unwrap();

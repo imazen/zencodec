@@ -101,7 +101,7 @@ mod web {
             .with_output(
                 OutputProfile::Named(Cicp::SRGB),
                 PixelFormat::Rgb8,
-                ConvertOptions::forbid_lossy(),
+                ConvertOptions::retain_channels(),
             )
             .with_metadata(MetadataTransfer::DiscardDescriptive)
             .with_policy_set(

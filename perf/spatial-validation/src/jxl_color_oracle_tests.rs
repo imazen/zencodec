@@ -44,7 +44,7 @@ mod planning {
         target_icc: Arc<[u8]>,
     ) -> Result<OutputPlan, At<ConvertError>> {
         // ANCHOR: native_float_color
-        let options = ConvertOptions::forbid_lossy().with_clip_out_of_gamut(false);
+        let options = ConvertOptions::retain_channels().with_clip_out_of_gamut(false);
         let plan = OutputPlan::new(
             source.descriptor(),
             source.color_context().cloned(),

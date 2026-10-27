@@ -1,0 +1,87 @@
+{
+  "date_utc": "2026-10-27",
+  "base_commit": "ba2cee2ca7f4608b8df0d7377f3d2a70b29d6850",
+  "zenpixels_revision": "27eeaf439faa5d71cc9b489d4ff141bf15582759",
+  "contract": "forbid_lossy deprecated; retain_channels preserves all historical options. Exact representation changes use new_preserving_samples.",
+  "api_delta": {
+    "new_constructor": 1,
+    "deprecated_constructor": 1,
+    "new_types": 0,
+    "new_features": 0
+  },
+  "package_graphs": {
+    "jpeg-policy-validation": {
+      "before": 66,
+      "after": 66
+    },
+    "av1-policy-validation": {
+      "before": 140,
+      "after": 140
+    },
+    "spatial-validation": {
+      "before": 127,
+      "after": 127
+    }
+  },
+  "migrated_calls": [
+    {
+      "path": "perf/av1-policy-validation/src/float_processing.rs",
+      "calls_migrated": 2
+    },
+    {
+      "path": "perf/spatial-validation/src/jxl_color_oracle_tests.rs",
+      "calls_migrated": 1
+    },
+    {
+      "path": "perf/spatial-validation/src/jxl_planned_color_tests.rs",
+      "calls_migrated": 4
+    },
+    {
+      "path": "perf/spatial-validation/src/canvas_render_tests.rs",
+      "calls_migrated": 2
+    },
+    {
+      "path": "docs/examples/pixel_conversion.rs",
+      "calls_migrated": 1
+    },
+    {
+      "path": "docs/examples/checked_operations.rs",
+      "calls_migrated": 1
+    }
+  ],
+  "native_gates": {
+    "jpeg": 27,
+    "av1_video": 30,
+    "tiff_jxl": 146,
+    "failed": 0,
+    "ignored": 0,
+    "strict_lint": "all three standalone native packages passed"
+  },
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/preset-migration",
+  "float_baseline": "/mnt/v/output/zencodec/platform-regions-20261026-run/public-ycbcr-pinned",
+  "byte_identical_float_files": 54,
+  "validation": [
+    {
+      "log": "/home/lilith/tmp/zenpixels-retain-channels-20261027.log",
+      "sha256": "7886b3a9f77012315c66cef19c4c0e9d0ce7cca9f2616cede3654aee87ce7ee6",
+      "resource_line": "run-heavy: done rc=0 52s | peak-RSS 2.64GiB | min-avail 8803MiB | peak-load 1.59"
+    },
+    {
+      "log": "/home/lilith/tmp/zencodec-preset-native-full-20261027.log",
+      "sha256": "85642e0a106b8889969b03e83b203b702c5daab2b7defaf6e5ca63692b567c74",
+      "resource_line": "run-heavy: done rc=0 150s | peak-RSS 0.85GiB | min-avail 10882MiB | peak-load 1.76"
+    },
+    {
+      "log": "/home/lilith/tmp/zencodec-preset-site-20261027.log",
+      "sha256": "54d10f90a4320cc7947d33eba35166f978d6a5726553f12e90f70ac74767bc03",
+      "resource_line": "run-heavy: done rc=0 11s | peak-RSS 0.17GiB | min-avail 11194MiB | peak-load 1.56"
+    }
+  ],
+  "scope": "Compatibility/correctness validation, not throughput or compile-time measurement. Resource lines include build/test/tool processes.",
+  "remaining": [
+    "non-sRGB and backend extended-range guarantees",
+    "numerical-model and approximation contracts",
+    "coupled streaming converter/encoder transitions",
+    "whole-operation memory bounds and runtime/compile-time comparisons"
+  ]
+}

@@ -401,8 +401,10 @@ Strided padding stays untouched. `replace_packed_color` adopts the processed
 owner without copying pixels and retains source facts, geometry and video timing;
 current output signaling becomes linear RGB while the source remains unchanged.
 
-Two contract issues remain visible. `ConvertOptions::forbid_lossy()` enables
-clipping: the tested route needs `with_clip_out_of_gamut(false)`. Also,
+The misleading `ConvertOptions::forbid_lossy()` preset is now deprecated.
+Its behavior-preserving replacement `retain_channels()` still enables clipping:
+the tested conversion explicitly selects `with_clip_out_of_gamut(false)`.
+The numerical contract remains open:
 linear-srgb 0.6.12 uses adjusted continuous constants. Its maximum error against
 that definition is 0.0000011395496919419656, but disagreement with the
 [IEC/CSS extended sRGB definition](https://www.w3.org/TR/css-color-4/#color-conversion-code)
@@ -416,7 +418,7 @@ at absolute 0.00001. Batch equivalence remains byte-exact. All per-presentation
 [measurements](../../benchmarks/float_processing_2026-10-27.csv) and the
 [receipt](../../benchmarks/float_processing_2026-10-27.json) are retained. This
 uses the reviewed OutputPlan revision without changing zenpixels source or adding
-a package to the graph. Broader planar coverage, a clear strict preset and numerical-model contract,
+a package to the graph. Broader planar coverage, required range behavior and the numerical-model contract,
 HDR rendering and workspace bounds remain open.
 
 ### Shared borrowed planar conversion

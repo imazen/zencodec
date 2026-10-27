@@ -149,10 +149,11 @@ color byte. Transfer/gamut changes, alpha reassociation, sample removal and
 depth reduction refuse before execution. This is an exactness requirement,
 not a claim that ordinary color conversion can be lossless.
 
-The validation also exposed a naming problem: `ConvertOptions::forbid_lossy()`
-still enables clipping. The native preservation example adds
-`with_clip_out_of_gamut(false)`. Before 0.3, presets must distinguish forbidden
-sample losses from a required color/range result; the caller should select
+The misleading `ConvertOptions::forbid_lossy()` preset is now deprecated.
+`retain_channels()` preserves its channel/depth restrictions and enabled
+clipping without promising exactness. Native color-conversion examples add
+`with_clip_out_of_gamut(false)`; exact carriage uses `new_preserving_samples`.
+Required color/range effects still need qualified executing routes; the caller should select
 effects through the existing resolver without coordinating backend capability
 flags. A native premultiplied fixture exposed an output-layout gap:
 `PixelFormat` selects straight alpha, so `SameAsOrigin` alone cannot request

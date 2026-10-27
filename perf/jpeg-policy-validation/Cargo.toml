@@ -23,8 +23,8 @@ zenpng = { git = "https://github.com/imazen/zenpng", rev = "7f13367f8f2d8ad78f60
 zencodec = { path = "../.." }
 # Reproduce zenjpeg main's unpublished workspace bridges at immutable commits.
 zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "8ca647c525cf488c61bbf35475ca8ba3db6b628e" }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "f8596aae7a16aec7875b6fe2ef39b501c11a0e82" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "f8596aae7a16aec7875b6fe2ef39b501c11a0e82" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "27eeaf439faa5d71cc9b489d4ff141bf15582759" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "27eeaf439faa5d71cc9b489d4ff141bf15582759" }
 
 [patch."https://github.com/imazen/zencodec"]
 zencodec = { path = "../.." }

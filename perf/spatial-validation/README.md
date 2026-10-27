@@ -298,9 +298,10 @@ the recorded worst sample directly from matrix/type-3 ICC tags; it is a narrow
 diagnostic, not a general profile parser. Its math follows
 [ICC.1:2022 sections 10.18 and F.3](https://archive.color.org/specification/ICC.1-2022-05.pdf).
 
-`forbid_lossy()` alone still permits clipping. This example explicitly uses
-`with_clip_out_of_gamut(false)`; the preset name and required range semantics
-need review before 0.3. No new conversion trait or capability handshake was
+`forbid_lossy()` is deprecated. The behavior-preserving `retain_channels()`
+replacement still permits clipping, so this color-conversion example explicitly
+uses `with_clip_out_of_gamut(false)`. Exact carriage uses `new_preserving_samples`.
+Required range semantics across all backends still need qualification. No new conversion trait or capability handshake was
 needed for these cases. General ICC/LUT qualification, numerical F32 CMYK,
 conversion cancellation and
 CMS workspace admission remain open. These are correctness measurements, not

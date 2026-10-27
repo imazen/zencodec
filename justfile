@@ -915,8 +915,8 @@ jpeg-policy-setup:
 jpeg-policy-update-lock:
     cargo update --manifest-path perf/jpeg-policy-validation/Cargo.toml
 
-jpeg-policy-check:
-    JPEG_POLICY_ARTIFACTS="$HOME/tmp/zencodec-jpeg-oracles" cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked -- --nocapture --test-threads=1
+jpeg-policy-check artifacts="$HOME/tmp/zencodec-jpeg-oracles":
+    JPEG_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked -- --nocapture --test-threads=1
     cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
 
 jpeg-policy-sync export:
@@ -1173,3 +1173,20 @@ av1-planar-float-inspect source output:
 # Fixed numerical gate; retain both float and integer observations and negative controls.
 av1-planar-float-verify source output:
     python3 perf/av1-policy-validation/inspect_planar_rgb.py "{{source}}" "{{output}}" --float-output --verify-float
+
+# Resolve both pixel crates together in standalone native validation exports.
+native-pixels-resolve:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    test ! -e .git
+    test ! -e .jj
+    for package in jpeg-policy-validation av1-policy-validation spatial-validation; do
+        cp "perf/$package/dependencies.lock" "perf/$package/Cargo.lock"
+        cargo update --manifest-path "perf/$package/Cargo.toml" -p zenpixels -p zenpixels-convert
+    done
+
+# Full real-codec coverage for changes shared by every native pixel consumer.
+native-pixels-check artifacts:
+    just jpeg-policy-check "{{artifacts}}/jpeg"
+    just av1-policy-check "{{artifacts}}/av1"
+    just spatial-ci-check "{{artifacts}}/spatial" cms_oracle,old_jpeg

@@ -61,7 +61,7 @@ mod framebuffer {
         // ANCHOR: convert_framebuffer
         check_opaque(pixels.clone())?; // Verify every row before authorizing alpha removal.
         let options =
-            ConvertOptions::forbid_lossy().with_alpha_policy(AlphaPolicy::DiscardUnchecked); // Proven above.
+            ConvertOptions::retain_channels().with_alpha_policy(AlphaPolicy::DiscardUnchecked); // Proven above.
         let mut converter =
             RowConverter::new_explicit(pixels.descriptor(), PixelDescriptor::RGB8_SRGB, &options)?;
         converter.prepare(pixels.width())?;

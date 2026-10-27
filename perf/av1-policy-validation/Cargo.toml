@@ -21,8 +21,8 @@ zenwebm = { git = "https://github.com/imazen/zenextras", rev = "ae920c1e2ac0fe0e
 
 [patch.crates-io]
 zencodec = { path = "../.." }
-zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "6250da2fc073150d69cbc6746ffa6cc6724b743f" }
-zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "6250da2fc073150d69cbc6746ffa6cc6724b743f" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "27eeaf439faa5d71cc9b489d4ff141bf15582759" }
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "27eeaf439faa5d71cc9b489d4ff141bf15582759" }
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "10a79c3a888dd589884fd032846eec70bc31eb13" }
 
 [patch."https://github.com/imazen/zencodec"]

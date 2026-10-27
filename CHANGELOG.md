@@ -314,6 +314,11 @@ Changes are grouped by package. zenmeta has its own [changelog](zenmeta/CHANGELO
 
 ### [Unreleased]
 
+- Migrate native JPEG, AV1/video and TIFF/JXL conversion callers from deprecated
+  `forbid_lossy()` to `retain_channels()` without changing their policies. Exact
+  carriage continues to use `new_preserving_samples`. Pin all native pixel
+  consumers to one review revision and show the actual replacement signatures.
+
 - Native JXL now exercises the shared `OutputPlan::new_preserving_samples`:
   unchanged rows borrow and opaque-alpha expansion preserves original sample
   bits. The pinned conversion API and guide distinguish exact representation
