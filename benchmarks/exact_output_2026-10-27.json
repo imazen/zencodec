@@ -54,5 +54,23 @@
     "perf/spatial-validation/src/jxl_planned_color_tests.rs": "ab06c57675633df21c628c9cce80ced5cf7f46949ec262d4ca94aff31d428dc6",
     "perf/spatial-validation/dependencies.lock": "47edfb9c281633f0840ef36835e249c804637c358a30a1700ec12bc9b99a5846",
     "docs/output-plan-api.json": "6986f52f92b8ad718a44037fb948179bcc7fdbb88698de3a045266c377a57001"
+  },
+  "caller_migration": {
+    "base": "99b6b7f81b013df1b87a5d235084929c5edfc62d",
+    "change": "Existing native required-layout helper uses new_preserving_samples, removing clipping and CMS arguments. Output-plan recipe includes both plan and ownership tests.",
+    "source_sha256": "1ea03cf06400389c69eb728af5e3082105c70ec5e1c8b5930b2de87fee76734a",
+    "tests": "12 native output tests passed; strict lint and guide/browser checks passed",
+    "logs": [
+      {
+        "path": "/home/lilith/tmp/zencodec-exact-migration-20261027.log",
+        "sha256": "5ce7eca13462245b49e7eb3f8d1540187f26990b72e489c2df813ffdc93f92cb",
+        "resource_line": "run-heavy: done rc=0 22s | peak-RSS 0.57GiB | min-avail 11285MiB | peak-load 0.68"
+      },
+      {
+        "path": "/home/lilith/tmp/zencodec-exact-migration-site-20261027.log",
+        "sha256": "c57ccaa3fe250924afd5afbf0bb87e1d93607b937137942770ac969af6eac14d",
+        "resource_line": "run-heavy: done rc=0 11s | peak-RSS 0.17GiB | min-avail 11205MiB | peak-load 0.69"
+      }
+    ]
   }
 }

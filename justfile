@@ -572,7 +572,7 @@ spatial-conversion-check:
 
 spatial-output-plan-check:
     cargo fmt --manifest-path perf/spatial-validation/Cargo.toml -p spatial-validation
-    cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked native_output_plan_ -- --nocapture --test-threads=1
+    cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked native_output_ -- --nocapture --test-threads=1
     just spatial-validation-lint
 
 # Test-only independent F32 ICC math. All oracle inputs/outputs stay in artifacts.

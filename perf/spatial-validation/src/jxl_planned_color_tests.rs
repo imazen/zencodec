@@ -69,14 +69,12 @@ fn plan_required_layout(
     required: PixelDescriptor,
 ) -> Result<OutputPlan, At<ConvertError>> {
     // ANCHOR: native_required_layout
-    OutputPlan::new_with_descriptor(
+    OutputPlan::new_preserving_samples(
         source.descriptor(),
         source.color_context().cloned(),
         origin,
         OutputProfile::SameAsOrigin,
         required,
-        &ConvertOptions::forbid_lossy().with_clip_out_of_gamut(false),
-        None,
     )
     // END: native_required_layout
 }
