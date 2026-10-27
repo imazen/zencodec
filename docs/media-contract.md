@@ -87,6 +87,30 @@ the fused-session terminal rules.
 
 ## Muxers
 
+### Exact supplied timing
+
+`Muxer::begin_exact_timing(tracks, hint)` prepares an actual instance that
+preserves supplied PTS, DTS and explicit durations without rounding or rebasing.
+The default refuses with `UnsupportedMedia::ExactTiming`, before calling legacy
+`begin` or exposing a header. `DynMuxer` and `MuxerShim` retain that boundary.
+The caller requests the behavior directly; no capability query is required.
+
+The implementation must reject an unrepresentable later packet before that
+packet changes pending output. A missing DTS may use PTS as decode time when
+the format needs one. A missing duration may be refused; this entry point must
+not guess it. Drivers retain the exact prepared instance, report prior output
+on failure, and cannot retry a different layout after publication. Preparation
+is not a guarantee about unknown future input. This timing contract does not
+establish metadata privacy, side-data retention or a workspace bound.
+
+The native MP4 implementation prepares fragmented output on both destination
+types because its progressive sample tables cannot represent an unknown
+nonzero decode origin. Its separate inherent entry point is bridged to this
+review trait in the native harness while native dependencies retain their
+earlier shared revision. No application chooses a layout from codec capability
+flags. `begin` remains the lower-level entry point for deliberately inferred
+timing; it is not an equivalent implementation of this stronger request.
+
 Use `finish.apply_to(&mut bytes)` to finalize an in-memory stream; the free
 `apply_finish` helper is deprecated. Validation or allocation failure leaves
 its contents and length unchanged. All patch ranges are checked before any

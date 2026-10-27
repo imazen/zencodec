@@ -287,6 +287,29 @@ pub trait Muxer {
         hint: MuxHint,
     ) -> Result<MuxTiming, SessionError<Self::Error>>;
 
+    /// Prepare a layout that preserves supplied PTS, DTS and explicit sample
+    /// durations exactly, or refuse without making output available.
+    ///
+    /// Unlike a capability query, success binds this muxer instance. Later
+    /// packets that cannot be represented must fail before their payload or
+    /// timing affects pending output. Missing timestamps/durations may be
+    /// refused; values must not be guessed, rounded or rebased to make a packet
+    /// fit. A missing DTS may use its PTS as decode time when the format requires
+    /// one. This does not certify metadata, packet additions or workspace bounds.
+    ///
+    /// Preparation cannot prove facts about future packets. A driver reports
+    /// already committed output on a subsequent failure and must not retry a
+    /// different layout. The default refuses: calling legacy `begin` alone is
+    /// not evidence of this stronger contract.
+    fn begin_exact_timing(
+        &mut self,
+        tracks: &[TrackInfo],
+        hint: MuxHint,
+    ) -> Result<MuxTiming, SessionError<Self::Error>> {
+        let _ = (tracks, hint);
+        Err(SessionError::Unsupported(UnsupportedMedia::ExactTiming))
+    }
+
     /// Write one packet. Takes the packet so its payload can be reused
     /// without a copy.
     fn write_packet(
@@ -312,6 +335,15 @@ pub trait Muxer {
 
 /// Object-safe muxer (`finish` by box), the `DynAnimationFrameEncoder` pattern.
 pub trait DynMuxer {
+    /// See [`Muxer::begin_exact_timing`]. Default refuses without calling `begin`.
+    fn begin_exact_timing(
+        &mut self,
+        tracks: &[TrackInfo],
+        hint: MuxHint,
+    ) -> Result<MuxTiming, SessionError<ErasedError>> {
+        let _ = (tracks, hint);
+        Err(SessionError::Unsupported(UnsupportedMedia::ExactTiming))
+    }
     /// See [`Muxer::begin`].
     fn begin(
         &mut self,
@@ -339,6 +371,15 @@ pub trait DynMuxer {
 pub struct MuxerShim<M>(pub M);
 
 impl<M: Muxer> DynMuxer for MuxerShim<M> {
+    fn begin_exact_timing(
+        &mut self,
+        tracks: &[TrackInfo],
+        hint: MuxHint,
+    ) -> Result<MuxTiming, SessionError<ErasedError>> {
+        self.0
+            .begin_exact_timing(tracks, hint)
+            .map_err(|e| e.map_codec(|c| ErasedError::new(Box::new(c))))
+    }
     fn begin(
         &mut self,
         tracks: &[TrackInfo],

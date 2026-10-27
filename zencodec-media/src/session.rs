@@ -109,6 +109,8 @@ pub enum UnsupportedMedia {
     Container,
     /// This sample layout or depth.
     PixelFormat,
+    /// Exact preservation of packet timestamps and explicit durations.
+    ExactTiming,
 }
 
 /// Every session error is terminal for the session except `Codec` errors a

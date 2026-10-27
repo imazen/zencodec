@@ -2,6 +2,11 @@
 
 ## Native image selection (unreleased experiment)
 
+- Add `Muxer::begin_exact_timing`, including dyn dispatch. Unqualified
+  implementations refuse before legacy setup; qualified instances preserve
+  supplied packet timing or reject before packet output. Metadata, workspace
+  admission and future-packet validity are separate requirements.
+
 - Add `MuxFinish::validate` and `MuxFinish::apply_to`; immediately deprecate
   `apply_finish` in favor of the method. Validate every patch before appending
   the tail or changing bytes, and reserve output fallibly. Existing testkit

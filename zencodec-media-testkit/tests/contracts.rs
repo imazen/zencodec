@@ -35,6 +35,23 @@ fn tb() -> TimeBase {
     TimeBase::new(1001, 30000).unwrap()
 }
 
+#[test]
+fn exact_timing_default_refuses_without_starting_legacy_muxer() {
+    use zencodec_media::session::UnsupportedMedia;
+    let mut mux = ToyMuxer::new(false);
+    assert!(matches!(
+        Muxer::begin_exact_timing(&mut mux, &[], MuxHint::default()),
+        Err(SessionError::Unsupported(UnsupportedMedia::ExactTiming))
+    ));
+    assert!(mux.pending_output().is_empty());
+    let mut erased = erase_muxer(ToyMuxer::new(false));
+    assert!(matches!(
+        erased.begin_exact_timing(&[], MuxHint::forward_only()),
+        Err(SessionError::Unsupported(UnsupportedMedia::ExactTiming))
+    ));
+    assert!(erased.pending_output().is_empty());
+}
+
 fn gray(v: u8) -> Vec<u8> {
     vec![v; PIX]
 }
