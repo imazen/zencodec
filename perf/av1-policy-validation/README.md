@@ -58,6 +58,11 @@ FFmpeg/libdav1d remains the independent pixel decoder. Every exact PTS/duration
 assertion remains required. `just av1-timing-oracle-build <directory> 6.1.1`
 reproduces the older reader; the recipe defaults to 8.0.1.
 
+The builder also recovers a partially restored external source directory: when
+`configure` is absent it preserves that directory and extracts the verified
+archive again. A reproduced partial-cache build produced FFprobe 8.0.1 while
+retaining its original marker file; this changes no timing expectations.
+
 Timing is a separate contract. The native IVF outputs preserve PTS but report
 no explicit packet durations; WebM and MP4 preserve all six authored durations.
 A second matrix starts at 40 ms: IVF, WebM and fragmented MP4 preserve the shifted

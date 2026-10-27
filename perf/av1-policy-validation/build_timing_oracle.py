@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 import tarfile
+import tempfile
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("directory", type=Path)
@@ -28,6 +29,13 @@ if digest != expected:
     raise ValueError(f"source checksum mismatch: {digest}, expected {expected}")
 (root / "source.sha256").write_text(f"{digest}  {archive.name}\n")
 source = root / f"ffmpeg-{args.version}"
+if source.exists() and not (source / "configure").is_file():
+    # Rust's target cache can retain directory/object entries while omitting
+    # this external source tree. Directory existence is not extraction proof.
+    # Preserve partial contents and restore from the checksum-verified archive.
+    preserved = Path(tempfile.mkdtemp(prefix=f"incomplete-{args.version}-", dir=root))
+    source.rename(preserved / source.name)
+    print(f"preserved incomplete source in {preserved}", flush=True)
 if not source.exists():
     with tarfile.open(archive) as bundle:
         bundle.extractall(root, filter="data")
