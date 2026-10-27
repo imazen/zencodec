@@ -284,6 +284,10 @@ fn planar_native_borrowed_rows_and_odd_crops_match_full_conversion() {
                     &packets,
                     &frames,
                 );
+                let comparison = root.join(format!("planar-{bits}-{sub:?}-{full}"));
+                std::fs::write(comparison.join("rgb-layout.json"), format!(
+                    "{{\"width\":{},\"height\":{},\"frames\":{},\"bits\":{bits},\"subsampling\":\"{sub:?}\",\"full_range\":{full}}}\n",
+                    s.width, s.height, frames.len())).unwrap();
                 decoder.reset().unwrap();
                 drop(decoder);
                 for (index, (native, input)) in frames.into_iter().zip(inputs).enumerate() {
@@ -296,6 +300,18 @@ fn planar_native_borrowed_rows_and_odd_crops_match_full_conversion() {
                         &mut full_rgb,
                         w,
                         h,
+                    )
+                    .unwrap();
+                    // Preserve our actual RGB result for the separate zimg
+                    // inspection. The independent native-sample gate above
+                    // remains exact and is not weakened by that comparison.
+                    std::fs::write(
+                        comparison.join(format!("zen-rgb16-{index}.raw")),
+                        full_rgb
+                            .iter()
+                            .flatten()
+                            .flat_map(|v| v.to_le_bytes())
+                            .collect::<Vec<_>>(),
                     )
                     .unwrap();
                     assert!(Arc::ptr_eq(&facts.source, native.interpretation()));

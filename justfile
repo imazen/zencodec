@@ -1161,3 +1161,7 @@ av1-timing-oracle-build directory version="8.0.1":
 conversion-check artifacts:
     cargo test -p zencodec-media-testkit --locked --test storage_ownership --test image_output
     just av1-planar-check "{{artifacts}}"
+
+# Independent color inspection reports disagreement; it sets no acceptance tolerance.
+av1-planar-rgb-inspect source output:
+    python3 perf/av1-policy-validation/inspect_planar_rgb.py "{{source}}" "{{output}}"

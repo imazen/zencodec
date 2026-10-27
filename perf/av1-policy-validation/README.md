@@ -214,6 +214,39 @@ Preparation still examines every active source word before asking policy;
 small-crop work is not proportional to returned pixels. Mapping, profile data,
 source storage and native kernel workspace are outside this payload allowance.
 
+### Independent RGB inspection
+
+`just av1-planar-rgb-inspect <native-artifacts> <fresh-output>` compares the
+retained RGB16 samples with FFmpeg/zimg float output, using explicit matrix,
+range, transfer, siting and bilinear filtering. It records every command,
+binary/input/output hash, float output and per-presentation difference. It is
+an inspection, **not an accepted accuracy tolerance**. The existing exact native
+sample and cross-path tests remain unchanged.
+
+The direct oracle refused our odd subsampled extents (zscale error 1027).
+The inspection now replicates only the final border into a subsampling-aligned
+raw input, verifies that original codes stay unchanged, then compares only the
+original rectangle. No resize or new encoded source is substituted.
+
+Across 54 presentations (35,802 channel samples), the largest absolute
+normalized difference after clipping the independent result into [0,1] is:
+
+| Source depth | Maximum difference |
+|---|---:|
+| 8-bit | 0.0020102734659231958 |
+| 10-bit | 0.0005358431544267017 |
+| 12-bit | 0.00017896717106022364 |
+
+The float oracle retains values from -0.9929103851318359 to 1.983231544494629
+on these boundary fixtures. Integer conversion discards those excursions.
+These observations support exposing clipping as a policy decision; they do not
+qualify a general HDR renderer or an acceptable color-error threshold. Native
+quantization, U16 bit replication and independent arithmetic remain distinct.
+[Receipt](../../benchmarks/planar_rgb_inspection_2026-10-27.json),
+[all per-presentation data](../../benchmarks/planar_rgb_inspection_2026-10-27.csv).
+The oracle options are documented by
+[FFmpeg](https://ffmpeg.org/ffmpeg-filters.html#zscale).
+
 ### Converted video uses the shared image output
 
 `ImageOutput::from_frame_pixels(frame, owner, orientation)` now adopts an actual
