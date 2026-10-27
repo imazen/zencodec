@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {declarations,example,maskRust} from './source.mjs';
+import {declarations,example,maskRust,snapshotMethods} from './source.mjs';
 import {api,chapterApi,entries,supplementalExamples} from './api.mjs';
 import {lanes} from './content.mjs';
 const root=new URL('../../',import.meta.url);
@@ -114,4 +114,23 @@ test('above, focus and below reconstruct complete independently compiled example
   assert.match(example(source,'codecset').above,/with_decoder\(BmpDecoderConfig::new\(\)\)/);
   assert.throws(()=>example(source,'missing'),/unique/);
   assert.throws(()=>example(source+source,'preview'),/unique/);
+});
+
+test('integration method discovery retains generic callbacks and range sources',()=>{
+  const snapshot=`pub fn Request<'a>::new() -> Self
+pub fn Request<'a>::transcode_with<R: PolicyResolver>(&self, &mut R)
+pub fn Request<'a>::transcode_from_read_at<S: ReadAt>(&self, &mut S)
+pub fn Request<'a>::transcode_from_read_at_with<S, R>(&self, &mut S, &mut R)
+pub const fn Request<'a>::configured() -> bool
+pub fn Other::transcode_with<R>(&self, R)
+pub Request<'a>::field: bool`;
+  assert.deepEqual(snapshotMethods(snapshot,"Request<'a>"),[
+    'new','transcode_with','transcode_from_read_at','transcode_from_read_at_with','configured',
+  ]);
+});
+
+test('pinned integration exposes every synchronous callback and source entry point',async()=>{
+  const {surface}=JSON.parse(await readFile(new URL('docs/integration-api.json',root),'utf8'));
+  for(const method of ['transcode_with','transcode_from_read_at','transcode_from_read_at_with'])
+    assert.match(surface,new RegExp(`pub fn ${method}<`),method);
 });

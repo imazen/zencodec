@@ -79,3 +79,14 @@ export function example(source,name) {
   const above=body.slice(0,a.index),focus=body.slice(a.index+a[0].length,b.index),below=body.slice(b.index+b[0].length);
   return {above,focus,below,full:above+focus+below,line:source.slice(0,start).split('\n').length};
 }
+
+// Public-API snapshots put method generics between the name and parameters.
+export function snapshotMethods(snapshot,path) {
+  const prefix=`${path}::`;
+  return snapshot.split('\n').flatMap(line=>{
+    const declaration=line.replace(/^pub (?:(?:async|const) )*fn /,'');
+    if(declaration===line||!declaration.startsWith(prefix))return [];
+    const name=declaration.slice(prefix.length).match(/^(\w+)(?=[<(])/);
+    return name?[name[1]]:[];
+  });
+}

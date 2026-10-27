@@ -2,14 +2,14 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
-import { declarations } from './site/source.mjs';
+import { declarations, snapshotMethods } from './site/source.mjs';
 const [checkout,revision]=process.argv.slice(2);
 if(!checkout||!revision?.match(/^[0-9a-f]{40}$/))throw Error('usage: capture-integration-api.mjs CHECKOUT FULL_COMMIT');
 const read=file=>execFileSync('git',['-C',checkout,'show',`${revision}:${file}`],{encoding:'utf8'});
 const file='zencodecs/src/checked_transcode.rs';
 const asyncFile='zencodecs/src/checked_transcode/asynchronous.rs';
 const snapshot=read('docs/public-api/zencodecs.features.txt');
-const methods=[...snapshot.matchAll(/^pub fn checked_transcode::TranscodeRequest<'a>::(\w+)\(/gm)].map(match=>match[1]);
+const methods=snapshotMethods(snapshot,"checked_transcode::TranscodeRequest<'a>");
 if(!methods.length)throw Error('Missing integration API');
 const imports=`use zencodec::{
     At, CodecSet, ImageFormat,
