@@ -1,5 +1,6 @@
 //! Native allocation probe: profile with heaptrack; this program has no timers.
-//! No pixels are decoded, allocated or read, and no encoded output is published.
+//! No source raster is allocated or read, and no encoded output is published.
+//! Native buffer allocations are the subject of this probe.
 #![forbid(unsafe_code)]
 
 use std::{error::Error, hint::black_box, io};

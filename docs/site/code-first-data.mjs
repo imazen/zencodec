@@ -60,6 +60,10 @@ export const codeFlows = [
   {id:'adapter-output',role:'adapter',title:'Rows → schedule → forward / seek-back output',steps:[
     {scope:'fn public_row_driver_native_schedules_preserve_pixels_owners_and_failure_context()',file:'perf/jpeg-policy-validation/src/row_driver.rs',api:['rowEncode','rowSource','rowEncodeOptions'],state:'Native JPEG integration test'},
   ]},
+  {id:'adapter-planning',role:'adapter',title:'Plan before begin: native contract gap',issue:160,evidence:'docs/encode-output-preparation.md',note:'Measured 2026-10-27: four prepared progressive JPEG jobs peaked at 77,485 heap bytes; beginning them peaked at 58,070,699 bytes before pixel reads. The native template plan also misses wrapper overrides. A checked destination path needs effective-job planning before startup.',steps:[
+    {scope:'fn native_template_plan_does_not_describe_adapter_streaming_overrides()',file:'perf/jpeg-policy-validation/src/preparation.rs',api:['operationPreparation','rasterOutput'],state:'Native planning counterexample; replacement hook not implemented'},
+    {scope:'fn explicit_native_and_progressive_settings_override_streaming_preference()',file:'perf/jpeg-policy-validation/src/preparation.rs',api:['outputScheduleFacts'],state:'Native override and small-image contract test'},
+  ]},
   {id:'adapter-ownership',role:'adapter',title:'Admit storage → hold → publish / refuse',steps:[
     {example:'checked_output_storage',file:'perf/spatial-validation/src/jxl_packaged_storage.rs',api:['preparedStorage','imageOutput'],state:'Native JXL integration test'},
   ]},

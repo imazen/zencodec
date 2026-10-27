@@ -950,6 +950,10 @@ jpeg-preparation-build:
     cargo build --manifest-path perf/jpeg-policy-validation/Cargo.toml --bin encode_preparation --locked
     cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --bin encode_preparation --locked -- -D warnings
 
+jpeg-preparation-check:
+    cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked preparation:: -- --test-threads=1
+    cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+
 jpeg-preparation-profile executable output revision:
     python3 -m unittest discover -s perf/jpeg-policy-validation -p test_preparation_profile.py
     python3 perf/jpeg-policy-validation/profile-preparation.py "{{executable}}" "{{output}}" --source-revision "{{revision}}"

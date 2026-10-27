@@ -1,0 +1,142 @@
+{
+  "source_revision": "06e352c75351",
+  "binary_sha256": "5edcdb32cdbc7898dbc542c4f78e435da45576fc248bdab0cc070edc759fb597",
+  "profile": "debug; heaptrack; no pixel reads or output publication",
+  "dimensions": [
+    2048,
+    2048
+  ],
+  "format": "RGB8_SRGB",
+  "native_revision": "4535ec499d88b04f58882df03e61761526c35756",
+  "started": "2026-10-27T12:17:02.281361+00:00",
+  "cells": [
+    {
+      "configuration": "fixed",
+      "stage": "prepare",
+      "candidates": 1,
+      "peak_heap_bytes": 75487,
+      "allocation_calls": 22,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "43a6ea00b9826c3a013bb3171c5154d77d5a9b67c9f1ba0c299125274917cd1b"
+    },
+    {
+      "configuration": "fixed",
+      "stage": "prepare",
+      "candidates": 4,
+      "peak_heap_bytes": 77479,
+      "allocation_calls": 25,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "91018f1887c1f5d9aa0b2179606d6997f78d1f4fcc432c59ccf59bd01cf790b3"
+    },
+    {
+      "configuration": "fixed",
+      "stage": "construct",
+      "candidates": 1,
+      "peak_heap_bytes": 84185,
+      "allocation_calls": 24,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "a2e62a47e58f2a766f5c8384581d4027ab29137b5a1d6f8c6a84cc1825ef0b91"
+    },
+    {
+      "configuration": "fixed",
+      "stage": "construct",
+      "candidates": 4,
+      "peak_heap_bytes": 110697,
+      "allocation_calls": 30,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "4c407a37a32d60b8d579092e853d2e02b6510e3e6ba656eb47852b73a1e83144"
+    },
+    {
+      "configuration": "fixed",
+      "stage": "begin",
+      "candidates": 1,
+      "peak_heap_bytes": 1836421,
+      "allocation_calls": 149,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "114b57f11480bbdf3f224451671e7374dcd0cdd2e1913539847596f48baea2e8"
+    },
+    {
+      "configuration": "fixed",
+      "stage": "begin",
+      "candidates": 4,
+      "peak_heap_bytes": 7118213,
+      "allocation_calls": 530,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "84017a1a2a8ef7d3a65235f48bf35cf3de767156955dd26a10f616f70d23f115"
+    },
+    {
+      "configuration": "fixed",
+      "stage": "refuse",
+      "candidates": 1,
+      "peak_heap_bytes": 1925732,
+      "allocation_calls": 153,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "54fe83d6a3d633d3eb5b695102fc49dac9b9a7aaf83776417e381f74c96948c0"
+    },
+    {
+      "configuration": "progressive",
+      "stage": "prepare",
+      "candidates": 1,
+      "peak_heap_bytes": 75493,
+      "allocation_calls": 22,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "b176b9a71ce4ef66785b4b8e49519f5eafe77c363ca1edcf9f56d559433f31f0"
+    },
+    {
+      "configuration": "progressive",
+      "stage": "prepare",
+      "candidates": 4,
+      "peak_heap_bytes": 77485,
+      "allocation_calls": 25,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "f9fa592b621aa952ab0521a22c36f3350d6249122ee015c1039fa855cab8641f"
+    },
+    {
+      "configuration": "progressive",
+      "stage": "construct",
+      "candidates": 1,
+      "peak_heap_bytes": 84191,
+      "allocation_calls": 24,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "bd4e0648bde8139035e65c2e6df9d5a3e32732f19b6f15f99fb8638473cbe42c"
+    },
+    {
+      "configuration": "progressive",
+      "stage": "construct",
+      "candidates": 4,
+      "peak_heap_bytes": 110703,
+      "allocation_calls": 30,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "b995120df273ad9c723efc95d71c9342d122bdb123513b7054161eb79987b7bf"
+    },
+    {
+      "configuration": "progressive",
+      "stage": "begin",
+      "candidates": 1,
+      "peak_heap_bytes": 14573843,
+      "allocation_calls": 58,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "b335782191fd2245d047a4cecf7fb29be33d5b5eb958682496be4563b9bf70e7"
+    },
+    {
+      "configuration": "progressive",
+      "stage": "begin",
+      "candidates": 4,
+      "peak_heap_bytes": 58070699,
+      "allocation_calls": 166,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "c3881ac884b0644ba3ab5fb994e296a62a3fd9f2fb7a6b39fbb3488699fb25d6"
+    },
+    {
+      "configuration": "progressive",
+      "stage": "refuse",
+      "candidates": 1,
+      "peak_heap_bytes": 14663988,
+      "allocation_calls": 57,
+      "live_bytes_at_exit": 548,
+      "raw_sha256": "6854e9800f60e6010f73d984d1e32ded8b61e0f77b62c6a1ea855bdd6f420739"
+    }
+  ],
+  "updated": "2026-10-27T12:17:05.178454+00:00",
+  "completed": "2026-10-27T12:17:05.178662+00:00"
+}
