@@ -951,6 +951,7 @@ jpeg-preparation-build:
     cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --bin encode_preparation --locked -- -D warnings
 
 jpeg-preparation-profile executable output revision:
+    python3 -m unittest discover -s perf/jpeg-policy-validation -p test_preparation_profile.py
     python3 perf/jpeg-policy-validation/profile-preparation.py "{{executable}}" "{{output}}" --source-revision "{{revision}}"
 
 # Paths are required; this integration never silently skips missing fixtures.
