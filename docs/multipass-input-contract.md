@@ -1,0 +1,69 @@
+# Retain the raster, not a replay token
+
+The [detached-proof reproduction](multipass-proof-review-2026-10-27.md) showed
+that a private constructor cannot prove what an arbitrary source callback reads.
+The replacement candidate retains the actual immutable view:
+
+```rust,ignore
+use multipass_validation::{Input, encode_passes};
+
+let input = Input::raster(pixels);
+let result = encode_passes(encoder, input, destination, output_policy,
+                           replay_policy, options, stop)?;
+```
+
+This is an executing experiment in
+[perf/multipass-validation](../perf/multipass-validation/README.md), not a new
+production entry point. Its two policy arguments expose the remaining integration
+work: the final API must use the existing single resolver.
+
+## Caller evolution
+
+Start with a complete borrowed image. `Input::raster` holds its PixelSlice and the
+driver supplies those same samples on every pass. There is no raw spool or digest
+reservation. The codec still receives samples in its own band buffer; this is not
+a claim of zero copies inside the codec.
+
+For a large file or decoder output, use `Input::source(source)`. A positional
+source may read again, with explicit version/digest evidence. A forward-only
+source can supply the first pass once; subsequent passes require admitted
+staging. If exact replay is required, driver-owned memory provides the snapshot.
+A caller-owned staging file plus a digest has weaker evidence and does not pass
+that requirement. No unknown source promise becomes an exactness guarantee.
+
+A pass limit can change the route even for an immutable raster. If the encoder
+needs two source passes and the caller permits one, the driver offers staging
+or refuses. Staging remains a policy decision, with the reservation held while
+the callback considers it. Declining reads no pixels and writes no output.
+
+Destination access is independent. A seek-back writer can receive an index patch;
+a forward writer needs a native trailing-index layout or a refusal. Output waits
+are a third concern: finish-first staging and live output use the existing output
+schedule resolver. Neither source repeatability nor seeking proves a memory bound.
+
+## Adapter and implementor boundary
+
+An encoder reports its actual pass plan and asks for a row range into its own
+buffer. The driver checks pass order, complete coverage and declared pass count.
+It retains source failures even if the encoder swallows the interruption, and
+refuses Filled-without-fill, double fills, early Done and incomplete passes.
+Only the selected source/staging mechanism supplies rows.
+
+The raster input arm constructs a concrete reader internally. Custom sources
+cannot obtain a token, claim that arm, or replace its rows after selection.
+A source wrapper that forwards another source's replay declaration is still an
+external source. This retains a useful trust boundary without preventing custom
+network or file sources.
+
+## Validation and remaining work
+
+The unchanged native assertions pass for IMI's exercised 2- and 5-pass modes:
+byte parity against its bounded entry point, sample parity against whole-image
+encoding, strided sources, both output layouts, replay failures and cancellation.
+The detached-proof regression now refuses. A positive direct-raster test passes
+with zero managed bytes and objects available for digests/raw staging.
+
+This establishes the tested replay mechanism, not release readiness. Remaining
+API work includes one resolver for replay and output decisions, operation-scoped
+requirement discharge, shared checked request-to-destination execution, bounded
+tracing, total retained-memory evidence and async source lifetime validation.

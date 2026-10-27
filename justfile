@@ -1300,3 +1300,26 @@ raster-output-native-check artifacts:
 # Final interpretation cannot discharge unrelated required policy obligations.
 boundary-preset-native-check artifacts:
     JPEG_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked native_final_boundary_cannot_bypass_unproven_preset_requirements -- --nocapture
+
+# Replay contract candidate; the native harness is separate and explicitly opt-in.
+multipass-sync export:
+    test ! -e "{{export}}/.git"
+    test ! -e "{{export}}/.jj"
+    mkdir -p "{{export}}/perf/multipass-validation/src" "{{export}}/perf/multipass-validation/tests" "{{export}}/perf/multipass-validation/native/src" "{{export}}/perf/multipass-validation/native/tests"
+    cp perf/multipass-validation/Cargo.toml perf/multipass-validation/dependencies.lock "{{export}}/perf/multipass-validation/"
+    cp perf/multipass-validation/src/*.rs "{{export}}/perf/multipass-validation/src/"
+    cp perf/multipass-validation/tests/*.rs "{{export}}/perf/multipass-validation/tests/"
+    cp perf/multipass-validation/native/Cargo.toml perf/multipass-validation/native/dependencies.lock "{{export}}/perf/multipass-validation/native/"
+    cp perf/multipass-validation/native/src/*.rs "{{export}}/perf/multipass-validation/native/src/"
+    cp perf/multipass-validation/native/tests/*.rs "{{export}}/perf/multipass-validation/native/tests/"
+
+multipass-check:
+    cp perf/multipass-validation/dependencies.lock perf/multipass-validation/Cargo.lock
+    cargo test --manifest-path perf/multipass-validation/Cargo.toml --locked
+    cargo clippy --manifest-path perf/multipass-validation/Cargo.toml --all-targets --locked -- -D warnings
+
+multipass-native-check artifacts:
+    mkdir -p "{{artifacts}}"
+    cp perf/multipass-validation/native/dependencies.lock perf/multipass-validation/native/Cargo.lock
+    CARGO_NET_GIT_FETCH_WITH_CLI=true MULTIPASS_SCRATCH="{{artifacts}}" cargo test --manifest-path perf/multipass-validation/native/Cargo.toml --locked -- --test-threads=1
+    CARGO_NET_GIT_FETCH_WITH_CLI=true cargo clippy --manifest-path perf/multipass-validation/native/Cargo.toml --all-targets --locked -- -D warnings
