@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import subprocess
 import tarfile
+import tomllib
 
 REVISION = "4535ec499d88b04f58882df03e61761526c35756"
 
@@ -55,9 +56,16 @@ def main():
     # Resolve only the patched graph before the locked build. Keep the complete
     # graph for attribution; do not update the committed registry lock.
     with (native / "resolved-graph.json").open("wb") as stream:
-        subprocess.run(["cargo", "metadata", "--offline", "--format-version", "1",
+        subprocess.run(["cargo", "metadata", "--format-version", "1",
                         "--manifest-path", str(manifest)], stdout=stream,
                        check=True, timeout=120)
+    if lock.exists() and (harness / "Cargo.lock.before-native-preflight").exists():
+        def unchanged_packages(path):
+            packages = tomllib.loads(path.read_text())["package"]
+            return sorted((p["name"], p["version"], p.get("source", ""), p.get("checksum", ""))
+                          for p in packages if p["name"] not in {"zenjpeg", "zenyuv"})
+        if unchanged_packages(lock) != unchanged_packages(harness / "Cargo.lock.before-native-preflight"):
+            raise ValueError("Native planning setup changed unrelated locked packages")
     (native / "experiment.json").write_text(json.dumps({
         "native_revision": REVISION,
         "native_patch_sha256": hashlib.sha256(patch.read_bytes()).hexdigest(),
