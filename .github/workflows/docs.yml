@@ -118,6 +118,7 @@ jobs:
       SPATIAL_GENERATED_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-generated
       SPATIAL_LAYER_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-layers
       SPATIAL_PROJECTION_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-projection
+      SPATIAL_INVENTORY_ARTIFACTS: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-inventory
       SPATIAL_ORACLE_PYTHON: ${{ github.workspace }}/perf/spatial-validation/target/oracle-python/bin/python
       JXL_SELECTION_ORACLE: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-jxl/jxl-oracle
       JXL_LAYER_ORACLE: ${{ github.workspace }}/perf/spatial-validation/target/oracle-${{ github.run_id }}-${{ github.run_attempt }}-jxl/layer-oracle
@@ -148,8 +149,8 @@ jobs:
       - name: Execute native spatial selection and exact guide example
         run: |
           cp perf/spatial-validation/dependencies.lock perf/spatial-validation/Cargo.lock
-          timeout --kill-after=15s 10m cargo test --manifest-path perf/spatial-validation/Cargo.toml --features cms_oracle --locked -- --nocapture --test-threads=1
-          timeout --kill-after=15s 5m cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --features cms_oracle --all-targets --locked -- -D warnings
+          timeout --kill-after=15s 10m cargo test --manifest-path perf/spatial-validation/Cargo.toml --features cms_oracle,old_jpeg --locked -- --nocapture --test-threads=1
+          timeout --kill-after=15s 5m cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --features cms_oracle,old_jpeg --all-targets --locked -- -D warnings
       - name: Retain independent layer evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -165,6 +166,7 @@ jobs:
             perf/spatial-validation/target/oracle-*-color/**/publication.json
             perf/spatial-validation/target/oracle-*-projection/**/*.json
             perf/spatial-validation/target/oracle-*-projection/**/*.txt
+            perf/spatial-validation/target/oracle-*-inventory/**/*.json
             perf/spatial-validation/target/oracle-*-color/**/stderr.txt
           if-no-files-found: error
 

@@ -1456,3 +1456,24 @@ region-sized work. Inventory must distinguish reachable data, actual decoder
 consumption, and privacy evidence. Predictor interpretation also depends on the
 compression method. The consumer rollout in zenextras is not established by
 this harness's passing tests.
+
+The opt-in `old_jpeg` qualification now uses two immutable fixtures from that
+fork through `codec-corpus`. `zackthecat.tif` exercises external tables: every
+reported table range is covered by native reads, and zeroing each table family
+changes decoded samples. `smallliz.tif` exercises a whole-JPEG stream: a zero
+JPEGInterchangeFormatLength makes the decoder read an appended opaque tail;
+the decoded pixels remain identical. Keeping the original nonzero length does
+not read that tail. A private `Rules::extents` implementation uses the existing
+`Count::ToEnd` for that exact decoder configuration, retaining `Unknown` fate.
+
+These are consumption and mutation controls, not an independent pixel-accuracy
+claim. Native reads do not prove bytes are necessary for rendering or safe to
+retain under a privacy requirement. A separate generated control establishes
+that Predictor 65535 is ignored for uncompressed samples but causes the typed
+`UnknownPredictor` error for LZW. The final consumer rules still belong in
+zentiff; these private rules do not replace its complete inventory.
+
+Run `just spatial-tiff-inventory-check <fresh-artifact-directory>` for the
+focused controls. The documentation workflow also runs them with the full native
+spatial suite and retains their JSON receipts. See
+[the native inventory receipt](../../benchmarks/native_tiff_inventory_2026-10-27.json).

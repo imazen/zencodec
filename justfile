@@ -359,6 +359,7 @@ shared-output-check artifacts:
 # Native TIFF spatial candidates and the positional-to-seek bridge.
 spatial-validation-sync export:
     just io-core-sync "{{export}}"
+    cp zenmeta/src/ifd/walk.rs "{{export}}/zenmeta/src/ifd/"
     cp zencodec-media/src/*.rs "{{export}}/zencodec-media/src/"
     test ! -e "{{export}}/.git"
     test ! -e "{{export}}/.jj"
@@ -381,6 +382,10 @@ spatial-layer-resolve:
 
 spatial-tiff-resolve:
     cargo update --manifest-path perf/spatial-validation/Cargo.toml -p tiff
+
+spatial-tiff-inventory-check artifacts:
+    SPATIAL_INVENTORY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/spatial-validation/Cargo.toml --features old_jpeg --locked tiff_inventory_ -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --features old_jpeg --all-targets --locked -- -D warnings
 
 spatial-validation-resolve:
     cargo metadata --manifest-path perf/spatial-validation/Cargo.toml --format-version 1 > /dev/null
@@ -616,6 +621,7 @@ spatial-ci-check artifacts features="":
     export SPATIAL_LAYER_ARTIFACTS="{{artifacts}}/layers"
     export SPATIAL_COLOR_ARTIFACTS="{{artifacts}}/color"
     export SPATIAL_PROJECTION_ARTIFACTS="{{artifacts}}/projection"
+    export SPATIAL_INVENTORY_ARTIFACTS="{{artifacts}}/inventory"
     mkdir -p "{{artifacts}}"
     timeout --kill-after=15s 10m cargo test --manifest-path perf/spatial-validation/Cargo.toml --features "{{features}}" --locked -- --nocapture --test-threads=1
     timeout --kill-after=15s 5m cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --features "{{features}}" --all-targets --locked -- -D warnings

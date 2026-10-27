@@ -38,6 +38,8 @@ mod placement;
 #[cfg(test)]
 mod strip_tests;
 mod tests;
+#[cfg(feature = "old_jpeg")]
+mod tiff_inventory_tests;
 mod tiff_items;
 mod tiff_pixels;
 mod tiff_region;
