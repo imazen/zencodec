@@ -123,3 +123,111 @@ export const codeFlows = [
     {scope:'impl Muxer for ToyMuxer',file:'zencodec-media-testkit/src/toy.rs',api:['muxer'],state:'Media conformance container'},
   ]},
 ];
+
+// Editorial context is separate from the extracted, compilable source.
+// Each addition answers a concrete need; a test fixture is never presented as
+// the application entry point for a production codec.
+export const roleStories = {
+  consumer: 'Build a photo gallery: open an upload, produce a derivative, then add display, metadata and transport requirements only as the product needs them.',
+  adapter: 'Connect that gallery to storage and a destination: retain the real source and codec across decisions, and account for effects when an operation fails.',
+  implementor: 'Expose an existing codec: start with a still image, then add byte acquisition, row output, collections or video where the codec can honor the contract.',
+};
+const lessons = {
+  'app-start': [
+    ['Choose the formats once', 'The gallery accepts JPEG and PNG and writes PNG. Register those implementations once; pass the set to each operation.'],
+    ['Open one upload', 'The caller has encoded bytes and wants their native pixels. DecodeRequest detects the format; the result retains pixel interpretation and the operation report.'],
+    ['Save a derivative', 'Now the gallery needs a PNG file. TranscodeRequest belongs to zencodecs, which composes the codecs and conversion; unsupported preservation can refuse.'],
+  ],
+  'app-render': [
+    ['Open the first display image', 'A collection can contain pages, children or layers. Select through the common collection interface before assuming that the first stored raster is a complete canvas.'],
+    ['Render from a remote snapshot', 'The viewer needs a display result from positional reads. This native test checks the full read → select → render path and rejects changed or faulty sources.'],
+  ],
+  'app-convert': [
+    ['Choose the display color', 'Native pixels need not match the display. Keep their current color context and let zenpixels-convert prepare the requested output interpretation.'],
+    ['Map the framebuffer', 'The display needs rows in a specific layout. Borrow the returned owner and honor its stride; do not infer packed storage from width.'],
+  ],
+  'app-transcode': [
+    ['Publish a web derivative', 'The output now needs named sRGB and descriptive-metadata removal. These are explicit requirements; alpha or depth loss must not be silently substituted.'],
+    ['Add a tenant decision', 'Only this tenant requires native workspace evidence. The callback chooses among admitted routes or returns a located application error; unknown is not zero.'],
+  ],
+  'app-io': [
+    ['Read a file positionally', 'The source is on disk instead of in a byte slice. Keep the same transcode request and supply FileReadAt.'],
+    ['Await a network source', 'The source can suspend for I/O. AsyncSource drives acquisition; this example still returns completed encoded bytes before the application sends them.'],
+  ],
+  'app-rewrite': [
+    ['Change metadata without pixel reconstruction', 'The product needs removal, not a new image encode. RewriteRequest retains the codestream and applies the selected metadata treatment.'],
+    ['Handle an uninspectable profile', 'Opaque ICC bytes may contain fields the privacy rule cannot inspect. Refuse rather than treating an unparsed payload as proven clean.'],
+  ],
+  'app-video': [
+    ['Gate decoded frame publication', 'The source is video. Wrap the native decoder once so every returned frame passes through the shared policy.'],
+    ['Bound native picture allocations', 'A publication decision happens after reconstruction. This native setting adds picture-plane admission before allocation; it is not a total-RAM bound.'],
+    ['Check each frame interpretation', 'A later frame can carry different color facts. This callback refuses an unsupported transfer before publication; it does not perform tone mapping.'],
+  ],
+  'app-density': [['Require a physical resolution', 'A print consumer relies on exact density. Ask for it on EncodeRequest and handle refusal when the format cannot represent it exactly.']],
+  'app-collection': [
+    ['Inspect before decoding', 'A large collection may contain images the caller never wants. Read the selected description before allocating its pixels.'],
+    ['Select a JXL layer deliberately', 'The application now edits layers. Preserve layer placement and distinguish a layer raster from a composited presentation.'],
+  ],
+  'app-limits': [['Bound and cancel an operation', 'An upload is untrusted or the user closes the viewer. Configure resource limits and a Pulse, and retain the typed cause when work refuses or stops.']],
+  'app-animation': [['Keep exact animation timing', 'An animation enters a video pipeline. The conformance test preserves rational timing through both adapters rather than rounding it at the boundary.']],
+  'app-layout': [['Require both layout and color', 'A native image has auxiliary channels and a particular color interpretation. Prepare one output plan and execute it on the held source; layout conversion alone is insufficient.']],
+  'adapter-input': [
+    ['Drive bytes already in memory', 'The application has a complete slice. The codec requests input through the same sans-I/O dialogue used by other sources.'],
+    ['Supply only requested ranges', 'The input now lives on disk or behind ranged reads. The driver fulfills InputRequest without teaching the codec about files or HTTP.'],
+    ['Coalesce nearby ranges', 'Remote requests have latency. Batch useful reads while retaining their offsets and EOF semantics.'],
+  ],
+  'adapter-seek': [['Reuse a seek-based parser', 'An existing parser expects Read + Seek. The adapter maps that interface onto positional acquisition while keeping source identity and errors visible.']],
+  'adapter-control': [['Hold the decoder at its decision boundary', 'Interpretation becomes available before affected rows may escape. Retain the suspended native JPEG decoder while the destination is prepared.']],
+  'adapter-output': [['Choose when the destination may wait', 'A slow writer may retain a large encoder. Offer finish-first or qualified live output, keep the actual source and encoder, and preserve partial-write facts.']],
+  'adapter-planning': [
+    ['Find the cost of planning by startup', 'Beginning every candidate can allocate uncompressed codec state before the caller chooses. The native counterexample measures that cost.'],
+    ['Include effective wrapper overrides', 'A codec template is not the configured job. Progressive mode, native color mode and small geometry change the route that can actually execute.'],
+  ],
+  'adapter-ownership': [['Reserve storage before reconstruction', 'The caller holds several images at once. The allocation charge must follow the returned owner, including after the decoder is dropped.']],
+  'adapter-preflight': [
+    ['Plan without beginning native work', 'This private JPEG patch validates the effective job before allocating pixel state. The test also checks repeated planning leaves strided encode bytes unchanged.'],
+    ['Validate current color before headers', 'The declared samples and attached profile must agree before startup writes color headers. These tests cover the patch’s current refusal scope, not all color transforms.'],
+  ],
+  'adapter-scope': [['Keep a late metadata obligation alive', 'An early decision cannot certify packets not yet seen. This private experiment retains the obligation until later inspection and final-effect admission.']],
+  'adapter-children': [['Select a child image', 'A TIFF thumbnail or pyramid level is a child, not another animation frame. Use explicit child selection and preserve the parent relationship.']],
+  'adapter-replay': [['Retain the exact raster for another pass', 'The codec needs analysis before coding. Driver-held immutable pixels provide replay identity; a caller-supplied digest alone does not.']],
+  'adapter-patches': [['Apply final seek-back patches', 'The container learns offsets or sizes at finish. Validate the full tail and patch plan before applying ordered writes to the actual destination.']],
+  'adapter-metadata': [
+    ['Inspect metadata with explicit coverage', 'The application wants an audit before choosing a treatment. Report recognized fields alongside uninspected data.'],
+    ['Refuse ambiguous XMP meaning', 'Duplicate fields or misleading namespaces prevent a unique interpretation. The test keeps those unknowns visible instead of selecting a convenient value.'],
+  ],
+  'codec-config': [
+    ['Expose a reusable configuration', 'Register format identity and accepted descriptors. This minimal test codec supplies a small implementation to read before a production adapter.'],
+    ['Bind one operation', 'Keep Pulse, limits and requested metadata on the job. Reject unsupported requirements rather than silently accepting setters.'],
+    ['Accept one image', 'The simplest executor consumes PixelSlice, including its stride and interpretation, and returns encoded output or the codec’s own error.'],
+  ],
+  'codec-decode': [
+    ['Register a decoder', 'Expose format detection and actual supported behavior once on DecoderConfig.'],
+    ['Prepare one decode', 'Bind source lifetime, Pulse, limits and output negotiation on DecodeJob.'],
+    ['Return interpreted pixels', 'Decode owns the reconstructed result. Keep its descriptor, metadata and pixel storage consistent.'],
+  ],
+  'codec-sansio': [
+    ['Ask the driver for bytes', 'IncrementalDecode consumes supplied bytes and names the next InputRequest. The protocol fixture makes consumption and row ownership explicit.'],
+    ['Bridge a whole-file codec explicitly', 'A codec that needs all bytes can use a whole-file bridge. This preserves the dialogue but does not make reconstruction incremental.'],
+  ],
+  'codec-coroutine': [['Write straight-line incremental decoding', 'A codec author can await requested bytes without choosing a runtime. The coroutine adapter exposes the same suspended state to the driver.']],
+  'codec-rows': [
+    ['Declare and drain row output', 'A row-capable encoder validates the image, accepts strided batches and exposes pending bytes. Timing describes bytes, not retained raw memory.'],
+    ['Prove configuration-dependent behavior', 'The native JPEG test compares pixels across row and one-shot paths while varying output timing. A protocol fixture alone cannot establish this.'],
+  ],
+  'codec-video': [
+    ['Decode through send and receive', 'A decoder can retain packets or delay pictures. The conformance codec makes backpressure, drain and ownership visible.'],
+    ['Encode through send and receive', 'An encoder can delay output independently of input frames. Expose actual fidelity and preserve state-machine errors.'],
+  ],
+  'codec-testkit': [['Check promises against behavior', 'Run both supported and unsupported directions, then compare exact pixels across feeding paths. A capability flag alone is not evidence.']],
+  'codec-collection': [['Expose native TIFF structure', 'Map pages and child images through Collection while retaining native range access. This remains an explicitly labeled adapter experiment.']],
+  'codec-container': [
+    ['Demux encoded packets', 'Container parsing requests bytes and emits packets with timing and provenance; pixel decoding is a separate stage.'],
+    ['Mux and finalize', 'Packet acceptance, delayed output and final patches belong to the container state machine. Keep destination effects visible on error.'],
+  ],
+};
+for (const flow of codeFlows) {
+  const steps = lessons[flow.id];
+  if (!steps || steps.length !== flow.steps.length) throw Error(`Missing graduated explanation: ${flow.id}`);
+  flow.steps.forEach((step, index) => { [step.title, step.why] = steps[index]; });
+}

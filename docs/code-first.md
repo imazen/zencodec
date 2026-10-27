@@ -44,6 +44,15 @@ full-example copy, filtering, pagination and responsive layout. The existing
 documentation workflow runs the examples and deploys the same `docs/` site on
 main; the review branch preview is served separately.
 
+## Graduated examples
+
+Each role begins with a concrete application story. Each flow opens only its first
+step; later steps explain the new need before revealing its source code. Imports
+and continuation still expand independently inside every example. Code remains
+extracted from repository sources, and every step links its actual signatures.
+The consumer story starts with one registry and one decode/transcode call;
+adapter and codec stories introduce ownership and state machines separately.
+
 ## Boundaries visible to readers
 
 The page describes the review revision, not an already released 0.3 API. A

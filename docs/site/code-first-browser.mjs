@@ -34,6 +34,14 @@ export async function checkCodeFirst(browser,url,output) {
       assert.equal(await page.locator('[role=tab][aria-selected=true]').getAttribute('data-role-tab'),flow.role);
       assert.equal(await page.locator('[data-flow]:visible').count(),1);
       for(const [i,step] of flow.steps.entries()) {
+        const stage=page.locator(`#${flow.id} > .cf-step`).nth(i);
+        assert.equal(await stage.getAttribute('open'),i===0?'':null,'only the starting step opens initially');
+        assert.ok((await stage.locator(':scope > summary').textContent()).includes(step.title));
+        if(i>0) {
+          await stage.locator(':scope > summary').click();
+          assert.equal(await stage.getAttribute('open'),'');
+        }
+        assert.equal(await stage.locator('.cf-why').textContent(),step.why);
         const source=await readFile(new URL(`../../${step.file}`,import.meta.url),'utf8');
         const parts=step.example?example(source,step.example):implementation(source,step.scope);
         const panel=page.locator(`#${flow.id}-${i}`);
