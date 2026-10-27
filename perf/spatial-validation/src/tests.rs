@@ -624,7 +624,7 @@ mod image_selection {
         use crate::checked_collection::Checked;
         use std::{cell::Cell, convert::Infallible};
         use zencodec::{
-            At, SharedPulse, NoPulse,
+            At, SharedPulse,
             operation::{Decision, Question},
         };
         for big in [false, true] {

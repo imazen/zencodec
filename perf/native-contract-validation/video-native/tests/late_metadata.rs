@@ -3,7 +3,7 @@
 //! media decoder returns exactly the frames it returns without the OBU, so
 //! a transcode through the media types drops the value without any signal,
 //! error or refusal.
-use enough::Unstoppable;
+use zencodec::NoPulse;
 use std::sync::Arc;
 use zenavif::media::{Av1EncodeSettings, Av1VideoDecoder, Av1VideoEncoder};
 use zencodec::time::{TimeBase, Timestamp};
@@ -75,18 +75,18 @@ fn encode(s: &Av1EncodeSettings) -> (CodecConfig, Vec<Packet>) {
     let mut packets = Vec::new();
     for index in 0..FRAMES {
         let f = frame(s, index);
-        while encoder.send(&f, &Unstoppable).unwrap() != SendStatus::Accepted {
-            let Receive::Ready(p) = encoder.receive(&Unstoppable).unwrap() else {
+        while encoder.send(&f, &NoPulse).unwrap() != SendStatus::Accepted {
+            let Receive::Ready(p) = encoder.receive(&NoPulse).unwrap() else {
                 panic!("encoder stalled")
             };
             packets.push(p);
         }
-        while let Receive::Ready(p) = encoder.receive(&Unstoppable).unwrap() {
+        while let Receive::Ready(p) = encoder.receive(&NoPulse).unwrap() {
             packets.push(p);
         }
     }
     encoder.end_input().unwrap();
-    while let Receive::Ready(p) = encoder.receive(&Unstoppable).unwrap() {
+    while let Receive::Ready(p) = encoder.receive(&NoPulse).unwrap() {
         packets.push(p);
     }
     (config, packets)
@@ -135,22 +135,22 @@ fn with_obu(packet: &[u8], obu: &[u8]) -> Vec<u8> {
 /// Decodes `bytes` (each with its original packet's facts) through the media decoder.
 fn media_frames(config: &CodecConfig, packets: &[Packet], bytes: &[Vec<u8>]) -> Vec<Frame> {
     let mut decoder = Av1VideoDecoder::new().unwrap();
-    decoder.configure(config, &Unstoppable).unwrap();
+    decoder.configure(config, &NoPulse).unwrap();
     let mut frames = Vec::new();
     for (original, b) in packets.iter().zip(bytes) {
         let mut packet = repacked(original, b.clone());
-        while decoder.send(&mut packet, &Unstoppable).unwrap() != SendStatus::Accepted {
-            let Receive::Ready(f) = decoder.receive(&Unstoppable).unwrap() else {
+        while decoder.send(&mut packet, &NoPulse).unwrap() != SendStatus::Accepted {
+            let Receive::Ready(f) = decoder.receive(&NoPulse).unwrap() else {
                 panic!("decoder stalled")
             };
             frames.push(f);
         }
-        while let Receive::Ready(f) = decoder.receive(&Unstoppable).unwrap() {
+        while let Receive::Ready(f) = decoder.receive(&NoPulse).unwrap() {
             frames.push(f);
         }
     }
     decoder.end_input().unwrap();
-    while let Receive::Ready(f) = decoder.receive(&Unstoppable).unwrap() {
+    while let Receive::Ready(f) = decoder.receive(&NoPulse).unwrap() {
         frames.push(f);
     }
     frames

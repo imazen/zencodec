@@ -343,19 +343,19 @@ fn native_refusal_stale_choice_error_cancel_and_unwind_release_held_picture() {
                 }
             },
         );
-        decoder.configure(&config, &stop).unwrap();
+        decoder.configure(&config, &zencodec::how_far::StopOnly::borrowed(&stop)).unwrap();
         for packet in &packets {
             assert_eq!(
-                decoder.send(&mut packet.clone(), &stop).unwrap(),
+                decoder.send(&mut packet.clone(), &zencodec::how_far::StopOnly::borrowed(&stop)).unwrap(),
                 SendStatus::Accepted
             );
         }
         decoder.end_input().unwrap();
-        let Receive::Ready(old) = decoder.receive(&stop).unwrap() else {
+        let Receive::Ready(old) = decoder.receive(&zencodec::how_far::StopOnly::borrowed(&stop)).unwrap() else {
             panic!("first presentation missing")
         };
         let result =
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| decoder.receive(&stop)));
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| decoder.receive(&zencodec::how_far::StopOnly::borrowed(&stop))));
         if mode == 4 {
             assert!(result.is_err());
         } else {

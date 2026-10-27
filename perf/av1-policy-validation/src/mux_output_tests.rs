@@ -713,7 +713,7 @@ struct StopAfterWrite {
     stopped: std::sync::atomic::AtomicBool,
     reason: enough::StopReason,
 }
-impl Stop for StopAfterWrite {
+impl enough::Stop for StopAfterWrite {
     fn check(&self) -> Result<(), enough::StopReason> {
         if self.stopped.load(std::sync::atomic::Ordering::SeqCst) {
             Err(self.reason)
@@ -760,12 +760,12 @@ fn mux_native_stop_during_packet_write_keeps_reason_and_cannot_resume() {
                 stop: &stop,
             }),
             &[track(&config)],
-            &stop,
+            &zencodec::how_far::StopOnly::borrowed(&stop),
         )
         .unwrap();
         let header = output.stats().emitted;
         stop.armed.store(true, std::sync::atomic::Ordering::SeqCst);
-        let error = output.send(packets[0].clone(), &stop).unwrap_err();
+        let error = output.send(packets[0].clone(), &zencodec::how_far::StopOnly::borrowed(&stop)).unwrap_err();
         assert_eq!(error.emitted, header + 7);
         assert!(
             matches!(zencodec::find_cause::<SessionError<ErasedError>>(&error), Some(SessionError::Cancelled(actual)) if *actual == reason)

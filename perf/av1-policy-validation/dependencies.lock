@@ -1125,7 +1125,7 @@ dependencies = [
 [[package]]
 name = "zenavif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=feadc4c94b19acdcd82ee545a02263bc67c45d7d#feadc4c94b19acdcd82ee545a02263bc67c45d7d"
+source = "git+https://github.com/imazen/zenavif?rev=b25f7604fbb71ead6517ec27fa52646770e3606a#b25f7604fbb71ead6517ec27fa52646770e3606a"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -1154,7 +1154,7 @@ dependencies = [
 [[package]]
 name = "zenavif-parse"
 version = "0.7.0"
-source = "git+https://github.com/imazen/zenavif?rev=feadc4c94b19acdcd82ee545a02263bc67c45d7d#feadc4c94b19acdcd82ee545a02263bc67c45d7d"
+source = "git+https://github.com/imazen/zenavif?rev=b25f7604fbb71ead6517ec27fa52646770e3606a#b25f7604fbb71ead6517ec27fa52646770e3606a"
 dependencies = [
  "arrayvec",
  "bitreader",
@@ -1202,9 +1202,8 @@ dependencies = [
 [[package]]
 name = "zenivf"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenextras?rev=ae920c1e2ac0fe0e6e2fcb709d99934ba36ea49c#ae920c1e2ac0fe0e6e2fcb709d99934ba36ea49c"
+source = "git+https://github.com/imazen/zenextras?rev=1af38ae83024830a141744fb3a565503bdc61af3#1af38ae83024830a141744fb3a565503bdc61af3"
 dependencies = [
- "enough",
  "zencodec",
  "zencodec-media",
 ]
@@ -1220,9 +1219,8 @@ dependencies = [
 [[package]]
 name = "zenmp4"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenavif?rev=11b2b1d69ea8ee3ae80bae67b35937b970a8c9ae#11b2b1d69ea8ee3ae80bae67b35937b970a8c9ae"
+source = "git+https://github.com/imazen/zenavif?rev=b25f7604fbb71ead6517ec27fa52646770e3606a#b25f7604fbb71ead6517ec27fa52646770e3606a"
 dependencies = [
- "enough",
  "zencodec",
  "zencodec-media",
  "zenpixels",
@@ -1292,9 +1290,8 @@ dependencies = [
 [[package]]
 name = "zenwebm"
 version = "0.1.0"
-source = "git+https://github.com/imazen/zenextras?rev=ae920c1e2ac0fe0e6e2fcb709d99934ba36ea49c#ae920c1e2ac0fe0e6e2fcb709d99934ba36ea49c"
+source = "git+https://github.com/imazen/zenextras?rev=1af38ae83024830a141744fb3a565503bdc61af3#1af38ae83024830a141744fb3a565503bdc61af3"
 dependencies = [
- "enough",
  "zencodec",
  "zencodec-media",
 ]

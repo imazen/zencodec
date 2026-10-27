@@ -610,7 +610,7 @@ fn canvas_projection_strided_auxiliaries_cancel_and_admission_release_without_fa
         projections += qualify(&source);
         let counted = CheckStop::default();
         let pool = StorageBudget::new(1024 * 1024, 4);
-        let output = project(&source, None, &pool, &counted).unwrap();
+        let output = project(&source, None, &pool, &zencodec::how_far::StopOnly::borrowed(&counted)).unwrap();
         let bytes = pool.reserved_bytes();
         drop(output);
         projections += 1;
@@ -621,7 +621,7 @@ fn canvas_projection_strided_auxiliaries_cancel_and_admission_release_without_fa
             for at in 0..counted.calls() {
                 let stop = CheckStop::with_reason(reason);
                 stop.after(at);
-                let error = project(&source, None, &pool, &stop).unwrap_err();
+                let error = project(&source, None, &pool, &zencodec::how_far::StopOnly::borrowed(&stop)).unwrap_err();
                 assert_eq!(
                     zencodec::find_cause::<CodecError>(&*error)
                         .unwrap()
@@ -640,7 +640,7 @@ fn canvas_projection_strided_auxiliaries_cancel_and_admission_release_without_fa
                     &source,
                     None,
                     &pool,
-                    &PanicAt(stop)
+                    &zencodec::how_far::StopOnly::borrowed(&PanicAt(stop))
                 )))
                 .is_err()
             );

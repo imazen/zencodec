@@ -7,7 +7,7 @@ use crate::{
     jxl_layers::JxlLayers,
     jxl_tests::fixture,
 };
-use zencodec::{SharedPulse, NoPulse};
+use zencodec::SharedPulse;
 
 fn limits(images: usize) -> Limits {
     Limits {

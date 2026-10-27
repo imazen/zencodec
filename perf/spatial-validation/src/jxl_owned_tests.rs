@@ -311,7 +311,7 @@ fn owned_jxl_output_refusal_native_cancellation_and_policy_release_all_charges()
         budget: budget.clone(),
         observed: Arc::new(AtomicBool::new(false)),
     };
-    let error = reconstruct(&bytes, &template, &budget, SharedPulse::new(stop.clone()))
+    let error = reconstruct(&bytes, &template, &budget, SharedPulse::new(zencodec::how_far::StopOnly::new(stop.clone())))
         .err()
         .unwrap();
     assert!(

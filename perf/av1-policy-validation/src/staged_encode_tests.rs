@@ -256,7 +256,7 @@ fn staged_native_refusal_conversion_drift_and_unwind_never_publish_or_resume() {
                         Ok(held)
                     }
                 },
-                &control,
+                &zencodec::how_far::StopOnly::borrowed(&control),
             )
         }));
         if mode == "budget" || mode == "epoch" {

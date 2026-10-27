@@ -7,7 +7,7 @@ use super::{
     jxl_tests::fixture,
 };
 use std::{fs::OpenOptions, path::PathBuf};
-use zencodec::{SharedPulse, NoPulse};
+use zencodec::SharedPulse;
 use zenjxl_decoder::api::{Error, JxlColorType, JxlDecoderOptions};
 
 fn options() -> JxlDecoderOptions {

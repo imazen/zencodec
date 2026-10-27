@@ -15,7 +15,7 @@ use std::{
     },
 };
 use zencodec::{
-    At, SharedPulse, NoPulse,
+    At, SharedPulse,
     enough::{Stop, StopReason},
     operation::{Decision, DecisionCode, Decline, PolicyResolver, PolicySet, Question},
 };
@@ -312,7 +312,7 @@ fn checked_collection_native_stop_latches_every_observed_poll_and_keeps_exact_re
                 at,
                 reason,
             };
-            let opened = Checked::open(SharedPulse::new(stop.clone()), PolicySet::new(), |token| {
+            let opened = Checked::open(SharedPulse::new(zencodec::how_far::StopOnly::new(stop.clone())), PolicySet::new(), |token| {
                 JxlItems::open_with_stop(&data, Composition::Composited, 64, token)
             });
             let error = match opened {

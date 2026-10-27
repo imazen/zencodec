@@ -11,7 +11,7 @@ use super::{
 };
 use std::{cell::Cell, convert::Infallible, path::PathBuf};
 use zencodec::{
-    At, SharedPulse, NoPulse,
+    At, SharedPulse,
     operation::{Decision, PolicySet, Question},
 };
 use zenjxl_decoder::api::{ExtraChannel, JxlLayerBlend, JxlLayerBlendMode};

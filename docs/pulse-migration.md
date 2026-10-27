@@ -98,3 +98,24 @@ tool version. Logs: `~/tmp/zencodec-version-gates-20261027.log`,
 `~/tmp/zencodec-version-semver-20261027.log`, and
 `~/tmp/zencodec-version-catalog-audit-20261027.log`. The forced-minor audit exits
 100 intentionally and is not reported as a passing compatibility check.
+
+## Native AV1 and collection qualification (2026-10-27)
+
+The root AV1/spatial harnesses now pin Pulse-aware adapters: zenavif/zenmp4
+`b25f7604`, zenivf/zenwebm `1af38ae8`, and zenjxl `a76ac76d`. Legacy Stop-only
+test controls use explicit `StopOnly` adapters; their cancellation assertions
+and the independent pixel/metadata oracles are unchanged.
+
+An export of `c39270dc` plus the integrated changes passed the AV1 suite and
+independent RGB/gamma checks, the native video witnesses, and the spatial CI
+feature set (`cms_oracle,old_jpeg`) with pinned libjxl, Little CMS and
+Pillow/libtiff oracles. Strict Clippy passed for all three root harnesses. Every
+integrated file was compared byte-for-byte with that tested export.
+[Qualification receipt](../benchmarks/native_pulse_2026-10-27.json).
+
+This qualifies those root graphs, not every native crate's standalone dependency
+graph or feature combination. Native own-suite migration and the JPEG/PNG
+shared-hook rollout remain separate gates. Pulse retention also does not imply
+native progress reporting. The video witnesses still reproduce copied frame
+retention/encoder delay and missing late HDR metadata carriage; cancellation
+migration does not solve those contracts.

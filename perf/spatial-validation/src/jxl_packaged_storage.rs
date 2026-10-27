@@ -14,7 +14,7 @@ pub(crate) fn factories(images: usize, headers: u64) -> (zencodec::CodecSet, Sto
 mod opening {
     // EXAMPLE: checked_output_storage
     use zencodec::{
-        At, CodecSet, ImageFormat, SharedPulse, NoPulse,
+        At, CodecSet, ImageFormat, SharedPulse,
         collection::{Composition, Discovery, ErasedCollection, OpenRequest},
         operation::{CheckedCollection, CollectionOperationError, PolicySet},
         source::DynReadAt,

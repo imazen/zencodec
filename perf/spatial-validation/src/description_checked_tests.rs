@@ -1,7 +1,7 @@
 use crate::{control::CheckStop, jxl_items::JxlItems, jxl_tests::fixture};
 use std::{cell::Cell, convert::Infallible, rc::Rc};
 use zencodec::{
-    At, SharedPulse, NoPulse,
+    At, SharedPulse,
     collection::{
         Collection, CollectionError, Composition, Discovery, DiscoveryExhausted, DiscoveryMethod,
         ImageDescription, ImageId, ImageRequest, Origin, SelectionError,

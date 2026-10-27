@@ -835,7 +835,7 @@ use zencodec::how_far::NoPulse;
                 },
                 PolicySet::new(),
                 target,
-                &stop,
+                &zencodec::how_far::StopOnly::borrowed(&stop),
             )
             .unwrap_err();
             assert_eq!(error.error().stage, Stage::Prepare);
@@ -858,7 +858,7 @@ use zencodec::how_far::NoPulse;
                     },
                     PolicySet::new(),
                     target,
-                    &stop,
+                    &zencodec::how_far::StopOnly::borrowed(&stop),
                 )
                 .unwrap_err();
                 assert_eq!(error.error().stage, stage);

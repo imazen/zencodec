@@ -102,10 +102,10 @@ frames it accepts before its first packet.
   metadata, so a transcode through them drops it without any signal.
 
 `video-native` pins the AV1 harness's native encoder and decoder (zenavif
-`feadc4c9`, rav1d-safe `b19aec65`). Root's Pulse migration changed the media
-and codec traits; zenavif at that revision fails to build against the current
-tree (`render_next_frame` signatures, missing `DecodeJob::with_pulse`), so this
-crate runs against the earlier tree until zenavif adopts Pulse.
+`b25f7604`, which adopts the Pulse controls, and rav1d-safe `b19aec65`).
+Pulse changes neither result: on the Pulse tree the encoder still copies
+frames with the same first-packet delays, and the late content light level
+still never reaches a media frame.
 
 ## Region read planning (large TIFF tiles)
 
@@ -157,6 +157,7 @@ bound is claimed for any route.
 | candidate native IMI + strict clippy (0fa2f60e) | 17 passed (4 new) | `rc=0 57s \| peak-RSS 1.18GiB` |
 | spatial-native + strict clippy (0fa2f60e) | 3 passed | `rc=0 6s \| peak-RSS 0.40GiB` |
 | video-native (zenavif build) + strict clippy (0fa2f60e) | 1 passed | `rc=0 96s \| peak-RSS 1.15GiB` |
+| video-native incl. late metadata + strict clippy (f73a7e0e, Pulse zenavif) | 2 passed | `rc=0 19s \| peak-RSS 0.53GiB` |
 
 ## Run
 
@@ -168,7 +169,7 @@ just baseline <export-dir>
 just candidate <export-dir>
 just candidate-native <export-dir>             # private zqi access
 just spatial <export-dir>
-just video <export-dir>                        # earlier tree until zenavif adopts Pulse
+just video <export-dir>
 ```
 
 No zenpixels change was needed.

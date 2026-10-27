@@ -497,7 +497,6 @@ dependencies = [
 name = "native-contract-video"
 version = "0.0.0"
 dependencies = [
- "enough",
  "rav1d-safe",
  "zenavif",
  "zencodec",
@@ -1120,7 +1119,7 @@ dependencies = [
 [[package]]
 name = "zenavif"
 version = "0.2.0"
-source = "git+https://github.com/imazen/zenavif?rev=feadc4c94b19acdcd82ee545a02263bc67c45d7d#feadc4c94b19acdcd82ee545a02263bc67c45d7d"
+source = "git+https://github.com/imazen/zenavif?rev=b25f7604fbb71ead6517ec27fa52646770e3606a#b25f7604fbb71ead6517ec27fa52646770e3606a"
 dependencies = [
  "almost-enough",
  "archmage",
@@ -1149,7 +1148,7 @@ dependencies = [
 [[package]]
 name = "zenavif-parse"
 version = "0.7.0"
-source = "git+https://github.com/imazen/zenavif?rev=feadc4c94b19acdcd82ee545a02263bc67c45d7d#feadc4c94b19acdcd82ee545a02263bc67c45d7d"
+source = "git+https://github.com/imazen/zenavif?rev=b25f7604fbb71ead6517ec27fa52646770e3606a#b25f7604fbb71ead6517ec27fa52646770e3606a"
 dependencies = [
  "arrayvec",
  "bitreader",
@@ -1164,7 +1163,7 @@ dependencies = [
 
 [[package]]
 name = "zencodec"
-version = "0.1.27"
+version = "0.2.0"
 dependencies = [
  "almost-enough",
  "enough",

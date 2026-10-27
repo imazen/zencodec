@@ -91,7 +91,7 @@ impl CheckStop {
         );
     }
     pub fn token(&self) -> SharedPulse {
-        SharedPulse::new(self.clone())
+        SharedPulse::new(zencodec::how_far::StopOnly::new(self.clone()))
     }
 }
 impl Stop for CheckStop {

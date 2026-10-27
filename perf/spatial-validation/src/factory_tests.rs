@@ -8,7 +8,7 @@ use crate::{
 use std::{cell::Cell, convert::Infallible, sync::Arc};
 use zencodec::decode::DecodePolicy;
 use zencodec::{
-    At, CodecSet, ImageFormat, ResourceLimits, SharedPulse, NoPulse,
+    At, CodecSet, ImageFormat, ResourceLimits, SharedPulse,
     collection::{Cause, CollectionOpenContext, DiscoveryExhausted, ErasedCollection, OpenRequest},
     operation::{CollectionStage, Decision, PolicySet, Question},
     source::{DynReadAt, ReadAtShim, SliceReadAt, SourceError},
@@ -652,9 +652,11 @@ fn collection_factory_all_inherited_stops_survive_registry_drop_and_policy_calls
             // Before opening, after opening, and inside the publication callback.
             for phase in 0..3 {
                 let controls = std::array::from_fn::<_, 3, _>(|_| CheckStop::with_reason(reason));
+                // The legacy setter adds a cancellation condition to the set's pulse.
+                #[allow(deprecated)]
                 let set = registered()
                     .with_pulse(SharedPulse::new(StopOnly::new(controls[0].clone())))
-                    .with_stop(controls[1].token());
+                    .with_stop(zencodec::StopToken::new(controls[1].clone()));
                 let resolver = |_: Question<'_>| -> Result<Decision, At<Infallible>> {
                     if phase == 2 {
                         controls[stopped].after(0);

@@ -2,7 +2,7 @@
 //! many frames are accepted before the first packet. `VideoEncoder` declares
 //! neither before the first frame, so a caller sizing frame storage or a live
 //! output wait has no stated value to use.
-use enough::Unstoppable;
+use zencodec::NoPulse;
 use std::sync::Arc;
 use zenavif::media::{Av1EncodeSettings, Av1VideoEncoder};
 use zencodec::time::{TimeBase, Timestamp};
@@ -86,12 +86,12 @@ fn accepted_before_first_packet(speed: u8, limit: usize) -> Option<usize> {
     let mut encoder = Av1VideoEncoder::new(s.clone(), TB).unwrap();
     for index in 0..limit {
         let frame = frame(&pool, &s, index).expect("one caller frame admitted");
-        match encoder.send(&frame, &Unstoppable).unwrap() {
+        match encoder.send(&frame, &NoPulse).unwrap() {
             SendStatus::Accepted => {}
             // Pushback only once a packet is ready: the queue held `index`.
             SendStatus::ReceivePending => {
                 assert!(matches!(
-                    encoder.receive(&Unstoppable).unwrap(),
+                    encoder.receive(&NoPulse).unwrap(),
                     Receive::Ready(_)
                 ));
                 return Some(index);
@@ -104,7 +104,7 @@ fn accepted_before_first_packet(speed: u8, limit: usize) -> Option<usize> {
             (0, 0),
             "speed {speed}: an accepted frame left caller storage charged"
         );
-        if let Receive::Ready(_) = encoder.receive(&Unstoppable).unwrap() {
+        if let Receive::Ready(_) = encoder.receive(&NoPulse).unwrap() {
             return Some(index + 1);
         }
     }

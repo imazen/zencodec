@@ -549,7 +549,7 @@ fn canvas_render_every_stop_seam_and_refusal_drops_unpublished_storage() {
                 source.clone(),
                 &mut PolicySet::new(),
                 PolicySet::new(),
-                &counted,
+                &zencodec::how_far::StopOnly::borrowed(&counted),
             )
             .unwrap(),
     );
@@ -566,7 +566,7 @@ fn canvas_render_every_stop_seam_and_refusal_drops_unpublished_storage() {
                     source.clone(),
                     &mut PolicySet::new(),
                     PolicySet::new(),
-                    &stop,
+                    &zencodec::how_far::StopOnly::borrowed(&stop),
                 )
                 .unwrap_err();
             let codec = zencodec::find_cause::<CodecError>(&failure);

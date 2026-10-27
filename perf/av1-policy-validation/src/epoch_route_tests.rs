@@ -373,20 +373,32 @@ fn epoch_route_stop_at_preparation_transition_and_finish_keeps_reason_and_releas
             );
             let error = if point == 3 {
                 for frame in &frames[..6] {
-                    operation.push(frame, &stop).unwrap();
+                    operation
+                        .push(frame, &zencodec::how_far::StopOnly::borrowed(&stop))
+                        .unwrap();
                 }
                 stop.stopped.store(true, Ordering::SeqCst);
-                operation.finish(&stop).err().expect("finish must stop")
+                operation
+                    .finish(&zencodec::how_far::StopOnly::borrowed(&stop))
+                    .err()
+                    .expect("finish must stop")
             } else {
                 let index = if point == 2 {
                     for frame in &frames[..6] {
-                        operation.push(frame, &stop).unwrap();
+                        operation
+                            .push(frame, &zencodec::how_far::StopOnly::borrowed(&stop))
+                            .unwrap();
                     }
                     6
                 } else {
                     0
                 };
-                let error = operation.push(&frames[index], &stop).unwrap_err();
+                let error = operation
+                    .push(
+                        &frames[index],
+                        &zencodec::how_far::StopOnly::borrowed(&stop),
+                    )
+                    .unwrap_err();
                 assert!(operation.is_failed());
                 let before = calls.get();
                 assert!(operation.push(&frames[index], &NoPulse).is_err());

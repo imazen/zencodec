@@ -67,7 +67,7 @@ impl Factory for TiffFactory {
             view,
             limits,
             policy,
-            stop,
+            pulse,
             output_storage,
             ..
         } = context;
@@ -80,7 +80,7 @@ impl Factory for TiffFactory {
                 ReadAtReader::new(ParserSource(source)),
                 view,
                 self.0,
-                stop,
+                pulse,
             )?
             .with_required_dimensions(limits),
         ))
