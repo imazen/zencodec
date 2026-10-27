@@ -41,7 +41,7 @@ fn tiff<C: colortype::ColorType, K: TiffKind>(
         .unwrap();
     image.write_data(samples).unwrap();
 }
-fn native_tiff_bytes(exif: u8, big: bool, depth: u8) -> Vec<u8> {
+pub(crate) fn native_tiff_bytes(exif: u8, big: bool, depth: u8) -> Vec<u8> {
     let mut file = Cursor::new(Vec::new());
     macro_rules! encode {
         ($color:ty, $samples:expr) => {

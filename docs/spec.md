@@ -2534,6 +2534,11 @@ configure explicit output and color processing. `RenderRequest::new(descriptor)`
 requires current-space output with channel/depth restrictions; `with_target`,
 `with_region` and `with_conversion` change those requirements explicitly.
 
+`render_first(&mut CheckedCollection<C, R>)` returns
+`Result<Option<Outcome<ImageOutput>>, At<CollectionOperationError>>`: the first
+top-level image, or `None` only on successful empty discovery. It propagates
+errors without skipping selections and restarts discovery on each call.
+
 `render_selected(&mut CheckedCollection<C, R>, &ImageId)` returns
 `Result<Outcome<ImageOutput>, At<CollectionOperationError>>` and uses the stored
 operation policy once, after rendering. `render(ImageOutput, &mut resolver,

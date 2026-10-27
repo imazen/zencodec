@@ -76,6 +76,76 @@ fn http_snapshot_collection_factory_preserves_positional_selection() {
     }
 }
 
+#[test]
+fn http_snapshot_render_first_matches_slice_and_rejects_late_source_faults() {
+    use crate::collection_factories::TiffFactory;
+    use zencodec::{CodecSet, ImageFormat, StopToken, Unstoppable,
+        collection::OpenRequest, operation::PolicySet,
+        source::{ReadAtShim, SliceReadAt}, storage::StorageBudget};
+    use zencodec_render::Renderer;
+    use zenpixels_convert::cms_moxcms::MoxCms;
+
+    let bytes = crate::canvas_render::tests::native_tiff_bytes(6, true, 8);
+    let name = "render-first";
+    write_fixture(name, &bytes);
+    let codecs = CodecSet::new().with_collection(TiffFactory(Allowances::default()));
+    let budget = StorageBudget::new(1024 * 1024, 32);
+    let renderer = Renderer::new(budget.clone()).with_cms(&MoxCms);
+    // The returned owner must survive both the collection and its source.
+    let reference = {
+        let mut source = ReadAtShim(SliceReadAt::new(&bytes));
+        let mut images = codecs.open_collection(
+            ImageFormat::Tiff, &mut source, OpenRequest::new(Composition::Composited, 32),
+            PolicySet::new(), StopToken::new(Unstoppable),
+        ).unwrap();
+        let image = renderer.render_first(&mut images).unwrap().unwrap();
+        assert_eq!(images.report().decisions().count(), 1);
+        image
+    };
+    let expected = reference.with_pixels(|p| {
+        assert_eq!((p.width(), p.rows()), (5, 7));
+        assert_eq!(p.descriptor(), zenpixels::PixelDescriptor::RGBA8_SRGB);
+        p.as_strided_bytes().to_vec()
+    }).unwrap();
+    drop(reference);
+    assert_eq!(budget.reserved_bytes(), 0);
+    let mut final_read = 0;
+    for mode in ["stable", "change", "changed_tag", "short_body"] {
+        let source = HttpSource::open(url(mode, name, final_read), 65536).unwrap();
+        let attempts = source.attempts.clone();
+        let mut source = ReadAtShim(source);
+        let mut images = codecs.open_collection(
+            ImageFormat::Tiff, &mut source, OpenRequest::new(Composition::Composited, 32),
+            PolicySet::new(), StopToken::new(Unstoppable),
+        ).unwrap();
+        let output = renderer.render_first(&mut images);
+        if mode == "stable" {
+            final_read = attempts.get();
+            let output = output.unwrap().unwrap();
+            assert_eq!(images.report().decisions().count(), 1);
+            drop(images);
+            drop(source);
+            assert_eq!(output.with_pixels(|p| p.as_strided_bytes().to_vec()).unwrap(), expected);
+            drop(output);
+        } else {
+            let kind = match mode {
+                "change" => FailureKind::Status(412),
+                "changed_tag" => FailureKind::Validator,
+                _ => FailureKind::Body,
+            };
+            let error = output.expect_err("fault must not become an empty collection or an image");
+            assert_cause(&error, kind);
+            assert_eq!(error.error().stop_reason(), None);
+            assert_eq!(images.report().decisions().count(), 0);
+            let before = attempts.get();
+            assert_cause(&renderer.render_first(&mut images).err().unwrap(), kind);
+            assert_eq!(attempts.get(), before, "terminal source retried transport I/O");
+        }
+        assert_eq!(budget.reserved_bytes(), 0);
+        assert_eq!(budget.reserved_objects(), 0);
+    }
+}
+
 fn write_fixture(name: &str, bytes: &[u8]) {
     use std::io::Write;
     let root =

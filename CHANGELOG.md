@@ -2,6 +2,10 @@
 
 ## Native image selection (unreleased experiment)
 
+- Add `Renderer::render_first` for checked first-image rendering without caller
+  discovery boilerplate. Preserve discovery/source failures and do not substitute
+  thumbnails or skip unsupported selections.
+
 - Prefer complete sample-preserving conversion plus lossless encoding before
   encoder-only lossless evidence, without bypassing required route constraints.
 

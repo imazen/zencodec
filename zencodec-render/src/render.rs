@@ -178,6 +178,22 @@ impl<'a> Renderer<'a> {
         self
     }
 
+    /// Render the first top-level image in discovery order. Returns `None` only
+    /// when discovery succeeds with no images. Discovery, decoding, rendering
+    /// and policy errors propagate; unsupported images are never skipped.
+    /// Each call starts discovery anew; use a cursor and `render_selected` to
+    /// traverse a collection. This does not choose a thumbnail or child image.
+    pub fn render_first<C: Collection, R: PolicyResolver>(
+        &self,
+        images: &mut CheckedCollection<C, R>,
+    ) -> Result<Option<Outcome<ImageOutput>>, At<CollectionOperationError>> {
+        let mut cursor = images.images()?;
+        images
+            .next(&mut cursor)?
+            .map(|id| self.render_selected(images, &id))
+            .transpose()
+    }
+
     /// Consumer convenience over the shared collection operation. The current
     /// candidate reconstructs the full native selection; its display crop does
     /// not promise proportional native work or bypass native dimension limits.

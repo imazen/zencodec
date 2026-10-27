@@ -20,6 +20,12 @@ survive independently of color replacement. Input interpretation is retained as
 provenance; output facts describe the resulting pixels. Unknown auxiliary
 registration refuses even when dimensions happen to match.
 
+`render_first(&mut CheckedCollection)` discovers and renders the first top-level
+image. Only successful empty discovery returns `None`; source, discovery, decode,
+rendering and policy failures remain errors. It never skips unsupported images
+or substitutes a child/thumbnail. Each call restarts discovery; traversal uses
+an explicit cursor with `render_selected`.
+
 `render_selected(&mut CheckedCollection, &ImageId)` uses `decode_with` so the
 collection's stored policy runs once on the final image. Cancellation is shared
 through decoding and rendering. `render(ImageOutput, resolver, preset, stop)`
@@ -63,3 +69,18 @@ proof that the entire dependency graph supports a freestanding target.
 The explicit Rust 1.89.0 check passed separately:
 `rc=0 6s | peak-RSS 0.30GiB | min-avail 11434MiB | peak-load 0.70`.
 The documentation workflow runs both standalone and native renderer checks.
+
+First-image transport validation (2026-10-27) registers the native TIFF factory
+in `CodecSet`, renders an oriented Display-P3 BigTIFF to default sRGB RGBA8, and
+compares slice input with conditional HTTP range input through the IMI-derived
+simulator. Returned pixels remain usable after the collection/source are dropped.
+Final-range 412, changed-validator and short-body faults retain their concrete
+source cause, publish no image, release output charges and perform no transport
+retry. Empty discovery is separately distinguished from a discovery error.
+All nine HTTP tests and strict lint passed; standalone tests, doctest and Rust
+1.89 check passed. This validates local HTTP correctness, not WAN performance or
+native workspace bounds. Evidence on r7900x:
+`/mnt/v/output/zencodec/platform-regions-20261026-run/render-first-http-20261027-verified`;
+log `/home/lilith/tmp/zencodec-render-first-http-verified-20261027.log`.
+Run-heavy: `rc=0 9s | peak-RSS 0.47GiB | min-avail 11652MiB | peak-load 0.69`.
+No additional zenpixels API or dependency change was required.

@@ -6,7 +6,7 @@ out of the core codec dependency graph.
 
 ```rust,ignore
 let renderer = Renderer::new(storage).with_cms(&cms);
-let image = renderer.render_selected(&mut images, &id)?;
+let image = renderer.render_first(&mut images)?; // None only for an empty collection
 ```
 
 The default is full-canvas sRGB RGBA8, with depth rounding and display-range
@@ -16,6 +16,10 @@ conversion options explicitly. Regions use oriented canvas coordinates.
 Unknown composition/orientation, unavailable samples, unqualified auxiliary
 alignment and unsupported color conversion fail explicitly. A supplied CMS may
 be required; omitting it does not authorize relabeling pixels.
+
+`render_first` renders the first top-level image in discovery order, without
+skipping unsupported images or selecting a thumbnail. Each call starts discovery
+again. Use a cursor with `render_selected` for traversal.
 
 `render_selected` uses the collection's cancellation and policy, publishing the
 final image once. `render` accepts an already-decoded `ImageOutput`. The managed

@@ -369,6 +369,8 @@ spatial-validation-sync export:
     mkdir -p "{{export}}/zencodec-render/src"
     cp zencodec-render/Cargo.toml zencodec-render/dependencies.lock "{{export}}/zencodec-render/"
     cp zencodec-render/src/*.rs "{{export}}/zencodec-render/src/"
+    mkdir -p "{{export}}/zencodec-render/tests"
+    cp zencodec-render/tests/*.rs "{{export}}/zencodec-render/tests/"
     just io-core-sync "{{export}}"
     cp zenmeta/src/ifd/walk.rs "{{export}}/zenmeta/src/ifd/"
     cp zencodec-media/Cargo.toml "{{export}}/zencodec-media/"
@@ -1240,7 +1242,7 @@ render-check:
     cp zencodec-render/dependencies.lock zencodec-render/Cargo.lock
     cargo check --manifest-path zencodec-render/Cargo.toml --no-default-features --locked
     cargo clippy --manifest-path zencodec-render/Cargo.toml --all-targets --locked -- -D warnings
-    cargo test --manifest-path zencodec-render/Cargo.toml --doc --locked
+    cargo test --manifest-path zencodec-render/Cargo.toml --locked
 
 render-msrv-check:
     cp zencodec-render/dependencies.lock zencodec-render/Cargo.lock

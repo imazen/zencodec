@@ -23,6 +23,9 @@ pub use render::{ColorTarget, RenderFailure, RenderRequest, RenderStage, Rendere
 ///     images: &mut CheckedCollection<C, R>, id: &ImageId,
 /// ) -> Result<(), Box<dyn core::error::Error>> {
 ///     let renderer = Renderer::new(StorageBudget::new(64 * 1024 * 1024, 32));
+///     if let Some(first) = renderer.render_first(images)? {
+///         first.with_pixels(|pixels| assert_eq!(pixels.descriptor(), zenpixels::PixelDescriptor::RGBA8_SRGB))?;
+///     }
 ///     let image = renderer.render_selected(images, id)?;
 ///     image.with_pixels(|pixels| assert_eq!(pixels.descriptor(), zenpixels::PixelDescriptor::RGBA8_SRGB))?;
 ///     Ok(())

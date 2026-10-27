@@ -182,7 +182,7 @@ jobs:
           cp zencodec-render/dependencies.lock zencodec-render/Cargo.lock
           timeout --kill-after=15s 2m cargo check --manifest-path zencodec-render/Cargo.toml --no-default-features --locked
           timeout --kill-after=15s 2m cargo clippy --manifest-path zencodec-render/Cargo.toml --all-targets --locked -- -D warnings
-          timeout --kill-after=15s 2m cargo test --manifest-path zencodec-render/Cargo.toml --doc --locked
+          timeout --kill-after=15s 2m cargo test --manifest-path zencodec-render/Cargo.toml --locked
       - uses: dtolnay/rust-toolchain@1.89.0
       - name: Check renderer MSRV
         timeout-minutes: 3

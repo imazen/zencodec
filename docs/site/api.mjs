@@ -53,7 +53,7 @@ export const api = {
   canvasProjection: {path:'zencodec_render::geometry::project',file:'zencodec-render/src/geometry.rs',methods:['project']},
   canvasRenderRequest: {path:'zencodec_render::RenderRequest',file:'zencodec-render/src/render.rs',scope:'pub struct RenderRequest',methods:[],item:true},
   canvasRenderTarget: {path:'zencodec_render::ColorTarget',file:'zencodec-render/src/render.rs',scope:'pub enum ColorTarget',methods:[],item:true},
-  canvasRenderer: {path:'zencodec_render::Renderer',file:'zencodec-render/src/render.rs',scope:"impl<'a> Renderer<'a>",methods:['new','with_request','with_cms','render_selected','render']},
+  canvasRenderer: {path:'zencodec_render::Renderer',file:'zencodec-render/src/render.rs',scope:"impl<'a> Renderer<'a>",methods:['new','with_request','with_cms','render_first','render_selected','render']},
   tiffTableRules: {path:'zenmeta::ifd::walk::Rules (implementor inventory evidence)',file:'zenmeta/src/ifd/walk.rs',scope:'pub trait Rules',methods:['jpeg_table','extents']},
   tiffExtentCount: {path:'zenmeta::ifd::walk::Count',file:'zenmeta/src/ifd/walk.rs',scope:'pub enum Count',methods:[],item:true},
   packedImageOwner: {path:'zencodec::image::PackedImageOwner',file:'src/image/owner.rs',scope:'pub trait PackedImageOwner:',methods:['pixels','auxiliary','retain_auxiliaries']},
