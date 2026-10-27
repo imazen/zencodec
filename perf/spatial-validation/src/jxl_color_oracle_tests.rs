@@ -237,7 +237,7 @@ fn native_color_profiles_match_independent_lcms_with_exact_alpha_and_admission()
                     }).unwrap();
                     Ok(Decision::UsePreset)
                 },
-                PolicySet::new(), &zencodec::Unstoppable,
+                PolicySet::new(), &zencodec::NoPulse,
             ).unwrap();
             assert_eq!(calls, 1);
             assert!(matches!(

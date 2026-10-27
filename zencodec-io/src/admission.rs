@@ -3,7 +3,7 @@
 use alloc::collections::TryReserveError;
 use alloc::vec::Vec;
 use core::fmt;
-use zencodec::decode::{ByteRange, Request};
+use zencodec::decode::{ByteRange, InputRequest};
 
 /// Limits on storage and requests owned by one input driver.
 ///
@@ -135,12 +135,17 @@ pub(crate) fn reserve<T>(v: &mut Vec<T>, len: usize) -> Result<(), InputError> {
 
 /// Choose an affordable alternative, preserving the codec's order of preference.
 /// The borrowed request list need not be copied to make this choice.
-pub(crate) fn select(requests: &[Request], limits: IoLimits) -> Result<Request, InputError> {
+pub(crate) fn select(
+    requests: &[InputRequest],
+    limits: IoLimits,
+) -> Result<InputRequest, InputError> {
     let mut first_error = None;
     for &request in requests {
         let result = match request {
-            Request::AtLeast { min_len, .. } => limits.bytes(min_len.max(1) as u64).map(|_| ()),
-            Request::Range(r) => limits.bytes(r.length).and({
+            InputRequest::AtLeast { min_len, .. } => {
+                limits.bytes(min_len.max(1) as u64).map(|_| ())
+            }
+            InputRequest::Range(r) => limits.bytes(r.length).and({
                 if limits.ranges == 0 {
                     Err(InputError::RangesDisabled)
                 } else {
@@ -164,7 +169,7 @@ pub(crate) fn select(requests: &[Request], limits: IoLimits) -> Result<Request, 
 /// fit the budget. Overlaps are merged without charging their bytes twice.
 pub(crate) fn plan(
     first: ByteRange,
-    requests: &[Request],
+    requests: &[InputRequest],
     gap: u64,
     limits: IoLimits,
     out: &mut Vec<ByteRange>,
@@ -179,7 +184,7 @@ pub(crate) fn plan(
     out.push(first);
     let mut bytes = first.length;
     for request in requests {
-        let Request::Range(r) = *request else {
+        let InputRequest::Range(r) = *request else {
             continue;
         };
         if r.is_empty() || r == first || out.len() == limits.ranges {
@@ -225,25 +230,26 @@ pub(crate) fn capacity(fetched: &[(u64, Vec<u8>)]) -> usize {
 /// only the selected request and a bounded number of affordable alternatives.
 #[cfg(feature = "tokio")]
 pub(crate) fn copy_requests(
-    requests: &[Request],
+    requests: &[InputRequest],
     limits: IoLimits,
-    out: &mut Vec<Request>,
+    out: &mut Vec<InputRequest>,
 ) -> Result<(), InputError> {
     let first = select(requests, limits)?;
     out.clear();
-    let count = if matches!(first, Request::Range(_)) {
+    let count = if matches!(first, InputRequest::Range(_)) {
         requests.len().min(limits.ranges)
     } else {
         1
     };
     reserve(out, count)?;
     out.push(first);
-    if matches!(first, Request::Range(_)) {
+    if matches!(first, InputRequest::Range(_)) {
         for &r in requests {
             if out.len() == count {
                 break;
             }
-            if r != first && matches!(r, Request::Range(b) if b.length <= limits.input_bytes as u64)
+            if r != first
+                && matches!(r, InputRequest::Range(b) if b.length <= limits.input_bytes as u64)
             {
                 out.push(r);
             }
@@ -303,18 +309,18 @@ mod tests {
     #[test]
     fn async_request_copy_does_not_copy_an_unbounded_alternative_list() {
         let requests: Vec<_> = (0..10000)
-            .map(|offset| Request::range(offset * 8, 8))
+            .map(|offset| InputRequest::range(offset * 8, 8))
             .collect();
         let mut copied = Vec::new();
         copy_requests(&requests, IoLimits::new(16, 2, 1), &mut copied).unwrap();
         assert_eq!(copied, requests[..2]);
         assert!(copied.capacity() <= 2);
         copy_requests(
-            &[Request::range(0, 17), Request::at_least(32, 8)],
+            &[InputRequest::range(0, 17), InputRequest::at_least(32, 8)],
             IoLimits::new(16, 0, 1),
             &mut copied,
         )
         .unwrap();
-        assert_eq!(copied, [Request::at_least(32, 8)]);
+        assert_eq!(copied, [InputRequest::at_least(32, 8)]);
     }
 }

@@ -1,7 +1,7 @@
 //! Checked consumer for the shared collection mechanism.
 use super::{OperationReport, Outcome, PolicyResolver, PolicySet, resolve_image};
 use crate::{
-    At, StopToken,
+    At, SharedPulse,
     collection::{Cause, Collection, Composition, ImageDescription, ImageId, ImageRequest},
     image::{ImageOutput, OutputError},
 };
@@ -51,11 +51,11 @@ pub struct CollectionOperationError {
     observed_stop: Option<StopReason>,
 }
 impl CollectionOperationError {
-    /// First stop reason observed through this operation's shared token.
+    /// First pulse reason observed through this operation's shared token.
     ///
     /// The original native, source or application failure remains the cause,
-    /// even when it coincides with a stop. `None` means the token has not
-    /// reported a stop; it does not classify arbitrary backend errors.
+    /// even when it coincides with a pulse. `None` means the token has not
+    /// reported a pulse; it does not classify arbitrary backend errors.
     pub const fn stop_reason(&self) -> Option<StopReason> {
         self.observed_stop
     }
@@ -97,11 +97,11 @@ fn failure(
 }
 
 /// The first native or wrapper observation stops this opened operation, even
-/// when a custom stop callback would subsequently return Ok. Policy failure and
+/// when a custom pulse callback would subsequently return Ok. Policy failure and
 /// request refusal do not change this token. No application callback runs while
 /// the first reason is being stored.
 struct LatchedStop {
-    source: StopToken,
+    source: SharedPulse,
     reason: spin::Once<StopReason>,
 }
 impl Stop for LatchedStop {
@@ -132,7 +132,7 @@ pub struct CheckedCollection<C, R> {
     view: Composition,
     resolver: R,
     preset: PolicySet,
-    stop: StopToken,
+    pulse: SharedPulse,
     report: OperationReport,
     observed_stop: Option<StopReason>,
 }
@@ -140,22 +140,26 @@ impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
     /// Bind the same token to the native adapter and publication checks. The
     /// factory is adapter setup; ordinary selection methods need no callback args.
     pub fn open(
-        stop: StopToken,
+        pulse: SharedPulse,
         resolver: R,
-        open: impl FnOnce(StopToken) -> Result<C, Cause>,
+        open: impl FnOnce(SharedPulse) -> Result<C, Cause>,
     ) -> Result<Self, At<CollectionOperationError>> {
-        let stop = StopToken::new(LatchedStop {
-            source: stop,
+        use crate::Pulse as _;
+        let latch = LatchedStop {
+            source: pulse.clone(),
             reason: spin::Once::new(),
-        });
+        };
+        let pulse = how_far::WithStop::replacing(&pulse, latch)
+            .share()
+            .expect("owned SharedPulse and owned latch are shareable");
         let report = OperationReport::default();
         let run = || {
-            check(&stop, &report)?;
+            check(&pulse, &report)?;
             let collection =
-                open(stop.clone()).map_err(|e| failure(CollectionStage::Open, &report, e));
+                open(pulse.clone()).map_err(|e| failure(CollectionStage::Open, &report, e));
             // Observe the final seam on failed opening too. Preserve the native
-            // cause while making a coincident stop available without downcasts.
-            let stopped = check(&stop, &report);
+            // cause while making a coincident pulse available without downcasts.
+            let stopped = check(&pulse, &report);
             let collection = match (collection, stopped) {
                 (Ok(collection), Ok(())) => collection,
                 (Err(error), Ok(())) => return Err(error),
@@ -167,7 +171,7 @@ impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
                 collection: Some(collection),
                 resolver,
                 preset: PolicySet::new(),
-                stop,
+                pulse,
                 report,
                 observed_stop: None,
             })
@@ -194,7 +198,7 @@ impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
             &mut C,
             &mut R,
             PolicySet,
-            &StopToken,
+            &SharedPulse,
             &mut OperationReport,
         ) -> Result<T, CollectionOperationError>,
     ) -> Result<T, At<CollectionOperationError>> {
@@ -207,7 +211,7 @@ impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
                     .with_stop(self.observed_stop),
             ));
         };
-        if let Err(stopped) = check(&self.stop, &self.report) {
+        if let Err(stopped) = check(&self.pulse, &self.report) {
             self.observed_stop = stopped.stop_reason();
             return Err(At::wrap(stopped));
         }
@@ -215,10 +219,10 @@ impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
             &mut collection,
             &mut self.resolver,
             self.preset,
-            &self.stop,
+            &self.pulse,
             &mut self.report,
         );
-        match check(&self.stop, &self.report) {
+        match check(&self.pulse, &self.report) {
             Ok(()) => {
                 self.collection = Some(collection);
                 result.map_err(At::wrap)
@@ -234,7 +238,7 @@ impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
             }
         }
     }
-    /// Begin top-level discovery, checking the shared operation stop token.
+    /// Begin top-level discovery, checking the shared operation pulse token.
     pub fn images(&mut self) -> Result<C::Cursor, At<CollectionOperationError>> {
         self.run(|c, _, _, _, report| {
             c.images()
@@ -289,7 +293,7 @@ impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
     /// with an identity transform. A render adapter can bind its own prepared
     /// color/geometry request here without publishing an intermediate raster.
     ///
-    /// The transform receives the operation's latched stop token. It must honor
+    /// The transform receives the operation's latched pulse token. It must honor
     /// its configured requirements, preserve or update interpretation together
     /// with the samples, and return a fully owned output or a concrete error.
     /// This wrapper does not prove arbitrary transform math, admit its workspace
@@ -300,10 +304,10 @@ impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
         &mut self,
         image: &ImageId,
         request: &ImageRequest,
-        transform: impl FnOnce(ImageOutput, &dyn Stop) -> Result<ImageOutput, E>,
+        transform: impl FnOnce(ImageOutput, &dyn crate::Pulse) -> Result<ImageOutput, E>,
     ) -> Result<Outcome<ImageOutput>, At<CollectionOperationError>> {
         let view = self.view;
-        self.run(|c, resolver, preset, stop, report| {
+        self.run(|c, resolver, preset, pulse, report| {
             let check_view = |actual| {
                 if actual == view {
                     Ok(())
@@ -326,11 +330,11 @@ impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
             let image = image
                 .in_collection_view(view)
                 .map_err(|e| failure(CollectionStage::Decode, report, e))?;
-            check(stop, report)?;
-            let image = transform(image, stop)
+            check(pulse, report)?;
+            let image = transform(image, pulse)
                 .map_err(|e| failure(CollectionStage::Transform, report, e))?;
-            check(stop, report)?;
-            match resolve_image(image, resolver, preset, stop) {
+            check(pulse, report)?;
+            match resolve_image(image, resolver, preset, pulse) {
                 Ok(output) => {
                     for &record in output.report().decisions() {
                         report.record(record);
@@ -357,8 +361,8 @@ impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
     }
 }
 
-fn check(stop: &StopToken, report: &OperationReport) -> Result<(), CollectionOperationError> {
-    stop.check().map_err(|reason| {
+fn check(pulse: &SharedPulse, report: &OperationReport) -> Result<(), CollectionOperationError> {
+    pulse.check().map_err(|reason| {
         failure(
             CollectionStage::Stopped,
             report,
@@ -397,21 +401,21 @@ mod tests {
             }
         }
         let calls = Arc::new(AtomicUsize::new(0));
-        let stop = Arc::new(LatchedStop {
-            source: StopToken::new(Race {
+        let pulse = Arc::new(LatchedStop {
+            source: SharedPulse::new(how_far::StopOnly::new(Race {
                 calls: calls.clone(),
                 entered: Barrier::new(2),
-            }),
+            })),
             reason: spin::Once::new(),
         });
-        let a = stop.clone();
-        let b = stop.clone();
+        let a = pulse.clone();
+        let b = pulse.clone();
         let a = std::thread::spawn(move || a.check());
         let b = std::thread::spawn(move || b.check());
         let reason = a.join().unwrap().unwrap_err();
         assert_eq!(b.join().unwrap(), Err(reason));
         for _ in 0..4 {
-            assert_eq!(stop.check(), Err(reason));
+            assert_eq!(pulse.check(), Err(reason));
         }
         assert_eq!(calls.load(Ordering::Relaxed), 2);
     }

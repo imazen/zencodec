@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::task::{Context, Poll};
 
 use zencodec::decode::{
-    BatchMeta, DecodeRowSink, Event, IncrementalDecode, Input, OutputInfo, Progress, Request,
+    BatchMeta, DecodeRowSink, Event, IncrementalDecode, Input, InputRequest, OutputInfo, Progress,
     StepError,
 };
 use zencodec::encode::{EncodeOutput, Encoder, OutputBuffer, OutputTiming};
@@ -109,7 +109,7 @@ struct Burst {
     band: u32,
     started: bool,
     counts: Arc<Counts>,
-    request: [Request; 1],
+    request: [InputRequest; 1],
 }
 impl IncrementalDecode for Burst {
     type Error = Error;
@@ -117,7 +117,7 @@ impl IncrementalDecode for Burst {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn enough::Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<Progress, StepError<Error>> {
         stop.check().map_err(StepError::Cancelled)?;
         if !self.started {
@@ -150,7 +150,7 @@ impl IncrementalDecode for Burst {
         self.counts.produced.store(self.y as usize, SeqCst);
         Ok(Progress::new(0, Event::Rows { meta, rows: n }))
     }
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         &self.request
     }
     fn info(&self) -> Option<&ImageInfo> {
@@ -210,7 +210,7 @@ async fn burst(band: u32, read_size: usize, pooled: bool) {
         band,
         started: false,
         counts: counts.clone(),
-        request: [Request::at_least(0, 1)],
+        request: [InputRequest::at_least(0, 1)],
     };
     let encoder = Raw {
         out: OutputBuffer::new(),
@@ -347,7 +347,7 @@ pub(crate) fn bench_transcode(suite: &mut zenbench::Suite) {
                                 band,
                                 started: false,
                                 counts: counts.clone(),
-                                request: [Request::at_least(0, 1)],
+                                request: [InputRequest::at_least(0, 1)],
                             };
                             let encoder = Raw {
                                 out: OutputBuffer::new(),

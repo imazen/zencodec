@@ -3,7 +3,7 @@
 use crate::output::{AnimationFrame, OwnedAnimationFrame};
 use crate::sink::SinkError;
 use crate::{DecodeOutput, ImageInfo, OutputInfo};
-use enough::Stop;
+
 use zenpixels::PixelSlice;
 
 /// Single-image decode. Returns owned pixels.
@@ -82,14 +82,14 @@ pub trait StreamingDecode {
 ///
 /// # Cooperative cancellation
 ///
-/// Each render method takes an `Option<&dyn Stop>` token for cooperative
+/// Each render method takes an `Option<&dyn crate::Pulse>` token for cooperative
 /// cancellation. The codec checks this token periodically during decode
 /// and returns early with [`StopReason`](enough::StopReason) if
 /// cancellation is requested.
 ///
 /// Because `AnimationFrameDec: 'static`, the decoder cannot borrow the
-/// job's stop token. Instead, the caller passes a stop token per call.
-/// Codecs that also stored an owned stop at construction time (e.g. via
+/// job's pulse token. Instead, the caller passes a pulse token per call.
+/// Codecs that also stored an owned pulse at construction time (e.g. via
 /// [`Stopper`](https://docs.rs/almost-enough/latest/almost_enough/struct.Stopper.html))
 /// can combine the two with
 /// [`OrStop`](https://docs.rs/almost-enough/latest/almost_enough/struct.OrStop.html).
@@ -142,7 +142,7 @@ pub trait AnimationFrameDecoder: Sized {
     /// Pass `None` if cancellation is not needed.
     fn render_next_frame(
         &mut self,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<Option<AnimationFrame<'_>>, Self::Error>;
 
     /// Render the next frame as an owned copy.
@@ -154,9 +154,9 @@ pub trait AnimationFrameDecoder: Sized {
     /// Pass `None` if cancellation is not needed.
     fn render_next_frame_owned(
         &mut self,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<Option<OwnedAnimationFrame>, Self::Error> {
-        match self.render_next_frame(stop)? {
+        match self.render_next_frame(pulse)? {
             Some(frame) => Ok(Some(frame.to_owned_frame())),
             None => Ok(None),
         }
@@ -174,7 +174,7 @@ pub trait AnimationFrameDecoder: Sized {
     /// Pass `None` if cancellation is not needed.
     fn render_next_frame_to_sink(
         &mut self,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn crate::Pulse>,
         sink: &mut dyn crate::DecodeRowSink,
     ) -> Result<Option<OutputInfo>, Self::Error>;
 }

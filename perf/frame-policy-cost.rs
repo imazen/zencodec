@@ -30,7 +30,7 @@ impl Workload {
             Self::timing(0),
             &mut PolicySet::new(),
             PolicySet::new(),
-            &enough::Unstoppable,
+            &zencodec::how_far::NoPulse,
         )
         .unwrap();
         Self {
@@ -62,7 +62,7 @@ impl Workload {
             Self::timing(i),
             &mut PolicySet::new(),
             PolicySet::new(),
-            &enough::Unstoppable,
+            &zencodec::how_far::NoPulse,
         )
         .unwrap()
     }

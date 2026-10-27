@@ -154,23 +154,15 @@ pub trait DecodeJob<'a>: Sized {
     /// across thread boundaries (e.g., in pipeline `Source` implementations).
     type AnimationFrameDec: AnimationFrameDecoder<Error = Self::Error> + Send + 'static;
 
-    /// Set cooperative cancellation token.
-    ///
-    /// [`StopToken`](crate::StopToken) is `Clone + Send + Sync + 'static` —
-    /// an owned, type-erased stop. Convert any `Stop + 'static` with
-    /// `StopToken::new(stop)`.
-    fn with_stop(self, stop: StopToken) -> Self;
-
-    /// Set progress and cancellation pulse.
-    ///
-    /// [`SharedPulse`](how_far::SharedPulse) is `Clone + Send + Sync + 'static` —
-    /// an owned, type-erased pulse.
-    ///
-    /// Default implementation delegates to [`with_stop`](DecodeJob::with_stop)
-    /// via `StopToken::new(pulse)`.
-    fn with_pulse(self, pulse: how_far::SharedPulse) -> Self {
-        self.with_stop(StopToken::new(pulse))
+    /// Legacy cancellation-only adapter. Prefer the complete operation pulse.
+    #[deprecated(note = "use with_pulse; wrap cancellation-only controls in how_far::StopOnly")]
+    fn with_stop(self, stop: StopToken) -> Self {
+        self.with_pulse(how_far::SharedPulse::new(how_far::StopOnly::new(stop)))
     }
+
+    /// Retain progress, cancellation, phase planning and sharing for this job.
+    /// Codecs must not erase this to a cancellation-only token.
+    fn with_pulse(self, pulse: how_far::SharedPulse) -> Self;
 
     /// Override resource limits for this operation.
     fn with_limits(self, limits: ResourceLimits) -> Self;
@@ -515,7 +507,7 @@ pub trait DecodeJob<'a>: Sized {
     /// whole protocol, over bytes already in memory:
     ///
     /// ```
-    /// use zencodec::decode::{BoxedError, DecodeJob, DecodeRowSink, Event, Input, Request};
+    /// use zencodec::decode::{BoxedError, DecodeJob, DecodeRowSink, Event, Input, InputRequest};
     ///
     /// fn decode_in_memory<'a, J: DecodeJob<'a>>(
     ///     job: J,
@@ -527,13 +519,13 @@ pub trait DecodeJob<'a>: Sized {
     ///     let mut at = 0usize;
     ///     loop {
     ///         let input = Input::new(at as u64, &data[at..]).with_total_len(total);
-    ///         let p = dec.step(input, sink, &zencodec::Unstoppable)?;
+    ///         let p = dec.step(input, sink, &zencodec::NoPulse)?;
     ///         at += p.consumed;
     ///         match p.event {
     ///             // Satisfy any one request; the length is always known here.
     ///             Event::Need => match dec.requested()[0] {
-    ///                 Request::AtLeast { offset, .. } => at = offset as usize,
-    ///                 Request::Range(r) => at = r.offset as usize,
+    ///                 InputRequest::AtLeast { offset, .. } => at = offset as usize,
+    ///                 InputRequest::Range(r) => at = r.offset as usize,
     ///                 _ => {}
     ///             },
     ///             Event::Done(_) => return Ok(()),

@@ -1,7 +1,8 @@
 //! Independent byte and source-call oracles for driver admission.
 use core::convert::Infallible;
-use enough::{Stop, Unstoppable};
-use zencodec::decode::{Input, Request};
+
+use zencodec::decode::{Input, InputRequest};
+use zencodec::how_far::NoPulse;
 use zencodec::source::{ReadAt, SliceReadAt, SourceError};
 use zencodec_io::{
     ByteStepper, DriveFailure, DriveOptions, InputError, IoLimits, ProtocolViolation, ReadAtCursor,
@@ -43,17 +44,17 @@ impl ReadAt for Source {
     }
 }
 
-struct Wants(Vec<Request>);
+struct Wants(Vec<InputRequest>);
 impl ByteStepper for Wants {
     type Error = Infallible;
     type Output = (u64, Vec<u8>);
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         &self.0
     }
     fn step(
         &mut self,
         input: Input<'_>,
-        _: &dyn Stop,
+        _: &dyn zencodec::Pulse,
     ) -> Result<Stepped<Self::Output>, Self::Error> {
         Ok(Stepped {
             consumed: 0,
@@ -72,11 +73,11 @@ fn options(bytes: usize, ranges: usize, concurrent: usize) -> DriveOptions {
 
 #[test]
 fn oversized_contiguous_requests_and_overflow_do_not_read() {
-    for request in [Request::range(32, 17), Request::at_least(32, 17)] {
+    for request in [InputRequest::range(32, 17), InputRequest::at_least(32, 17)] {
         let mut source = Source::default();
         let mut cursor = ReadAtCursor::new(options(16, 8, 8));
         let e = cursor
-            .next(&mut source, &mut Wants(vec![request]), &Unstoppable)
+            .next(&mut source, &mut Wants(vec![request]), &NoPulse)
             .unwrap_err();
         assert!(matches!(
             e,
@@ -88,10 +89,13 @@ fn oversized_contiguous_requests_and_overflow_do_not_read() {
         assert!(source.reads.is_empty());
         assert_eq!(cursor.retained_input_capacity(), 0);
     }
-    for request in [Request::range(u64::MAX, 2), Request::at_least(u64::MAX, 2)] {
+    for request in [
+        InputRequest::range(u64::MAX, 2),
+        InputRequest::at_least(u64::MAX, 2),
+    ] {
         let mut source = Source::default();
         let e = ReadAtCursor::new(DriveOptions::default())
-            .next(&mut source, &mut Wants(vec![request]), &Unstoppable)
+            .next(&mut source, &mut Wants(vec![request]), &NoPulse)
             .unwrap_err();
         assert!(matches!(
             e,
@@ -107,15 +111,15 @@ fn affordable_alternative_and_prefetch_obey_every_cap() {
         for descriptors in [1, 2, 3, 4] {
             for concurrent in [1, 2, 4] {
                 let requests = vec![
-                    Request::range(0, 256),
-                    Request::range(32, 8),
-                    Request::range(48, 8),
-                    Request::range(80, 8),
+                    InputRequest::range(0, 256),
+                    InputRequest::range(32, 8),
+                    InputRequest::range(48, 8),
+                    InputRequest::range(80, 8),
                 ];
                 let mut source = Source::default();
                 let mut cursor = ReadAtCursor::new(options(cap, descriptors, concurrent));
                 let (offset, bytes) = cursor
-                    .next(&mut source, &mut Wants(requests), &Unstoppable)
+                    .next(&mut source, &mut Wants(requests), &NoPulse)
                     .unwrap()
                     .into_inner();
                 assert_eq!(offset, 32);
@@ -138,8 +142,8 @@ fn sequential_prefetch_and_forward_reuse_stay_inside_capacity() {
         let (_, bytes) = cursor
             .next(
                 &mut source,
-                &mut Wants(vec![Request::at_least(offset, len)]),
-                &Unstoppable,
+                &mut Wants(vec![InputRequest::at_least(offset, len)]),
+                &NoPulse,
             )
             .unwrap()
             .into_inner();
@@ -165,21 +169,21 @@ fn retained_ranges_and_new_sequential_window_share_the_allowance() {
         .next(
             &mut source,
             &mut Wants(vec![
-                Request::range(0, 8),
-                Request::range(32, 8),
-                Request::range(64, 8),
+                InputRequest::range(0, 8),
+                InputRequest::range(32, 8),
+                InputRequest::range(64, 8),
             ]),
-            &Unstoppable,
+            &NoPulse,
         )
         .unwrap();
     assert_eq!(cursor.retained_input_capacity(), 24);
     for request in [
-        Request::at_least(33, 16),
-        Request::range(96, 24),
-        Request::at_least(120, 16),
+        InputRequest::at_least(33, 16),
+        InputRequest::range(96, 24),
+        InputRequest::at_least(120, 16),
     ] {
         let (offset, bytes) = cursor
-            .next(&mut source, &mut Wants(vec![request]), &Unstoppable)
+            .next(&mut source, &mut Wants(vec![request]), &NoPulse)
             .unwrap()
             .into_inner();
         assert_eq!(bytes, bytes_at(offset, bytes.len()));
@@ -195,8 +199,8 @@ fn borrowed_slices_need_no_owned_payload_or_io_allowance() {
     let (offset, got) = cursor
         .next(
             &mut source,
-            &mut Wants(vec![Request::range(32, 64)]),
-            &Unstoppable,
+            &mut Wants(vec![InputRequest::range(32, 64)]),
+            &NoPulse,
         )
         .unwrap()
         .into_inner();
@@ -211,8 +215,8 @@ fn sequential_prefetch_cannot_wrap_the_address_space() {
     let (offset, bytes) = cursor
         .next(
             &mut source,
-            &mut Wants(vec![Request::at_least(u64::MAX - 8, 8)]),
-            &Unstoppable,
+            &mut Wants(vec![InputRequest::at_least(u64::MAX - 8, 8)]),
+            &NoPulse,
         )
         .unwrap()
         .into_inner();
@@ -230,8 +234,8 @@ fn zero_read_and_descriptor_allowances_refuse_without_io() {
         let error = ReadAtCursor::new(DriveOptions::default().with_limits(limits))
             .next(
                 &mut source,
-                &mut Wants(vec![Request::range(32, 8)]),
-                &Unstoppable,
+                &mut Wants(vec![InputRequest::range(32, 8)]),
+                &NoPulse,
             )
             .unwrap_err();
         assert!(if range_error {
@@ -275,14 +279,14 @@ fn failed_sync_batches_never_publish_unfilled_bytes() {
         started: 0,
     };
     let mut cursor = ReadAtCursor::new(options(16, 2, 2));
-    let mut stage = Wants(vec![Request::range(32, 8), Request::range(80, 8)]);
+    let mut stage = Wants(vec![InputRequest::range(32, 8), InputRequest::range(80, 8)]);
     assert!(matches!(
-        cursor.next(&mut source, &mut stage, &Unstoppable),
+        cursor.next(&mut source, &mut stage, &NoPulse),
         Err(DriveFailure::Source(_))
     ));
     assert_eq!(cursor.retained_input_capacity(), 0);
     let (offset, bytes) = cursor
-        .next(&mut source, &mut stage, &Unstoppable)
+        .next(&mut source, &mut stage, &NoPulse)
         .unwrap()
         .into_inner();
     assert_eq!(source.started, 2);
@@ -299,8 +303,8 @@ fn sequential_read_cursor_limits_prefetch_and_skipping_too() {
         let (offset, got) = cursor
             .next(
                 &mut source,
-                &mut Wants(vec![Request::at_least(offset, 7)]),
-                &Unstoppable,
+                &mut Wants(vec![InputRequest::at_least(offset, 7)]),
+                &NoPulse,
             )
             .unwrap()
             .into_inner();
@@ -340,10 +344,14 @@ mod asynchronous {
         impl ByteStepper for Ready {
             type Output = ();
             type Error = Infallible;
-            fn requested(&self) -> &[Request] {
+            fn requested(&self) -> &[InputRequest] {
                 &[]
             }
-            fn step(&mut self, _: Input<'_>, _: &dyn Stop) -> Result<Stepped<()>, Infallible> {
+            fn step(
+                &mut self,
+                _: Input<'_>,
+                _: &dyn zencodec::Pulse,
+            ) -> Result<Stepped<()>, Infallible> {
                 Ok(Stepped {
                     consumed: 0,
                     step: Step::Output(()),
@@ -357,11 +365,11 @@ mod asynchronous {
         let mut stage = Ready;
         for _ in 0..3 {
             cursor
-                .next(&mut source, &mut stage, &Unstoppable)
+                .next(&mut source, &mut stage, &NoPulse)
                 .await
                 .unwrap();
         }
-        let future = cursor.next(&mut source, &mut stage, &Unstoppable);
+        let future = cursor.next(&mut source, &mut stage, &NoPulse);
         let mut future = core::pin::pin!(future);
         poll_fn(|cx| {
             assert!(future.as_mut().poll(cx).is_pending());
@@ -406,9 +414,9 @@ mod asynchronous {
             started: 0,
         };
         let mut cursor = AsyncCursor::new(options(16, 2, 2));
-        let mut stage = Wants(vec![Request::range(32, 8), Request::range(80, 8)]);
+        let mut stage = Wants(vec![InputRequest::range(32, 8), InputRequest::range(80, 8)]);
         {
-            let future = cursor.next(&mut source, &mut stage, &Unstoppable);
+            let future = cursor.next(&mut source, &mut stage, &NoPulse);
             let mut future = core::pin::pin!(future);
             poll_fn(|cx| {
                 assert!(future.as_mut().poll(cx).is_pending());
@@ -419,7 +427,7 @@ mod asynchronous {
         assert_eq!(source.started, 1);
         assert_eq!(cursor.retained_input_capacity(), 0);
         let (offset, bytes) = cursor
-            .next(&mut source, &mut stage, &Unstoppable)
+            .next(&mut source, &mut stage, &NoPulse)
             .await
             .unwrap()
             .into_inner();
@@ -435,16 +443,16 @@ mod asynchronous {
                 let mut cursor = AsyncCursor::new(options(cap, 3, concurrent));
                 for requests in [
                     vec![
-                        Request::range(0, 256),
-                        Request::range(32, 8),
-                        Request::range(48, 8),
-                        Request::range(80, 8),
+                        InputRequest::range(0, 256),
+                        InputRequest::range(32, 8),
+                        InputRequest::range(48, 8),
+                        InputRequest::range(80, 8),
                     ],
-                    vec![Request::at_least(33, 8)],
-                    vec![Request::range(256, 8)],
+                    vec![InputRequest::at_least(33, 8)],
+                    vec![InputRequest::range(256, 8)],
                 ] {
                     let (offset, bytes) = cursor
-                        .next(&mut source, &mut Wants(requests), &Unstoppable)
+                        .next(&mut source, &mut Wants(requests), &NoPulse)
                         .await
                         .unwrap()
                         .into_inner();
@@ -458,8 +466,8 @@ mod asynchronous {
         let error = AsyncCursor::new(options(16, 3, 3))
             .next(
                 &mut source,
-                &mut Wants(vec![Request::range(32, 17)]),
-                &Unstoppable,
+                &mut Wants(vec![InputRequest::range(32, 17)]),
+                &NoPulse,
             )
             .await
             .unwrap_err();

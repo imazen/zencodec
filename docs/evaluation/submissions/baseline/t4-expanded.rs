@@ -1,14 +1,14 @@
 use std::io::{Error, ErrorKind, Write};
 use zencodec::{
     MetadataPolicy,
-    metadata_rewrite::{Action, Request},
+    metadata_rewrite::{Action, RewriteRequest},
 };
 
 pub fn rewrite_jpeg(
     source: &[u8],
     writer: &mut dyn Write,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let request = Request::new(source).with_policy(MetadataPolicy::ColorAndRotation);
+    let request = RewriteRequest::new(source).with_policy(MetadataPolicy::ColorAndRotation);
     let plan = zenjpeg::metadata::rewrite(&request)?;
 
     for entry in plan.report() {

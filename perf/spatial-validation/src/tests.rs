@@ -405,7 +405,7 @@ mod image_selection {
                         assert!(facts.frame.is_none());
                         image.with_pixels(|p| assert_eq!(facts.packed, Some(p.descriptor()))).unwrap();
                         Ok(Decision::choose(choices.first().unwrap()))
-                    }, PolicySet::new(), &zencodec::Unstoppable).unwrap();
+                    }, PolicySet::new(), &zencodec::NoPulse).unwrap();
                 assert_eq!(outcome.report().decisions().count(), 1);
                 outcome
                     .with_pixels(|p| {
@@ -624,7 +624,7 @@ mod image_selection {
         use crate::checked_collection::Checked;
         use std::{cell::Cell, convert::Infallible};
         use zencodec::{
-            At, StopToken, Unstoppable,
+            At, SharedPulse, NoPulse,
             operation::{Decision, Question},
         };
         for big in [false, true] {
@@ -641,7 +641,7 @@ mod image_selection {
                     seen.set(seen.get() + 1);
                     Ok(Decision::UsePreset)
                 };
-                let mut collection = Checked::open(StopToken::new(Unstoppable), resolver, |stop| {
+                let mut collection = Checked::open(SharedPulse::default(), resolver, |stop| {
                     TiffCollection::open_with_stop(
                         Cursor::new(bytes),
                         Composition::Composited,

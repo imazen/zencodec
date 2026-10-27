@@ -1370,3 +1370,11 @@ policy-admission-check artifacts:
     cargo test --workspace --all-features --locked
     cargo clippy -p zencodec --all-targets --all-features --locked -- -D warnings
     just jpeg-policy-check "{{artifacts}}"
+
+# Complete control-interface migration gate; run from an isolated source export.
+pulse-check:
+    cargo check --workspace --all-features --all-targets --locked --keep-going
+
+pulse-test:
+    cargo test --workspace --all-features --locked
+    cargo clippy --workspace --all-features --all-targets --locked -- -D warnings

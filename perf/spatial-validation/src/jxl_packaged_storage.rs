@@ -14,7 +14,7 @@ pub(crate) fn factories(images: usize, headers: u64) -> (zencodec::CodecSet, Sto
 mod opening {
     // EXAMPLE: checked_output_storage
     use zencodec::{
-        At, CodecSet, ImageFormat, StopToken, Unstoppable,
+        At, CodecSet, ImageFormat, SharedPulse, NoPulse,
         collection::{Composition, Discovery, ErasedCollection, OpenRequest},
         operation::{CheckedCollection, CollectionOperationError, PolicySet},
         source::DynReadAt,
@@ -39,7 +39,7 @@ mod opening {
             source,
             request,
             PolicySet::new(),
-            StopToken::new(Unstoppable),
+            SharedPulse::default(),
         );
         // END: checked_output_storage
         // Ordinary selection methods now retain output charges automatically.

@@ -81,7 +81,7 @@ pub fn resolve_transcode<R: PolicyResolver + ?Sized>(
     offers: &[TranscodeOffer],
     resolver: &mut R,
     preset: PolicySet,
-    stop: &dyn enough::Stop,
+    pulse: &dyn crate::Pulse,
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>> {
     let facts = boundary.facts();
     let offers = if BoundaryAction::AdoptInterpretation.permits(facts) {
@@ -96,7 +96,7 @@ pub fn resolve_transcode<R: PolicyResolver + ?Sized>(
         super::Selection::Transcode,
         resolver,
         preset,
-        stop,
+        pulse,
     )
 }
 
@@ -147,7 +147,7 @@ mod tests {
                     &[candidate],
                     &mut PolicySet::new().allow_opaque_profiles(allowed),
                     PolicySet::new(),
-                    &enough::Unstoppable,
+                    &crate::how_far::NoPulse,
                 );
                 assert_eq!(result.is_ok(), allowed || retention == Some(false));
                 if let Err(error) = result {
@@ -183,7 +183,7 @@ mod tests {
             &offers,
             &mut delegate,
             preset,
-            &enough::Unstoppable,
+            &crate::how_far::NoPulse,
         )
         .unwrap();
         assert_eq!(index, 4);
@@ -194,7 +194,7 @@ mod tests {
             &offers[..4],
             &mut delegate,
             preset,
-            &enough::Unstoppable,
+            &crate::how_far::NoPulse,
         )
         .unwrap_err();
         assert_eq!(error.error().record().code, DecisionCode::Declined);
@@ -215,7 +215,7 @@ mod tests {
                 Ok(Decision::UsePreset)
             },
             PolicySet::new(),
-            &enough::Unstoppable,
+            &crate::how_far::NoPulse,
         )
         .unwrap();
         for state in [InterpretationState::Final, InterpretationState::Provisional] {
@@ -230,7 +230,7 @@ mod tests {
                     Ok(Decision::Choose(token.unwrap()))
                 },
                 PolicySet::new(),
-                &enough::Unstoppable,
+                &crate::how_far::NoPulse,
             )
             .unwrap_err();
             assert_eq!(error.error().record().code, DecisionCode::InvalidChoice);
@@ -244,7 +244,7 @@ mod tests {
                 Ok(Decision::UsePreset)
             },
             PolicySet::new(),
-            &enough::Unstoppable,
+            &crate::how_far::NoPulse,
         )
         .unwrap_err();
         assert!(!called);

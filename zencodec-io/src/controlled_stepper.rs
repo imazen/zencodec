@@ -1,10 +1,9 @@
 //! Expose mandatory suspensions through the existing byte cursors.
 
-use enough::Stop;
 use zencodec::ImageInfo;
 use zencodec::decode::{
     BoundaryAction, BoundaryId, ControlledIncrementalDecode, ControlledProgress, DecodeBoundary,
-    DecodeRowSink, Event, Fused, IncrementalDecode, Input, Request, StepError,
+    DecodeRowSink, Event, Fused, IncrementalDecode, Input, InputRequest, StepError,
 };
 use zenpixels::PixelDescriptor;
 
@@ -75,10 +74,10 @@ impl<'a, D: ControlledIncrementalDecode, S: DecodeRowSink> ControlledStepper<'a,
         &mut self,
         boundary: BoundaryId,
         action: BoundaryAction,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<(), StepError<D::Error>> {
         let mut decoder = self.decoder.take().ok_or(StepError::Finished)?;
-        decoder.resume(boundary, action, stop)?;
+        decoder.resume(boundary, action, pulse)?;
         self.decoder = Some(decoder);
         Ok(())
     }
@@ -91,12 +90,12 @@ impl<D: ControlledIncrementalDecode, S: DecodeRowSink> ByteStepper for Controlle
     fn step(
         &mut self,
         input: Input<'_>,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<Stepped<Self::Output>, Self::Error> {
         // Taking ownership also makes a caught native/sink unwind terminal and
         // releases the session before control returns to its caller.
         let mut decoder = self.decoder.take().ok_or(StepError::Finished)?;
-        let (consumed, step) = match decoder.step_controlled(input, self.sink, stop)? {
+        let (consumed, step) = match decoder.step_controlled(input, self.sink, pulse)? {
             ControlledProgress::Suspended { consumed, boundary } => {
                 (consumed, Step::Output(ControlledEvent::Suspended(boundary)))
             }
@@ -113,7 +112,7 @@ impl<D: ControlledIncrementalDecode, S: DecodeRowSink> ByteStepper for Controlle
         Ok(Stepped { consumed, step })
     }
 
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         self.decoder
             .as_ref()
             .map_or(&[], IncrementalDecode::requested)

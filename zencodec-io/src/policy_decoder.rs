@@ -1,10 +1,10 @@
 //! Serve mandatory decoder suspensions through one fallible policy resolver.
 
 use core::fmt;
-use enough::Stop;
+
 use zencodec::decode::{
     ControlledIncrementalDecode, ControlledProgress, DecodeRowSink, Event, Fused,
-    IncrementalDecode, Input, MetadataUpdate, Progress, Request, StepError,
+    IncrementalDecode, Input, InputRequest, MetadataUpdate, Progress, StepError,
 };
 use zencodec::operation::{
     OperationReport, PolicyFailure, PolicyResolver, PolicySet, resolve_boundary,
@@ -81,7 +81,7 @@ impl<D: ControlledIncrementalDecode, R: PolicyResolver> IncrementalDecode for Po
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<Progress, StepError<Self::Error>> {
         if self.failed {
             return Err(StepError::Finished);
@@ -93,13 +93,13 @@ impl<D: ControlledIncrementalDecode, R: PolicyResolver> IncrementalDecode for Po
         // this adapter to inspect the report. Only a successful step restores it.
         let mut decoder = self.decoder.take().ok_or(StepError::Finished)?;
         let progress = match decoder
-            .step_controlled(input, sink, stop)
+            .step_controlled(input, sink, pulse)
             .map_err(|e| e.map_codec(PolicyDecodeError::Native))?
         {
             ControlledProgress::Decode(progress) => progress,
             ControlledProgress::Suspended { consumed, boundary } => {
                 let (action, record) =
-                    match resolve_boundary(boundary, &mut self.resolver, self.preset, stop) {
+                    match resolve_boundary(boundary, &mut self.resolver, self.preset, pulse) {
                         Ok(answer) => answer,
                         Err(error) => {
                             self.report.record(error.error().record());
@@ -108,7 +108,7 @@ impl<D: ControlledIncrementalDecode, R: PolicyResolver> IncrementalDecode for Po
                     };
                 self.report.record(record);
                 decoder
-                    .resume(boundary.id(), action, stop)
+                    .resume(boundary.id(), action, pulse)
                     .map_err(|e| e.map_codec(PolicyDecodeError::Native))?;
                 // The decision is already handled. Let the outer driver observe
                 // current metadata and schedule its next turn before more work.
@@ -119,7 +119,7 @@ impl<D: ControlledIncrementalDecode, R: PolicyResolver> IncrementalDecode for Po
         self.failed = false;
         Ok(progress)
     }
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         if self.failed {
             &[]
         } else {

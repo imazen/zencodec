@@ -274,7 +274,6 @@ pub struct CodecSet {
     encoders: Vec<Box<dyn EncoderEntry>>,
     collections: Vec<Arc<dyn crate::collection::CollectionFactory>>,
     limits: Option<ResourceLimits>,
-    stop: Option<StopToken>,
     pulse: Option<how_far::SharedPulse>,
     decode_policy: Option<DecodePolicy>,
     encode_policy: Option<EncodePolicy>,
@@ -289,7 +288,6 @@ impl CodecSet {
             encoders: Vec::new(),
             collections: Vec::new(),
             limits: None,
-            stop: None,
             pulse: None,
             decode_policy: None,
             encode_policy: None,
@@ -348,17 +346,21 @@ impl CodecSet {
         self
     }
 
-    /// Cooperative-cancellation token stamped onto every job this set creates.
+    /// Add a cancellation-only condition while retaining the operation pulse.
+    #[deprecated(note = "use with_pulse; wrap cancellation-only controls in how_far::StopOnly")]
     pub fn with_stop(mut self, stop: StopToken) -> Self {
-        self.stop = Some(stop);
+        use how_far::Pulse as _;
+        let pulse = self.pulse.take().unwrap_or_default();
+        self.pulse = Some(
+            how_far::WithStop::new(&pulse, stop)
+                .share()
+                .expect("owned SharedPulse and owned cancellation are shareable"),
+        );
         self
     }
 
     /// Progress and cancellation pulse stamped onto every job this set creates.
-    ///
-    /// Automatically populates the cancellation token for codecs that only support `Stop`.
     pub fn with_pulse(mut self, pulse: how_far::SharedPulse) -> Self {
-        self.stop = Some(StopToken::new(pulse.clone()));
         self.pulse = Some(pulse);
         self
     }
@@ -593,8 +595,6 @@ impl CodecSet {
         }
         if let Some(pulse) = &self.pulse {
             job.set_pulse(pulse.clone());
-        } else if let Some(stop) = &self.stop {
-            job.set_stop(stop.clone());
         }
         if let Some(policy) = self.decode_policy {
             // Legacy convenience preserves best-effort behavior.
@@ -618,8 +618,6 @@ impl CodecSet {
         }
         if let Some(pulse) = &self.pulse {
             job.set_pulse(pulse.clone());
-        } else if let Some(stop) = &self.stop {
-            job.set_stop(stop.clone());
         }
         if let Some(policy) = policy.or(self.decode_policy) {
             job.try_set_policy(policy)?;
@@ -627,31 +625,24 @@ impl CodecSet {
         Ok(job)
     }
 
-    /// Inherited operation cancellation/progress stop for executing adapters.
-    /// With no configured token this returns `Unstoppable`. Use the same
-    /// handle around policy callbacks and between native pipeline stages.
-    pub fn stop(&self) -> &dyn enough::Stop {
-        self.operation_stop()
+    /// The inherited operation pulse, or `NoPulse` when none was configured.
+    /// Pass this same control through policy, I/O, and native work.
+    pub fn pulse(&self) -> &dyn crate::Pulse {
+        self.pulse.as_ref().map_or(&crate::NoPulse, |pulse| pulse)
     }
 
-    pub(crate) fn operation_stop(&self) -> &dyn enough::Stop {
-        match &self.stop {
-            Some(stop) => stop,
-            None => &enough::Unstoppable,
-        }
+    /// Legacy name for the operation control.
+    #[deprecated(note = "use pulse; operation control includes progress and cancellation")]
+    pub fn stop(&self) -> &dyn enough::Stop {
+        self.pulse()
+    }
+
+    pub(crate) fn operation_pulse(&self) -> &dyn crate::Pulse {
+        self.pulse()
     }
 
     pub(crate) fn check_operation_stop(&self) -> Result<(), enough::StopReason> {
-        for stop in [
-            self.pulse.as_ref().map(|p| p as &dyn enough::Stop),
-            self.stop.as_ref().map(|s| s as &dyn enough::Stop),
-        ]
-        .into_iter()
-        .flatten()
-        {
-            stop.check()?;
-        }
-        Ok(())
+        self.pulse().check()
     }
 
     pub(crate) fn operation_access_pattern(&self) -> crate::source::AccessPattern {
@@ -671,8 +662,9 @@ impl CodecSet {
             return Ok(None);
         }
         let detected = self.detect(input.bytes);
-        let complete = crate::decode::Request::at_least(0, ImageFormat::RECOMMENDED_PROBE_BYTES)
-            .is_satisfied_by(input);
+        let complete =
+            crate::decode::InputRequest::at_least(0, ImageFormat::RECOMMENDED_PROBE_BYTES)
+                .is_satisfied_by(input);
         // TIFF magic is shared with TIFF-based raws. Wait for the same complete
         // prefix in both the legacy and controlled request entry points.
         let conclusive = match detected {
@@ -736,8 +728,6 @@ impl CodecSet {
         }
         if let Some(pulse) = &self.pulse {
             job.set_pulse(pulse.clone());
-        } else if let Some(stop) = &self.stop {
-            job.set_stop(stop.clone());
         }
         if let Some(policy) = policy.or(self.encode_policy) {
             job.try_set_policy(policy)?;
@@ -1020,8 +1010,6 @@ impl CodecSet {
         }
         if let Some(pulse) = &self.pulse {
             job.set_pulse(pulse.clone());
-        } else if let Some(stop) = &self.stop {
-            job.set_stop(stop.clone());
         }
         if let Some(policy) = self.encode_policy {
             // Legacy convenience preserves best-effort behavior.
@@ -1045,7 +1033,6 @@ impl Clone for CodecSet {
             encoders: self.encoders.iter().map(|e| e.clone_entry()).collect(),
             collections: self.collections.clone(),
             limits: self.limits,
-            stop: self.stop.clone(),
             pulse: self.pulse.clone(),
             decode_policy: self.decode_policy,
             encode_policy: self.encode_policy,
@@ -1076,7 +1063,7 @@ pub struct CodecSetIncrementalDecoder {
     set: CodecSet,
     preferred: Vec<PixelDescriptor>,
     inner: Option<Box<crate::traits::DynIncrementalDecoder>>,
-    probe: [crate::traits::Request; 1],
+    probe: [crate::traits::InputRequest; 1],
 }
 
 impl CodecSetIncrementalDecoder {
@@ -1086,7 +1073,7 @@ impl CodecSetIncrementalDecoder {
             set,
             preferred: preferred.to_vec(),
             inner: None,
-            probe: [crate::traits::Request::at_least(
+            probe: [crate::traits::InputRequest::at_least(
                 0,
                 ImageFormat::RECOMMENDED_PROBE_BYTES,
             )],
@@ -1101,7 +1088,7 @@ impl crate::traits::IncrementalDecode for CodecSetIncrementalDecoder {
         &mut self,
         input: crate::traits::Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn enough::Stop,
+        pulse: &dyn crate::Pulse,
     ) -> Result<crate::traits::Progress, crate::traits::StepError<CodecSetError>> {
         use crate::traits::{Progress, StepError};
         self.set.check_operation_stop()?;
@@ -1121,11 +1108,11 @@ impl crate::traits::IncrementalDecode for CodecSetIncrementalDecoder {
         }
         let inner = self.inner.as_mut().expect("set above");
         inner
-            .step(input, sink, stop)
+            .step(input, sink, pulse)
             .map_err(|e| e.map_codec(|c| CodecSetError::Codec(c.into_inner())))
     }
 
-    fn requested(&self) -> &[crate::traits::Request] {
+    fn requested(&self) -> &[crate::traits::InputRequest] {
         match &self.inner {
             Some(inner) => inner.requested(),
             None => &self.probe,

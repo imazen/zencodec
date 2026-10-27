@@ -1,7 +1,7 @@
 //! Adapter defaults must not erase explicit requirements during preparation.
 use std::sync::{Arc, Mutex};
 use zencodec::{
-    CodecSet, ColorEmitPolicy, ImageFormat, Metadata, ResourceLimits, StopToken,
+    CodecSet, ColorEmitPolicy, ImageFormat, Metadata, ResourceLimits, SharedPulse,
     UnsupportedOperation,
     encode::{EncodeJob, EncodePolicy, EncoderConfig, Fidelity},
     operation::EncodeRequest,
@@ -41,8 +41,8 @@ impl EncodeJob for Job {
     type Error = RefError;
     type Enc = RefEnc;
     type AnimationFrameEnc = ();
-    fn with_stop(mut self, stop: StopToken) -> Self {
-        self.inner = self.inner.with_stop(stop);
+    fn with_pulse(mut self, stop: SharedPulse) -> Self {
+        self.inner = self.inner.with_pulse(stop);
         self
     }
     fn with_limits(mut self, limits: ResourceLimits) -> Self {

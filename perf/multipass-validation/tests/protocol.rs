@@ -1,7 +1,8 @@
 //! Adversarial controls for the pull protocol and replay gates, driven by a
 //! scripted encoder (no codec, no private dependency). Each control runs the
 //! real driver; native parity lives in `imi_native.rs`.
-use enough::{Stop, Unstoppable};
+use enough::{Stop, };
+use zencodec::how_far::NoPulse;
 use multipass_validation::{
     Input, Interrupted, MultiPassEncoder, Options, PassCount, PassPlan, PassProgress, PassRows,
     PassSource, Preset, Refusal, Replay, ReplayDecision, ReplayEvidence, ReplayFacts, ReplayOffer,
@@ -124,7 +125,7 @@ impl MultiPassEncoder for Scripted {
     fn pull_rows(
         &mut self,
         rows: &mut dyn PassRows,
-        _: &dyn Stop,
+        _: &dyn zencodec::Pulse,
     ) -> Result<PassProgress, MockError> {
         let step = *self.steps.get(self.at).unwrap_or(&Step::FilledEmpty);
         self.at += 1;
@@ -190,7 +191,7 @@ impl<F: FnMut(u32, u32) -> u8> PassSource for Callback<F> {
         &mut self,
         first: u32,
         mut rows: PixelSliceMut<'_>,
-        _: &dyn Stop,
+        _: &dyn zencodec::Pulse,
     ) -> io::Result<()> {
         let call = self.calls.get();
         self.calls.set(call + 1);
@@ -227,7 +228,7 @@ fn run<E: MultiPassEncoder, S: PassSource>(
         PolicySet::new(),
         Preset,
         opts,
-        &Unstoppable,
+        &NoPulse,
     );
     (r, out)
 }
@@ -447,7 +448,7 @@ fn exact_replay_requirement_excludes_digest_evidence() {
             require_exact_replay: true,
             ..Default::default()
         }),
-        &Unstoppable,
+        &NoPulse,
     )
     .unwrap();
     assert_eq!(seen.len(), 1);
@@ -513,7 +514,7 @@ fn offers_disclose_evidence_per_route() {
             Ok(ReplayDecision::UsePreset)
         },
         options().with_stage_file(file, u64::MAX),
-        &Unstoppable,
+        &NoPulse,
     )
     .unwrap();
     std::fs::remove_file(path).unwrap();

@@ -197,7 +197,7 @@ fn checked_decode_policy_and_inventory_boundaries() {
 }
 
 fn rewrite_identity<'a>(
-    request: &zencodec::metadata_rewrite::Request<'a>,
+    request: &zencodec::metadata_rewrite::RewriteRequest<'a>,
 ) -> Result<zencodec::metadata_rewrite::Plan<'a>, zencodec::metadata_rewrite::Error> {
     let context = zenmeta::rewrite::Context::new(request)?;
     let mut builder = zenmeta::rewrite::PlanBuilder::new();
@@ -208,7 +208,7 @@ fn rewrite_identity<'a>(
 #[test]
 fn rewrite_harness_catches_ignored_limits_cancellation_and_changed_output() {
     use std::borrow::Cow;
-    use zencodec::metadata_rewrite::{Plan, Request};
+    use zencodec::metadata_rewrite::{Plan, RewriteRequest};
     let bytes = b"fixture payload";
     let observe = |actual: &[u8]| {
         if actual == bytes {
@@ -220,11 +220,11 @@ fn rewrite_harness_catches_ignored_limits_cancellation_and_changed_output() {
             })
         }
     };
-    tk::check_metadata_rewrite(Request::new(bytes), rewrite_identity, observe).unwrap();
+    tk::check_metadata_rewrite(RewriteRequest::new(bytes), rewrite_identity, observe).unwrap();
     // A planner that silently bypasses request admission must fail the harness.
     assert!(
         tk::check_metadata_rewrite(
-            Request::new(bytes),
+            RewriteRequest::new(bytes),
             |r| Plan::from_parts(r.input().len(), vec![Cow::Borrowed(r.input())], vec![]),
             observe
         )
@@ -232,22 +232,22 @@ fn rewrite_harness_catches_ignored_limits_cancellation_and_changed_output() {
     );
     // Test each failure independently so one failing check cannot mask another.
     for mutation in 0..4 {
-        let broken = |r: &Request<'static>| {
+        let broken = |r: &RewriteRequest<'static>| {
             let changed = match mutation {
                 0 => r.clone().with_byte_limits(usize::MAX, r.max_output()),
                 1 => r.clone().with_byte_limits(r.max_input(), usize::MAX),
                 2 => r.clone().with_carrier_limit(usize::MAX),
-                _ => r.clone().with_stop(&zencodec::enough::Unstoppable),
+                _ => r.clone().with_pulse(&zencodec::how_far::NoPulse),
             };
             rewrite_identity(&changed)
         };
         assert!(
-            tk::check_metadata_rewrite(Request::new(bytes), broken, observe).is_err(),
+            tk::check_metadata_rewrite(RewriteRequest::new(bytes), broken, observe).is_err(),
             "mutation {mutation}"
         );
     }
     assert!(
-        tk::check_metadata_rewrite(Request::new(bytes), rewrite_identity, |_| Err(
+        tk::check_metadata_rewrite(RewriteRequest::new(bytes), rewrite_identity, |_| Err(
             tk::Failure {
                 check: "oracle",
                 detail: "pixels changed".into()

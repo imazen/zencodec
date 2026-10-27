@@ -5,14 +5,14 @@ use core::{
     pin::Pin,
     task::{Context, Poll},
 };
-use enough::Stop;
+
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
 use zencodec::decode::{
-    BatchMeta, DecodeRowSink, Event, IncrementalDecode, Input, MetadataUpdate, OutputInfo,
-    Progress, Request, StepError,
+    BatchMeta, DecodeRowSink, Event, IncrementalDecode, Input, InputRequest, MetadataUpdate,
+    OutputInfo, Progress, StepError,
 };
 use zencodec::encode::{EncodeOutput, Encoder, OutputTiming};
 use zencodec::{ImageFormat, ImageInfo};
@@ -42,7 +42,7 @@ impl IncrementalDecode for Burst {
         &mut self,
         _: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        _: &dyn Stop,
+        _: &dyn zencodec::Pulse,
     ) -> Result<Progress, StepError<Failed>> {
         self.steps.fetch_add(1, Ordering::SeqCst);
         let phase = self.next;
@@ -71,7 +71,7 @@ impl IncrementalDecode for Burst {
         };
         Ok(Progress::new(0, event))
     }
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         &[]
     }
     fn info(&self) -> Option<&ImageInfo> {

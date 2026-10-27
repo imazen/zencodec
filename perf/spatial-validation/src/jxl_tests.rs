@@ -290,7 +290,7 @@ fn selected_jxl_presentations_match_native_sequential_with_dependencies() {
                 &mut source,
                 zencodec::collection::OpenRequest::new(Composition::Composited, 16384),
                 zencodec::operation::PolicySet::new(),
-                zencodec::StopToken::new(zencodec::Unstoppable),
+                zencodec::SharedPulse::default(),
             )
             .unwrap();
         let mut cursor = packaged.images().unwrap();

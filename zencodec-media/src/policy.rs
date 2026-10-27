@@ -12,7 +12,7 @@ use crate::{
 };
 use alloc::boxed::Box;
 use core::{error::Error as StdError, fmt};
-use enough::Stop;
+
 use zencodec::operation::{OperationReport, PolicyResolver, PolicySet, resolve_frame};
 
 /// Which part of the controlled session failed.
@@ -149,36 +149,39 @@ impl<D: VideoDecoder, R: PolicyResolver> VideoDecoder for PolicyDecoder<D, R> {
     fn configure(
         &mut self,
         config: &CodecConfig,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<(), SessionError<Error>> {
         self.run(|decoder, _, _, report| {
-            stop.check()?;
+            pulse.check()?;
             decoder
-                .configure(config, stop)
+                .configure(config, pulse)
                 .map_err(|e| native(e, report))
         })
     }
     fn send(
         &mut self,
         packet: &mut Packet,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<SendStatus, SessionError<Error>> {
         self.run(|decoder, _, _, report| {
-            stop.check()?;
-            decoder.send(packet, stop).map_err(|e| native(e, report))
+            pulse.check()?;
+            decoder.send(packet, pulse).map_err(|e| native(e, report))
         })
     }
-    fn receive(&mut self, stop: &dyn Stop) -> Result<Receive<Frame>, SessionError<Error>> {
+    fn receive(
+        &mut self,
+        pulse: &dyn zencodec::Pulse,
+    ) -> Result<Receive<Frame>, SessionError<Error>> {
         self.run(|decoder, resolver, preset, report| {
-            stop.check()?;
-            let output = decoder.receive(stop).map_err(|e| native(e, report))?;
+            pulse.check()?;
+            let output = decoder.receive(pulse).map_err(|e| native(e, report))?;
             if let Receive::Ready(frame) = &output {
                 match resolve_frame(
                     frame.interpretation(),
                     frame.timing(),
                     resolver,
                     preset,
-                    stop,
+                    pulse,
                 ) {
                     Ok(record) => report.record(record),
                     Err(error) => {

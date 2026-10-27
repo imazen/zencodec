@@ -1,13 +1,13 @@
 //! Real forward-only sources must not be asked to refetch held bytes.
 #![cfg(feature = "std")]
 
-use enough::Unstoppable;
-use zencodec::decode::{Input, Request};
+use zencodec::decode::{Input, InputRequest};
+use zencodec::how_far::NoPulse;
 use zencodec::source::{ReadAt, SourceError};
 use zencodec_io::{ByteStepper, DriveOptions, ReadAtCursor, Step, Stepped};
 
 struct Plan {
-    rounds: Vec<Vec<Request>>,
+    rounds: Vec<Vec<InputRequest>>,
     at: usize,
 }
 
@@ -18,7 +18,7 @@ impl ByteStepper for Plan {
     fn step(
         &mut self,
         input: Input<'_>,
-        _: &dyn enough::Stop,
+        _: &dyn zencodec::Pulse,
     ) -> Result<Stepped<Vec<u8>>, Self::Error> {
         let request = self.rounds[self.at][0];
         if !request.is_satisfied_by(&input) {
@@ -28,8 +28,8 @@ impl ByteStepper for Plan {
             });
         }
         let (offset, n) = match request {
-            Request::AtLeast { offset, min_len } => (offset, min_len),
-            Request::Range(r) => (r.offset, r.length as usize),
+            InputRequest::AtLeast { offset, min_len } => (offset, min_len),
+            InputRequest::Range(r) => (r.offset, r.length as usize),
             _ => unreachable!(),
         };
         assert_eq!(input.offset, offset);
@@ -51,7 +51,7 @@ impl ByteStepper for Plan {
         })
     }
 
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         &self.rounds[self.at]
     }
 }
@@ -101,11 +101,11 @@ fn overlap_plan() -> Plan {
     Plan {
         at: 0,
         rounds: vec![
-            vec![Request::at_least(0, 2)],
-            vec![Request::range(4, 4)],
-            vec![Request::range(10, 10)],
-            vec![Request::at_least(20, 3)],
-            vec![Request::range(25, 3)],
+            vec![InputRequest::at_least(0, 2)],
+            vec![InputRequest::range(4, 4)],
+            vec![InputRequest::range(10, 10)],
+            vec![InputRequest::at_least(20, 3)],
+            vec![InputRequest::range(25, 3)],
         ],
     }
 }
@@ -114,10 +114,10 @@ fn batch_plan() -> Plan {
     Plan {
         at: 0,
         rounds: vec![
-            vec![Request::range(0, 4), Request::range(16, 16)],
-            vec![Request::at_least(16, 4)],
-            vec![Request::range(24, 4)],
-            vec![Request::range(30, 6)],
+            vec![InputRequest::range(0, 4), InputRequest::range(16, 16)],
+            vec![InputRequest::at_least(16, 4)],
+            vec![InputRequest::range(24, 4)],
+            vec![InputRequest::range(30, 6)],
         ],
     }
 }
@@ -128,7 +128,7 @@ fn read_at_reuses_overlap_and_retains_the_unused_suffix() {
     let mut cursor = ReadAtCursor::new(opts());
     let mut plan = overlap_plan();
     while !cursor
-        .next(&mut source, &mut plan, &Unstoppable)
+        .next(&mut source, &mut plan, &NoPulse)
         .unwrap()
         .is_finished()
     {}
@@ -141,7 +141,7 @@ fn read_at_reuses_a_batched_range_for_a_sequential_request() {
     let mut cursor = ReadAtCursor::new(opts());
     let mut plan = batch_plan();
     while !cursor
-        .next(&mut source, &mut plan, &Unstoppable)
+        .next(&mut source, &mut plan, &NoPulse)
         .unwrap()
         .is_finished()
     {}
@@ -152,13 +152,16 @@ fn read_at_reuses_a_batched_range_for_a_sequential_request() {
 fn true_backtracking_still_reaches_the_forward_source_refusal() {
     let mut plan = Plan {
         at: 0,
-        rounds: vec![vec![Request::at_least(0, 16)], vec![Request::range(0, 1)]],
+        rounds: vec![
+            vec![InputRequest::at_least(0, 16)],
+            vec![InputRequest::range(0, 1)],
+        ],
     };
     let mut source = Forward::default();
     let mut cursor = ReadAtCursor::new(opts());
-    cursor.next(&mut source, &mut plan, &Unstoppable).unwrap();
+    cursor.next(&mut source, &mut plan, &NoPulse).unwrap();
     assert!(matches!(
-        cursor.next(&mut source, &mut plan, &Unstoppable),
+        cursor.next(&mut source, &mut plan, &NoPulse),
         Err(zencodec_io::DriveFailure::Source(
             SourceError::BeyondWindow { .. }
         ))
@@ -203,7 +206,7 @@ mod asynchronous {
                 };
                 let mut cursor = AsyncCursor::new(opts());
                 while !cursor
-                    .next(&mut source, &mut plan, &Unstoppable)
+                    .next(&mut source, &mut plan, &NoPulse)
                     .await
                     .unwrap()
                     .is_finished()

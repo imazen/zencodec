@@ -2,7 +2,8 @@
 //! tests/media_session.rs and examples/media_ivf.rs. Test artifacts only.
 use std::{path::Path, process::Command, sync::Arc};
 
-use enough::{Stop, Unstoppable};
+use enough::{Stop, };
+use zencodec::how_far::NoPulse;
 use zenavif::media::{Av1EncodeSettings, Av1VideoEncoder};
 use zencodec::time::{TimeBase, Timestamp};
 use zencodec_media::{
@@ -105,19 +106,19 @@ pub fn encode(settings: Av1EncodeSettings, frames: &[Frame]) -> (CodecConfig, Ve
     let config = encoder.output_config().unwrap().clone();
     let mut packets = Vec::new();
     for frame in frames {
-        while encoder.send(frame, &Unstoppable).unwrap() != SendStatus::Accepted {
-            let Receive::Ready(packet) = encoder.receive(&Unstoppable).unwrap() else {
+        while encoder.send(frame, &NoPulse).unwrap() != SendStatus::Accepted {
+            let Receive::Ready(packet) = encoder.receive(&NoPulse).unwrap() else {
                 panic!("encoder stalled")
             };
             packets.push(packet);
         }
-        while let Receive::Ready(packet) = encoder.receive(&Unstoppable).unwrap() {
+        while let Receive::Ready(packet) = encoder.receive(&NoPulse).unwrap() {
             packets.push(packet);
         }
     }
     encoder.end_input().unwrap();
     loop {
-        match encoder.receive(&Unstoppable).unwrap() {
+        match encoder.receive(&NoPulse).unwrap() {
             Receive::Ready(packet) => packets.push(packet),
             Receive::EndOfStream => break,
             other => panic!("encoder did not drain: {other:?}"),
@@ -130,7 +131,7 @@ pub fn decode<D: VideoDecoder>(
     decoder: &mut D,
     config: &CodecConfig,
     packets: &[Packet],
-    stop: &dyn Stop,
+    stop: &dyn zencodec::Pulse,
 ) -> Result<Vec<Frame>, SessionError<D::Error>> {
     decoder.configure(config, stop)?;
     let mut outputs = Vec::new();

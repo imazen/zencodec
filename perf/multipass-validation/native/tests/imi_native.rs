@@ -2,7 +2,8 @@
 //! encoder. Byte parity with the native public entry point (same settings,
 //! same index placement) and exact decoded-sample parity with the ordinary
 //! whole-image encoder. Every failure boundary keeps its original cause.
-use enough::{Stop, StopReason, Unstoppable};
+use enough::{Stop, StopReason, };
+use zencodec::how_far::NoPulse;
 use imij::stream_encode::{BoundedLossyConfig, LossyUnitIndex, encode_lossy_bounded};
 use imij::{DecodeSpeed, ImageRef, ImiEncoderConfig, Metadata};
 use multipass_native::{ImiBounded, ImiError, Scratch, image_info};
@@ -225,7 +226,7 @@ fn run_borrowed(
             PolicySet::new(),
             Preset,
             options(),
-            &Unstoppable,
+            &NoPulse,
         )
     } else {
         encode_passes(
@@ -235,7 +236,7 @@ fn run_borrowed(
             PolicySet::new(),
             Preset,
             options(),
-            &Unstoppable,
+            &NoPulse,
         )
     }
     .unwrap();
@@ -344,7 +345,7 @@ fn positional_file_replay_is_digest_verified_and_matches() {
             PolicySet::new(),
             Preset,
             options(),
-            &Unstoppable,
+            &NoPulse,
         )
         .unwrap();
         assert_eq!(out.into_inner(), expect, "{}", c.name);
@@ -388,7 +389,7 @@ fn forward_source_replays_from_admitted_memory_or_disk_staging_only() {
             },
             multipass_validation::Options::new(budget.clone(), u64::MAX)
                 .with_stage_file(file, pass_bytes),
-            &Unstoppable,
+            &NoPulse,
         )
         .unwrap();
         assert_eq!(out.into_inner(), expect, "{kind:?}");
@@ -450,7 +451,7 @@ impl<S: PassSource> PassSource for Counting<S> {
         &mut self,
         first: u32,
         rows: PixelSliceMut<'_>,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<(), Self::Error> {
         self.reads.set(self.reads.get() + 1);
         self.inner.read_rows(first, rows, stop)
@@ -482,7 +483,7 @@ fn forward_without_admitted_staging_refuses_before_reading() {
             panic!("nothing to decide")
         },
         multipass_validation::Options::new(StorageBudget::new(4096, 16), u64::MAX),
-        &Unstoppable,
+        &NoPulse,
     )
     .unwrap_err();
     assert_eq!(refusal(&err), Some(Refusal::NotReplayable));
@@ -525,7 +526,7 @@ fn replay_policy_decline_and_error_keep_cause_without_reads() {
                 }
             },
             options(),
-            &Unstoppable,
+            &NoPulse,
         )
         .unwrap_err();
         assert_eq!(err.error().stage, Stage::Policy);
@@ -559,7 +560,7 @@ fn source_pass_budget_stages_or_refuses_before_reading() {
             max_source_passes: Some(1),
             ..Default::default()
         }),
-        &Unstoppable,
+        &NoPulse,
     )
     .unwrap();
     assert_eq!(done.route, ReplayRoute::Stage(StagingKind::Memory));
@@ -581,7 +582,7 @@ fn source_pass_budget_stages_or_refuses_before_reading() {
             forbid_memory_staging: true,
             ..Default::default()
         }),
-        &Unstoppable,
+        &NoPulse,
     )
     .unwrap_err();
     assert_eq!(refusal(&err), Some(Refusal::PassBudget { pass: 0 }));
@@ -609,7 +610,7 @@ fn source_pass_budget_refuses_at_the_pass_that_exceeds_it() {
             forbid_memory_staging: true,
             ..Default::default()
         }),
-        &Unstoppable,
+        &NoPulse,
     )
     .unwrap_err();
     assert_eq!(refusal(&err), Some(Refusal::PassBudget { pass: 2 }));
@@ -648,7 +649,7 @@ impl PassSource for Mutating {
         &mut self,
         first: u32,
         rows: PixelSliceMut<'_>,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> io::Result<()> {
         let n = rows.rows();
         self.inner.read_rows(first, rows, stop)?;
@@ -703,7 +704,7 @@ fn changed_positional_content_identity_or_interpretation_refuses_before_output()
             PolicySet::new(),
             Preset,
             options(),
-            &Unstoppable,
+            &NoPulse,
         )
         .unwrap_err();
         // A declaration change is seen right after the read that made it (the
@@ -838,7 +839,7 @@ impl PassSource for FailingRead {
         &mut self,
         first: u32,
         rows: PixelSliceMut<'_>,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> io::Result<()> {
         let pass = self.rows_seen / self.height;
         if (pass, first) >= self.fail_pass_row {
@@ -893,7 +894,7 @@ fn partial_failures_keep_original_cause_stage_pass_and_confirmed_bytes() {
         PolicySet::new(),
         Preset,
         options(),
-        &Unstoppable,
+        &NoPulse,
     )
     .unwrap_err();
     assert_eq!(err.error().stage, Stage::Read);
@@ -928,7 +929,7 @@ fn partial_failures_keep_original_cause_stage_pass_and_confirmed_bytes() {
                 forbid_memory_staging: true,
                 ..Default::default()
             }),
-        &Unstoppable,
+        &NoPulse,
     )
     .unwrap_err();
     assert_eq!(err.error().stage, Stage::Staging);
@@ -951,7 +952,7 @@ fn partial_failures_keep_original_cause_stage_pass_and_confirmed_bytes() {
             PolicySet::new().require_output_schedule(OutputSchedule::Live),
             Preset,
             options(),
-            &Unstoppable,
+            &NoPulse,
         )
         .unwrap_err();
         assert_eq!(err.error().stage, Stage::Write, "limit {limit}");
@@ -973,7 +974,7 @@ fn partial_failures_keep_original_cause_stage_pass_and_confirmed_bytes() {
         PolicySet::new(),
         Preset,
         multipass_validation::Options::new(StorageBudget::new(BIG, 1 << 16), 1000),
-        &Unstoppable,
+        &NoPulse,
     )
     .unwrap_err();
     assert_eq!(refusal(&err), Some(Refusal::OutputLimit));
@@ -1018,7 +1019,7 @@ fn live_output_starts_only_in_the_final_pass_and_matches() {
         PolicySet::new().require_output_schedule(OutputSchedule::Live),
         Preset,
         options(),
-        &Unstoppable,
+        &NoPulse,
     )
     .unwrap();
     assert_eq!(w.bytes, expect);
@@ -1053,7 +1054,7 @@ fn unsupported_interpretation_refuses_at_prepare_without_relabeling() {
         PolicySet::new(),
         Preset,
         options(),
-        &Unstoppable,
+        &NoPulse,
     )
     .unwrap_err();
     assert_eq!(err.error().stage, Stage::Prepare);
@@ -1076,7 +1077,7 @@ fn unsupported_interpretation_refuses_at_prepare_without_relabeling() {
         PolicySet::new(),
         Preset,
         options(),
-        &Unstoppable,
+        &NoPulse,
     )
     .unwrap();
     assert_eq!(

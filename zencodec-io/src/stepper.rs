@@ -16,8 +16,7 @@ use alloc::vec::Vec;
 use core::convert::Infallible;
 use core::fmt;
 
-use enough::Stop;
-use zencodec::decode::{ByteRange, Input, Request};
+use zencodec::decode::{ByteRange, Input, InputRequest};
 use zencodec::source::ReadAt;
 
 use crate::admission::{self, InputError};
@@ -36,11 +35,11 @@ pub trait ByteStepper {
     fn step(
         &mut self,
         input: Input<'_>,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<Stepped<Self::Output>, Self::Error>;
 
     /// What the stage needs next, after a [`Step::Need`]. Never empty then.
-    fn requested(&self) -> &[Request];
+    fn requested(&self) -> &[InputRequest];
 }
 
 /// The result of one [`ByteStepper::step`].
@@ -93,7 +92,7 @@ impl<O> Yield<O> {
 #[non_exhaustive]
 pub enum DriveFailure<E, SE> {
     /// The stage failed (for an image decoder: the decoder, its sink or the
-    /// stop).
+    /// pulse).
     Step(E),
     /// The source failed.
     Source(SE),
@@ -153,14 +152,14 @@ pub(crate) fn slice_span(
     end: usize,
     window: usize,
     total: usize,
-    requests: &[Request],
+    requests: &[InputRequest],
 ) -> (usize, usize) {
     match requests[0] {
-        Request::AtLeast { offset, min_len } => {
+        InputRequest::AtLeast { offset, min_len } => {
             let s = offset as usize;
             (s, s.saturating_add(min_len.max(window)).min(total))
         }
-        Request::Range(r) => (r.offset as usize, r.end() as usize),
+        InputRequest::Range(r) => (r.offset as usize, r.end() as usize),
         // Every input carries the total; `check_need` reports a stage that
         // keeps asking.
         _ => (start, end),
@@ -217,7 +216,7 @@ impl SliceCursor {
 
     /// Point the next offer at the first of `requests` (post
     /// [`check_need`], so `requests` is never empty).
-    pub(crate) fn serve(&mut self, bytes: &[u8], requests: &[Request]) {
+    pub(crate) fn serve(&mut self, bytes: &[u8], requests: &[InputRequest]) {
         let (s, e) = slice_span(self.start, self.end, self.window, bytes.len(), requests);
         self.start = s;
         self.end = e;
@@ -232,11 +231,11 @@ impl SliceCursor {
         &mut self,
         bytes: &[u8],
         stage: &mut S,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Next<S, Infallible> {
         loop {
             let input = self.offer(bytes);
-            let p = stage.step(input, stop).map_err(DriveFailure::Step)?;
+            let p = stage.step(input, pulse).map_err(DriveFailure::Step)?;
             self.take(p.consumed);
             if matches!(p.step, Step::Need) {
                 check_need(stage.requested(), &input, p.consumed)
@@ -357,7 +356,7 @@ impl ReadAtCursor {
         &mut self,
         source: &mut Src,
         stage: &mut S,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Next<S, Src::Error>
     where
         S: ByteStepper + ?Sized,
@@ -369,11 +368,13 @@ impl ReadAtCursor {
         }
         if let Some(cursor) = &mut self.slice {
             let bytes = source.as_slice().expect("the source stays in memory");
-            return cursor.next(bytes, stage, stop).map_err(DriveFailure::widen);
+            return cursor
+                .next(bytes, stage, pulse)
+                .map_err(DriveFailure::widen);
         }
         loop {
             let input = self.offer(source);
-            let p = stage.step(input, stop).map_err(DriveFailure::Step)?;
+            let p = stage.step(input, pulse).map_err(DriveFailure::Step)?;
             if matches!(p.step, Step::Need) {
                 check_need(stage.requested(), &input, p.consumed)
                     .map_err(DriveFailure::Protocol)?;
@@ -390,14 +391,14 @@ impl ReadAtCursor {
     /// Make the input for the first of `requests` available.
     pub(crate) fn serve<E, Src: ReadAt + ?Sized>(
         &mut self,
-        requests: &[Request],
+        requests: &[InputRequest],
         source: &mut Src,
     ) -> Result<(), DriveFailure<E, Src::Error>> {
         let window = &mut self.window;
         let limits = self.opts.limits;
         let request = admission::select(requests, limits).map_err(DriveFailure::Input)?;
         match request {
-            Request::AtLeast { offset, min_len } => {
+            InputRequest::AtLeast { offset, min_len } => {
                 self.from_fetched = None;
                 window.position(offset, &mut self.fetched);
                 // Held bytes already satisfy the request; do not turn a cache
@@ -432,7 +433,7 @@ impl ReadAtCursor {
                     }
                 }
             }
-            Request::Range(first) => {
+            InputRequest::Range(first) => {
                 if first.offset >= window.base() && first.end() <= window.end() {
                     self.from_fetched = None;
                     window.consume((first.offset - window.base()) as usize);
@@ -500,7 +501,7 @@ impl ReadAtCursor {
                     .expect("coalesced ranges cover every request");
                 self.from_fetched = Some((i, (first.offset - self.fetched[i].0) as usize));
             }
-            Request::Len => {
+            InputRequest::Len => {
                 self.from_fetched = None;
                 if window.total.is_none() {
                     limits.reading().map_err(DriveFailure::Input)?;
@@ -532,7 +533,7 @@ mod read {
         /// total length before the stream ended. A stream cannot serve
         /// either; wrap it in [`BufferedReadAt`](crate::BufferedReadAt) and
         /// use a [`ReadAtCursor`].
-        NeedsRandomAccess(Request),
+        NeedsRandomAccess(InputRequest),
         /// The stage needs more contiguous bytes than `max_window` allows.
         WindowLimit {
             /// Bytes the stage asked for in one input.
@@ -625,7 +626,7 @@ mod read {
         pub(crate) fn serve<R, E>(
             &mut self,
             reader: &mut R,
-            requests: &[Request],
+            requests: &[InputRequest],
         ) -> Result<(), PumpFailure<E>>
         where
             R: std::io::Read + ?Sized,
@@ -639,8 +640,8 @@ mod read {
                 .find(|r| r.offset().is_some_and(|o| o >= window.base()))
                 .unwrap_or(requests[0]);
             let (offset, min_len) = match request {
-                Request::AtLeast { offset, min_len } => (offset, min_len),
-                Request::Range(r) => (
+                InputRequest::AtLeast { offset, min_len } => (offset, min_len),
+                InputRequest::Range(r) => (
                     r.offset,
                     usize::try_from(r.length).map_err(|_| {
                         PumpFailure::Input(InputError::Limit {
@@ -707,7 +708,7 @@ mod read {
             &mut self,
             reader: &mut R,
             stage: &mut S,
-            stop: &dyn Stop,
+            pulse: &dyn zencodec::Pulse,
         ) -> Result<Yield<S::Output>, PumpFailure<S::Error>>
         where
             S: ByteStepper + ?Sized,
@@ -715,7 +716,7 @@ mod read {
         {
             loop {
                 let input = self.offer();
-                let p = stage.step(input, stop).map_err(PumpFailure::Step)?;
+                let p = stage.step(input, pulse).map_err(PumpFailure::Step)?;
                 if matches!(p.step, Step::Need) {
                     check_need(stage.requested(), &input, p.consumed)
                         .map_err(PumpFailure::Protocol)?;

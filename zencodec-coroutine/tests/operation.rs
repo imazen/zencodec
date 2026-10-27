@@ -9,7 +9,7 @@ use std::{
     },
 };
 use zencodec::{
-    At, CodecSet, ImageFormat, ImageFormatDefinition, ImageInfo, ResourceLimits, StopToken,
+    At, CodecSet, ImageFormat, ImageFormatDefinition, ImageInfo, ResourceLimits, SharedPulse,
     UnsupportedOperation,
     decode::*,
     operation::{Decision, DecodeRequest, OperationError, PolicySet, Question},
@@ -68,7 +68,7 @@ impl<'a> DecodeJob<'a> for Config {
     type Dec = Never;
     type StreamDec = zencodec::Unsupported<CoroutineError>;
     type AnimationFrameDec = zencodec::Unsupported<CoroutineError>;
-    fn with_stop(self, _: StopToken) -> Self {
+    fn with_pulse(self, _: SharedPulse) -> Self {
         self
     }
     fn with_limits(mut self, limits: ResourceLimits) -> Self {

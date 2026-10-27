@@ -15,14 +15,14 @@ use std::{
     },
 };
 use zencodec::{
-    At, StopToken, Unstoppable,
+    At, SharedPulse, NoPulse,
     enough::{Stop, StopReason},
     operation::{Decision, DecisionCode, Decline, PolicyResolver, PolicySet, Question},
 };
 
 fn open<'a, R: PolicyResolver>(
     data: &'a [u8],
-    stop: StopToken,
+    stop: SharedPulse,
     resolver: R,
 ) -> Checked<JxlItems<'a>, R> {
     Checked::open(stop, resolver, |stop| {
@@ -42,7 +42,7 @@ fn checked_collection_guide_runs_native_factory_and_returns_owned_checked_pixels
             frame_headers: Some(1),
         },
         PolicySet::new(),
-        StopToken::new(Unstoppable),
+        SharedPulse::default(),
     )
     .unwrap()
     .unwrap();
@@ -73,7 +73,7 @@ fn checked_collection_repeated_native_output_is_rechecked_without_copying() {
         address.set(image.with_pixels(|p| p.row(0).as_ptr() as usize).unwrap());
         Ok(Decision::UsePreset)
     };
-    let mut collection = open(&data, StopToken::new(Unstoppable), resolver);
+    let mut collection = open(&data, SharedPulse::default(), resolver);
     let mut cursor = collection.images().unwrap();
     let id = collection.next(&mut cursor).unwrap().unwrap();
     let mut expected = None;
@@ -114,7 +114,7 @@ fn checked_collection_request_and_policy_failures_remain_request_local() {
             Decision::UsePreset
         })
     };
-    let mut collection = open(&data, StopToken::new(Unstoppable), resolver);
+    let mut collection = open(&data, SharedPulse::default(), resolver);
     let mut cursor = collection.images().unwrap();
     let id = collection.next(&mut cursor).unwrap().unwrap();
     let error = collection
@@ -167,7 +167,7 @@ fn checked_collection_configured_preset_refuses_unproven_obligations() {
         let resolver =
             |_: Question<'_>| -> Result<Decision, At<Infallible>> { Ok(Decision::UsePreset) };
         let mut collection =
-            open(&data, StopToken::new(Unstoppable), resolver).with_policy_set(preset);
+            open(&data, SharedPulse::default(), resolver).with_policy_set(preset);
         let error = collection
             .first_image(&ImageRequest::default())
             .unwrap_err();
@@ -198,7 +198,7 @@ fn checked_collection_retains_application_trace_without_default_payload_logging(
     let resolver = |_: Question<'_>| -> Result<Decision, At<ApplicationFailure>> {
         Err(At::wrap(ApplicationFailure).at_named("application publication rule"))
     };
-    let mut collection = open(&data, StopToken::new(Unstoppable), resolver);
+    let mut collection = open(&data, SharedPulse::default(), resolver);
     let error = collection
         .first_image(&ImageRequest::default())
         .unwrap_err();
@@ -229,7 +229,7 @@ fn checked_collection_stale_decision_cannot_authorize_repeated_image() {
         ticket = Some(choice.id());
         Ok(Decision::choose(choice))
     };
-    let mut collection = open(&data, StopToken::new(Unstoppable), resolver);
+    let mut collection = open(&data, SharedPulse::default(), resolver);
     let first = collection
         .first_image(&ImageRequest::default())
         .unwrap()
@@ -312,7 +312,7 @@ fn checked_collection_native_stop_latches_every_observed_poll_and_keeps_exact_re
                 at,
                 reason,
             };
-            let opened = Checked::open(StopToken::new(stop.clone()), PolicySet::new(), |token| {
+            let opened = Checked::open(SharedPulse::new(stop.clone()), PolicySet::new(), |token| {
                 JxlItems::open_with_stop(&data, Composition::Composited, 64, token)
             });
             let error = match opened {

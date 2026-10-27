@@ -8,7 +8,7 @@ mod policy_disclosure;
 use core::convert::Infallible;
 use policy::*;
 use policy_disclosure::*;
-use zencodec::{At, Unstoppable};
+use zencodec::{At, NoPulse};
 
 const STRICT: Privacy = Privacy::OrientationOnlyV1;
 const ROUTES: [TranscodeRoute; 5] = [
@@ -44,13 +44,13 @@ fn parsed_xml_is_not_privacy_evidence_on_any_transcode_route() {
         let packet = prepare(&private, Obligation::OptionalRemovable, route);
         assert_eq!(packet.inspection(), Inspection::SyntaxOnly);
         let approved = packet
-            .resolve(&mut engine(), Context::default(), &mut first, &Unstoppable)
+            .resolve(&mut engine(), Context::default(), &mut first, &NoPulse)
             .unwrap();
         assert_eq!(approved.action, BoundaryAction::Drop);
         assert_eq!(approved.route, route);
         assert!(approved.bytes().is_empty());
         let failure = prepare(&private, Obligation::ExactBytes, route)
-            .resolve(&mut engine(), Context::default(), &mut first, &Unstoppable)
+            .resolve(&mut engine(), Context::default(), &mut first, &NoPulse)
             .err()
             .unwrap();
         assert_eq!(failure.error().code(), Code::NoAlternative);
@@ -65,7 +65,7 @@ fn regenerate_known_orientation_removes_unknown_data_without_changing_the_value(
             "<!-- private comment --><private:Blob>opaque payload</private:Blob>",
         );
         let approved = prepare(&bytes, Obligation::Orientation, TranscodeRoute::Rewrite)
-            .resolve(&mut engine(), Context::default(), &mut first, &Unstoppable)
+            .resolve(&mut engine(), Context::default(), &mut first, &NoPulse)
             .unwrap();
         assert_eq!(approved.action, BoundaryAction::Regenerate);
         // Exact output schema, plus semantic read-back with the existing reader.
@@ -88,7 +88,7 @@ fn regenerate_known_orientation_removes_unknown_data_without_changing_the_value(
             Obligation::ExactBytes,
             TranscodeRoute::Copy,
         )
-        .resolve(&mut engine(), Context::default(), &mut first, &Unstoppable)
+        .resolve(&mut engine(), Context::default(), &mut first, &NoPulse)
         .unwrap();
         assert_eq!(exact.action, BoundaryAction::Keep);
         assert_eq!(exact.bytes(), approved.bytes());
@@ -125,7 +125,7 @@ fn missing_service_malformed_xml_dtd_and_limits_drop_or_refuse_never_keep() {
             );
             assert_eq!(prepared.inspection(), inspection);
             let result =
-                prepared.resolve(&mut engine(), Context::default(), &mut first, &Unstoppable);
+                prepared.resolve(&mut engine(), Context::default(), &mut first, &NoPulse);
             if obligation == Obligation::OptionalRemovable {
                 let approved = result.ok().unwrap();
                 assert_eq!(approved.action, BoundaryAction::Drop);
@@ -156,7 +156,7 @@ fn unsupported_rdf_and_numeric_values_cannot_authorize_a_rendering_subset() {
         let packet = prepare(&bytes, Obligation::Orientation, TranscodeRoute::Rewrite);
         assert_eq!(packet.inspection(), Inspection::SyntaxOnly);
         let failure = packet
-            .resolve(&mut engine(), Context::default(), &mut first, &Unstoppable)
+            .resolve(&mut engine(), Context::default(), &mut first, &NoPulse)
             .err()
             .unwrap();
         assert_eq!(failure.error().code(), Code::NoAlternative);
@@ -179,7 +179,7 @@ fn opaque_icc_reconstruction_and_nested_required_payloads_are_conflicts() {
                 STRICT,
                 route,
             )
-            .resolve(&mut engine(), Context::default(), &mut first, &Unstoppable)
+            .resolve(&mut engine(), Context::default(), &mut first, &NoPulse)
             .err()
             .unwrap();
             assert_eq!(error.error().code(), Code::NoAlternative);
@@ -208,7 +208,7 @@ fn an_explicit_weaker_contract_is_reported_and_cannot_be_mistaken_for_strict() {
         Privacy::PreserveUninspected,
         TranscodeRoute::Copy,
     )
-    .resolve(&mut engine(), Context::default(), &mut first, &Unstoppable)
+    .resolve(&mut engine(), Context::default(), &mut first, &NoPulse)
     .unwrap();
     assert_eq!(approved.privacy, Privacy::PreserveUninspected);
     assert_eq!(approved.inspection, Inspection::Unavailable);
@@ -223,14 +223,14 @@ fn outgoing_bytes_are_bound_to_the_inspected_packet_not_a_separate_boolean() {
         "",
     );
     let approved = prepare(&canonical, Obligation::ExactBytes, TranscodeRoute::Rewrite)
-        .resolve(&mut engine(), Context::default(), &mut first, &Unstoppable)
+        .resolve(&mut engine(), Context::default(), &mut first, &NoPulse)
         .unwrap();
     // Passing a different packet requires a new check; copying a previous
     // receipt cannot substitute different bytes into Approved's private body.
     assert_eq!(approved.bytes(), canonical);
     assert!(
         prepare(&private, Obligation::ExactBytes, TranscodeRoute::Rewrite)
-            .resolve(&mut engine(), Context::default(), &mut first, &Unstoppable)
+            .resolve(&mut engine(), Context::default(), &mut first, &NoPulse)
             .is_err()
     );
 }

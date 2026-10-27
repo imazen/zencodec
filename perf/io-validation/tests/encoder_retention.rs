@@ -243,7 +243,7 @@ mod policy;
 async fn one_policy_decision_selects_a_schedule_that_releases_raw_before_waiting() {
     use policy::*;
     use std::convert::Infallible;
-    use zencodec::{At, Unstoppable};
+    use zencodec::{At, NoPulse};
     let encoded = fixture();
     for retains_whole_raster in [true, false] {
         // This adapter knows which control wrapper it configured. A general
@@ -289,7 +289,7 @@ async fn one_policy_decision_selects_a_schedule_that_releases_raw_before_waiting
                 },
                 Context::default(),
                 &mut resolver,
-                &Unstoppable,
+                &NoPulse,
             )
             .unwrap();
         let finish_first = selected.alternative.action == Action::Execution(Execution::Buffered);

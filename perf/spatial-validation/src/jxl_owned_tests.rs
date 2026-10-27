@@ -15,7 +15,7 @@ use std::{
     },
 };
 use zencodec::{
-    At, StopToken, Unstoppable,
+    At, SharedPulse, NoPulse,
     collection::Cause,
     enough::{Stop, StopReason},
     image::{
@@ -91,7 +91,7 @@ fn reference(bytes: &[u8]) -> (ImageOutput, Template, usize) {
             images: 64,
             frame_headers: Some(64),
         },
-        StopToken::new(Unstoppable),
+        SharedPulse::default(),
     )
     .unwrap();
     let mut cursor = native.images().unwrap();
@@ -124,7 +124,7 @@ fn reconstruct(
     bytes: &[u8],
     template: &Template,
     budget: &StorageBudget,
-    stop: StopToken,
+    stop: SharedPulse,
 ) -> Result<(ImageOutput, Vec<usize>), Cause> {
     let options = JxlDecoderOptions::default()
         .with_coalescing(false)
@@ -225,7 +225,7 @@ fn check_owner(name: &str) {
     let (expected, template, size) = reference(&bytes);
     let budget = StorageBudget::new(size, 8);
     let (image, addresses) =
-        reconstruct(&bytes, &template, &budget, StopToken::new(Unstoppable)).unwrap();
+        reconstruct(&bytes, &template, &budget, SharedPulse::default()).unwrap();
     assert_eq!(budget.reserved_bytes(), size);
     assert_eq!(mapped_planes(&image), mapped_planes(&expected));
     image
@@ -265,7 +265,7 @@ fn check_owner(name: &str) {
     drop(map);
     let clone = image.clone();
     drop(image);
-    let error = reconstruct(&bytes, &template, &budget, StopToken::new(Unstoppable))
+    let error = reconstruct(&bytes, &template, &budget, SharedPulse::default())
         .err()
         .unwrap();
     assert!(zencodec::find_cause::<StorageError>(error.as_ref()).is_some());
@@ -273,7 +273,7 @@ fn check_owner(name: &str) {
     assert_eq!(mapped_planes(&clone), mapped_planes(&expected));
     drop(clone);
     assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
-    let (next, _) = reconstruct(&bytes, &template, &budget, StopToken::new(Unstoppable)).unwrap();
+    let (next, _) = reconstruct(&bytes, &template, &budget, SharedPulse::default()).unwrap();
     assert_eq!(mapped_planes(&next), mapped_planes(&expected));
     drop(next);
     assert_eq!(budget.reserved_bytes(), 0);
@@ -300,7 +300,7 @@ fn owned_jxl_output_refusal_native_cancellation_and_policy_release_all_charges()
     let bytes = fixture("conformance_test_images/cmyk_layers.jxl");
     let (_, template, size) = reference(&bytes);
     for budget in [StorageBudget::new(size - 1, 8), StorageBudget::new(size, 1)] {
-        let error = reconstruct(&bytes, &template, &budget, StopToken::new(Unstoppable))
+        let error = reconstruct(&bytes, &template, &budget, SharedPulse::default())
             .err()
             .unwrap();
         assert!(zencodec::find_cause::<StorageError>(error.as_ref()).is_some());
@@ -311,7 +311,7 @@ fn owned_jxl_output_refusal_native_cancellation_and_policy_release_all_charges()
         budget: budget.clone(),
         observed: Arc::new(AtomicBool::new(false)),
     };
-    let error = reconstruct(&bytes, &template, &budget, StopToken::new(stop.clone()))
+    let error = reconstruct(&bytes, &template, &budget, SharedPulse::new(stop.clone()))
         .err()
         .unwrap();
     assert!(
@@ -326,13 +326,13 @@ fn owned_jxl_output_refusal_native_cancellation_and_policy_release_all_charges()
     );
     assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
 
-    let (image, _) = reconstruct(&bytes, &template, &budget, StopToken::new(Unstoppable)).unwrap();
+    let (image, _) = reconstruct(&bytes, &template, &budget, SharedPulse::default()).unwrap();
     let mut resolver = |question: Question<'_>| -> Result<Decision, At<Infallible>> {
         assert!(matches!(question, Question::Image { .. }));
         assert_eq!(budget.reserved_bytes(), size);
         Ok(Decision::decline(Decline::ApplicationRule))
     };
-    let error = resolve_image(image, &mut resolver, PolicySet::new(), &Unstoppable).unwrap_err();
+    let error = resolve_image(image, &mut resolver, PolicySet::new(), &NoPulse).unwrap_err();
     assert!(zencodec::find_cause::<Decline>(&error).is_some());
     assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
 }

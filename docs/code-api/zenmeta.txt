@@ -277,14 +277,14 @@ pub fn zenmeta::rewrite::Context<'a>::check(&self) -> core::result::Result<(), z
 pub fn zenmeta::rewrite::Context<'a>::decompress(&self, kind: zencodec::metadata_rewrite::Compression, bytes: &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, zencodec::metadata_rewrite::Error>
 pub fn zenmeta::rewrite::Context<'a>::exif(&self, bytes: &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, zencodec::metadata_rewrite::Error>
 pub fn zenmeta::rewrite::Context<'a>::icc(&self, bytes: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, zencodec::metadata_rewrite::Error>
-pub fn zenmeta::rewrite::Context<'a>::new(request: &zencodec::metadata_rewrite::Request<'a>) -> core::result::Result<Self, zencodec::metadata_rewrite::Error>
+pub fn zenmeta::rewrite::Context<'a>::new(request: &zencodec::metadata_rewrite::RewriteRequest<'a>) -> core::result::Result<Self, zencodec::metadata_rewrite::Error>
 pub fn zenmeta::rewrite::Context<'a>::packet(&self, size: usize) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
 pub fn zenmeta::rewrite::Context<'a>::services(&self) -> core::result::Result<&dyn zencodec::metadata_rewrite::Services, zencodec::metadata_rewrite::Error>
 pub fn zenmeta::rewrite::Context<'a>::with_input(self, input: &'a [u8]) -> Self
 pub fn zenmeta::rewrite::Context<'a>::with_xmp_editing(self, enabled: bool) -> Self
 pub fn zenmeta::rewrite::Context<'a>::xmp(&self, xml: &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, zencodec::metadata_rewrite::Error>
 impl<'a> core::ops::deref::Deref for zenmeta::rewrite::Context<'a>
-pub type zenmeta::rewrite::Context<'a>::Target = zencodec::metadata_rewrite::Request<'a>
+pub type zenmeta::rewrite::Context<'a>::Target = zencodec::metadata_rewrite::RewriteRequest<'a>
 pub fn zenmeta::rewrite::Context<'a>::deref(&self) -> &Self::Target
 pub struct zenmeta::rewrite::PlanBuilder<'a>
 impl<'a> zenmeta::rewrite::PlanBuilder<'a>

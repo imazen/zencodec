@@ -22,7 +22,7 @@ pub enum Error {
     Service(&'static str),
     /// Cooperative cancellation was requested.
     Cancelled,
-    /// A deadline or another cooperative stop reason.
+    /// A deadline or another cooperative pulse reason.
     Stopped(enough::StopReason),
 }
 impl core::fmt::Display for Error {
@@ -59,7 +59,7 @@ pub trait Services {
         _descriptive: &[u8],
         _required: &[u8],
         _limit: usize,
-        _stop: &dyn enough::Stop,
+        _pulse: &dyn crate::Pulse,
     ) -> Result<Vec<u8>, Error> {
         Err(Error::Unsupported("XMP merge service not supplied"))
     }
@@ -70,7 +70,7 @@ pub trait Services {
         &self,
         _xml: &[u8],
         _limit: usize,
-        _stop: &dyn enough::Stop,
+        _pulse: &dyn crate::Pulse,
     ) -> Result<Option<Vec<u8>>, Error> {
         Err(Error::Unsupported("XMP editing service not supplied"))
     }
@@ -80,7 +80,7 @@ pub trait Services {
         &self,
         _icc: &[u8],
         _limit: usize,
-        _stop: &dyn enough::Stop,
+        _pulse: &dyn crate::Pulse,
     ) -> Result<Option<Vec<u8>>, Error> {
         Ok(None)
     }
@@ -90,7 +90,7 @@ pub trait Services {
         _kind: Compression,
         _data: &[u8],
         _limit: usize,
-        _stop: &dyn enough::Stop,
+        _pulse: &dyn crate::Pulse,
     ) -> Result<Vec<u8>, Error> {
         Err(Error::Unsupported(
             "metadata decompression service not supplied",
@@ -102,7 +102,7 @@ pub trait Services {
         _kind: Compression,
         _data: &[u8],
         _limit: usize,
-        _stop: &dyn enough::Stop,
+        _pulse: &dyn crate::Pulse,
     ) -> Result<Vec<u8>, Error> {
         Err(Error::Unsupported(
             "metadata compression service not supplied",
@@ -223,7 +223,7 @@ impl<'a> Plan<'a> {
 /// and orientation, 512 MiB input/output, 16 MiB metadata, 65,536 carriers.
 /// Unsupported formats fail rather than falling back to decoding/re-encoding.
 #[derive(Clone)]
-pub struct Request<'a> {
+pub struct RewriteRequest<'a> {
     input: &'a [u8],
     policy: MetadataPolicy,
     services: Option<&'a dyn Services>,
@@ -234,9 +234,13 @@ pub struct Request<'a> {
     max_output: usize,
     max_metadata: usize,
     max_carriers: usize,
-    stop: &'a dyn enough::Stop,
+    pulse: &'a dyn crate::Pulse,
 }
-impl<'a> Request<'a> {
+/// Legacy ambiguous name for a metadata rewrite request.
+#[deprecated(note = "use RewriteRequest")]
+pub type Request<'a> = RewriteRequest<'a>;
+
+impl<'a> RewriteRequest<'a> {
     /// Borrow encoded input. No parsing or allocation occurs yet.
     pub fn new(input: &'a [u8]) -> Self {
         Self {
@@ -250,7 +254,7 @@ impl<'a> Request<'a> {
             max_output: 512 << 20,
             max_metadata: 16 << 20,
             max_carriers: 65_536,
-            stop: &enough::Unstoppable,
+            pulse: &crate::how_far::NoPulse,
         }
     }
     /// Metadata retention. Retained XMP is copied unless an editor is requested.
@@ -297,8 +301,8 @@ impl<'a> Request<'a> {
         self
     }
     /// Cooperative cancellation, checked between carriers and long byte walks.
-    pub fn with_stop(mut self, stop: &'a dyn enough::Stop) -> Self {
-        self.stop = stop;
+    pub fn with_pulse(mut self, pulse: &'a dyn crate::Pulse) -> Self {
+        self.pulse = pulse;
         self
     }
     /// Encoded source bytes.
@@ -341,9 +345,9 @@ impl<'a> Request<'a> {
     pub fn max_carriers(&self) -> usize {
         self.max_carriers
     }
-    /// Caller stop token.
-    pub fn stop(&self) -> &'a dyn enough::Stop {
-        self.stop
+    /// Caller pulse token.
+    pub fn pulse(&self) -> &'a dyn crate::Pulse {
+        self.pulse
     }
     /// Reuse the same policy, limits and services for a contained image.
     pub fn with_input(mut self, input: &'a [u8]) -> Self {

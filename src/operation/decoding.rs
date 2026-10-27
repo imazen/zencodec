@@ -5,7 +5,7 @@ use crate::{
     storage::StorageBudget,
 };
 use alloc::boxed::Box;
-use enough::Stop;
+
 use zenpixels::PixelDescriptor;
 
 pub(super) struct CheckedDecoder {
@@ -13,7 +13,7 @@ pub(super) struct CheckedDecoder {
     codecs: CodecSet,
     storage: StorageBudget,
     inner: Option<Box<DynControlledDecoder>>,
-    probe: [Request; 1],
+    probe: [InputRequest; 1],
 }
 impl CheckedDecoder {
     pub(super) fn new(
@@ -29,7 +29,10 @@ impl CheckedDecoder {
             codecs,
             storage,
             inner: None,
-            probe: [Request::at_least(0, ImageFormat::RECOMMENDED_PROBE_BYTES)],
+            probe: [InputRequest::at_least(
+                0,
+                ImageFormat::RECOMMENDED_PROBE_BYTES,
+            )],
         };
         if let Some(format) = session.request.format {
             session.prepare(format)?;
@@ -59,11 +62,11 @@ impl IncrementalDecode for CheckedDecoder {
         &mut self,
         _: Input<'_>,
         _: &mut dyn DecodeRowSink,
-        _: &dyn Stop,
+        _: &dyn crate::Pulse,
     ) -> Result<Progress, StepError<Self::Error>> {
         Err(StepError::Control(ControlError::UnhandledBoundary))
     }
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         self.inner.as_ref().map_or(&self.probe, |d| d.requested())
     }
     fn info(&self) -> Option<&ImageInfo> {
@@ -84,7 +87,7 @@ impl ControlledIncrementalDecode for CheckedDecoder {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn Stop,
+        pulse: &dyn crate::Pulse,
     ) -> Result<ControlledProgress, StepError<Self::Error>> {
         self.codecs.check_operation_stop()?;
         if self.inner.is_none() {
@@ -101,7 +104,7 @@ impl ControlledIncrementalDecode for CheckedDecoder {
             .inner
             .as_mut()
             .expect("prepared above")
-            .step_controlled(input, sink, stop)
+            .step_controlled(input, sink, pulse)
             .map_err(|e| {
                 e.map_codec(|e| OperationError::Codec(CodecSetError::Codec(e.into_inner())))
             })?;
@@ -122,13 +125,13 @@ impl ControlledIncrementalDecode for CheckedDecoder {
         &mut self,
         boundary: BoundaryId,
         action: BoundaryAction,
-        stop: &dyn Stop,
+        pulse: &dyn crate::Pulse,
     ) -> Result<(), StepError<Self::Error>> {
         self.codecs.check_operation_stop()?;
         self.inner
             .as_mut()
             .ok_or(StepError::Control(ControlError::InvalidReply))?
-            .resume(boundary, action, stop)
+            .resume(boundary, action, pulse)
             .map_err(|e| {
                 e.map_codec(|e| OperationError::Codec(CodecSetError::Codec(e.into_inner())))
             })

@@ -13,7 +13,7 @@ use super::{
     tiff_region::Failure,
 };
 use std::{io::Error, sync::Arc};
-use zencodec::{At, StopToken};
+use zencodec::{At, SharedPulse};
 use zenjxl_decoder::api::{ExtraChannel, JxlColorType, JxlDecoder, JxlLayerInfo, states};
 
 pub struct JxlLayers<'a> {
@@ -47,7 +47,7 @@ pub struct Cursor {
 }
 
 impl<'a> JxlLayers<'a> {
-    pub fn open(bytes: &'a [u8], limits: Limits, stop: StopToken) -> Result<Self, Failure> {
+    pub fn open(bytes: &'a [u8], limits: Limits, stop: SharedPulse) -> Result<Self, Failure> {
         let control = Control::new(stop);
         control.check()?;
         let options = controlled_options(&control, limits)

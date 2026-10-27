@@ -571,7 +571,7 @@ fn native_output_owner_keeps_auxiliaries_and_interpretation_through_color_replac
                 replaced,
                 &mut PolicySet::new(),
                 PolicySet::new(),
-                &zencodec::Unstoppable,
+                &zencodec::NoPulse,
             )
             .unwrap();
             assert_eq!(color_pool.reserved_objects(), 1);

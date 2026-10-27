@@ -1,6 +1,6 @@
 //! Concrete sources for the three replay classes.
 use crate::{PassSource, Replay, SourceIdentity};
-use enough::Stop;
+
 use std::{
     fs::File,
     io::{self, Read},
@@ -30,7 +30,7 @@ impl PassSource for Borrowed<'_> {
         &mut self,
         first: u32,
         rows: PixelSliceMut<'_>,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<(), Self::Error> {
         self.0.read_rows(first, rows, stop)
     }
@@ -47,7 +47,7 @@ impl<S: Source> PassSource for Sequential<S> {
         &mut self,
         first: u32,
         rows: PixelSliceMut<'_>,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<(), Self::Error> {
         self.0.read_rows(first, rows, stop)
     }
@@ -89,7 +89,7 @@ impl PassSource for FileRows {
         &mut self,
         first: u32,
         mut rows: PixelSliceMut<'_>,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> io::Result<()> {
         for y in 0..rows.rows() {
             stop.check()
@@ -134,7 +134,7 @@ impl<R: Read> PassSource for ReaderRows<R> {
         &mut self,
         first: u32,
         mut rows: PixelSliceMut<'_>,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> io::Result<()> {
         if first != self.next {
             return Err(io::Error::new(

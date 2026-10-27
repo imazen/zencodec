@@ -9,7 +9,8 @@ extern crate alloc;
 #[cfg(not(feature = "full-zencodec"))]
 extern crate self as zencodec;
 #[cfg(not(feature = "full-zencodec"))]
-pub(crate) use enough::{self, Unstoppable};
+pub(crate) use enough::{self, };
+use zencodec::how_far::NoPulse;
 #[cfg(not(feature = "full-zencodec"))]
 pub(crate) use whereat::At;
 #[cfg(not(feature = "full-zencodec"))]
@@ -55,7 +56,7 @@ fn resolve_without_std() -> Result<(), zencodec::At<policy::Failure<core::conver
         },
         Context::default(),
         &mut preset,
-        &zencodec::Unstoppable,
+        &zencodec::NoPulse,
     )?;
     Ok(())
 }

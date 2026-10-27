@@ -4337,7 +4337,11 @@ mod tests {
             .animation_frame_encoder()
             .expect("animation encoder");
         let err = a
-            .push_frame(img.as_slice(), 40, Some(&Cancelled))
+            .push_frame(
+                img.as_slice(),
+                40,
+                Some(&zencodec::how_far::StopOnly::borrowed(&Cancelled)),
+            )
             .expect_err("a fired stop token must cancel the push");
 
         // Classify it the way a generic consumer would, with no knowledge of RefError:

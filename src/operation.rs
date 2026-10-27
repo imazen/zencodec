@@ -267,7 +267,7 @@ impl DecodeRequest {
     ) -> Result<Outcome<DecodeOutput>, At<OperationError>> {
         let run = || -> Result<DecodeOutput, OperationError> {
             codecs
-                .operation_stop()
+                .operation_pulse()
                 .check()
                 .map_err(OperationError::Stopped)?;
             let format = self
@@ -289,7 +289,7 @@ impl DecodeRequest {
                 .decode()
                 .map_err(|e| OperationError::Codec(e.into()))?;
             codecs
-                .operation_stop()
+                .operation_pulse()
                 .check()
                 .map_err(OperationError::Stopped)?;
             if let Output::Require(requested) = self.output {
@@ -522,7 +522,7 @@ impl EncodeRequest {
         };
         let count = targets.map_or(1, <[_]>::len);
         codecs
-            .operation_stop()
+            .operation_pulse()
             .check()
             .map_err(|reason| failure(OperationError::Stopped(reason)))?;
         if count == 0 || count > policy::MAX_OFFERS {
@@ -550,7 +550,7 @@ impl EncodeRequest {
             .map_err(|_| failure(OperationError::Allocation))?;
         for index in 0..count {
             codecs
-                .operation_stop()
+                .operation_pulse()
                 .check()
                 .map_err(|reason| failure(OperationError::Stopped(reason)))?;
             let fidelity = targets.map(|targets| targets[index]);
@@ -614,7 +614,7 @@ impl EncodeRequest {
             &offers,
             resolver,
             self.preset,
-            codecs.operation_stop(),
+            codecs.operation_pulse(),
         )
         .map_err(|error| {
             error

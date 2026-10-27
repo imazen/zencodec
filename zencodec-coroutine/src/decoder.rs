@@ -8,12 +8,11 @@ use core::marker::PhantomData;
 use core::pin::Pin;
 use core::task::{Context, Poll, Waker};
 
-use enough::Stop;
 use zencodec::ImageInfo;
 use zencodec::decode::{
     BoundaryAction, BoundaryId, ControlError, ControlledIncrementalDecode, ControlledProgress,
-    DecodeBoundary, DecodeRowSink, Event, IncrementalDecode, Input, MetadataUpdate, OutputInfo,
-    Progress, Request, SinkError, StepError,
+    DecodeBoundary, DecodeRowSink, Event, IncrementalDecode, Input, InputRequest, MetadataUpdate,
+    OutputInfo, Progress, SinkError, StepError,
 };
 use zencodec::source::AccessPattern;
 use zenpixels::PixelDescriptor;
@@ -56,7 +55,7 @@ pub struct CoroutineDecoder<F, E> {
     /// the `Rows` arm does not take the shared lock just to read it.
     accepts_provisional: bool,
     access: AccessPattern,
-    need: Vec<Request>,
+    need: Vec<InputRequest>,
     cached_info: Option<ImageInfo>,
     cached_info_generation: u64,
     _err: PhantomData<fn() -> E>,
@@ -199,8 +198,8 @@ where
         let needs = core::mem::take(&mut shared.need);
         for r in &needs {
             let (lo, hi, sequential) = match *r {
-                Request::AtLeast { offset, .. } => (offset, end, true),
-                Request::Range(range) => (range.offset, range.end(), false),
+                InputRequest::AtLeast { offset, .. } => (offset, end, true),
+                InputRequest::Range(range) => (range.offset, range.end(), false),
                 _ => continue,
             };
             let lo = lo.max(front);
@@ -266,7 +265,7 @@ where
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<ControlledProgress, StepError<E>> {
         match &self.state {
             State::Done(info) => return Ok(Progress::new(0, Event::Done(info.clone())).into()),
@@ -277,7 +276,7 @@ where
             }
             State::Running => {}
         }
-        if let Err(reason) = stop.check() {
+        if let Err(reason) = pulse.check() {
             self.shared.lock().cancelled = Some(reason);
             self.state = State::Failed;
             return Err(StepError::Cancelled(reason));
@@ -299,7 +298,7 @@ where
             self.state = State::Failed;
             let polled = self.future.as_mut().poll(&mut cx);
             self.state = State::Running;
-            if let Err(reason) = stop.check() {
+            if let Err(reason) = pulse.check() {
                 self.shared.lock().cancelled = Some(reason);
                 self.state = State::Failed;
                 return Err(StepError::Cancelled(reason));
@@ -444,7 +443,7 @@ where
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<Progress, StepError<E>> {
         if matches!(self.state, State::Failed) {
             return Err(StepError::Finished);
@@ -453,7 +452,7 @@ where
             self.state = State::Failed;
             return Err(StepError::Control(ControlError::UnhandledBoundary));
         }
-        match self.advance(input, sink, stop)? {
+        match self.advance(input, sink, pulse)? {
             ControlledProgress::Decode(progress) => Ok(progress),
             ControlledProgress::Suspended { .. } => {
                 self.state = State::Failed;
@@ -462,7 +461,7 @@ where
         }
     }
 
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         match self.state {
             State::Running => &self.need,
             _ => &[],
@@ -491,7 +490,7 @@ where
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<ControlledProgress, StepError<E>> {
         if matches!(self.state, State::Failed) {
             return Err(StepError::Finished);
@@ -500,20 +499,20 @@ where
             self.state = State::Failed;
             return Err(StepError::Control(ControlError::NotControlled));
         }
-        self.advance(input, sink, stop)
+        self.advance(input, sink, pulse)
     }
 
     fn resume(
         &mut self,
         id: BoundaryId,
         action: BoundaryAction,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<(), StepError<E>> {
         let state = core::mem::replace(&mut self.state, State::Failed);
         if !matches!(state, State::Running) {
             return Err(StepError::Finished);
         }
-        stop.check()?;
+        pulse.check()?;
         let mut shared = self.shared.lock();
         if !shared.controlled {
             return Err(StepError::Control(ControlError::NotControlled));

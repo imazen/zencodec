@@ -1,9 +1,10 @@
 //! Terminal-state enforcement is independent of a backend's own error handling.
-use enough::{Stop, StopReason, Unstoppable};
+use enough::{Stop, StopReason};
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
+use zencodec::how_far::NoPulse;
 use zencodec::time::TimeBase;
 use zencodec_media::{
     frame::Frame,
@@ -43,11 +44,18 @@ impl Loose {
 }
 impl VideoEncoder for Loose {
     type Error = NativeError;
-    fn send(&mut self, _: &Frame, _: &dyn Stop) -> Result<SendStatus, SessionError<NativeError>> {
+    fn send(
+        &mut self,
+        _: &Frame,
+        _: &dyn zencodec::Pulse,
+    ) -> Result<SendStatus, SessionError<NativeError>> {
         self.call(0)?;
         Ok(SendStatus::Accepted)
     }
-    fn receive(&mut self, _: &dyn Stop) -> Result<Receive<Packet>, SessionError<NativeError>> {
+    fn receive(
+        &mut self,
+        _: &dyn zencodec::Pulse,
+    ) -> Result<Receive<Packet>, SessionError<NativeError>> {
         self.call(1)?;
         Ok(Receive::NeedInput)
     }
@@ -66,11 +74,11 @@ fn frame() -> Frame {
         TimeBase::new(1, 1).unwrap(),
     )
     .with_video(VideoTrackInfo::new(2, 2));
-    decoder.configure(&config, &Unstoppable).unwrap();
+    decoder.configure(&config, &NoPulse).unwrap();
     let mut packet = Packet::from_vec(toy_payload(&[&[1, 2, 3, 4]], false)).unwrap();
-    decoder.send(&mut packet, &Unstoppable).unwrap();
+    decoder.send(&mut packet, &NoPulse).unwrap();
     decoder.end_input().unwrap();
-    let Receive::Ready(frame) = decoder.receive(&Unstoppable).unwrap() else {
+    let Receive::Ready(frame) = decoder.receive(&NoPulse).unwrap() else {
         panic!("frame fixture")
     };
     frame
@@ -82,8 +90,8 @@ fn invoke<E: VideoEncoder + ?Sized>(
     method: u8,
 ) -> Result<(), SessionError<E::Error>> {
     match method {
-        0 => encoder.send(frame, &Unstoppable).map(|_| ()),
-        1 => encoder.receive(&Unstoppable).map(|_| ()),
+        0 => encoder.send(frame, &NoPulse).map(|_| ()),
+        1 => encoder.receive(&NoPulse).map(|_| ()),
         _ => encoder.end_input(),
     }
 }
@@ -139,9 +147,9 @@ fn pump_failure<E: VideoEncoder + ?Sized>(
     method: u8,
 ) -> PumpError<SessionError<E::Error>, core::convert::Infallible> {
     if method == 2 {
-        drain_encoder(encoder, &Unstoppable, |_| Ok(())).unwrap_err()
+        drain_encoder(encoder, &NoPulse, |_| Ok(())).unwrap_err()
     } else {
-        send_frame_until_accepted(encoder, frame, &Unstoppable, |_| Ok(())).unwrap_err()
+        send_frame_until_accepted(encoder, frame, &NoPulse, |_| Ok(())).unwrap_err()
     }
 }
 
@@ -196,9 +204,13 @@ fn cancellation_is_checked_before_entering_an_uncooperative_encoder() {
             panic: false,
         });
         let result = if send {
-            encoder.send(&frame, &Cancel).map(|_| ())
+            encoder
+                .send(&frame, &zencodec::how_far::StopOnly::borrowed(&Cancel))
+                .map(|_| ())
         } else {
-            encoder.receive(&Cancel).map(|_| ())
+            encoder
+                .receive(&zencodec::how_far::StopOnly::borrowed(&Cancel))
+                .map(|_| ())
         };
         assert!(matches!(result, Err(SessionError::Cancelled(_))));
         assert_eq!(calls.load(Ordering::SeqCst), 0);
@@ -238,17 +250,15 @@ fn a_panicking_stop_poisoned_decoder_reopens_only_after_reset() {
         TimeBase::new(1, 1).unwrap(),
     )
     .with_video(VideoTrackInfo::new(2, 2));
-    decoder.configure(&config, &Unstoppable).unwrap();
-    let result =
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| decoder.receive(&PanicStop)));
+    decoder.configure(&config, &NoPulse).unwrap();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        decoder.receive(&zencodec::how_far::StopOnly::borrowed(&PanicStop))
+    }));
     assert!(result.is_err());
     assert!(matches!(
-        decoder.receive(&Unstoppable),
+        decoder.receive(&NoPulse),
         Err(SessionError::Finished)
     ));
     decoder.reset().unwrap();
-    assert!(matches!(
-        decoder.receive(&Unstoppable),
-        Ok(Receive::NeedInput)
-    ));
+    assert!(matches!(decoder.receive(&NoPulse), Ok(Receive::NeedInput)));
 }

@@ -12,7 +12,7 @@ use crate::{
 };
 use alloc::{collections::VecDeque, vec::Vec};
 use core::fmt;
-use enough::Stop;
+
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom, Write},
@@ -67,8 +67,9 @@ impl core::error::Error for Refusal {}
 fn refuse(reason: Refusal) -> Cause {
     alloc::boxed::Box::new(reason)
 }
-fn check(stop: &dyn Stop) -> Result<(), Cause> {
-    stop.check()
+fn check(pulse: &dyn zencodec::Pulse) -> Result<(), Cause> {
+    pulse
+        .check()
         .map_err(|r| At::wrap(zencodec::CodecError::new(None, r.into())).into())
 }
 struct Entry {
@@ -148,8 +149,12 @@ impl Staging {
             Store::Disk(disk) => disk.replay.reserved_bytes(),
         }
     }
-    pub(crate) fn push(&mut self, packet: Packet, stop: &dyn Stop) -> Result<(), Cause> {
-        check(stop)?;
+    pub(crate) fn push(
+        &mut self,
+        packet: Packet,
+        pulse: &dyn zencodec::Pulse,
+    ) -> Result<(), Cause> {
+        check(pulse)?;
         let bytes = packet
             .additions()
             .iter()
@@ -188,7 +193,7 @@ impl Staging {
                 let metadata = packet.map_payloads(|payload| {
                     lengths.push(payload.len());
                     for chunk in payload.as_bytes().chunks(64 * 1024) {
-                        check(stop)?;
+                        check(pulse)?;
                         disk.file.write_all(chunk)?;
                     }
                     Ok(PacketPayload::Owned(Vec::new()))
@@ -202,17 +207,17 @@ impl Staging {
             }
         }
         self.bytes = total;
-        check(stop)
+        check(pulse)
     }
-    pub(crate) fn begin_replay(&mut self, stop: &dyn Stop) -> Result<(), Cause> {
-        check(stop)?;
+    pub(crate) fn begin_replay(&mut self, pulse: &dyn zencodec::Pulse) -> Result<(), Cause> {
+        check(pulse)?;
         if let Store::Disk(disk) = &mut self.store {
             disk.file.flush()?;
         }
-        check(stop)
+        check(pulse)
     }
-    pub(crate) fn next(&mut self, stop: &dyn Stop) -> Result<Option<Packet>, Cause> {
-        check(stop)?;
+    pub(crate) fn next(&mut self, pulse: &dyn zencodec::Pulse) -> Result<Option<Packet>, Cause> {
+        check(pulse)?;
         match &mut self.store {
             Store::Memory { packets, .. } => Ok(packets.pop_front()),
             Store::Disk(disk) => {
@@ -222,10 +227,10 @@ impl Staging {
                 let mut payload = disk.replay.bytes(entry.bytes)?;
                 disk.file.seek(SeekFrom::Start(entry.offset))?;
                 for chunk in payload.as_mut_slice().chunks_mut(64 * 1024) {
-                    check(stop)?;
+                    check(pulse)?;
                     disk.file.read_exact(chunk)?;
                 }
-                check(stop)?;
+                check(pulse)?;
                 let payload = payload.freeze();
                 let mut lengths = entry.lengths.into_iter();
                 let mut offset = 0;
@@ -301,12 +306,12 @@ mod tests {
         let mut staging = Staging::disk(file, DiskLimits::new(5, 1, 1), budget.clone()).unwrap();
         let original = packet();
         staging
-            .push(original.clone(), &enough::Unstoppable)
+            .push(original.clone(), &zencodec::how_far::NoPulse)
             .unwrap();
         assert_eq!(budget.reserved_bytes(), 0);
         assert_eq!(staging.facts().payload_bytes, 5);
-        staging.begin_replay(&enough::Unstoppable).unwrap();
-        let output = staging.next(&enough::Unstoppable).unwrap().unwrap();
+        staging.begin_replay(&zencodec::how_far::NoPulse).unwrap();
+        let output = staging.next(&zencodec::how_far::NoPulse).unwrap().unwrap();
         assert_eq!(output.bytes(), original.bytes());
         assert_eq!(output.track(), original.track());
         assert_eq!(output.pts(), original.pts());
@@ -320,7 +325,7 @@ mod tests {
         assert_eq!(output.additions()[0].payload().as_bytes(), &[4, 5]);
         assert_eq!(budget.reserved_bytes(), 5);
         assert_eq!(budget.reserved_objects(), 1);
-        assert!(staging.next(&enough::Unstoppable).unwrap().is_none());
+        assert!(staging.next(&zencodec::how_far::NoPulse).unwrap().is_none());
         drop(staging);
         assert_eq!(output.bytes(), &[1, 2, 3]);
         drop(output);
@@ -336,7 +341,9 @@ mod tests {
         ] {
             let (file, path) = file();
             let mut staging = Staging::disk(file, limits, StorageBudget::new(5, 1)).unwrap();
-            let error = staging.push(packet(), &enough::Unstoppable).unwrap_err();
+            let error = staging
+                .push(packet(), &zencodec::how_far::NoPulse)
+                .unwrap_err();
             assert_eq!(error.downcast_ref::<Refusal>(), Some(&expected));
             assert_eq!(std::fs::read(path).unwrap(), b"prefix");
         }
@@ -346,7 +353,7 @@ mod tests {
         let (file, path) = file();
         let budget = StorageBudget::new(5, 1);
         let mut staging = Staging::disk(file, DiskLimits::new(5, 1, 1), budget.clone()).unwrap();
-        staging.push(packet(), &enough::Unstoppable).unwrap();
+        staging.push(packet(), &zencodec::how_far::NoPulse).unwrap();
         // Deliberate external interference is fault injection, not a supported
         // scratch-sharing mode or proof of same-length mutation detection.
         OpenOptions::new()
@@ -355,7 +362,7 @@ mod tests {
             .unwrap()
             .set_len(7)
             .unwrap();
-        let error = staging.next(&enough::Unstoppable).unwrap_err();
+        let error = staging.next(&zencodec::how_far::NoPulse).unwrap_err();
         assert_eq!(
             error.downcast_ref::<std::io::Error>().unwrap().kind(),
             std::io::ErrorKind::UnexpectedEof

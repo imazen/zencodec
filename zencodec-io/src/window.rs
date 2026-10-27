@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 use core::fmt;
 
 use crate::admission::{InputError, reserve};
-use zencodec::decode::{Input, Request};
+use zencodec::decode::{Input, InputRequest};
 
 /// Bytes the driver holds: `buf[head..end]` starts at absolute `base`.
 ///
@@ -189,15 +189,15 @@ pub enum ProtocolViolation {
     /// `Need` with no requests.
     EmptyRequest,
     /// A request's offset plus length cannot be represented by the protocol.
-    AddressOverflow(Request),
+    AddressOverflow(InputRequest),
     /// The input satisfied one of the decoder's requests, yet it took
     /// nothing and asked again.
-    NoProgress(Request),
+    NoProgress(InputRequest),
     /// The decoder asked for bytes past the end it was told about, instead
     /// of reporting truncated input.
     NeedPastEnd {
         /// The request.
-        request: Request,
+        request: InputRequest,
         /// The total length the decoder had been given.
         total: u64,
     },
@@ -226,7 +226,7 @@ impl core::error::Error for ProtocolViolation {}
 /// exist, must not ask past a known end, and an input that satisfied one
 /// must have been consumed from.
 pub(crate) fn check_need(
-    requests: &[Request],
+    requests: &[InputRequest],
     offered: &Input<'_>,
     consumed: usize,
 ) -> Result<(), ProtocolViolation> {
@@ -235,8 +235,8 @@ pub(crate) fn check_need(
     }
     for &request in requests {
         let span = match request {
-            Request::AtLeast { offset, min_len } => Some((offset, min_len.max(1) as u64)),
-            Request::Range(r) => Some((r.offset, r.length)),
+            InputRequest::AtLeast { offset, min_len } => Some((offset, min_len.max(1) as u64)),
+            InputRequest::Range(r) => Some((r.offset, r.length)),
             _ => None,
         };
         if let Some((offset, length)) = span
@@ -248,8 +248,8 @@ pub(crate) fn check_need(
     if let Some(total) = offered.total_len {
         for r in requests {
             let past = match *r {
-                Request::AtLeast { offset, .. } => offset > total,
-                Request::Range(range) => range.end() > total,
+                InputRequest::AtLeast { offset, .. } => offset > total,
+                InputRequest::Range(range) => range.end() > total,
                 _ => false,
             };
             if past {
@@ -302,13 +302,13 @@ mod tests {
             check_need(&[], &full, 0),
             Err(ProtocolViolation::EmptyRequest)
         );
-        let r = Request::at_least(0, 4);
+        let r = InputRequest::at_least(0, 4);
         assert_eq!(
             check_need(&[r], &full, 0),
             Err(ProtocolViolation::NoProgress(r))
         );
         assert_eq!(check_need(&[r], &full, 1), Ok(()));
-        let past = Request::range(6, 4);
+        let past = InputRequest::range(6, 4);
         assert!(matches!(
             check_need(&[past], &full, 0),
             Err(ProtocolViolation::NeedPastEnd { .. })

@@ -10,8 +10,8 @@ use core::task::{Context, Poll};
 use enough::StopReason;
 use zencodec::ImageInfo;
 use zencodec::decode::{
-    BatchMeta, BoundaryAction, BoundaryId, ByteRange, ControlError, DecodeBoundary,
-    InterpretationFacts, MetadataUpdate, Request, SinkError,
+    BatchMeta, BoundaryAction, BoundaryId, ByteRange, ControlError, DecodeBoundary, InputRequest,
+    InterpretationFacts, MetadataUpdate, SinkError,
 };
 use zencodec::source::SourceError;
 use zencodec::storage::{OwnedStorage, StorageBudget, StorageError};
@@ -195,7 +195,7 @@ pub(crate) struct Shared {
     pub(crate) adopted: Option<InterpretationFacts>,
     pub(crate) control_failure: Option<ControlError>,
     pub(crate) input: InputStore,
-    pub(crate) need: Vec<Request>,
+    pub(crate) need: Vec<InputRequest>,
     /// Scratch for a read's satisfied spans and missing gaps, reused across polls.
     pub(crate) satisfied: Vec<(u64, usize)>,
     pub(crate) gaps: Vec<(u64, u64)>,
@@ -265,7 +265,7 @@ impl CoroutineContext {
 
     /// Read exactly `out.len()` bytes at `offset`.
     ///
-    /// Suspends with `Event::Need` (a `Request::Range`) until the driver
+    /// Suspends with `Event::Need` (a `InputRequest::Range`) until the driver
     /// offers the span. Fails with [`SourceError::UnexpectedEof`] once the
     /// announced length shows the span can never arrive.
     pub fn read_exact_at<'a>(
@@ -294,7 +294,7 @@ impl CoroutineContext {
     }
 
     /// Read the next `out.len()` bytes at the sequential cursor and
-    /// advance it. Suspends with one `Request::AtLeast` for the rest of the
+    /// advance it. Suspends with one `InputRequest::AtLeast` for the rest of the
     /// read, which stream pumps serve by reading forward. Bytes behind the
     /// cursor are released.
     pub async fn read_exact(&mut self, out: &mut [u8]) -> Result<(), CoroutineError> {
@@ -321,7 +321,7 @@ impl CoroutineContext {
         self.shared.lock().input.release_before(offset);
     }
 
-    /// Total source length. Suspends with `Request::Len` until a driver
+    /// Total source length. Suspends with `InputRequest::Len` until a driver
     /// offers an input carrying it.
     pub fn len(&mut self) -> impl Future<Output = Result<u64, CoroutineError>> + '_ {
         Len {
@@ -583,11 +583,11 @@ impl Future for ReadMany<'_, '_> {
                     let first = gaps.get(before).map(|(o, _)| *o).unwrap_or(offset);
                     gaps.truncate(before);
                     let end = offset + out.len() as u64;
-                    missing.push(Request::at_least(first, (end - first) as usize));
+                    missing.push(InputRequest::at_least(first, (end - first) as usize));
                 } else {
                     missing.extend(
                         gaps.drain(before..)
-                            .map(|(o, l)| Request::Range(ByteRange::new(o, l))),
+                            .map(|(o, l)| InputRequest::Range(ByteRange::new(o, l))),
                     );
                 }
                 Ok(())
@@ -642,7 +642,7 @@ impl Future for Len<'_> {
             Some(t) => Poll::Ready(Ok(t)),
             None => {
                 shared.need.clear();
-                shared.need.push(Request::Len);
+                shared.need.push(InputRequest::Len);
                 Poll::Pending
             }
         }

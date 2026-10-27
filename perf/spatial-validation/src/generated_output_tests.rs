@@ -117,7 +117,7 @@ fn project_packaged_subsampled(encoded: &[u8], expected: &[Plane], shift: u32) {
         &image,
         Some(region),
         &destination_pool,
-        &zencodec::Unstoppable,
+        &zencodec::NoPulse,
     )
     .unwrap();
     let mapped = output.map().unwrap();

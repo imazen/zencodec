@@ -32,7 +32,7 @@ where
     D: IncrementalDecode + ?Sized,
 {
     let mut progress = Progressor::new(pulse);
-    let stop = progress.stop();
+    let stop = progress.pulse();
     let mut cursor = ReadCursor::new(read_size, max_window);
     loop {
         let input = cursor.offer();

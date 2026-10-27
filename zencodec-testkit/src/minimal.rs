@@ -29,7 +29,7 @@ use zencodec::decode::{
 };
 use zencodec::encode::{EncodeCapabilities, EncodeJob, EncodeOutput, Encoder, EncoderConfig};
 use zencodec::{
-    CodecError, ImageFormat, ImageInfo, Metadata, Orientation, ResourceLimits, StopToken,
+    CodecError, ImageFormat, ImageInfo, Metadata, Orientation, ResourceLimits, SharedPulse,
     Unsupported, UnsupportedOperation,
 };
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSlice};
@@ -102,7 +102,7 @@ impl EncodeJob for MinEncodeJob {
     // is `UnsupportedOperation`, not the job's error.
     type AnimationFrameEnc = ();
 
-    fn with_stop(self, _stop: StopToken) -> Self {
+    fn with_pulse(self, _stop: SharedPulse) -> Self {
         self
     }
     fn with_limits(self, _limits: ResourceLimits) -> Self {
@@ -191,7 +191,7 @@ impl<'a> DecodeJob<'a> for MinDecodeJob {
     type StreamDec = Unsupported<At<CodecError>>;
     type AnimationFrameDec = Unsupported<At<CodecError>>;
 
-    fn with_stop(self, _stop: StopToken) -> Self {
+    fn with_pulse(self, _stop: SharedPulse) -> Self {
         self
     }
     fn with_limits(self, _limits: ResourceLimits) -> Self {

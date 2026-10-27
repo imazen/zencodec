@@ -80,7 +80,7 @@ fn conversion_policy_selects_only_qualified_choices_and_keeps_source_facts() {
             &offers,
             &mut use_preset,
             preset,
-            &enough::Unstoppable,
+            &zencodec::how_far::NoPulse,
         )
         .unwrap();
         assert_eq!(index, expected);
@@ -100,7 +100,7 @@ fn conversion_policy_selects_only_qualified_choices_and_keeps_source_facts() {
             &[assumed],
             &mut use_preset,
             PolicySet::new().allow_assumed_chroma_siting(true),
-            &enough::Unstoppable
+            &zencodec::how_far::NoPulse
         )
         .is_err()
     );
@@ -110,7 +110,7 @@ fn conversion_policy_selects_only_qualified_choices_and_keeps_source_facts() {
             &[extended],
             &mut use_preset,
             PolicySet::new().with_workspace_limit(4095),
-            &enough::Unstoppable
+            &zencodec::how_far::NoPulse
         )
         .is_err()
     );
@@ -120,7 +120,7 @@ fn conversion_policy_selects_only_qualified_choices_and_keeps_source_facts() {
             source,
             &mut use_preset,
             PolicySet::new().require_extended_range(true),
-            &enough::Unstoppable
+            &zencodec::how_far::NoPulse
         )
         .is_err()
     );
@@ -268,11 +268,12 @@ fn missing_planes_and_invalid_canvas_refuse_before_exposing_samples() {
 
 mod publication {
     use super::*;
-    use enough::{Stop, StopReason, Unstoppable};
+    use enough::{Stop, StopReason};
     use std::{
         convert::Infallible,
         sync::atomic::{AtomicBool, Ordering},
     };
+    use zencodec::how_far::NoPulse;
     use zencodec::operation::{
         Decision, DecisionCode, DecisionContext, Decline, MetadataTransfer, PolicySet, Question,
         Selection, resolve_image,
@@ -309,7 +310,7 @@ mod publication {
                 Ok(Decision::choose(choices.first().unwrap()))
             },
             PolicySet::new(),
-            &Unstoppable,
+            &NoPulse,
         )
         .unwrap();
         assert!(owner.upgrade().is_some());
@@ -334,7 +335,7 @@ mod publication {
                 Ok(Decision::UsePreset)
             },
             PolicySet::new(),
-            &Unstoppable,
+            &NoPulse,
         )
         .unwrap();
         drop(first);
@@ -353,7 +354,7 @@ mod publication {
                         }
                     },
                     PolicySet::new(),
-                    &Unstoppable,
+                    &NoPulse,
                 )
             }));
             assert!(owner.upgrade().is_none());
@@ -407,7 +408,7 @@ mod publication {
                     Ok(Decision::UsePreset)
                 },
                 PolicySet::new(),
-                &stop,
+                &zencodec::how_far::StopOnly::borrowed(&stop),
             )
             .unwrap_err();
             assert_eq!(called, !pre_cancelled);
@@ -432,7 +433,7 @@ mod publication {
                     panic!("mandatory admission must refuse before callback")
                 },
                 preset,
-                &Unstoppable,
+                &NoPulse,
             )
             .unwrap_err();
             assert!(owner.upgrade().is_none());
@@ -565,7 +566,7 @@ fn converted_frame_adoption_separates_source_codes_and_releases_native_storage()
             Ok(Decision::UsePreset)
         },
         PolicySet::new(),
-        &enough::Unstoppable,
+        &zencodec::how_far::NoPulse,
     )
     .unwrap()
     .into_output();

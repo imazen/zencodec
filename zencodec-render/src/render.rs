@@ -115,8 +115,8 @@ fn fail(stage: RenderStage, cause: impl Into<Cause>) -> At<RenderFailure> {
         cause: cause.into(),
     })
 }
-fn check(stop: &dyn Stop) -> Result<(), Cause> {
-    stop.check()
+fn check(pulse: &dyn zencodec::Pulse) -> Result<(), Cause> {
+    pulse.check()
         .map_err(|reason| At::wrap(CodecError::new(None, reason.into())).into())
 }
 
@@ -202,8 +202,8 @@ impl<'a> Renderer<'a> {
         images: &mut CheckedCollection<C, R>,
         image: &ImageId,
     ) -> Result<Outcome<ImageOutput>, At<CollectionOperationError>> {
-        images.decode_with(image, &ImageRequest::new(), |held, stop| {
-            self.apply(held, stop)
+        images.decode_with(image, &ImageRequest::new(), |held, pulse| {
+            self.apply(held, pulse)
         })
     }
 
@@ -213,14 +213,14 @@ impl<'a> Renderer<'a> {
         image: ImageOutput,
         resolver: &mut R,
         preset: PolicySet,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<Outcome<ImageOutput>, At<RenderFailure>> {
-        let output = self.apply(image, stop)?;
-        resolve_image(output, resolver, preset, stop).map_err(|e| fail(RenderStage::Publication, e))
+        let output = self.apply(image, pulse)?;
+        resolve_image(output, resolver, preset, pulse).map_err(|e| fail(RenderStage::Publication, e))
     }
 
-    fn apply(&self, image: ImageOutput, stop: &dyn Stop) -> Result<ImageOutput, At<RenderFailure>> {
-        check(stop).map_err(|e| fail(RenderStage::ColorPlan, e))?;
+    fn apply(&self, image: ImageOutput, pulse: &dyn zencodec::Pulse) -> Result<ImageOutput, At<RenderFailure>> {
+        check(pulse).map_err(|e| fail(RenderStage::ColorPlan, e))?;
         // Prepare the actual transform before allocating projected samples.
         let mut plan = image
             .with_pixels(|pixels| {
@@ -241,7 +241,7 @@ impl<'a> Renderer<'a> {
             })
             .map_err(|e| fail(RenderStage::ColorPlan, e))?
             .map_err(|e| fail(RenderStage::ColorPlan, e))?;
-        let projected = crate::geometry::project(&image, self.request.region, &self.storage, stop)
+        let projected = crate::geometry::project(&image, self.request.region, &self.storage, pulse)
             .map_err(|e| fail(RenderStage::Geometry, e))?;
         // Do not retain native uncompressed color while preparing/converting a
         // replacement. Independently held caller clones remain charged.
@@ -261,7 +261,7 @@ impl<'a> Renderer<'a> {
             projected
         } else {
             let color = projected
-                .with_pixels(|pixels| self.convert(pixels, &mut plan, stop))
+                .with_pixels(|pixels| self.convert(pixels, &mut plan, pulse))
                 .map_err(|e| fail(RenderStage::Color, e))?
                 .map_err(|e| fail(RenderStage::Color, e))?;
             projected
@@ -275,7 +275,7 @@ impl<'a> Renderer<'a> {
         &self,
         source: PixelSlice<'_>,
         plan: &mut OutputPlan,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<Color, Cause> {
         let descriptor = plan.output_descriptor();
         let (width, rows) = (source.width(), source.rows());
@@ -287,15 +287,15 @@ impl<'a> Renderer<'a> {
         let bytes = stride
             .checked_mul(rows as usize)
             .ok_or(StorageError::SizeOverflow)?;
-        check(stop)?;
+        check(pulse)?;
         plan.prepare(width)?;
-        check(stop)?;
+        check(pulse)?;
         let mut data = self.storage.filled(bytes / 8, 0xa5a5_a5a5_a5a5_a5a5u64)?;
         let mut context = None;
         // Check cancellation between rows. Partially written storage remains
         // private and drops on failure; no resolver observes a partial image.
         for y in 0..rows {
-            check(stop)?;
+            check(pulse)?;
             let offset = y as usize * stride;
             let destination = PixelSliceMut::new(
                 &mut bytemuck::cast_slice_mut(data.as_mut_slice())[offset..offset + stride],
@@ -307,7 +307,7 @@ impl<'a> Renderer<'a> {
             let converted = plan.convert_rows(source.crop_view(0, y, width, 1), destination)?;
             context = converted.color_context().cloned();
         }
-        check(stop)?;
+        check(pulse)?;
         Ok(Color {
             data: data.freeze(),
             width,

@@ -25,7 +25,7 @@ use crate::StopToken;
 use crate::estimate::{ComputeEnvironment, ImageCharacteristics, ResourceEstimate};
 use crate::format::ImageFormat;
 use crate::{EncodeCapabilities, EncodeOutput, Metadata, ResourceLimits};
-use enough::Stop;
+
 use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 
 use super::BoxedError;
@@ -41,7 +41,7 @@ use super::encoding::{EncodeJob, EncoderConfig};
 /// Wraps [`Encoder`] for dyn dispatch. Produced by
 /// [`DynEncodeJob::into_encoder`].
 ///
-/// Encoders may borrow job-scoped data (stop tokens, metadata) so they
+/// Encoders may borrow job-scoped data (pulse tokens, metadata) so they
 /// are not guaranteed `'static`. Attach codec-specific output data via
 /// [`EncodeOutput::with_extras`](crate::EncodeOutput::with_extras) instead
 /// of downcasting.
@@ -288,7 +288,7 @@ pub trait DynAnimationFrameEncoder: Send {
         &mut self,
         pixels: PixelSlice<'_>,
         duration_ms: u32,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<(), BoxedError>;
 
     /// Push with destination-aware rounding and return the actual duration.
@@ -297,9 +297,9 @@ pub trait DynAnimationFrameEncoder: Send {
         &mut self,
         pixels: PixelSlice<'_>,
         duration: crate::animation::FrameDuration,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<crate::animation::FrameDuration, BoxedError> {
-        self.push_frame_exact(pixels, duration, stop)?;
+        self.push_frame_exact(pixels, duration, pulse)?;
         Ok(duration)
     }
 
@@ -309,13 +309,16 @@ pub trait DynAnimationFrameEncoder: Send {
         &mut self,
         _pixels: PixelSlice<'_>,
         _duration: crate::animation::FrameDuration,
-        _stop: Option<&dyn Stop>,
+        _pulse: Option<&dyn crate::Pulse>,
     ) -> Result<(), BoxedError> {
         Err(Box::new(crate::UnsupportedOperation::AnimationTiming))
     }
 
     /// Finalize animation. Returns encoded output.
-    fn finish(self: Box<Self>, stop: Option<&dyn Stop>) -> Result<EncodeOutput, BoxedError>;
+    fn finish(
+        self: Box<Self>,
+        pulse: Option<&dyn crate::Pulse>,
+    ) -> Result<EncodeOutput, BoxedError>;
 }
 
 impl core::fmt::Debug for dyn DynAnimationFrameEncoder + '_ {
@@ -370,10 +373,10 @@ impl<F: AnimationFrameEncoder + Send + 'static> DynAnimationFrameEncoder
         &mut self,
         pixels: PixelSlice<'_>,
         duration_ms: u32,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<(), BoxedError> {
         self.0
-            .push_frame(pixels, duration_ms, stop)
+            .push_frame(pixels, duration_ms, pulse)
             .map_err(|e| Box::new(e) as BoxedError)
     }
 
@@ -381,10 +384,10 @@ impl<F: AnimationFrameEncoder + Send + 'static> DynAnimationFrameEncoder
         &mut self,
         pixels: PixelSlice<'_>,
         duration: crate::animation::FrameDuration,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<crate::animation::FrameDuration, BoxedError> {
         self.0
-            .push_frame_timed(pixels, duration, stop)
+            .push_frame_timed(pixels, duration, pulse)
             .map_err(|e| Box::new(e) as BoxedError)
     }
 
@@ -392,15 +395,18 @@ impl<F: AnimationFrameEncoder + Send + 'static> DynAnimationFrameEncoder
         &mut self,
         pixels: PixelSlice<'_>,
         duration: crate::animation::FrameDuration,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<(), BoxedError> {
         self.0
-            .push_frame_exact(pixels, duration, stop)
+            .push_frame_exact(pixels, duration, pulse)
             .map_err(|e| Box::new(e) as BoxedError)
     }
 
-    fn finish(self: Box<Self>, stop: Option<&dyn Stop>) -> Result<EncodeOutput, BoxedError> {
-        self.0.finish(stop).map_err(|e| Box::new(e) as BoxedError)
+    fn finish(
+        self: Box<Self>,
+        pulse: Option<&dyn crate::Pulse>,
+    ) -> Result<EncodeOutput, BoxedError> {
+        self.0.finish(pulse).map_err(|e| Box::new(e) as BoxedError)
     }
 }
 
@@ -416,12 +422,13 @@ impl<F: AnimationFrameEncoder + Send + 'static> DynAnimationFrameEncoder
 /// [`into_animation_frame_encoder`](DynEncodeJob::into_animation_frame_encoder).
 pub trait DynEncodeJob {
     /// Set cooperative cancellation token.
-    fn set_stop(&mut self, stop: StopToken);
-
-    /// Set progress and cancellation pulse.
-    fn set_pulse(&mut self, pulse: how_far::SharedPulse) {
-        self.set_stop(crate::StopToken::new(pulse));
+    #[deprecated(note = "use set_pulse; wrap cancellation-only controls in how_far::StopOnly")]
+    fn set_stop(&mut self, pulse: StopToken) {
+        self.set_pulse(how_far::SharedPulse::new(how_far::StopOnly::new(pulse)));
     }
+
+    /// Retain all operation control capabilities through type erasure.
+    fn set_pulse(&mut self, pulse: how_far::SharedPulse);
 
     /// Override resource limits.
     fn set_limits(&mut self, limits: ResourceLimits);
@@ -554,10 +561,6 @@ where
     J::Enc: Encoder + Send,
     J::AnimationFrameEnc: AnimationFrameEncoder,
 {
-    fn set_stop(&mut self, stop: StopToken) {
-        self.try_apply(|job| job.with_stop(stop));
-    }
-
     fn set_pulse(&mut self, pulse: how_far::SharedPulse) {
         self.try_apply(|job| job.with_pulse(pulse));
     }
@@ -720,7 +723,7 @@ pub trait DynEncoderConfig: Send + Sync {
     ///
     /// The job owns its config (cloned). The `'static` bound means
     /// the job can outlive the config reference — the only remaining
-    /// lifetime dependency is the stop token (set via `set_stop`).
+    /// lifetime dependency is the pulse control (set via `set_pulse`).
     fn dyn_job(&self) -> Box<dyn DynEncodeJob + 'static>;
 }
 
@@ -889,7 +892,7 @@ mod timing_dispatch_tests {
             &mut self,
             _: PixelSlice<'_>,
             _: u32,
-            _: Option<&dyn Stop>,
+            _: Option<&dyn crate::Pulse>,
         ) -> Result<(), Self::Error> {
             panic!("rational dispatch must not call the legacy path")
         }
@@ -897,7 +900,7 @@ mod timing_dispatch_tests {
             &mut self,
             _: PixelSlice<'_>,
             duration: FrameDuration,
-            _: Option<&dyn Stop>,
+            _: Option<&dyn crate::Pulse>,
         ) -> Result<(), Self::Error> {
             let ticks = duration
                 .ticks_at(100)
@@ -911,17 +914,17 @@ mod timing_dispatch_tests {
             &mut self,
             pixels: PixelSlice<'_>,
             duration: FrameDuration,
-            stop: Option<&dyn Stop>,
+            pulse: Option<&dyn crate::Pulse>,
         ) -> Result<FrameDuration, Self::Error> {
             let mut next = self.quantizer;
             let encoded = next
                 .quantize(duration)
                 .map_err(|_| UnsupportedOperation::AnimationTiming)?;
-            self.push_frame_exact(pixels, encoded, stop)?;
+            self.push_frame_exact(pixels, encoded, pulse)?;
             self.quantizer = next;
             Ok(encoded)
         }
-        fn finish(self, _: Option<&dyn Stop>) -> Result<EncodeOutput, Self::Error> {
+        fn finish(self, _: Option<&dyn crate::Pulse>) -> Result<EncodeOutput, Self::Error> {
             Ok(EncodeOutput::new(self.accepted, ImageFormat::Gif))
         }
     }

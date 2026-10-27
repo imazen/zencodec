@@ -239,7 +239,8 @@ impl EncodeCapabilities {
     pub const fn cicp_safe_sole_carrier(&self) -> bool {
         self.cicp_safe_sole_carrier
     }
-    /// Whether `with_stop` on encode jobs is respected (not a no-op).
+    /// Whether encode jobs honor cancellation from `with_pulse`.
+    /// This flag does not promise progress reports.
     pub const fn stop(&self) -> bool {
         self.stop
     }
@@ -685,7 +686,8 @@ impl DecodeCapabilities {
     pub const fn cicp(&self) -> bool {
         self.cicp
     }
-    /// Whether `with_stop` on decode jobs is respected (not a no-op).
+    /// Whether decode jobs honor cancellation from `with_pulse`.
+    /// This flag does not promise progress reports.
     pub const fn stop(&self) -> bool {
         self.stop
     }

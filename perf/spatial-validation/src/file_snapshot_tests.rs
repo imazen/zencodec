@@ -6,7 +6,7 @@ use crate::{
     tiff_items::TiffCollection,
 };
 use std::fs::File;
-use zencodec::{StopToken, Unstoppable, operation::PolicySet};
+use zencodec::{SharedPulse, NoPulse, operation::PolicySet};
 use zencodec_io::FileReadAt;
 
 type Disk = Checked<TiffCollection<BufReader<ReadAtReader<FileReadAt>>>, PolicySet>;
@@ -26,7 +26,7 @@ fn create(path: &Path, data: &[u8]) -> File {
     file
 }
 fn open(source: FileReadAt, buffer: usize) -> Disk {
-    Checked::open(StopToken::new(Unstoppable), PolicySet::new(), |stop| {
+    Checked::open(SharedPulse::default(), PolicySet::new(), |stop| {
         TiffCollection::open_with_stop(
             BufReader::with_capacity(buffer, ReadAtReader::new(source)),
             Composition::Composited,

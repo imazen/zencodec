@@ -2,7 +2,7 @@ use crate::{
     fixtures::*,
     image_output::{ImageOutput, Meaning, OutputError, Row},
 };
-use enough::Unstoppable;
+use zencodec::how_far::NoPulse;
 use std::sync::Arc;
 use zenavif::media::Av1VideoDecoder;
 use zencodec_media::{
@@ -30,7 +30,7 @@ fn output_native_av1_keeps_mapping_ownership_codes_roles_and_timing() {
             let mut native_settings = rav1d_safe::Settings::default();
             native_settings.threads = 1;
             let mut decoder = Av1VideoDecoder::with_settings(native_settings).unwrap();
-            let frames = decode(&mut decoder, &config, &packets, &Unstoppable).unwrap();
+            let frames = decode(&mut decoder, &config, &packets, &NoPulse).unwrap();
             assert_eq!(frames.len(), inputs.len());
             oracle(
                 root,
@@ -73,7 +73,7 @@ fn output_native_av1_keeps_mapping_ownership_codes_roles_and_timing() {
                         Ok(zencodec::operation::Decision::choose(choices.first().unwrap()))
                     },
                     zencodec::operation::PolicySet::new(),
-                    &Unstoppable,
+                    &NoPulse,
                 ).unwrap().into_output();
                 let retained = image.clone();
                 drop(image);

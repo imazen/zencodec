@@ -85,7 +85,7 @@ pub fn resolve_image<R: PolicyResolver + ?Sized>(
     image: ImageOutput,
     resolver: &mut R,
     preset: PolicySet,
-    stop: &dyn enough::Stop,
+    pulse: &dyn crate::Pulse,
 ) -> Result<Outcome<ImageOutput>, At<PolicyFailure>> {
     let facts = ImageFacts::new(&image);
     let (_, record) = policy::choose(
@@ -99,7 +99,7 @@ pub fn resolve_image<R: PolicyResolver + ?Sized>(
         Selection::Image,
         resolver,
         preset,
-        stop,
+        pulse,
     )?;
     let mut report = super::OperationReport::default();
     report.record(record);

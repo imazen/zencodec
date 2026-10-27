@@ -1,6 +1,6 @@
 //! Executing fixed-output witness: retained YCbCr plan + native AV1 encoder.
 use crate::{epoch_route::Candidate, fixtures::*};
-use enough::Unstoppable;
+use zencodec::how_far::NoPulse;
 use std::{
     cell::Cell,
     error::Error,
@@ -51,7 +51,7 @@ impl<R: PolicyResolver> ConversionRoute for Candidate<R> {
             (target, input.timing()),
             Some(offer),
             execute,
-            &Unstoppable,
+            &NoPulse,
         )
     }
 }
@@ -69,7 +69,7 @@ impl<
         offer: FrameConversionOffer,
         execute: impl FnOnce() -> Result<Frame, Cause>,
     ) -> Result<(), Cause> {
-        self.push_converted(input.clone(), target, offer, |_| execute(), &Unstoppable)
+        self.push_converted(input.clone(), target, offer, |_| execute(), &NoPulse)
             .map_err(Into::into)
     }
 }
@@ -216,7 +216,7 @@ pub(crate) fn sources() -> Vec<Frame> {
             &mut Av1VideoDecoder::new().unwrap(),
             &config,
             &packets,
-            &Unstoppable,
+            &NoPulse,
         )
         .unwrap();
         result.append(&mut decoded);
@@ -237,7 +237,7 @@ fn coupled_native_retiming_keeps_source_provenance_and_fixed_output_clock() {
         &mut Av1VideoDecoder::new().unwrap(),
         &config,
         &packets,
-        &Unstoppable,
+        &NoPulse,
     )
     .unwrap();
     let clock = TimeBase::hz(90_000).unwrap();
@@ -292,7 +292,7 @@ fn coupled_native_retiming_keeps_source_provenance_and_fixed_output_clock() {
                     expected.push(retimed.clone());
                     Ok(retimed)
                 },
-                &Unstoppable,
+                &NoPulse,
             )
             .unwrap();
         if i == 0 {
@@ -302,12 +302,12 @@ fn coupled_native_retiming_keeps_source_provenance_and_fixed_output_clock() {
                         assert_eq!(config.time_base, clock);
                         Ok(())
                     },
-                    &Unstoppable,
+                    &NoPulse,
                 )
                 .unwrap();
         }
     }
-    let segments = operation.finish(&Unstoppable).unwrap();
+    let segments = operation.finish(&NoPulse).unwrap();
     assert_eq!(segments.len(), 1);
     assert_eq!(calls.get(), inputs.len());
     assert_eq!(executions.get(), inputs.len());
@@ -392,12 +392,12 @@ fn coupled_native_changes_convert_to_one_committed_encoder_with_disclosed_losses
                         header = Some(config.clone());
                         Ok(())
                     },
-                    &Unstoppable,
+                    &NoPulse,
                 )
                 .unwrap();
         }
     }
-    let segments = operation.finish(&Unstoppable).unwrap();
+    let segments = operation.finish(&NoPulse).unwrap();
     assert_eq!(segments.len(), 1);
     assert_eq!(calls.get(), 3);
     assert_eq!(executions.get(), 3);
@@ -507,8 +507,8 @@ fn coupled_native_conversion_failure_and_target_drift_are_terminal_after_selecti
             storage.clone(),
             live.clone(),
         );
-        operation.push(&inputs[0], &Unstoppable).unwrap();
-        operation.publish_header(|_| Ok(()), &Unstoppable).unwrap();
+        operation.push(&inputs[0], &NoPulse).unwrap();
+        operation.publish_header(|_| Ok(()), &NoPulse).unwrap();
         let target = inputs[0].interpretation();
         let mut conversion = FrameConversionOffer::new(FrameFacts::new(target, inputs[1].timing()));
         conversion.preserves_samples = false;
@@ -527,7 +527,7 @@ fn coupled_native_conversion_failure_and_target_drift_are_terminal_after_selecti
                         Err(std::io::Error::other("conversion failed after policy").into())
                     }
                 },
-                &Unstoppable,
+                &NoPulse,
             )
             .unwrap_err();
         assert_eq!(
@@ -550,6 +550,6 @@ fn coupled_native_conversion_failure_and_target_drift_are_terminal_after_selecti
         assert!(operation.is_failed());
         assert_eq!(live.load(std::sync::atomic::Ordering::SeqCst), 0);
         assert_eq!(storage.reserved_bytes(), 0);
-        assert!(operation.push(&inputs[0], &Unstoppable).is_err());
+        assert!(operation.push(&inputs[0], &NoPulse).is_err());
     }
 }

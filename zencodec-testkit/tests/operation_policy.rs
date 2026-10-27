@@ -8,7 +8,7 @@ use std::{
     },
 };
 use zencodec::{
-    At, CodecSet, ImageFormat, Metadata, ResourceLimits, StopToken, UnsupportedOperation,
+    At, CodecSet, ImageFormat, Metadata, ResourceLimits, SharedPulse, UnsupportedOperation,
     encode::{EncodeJob, EncodeOutput, Encoder, EncoderConfig, Fidelity},
     operation::{
         Decision, DecisionCode, Decline, EncodeRequest, OperationError, PolicyFailure, PolicySet,
@@ -80,7 +80,7 @@ impl EncodeJob for Job {
     type Enc = Enc;
     type AnimationFrameEnc = ();
     // Deliberately uncooperative: the outer operation must check cancellation.
-    fn with_stop(self, _: StopToken) -> Self {
+    fn with_pulse(self, _: SharedPulse) -> Self {
         self
     }
     fn with_limits(self, _: ResourceLimits) -> Self {
@@ -143,7 +143,9 @@ fn setup() -> (Arc<Counts>, CodecSet, TestImage) {
             counts: counts.clone(),
             target: None,
         })
-        .with_stop(StopToken::new(Stop(counts.clone())));
+        .with_pulse(SharedPulse::new(zencodec::how_far::StopOnly::new(Stop(
+            counts.clone(),
+        ))));
     (counts, set, TestImage::rgb8_gradient(3, 2))
 }
 
@@ -199,7 +201,9 @@ fn transferable_preparation_checks_required_policy_and_cancellation() {
             counts: counts.clone(),
             target: None,
         })
-        .with_stop(StopToken::new(Stop(counts.clone())))
+        .with_pulse(SharedPulse::new(zencodec::how_far::StopOnly::new(Stop(
+            counts.clone(),
+        ))))
         .with_encode_policy(EncodePolicy::none().with_strict(true));
     let error = EncodeRequest::new(ImageFormat::Pnm)
         .with_fidelity(Fidelity::Lossless)
@@ -254,7 +258,7 @@ impl EncodeJob for ThreadAffineJob {
     type Error = RefError;
     type Enc = Enc;
     type AnimationFrameEnc = ();
-    fn with_stop(self, _: StopToken) -> Self {
+    fn with_pulse(self, _: SharedPulse) -> Self {
         self
     }
     fn with_limits(self, _: ResourceLimits) -> Self {

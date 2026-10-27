@@ -5,7 +5,7 @@
 //! writes at the current end become pending bytes; earlier offsets become
 //! retained patches (seek-back only). Index and checksum scratch are encoder
 //! retention, kept here under an explicit cap, never in the driver.
-use enough::Stop;
+
 use imij::stream_encode::{
     BoundedLossySession, BoundedLossyStep, BoundedStream, LossyUnitIndex, StreamEncodeError,
 };
@@ -295,7 +295,7 @@ impl MultiPassEncoder for ImiBounded {
     fn pull_rows(
         &mut self,
         rows: &mut dyn PassRows,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<PassProgress, ImiError> {
         let cap = self.scratch_cap;
         let stats = &mut self.stats;

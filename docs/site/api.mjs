@@ -20,7 +20,7 @@ export const api = {
   operationPreparation: {path:'zencodec::operation::EncodeRequest (adapter)',file:'src/operation.rs',scope:'impl EncodeRequest {',methods:['with_policy_defaults','prepare','prepare_send']},
   operationResolver: {path:'zencodec::operation::PolicyResolver',file:'src/operation/policy.rs',scope:'pub trait PolicyResolver',methods:['resolve']},
   operationPreset: {path:'zencodec::operation::PolicySet',file:'src/operation/policy.rs',scope:'impl PolicySet {',methods:['new','prefer_lossless','require_metadata','allow_opaque_profiles','with_workspace_limit','allow_assumed_chroma_siting','require_extended_range','require_output_schedule','with_output_wait_limit']},
-  operationRegistration: {path:'zencodec::CodecSet',file:'src/set.rs',scope:'impl CodecSet {',methods:['new','with_decoder','with_send_encoder','with_limits','with_stop']},
+  operationRegistration: {path:'zencodec::CodecSet',file:'src/set.rs',scope:'impl CodecSet {',methods:['new','with_decoder','with_send_encoder','with_limits','with_pulse','pulse']},
   operationControl: {path:'zencodec::decode::ControlledIncrementalDecode',file:'src/traits/control.rs',scope:'pub trait ControlledIncrementalDecode: IncrementalDecode',methods:['step_controlled','resume']},
   framePolicy: {path:'zencodec_media::policy::PolicyDecoder',file:'zencodec-media/src/policy.rs',scope:'impl<D, R> PolicyDecoder<D, R>',methods:['new','with_policy_set','report','is_failed']},
   imageConversion: {path:'zencodec::operation::resolve_image_conversion',file:'src/operation/conversion.rs',methods:['resolve_image_conversion']},
@@ -99,7 +99,7 @@ export const api = {
 
   checkedDecodePolicy: {path:"zencodec::decode::DecodeJob<'a>",file:'src/traits/decoding.rs',scope:"pub trait DecodeJob<'a>",methods:['try_set_policy','try_with_policy'],associated:false},
   checkedEncodePolicy: {path:'zencodec::encode::EncodeJob',file:'src/traits/encoding.rs',scope:'pub trait EncodeJob: Sized',methods:['try_set_policy','try_with_policy'],associated:false},
-  rewriteRequest: {path:'zencodec::metadata_rewrite::Request',file:'src/metadata_rewrite.rs',scope:"impl<'a> Request<'a>",methods:['new','with_policy']},
+  rewriteRequest: {path:'zencodec::metadata_rewrite::RewriteRequest',file:'src/metadata_rewrite.rs',scope:"impl<'a> RewriteRequest<'a>",methods:['new','with_policy']},
   rewritePlan: {path:'zencodec::metadata_rewrite::Plan',file:'src/metadata_rewrite.rs',scope:"impl<'a> Plan<'a>",methods:['report','chunks','output_len','to_vec']},
   disclosurePrepared: {path:'prototype::Prepared (private)',file:'perf/io-validation/src/policy_disclosure.rs',scope:"impl<'a> Prepared<'a>",methods:['opaque','xmp','resolve']},
   policyGate: {path:'prototype::Gate (private)',file:'perf/io-validation/src/policy_stream.rs',scope:'impl Gate {',methods:['discover','resolve','before_effect']},

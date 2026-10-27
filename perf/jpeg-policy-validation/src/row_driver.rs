@@ -90,7 +90,7 @@ impl Source for Rows {
         &mut self,
         first: u32,
         mut rows: PixelSliceMut<'_>,
-        _: &dyn Stop,
+        _: &dyn zencodec::Pulse,
     ) -> io::Result<()> {
         assert_eq!(first, self.calls.get());
         if first >= 16 {
@@ -287,7 +287,7 @@ fn public_row_driver_raster_adapter_preserves_strides_and_never_substitutes_sche
                     },
                     Options::new(StorageBudget::new(1 << 20, 1024), 1 << 20)
                         .with_policy_set(policy),
-                    &zencodec::enough::Unstoppable,
+                    &zencodec::how_far::NoPulse,
                 );
                 if schedule == OutputSchedule::Live && (progressive || optimized) {
                     assert_eq!(asked, 0, "mandatory admission precedes callback");
@@ -323,7 +323,7 @@ fn public_row_driver_preserves_attached_color_context_on_every_native_push() {
         &mut bytes,
         PolicySet::new(),
         Options::new(StorageBudget::new(1 << 20, 1024), 1 << 20),
-        &zencodec::enough::Unstoppable,
+        &zencodec::how_far::NoPulse,
     )
     .unwrap();
     assert!(!live.get());
@@ -404,7 +404,7 @@ fn public_row_driver_revalidates_source_across_policy_and_writer_callbacks() {
                 OutputSource::PullRows
             }
         }
-        fn read_rows(&mut self, _: u32, _: PixelSliceMut<'_>, _: &dyn Stop) -> io::Result<()> {
+        fn read_rows(&mut self, _: u32, _: PixelSliceMut<'_>, _: &dyn zencodec::Pulse) -> io::Result<()> {
             self.reads.set(self.reads.get() + 1);
             Err(io::Error::other(
                 "source must not run after preparation changed",
@@ -462,7 +462,7 @@ fn public_row_driver_revalidates_source_across_policy_and_writer_callbacks() {
             },
             Options::new(StorageBudget::new(1 << 20, 1024), 1 << 20)
                 .with_policy_set(PolicySet::new().require_output_schedule(OutputSchedule::Live)),
-            &zencodec::enough::Unstoppable,
+            &zencodec::how_far::NoPulse,
         )
         .unwrap_err();
         if phase == "policy" {

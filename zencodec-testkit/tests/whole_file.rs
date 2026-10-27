@@ -63,7 +63,7 @@ fn header_is_reported_before_the_body_arrives() {
     let data = file();
     let mut dec = decoder();
     let mut sink = CollectSink::new();
-    let unstoppable = zencodec::Unstoppable;
+    let unstoppable = &zencodec::NoPulse;
     // Offer a prefix that holds the header but not the pixels.
     let prefix = &data[..data.len() / 2];
     let mut saw_header = false;
@@ -111,18 +111,24 @@ fn cancellation_is_terminal() {
     let stopper = Flag::default();
     let mut dec = decoder();
     let mut sink = CollectSink::new();
-    let _ = dec.step(Input::empty(), &mut sink, &stopper).unwrap();
+    let _ = dec
+        .step(
+            Input::empty(),
+            &mut sink,
+            &zencodec::how_far::StopOnly::borrowed(&stopper),
+        )
+        .unwrap();
     stopper.0.store(true, std::sync::atomic::Ordering::SeqCst);
     assert!(matches!(
         dec.step(
             Input::new(0, &data).with_total_len(data.len() as u64),
             &mut sink,
-            &stopper
+            &zencodec::how_far::StopOnly::borrowed(&stopper)
         ),
         Err(StepError::Cancelled(_))
     ));
     assert!(matches!(
-        dec.step(Input::empty(), &mut sink, &zencodec::Unstoppable),
+        dec.step(Input::empty(), &mut sink, &zencodec::NoPulse),
         Err(StepError::Finished)
     ));
 }

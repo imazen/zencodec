@@ -1,6 +1,7 @@
 //! Native witness for output transitions. Fixed AV1 settings per segment;
 //! finish/drop native encoders before exposing admitted compressed output.
-use enough::{Stop, Unstoppable};
+use enough::{Stop, };
+use zencodec::how_far::NoPulse;
 use std::{
     error::Error,
     sync::{
@@ -161,7 +162,7 @@ impl<R: PolicyResolver> Candidate<R> {
     pub fn publish_header(
         &mut self,
         publish: impl FnOnce(&CodecConfig) -> Result<(), Cause>,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<(), Cause> {
         let state = self
             .state
@@ -182,7 +183,7 @@ impl<R: PolicyResolver> Candidate<R> {
         self.state = Some(state);
         Ok(())
     }
-    pub fn push(&mut self, frame: &Frame, stop: &dyn Stop) -> Result<(), Cause> {
+    pub fn push(&mut self, frame: &Frame, stop: &dyn zencodec::Pulse) -> Result<(), Cause> {
         self.push_route(
             frame,
             (frame.interpretation(), frame.timing()),
@@ -197,7 +198,7 @@ impl<R: PolicyResolver> Candidate<R> {
         target: (&FrameInterpretation, FrameTiming),
         conversion: Option<FrameConversionOffer>,
         execute: impl FnOnce() -> Result<Frame, Cause>,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<(), Cause> {
         self.push_route_with_destination(
             frame,
@@ -217,7 +218,7 @@ impl<R: PolicyResolver> Candidate<R> {
         conversion: Option<FrameConversionOffer>,
         prepare_destination: impl FnOnce(&CodecConfig) -> Result<(D, Option<DestinationFacts>), Cause>,
         execute: impl FnOnce() -> Result<Frame, Cause>,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<D, Cause> {
         let mut state = self
             .state
@@ -332,7 +333,7 @@ impl<R: PolicyResolver> Candidate<R> {
         self.state = Some(state);
         Ok(destination.expect("selected route retains destination").0)
     }
-    pub fn finish(mut self, stop: &dyn Stop) -> Result<Vec<Segment>, Cause> {
+    pub fn finish(mut self, stop: &dyn zencodec::Pulse) -> Result<Vec<Segment>, Cause> {
         let mut state = self
             .state
             .take()
@@ -346,7 +347,7 @@ impl<R: PolicyResolver> Candidate<R> {
     }
 }
 
-fn check(stop: &dyn Stop) -> Result<(), Cause> {
+fn check(stop: &dyn zencodec::Pulse) -> Result<(), Cause> {
     stop.check()
         .map_err(|reason| At::wrap(CodecError::new(None, reason.into())).into())
 }
@@ -384,7 +385,7 @@ fn stage(packets: &mut Vec<Packet>, packet: Packet, storage: &StorageBudget) -> 
 fn finish_segment(
     state: &mut State,
     storage: &StorageBudget,
-    stop: &dyn Stop,
+    stop: &dyn zencodec::Pulse,
 ) -> Result<(), Cause> {
     let Some(mut native) = state.native.take() else {
         return Ok(());

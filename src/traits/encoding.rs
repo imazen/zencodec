@@ -321,23 +321,15 @@ pub trait EncodeJob: Sized {
     /// thread boundaries (e.g., in pipeline `Sink` implementations).
     type AnimationFrameEnc: Sized + Send + 'static;
 
-    /// Set cooperative cancellation token.
-    ///
-    /// [`StopToken`](almost_enough::StopToken) is `Clone + Send + Sync + 'static` —
-    /// an owned, type-erased stop. Convert any `Stop + Clone + 'static` with
-    /// `stop.into_token()` or `StopToken::new(stop)`.
-    fn with_stop(self, stop: crate::StopToken) -> Self;
-
-    /// Set progress and cancellation pulse.
-    ///
-    /// [`SharedPulse`](how_far::SharedPulse) is `Clone + Send + Sync + 'static` —
-    /// an owned, type-erased pulse.
-    ///
-    /// Default implementation delegates to [`with_stop`](EncodeJob::with_stop)
-    /// via `StopToken::new(pulse)`.
-    fn with_pulse(self, pulse: how_far::SharedPulse) -> Self {
-        self.with_stop(crate::StopToken::new(pulse))
+    /// Legacy cancellation-only adapter. Prefer the complete operation pulse.
+    #[deprecated(note = "use with_pulse; wrap cancellation-only controls in how_far::StopOnly")]
+    fn with_stop(self, stop: crate::StopToken) -> Self {
+        self.with_pulse(how_far::SharedPulse::new(how_far::StopOnly::new(stop)))
     }
+
+    /// Retain progress, cancellation, phase planning and sharing for this job.
+    /// Codecs must not erase this to a cancellation-only token.
+    fn with_pulse(self, pulse: how_far::SharedPulse) -> Self;
 
     /// Override resource limits for this operation.
     fn with_limits(self, limits: ResourceLimits) -> Self;

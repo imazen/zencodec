@@ -1,5 +1,5 @@
 #![cfg(feature = "rewrite")]
-use zencodec::metadata_rewrite::{Error, Request};
+use zencodec::metadata_rewrite::{Error, RewriteRequest};
 use zenmeta::rewrite::Context;
 
 #[test]
@@ -7,7 +7,7 @@ fn filtering_preserves_orientation_and_rejects_corrupt_pointers() {
     let mut exif = zencodec::Exif::new(zencodec::TextEncoding::Ascii);
     exif.set_orientation(zencodec::Orientation::Rotate90);
     exif.set_artist("private artist");
-    let context = Context::new(&Request::new(b"")).unwrap();
+    let context = Context::new(&RewriteRequest::new(b"")).unwrap();
     let output = context.exif(&zenmeta::exif::serialize(&exif)).unwrap();
     let parsed = zencodec::Exif::parse(&output).unwrap();
     assert_eq!(parsed.orientation(), Some(zencodec::Orientation::Rotate90));
@@ -23,12 +23,12 @@ fn metadata_services_cannot_return_over_budget_packets() {
             &self,
             _: &[u8],
             _: usize,
-            _: &dyn zencodec::enough::Stop,
+            _: &dyn zencodec::Pulse,
         ) -> Result<Option<Vec<u8>>, Error> {
             Ok(Some(vec![0; 17]))
         }
     }
-    let request = Request::new(b"")
+    let request = RewriteRequest::new(b"")
         .with_metadata_limit(16)
         .with_services(&Expands)
         .with_xmp_editing(true);
@@ -46,7 +46,8 @@ fn cancellation_retains_deadline_reason() {
             Err(zencodec::enough::StopReason::TimedOut)
         }
     }
-    let request = Request::new(b"data").with_stop(&Deadline);
+    let pulse = zencodec::how_far::StopOnly::borrowed(&Deadline);
+    let request = RewriteRequest::new(b"data").with_pulse(&pulse);
     assert!(matches!(
         Context::new(&request),
         Err(Error::Stopped(zencodec::enough::StopReason::TimedOut))
@@ -55,11 +56,11 @@ fn cancellation_retains_deadline_reason() {
 
 #[test]
 fn preserving_xmp_needs_no_editor_and_keeps_exact_packet_bytes() {
-    let request = Request::new(b"").with_policy(zencodec::MetadataPolicy::PreserveExact);
+    let request = RewriteRequest::new(b"").with_policy(zencodec::MetadataPolicy::PreserveExact);
     let context = Context::new(&request).unwrap();
     let xml = br#"<packet unusual='retained byte for byte'/>"#;
     assert_eq!(context.xmp(xml).unwrap().as_deref(), Some(xml.as_slice()));
-    let context = Context::new(&Request::new(b"")).unwrap();
+    let context = Context::new(&RewriteRequest::new(b"")).unwrap();
     assert_eq!(context.xmp(xml).unwrap(), None);
     let bounded = request.with_metadata_limit(1);
     assert_eq!(
@@ -74,7 +75,7 @@ fn rejected_carriers_do_not_damage_the_builder() {
     use zencodec::metadata_rewrite::Action;
     use zenmeta::rewrite::PlanBuilder;
     let bytes = b"1234";
-    let request = Request::new(bytes).with_byte_limits(4, 4);
+    let request = RewriteRequest::new(bytes).with_byte_limits(4, 4);
     let context = Context::new(&request).unwrap();
     let mut builder = PlanBuilder::new();
     assert!(
@@ -102,15 +103,17 @@ fn rejected_carriers_do_not_damage_the_builder() {
 #[test]
 fn empty_and_service_requests_are_validated_by_zenmeta() {
     assert!(
-        Context::new(&Request::new(b"").with_policy(zencodec::MetadataPolicy::PreserveExact))
-            .is_ok()
+        Context::new(
+            &RewriteRequest::new(b"").with_policy(zencodec::MetadataPolicy::PreserveExact)
+        )
+        .is_ok()
     );
     assert!(matches!(
-        Context::new(&Request::new(b"").with_xmp_editing(true)),
+        Context::new(&RewriteRequest::new(b"").with_xmp_editing(true)),
         Err(Error::Unsupported(_))
     ));
     assert!(matches!(
-        Context::new(&Request::new(b"123").with_byte_limits(2, 10)),
+        Context::new(&RewriteRequest::new(b"123").with_byte_limits(2, 10)),
         Err(Error::Limit(zencodec::LimitKind::InputSize))
     ));
 }
@@ -118,8 +121,8 @@ fn empty_and_service_requests_are_validated_by_zenmeta() {
 #[test]
 fn failed_child_append_does_not_add_partial_reports() {
     use zenmeta::rewrite::PlanBuilder;
-    let parent = Context::new(&Request::new(b"123456")).unwrap();
-    let child = Context::new(&Request::new(b"abcdef")).unwrap();
+    let parent = Context::new(&RewriteRequest::new(b"123456")).unwrap();
+    let child = Context::new(&RewriteRequest::new(b"abcdef")).unwrap();
     let mut builder = PlanBuilder::new();
     builder.keep(&parent, 0..1, "prefix").unwrap();
     let mut nested = PlanBuilder::new();
@@ -134,8 +137,8 @@ fn failed_child_append_does_not_add_partial_reports() {
 #[test]
 fn equal_length_inputs_cannot_be_mixed_in_one_builder() {
     use zenmeta::rewrite::PlanBuilder;
-    let first = Context::new(&Request::new(b"123456")).unwrap();
-    let other = Context::new(&Request::new(b"abcdef")).unwrap();
+    let first = Context::new(&RewriteRequest::new(b"123456")).unwrap();
+    let other = Context::new(&RewriteRequest::new(b"abcdef")).unwrap();
     let mut builder = PlanBuilder::new();
     builder.keep(&first, 0..3, "one").unwrap();
     assert!(builder.keep(&other, 3..6, "two").is_err());
@@ -145,7 +148,7 @@ fn equal_length_inputs_cannot_be_mixed_in_one_builder() {
 #[test]
 fn replacing_context_input_cannot_bypass_input_budget() {
     let context = Context::new(
-        &Request::new(b"1")
+        &RewriteRequest::new(b"1")
             .with_byte_limits(1, 10)
             .with_policy(zencodec::MetadataPolicy::PreserveExact),
     )
@@ -172,7 +175,7 @@ fn overlapping_exif_values_obey_expanded_metadata_budget() {
     exif.push(0);
     assert!(exif.len() <= 190);
     let context = Context::new(
-        &Request::new(b"")
+        &RewriteRequest::new(b"")
             .with_metadata_limit(190)
             .with_policy(zencodec::MetadataPolicy::PreserveExact),
     )
@@ -191,7 +194,7 @@ fn overlapping_exif_values_obey_expanded_metadata_budget() {
 fn valid_nested_plan_keeps_offsets_and_bytes() {
     use zenmeta::rewrite::PlanBuilder;
     let bytes = b"abcdef";
-    let parent = Context::new(&Request::new(bytes)).unwrap();
+    let parent = Context::new(&RewriteRequest::new(bytes)).unwrap();
     let child = parent.clone().with_input(&bytes[2..]);
     let mut nested = PlanBuilder::new();
     nested.keep(&child, 0..2, "one").unwrap();
@@ -225,7 +228,7 @@ fn cancellation_prevents_calling_a_packet_service() {
             _: zencodec::metadata_rewrite::Compression,
             _: &[u8],
             _: usize,
-            _: &dyn zencodec::enough::Stop,
+            _: &dyn zencodec::Pulse,
         ) -> Result<Vec<u8>, Error> {
             self.0.fetch_add(1, Ordering::Relaxed);
             Ok(vec![])
@@ -233,8 +236,13 @@ fn cancellation_prevents_calling_a_packet_service() {
     }
     let stop = Stop(AtomicBool::new(false));
     let service = Service(AtomicUsize::new(0));
-    let context =
-        Context::new(&Request::new(b"").with_stop(&stop).with_services(&service)).unwrap();
+    let pulse = zencodec::how_far::StopOnly::borrowed(&stop);
+    let context = Context::new(
+        &RewriteRequest::new(b"")
+            .with_pulse(&pulse)
+            .with_services(&service),
+    )
+    .unwrap();
     stop.0.store(true, Ordering::Relaxed);
     assert_eq!(
         context.decompress(zencodec::metadata_rewrite::Compression::Zlib, b"packet"),
@@ -249,7 +257,7 @@ fn typed_plan_limits_distinguish_carriers_output_and_regenerated_metadata() {
     use zencodec::{LimitKind, metadata_rewrite::Action};
     use zenmeta::rewrite::PlanBuilder;
     let input = b"abcd";
-    let request = Request::new(input)
+    let request = RewriteRequest::new(input)
         .with_metadata_limit(3)
         .with_byte_limits(4, 4);
     let context = Context::new(&request).unwrap();
@@ -283,7 +291,7 @@ fn typed_plan_limits_distinguish_carriers_output_and_regenerated_metadata() {
         PlanBuilder::new().keep(&context, 0..2, "output"),
         Err(Error::Limit(LimitKind::OutputSize))
     );
-    let context = Context::new(&Request::new(input).with_carrier_limit(0)).unwrap();
+    let context = Context::new(&RewriteRequest::new(input).with_carrier_limit(0)).unwrap();
     assert_eq!(
         PlanBuilder::new().keep(&context, 0..1, "carrier"),
         Err(Error::Limit(LimitKind::MetadataCarriers))
@@ -295,7 +303,7 @@ fn nested_plan_rejects_unrelated_equal_bytes_without_mutating_parent() {
     use zenmeta::rewrite::PlanBuilder;
     let bytes = b"abcdef";
     let copied_child = bytes[2..].to_vec();
-    let parent = Context::new(&Request::new(bytes)).unwrap();
+    let parent = Context::new(&RewriteRequest::new(bytes)).unwrap();
     let child = parent.clone().with_input(&copied_child);
     let mut nested = PlanBuilder::new();
     nested.keep(&child, 0..4, "child").unwrap();

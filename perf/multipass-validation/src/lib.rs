@@ -18,7 +18,7 @@ use std::{
     os::unix::fs::FileExt,
 };
 
-use enough::Stop;
+
 use zencodec::{
     At,
     encode::{EncodeOutput, OutputTiming},
@@ -99,7 +99,7 @@ pub trait PassSource {
         &mut self,
         first: u32,
         rows: PixelSliceMut<'_>,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<(), Self::Error>;
 }
 
@@ -118,7 +118,7 @@ impl PassSource for NoSource {
     fn description(&self) -> Description {
         match *self {}
     }
-    fn read_rows(&mut self, _: u32, _: PixelSliceMut<'_>, _: &dyn Stop) -> Result<(), Self::Error> {
+    fn read_rows(&mut self, _: u32, _: PixelSliceMut<'_>, _: &dyn zencodec::Pulse) -> Result<(), Self::Error> {
         match *self {}
     }
 }
@@ -222,7 +222,7 @@ pub trait MultiPassEncoder: Sized {
     fn pull_rows(
         &mut self,
         rows: &mut dyn PassRows,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<PassProgress, Self::Error>;
     /// Bytes ready to send, as `Encoder::pending_output`.
     fn pending_output(&self) -> &[u8];
@@ -549,7 +549,7 @@ pub struct Completed {
     pub report: OperationReport,
 }
 
-fn check(stop: &dyn Stop) -> Result<(), Cause> {
+fn check(stop: &dyn zencodec::Pulse) -> Result<(), Cause> {
     stop.check()
         .map_err(|r| At::wrap(zencodec::CodecError::new(None, r.into())).into())
 }
@@ -589,7 +589,7 @@ struct Filler<'a, S: PassSource> {
     trace: Trace,
     failure: Option<(Stage, Cause)>,
     fills: u32,
-    stop: &'a dyn Stop,
+    stop: &'a dyn zencodec::Pulse,
 }
 
 impl<S: PassSource> Filler<'_, S> {
@@ -777,7 +777,7 @@ fn write_all(
     writer: &mut impl Write,
     mut bytes: &[u8],
     emitted: &mut u64,
-    stop: &dyn Stop,
+    stop: &dyn zencodec::Pulse,
 ) -> Result<(), Cause> {
     while !bytes.is_empty() {
         check(stop)?;
@@ -824,7 +824,7 @@ pub fn encode_passes<E, S, D, R, Q>(
     resolver: R,
     replay: Q,
     options: Options,
-    stop: &dyn Stop,
+    stop: &dyn zencodec::Pulse,
 ) -> Result<Completed, At<Failure>>
 where
     E: MultiPassEncoder,
@@ -861,7 +861,7 @@ fn encode_inner<E, S, D, R, Q>(
     mut resolver: R,
     mut replay: Q,
     mut options: Options,
-    stop: &dyn Stop,
+    stop: &dyn zencodec::Pulse,
 ) -> Result<Completed, At<Failure>>
 where
     E: MultiPassEncoder,

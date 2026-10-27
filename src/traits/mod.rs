@@ -46,7 +46,8 @@ pub use encoder::{AnimationFrameEncoder, Encoder};
 pub use encoding::{EncodeJob, EncoderConfig};
 pub use incremental::{
     BatchMeta, ByteRange, DynIncrementalDecoder, ErasedError, Event, Fused, IncrementalDecode,
-    IncrementalDecoderShim, Input, MetadataUpdate, Progress, Request, StepError, erase_incremental,
+    IncrementalDecoderShim, Input, InputRequest, MetadataUpdate, Progress, StepError,
+    erase_incremental,
 };
 pub use unsupported::Unsupported;
 
@@ -59,3 +60,6 @@ use alloc::boxed::Box;
 pub type BoxedError = Box<dyn core::error::Error + Send + Sync>;
 
 pub(crate) use dyn_encoding::erase_send_job;
+
+#[allow(deprecated)]
+pub use incremental::Request;

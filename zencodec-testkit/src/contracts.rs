@@ -4,7 +4,7 @@ use zencodec::animation::FrameDuration;
 use zencodec::decode::DecodePolicy;
 use zencodec::encode::DynEncoderConfig;
 use zencodec::encode::EncodePolicy;
-use zencodec::metadata_rewrite::{Error as RewriteError, Plan, Request};
+use zencodec::metadata_rewrite::{Error as RewriteError, Plan, RewriteRequest};
 use zencodec::{LimitKind, ResourceLimits};
 
 /// Verify source timing through borrowed, owned and erased animation decoders.
@@ -395,8 +395,8 @@ pub fn check_decode_policy_admission<D: DecoderConfig + 'static>(
 /// Checks plan materialization, report ranges, deterministic output, typed input,
 /// output and carrier limits, and pre-cancellation. Services are retained.
 pub fn check_metadata_rewrite<'a>(
-    request: Request<'a>,
-    rewrite: impl Fn(&Request<'a>) -> Result<Plan<'a>, RewriteError>,
+    request: RewriteRequest<'a>,
+    rewrite: impl Fn(&RewriteRequest<'a>) -> Result<Plan<'a>, RewriteError>,
     observe: impl Fn(&[u8]) -> Conformance,
 ) -> Conformance {
     const CHECK: &str = "metadata rewrite";
@@ -462,7 +462,9 @@ pub fn check_metadata_rewrite<'a>(
             Err(enough::StopReason::Cancelled)
         }
     }
-    let cancelled = request.with_stop(&Cancelled);
+    static PULSE: std::sync::LazyLock<zencodec::how_far::StopOnly<'static>> =
+        std::sync::LazyLock::new(|| zencodec::how_far::StopOnly::new(Cancelled));
+    let cancelled = request.with_pulse(&*PULSE);
     if !matches!(
         rewrite(&cancelled),
         Err(RewriteError::Cancelled) | Err(RewriteError::Stopped(enough::StopReason::Cancelled))
@@ -955,7 +957,7 @@ where
         }
         // Done repeats and takes nothing.
         let again = inc
-            .step(Input::new(0, data), &mut sink, &enough::Unstoppable)
+            .step(Input::new(0, data), &mut sink, &zencodec::how_far::NoPulse)
             .map_err(|e| fail(CHECK, format!("step after Done: {e}")))?;
         if !again.event.is_done() || again.consumed != 0 {
             return Err(fail(CHECK, format!("step after Done returned {again:?}")));
@@ -967,15 +969,19 @@ where
         let mut inc = new_dec()?;
         let mut sink = zencodec_io::CollectSink::new();
         let p = inc
-            .step(Input::empty(), &mut sink, &enough::Unstoppable)
+            .step(Input::empty(), &mut sink, &zencodec::how_far::NoPulse)
             .map_err(|e| fail(CHECK, format!("first step: {e}")))?;
         if p.event == Event::Need {
-            let wanted: Vec<zencodec::decode::Request> = inc.requested().to_vec();
+            let wanted: Vec<zencodec::decode::InputRequest> = inc.requested().to_vec();
             let first = wanted.first().and_then(|r| r.offset()).unwrap_or(0);
             let bogus = first.saturating_add(1).min(data.len() as u64);
             let tail = &data[bogus as usize..];
             let p = inc
-                .step(Input::new(bogus, tail), &mut sink, &enough::Unstoppable)
+                .step(
+                    Input::new(bogus, tail),
+                    &mut sink,
+                    &zencodec::how_far::NoPulse,
+                )
                 .map_err(|e| fail(CHECK, format!("unrequested input at {bogus} failed: {e}")))?;
             if p.consumed != 0 || p.event != Event::Need {
                 return Err(fail(
@@ -996,7 +1002,11 @@ where
         let mut input = Input::empty().with_total_len(data.len() as u64);
         let mut saw_cancel = false;
         for step in 0..budget {
-            match inc.step(input, &mut sink, &stop) {
+            match inc.step(
+                input,
+                &mut sink,
+                &zencodec::how_far::StopOnly::borrowed(&stop),
+            ) {
                 Ok(p) => {
                     if p.event.is_done() {
                         break;
@@ -1025,7 +1035,7 @@ where
             }
         }
         if saw_cancel {
-            match inc.step(input, &mut sink, &enough::Unstoppable) {
+            match inc.step(input, &mut sink, &zencodec::how_far::NoPulse) {
                 Err(StepError::Finished) => {}
                 other => {
                     return Err(fail(

@@ -173,6 +173,14 @@
 
 ### QUEUED BREAKING CHANGES
 
+- Review API: borrowed codec, I/O, policy and media controls now accept `Pulse`;
+  jobs require `with_pulse(SharedPulse)` / `set_pulse`, and collection contexts
+  retain the complete pulse. Cancellation-only setters remain deprecated adapters.
+  Native codec implementations must migrate; pinned native qualification is pending.
+- Rename the bare byte-acquisition `Request` to `InputRequest` and metadata
+  rewrite `Request` to `RewriteRequest`; retain deprecated type aliases.
+
+
 - Rename review-only `PublicationOffer::PreserveNative` to `ReturnHeld`: an
   explicitly converted image can be published through this same boundary. The
   offer promises the current held samples, not the original pre-conversion ones

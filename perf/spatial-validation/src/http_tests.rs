@@ -4,7 +4,7 @@ use crate::http_source::{Failure, FailureKind, HttpSource};
 #[test]
 fn http_snapshot_collection_limits_keep_inspection_and_smaller_children_available() {
     use crate::collection_factories::TiffFactory;
-    use zencodec::{CodecSet, ImageFormat, LimitExceeded, ResourceLimits, StopToken, Unstoppable,
+    use zencodec::{CodecSet, ImageFormat, LimitExceeded, ResourceLimits, SharedPulse, NoPulse,
         collection::OpenRequest, operation::PolicySet, source::ReadAtShim};
     let (bytes, refs) = nested_fixture(true, true, false);
     let name = "collection-limits";
@@ -14,7 +14,7 @@ fn http_snapshot_collection_limits_keep_inspection_and_smaller_children_availabl
         .with_limits(ResourceLimits::none().with_max_width(refs[1].width));
     let mut images = codecs.open_collection(
         ImageFormat::Tiff, &mut source, OpenRequest::new(Composition::Composited, 32),
-        PolicySet::new(), StopToken::new(Unstoppable),
+        PolicySet::new(), SharedPulse::default(),
     ).unwrap();
     let mut roots = images.images().unwrap();
     let root = images.next(&mut roots).unwrap().unwrap();
@@ -36,7 +36,7 @@ fn http_snapshot_collection_limits_keep_inspection_and_smaller_children_availabl
 fn http_snapshot_collection_factory_preserves_positional_selection() {
     use crate::collection_factories::TiffFactory;
     use zencodec::{CodecSet, collection::OpenRequest};
-    use zencodec::{ImageFormat, StopToken, Unstoppable, operation::PolicySet, source::ReadAtShim};
+    use zencodec::{ImageFormat, SharedPulse, NoPulse, operation::PolicySet, source::ReadAtShim};
     let (bytes, refs) = nested_fixture(true, true, false);
     let name = "collection-factory";
     write_fixture(name, &bytes);
@@ -49,7 +49,7 @@ fn http_snapshot_collection_factory_preserves_positional_selection() {
         let mut images = factories.open_collection(
             ImageFormat::Tiff, &mut source,
             OpenRequest::new(Composition::Composited, 32),
-            PolicySet::new(), StopToken::new(Unstoppable),
+            PolicySet::new(), SharedPulse::default(),
         ).unwrap();
         let mut roots = images.images().unwrap();
         let root = images.next(&mut roots).unwrap().unwrap();
@@ -79,7 +79,7 @@ fn http_snapshot_collection_factory_preserves_positional_selection() {
 #[test]
 fn http_snapshot_render_first_matches_slice_and_rejects_late_source_faults() {
     use crate::collection_factories::TiffFactory;
-    use zencodec::{CodecSet, ImageFormat, StopToken, Unstoppable,
+    use zencodec::{CodecSet, ImageFormat, SharedPulse, NoPulse,
         collection::OpenRequest, operation::PolicySet,
         source::{ReadAtShim, SliceReadAt}, storage::StorageBudget};
     use zencodec_render::Renderer;
@@ -96,7 +96,7 @@ fn http_snapshot_render_first_matches_slice_and_rejects_late_source_faults() {
         let mut source = ReadAtShim(SliceReadAt::new(&bytes));
         let mut images = codecs.open_collection(
             ImageFormat::Tiff, &mut source, OpenRequest::new(Composition::Composited, 32),
-            PolicySet::new(), StopToken::new(Unstoppable),
+            PolicySet::new(), SharedPulse::default(),
         ).unwrap();
         let image = renderer.render_first(&mut images).unwrap().unwrap();
         assert_eq!(images.report().decisions().count(), 1);
@@ -116,7 +116,7 @@ fn http_snapshot_render_first_matches_slice_and_rejects_late_source_faults() {
         let mut source = ReadAtShim(source);
         let mut images = codecs.open_collection(
             ImageFormat::Tiff, &mut source, OpenRequest::new(Composition::Composited, 32),
-            PolicySet::new(), StopToken::new(Unstoppable),
+            PolicySet::new(), SharedPulse::default(),
         ).unwrap();
         let output = renderer.render_first(&mut images);
         if mode == "stable" {
@@ -232,7 +232,7 @@ fn http_snapshot_checked_collection_publishes_only_after_last_range_and_policy()
     use crate::checked_collection::{Checked, Stage};
     use std::{cell::Cell, convert::Infallible};
     use zencodec::{
-        At, StopToken, Unstoppable,
+        At, SharedPulse, NoPulse,
         operation::{Decision, Question},
     };
     for big in [false, true] {
@@ -258,7 +258,7 @@ fn http_snapshot_checked_collection_publishes_only_after_last_range_and_policy()
                 Ok(Decision::UsePreset)
             };
             let mut attempts = None;
-            let mut collection = Checked::open(StopToken::new(Unstoppable), resolver, |stop| {
+            let mut collection = Checked::open(SharedPulse::default(), resolver, |stop| {
                 let source = HttpSource::open(url(mode, &name, last_read), 65536)?;
                 attempts = Some(source.attempts.clone());
                 TiffCollection::open_with_stop(

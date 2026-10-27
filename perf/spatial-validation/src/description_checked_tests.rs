@@ -1,7 +1,7 @@
 use crate::{control::CheckStop, jxl_items::JxlItems, jxl_tests::fixture};
 use std::{cell::Cell, convert::Infallible, rc::Rc};
 use zencodec::{
-    At, StopToken, Unstoppable,
+    At, SharedPulse, NoPulse,
     collection::{
         Collection, CollectionError, Composition, Discovery, DiscoveryExhausted, DiscoveryMethod,
         ImageDescription, ImageId, ImageRequest, Origin, SelectionError,
@@ -54,7 +54,7 @@ fn description_checked_validates_native_facts_without_claiming_pixel_publication
         visits.set(visits.get() + 1);
         Ok(Decision::UsePreset)
     };
-    let mut images = CheckedCollection::open(StopToken::new(Unstoppable), resolver, |stop| {
+    let mut images = CheckedCollection::open(SharedPulse::default(), resolver, |stop| {
         Ok(Tampered {
             native: JxlItems::open_with_stop(&bytes, Composition::Composited, 64, stop)?,
             corrupt: corrupt.clone(),

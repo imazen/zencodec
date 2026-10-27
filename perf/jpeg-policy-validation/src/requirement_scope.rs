@@ -5,10 +5,10 @@ use crate::{fixtures, policy::*};
 use plan::{PendingPlan, PlanError};
 use std::{convert::Infallible, error::Error, io::Write};
 use zencodec::{
-    At, Unstoppable,
+    At, NoPulse,
     encode::Fidelity,
     enough::Stop,
-    metadata_rewrite::{Plan as NativePlan, Request},
+    metadata_rewrite::{Plan as NativePlan, RewriteRequest},
 };
 
 #[path = "../../../zencodec-testkit/src/fixtures.rs"]
@@ -72,7 +72,7 @@ fn select(
         requirements,
         context,
         resolver,
-        &Unstoppable,
+        &NoPulse,
     )?)
 }
 
@@ -121,7 +121,7 @@ impl<'a> DeferredRewrite<'a> {
         // Default native rewrite removes descriptive metadata, retains color
         // and orientation. NO_GPS is scoped to descriptive metadata, never ICC,
         // arbitrary XML semantics or anonymity of the image samples.
-        let native = zenjpeg::metadata::rewrite(&Request::new(self.input))?;
+        let native = zenjpeg::metadata::rewrite(&RewriteRequest::new(self.input))?;
         let metadata = select(
             engine,
             resolver,
@@ -155,7 +155,7 @@ impl<'a> DeferredRewrite<'a> {
         Ok(self)
     }
 
-    fn write(self, current: Context, writer: &mut impl Write, stop: &dyn Stop) -> Result<()> {
+    fn write(self, current: Context, writer: &mut impl Write, stop: &dyn zencodec::Pulse) -> Result<()> {
         stop.check()
             .map_err(zencodec::metadata_rewrite::Error::Stopped)?;
         self.pending.finish(current)?;
@@ -192,7 +192,7 @@ fn pending_native_rewrite_never_publishes_before_inspection_or_after_source_chan
         };
         let mut output = Vec::new();
         let error = pending
-            .write(current, &mut output, &Unstoppable)
+            .write(current, &mut output, &NoPulse)
             .unwrap_err();
         assert_eq!(
             *error.downcast_ref::<At<PlanError>>().unwrap().error(),
@@ -251,7 +251,7 @@ fn native_descriptive_privacy_survives_report_wrap_with_one_callback() {
             );
             let ready = pending.inspect(&mut engine, &mut resolver).unwrap();
             let mut output = Vec::new();
-            ready.write(context(), &mut output, &Unstoppable).unwrap();
+            ready.write(context(), &mut output, &NoPulse).unwrap();
             assert_eq!(domains.first(), Some(&Kind::Execution));
             assert_eq!(
                 &domains[domains.len() - 2..],
@@ -360,7 +360,7 @@ fn admitted_native_rewrite_still_honors_cancellation_and_preserves_partial_write
         }
     }
     let source = source_with_gps(true, fixtures::Placement::BeforeEoi);
-    let expected = zenjpeg::metadata::rewrite(&Request::new(&source))
+    let expected = zenjpeg::metadata::rewrite(&RewriteRequest::new(&source))
         .unwrap()
         .to_vec()
         .unwrap();
@@ -397,7 +397,7 @@ fn admitted_native_rewrite_still_honors_cancellation_and_preserves_partial_write
         fail_after: Some(3),
     };
     let error = prepare()
-        .write(context(), &mut sink, &Unstoppable)
+        .write(context(), &mut sink, &NoPulse)
         .unwrap_err();
     let original = error.downcast_ref::<io::Error>().unwrap();
     assert_eq!(original.kind(), io::ErrorKind::BrokenPipe);

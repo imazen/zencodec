@@ -14,7 +14,7 @@
 //! - [`session`]: codec sessions with explicit backpressure (`send` /
 //!   `receive`), drain at end of input, and discard-only reset.
 //! - [`container`]: a sans-I/O [`Demuxer`](container::Demuxer) speaking the
-//!   image decoders' `Input`/`Request` dialogue (so every `zencodec-io`
+//!   image decoders' `Input`/`InputRequest` dialogue (so every `zencodec-io`
 //!   driver serves it), and a [`Muxer`](container::Muxer) whose bytes are
 //!   pulled like a streaming image encoder's.
 //! - [`adapt`]: the animation traits as a layer over demuxer + decoder and

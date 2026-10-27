@@ -1,7 +1,7 @@
 //! Collection registration shares the set's defaults without sharing a job.
 use super::CodecSet;
 use crate::{
-    At, ImageFormat, StopToken,
+    At, ImageFormat, SharedPulse,
     collection::{
         Collection, CollectionFactory, CollectionOpenContext, CollectionOpenError, Discovery,
         ErasedCollection, OpenRequest, SelectionError,
@@ -10,7 +10,6 @@ use crate::{
     source::DynReadAt,
 };
 use alloc::{boxed::Box, sync::Arc};
-use enough::{Stop, StopReason};
 
 impl CodecSet {
     /// Register an immutable native collection factory. First registration wins,
@@ -26,8 +25,8 @@ impl CodecSet {
     /// The factory must honor configured limits and decode policy or explicitly
     /// refuse. This is stronger than the legacy best-effort policy setters on
     /// still-image jobs. The publication resolver runs on each selected output.
-    /// The set's stop/pulse and this call's stop all remain active throughout the
-    /// opened operation; the first observed stop is latched. No implicit source
+    /// The set's pulse/pulse and this call's pulse all remain active throughout the
+    /// opened operation; the first observed pulse is latched. No implicit source
     /// staging or format probing occurs. Register concrete factories separately.
     pub fn open_collection<'a, R: PolicyResolver>(
         &self,
@@ -35,21 +34,21 @@ impl CodecSet {
         source: &'a mut dyn DynReadAt,
         request: OpenRequest,
         resolver: R,
-        stop: StopToken,
+        pulse: SharedPulse,
     ) -> Result<CheckedCollection<Discovery<ErasedCollection<'a>>, R>, At<CollectionOperationError>>
     {
-        let stop = StopToken::new(CollectionStop {
-            pulse: self.pulse.clone(),
-            inherited: self.stop.clone(),
-            request: stop,
-        });
-        CheckedCollection::open(stop, resolver, |stop| {
+        use crate::Pulse as _;
+        let inherited = self.pulse.clone().unwrap_or_default();
+        let pulse = how_far::WithStop::new(&pulse, inherited)
+            .share()
+            .expect("owned operation pulses are shareable");
+        CheckedCollection::open(pulse, resolver, |pulse| {
             let factory = self
                 .collections
                 .iter()
                 .find(|factory| factory.formats().contains(&format))
                 .ok_or(CollectionOpenError::NotRegistered(format))?;
-            let mut context = CollectionOpenContext::new(format, request.view, stop);
+            let mut context = CollectionOpenContext::new(format, request.view, pulse);
             context.limits = self.limits;
             context.policy = self.decode_policy;
             context.output_storage = request.output_storage;
@@ -59,27 +58,5 @@ impl CodecSet {
             }
             Ok(Discovery::new(collection, request.discovery_attempts))
         })
-    }
-}
-
-struct CollectionStop {
-    pulse: Option<how_far::SharedPulse>,
-    inherited: Option<StopToken>,
-    request: StopToken,
-}
-impl Stop for CollectionStop {
-    fn may_stop(&self) -> bool {
-        self.pulse.as_ref().is_some_and(Stop::may_stop)
-            || self.inherited.as_ref().is_some_and(Stop::may_stop)
-            || self.request.may_stop()
-    }
-    fn check(&self) -> Result<(), StopReason> {
-        if let Some(pulse) = &self.pulse {
-            pulse.check()?;
-        }
-        if let Some(stop) = &self.inherited {
-            stop.check()?;
-        }
-        self.request.check()
     }
 }

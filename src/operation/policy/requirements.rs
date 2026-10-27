@@ -245,7 +245,7 @@ mod tests {
                 Ok(Decision::choose(choice))
             },
             requirements(),
-            &enough::Unstoppable,
+            &crate::how_far::NoPulse,
         )
         .unwrap();
         assert_eq!(index, 63);
@@ -276,7 +276,7 @@ mod tests {
                 panic!("requirements must precede callback")
             },
             requirements(),
-            &enough::Unstoppable,
+            &crate::how_far::NoPulse,
         )
         .unwrap_err();
         let record = error.error().record();
@@ -322,7 +322,7 @@ mod tests {
                 Ok(Decision::choose(choices.first().unwrap()))
             },
             preset,
-            &enough::Unstoppable,
+            &crate::how_far::NoPulse,
         )
         .unwrap();
         assert_eq!(index, 0);
@@ -331,7 +331,7 @@ mod tests {
             &offers,
             &mut |_: Question<'_>| -> Result<Decision, At<Infallible>> { Ok(Decision::UsePreset) },
             preset,
-            &enough::Unstoppable,
+            &crate::how_far::NoPulse,
         )
         .unwrap();
         assert_eq!(index, 1);

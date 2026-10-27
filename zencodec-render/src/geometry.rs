@@ -123,8 +123,8 @@ impl PackedImageOwner for Projected {
     }
 }
 
-fn check(stop: &dyn Stop) -> Result<(), Cause> {
-    stop.check()
+fn check(pulse: &dyn zencodec::Pulse) -> Result<(), Cause> {
+    pulse.check()
         .map_err(|reason| At::wrap(CodecError::new(None, reason.into())).into())
 }
 
@@ -139,9 +139,9 @@ pub fn project(
     image: &ImageOutput,
     region: Option<Rect>,
     storage: &StorageBudget,
-    stop: &dyn Stop,
+    pulse: &dyn zencodec::Pulse,
 ) -> Result<ImageOutput, Cause> {
-    check(stop)?;
+    check(pulse)?;
     let source = image.interpretation();
     if source.composition != Some(Composition::Composited) {
         return Err(Refusal::Composition(source.composition).into());
@@ -249,7 +249,7 @@ pub fn project(
     planes.try_reserve_exact(views.len())?;
     roles.try_reserve_exact(views.len() - 1)?;
     for (pixels, auxiliary) in views {
-        check(stop)?;
+        check(pulse)?;
         let descriptor = pixels.descriptor();
         // Deliberately padded output exercises the same strided kernel contract
         // for color and every auxiliary sample width, including 64-bit scalars.
@@ -279,7 +279,7 @@ pub fn project(
             required.height,
         );
         apply_orientation_into(selected, orientation, dst)?;
-        check(stop)?;
+        check(pulse)?;
         planes.push(Plane {
             data: data.freeze(),
             width: region.width,
@@ -308,6 +308,6 @@ pub fn project(
         roles,
         interpretation,
     )?;
-    check(stop)?;
+    check(pulse)?;
     Ok(output)
 }

@@ -26,11 +26,11 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt;
 
-use enough::{Stop, Unstoppable};
 use zencodec::decode::{
     AnimationFrame, AnimationFrameDecoder, DecodeRowSink, OutputInfo, SinkError,
 };
 use zencodec::encode::{AnimationFrameEncoder, AnimationOutputTiming, BoxedError, EncodeOutput};
+use zencodec::how_far::NoPulse;
 use zencodec::time::{FrameDuration, Timestamp, TimingError, duration_to_ticks};
 use zencodec::{ImageFormat, ImageInfo, ImageSequence, UnsupportedOperation};
 use zencodec_io::{DriveFailure, SliceCursor};
@@ -47,10 +47,8 @@ use crate::session::{
 };
 use crate::track::{TrackInfo, TrackKind};
 
-static UNSTOPPABLE: Unstoppable = Unstoppable;
-
-fn stop_or_never(stop: Option<&dyn Stop>) -> &dyn Stop {
-    stop.unwrap_or(&UNSTOPPABLE)
+fn stop_or_never(pulse: Option<&dyn zencodec::Pulse>) -> &dyn zencodec::Pulse {
+    pulse.unwrap_or(&NoPulse)
 }
 
 /// Writes a decoded frame onto a packed canvas: the step between a video
@@ -338,7 +336,7 @@ impl<D: Demuxer, C: VideoDecoder, R: RenderFrame> VideoAnimationDecoder<D, C, R>
         &self.dem
     }
 
-    fn on_headers(&mut self, stop: &dyn Stop) -> Result<(), DecErr<D, C>> {
+    fn on_headers(&mut self, pulse: &dyn zencodec::Pulse) -> Result<(), DecErr<D, C>> {
         let tracks = self.dem.tracks();
         let track = tracks
             .iter()
@@ -359,19 +357,19 @@ impl<D: Demuxer, C: VideoDecoder, R: RenderFrame> VideoAnimationDecoder<D, C, R>
             });
         self.track = Some(track.index());
         self.dec
-            .configure(&CodecConfig::from(track), stop)
+            .configure(&CodecConfig::from(track), pulse)
             .map_err(AdaptError::Decode)
     }
 
-    fn fill(&mut self, min: usize, stop: &dyn Stop) -> Result<(), DecErr<D, C>> {
+    fn fill(&mut self, min: usize, pulse: &dyn zencodec::Pulse) -> Result<(), DecErr<D, C>> {
         while self.pending.len() < min && !self.eos {
             let ev = self
                 .cursor
-                .next(&self.bytes, &mut DemuxStage(&mut self.dem), stop)
+                .next(&self.bytes, &mut DemuxStage(&mut self.dem), pulse)
                 .map_err(AdaptError::Demux)?
                 .into_inner();
             match ev {
-                DemuxEvent::Headers => self.on_headers(stop)?,
+                DemuxEvent::Headers => self.on_headers(pulse)?,
                 DemuxEvent::ConfigChanged { track, .. } if Some(track) == self.track => {
                     let t = self
                         .dem
@@ -380,7 +378,7 @@ impl<D: Demuxer, C: VideoDecoder, R: RenderFrame> VideoAnimationDecoder<D, C, R>
                         .find(|t| t.index() == track)
                         .ok_or(AdaptError::Shape)?;
                     self.dec
-                        .configure(&CodecConfig::from(t), stop)
+                        .configure(&CodecConfig::from(t), pulse)
                         .map_err(AdaptError::Decode)?;
                 }
                 DemuxEvent::Packet(mut p) if Some(p.track()) == self.track => {
@@ -390,7 +388,7 @@ impl<D: Demuxer, C: VideoDecoder, R: RenderFrame> VideoAnimationDecoder<D, C, R>
                         frames_decoded,
                         ..
                     } = self;
-                    send_packet_until_accepted(dec, &mut p, stop, |f| {
+                    send_packet_until_accepted(dec, &mut p, pulse, |f| {
                         *frames_decoded += 1;
                         pending.push_back(f);
                         Ok::<(), SessionError<C::Error>>(())
@@ -406,7 +404,7 @@ impl<D: Demuxer, C: VideoDecoder, R: RenderFrame> VideoAnimationDecoder<D, C, R>
                         frames_decoded,
                         ..
                     } = self;
-                    drain_decoder(dec, stop, |f| {
+                    drain_decoder(dec, pulse, |f| {
                         *frames_decoded += 1;
                         pending.push_back(f);
                         Ok::<(), SessionError<C::Error>>(())
@@ -442,11 +440,11 @@ where
 
     fn render_next_frame(
         &mut self,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<Option<AnimationFrame<'_>>, Self::Error> {
-        let stop = stop_or_never(stop);
+        let pulse = stop_or_never(pulse);
         // One frame of lookahead: a frame lasts until the next one starts.
-        self.fill(2, stop)?;
+        self.fill(2, pulse)?;
         let Some(frame) = self.pending.pop_front() else {
             return Ok(None);
         };
@@ -471,10 +469,10 @@ where
 
     fn render_next_frame_to_sink(
         &mut self,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn zencodec::Pulse>,
         sink: &mut dyn DecodeRowSink,
     ) -> Result<Option<OutputInfo>, Self::Error> {
-        zencodec::helpers::copy_frame_to_sink(self, stop, sink)
+        zencodec::helpers::copy_frame_to_sink(self, pulse, sink)
     }
 }
 
@@ -591,18 +589,18 @@ where
         &mut self,
         pixels: PixelSlice<'_>,
         duration_ms: u32,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
-        self.push_frame_exact(pixels, FrameDuration::from_millis(duration_ms), stop)
+        self.push_frame_exact(pixels, FrameDuration::from_millis(duration_ms), pulse)
     }
 
     fn push_frame_exact(
         &mut self,
         pixels: PixelSlice<'_>,
         duration: FrameDuration,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn zencodec::Pulse>,
     ) -> Result<(), Self::Error> {
-        let stop = stop_or_never(stop);
+        let pulse = stop_or_never(pulse);
         if self.declared.is_some_and(|n| self.pushed >= n) {
             return Err(AdaptError::FrameCountMismatch);
         }
@@ -625,7 +623,7 @@ where
             )
             .map_err(AdaptError::Convert)?;
         let mux = &mut self.mux;
-        send_frame_until_accepted(&mut self.enc, &frame, stop, |p| mux.write_packet(p, stop))
+        send_frame_until_accepted(&mut self.enc, &frame, pulse, |p| mux.write_packet(p, pulse))
             .map_err(|e| match e {
                 PumpError::Upstream(e) => AdaptError::Encode(e),
                 PumpError::Downstream(e) => AdaptError::Mux(e),
@@ -635,8 +633,8 @@ where
         Ok(())
     }
 
-    fn finish(mut self, stop: Option<&dyn Stop>) -> Result<EncodeOutput, Self::Error> {
-        let stop = stop_or_never(stop);
+    fn finish(mut self, pulse: Option<&dyn zencodec::Pulse>) -> Result<EncodeOutput, Self::Error> {
+        let pulse = stop_or_never(pulse);
         if !self.begun {
             return Err(AdaptError::Mux(SessionError::Protocol(
                 ProtocolViolation::NoBegin,
@@ -646,11 +644,13 @@ where
             return Err(AdaptError::FrameCountMismatch);
         }
         let mux = &mut self.mux;
-        drain_encoder(&mut self.enc, stop, |p| mux.write_packet(p, stop)).map_err(|e| match e {
-            PumpError::Upstream(e) => AdaptError::Encode(e),
-            PumpError::Downstream(e) => AdaptError::Mux(e),
-        })?;
-        let fin = self.mux.finish(stop).map_err(AdaptError::Mux)?;
+        drain_encoder(&mut self.enc, pulse, |p| mux.write_packet(p, pulse)).map_err(
+            |e| match e {
+                PumpError::Upstream(e) => AdaptError::Encode(e),
+                PumpError::Downstream(e) => AdaptError::Mux(e),
+            },
+        )?;
+        let fin = self.mux.finish(pulse).map_err(AdaptError::Mux)?;
         if !fin.patches.is_empty() {
             return Err(AdaptError::PatchesNotAllowed);
         }

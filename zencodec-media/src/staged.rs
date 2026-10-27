@@ -15,11 +15,11 @@
 //! fn encode<E: VideoEncoder, M: Muxer, W: std::io::Write>(
 //!     encoder: E, mux: M, writer: W, frames: impl IntoIterator<Item = Frame>,
 //! ) -> Result<(), Box<dyn core::error::Error>> {
-//!     let stop = enough::Unstoppable;
+//!     let pulse = &zencodec::how_far::NoPulse;
 //!     let mut job = StagedEncode::new(encoder, mux, Forward(writer),
-//!         PolicySet::new(), StorageBudget::new(64 * 1024 * 1024, 4096), &stop)?;
-//!     for frame in frames { job.push(frame, &stop)?; }
-//!     let completed = job.finish(&stop)?;
+//!         PolicySet::new(), StorageBudget::new(64 * 1024 * 1024, 4096), &pulse)?;
+//!     for frame in frames { job.push(frame, &pulse)?; }
+//!     let completed = job.finish(&pulse)?;
 //!     let _ = (completed.stats, completed.report);
 //!     Ok(())
 //! }
@@ -34,7 +34,7 @@ use crate::{
 };
 use alloc::boxed::Box;
 use core::{error::Error as StdError, fmt};
-use enough::Stop;
+
 use zencodec::{
     At,
     frame::{Frame, FrameInterpretation},
@@ -132,8 +132,9 @@ impl StdError for Refusal {}
 fn invalid(reason: Refusal) -> Cause {
     Box::new(reason)
 }
-fn check(stop: &dyn Stop) -> Result<(), Cause> {
-    stop.check()
+fn check(pulse: &dyn zencodec::Pulse) -> Result<(), Cause> {
+    pulse
+        .check()
         .map_err(|reason| At::wrap(zencodec::CodecError::new(None, reason.into())).into())
 }
 fn same_config(a: &CodecConfig, b: &CodecConfig) -> bool {
@@ -182,7 +183,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
         destination: D,
         resolver: R,
         storage: StorageBudget,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<Self, At<Failure>> {
         Self::with_staging(
             encoder,
@@ -190,7 +191,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
             destination,
             resolver,
             Staging::memory(storage),
-            stop,
+            pulse,
         )
     }
     /// Retain an explicit compressed store. Disk staging may block while the
@@ -201,10 +202,10 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
         destination: D,
         resolver: R,
         staging: Staging,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<Self, At<Failure>> {
         let prepare = || -> Result<_, Cause> {
-            check(stop)?;
+            check(pulse)?;
             let config = encoder
                 .output_config()
                 .ok_or_else(|| invalid(Refusal::ConfigurationUnavailable))?
@@ -217,7 +218,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
             if let Some(private) = &config.private {
                 track = track.with_codec_private(private.clone());
             }
-            let output = PreparedOutput::new(mux, destination, &[track.build()?], stop)?;
+            let output = PreparedOutput::new(mux, destination, &[track.build()?], pulse)?;
             let fidelity = encoder.output_fidelity();
             Ok(State {
                 encoder,
@@ -271,12 +272,12 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
     }
     /// Send the exact held picture without conversion or timing changes.
     /// Prepared encoder fidelity is disclosed; native workspace remains unqualified.
-    pub fn push(&mut self, input: Frame, stop: &dyn Stop) -> Result<(), At<Failure>> {
+    pub fn push(&mut self, input: Frame, pulse: &dyn zencodec::Pulse) -> Result<(), At<Failure>> {
         let target = input.interpretation().clone();
         let mut offer = FrameConversionOffer::new(FrameFacts::new(&target, input.timing()));
         offer.preserves_samples = true;
         offer.preserves_extended_range = true;
-        self.push_converted(input, &target, offer, Ok, stop)
+        self.push_converted(input, &target, offer, Ok, pulse)
     }
     /// Retain this input and selected converter through policy, then execute once.
     /// `target` is the complete required interpretation; timing comes from the
@@ -288,7 +289,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
         target: &FrameInterpretation,
         conversion: FrameConversionOffer,
         execute: impl FnOnce(Frame) -> Result<Frame, Cause>,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<(), At<Failure>> {
         let mut state = self
             .state
@@ -296,7 +297,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
             .ok_or_else(|| self.failure(Stage::Terminal, invalid(Refusal::Terminal)))?;
         let mut stage = Stage::Policy;
         let run = || -> Result<(), Cause> {
-            check(stop)?;
+            check(pulse)?;
             if state.encoder.output_fidelity() != state.fidelity {
                 return Err(invalid(Refusal::ConfigurationChanged));
             }
@@ -326,7 +327,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
                 &[offer],
                 &mut self.resolver,
                 self.preset,
-                stop,
+                pulse,
             ) {
                 Ok((_, record)) => self.report.record(record),
                 Err(error) => {
@@ -337,7 +338,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
             stage = Stage::Convert;
             let previous = FrameFacts::new(input.interpretation(), input.timing());
             let converted = execute(input)?;
-            check(stop)?;
+            check(pulse)?;
             if converted.interpretation().as_ref() != target
                 || converted.timing() != conversion.encoder_input.timing
             {
@@ -345,22 +346,22 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
             }
             stage = Stage::Encode;
             loop {
-                check(stop)?;
-                match state.encoder.send(&converted, stop)? {
+                check(pulse)?;
+                match state.encoder.send(&converted, pulse)? {
                     SendStatus::Accepted => break,
-                    SendStatus::ReceivePending => match state.encoder.receive(stop)? {
+                    SendStatus::ReceivePending => match state.encoder.receive(pulse)? {
                         Receive::Ready(packet) => {
-                            stage_packet(&mut state.packets, packet, &state.output, stop)?
+                            stage_packet(&mut state.packets, packet, &state.output, pulse)?
                         }
                         _ => return Err(invalid(Refusal::ReceivePendingWithoutPacket)),
                     },
                 }
             }
             loop {
-                check(stop)?;
-                match state.encoder.receive(stop)? {
+                check(pulse)?;
+                match state.encoder.receive(pulse)? {
                     Receive::Ready(packet) => {
-                        stage_packet(&mut state.packets, packet, &state.output, stop)?
+                        stage_packet(&mut state.packets, packet, &state.output, pulse)?
                     }
                     Receive::NeedInput => break,
                     Receive::EndOfStream => return Err(invalid(Refusal::EarlyEnd)),
@@ -375,7 +376,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
                 return Err(invalid(Refusal::ConfigurationChanged));
             }
             state.previous = Some(previous);
-            check(stop)
+            check(pulse)
         };
         run().map_err(|cause| self.failure(stage, cause))?;
         self.state = Some(state);
@@ -384,19 +385,19 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
     /// Drain, release all owned encoder state, then publish the retained output.
     /// Writer failure may leave partial bytes; its concrete output failure and
     /// confirmed append count remain in the error chain. No retry is performed.
-    pub fn finish(mut self, stop: &dyn Stop) -> Result<Completed, At<Failure>> {
+    pub fn finish(mut self, pulse: &dyn zencodec::Pulse) -> Result<Completed, At<Failure>> {
         let mut state = self
             .state
             .take()
             .ok_or_else(|| self.failure(Stage::Terminal, invalid(Refusal::Terminal)))?;
         let mut drain = || -> Result<(), Cause> {
-            check(stop)?;
+            check(pulse)?;
             state.encoder.end_input()?;
             loop {
-                check(stop)?;
-                match state.encoder.receive(stop)? {
+                check(pulse)?;
+                match state.encoder.receive(pulse)? {
                     Receive::Ready(packet) => {
-                        stage_packet(&mut state.packets, packet, &state.output, stop)?
+                        stage_packet(&mut state.packets, packet, &state.output, pulse)?
                     }
                     Receive::EndOfStream => break,
                     Receive::NeedInput => {
@@ -412,7 +413,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
             {
                 return Err(invalid(Refusal::ConfigurationChanged));
             }
-            check(stop)
+            check(pulse)
         };
         drain().map_err(|cause| self.failure(Stage::Finish, cause))?;
         let State {
@@ -424,17 +425,17 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
         drop(encoder);
         let mut emitted = 0;
         let publish = || -> Result<Stats, Cause> {
-            packets.begin_replay(stop)?;
+            packets.begin_replay(pulse)?;
             // Admit/read the first packet before any final destination effects.
-            let mut packet = packets.next(stop)?;
-            let mut output = output.publish(stop)?;
+            let mut packet = packets.next(pulse)?;
+            let mut output = output.publish(pulse)?;
             emitted = output.stats().emitted;
             while let Some(held) = packet {
-                output.send(held, stop)?;
+                output.send(held, pulse)?;
                 emitted = output.stats().emitted;
-                packet = packets.next(stop)?;
+                packet = packets.next(pulse)?;
             }
-            Ok(output.finish(stop)?)
+            Ok(output.finish(pulse)?)
         };
         let stats =
             publish().map_err(|cause| self.failure_after(Stage::Publish, cause, emitted))?;
@@ -448,11 +449,11 @@ fn stage_packet<M: Muxer, D: Destination>(
     packets: &mut Staging,
     packet: Packet,
     output: &PreparedOutput<M, D>,
-    stop: &dyn Stop,
+    pulse: &dyn zencodec::Pulse,
 ) -> Result<(), Cause> {
     output.validate_packet(&packet)?;
     if packet.is_empty() {
         return Err(invalid(Refusal::EmptyPacket));
     }
-    packets.push(packet, stop)
+    packets.push(packet, pulse)
 }

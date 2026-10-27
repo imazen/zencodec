@@ -12,7 +12,6 @@
 
 use alloc::borrow::Cow;
 
-use enough::Stop;
 use zenpixels::PixelDescriptor;
 
 use crate::cost::OutputInfo;
@@ -122,18 +121,18 @@ where
 /// ```rust,ignore
 /// fn render_next_frame_to_sink(
 ///     &mut self,
-///     stop: Option<&dyn Stop>,
+///     pulse: Option<&dyn crate::Pulse>,
 ///     sink: &mut dyn DecodeRowSink,
 /// ) -> Result<Option<OutputInfo>, Self::Error> {
-///     zencodec::helpers::copy_frame_to_sink(self, stop, sink)
+///     zencodec::helpers::copy_frame_to_sink(self, pulse, sink)
 /// }
 /// ```
 pub fn copy_frame_to_sink<D: AnimationFrameDecoder>(
     decoder: &mut D,
-    stop: Option<&dyn Stop>,
+    pulse: Option<&dyn crate::Pulse>,
     sink: &mut dyn crate::DecodeRowSink,
 ) -> Result<Option<OutputInfo>, D::Error> {
-    let frame = match decoder.render_next_frame(stop)? {
+    let frame = match decoder.render_next_frame(pulse)? {
         Some(f) => f,
         None => return Ok(None),
     };

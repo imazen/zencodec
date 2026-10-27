@@ -101,7 +101,7 @@ fn canvas_render_independent_cms_after_native_jxl_and_tiff_reconstruction() {
                 source.clone(),
                 &mut PolicySet::new(),
                 PolicySet::new(),
-                &Unstoppable,
+                &NoPulse,
             )
             .unwrap();
         exact(&source, output.output(), false);

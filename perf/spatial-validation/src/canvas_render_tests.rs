@@ -6,7 +6,7 @@ use tiff::{
     tags::Tag,
 };
 use zencodec::{
-    Unstoppable,
+    NoPulse,
     collection::{Composition, ImageRequest},
     image::{Row, Samples},
     operation::{CollectionStage, Decision, Decline, Question},
@@ -73,7 +73,7 @@ pub(crate) fn native_tiff_bytes(exif: u8, big: bool, depth: u8) -> Vec<u8> {
 }
 fn native_tiff(exif: u8, big: bool, depth: u8) -> ImageOutput {
     let mut images = zencodec::operation::CheckedCollection::open(
-        zencodec::StopToken::new(Unstoppable),
+        zencodec::SharedPulse::default(),
         PolicySet::new(),
         |stop| {
             Ok(crate::tiff_items::TiffCollection::open_with_stop(
@@ -94,7 +94,7 @@ fn native_tiff(exif: u8, big: bool, depth: u8) -> ImageOutput {
 
 fn qualify_selected<C: Collection>(
     expected: &ImageOutput,
-    open: impl FnOnce(zencodec::StopToken) -> Result<C, Cause>,
+    open: impl FnOnce(zencodec::SharedPulse) -> Result<C, Cause>,
 ) {
     use std::cell::Cell;
     let region = Rect {
@@ -107,7 +107,7 @@ fn qualify_selected<C: Collection>(
     let mut renderer = renderer(expected, Some(region));
     let required = renderer.request.required;
     let mut images = CheckedCollection::open(
-        zencodec::StopToken::new(Unstoppable),
+        zencodec::SharedPulse::default(),
         |question: Question<'_>| -> Result<Decision, At<Infallible>> {
             calls.set(calls.get() + 1);
             let Question::Image { image, facts, .. } = question else {
@@ -217,7 +217,7 @@ fn canvas_render_selected_subifd_keeps_child_color_orientation_and_identity() {
         }
         let seen = std::cell::Cell::new(0);
         let mut images = CheckedCollection::open(
-            zencodec::StopToken::new(Unstoppable),
+            zencodec::SharedPulse::default(),
             |q: Question<'_>| -> Result<Decision, At<Infallible>> {
                 let Question::Image { image, facts, .. } = q else {
                     panic!()
@@ -396,7 +396,7 @@ pub(crate) fn qualify_auxiliaries(source: &ImageOutput, region: Rect) {
             source.clone(),
             &mut PolicySet::new(),
             PolicySet::new(),
-            &Unstoppable,
+            &NoPulse,
         )
         .unwrap();
     exact(source, output.output(), false);
@@ -425,7 +425,7 @@ fn canvas_render_traced_callback_failure_and_color_admission_are_explicit() {
                 Err(At::wrap(ApplicationFailure))
             },
             PolicySet::new(),
-            &Unstoppable,
+            &NoPulse,
         )
         .unwrap_err();
     assert_eq!(failure.error().stage, Stage::Publication);
@@ -442,7 +442,7 @@ fn canvas_render_traced_callback_failure_and_color_admission_are_explicit() {
             source,
             &mut PolicySet::new(),
             PolicySet::new(),
-            &Unstoppable,
+            &NoPulse,
         )
         .unwrap_err();
     assert_eq!(failure.error().stage, Stage::Color);
@@ -485,7 +485,7 @@ fn canvas_render_native_tiff_all_orientations_depths_and_containers() {
                                 Ok(Decision::UsePreset)
                             },
                             PolicySet::new(),
-                            &Unstoppable,
+                            &NoPulse,
                         )
                         .unwrap();
                     assert_eq!(calls, 1);
@@ -522,7 +522,7 @@ fn canvas_render_native_jxl_color_auxiliaries_and_named_profile() {
                 source.clone(),
                 &mut PolicySet::new(),
                 PolicySet::new(),
-                &Unstoppable,
+                &NoPulse,
             )
             .unwrap();
         exact(&source, output.output(), false);
@@ -585,7 +585,7 @@ fn canvas_render_every_stop_seam_and_refusal_drops_unpublished_storage() {
                 Ok(Decision::decline(Decline::ApplicationRule))
             },
             PolicySet::new(),
-            &Unstoppable,
+            &NoPulse,
         )
         .unwrap_err();
     assert_eq!(refused.error().stage, Stage::Publication);
@@ -598,7 +598,7 @@ fn canvas_render_every_stop_seam_and_refusal_drops_unpublished_storage() {
                 panic!("injected publication panic")
             },
             PolicySet::new(),
-            &Unstoppable,
+            &NoPulse,
         )
     }));
     assert!(unwind.is_err());
@@ -610,7 +610,7 @@ fn canvas_render_every_stop_seam_and_refusal_drops_unpublished_storage() {
             source,
             &mut PolicySet::new(),
             PolicySet::new(),
-            &Unstoppable
+            &NoPulse
         )
         .unwrap_err()
         .error()
@@ -631,7 +631,7 @@ fn canvas_render_refuses_wrong_color_before_projection_and_raw_layers_before_pub
         Ok(Decision::UsePreset)
     };
     let error = renderer
-        .render(source, &mut policy, PolicySet::new(), &Unstoppable)
+        .render(source, &mut policy, PolicySet::new(), &NoPulse)
         .unwrap_err();
     assert_eq!(error.error().stage, Stage::ColorPlan);
     assert_eq!(renderer.storage.reserved_bytes(), 0);
@@ -641,7 +641,7 @@ fn canvas_render_refuses_wrong_color_before_projection_and_raw_layers_before_pub
     );
     renderer.request.required = p3_descriptor(&raw);
     let error = renderer
-        .render(raw, &mut policy, PolicySet::new(), &Unstoppable)
+        .render(raw, &mut policy, PolicySet::new(), &NoPulse)
         .unwrap_err();
     assert_eq!(error.error().stage, Stage::Geometry);
     assert!(zencodec::find_cause::<crate::canvas_projection::Refusal>(&error).is_some());
@@ -660,7 +660,7 @@ fn canvas_render_public_default_delivers_oriented_srgb_rgba_and_retains_alpha() 
                 source,
                 &mut PolicySet::new(),
                 PolicySet::new(),
-                &Unstoppable,
+                &NoPulse,
             )
             .unwrap();
         let dimensions = if exif <= 4 { (7, 5) } else { (5, 7) };

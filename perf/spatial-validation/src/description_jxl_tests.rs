@@ -7,7 +7,7 @@ use crate::{
     jxl_layers::JxlLayers,
     jxl_tests::fixture,
 };
-use zencodec::{StopToken, Unstoppable};
+use zencodec::{SharedPulse, NoPulse};
 
 fn limits(images: usize) -> Limits {
     Limits {
@@ -64,7 +64,7 @@ fn description_jxl_presentations_and_raw_layers_survive_eof_and_match_reconstruc
         );
         assert_eq!(
             compare(
-                JxlLayers::open(&bytes, limits(64), StopToken::new(Unstoppable)).unwrap(),
+                JxlLayers::open(&bytes, limits(64), SharedPulse::default()).unwrap(),
                 None
             ),
             raw_count
@@ -98,7 +98,7 @@ fn description_jxl_preserves_all_eight_stored_orientations_in_both_views() {
         );
         assert_eq!(
             compare(
-                JxlLayers::open(&bytes, limits(64), StopToken::new(Unstoppable)).unwrap(),
+                JxlLayers::open(&bytes, limits(64), SharedPulse::default()).unwrap(),
                 orientation
             ),
             1
@@ -106,7 +106,7 @@ fn description_jxl_preserves_all_eight_stored_orientations_in_both_views() {
     }
 }
 
-fn cached_stop<C: Collection>(factory: impl Fn(StopToken) -> C) {
+fn cached_stop<C: Collection>(factory: impl Fn(SharedPulse) -> C) {
     let describe =
         |stop: &CheckStop,
          at: Option<usize>|
@@ -172,7 +172,7 @@ fn description_jxl_cached_returns_honor_stop_and_latched_native_failure() {
     // animation to exercise failure after a retained presentation identity.
     let animation = fixture("conformance_test_images/animation_newtons_cradle.jxl");
     failed_scan(JxlItems::open(&animation, Composition::Composited, limits(1)).unwrap());
-    failed_scan(JxlLayers::open(&bytes, limits(1), StopToken::new(Unstoppable)).unwrap());
+    failed_scan(JxlLayers::open(&bytes, limits(1), SharedPulse::default()).unwrap());
 }
 
 #[test]
@@ -182,7 +182,7 @@ fn description_jxl_ids_do_not_cross_operations_or_composition_views() {
     let mut cursor = first.images().unwrap();
     let id = Collection::next(&mut first, &mut cursor).unwrap().unwrap();
     let mut second = JxlItems::open(&bytes, Composition::Composited, limits(64)).unwrap();
-    let mut layers = JxlLayers::open(&bytes, limits(64), StopToken::new(Unstoppable)).unwrap();
+    let mut layers = JxlLayers::open(&bytes, limits(64), SharedPulse::default()).unwrap();
     for error in [
         second.describe(&id).unwrap_err(),
         layers.describe(&id).unwrap_err(),

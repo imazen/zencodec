@@ -127,7 +127,7 @@ impl<'a> JxlItems<'a> {
         data: &'a [u8],
         composition: Composition,
         limits: impl Into<Limits>,
-        stop: zencodec::StopToken,
+        stop: zencodec::SharedPulse,
     ) -> Result<Self, Failure> {
         Self::open_controlled(data, composition, limits.into(), Control::new(stop))
     }

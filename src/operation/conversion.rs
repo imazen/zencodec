@@ -73,7 +73,7 @@ pub fn resolve_image_conversion<R: PolicyResolver + ?Sized>(
     offers: &[ImageConversionOffer],
     resolver: &mut R,
     preset: PolicySet,
-    stop: &dyn enough::Stop,
+    pulse: &dyn crate::Pulse,
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>> {
     let facts = ImageFacts::new(image);
     policy::choose(
@@ -87,6 +87,6 @@ pub fn resolve_image_conversion<R: PolicyResolver + ?Sized>(
         Selection::ImageConversion,
         resolver,
         preset,
-        stop,
+        pulse,
     )
 }

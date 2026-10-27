@@ -20,8 +20,10 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
-use enough::Stop;
-pub use zencodec::decode::{ByteRange, Input, Request};
+pub use zencodec::decode::{ByteRange, Input, InputRequest};
+/// Deprecated byte-input request name; use [`InputRequest`].
+#[deprecated(note = "use InputRequest")]
+pub type Request = InputRequest;
 pub use zencodec::source::AccessPattern;
 
 use crate::packet::{Packet, RandomAccess};
@@ -176,12 +178,12 @@ pub trait Demuxer {
     fn step(
         &mut self,
         input: Input<'_>,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<DemuxProgress, SessionError<Self::Error>>;
 
     /// What the demuxer needs next, after [`DemuxEvent::Need`]. Never empty
     /// then.
-    fn requested(&self) -> &[Request];
+    fn requested(&self) -> &[InputRequest];
 
     /// The tracks; empty before [`DemuxEvent::Headers`].
     fn tracks(&self) -> &[TrackInfo];
@@ -299,7 +301,7 @@ pub trait Muxer {
     fn write_packet(
         &mut self,
         packet: Packet,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<(), SessionError<Self::Error>>;
 
     /// Bytes ready to send, not yet consumed.
@@ -312,7 +314,7 @@ pub trait Muxer {
     fn take_output(&mut self, into: &mut Vec<u8>);
 
     /// Finish: the bytes not yet consumed, and any patches.
-    fn finish(self, stop: &dyn Stop) -> Result<MuxFinish, SessionError<Self::Error>>
+    fn finish(self, pulse: &dyn zencodec::Pulse) -> Result<MuxFinish, SessionError<Self::Error>>
     where
         Self: Sized;
 }
@@ -338,7 +340,7 @@ pub trait DynMuxer {
     fn write_packet(
         &mut self,
         packet: Packet,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<(), SessionError<ErasedError>>;
     /// See [`Muxer::pending_output`].
     fn pending_output(&self) -> &[u8];
@@ -347,7 +349,10 @@ pub trait DynMuxer {
     /// See [`Muxer::take_output`].
     fn take_output(&mut self, into: &mut Vec<u8>);
     /// See [`Muxer::finish`].
-    fn finish(self: Box<Self>, stop: &dyn Stop) -> Result<MuxFinish, SessionError<ErasedError>>;
+    fn finish(
+        self: Box<Self>,
+        pulse: &dyn zencodec::Pulse,
+    ) -> Result<MuxFinish, SessionError<ErasedError>>;
 }
 
 /// Shim erasing a muxer's error type (the `DynAnimationFrameEncoder` pattern:
@@ -376,10 +381,10 @@ impl<M: Muxer> DynMuxer for MuxerShim<M> {
     fn write_packet(
         &mut self,
         packet: Packet,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<(), SessionError<ErasedError>> {
         self.0
-            .write_packet(packet, stop)
+            .write_packet(packet, pulse)
             .map_err(|e| e.map_codec(|c| ErasedError::new(Box::new(c))))
     }
     fn pending_output(&self) -> &[u8] {
@@ -391,9 +396,12 @@ impl<M: Muxer> DynMuxer for MuxerShim<M> {
     fn take_output(&mut self, into: &mut Vec<u8>) {
         self.0.take_output(into)
     }
-    fn finish(self: Box<Self>, stop: &dyn Stop) -> Result<MuxFinish, SessionError<ErasedError>> {
+    fn finish(
+        self: Box<Self>,
+        pulse: &dyn zencodec::Pulse,
+    ) -> Result<MuxFinish, SessionError<ErasedError>> {
         self.0
-            .finish(stop)
+            .finish(pulse)
             .map_err(|e| e.map_codec(|c| ErasedError::new(Box::new(c))))
     }
 }
@@ -428,9 +436,9 @@ impl<D: Demuxer + ?Sized> ByteStepper for DemuxStage<'_, D> {
     fn step(
         &mut self,
         input: Input<'_>,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<Stepped<DemuxEvent>, Self::Error> {
-        let p = self.0.step(input, stop)?;
+        let p = self.0.step(input, pulse)?;
         let step = match p.event {
             DemuxEvent::Need => Step::Need,
             DemuxEvent::Done => Step::Finished(DemuxEvent::Done),
@@ -442,7 +450,7 @@ impl<D: Demuxer + ?Sized> ByteStepper for DemuxStage<'_, D> {
         })
     }
 
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         self.0.requested()
     }
 }

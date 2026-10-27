@@ -17,7 +17,7 @@
 //!     Ok(row_encode::encode(
 //!         encoder, Raster::new(pixels), writer, PolicySet::new(),
 //!         Options::new(StorageBudget::new(64 * 1024 * 1024, 4096), 64 * 1024 * 1024),
-//!         &enough::Unstoppable,
+//!         &zencodec::how_far::NoPulse,
 //!     )?)
 //! }
 //! ```
@@ -28,7 +28,7 @@ use core::{
     fmt,
     num::{NonZeroU32, NonZeroUsize},
 };
-use enough::Stop;
+
 use std::{
     fs::File,
     io::{self, Read, Seek, SeekFrom, Write},
@@ -90,7 +90,7 @@ pub trait Source {
         &mut self,
         first: u32,
         rows: PixelSliceMut<'_>,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<(), Self::Error>;
 }
 /// Borrow a complete raster through the same row-source interface.
@@ -115,7 +115,7 @@ impl Source for Raster<'_> {
         &mut self,
         first: u32,
         mut rows: PixelSliceMut<'_>,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<(), Self::Error> {
         if rows.width() != self.0.width()
             || rows.descriptor() != self.0.descriptor()
@@ -130,7 +130,8 @@ impl Source for Raster<'_> {
             ));
         }
         for y in 0..rows.rows() {
-            stop.check()
+            pulse
+                .check()
                 .map_err(|r| zencodec::CodecError::new(None, r.into()))?;
             rows.row_mut(y).copy_from_slice(self.0.row(first + y));
         }
@@ -286,8 +287,9 @@ pub struct Completed {
     /// Decisions made before source reads and final output writes.
     pub report: OperationReport,
 }
-fn check(stop: &dyn Stop) -> Result<(), Cause> {
-    stop.check()
+fn check(pulse: &dyn zencodec::Pulse) -> Result<(), Cause> {
+    pulse
+        .check()
         .map_err(|r| At::wrap(zencodec::CodecError::new(None, r.into())).into())
 }
 fn validate_source<S: Source>(
@@ -312,10 +314,10 @@ fn write_all(
     writer: &mut impl Write,
     mut bytes: &[u8],
     emitted: &mut u64,
-    stop: &dyn Stop,
+    pulse: &dyn zencodec::Pulse,
 ) -> Result<(), Cause> {
     while !bytes.is_empty() {
-        check(stop)?;
+        check(pulse)?;
         match writer.write(bytes) {
             Ok(0) => return Err(io::Error::from(io::ErrorKind::WriteZero).into()),
             Ok(n) if n <= bytes.len() => {
@@ -333,7 +335,7 @@ fn write_all(
             Err(e) => return Err(e.into()),
         }
     }
-    check(stop)
+    check(pulse)
 }
 struct Disk {
     file: File,
@@ -341,9 +343,9 @@ struct Disk {
     replay_bytes: NonZeroUsize,
 }
 impl Disk {
-    fn append(&mut self, bytes: &[u8], stop: &dyn Stop) -> Result<(), Cause> {
+    fn append(&mut self, bytes: &[u8], pulse: &dyn zencodec::Pulse) -> Result<(), Cause> {
         let mut written = 0;
-        write_all(&mut self.file, bytes, &mut written, stop)
+        write_all(&mut self.file, bytes, &mut written, pulse)
     }
     fn replay(
         &mut self,
@@ -352,10 +354,10 @@ impl Disk {
         writer: &mut impl Write,
         emitted: &mut u64,
         boundary: &mut Stage,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<(), Cause> {
         *boundary = Stage::Replay;
-        check(stop)?;
+        check(pulse)?;
         self.file.flush()?;
         self.file.seek(SeekFrom::Start(self.origin))?;
         let size = total.min(self.replay_bytes.get() as u64) as usize;
@@ -363,12 +365,12 @@ impl Disk {
         let mut remaining = total;
         while remaining != 0 {
             *boundary = Stage::Replay;
-            check(stop)?;
+            check(pulse)?;
             let n = remaining.min(size as u64) as usize;
             self.file.read_exact(&mut buffer.as_mut_slice()[..n])?;
-            check(stop)?;
+            check(pulse)?;
             *boundary = Stage::Write;
-            write_all(writer, &buffer.as_slice()[..n], emitted, stop)?;
+            write_all(writer, &buffer.as_slice()[..n], emitted, pulse)?;
             remaining -= n as u64;
         }
         Ok(())
@@ -406,9 +408,9 @@ pub fn encode<E: Encoder, S: Source, W: Write, R: PolicyResolver>(
     writer: W,
     resolver: R,
     options: Options,
-    stop: &dyn Stop,
+    pulse: &dyn zencodec::Pulse,
 ) -> Result<Completed, At<Failure>> {
-    encode_to_destination(encoder, source, Forward(writer), resolver, options, stop)
+    encode_to_destination(encoder, source, Forward(writer), resolver, options, pulse)
 }
 
 /// Encode to an actual forward or seek-back destination. Layout admission occurs
@@ -422,14 +424,14 @@ pub fn encode_to_destination<E: Encoder, S: Source, D: Destination, R: PolicyRes
     mut writer: D,
     mut resolver: R,
     mut options: Options,
-    stop: &dyn Stop,
+    pulse: &dyn zencodec::Pulse,
 ) -> Result<Completed, At<Failure>> {
     let mut boundary = Stage::Prepare;
     let mut emitted = 0;
     let mut patched_bytes = 0;
     let mut report = OperationReport::default();
     let run = || -> Result<OutputSchedule, Cause> {
-        check(stop)?;
+        check(pulse)?;
         let desc = source.description();
         let mechanism = source.mechanism();
         if desc.width == 0 || desc.height == 0 {
@@ -450,7 +452,7 @@ pub fn encode_to_destination<E: Encoder, S: Source, D: Destination, R: PolicyRes
         if timing.patches_at_finish() && !writer.can_patch() {
             return Err(Refusal::Patches.into());
         }
-        check(stop)?;
+        check(pulse)?;
         let mut finish_first = OutputScheduleOffer::new(OutputSchedule::FinishFirst);
         finish_first.staging = Some(StagingFacts::new(
             if options.disk.is_some() {
@@ -473,7 +475,7 @@ pub fn encode_to_destination<E: Encoder, S: Source, D: Destination, R: PolicyRes
             offers,
             &mut resolver,
             options.preset,
-            stop,
+            pulse,
         ) {
             Ok(selected) => selected,
             Err(error) => {
@@ -487,7 +489,7 @@ pub fn encode_to_destination<E: Encoder, S: Source, D: Destination, R: PolicyRes
         let mut produced = 0;
         let mut y = 0;
         loop {
-            check(stop)?;
+            check(pulse)?;
             boundary = Stage::Read;
             validate_source(&source, &desc, mechanism)?;
             // The final pending bytes belong to finish. Do not introduce an
@@ -500,12 +502,12 @@ pub fn encode_to_destination<E: Encoder, S: Source, D: Destination, R: PolicyRes
             count(&mut produced, pending.len(), options.max_output_bytes)?;
             if schedule == OutputSchedule::Live {
                 boundary = Stage::Write;
-                write_all(&mut writer, pending, &mut emitted, stop)?;
+                write_all(&mut writer, pending, &mut emitted, pulse)?;
             } else {
                 boundary = Stage::Encode;
                 if let Some(disk) = &mut options.disk {
                     disk.origin.checked_add(produced).ok_or(Refusal::Overflow)?;
-                    disk.append(pending, stop)?;
+                    disk.append(pending, pulse)?;
                 } else {
                     stage(pending, &options.storage, &mut staged)?;
                 }
@@ -527,8 +529,8 @@ pub fn encode_to_destination<E: Encoder, S: Source, D: Destination, R: PolicyRes
             if let Some(context) = &desc.color_context {
                 destination = destination.with_color_context(context.clone());
             }
-            source.read_rows(y, destination, stop)?;
-            check(stop)?;
+            source.read_rows(y, destination, pulse)?;
+            check(pulse)?;
             validate_source(&source, &desc, mechanism)?;
             boundary = Stage::Encode;
             let mut pixels = PixelSlice::new(
@@ -548,9 +550,9 @@ pub fn encode_to_destination<E: Encoder, S: Source, D: Destination, R: PolicyRes
         drop(buffer);
         drop(desc);
         boundary = Stage::Finish;
-        check(stop)?;
+        check(pulse)?;
         let finished = encoder.finish_output()?;
-        check(stop)?;
+        check(pulse)?;
         finished.validate(produced)?;
         if !finished.patches.is_empty() && (!writer.can_patch() || !timing.patches_at_finish()) {
             return Err(Refusal::Patches.into());
@@ -561,7 +563,7 @@ pub fn encode_to_destination<E: Encoder, S: Source, D: Destination, R: PolicyRes
         if schedule == OutputSchedule::FinishFirst {
             if let Some(disk) = &mut options.disk {
                 disk.origin.checked_add(produced).ok_or(Refusal::Overflow)?;
-                disk.append(rest.data(), stop)?;
+                disk.append(rest.data(), pulse)?;
                 drop(rest);
                 disk.replay(
                     produced,
@@ -569,33 +571,33 @@ pub fn encode_to_destination<E: Encoder, S: Source, D: Destination, R: PolicyRes
                     &mut writer,
                     &mut emitted,
                     &mut boundary,
-                    stop,
+                    pulse,
                 )?;
             } else {
                 stage(rest.data(), &options.storage, &mut staged)?;
                 drop(rest);
                 boundary = Stage::Write;
                 while let Some(bytes) = staged.pop_front() {
-                    write_all(&mut writer, bytes.as_slice(), &mut emitted, stop)?;
+                    write_all(&mut writer, bytes.as_slice(), &mut emitted, pulse)?;
                 }
             }
         } else {
             boundary = Stage::Write;
-            write_all(&mut writer, rest.data(), &mut emitted, stop)?;
+            write_all(&mut writer, rest.data(), &mut emitted, pulse)?;
         }
-        check(stop)?;
+        check(pulse)?;
         if !patches.is_empty() {
             boundary = Stage::Patch;
             for patch in patches {
-                check(stop)?;
+                check(pulse)?;
                 writer.position(patch.offset)?;
-                write_all(&mut writer, &patch.bytes, &mut patched_bytes, stop)?;
+                write_all(&mut writer, &patch.bytes, &mut patched_bytes, pulse)?;
             }
             writer.position(produced)?;
         }
         boundary = Stage::Write;
         writer.flush()?;
-        check(stop)?;
+        check(pulse)?;
         Ok(schedule)
     };
     match run() {
@@ -628,12 +630,18 @@ mod tests {
         let mut source = Raster::new(pixels);
         let mut output = [77; 12];
         let view = PixelSliceMut::new(&mut output, 1, 2, 9, PixelDescriptor::RGB8_SRGB).unwrap();
-        assert!(source.read_rows(0, view, &enough::Unstoppable).is_err());
+        assert!(
+            source
+                .read_rows(0, view, &zencodec::how_far::NoPulse)
+                .is_err()
+        );
         assert_eq!(output, [77; 12]);
         let view = PixelSliceMut::new(&mut output, 1, 2, 9, PixelDescriptor::RGB8_SRGB)
             .unwrap()
             .with_color_context(context);
-        source.read_rows(0, view, &enough::Unstoppable).unwrap();
+        source
+            .read_rows(0, view, &zencodec::how_far::NoPulse)
+            .unwrap();
         assert_eq!(output, [1, 2, 3, 77, 77, 77, 77, 77, 77, 4, 5, 6]);
     }
 }
@@ -733,7 +741,7 @@ mod patch_tests {
                     zencodec::At<core::convert::Infallible>,
                 > { panic!("must refuse before policy") },
                 options(),
-                &enough::Unstoppable,
+                &zencodec::how_far::NoPulse,
             )
             .unwrap_err();
         assert!(bytes.is_empty());
@@ -762,7 +770,7 @@ mod patch_tests {
                     SeekBack::new(&mut writer).unwrap(),
                     PolicySet::new().require_output_schedule(schedule),
                     options(),
-                    &enough::Unstoppable,
+                    &zencodec::how_far::NoPulse,
                 );
                 assert_eq!(&writer.cursor.get_ref()[..6], b"prefix");
                 if bad {

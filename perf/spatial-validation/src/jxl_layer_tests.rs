@@ -11,7 +11,7 @@ use super::{
 };
 use std::{cell::Cell, convert::Infallible, path::PathBuf};
 use zencodec::{
-    At, StopToken, Unstoppable,
+    At, SharedPulse, NoPulse,
     operation::{Decision, PolicySet, Question},
 };
 use zenjxl_decoder::api::{ExtraChannel, JxlLayerBlend, JxlLayerBlendMode};
@@ -23,7 +23,7 @@ fn limits(images: usize) -> Limits {
     }
 }
 fn open(bytes: &[u8]) -> JxlLayers<'_> {
-    JxlLayers::open(bytes, limits(64), StopToken::new(Unstoppable)).unwrap()
+    JxlLayers::open(bytes, limits(64), SharedPulse::default()).unwrap()
 }
 fn ids(collection: &mut JxlLayers<'_>) -> Vec<super::image_items::ImageId> {
     let mut cursor = collection.images().unwrap();
@@ -114,7 +114,7 @@ fn raw_collection_native_samples_and_owner_bound_policy_match_independent_layers
                 &mut source,
                 zencodec::collection::OpenRequest::new(Composition::Uncomposited, 128),
                 PolicySet::new(),
-                StopToken::new(Unstoppable),
+                SharedPulse::default(),
             )
             .unwrap();
         let mut package_cursor = packaged.images().unwrap();
@@ -167,7 +167,7 @@ fn raw_collection_native_samples_and_owner_bound_policy_match_independent_layers
             visits.set(visits.get() + 1);
             Ok(Decision::UsePreset)
         };
-        let mut collection = Checked::open(StopToken::new(Unstoppable), resolver, |stop| {
+        let mut collection = Checked::open(SharedPulse::default(), resolver, |stop| {
             JxlLayers::open(&bytes, limits(64), stop)
         })
         .unwrap();
@@ -475,7 +475,7 @@ fn raw_collection_identity_limits_and_refusals_do_not_become_exhaustion() {
     collection
         .decode(&images[0], &ImageRequest::default())
         .unwrap();
-    let mut bounded = JxlLayers::open(&bytes, limits(1), StopToken::new(Unstoppable)).unwrap();
+    let mut bounded = JxlLayers::open(&bytes, limits(1), SharedPulse::default()).unwrap();
     let mut cursor = bounded.images().unwrap();
     bounded.next(&mut cursor).unwrap().unwrap();
     for _ in 0..2 {
@@ -491,7 +491,7 @@ fn raw_collection_identity_limits_and_refusals_do_not_become_exhaustion() {
             images: 64,
             frame_headers: Some(1),
         },
-        StopToken::new(Unstoppable),
+        SharedPulse::default(),
     )
     .unwrap();
     let mut cursor = native_bounded.images().unwrap();
@@ -512,7 +512,7 @@ fn raw_collection_identity_limits_and_refusals_do_not_become_exhaustion() {
 fn raw_collection_policy_and_stop_prevent_unapproved_output() {
     let bytes = fixture("conformance_test_images/cmyk_layers.jxl");
     let mut checked = Checked::open(
-        StopToken::new(Unstoppable),
+        SharedPulse::default(),
         PolicySet::new().allow_opaque_profiles(false),
         |stop| JxlLayers::open(&bytes, limits(64), stop),
     )

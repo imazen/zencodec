@@ -7,7 +7,7 @@ use super::{
     jxl_tests::fixture,
 };
 use std::{fs::OpenOptions, path::PathBuf};
-use zencodec::{StopToken, Unstoppable};
+use zencodec::{SharedPulse, NoPulse};
 use zenjxl_decoder::api::{Error, JxlColorType, JxlDecoderOptions};
 
 fn options() -> JxlDecoderOptions {
@@ -40,7 +40,7 @@ fn native_jxl_admission_pixel_cap_includes_canvas_before_small_layer_selection()
             images: 64,
             frame_headers: Some(64),
         },
-        StopToken::new(Unstoppable),
+        SharedPulse::default(),
     )
     .unwrap();
     assert_eq!(layers.view(), Composition::Uncomposited);

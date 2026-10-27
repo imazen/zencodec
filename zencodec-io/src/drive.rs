@@ -2,11 +2,11 @@
 
 use alloc::vec::Vec;
 
-use enough::{Stop, Unstoppable};
 use how_far::{Pulse, Total};
 use zencodec::decode::{
     ByteRange, DecodeRowSink, Event, IncrementalDecode, Input, OutputInfo, StepError,
 };
+use zencodec::how_far::NoPulse;
 use zencodec::source::ReadAt;
 
 use crate::stepper::{DriveFailure, ReadAtCursor};
@@ -124,10 +124,10 @@ impl<'a> Progressor<'a> {
         }
     }
 
-    pub(crate) fn stop(&self) -> &'a dyn Stop {
+    pub(crate) fn pulse(&self) -> &'a dyn zencodec::Pulse {
         match self.pulse {
             Some(p) => p,
-            None => &Unstoppable,
+            None => &NoPulse,
         }
     }
 
@@ -167,7 +167,7 @@ where
     D: IncrementalDecode + ?Sized,
 {
     let mut progress = Progressor::new(pulse);
-    let stop = progress.stop();
+    let stop = progress.pulse();
     let total = bytes.len() as u64;
     let window = window.max(1);
     let mut stats = DriveStats::default();
@@ -229,7 +229,7 @@ where
             .map_err(DriveFailure::widen);
     }
     let mut progress = Progressor::new(pulse);
-    let stop = progress.stop();
+    let stop = progress.pulse();
     let mut cursor = ReadAtCursor::new(opts);
     let mut rows = 0u64;
     loop {

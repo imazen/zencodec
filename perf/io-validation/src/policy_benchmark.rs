@@ -2,7 +2,7 @@
 //! arms run the same engine validation, choose index 1, and retain diagnostics.
 use crate::policy::*;
 use std::{convert::Infallible, error::Error, fmt, hint::black_box};
-use zencodec::{At, Unstoppable};
+use zencodec::{At, NoPulse};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Mode {
@@ -60,7 +60,7 @@ fn run<R: PolicyResolver + ?Sized>(
         requirements,
         Context::default(),
         resolver,
-        &Unstoppable,
+        &NoPulse,
     ) {
         Ok(selected) => {
             assert_eq!(selected.index, 1);

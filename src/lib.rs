@@ -22,10 +22,10 @@
 //! # Re-exported crates
 //!
 //! The [`enough`] crate is re-exported for cooperative cancellation
-//! (`enough::Stop`).
+//! (`how_far::Pulse`: progress, cancellation, and phase planning).
 //!
 //! ```rust,ignore
-//! use enough::Stop;
+//! use zencodec::{NoPulse, Pulse, SharedPulse};
 //! ```
 //!
 //! Individual codecs (zenjpeg, zenwebp, zengif, zenavif) implement the
@@ -150,7 +150,8 @@ pub use almost_enough::StopToken;
 pub use enough;
 pub use enough::Unstoppable;
 pub use how_far;
-pub use how_far::Pulse;
+pub use how_far::NoPulse;
+pub use how_far::{Pulse, SharedPulse};
 
 /// Location-tracing error wrapper, re-exported from [`whereat`].
 ///
@@ -236,6 +237,9 @@ pub mod encode {
 /// Codec implementors implement the generic traits. Dispatch callers
 /// use the `Dyn*` variants for codec-agnostic operation.
 pub mod decode {
+    #[allow(deprecated)]
+    pub use crate::traits::Request;
+
     pub use crate::traits::{
         BoundaryAction, BoundaryId, ControlError, ControlledIncrementalDecode, ControlledProgress,
         DecodeBoundary, DynControlledDecoder, InterpretationFacts, InterpretationState,
@@ -244,7 +248,7 @@ pub mod decode {
     // Traits — config, job, execution
     pub use crate::traits::{
         AnimationFrameDecoder, BatchMeta, Decode, DecodeJob, DecoderConfig, ErasedError, Event,
-        Fused, IncrementalDecode, Input, MetadataUpdate, Progress, Request, StepError,
+        Fused, IncrementalDecode, Input, InputRequest, MetadataUpdate, Progress, StepError,
         StreamingDecode, erase_incremental,
     };
 
@@ -290,5 +294,5 @@ pub mod prelude {
         AnimationFrameEncoder, DynAnimationFrameEncoder, DynEncodeJob, DynEncoder,
         DynEncoderConfig, EncodeJob, Encoder, EncoderConfig,
     };
-    pub use how_far::Pulse;
+    pub use how_far::{Pulse, SharedPulse};
 }

@@ -1,18 +1,18 @@
 //! Mechanical cancellation shared by the private native collection adapters.
-//! The existing StopToken is configured once when opening an operation.
+//! The existing SharedPulse is configured once when opening an operation.
 use super::tiff_region::Failure;
 use std::io::{self, Read, Seek, SeekFrom};
-use zencodec::{StopToken, enough::Stop};
+use zencodec::{SharedPulse, enough::Stop};
 
 #[derive(Clone, Default)]
 pub struct Control {
-    stop: Option<StopToken>,
+    stop: Option<SharedPulse>,
 }
 impl Control {
-    pub fn new(stop: StopToken) -> Self {
+    pub fn new(stop: SharedPulse) -> Self {
         Self { stop: Some(stop) }
     }
-    pub fn token(&self) -> Option<&StopToken> {
+    pub fn token(&self) -> Option<&SharedPulse> {
         self.stop.as_ref()
     }
     pub fn check(&self) -> Result<(), Failure> {
@@ -90,8 +90,8 @@ impl CheckStop {
             std::sync::atomic::Ordering::SeqCst,
         );
     }
-    pub fn token(&self) -> StopToken {
-        StopToken::new(self.clone())
+    pub fn token(&self) -> SharedPulse {
+        SharedPulse::new(self.clone())
     }
 }
 impl Stop for CheckStop {

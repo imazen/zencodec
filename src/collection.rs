@@ -261,7 +261,7 @@ impl ImageRequest {
 
 /// Opening the concrete adapter fixes its view. Discovery can then be lazy and
 /// selection IDs remain stable while the source operation lives.
-/// Adapters receive the operation StopToken at open and must check it
+/// Adapters receive the operation SharedPulse at open and must check it
 /// during discovery/replay and before returning an ID, exhaustion or output.
 /// This is cooperative cancellation, not a hard native-call latency bound.
 pub trait Collection {

@@ -554,7 +554,7 @@ fn output_policy_native_spot_decision_uses_actual_applied_effects() {
                 } else {
                     Ok(Decision::choose(choices.first().unwrap()))
                 }
-            }, PolicySet::new(), &zencodec::Unstoppable);
+            }, PolicySet::new(), &zencodec::NoPulse);
         if render {
             let error = result.unwrap_err();
             assert_eq!(error.error().record().code, DecisionCode::Declined);

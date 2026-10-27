@@ -284,7 +284,7 @@ impl<R: Read + Seek> TiffCollection<R> {
         input: R,
         view: Composition,
         limits: Allowances,
-        stop: zencodec::StopToken,
+        stop: zencodec::SharedPulse,
     ) -> Result<Self, zencodec::At<CollectionError>> {
         Self::open_controlled(input, view, limits, Control::new(stop))
     }

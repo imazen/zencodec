@@ -1,6 +1,6 @@
 //! First-image discovery must distinguish exhaustion from failure.
 use zencodec::{
-    At, StopToken, Unstoppable,
+    At, SharedPulse, NoPulse,
     collection::{
         Collection, CollectionError, Composition, ImageDescription, ImageId, ImageRequest,
         SelectionError,
@@ -52,7 +52,7 @@ fn empty_discovery_is_distinct_from_failed_discovery() {
     let renderer = Renderer::new(storage.clone());
     for fail in [false, true] {
         let mut images =
-            CheckedCollection::open(StopToken::new(Unstoppable), PolicySet::new(), |_| {
+            CheckedCollection::open(SharedPulse::default(), PolicySet::new(), |_| {
                 Ok(Empty { fail })
             })
             .unwrap();

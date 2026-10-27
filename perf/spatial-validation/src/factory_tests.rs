@@ -8,7 +8,7 @@ use crate::{
 use std::{cell::Cell, convert::Infallible, sync::Arc};
 use zencodec::decode::DecodePolicy;
 use zencodec::{
-    At, CodecSet, ImageFormat, ResourceLimits, StopToken, Unstoppable,
+    At, CodecSet, ImageFormat, ResourceLimits, SharedPulse, NoPulse,
     collection::{Cause, CollectionOpenContext, DiscoveryExhausted, ErasedCollection, OpenRequest},
     operation::{CollectionStage, Decision, PolicySet, Question},
     source::{DynReadAt, ReadAtShim, SliceReadAt, SourceError},
@@ -23,8 +23,8 @@ fn registered() -> CodecSet {
 fn request(view: Composition) -> OpenRequest {
     OpenRequest::new(view, 64)
 }
-fn stop() -> StopToken {
-    StopToken::new(Unstoppable)
+fn stop() -> SharedPulse {
+    SharedPulse::default()
 }
 
 #[test]

@@ -8,9 +8,10 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::fmt;
 
-use enough::{Stop, StopReason, Unstoppable};
+use enough::{Stop, StopReason};
 use zencodec::decode::{AnimationFrameDecoder, Input};
 use zencodec::encode::AnimationFrameEncoder;
+use zencodec::how_far::NoPulse;
 use zencodec::source::{ReadAt, SourceError};
 use zencodec::time::{FrameDuration, TimeBase, Timestamp};
 use zencodec_io::{DriveFailure, DriveOptions, ReadAtCursor, SliceCursor, Yield};
@@ -108,13 +109,13 @@ fn decode_eager<D: VideoDecoder>(dec: &mut D, packets: &[Packet]) -> Result<Vec<
     let mut frames = Vec::new();
     for p in packets {
         let mut p = p.clone();
-        zencodec_media::session::send_packet_until_accepted(dec, &mut p, &Unstoppable, |f| {
+        zencodec_media::session::send_packet_until_accepted(dec, &mut p, &NoPulse, |f| {
             frames.push(f);
             Ok::<(), ()>(())
         })
         .map_err(|e| format!("{e:?}"))?;
     }
-    zencodec_media::session::drain_decoder(dec, &Unstoppable, |f| {
+    zencodec_media::session::drain_decoder(dec, &NoPulse, |f| {
         frames.push(f);
         Ok::<(), ()>(())
     })
@@ -153,7 +154,7 @@ where
     const CHECK: &str = "video_decoder_contract";
     let configured = |make: &mut F| -> Result<D, Failure> {
         let mut d = make();
-        d.configure(config, &Unstoppable)
+        d.configure(config, &NoPulse)
             .map_err(|e| fail(CHECK, format!("configure: {e:?}")))?;
         Ok(d)
     };
@@ -178,7 +179,7 @@ where
     for (i, p) in packets.iter().enumerate() {
         let mut p = p.clone();
         loop {
-            match dec.send(&mut p, &Unstoppable) {
+            match dec.send(&mut p, &NoPulse) {
                 Ok(SendStatus::Accepted) => break,
                 Ok(SendStatus::ReceivePending) => {
                     if p.is_taken() {
@@ -187,7 +188,7 @@ where
                             format!("packet {i}: ReceivePending took the payload"),
                         ));
                     }
-                    match dec.receive(&Unstoppable) {
+                    match dec.receive(&NoPulse) {
                         Ok(Receive::Ready(f)) => lazy.push(f),
                         other => {
                             return Err(fail(
@@ -207,13 +208,13 @@ where
     dec.end_input()
         .map_err(|e| fail(CHECK, format!("second end_input: {e:?}")))?;
     loop {
-        match dec.receive(&Unstoppable) {
+        match dec.receive(&NoPulse) {
             Ok(Receive::Ready(f)) => lazy.push(f),
             Ok(Receive::EndOfStream) => break,
             other => return Err(fail(CHECK, format!("drain: {other:?}"))),
         }
     }
-    if !matches!(dec.receive(&Unstoppable), Ok(Receive::EndOfStream)) {
+    if !matches!(dec.receive(&NoPulse), Ok(Receive::EndOfStream)) {
         return Err(fail(CHECK, "EndOfStream is not stable"));
     }
     let got: Vec<Shown> = lazy
@@ -232,7 +233,7 @@ where
         ));
     }
     let mut again = packets[0].clone();
-    match dec.send(&mut again, &Unstoppable) {
+    match dec.send(&mut again, &NoPulse) {
         Err(SessionError::Protocol(ProtocolViolation::SendAfterEnd)) => {}
         other => return Err(fail(CHECK, format!("send after end_input: {other:?}"))),
     }
@@ -242,7 +243,7 @@ where
     let mut other_epoch = packets[0]
         .clone()
         .with_config_epoch(config.epoch.wrapping_add(1));
-    match dec.send(&mut other_epoch, &Unstoppable) {
+    match dec.send(&mut other_epoch, &NoPulse) {
         Err(SessionError::Protocol(ProtocolViolation::EpochMismatch)) => {}
         other => {
             return Err(fail(
@@ -283,17 +284,17 @@ where
 
     // Cancellation is terminal until reset, behind the erased wrapper.
     let mut dec = erase_video_decoder(configured(&mut make)?);
-    match dec.receive(&Tripped) {
+    match dec.receive(&zencodec::how_far::StopOnly::borrowed(&Tripped)) {
         Err(SessionError::Cancelled(_)) => {}
         other => return Err(fail(CHECK, format!("a tripped stop: {other:?}"))),
     }
-    match dec.receive(&Unstoppable) {
+    match dec.receive(&NoPulse) {
         Err(SessionError::Finished) => {}
         other => return Err(fail(CHECK, format!("after cancellation: {other:?}"))),
     }
     dec.reset()
         .map_err(|e| fail(CHECK, format!("reset after cancellation: {e:?}")))?;
-    if !matches!(dec.receive(&Unstoppable), Ok(Receive::NeedInput)) {
+    if !matches!(dec.receive(&NoPulse), Ok(Receive::NeedInput)) {
         return Err(fail(CHECK, "reset did not reopen the session"));
     }
     Ok(())
@@ -326,9 +327,9 @@ where
         let keep = |p: Packet| -> Out { (p.bytes().to_vec(), p.pts(), p.random_access()) };
         for (i, f) in frames.iter().enumerate() {
             loop {
-                match enc.send(f, &Unstoppable) {
+                match enc.send(f, &NoPulse) {
                     Ok(SendStatus::Accepted) => break,
-                    Ok(SendStatus::ReceivePending) => match enc.receive(&Unstoppable) {
+                    Ok(SendStatus::ReceivePending) => match enc.receive(&NoPulse) {
                         Ok(Receive::Ready(p)) => out.push(keep(p)),
                         other => {
                             return Err(fail(
@@ -341,7 +342,7 @@ where
                 }
             }
             if eager {
-                while let Ok(Receive::Ready(p)) = enc.receive(&Unstoppable) {
+                while let Ok(Receive::Ready(p)) = enc.receive(&NoPulse) {
                     out.push(keep(p));
                 }
             }
@@ -350,16 +351,16 @@ where
             .and_then(|()| enc.end_input())
             .map_err(|e| fail(CHECK, format!("end_input: {e:?}")))?;
         loop {
-            match enc.receive(&Unstoppable) {
+            match enc.receive(&NoPulse) {
                 Ok(Receive::Ready(p)) => out.push(keep(p)),
                 Ok(Receive::EndOfStream) => break,
                 other => return Err(fail(CHECK, format!("drain: {other:?}"))),
             }
         }
-        if !matches!(enc.receive(&Unstoppable), Ok(Receive::EndOfStream)) {
+        if !matches!(enc.receive(&NoPulse), Ok(Receive::EndOfStream)) {
             return Err(fail(CHECK, "EndOfStream is not stable"));
         }
-        match enc.send(&frames[0], &Unstoppable) {
+        match enc.send(&frames[0], &NoPulse) {
             Err(SessionError::Protocol(ProtocolViolation::SendAfterEnd)) => {}
             other => return Err(fail(CHECK, format!("send after end_input: {other:?}"))),
         }
@@ -397,7 +398,7 @@ where
     let mut timing = frames[0].timing();
     timing.pts = Some(Timestamp::new(0, other_base));
     let stray = frames[0].represent(timing, frames[0].presentation());
-    match enc.send(&stray, &Unstoppable) {
+    match enc.send(&stray, &NoPulse) {
         Err(SessionError::Protocol(ProtocolViolation::ClockMismatch)) => Ok(()),
         other => Err(fail(CHECK, format!("a frame on another clock: {other:?}"))),
     }
@@ -518,7 +519,7 @@ where
         let mut cursor = SliceCursor::new(window);
         demux_all(&mut dem, |d| {
             cursor
-                .next(bytes, &mut DemuxStage(d), &Unstoppable)
+                .next(bytes, &mut DemuxStage(d), &NoPulse)
                 .map_err(DriveFailure::widen)
         })
     };
@@ -542,7 +543,7 @@ where
         let mut src = Remote(file);
         let mut cursor = ReadAtCursor::new(DriveOptions::new(0, read_size));
         let got = demux_all(&mut dem, |d| {
-            cursor.next(&mut src, &mut DemuxStage(d), &Unstoppable)
+            cursor.next(&mut src, &mut DemuxStage(d), &NoPulse)
         })
         .map_err(|e| fail(CHECK, format!("read_at {read_size}: {e:?}")))?;
         if got != want {
@@ -557,7 +558,7 @@ where
     let mut dem = make();
     let at = file.len() / 2;
     let p = dem
-        .step(Input::new(at as u64 + 1, &file[at..]), &Unstoppable)
+        .step(Input::new(at as u64 + 1, &file[at..]), &NoPulse)
         .map_err(|e| fail(CHECK, format!("an unrequested input: {e:?}")))?;
     if p.consumed != 0 || !matches!(p.event, DemuxEvent::Need) || dem.requested().is_empty() {
         return Err(fail(
@@ -607,7 +608,7 @@ where
     let mut cursor = SliceCursor::new(16);
     loop {
         match cursor
-            .next(file, &mut DemuxStage(&mut dem), &Unstoppable)
+            .next(file, &mut DemuxStage(&mut dem), &NoPulse)
             .map_err(|e| fail(CHECK, format!("{e:?}")))?
             .into_inner()
         {
@@ -621,7 +622,7 @@ where
             Ok(SeekStatus::Positioned(r)) => r,
             Ok(SeekStatus::Scanning) => loop {
                 match cursor
-                    .next(file, &mut DemuxStage(&mut dem), &Unstoppable)
+                    .next(file, &mut DemuxStage(&mut dem), &NoPulse)
                     .map_err(|e| fail(CHECK, format!("target {i}: {e:?}")))?
                     .into_inner()
                 {
@@ -640,7 +641,7 @@ where
         };
         let next = loop {
             match cursor
-                .next(file, &mut DemuxStage(&mut dem), &Unstoppable)
+                .next(file, &mut DemuxStage(&mut dem), &NoPulse)
                 .map_err(|e| fail(CHECK, format!("target {i}: {e:?}")))?
                 .into_inner()
             {
@@ -719,7 +720,7 @@ where
         let mut out = Vec::new();
         let mut rng = 0x2545_f491u32;
         for (i, p) in packets.iter().enumerate() {
-            m.write_packet(p.clone(), &Unstoppable)
+            m.write_packet(p.clone(), &NoPulse)
                 .map_err(|e| fail(CHECK, format!("packet {i}: {e:?}")))?;
             let pending = m.pending_output().len();
             match drain {
@@ -749,7 +750,7 @@ where
             }
         }
         let fin = m
-            .finish(&Unstoppable)
+            .finish(&NoPulse)
             .map_err(|e| fail(CHECK, format!("finish: {e:?}")))?;
         if !timing.patches_at_finish() && !fin.patches.is_empty() {
             return Err(fail(

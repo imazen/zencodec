@@ -8,7 +8,7 @@ use core::marker::PhantomData;
 use crate::output::{AnimationFrame, OwnedAnimationFrame};
 use crate::sink::SinkError;
 use crate::{ImageInfo, OutputInfo};
-use enough::Stop;
+
 use zenpixels::PixelSlice;
 
 use super::decoder::{AnimationFrameDecoder, StreamingDecode};
@@ -64,21 +64,21 @@ impl<E: core::error::Error + Send + Sync + 'static> AnimationFrameDecoder for Un
 
     fn render_next_frame(
         &mut self,
-        _stop: Option<&dyn Stop>,
+        _pulse: Option<&dyn crate::Pulse>,
     ) -> Result<Option<AnimationFrame<'_>>, E> {
         unreachable!("Unsupported: full frame decode stub should never be constructed")
     }
 
     fn render_next_frame_owned(
         &mut self,
-        _stop: Option<&dyn Stop>,
+        _pulse: Option<&dyn crate::Pulse>,
     ) -> Result<Option<OwnedAnimationFrame>, E> {
         unreachable!("Unsupported: full frame decode stub should never be constructed")
     }
 
     fn render_next_frame_to_sink(
         &mut self,
-        _stop: Option<&dyn Stop>,
+        _pulse: Option<&dyn crate::Pulse>,
         _sink: &mut dyn crate::DecodeRowSink,
     ) -> Result<Option<OutputInfo>, E> {
         unreachable!("Unsupported: full frame decode stub should never be constructed")
@@ -94,12 +94,12 @@ impl<E: core::error::Error + Send + Sync + 'static> super::incremental::Incremen
         &mut self,
         _input: super::incremental::Input<'_>,
         _sink: &mut dyn crate::DecodeRowSink,
-        _stop: &dyn Stop,
+        _pulse: &dyn crate::Pulse,
     ) -> Result<super::incremental::Progress, super::incremental::StepError<E>> {
         unreachable!("Unsupported: incremental decode stub should never be constructed")
     }
 
-    fn requested(&self) -> &[super::incremental::Request] {
+    fn requested(&self) -> &[super::incremental::InputRequest] {
         unreachable!("Unsupported: incremental decode stub should never be constructed")
     }
 

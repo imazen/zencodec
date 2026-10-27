@@ -45,14 +45,15 @@ use alloc::vec::Vec;
 use core::fmt;
 use core::future::Future;
 
-use enough::{Stop, StopReason, Unstoppable};
+use enough::{Stop, StopReason};
 use how_far::{Pulse, SharedPulse};
 use tokio::sync::{mpsc, oneshot};
 use zencodec::decode::{
-    BatchMeta, BoxedError, ByteRange, DecodeRowSink, Event, IncrementalDecode, OutputInfo, Request,
-    SinkError, StepError,
+    BatchMeta, BoxedError, ByteRange, DecodeRowSink, Event, IncrementalDecode, InputRequest,
+    OutputInfo, SinkError, StepError,
 };
 use zencodec::encode::Encoder;
+use zencodec::how_far::NoPulse;
 use zencodec::source::{DynReadAt, SourceError};
 use zenpixels::{PixelBuffer, PixelDescriptor, PixelSliceMut};
 
@@ -286,7 +287,7 @@ fn run_on<C: Compute + ?Sized, T: Send + 'static>(
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum AsyncDriveError<E> {
-    /// The decoder failed, the sink failed, or the stop tripped inside a batch.
+    /// The decoder failed, the sink failed, or the pulse tripped inside a batch.
     Step(StepError<E>),
     /// The source failed.
     Source(BoxedError),
@@ -387,14 +388,14 @@ where
 {
     let pulse_ref: Option<&dyn Pulse> = pulse.as_ref().map(|p| p as &dyn Pulse);
     let mut progress = Progressor::new(pulse_ref);
-    let stop = progress.stop();
+    let pulse = progress.pulse();
     let mut steps = 0usize;
     let outcome = loop {
         if steps == quota.max_steps() {
             break Ok(BatchEnd::Yield);
         }
         let input = window.input();
-        let p = match decoder.step(input, &mut sink, stop) {
+        let p = match decoder.step(input, &mut sink, pulse) {
             Ok(p) => p,
             Err(e) => break Err(BatchFail::Step(e)),
         };
@@ -431,14 +432,14 @@ fn fill<'a, Src: AsyncSource + ?Sized, E: 'a>(
     source: &'a mut Src,
     window: &'a mut Window,
     fetched: &'a mut Vec<(u64, Vec<u8>)>,
-    requests: &'a [Request],
+    requests: &'a [InputRequest],
     opts: DriveOptions,
 ) -> impl Future<Output = Result<(), AsyncDriveError<E>>> + Send + 'a {
     async move {
         let limits = opts.limits;
         let request = admission::select(requests, limits).map_err(AsyncDriveError::Input)?;
         match request {
-            Request::AtLeast { offset, min_len } => {
+            InputRequest::AtLeast { offset, min_len } => {
                 window.position(offset, fetched);
                 // Read until the request is met (or the source ends), asking
                 // for up to `read_size` more each time; a network source returns
@@ -468,7 +469,7 @@ fn fill<'a, Src: AsyncSource + ?Sized, E: 'a>(
                     }
                 }
             }
-            Request::Range(r) => {
+            InputRequest::Range(r) => {
                 if r.offset >= window.base() && r.end() <= window.end() {
                     window.consume((r.offset - window.base()) as usize);
                     return Ok(());
@@ -527,7 +528,7 @@ fn fill<'a, Src: AsyncSource + ?Sized, E: 'a>(
                 window.adopt(off, buf);
                 window.consume((r.offset - off) as usize);
             }
-            Request::Len => {
+            InputRequest::Len => {
                 if window.total.is_none() {
                     limits.reading().map_err(AsyncDriveError::Input)?;
                     window.total = Some(source.len().await.map_err(AsyncDriveError::Source)?);
@@ -583,7 +584,7 @@ impl AsyncCursor {
         &mut self,
         source: &mut Src,
         stage: &mut S,
-        stop: &dyn Stop,
+        pulse: &dyn zencodec::Pulse,
     ) -> Result<crate::Yield<S::Output>, crate::DriveFailure<S::Error, BoxedError>>
     where
         S: crate::ByteStepper + ?Sized,
@@ -600,7 +601,7 @@ impl AsyncCursor {
                 self.steps_since_yield = 0;
             }
             let input = self.window.input();
-            let p = stage.step(input, stop).map_err(DriveFailure::Step)?;
+            let p = stage.step(input, pulse).map_err(DriveFailure::Step)?;
             self.steps_since_yield += 1;
             if matches!(p.step, Step::Need) {
                 check_need(stage.requested(), &input, p.consumed)
@@ -687,7 +688,7 @@ where
             w.total = source.len_hint();
         }
         let mut fetched = Vec::new();
-        let mut requests: Vec<Request> = Vec::new();
+        let mut requests: Vec<InputRequest> = Vec::new();
         loop {
             if let Some(p) = &pulse
                 && let Err(r) = p.check()
@@ -767,7 +768,7 @@ where
             w.total = source.len_hint();
         }
         let mut fetched = Vec::new();
-        let mut requests: Vec<Request> = Vec::new();
+        let mut requests: Vec<InputRequest> = Vec::new();
         loop {
             if let Some(p) = &pulse
                 && let Err(r) = p.check()
@@ -831,13 +832,13 @@ enum Attempt<T> {
     Closed,
 }
 
-/// Block until `attempt` is ready, re-checking `stop` between attempts.
+/// Block until `attempt` is ready, re-checking `pulse` between attempts.
 ///
-/// Without a stop the caller uses the channel's own blocking call; with
+/// Without a pulse the caller uses the channel's own blocking call; with
 /// one, a short spin then a sleep that doubles from 50 µs to 2 ms bounds
 /// both the cancellation latency and the idle wakeups.
 fn wait_with_stop<T>(
-    stop: Option<&dyn Stop>,
+    pulse: Option<&dyn zencodec::Pulse>,
     mut attempt: impl FnMut() -> Attempt<T>,
 ) -> Result<T, AsyncDriveError<core::convert::Infallible>> {
     let mut sleep = core::time::Duration::from_micros(50);
@@ -848,7 +849,7 @@ fn wait_with_stop<T>(
             Attempt::Closed => return Err(AsyncDriveError::Disconnected),
             Attempt::Pending => {}
         }
-        if let Some(s) = stop
+        if let Some(s) = pulse
             && let Err(reason) = s.check()
         {
             return Err(AsyncDriveError::Cancelled(reason));
@@ -888,11 +889,11 @@ impl Links {
         &mut self,
         req: PullRequest,
     ) -> Result<PullReply, AsyncDriveError<core::convert::Infallible>> {
-        let stop: &dyn Stop = match &self.pulse {
+        let pulse: &dyn zencodec::Pulse = match &self.pulse {
             Some(p) => p,
-            None => &Unstoppable,
+            None => &NoPulse,
         };
-        stop.check().map_err(AsyncDriveError::Cancelled)?;
+        pulse.check().map_err(AsyncDriveError::Cancelled)?;
         if self.pulse.is_none() {
             self.requests
                 .blocking_send(req)
@@ -904,7 +905,7 @@ impl Links {
         }
         let mut slot = Some(req);
         let tx = &self.requests;
-        wait_with_stop(Some(stop), || {
+        wait_with_stop(Some(pulse), || {
             let Some(r) = slot.take() else {
                 return Attempt::Ready(());
             };
@@ -918,7 +919,7 @@ impl Links {
             }
         })?;
         let rx = &mut self.replies;
-        wait_with_stop(Some(stop), || match rx.try_recv() {
+        wait_with_stop(Some(pulse), || match rx.try_recv() {
             Ok(reply) => Attempt::Ready(reply),
             Err(mpsc::error::TryRecvError::Empty) => Attempt::Pending,
             Err(mpsc::error::TryRecvError::Disconnected) => Attempt::Closed,
@@ -1238,9 +1239,9 @@ impl ChannelRowSink {
                 .blocking_send(event)
                 .map_err(|_| SinkError::from("strip consumer went away")),
             Some(pulse) => {
-                let stop: &dyn Stop = pulse;
+                let pulse: &dyn zencodec::Pulse = pulse;
                 let mut slot = Some(event);
-                wait_with_stop(Some(stop), || {
+                wait_with_stop(Some(pulse), || {
                     let Some(ev) = slot.take() else {
                         return Attempt::Ready(());
                     };

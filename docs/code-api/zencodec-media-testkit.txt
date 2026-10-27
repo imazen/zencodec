@@ -32,11 +32,11 @@ impl zencodec_media_testkit::toy::ToyDecoder
 pub fn zencodec_media_testkit::toy::ToyDecoder::new(max_queued_frames: usize) -> Self
 impl zencodec_media::session::VideoDecoder for zencodec_media_testkit::toy::ToyDecoder
 pub type zencodec_media_testkit::toy::ToyDecoder::Error = zencodec_media_testkit::toy::ToyError
-pub fn zencodec_media_testkit::toy::ToyDecoder::configure(&mut self, config: &zencodec_media::session::CodecConfig, stop: &dyn enough::Stop) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec_media_testkit::toy::ToyError>>
+pub fn zencodec_media_testkit::toy::ToyDecoder::configure(&mut self, config: &zencodec_media::session::CodecConfig, stop: &dyn how_far::pulse::Pulse) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec_media_testkit::toy::ToyError>>
 pub fn zencodec_media_testkit::toy::ToyDecoder::end_input(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec_media_testkit::toy::ToyError>>
-pub fn zencodec_media_testkit::toy::ToyDecoder::receive(&mut self, stop: &dyn enough::Stop) -> core::result::Result<zencodec_media::session::Receive<zencodec::frame_storage::Frame>, zencodec_media::session::SessionError<zencodec_media_testkit::toy::ToyError>>
+pub fn zencodec_media_testkit::toy::ToyDecoder::receive(&mut self, stop: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::Receive<zencodec::frame_storage::Frame>, zencodec_media::session::SessionError<zencodec_media_testkit::toy::ToyError>>
 pub fn zencodec_media_testkit::toy::ToyDecoder::reset(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec_media_testkit::toy::ToyError>>
-pub fn zencodec_media_testkit::toy::ToyDecoder::send(&mut self, packet: &mut zencodec_media::packet::Packet, stop: &dyn enough::Stop) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<zencodec_media_testkit::toy::ToyError>>
+pub fn zencodec_media_testkit::toy::ToyDecoder::send(&mut self, packet: &mut zencodec_media::packet::Packet, stop: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<zencodec_media_testkit::toy::ToyError>>
 pub fn zencodec_media_testkit::toy::ToyDecoder::stream_info(&self) -> core::option::Option<&zencodec_media::session::VideoStreamInfo>
 pub struct zencodec_media_testkit::toy::ToyDemuxer
 impl zencodec_media_testkit::toy::ToyDemuxer
@@ -44,9 +44,9 @@ pub fn zencodec_media_testkit::toy::ToyDemuxer::new(limits: zencodec_media::limi
 impl zencodec_media::container::Demuxer for zencodec_media_testkit::toy::ToyDemuxer
 pub type zencodec_media_testkit::toy::ToyDemuxer::Error = zencodec_media_testkit::toy::ToyError
 pub fn zencodec_media_testkit::toy::ToyDemuxer::access_pattern(&self) -> zencodec::source::AccessPattern
-pub fn zencodec_media_testkit::toy::ToyDemuxer::requested(&self) -> &[zencodec::traits::incremental::Request]
+pub fn zencodec_media_testkit::toy::ToyDemuxer::requested(&self) -> &[zencodec::traits::incremental::InputRequest]
 pub fn zencodec_media_testkit::toy::ToyDemuxer::seek(&mut self, target: &zencodec_media::container::SeekTarget) -> core::result::Result<zencodec_media::container::SeekStatus, zencodec_media::session::SessionError<zencodec_media_testkit::toy::ToyError>>
-pub fn zencodec_media_testkit::toy::ToyDemuxer::step(&mut self, input: zencodec::traits::incremental::Input<'_>, stop: &dyn enough::Stop) -> core::result::Result<zencodec_media::container::DemuxProgress, zencodec_media::session::SessionError<zencodec_media_testkit::toy::ToyError>>
+pub fn zencodec_media_testkit::toy::ToyDemuxer::step(&mut self, input: zencodec::traits::incremental::Input<'_>, stop: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::container::DemuxProgress, zencodec_media::session::SessionError<zencodec_media_testkit::toy::ToyError>>
 pub fn zencodec_media_testkit::toy::ToyDemuxer::tracks(&self) -> &[zencodec_media::track::TrackInfo]
 pub struct zencodec_media_testkit::toy::ToyEncoder
 impl zencodec_media_testkit::toy::ToyEncoder
@@ -56,8 +56,8 @@ impl zencodec_media::session::VideoEncoder for zencodec_media_testkit::toy::ToyE
 pub type zencodec_media_testkit::toy::ToyEncoder::Error = zencodec_media_testkit::toy::ToyError
 pub fn zencodec_media_testkit::toy::ToyEncoder::end_input(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec_media_testkit::toy::ToyError>>
 pub fn zencodec_media_testkit::toy::ToyEncoder::output_config(&self) -> core::option::Option<&zencodec_media::session::CodecConfig>
-pub fn zencodec_media_testkit::toy::ToyEncoder::receive(&mut self, stop: &dyn enough::Stop) -> core::result::Result<zencodec_media::session::Receive<zencodec_media::packet::Packet>, zencodec_media::session::SessionError<zencodec_media_testkit::toy::ToyError>>
-pub fn zencodec_media_testkit::toy::ToyEncoder::send(&mut self, frame: &zencodec::frame_storage::Frame, stop: &dyn enough::Stop) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<zencodec_media_testkit::toy::ToyError>>
+pub fn zencodec_media_testkit::toy::ToyEncoder::receive(&mut self, stop: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::Receive<zencodec_media::packet::Packet>, zencodec_media::session::SessionError<zencodec_media_testkit::toy::ToyError>>
+pub fn zencodec_media_testkit::toy::ToyEncoder::send(&mut self, frame: &zencodec::frame_storage::Frame, stop: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<zencodec_media_testkit::toy::ToyError>>
 pub struct zencodec_media_testkit::toy::ToyMuxer
 impl zencodec_media_testkit::toy::ToyMuxer
 pub fn zencodec_media_testkit::toy::ToyMuxer::new(write_count: bool) -> Self
@@ -65,10 +65,10 @@ impl zencodec_media::container::Muxer for zencodec_media_testkit::toy::ToyMuxer
 pub type zencodec_media_testkit::toy::ToyMuxer::Error = zencodec_media_testkit::toy::ToyError
 pub fn zencodec_media_testkit::toy::ToyMuxer::begin(&mut self, tracks: &[zencodec_media::track::TrackInfo], hint: zencodec_media::container::MuxHint) -> core::result::Result<zencodec_media::container::MuxTiming, zencodec_media::session::SessionError<zencodec_media_testkit::toy::ToyError>>
 pub fn zencodec_media_testkit::toy::ToyMuxer::consume_output(&mut self, n: usize)
-pub fn zencodec_media_testkit::toy::ToyMuxer::finish(self, stop: &dyn enough::Stop) -> core::result::Result<zencodec::output_patch::OutputFinish, zencodec_media::session::SessionError<zencodec_media_testkit::toy::ToyError>>
+pub fn zencodec_media_testkit::toy::ToyMuxer::finish(self, stop: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec::output_patch::OutputFinish, zencodec_media::session::SessionError<zencodec_media_testkit::toy::ToyError>>
 pub fn zencodec_media_testkit::toy::ToyMuxer::pending_output(&self) -> &[u8]
 pub fn zencodec_media_testkit::toy::ToyMuxer::take_output(&mut self, into: &mut alloc::vec::Vec<u8>)
-pub fn zencodec_media_testkit::toy::ToyMuxer::write_packet(&mut self, packet: zencodec_media::packet::Packet, stop: &dyn enough::Stop) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec_media_testkit::toy::ToyError>>
+pub fn zencodec_media_testkit::toy::ToyMuxer::write_packet(&mut self, packet: zencodec_media::packet::Packet, stop: &dyn how_far::pulse::Pulse) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec_media_testkit::toy::ToyError>>
 pub const zencodec_media_testkit::toy::HEADER_LEN: usize
 pub const zencodec_media_testkit::toy::MAGIC: &[u8; 4]
 pub const zencodec_media_testkit::toy::PACKET_HEADER_LEN: usize

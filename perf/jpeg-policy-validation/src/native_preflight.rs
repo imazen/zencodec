@@ -210,7 +210,7 @@ fn cancelled_planning_refuses_before_begin() {
     }
     let job = JpegEncoderConfig::new()
         .job()
-        .with_stop(zencodec::StopToken::new(Cancel));
+        .with_pulse(zencodec::SharedPulse::new(Cancel));
     assert!(
         job.plan_rows(
             32,

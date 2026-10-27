@@ -2,7 +2,7 @@
 
 use crate::EncodeOutput;
 use alloc::vec::Vec;
-use enough::Stop;
+
 use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 
 /// Type-erased single-image encoder.
@@ -283,10 +283,10 @@ pub trait Encoder: Sized {
 ///
 /// # Cooperative cancellation
 ///
-/// Each method takes an `Option<&dyn Stop>` token for cooperative
+/// Each method takes an `Option<&dyn crate::Pulse>` token for cooperative
 /// cancellation. Because `AnimationFrameEnc: 'static`, the encoder cannot
-/// borrow the job's stop token. Instead, the caller passes a stop
-/// token per call. Codecs that also stored an owned stop at
+/// borrow the job's pulse token. Instead, the caller passes a pulse
+/// token per call. Codecs that also stored an owned pulse at
 /// construction time can combine the two with
 /// [`OrStop`](https://docs.rs/almost-enough/latest/almost_enough/struct.OrStop.html).
 /// Pass `None` when cancellation is not needed.
@@ -365,7 +365,7 @@ pub trait AnimationFrameEncoder: Sized {
         &mut self,
         pixels: PixelSlice<'_>,
         duration_ms: u32,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<(), Self::Error>;
 
     /// Push a frame using the destination's timing resolution.
@@ -381,9 +381,9 @@ pub trait AnimationFrameEncoder: Sized {
         &mut self,
         pixels: PixelSlice<'_>,
         duration: crate::animation::FrameDuration,
-        stop: Option<&dyn Stop>,
+        pulse: Option<&dyn crate::Pulse>,
     ) -> Result<crate::animation::FrameDuration, Self::Error> {
-        self.push_frame_exact(pixels, duration, stop)?;
+        self.push_frame_exact(pixels, duration, pulse)?;
         Ok(duration)
     }
 
@@ -399,7 +399,7 @@ pub trait AnimationFrameEncoder: Sized {
         &mut self,
         _pixels: PixelSlice<'_>,
         _duration: crate::animation::FrameDuration,
-        _stop: Option<&dyn Stop>,
+        _pulse: Option<&dyn crate::Pulse>,
     ) -> Result<(), Self::Error> {
         Err(Self::reject(crate::UnsupportedOperation::AnimationTiming))
     }
@@ -408,7 +408,7 @@ pub trait AnimationFrameEncoder: Sized {
     /// through [`pending_output`](Self::pending_output).
     ///
     /// Pass `None` if cancellation is not needed.
-    fn finish(self, stop: Option<&dyn Stop>) -> Result<EncodeOutput, Self::Error>;
+    fn finish(self, pulse: Option<&dyn crate::Pulse>) -> Result<EncodeOutput, Self::Error>;
 }
 
 /// Trivial rejection impl — codecs that don't support animation set
@@ -424,12 +424,12 @@ impl AnimationFrameEncoder for () {
         &mut self,
         _: PixelSlice<'_>,
         _: u32,
-        _: Option<&dyn Stop>,
+        _: Option<&dyn crate::Pulse>,
     ) -> Result<(), Self::Error> {
         Err(crate::UnsupportedOperation::AnimationEncode)
     }
 
-    fn finish(self, _: Option<&dyn Stop>) -> Result<EncodeOutput, Self::Error> {
+    fn finish(self, _: Option<&dyn crate::Pulse>) -> Result<EncodeOutput, Self::Error> {
         Err(crate::UnsupportedOperation::AnimationEncode)
     }
 }

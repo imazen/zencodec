@@ -28,7 +28,7 @@ use zenpixels::{PixelDescriptor, PixelSliceMut};
 
 #[test]
 fn registered_native_jpeg_stays_suspended_while_an_adapter_prepares_its_destination() {
-    use zencodec::{CodecSet, enough::Unstoppable, operation::DecodeRequest};
+    use zencodec::{CodecSet, zencodec::how_far::NoPulse, operation::DecodeRequest};
     use zencodec_io::{ControlledEvent, ControlledStepper, ReadAtCursor, Yield};
     let codecs = CodecSet::new().with_decoder(JpegDecoderConfig::new());
     for progressive in [false, true] {
@@ -44,7 +44,7 @@ fn registered_native_jpeg_stays_suspended_while_an_adapter_prepares_its_destinat
         let mut stage = ControlledStepper::new(native, &mut sink);
         let mut states = Vec::new();
         loop {
-            match cursor.next(&mut source, &mut stage, &Unstoppable).unwrap() {
+            match cursor.next(&mut source, &mut stage, &NoPulse).unwrap() {
                 Yield::Output(ControlledEvent::Suspended(boundary)) => {
                     states.push(boundary.facts().state);
                     assert_eq!(
@@ -53,7 +53,7 @@ fn registered_native_jpeg_stays_suspended_while_an_adapter_prepares_its_destinat
                     );
                     let before = cursor.stats();
                     assert!(
-                        matches!(cursor.next(&mut source, &mut stage, &Unstoppable).unwrap(),
+                        matches!(cursor.next(&mut source, &mut stage, &NoPulse).unwrap(),
                         Yield::Output(ControlledEvent::Suspended(again)) if again == boundary)
                     );
                     let after = cursor.stats();
@@ -73,10 +73,10 @@ fn registered_native_jpeg_stays_suspended_while_an_adapter_prepares_its_destinat
                         boundary,
                         &mut PolicySet::new(),
                         PolicySet::new(),
-                        &Unstoppable,
+                        &NoPulse,
                     )
                     .unwrap();
-                    stage.resume(boundary.id(), action, &Unstoppable).unwrap();
+                    stage.resume(boundary.id(), action, &NoPulse).unwrap();
                     assert_eq!(stage.sink().begin, 0, "resume does not do native work");
                 }
                 Yield::Finished(ControlledEvent::Decode(Event::Done(_))) => break,
@@ -602,7 +602,7 @@ fn native_waiting_input_is_released_after_callback_unwind_and_native_failure() {
     );
     assert_eq!((budget.reserved_bytes(), budget.reserved_objects()), (0, 0));
     assert!(matches!(
-        session.step(Input::empty(), &mut sink, &zencodec::enough::Unstoppable),
+        session.step(Input::empty(), &mut sink, &zencodec::how_far::NoPulse),
         Err(StepError::Finished)
     ));
     assert_eq!((sink.begin, sink.rows, sink.finish), (0, 0, 0));

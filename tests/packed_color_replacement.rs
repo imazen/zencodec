@@ -486,7 +486,7 @@ fn packed_color_replacement_remains_subject_to_publication_refusal_and_unwind() 
                     Ok(Decision::decline(Decline::ApplicationRule))
                 },
                 PolicySet::new(),
-                &zencodec::Unstoppable,
+                &zencodec::NoPulse,
             )
         }));
         if panic {

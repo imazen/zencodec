@@ -60,7 +60,7 @@ impl PnmEncoderConfig {
 /// Per-operation encode job.
 pub struct PnmEncodeJob {
     limits: ResourceLimits,
-    stop: Option<zencodec::StopToken>,
+    stop: Option<zencodec::SharedPulse>,
     metadata: Option<Metadata>,
 }
 
@@ -104,7 +104,7 @@ impl EncodeJob for PnmEncodeJob {
     type Enc = PnmEnc;
     type AnimationFrameEnc = (); // no animation
 
-    fn with_stop(mut self, stop: zencodec::StopToken) -> Self {
+    fn with_pulse(mut self, stop: zencodec::SharedPulse) -> Self {
         self.stop = Some(stop);
         self
     }
@@ -197,7 +197,7 @@ impl PnmDecoderConfig {
 /// Per-operation decode job.
 pub struct PnmDecodeJob {
     limits: ResourceLimits,
-    stop: Option<zencodec::StopToken>,
+    stop: Option<zencodec::SharedPulse>,
 }
 
 /// The actual PPM/PGM decoder (data bound at construction).
@@ -239,7 +239,7 @@ impl<'a> DecodeJob<'a> for PnmDecodeJob {
     type StreamDec = Unsupported<At<PnmError>>;
     type AnimationFrameDec = Unsupported<At<PnmError>>;
 
-    fn with_stop(mut self, stop: zencodec::StopToken) -> Self {
+    fn with_pulse(mut self, stop: zencodec::SharedPulse) -> Self {
         self.stop = Some(stop);
         self
     }

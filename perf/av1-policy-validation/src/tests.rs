@@ -7,7 +7,8 @@ use std::{
     },
 };
 
-use enough::{Stop, StopReason, Unstoppable};
+use enough::{Stop, StopReason, };
+use zencodec::how_far::NoPulse;
 use zenavif::media::{Av1SessionError, Av1VideoDecoder};
 use zencodec::{
     At,
@@ -45,18 +46,18 @@ impl VideoDecoder for Watched {
     fn configure(
         &mut self,
         config: &CodecConfig,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<(), SessionError<Self::Error>> {
         self.decoder.configure(config, stop)
     }
     fn send(
         &mut self,
         packet: &mut Packet,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<SendStatus, SessionError<Self::Error>> {
         self.decoder.send(packet, stop)
     }
-    fn receive(&mut self, stop: &dyn Stop) -> Result<Receive<Frame>, SessionError<Self::Error>> {
+    fn receive(&mut self, stop: &dyn zencodec::Pulse) -> Result<Receive<Frame>, SessionError<Self::Error>> {
         let output = self.decoder.receive(stop)?;
         if let Receive::Ready(frame) = &output {
             self.observed
@@ -134,7 +135,7 @@ fn approved_native_frames_reencode_exactly_under_independent_decoder() {
                         Ok(Decision::choose(choices.first().unwrap()))
                     },
                 );
-                let outputs = decode(&mut decoder, &config, &packets, &Unstoppable).unwrap();
+                let outputs = decode(&mut decoder, &config, &packets, &NoPulse).unwrap();
                 assert_eq!(outputs.len(), inputs.len());
                 assert_eq!(decoder.report().decisions().count(), inputs.len());
                 for ((output, input), owner) in outputs
@@ -207,26 +208,26 @@ fn queued_native_epochs_present_original_facts_to_policy() {
             let mut config = base.clone().with_epoch(i as u32);
             config.time_base = clocks[i % 2];
             config.video = Some(VideoTrackInfo::new(s.width, s.height).with_color(colors[i % 2]));
-            decoder.configure(&config, &Unstoppable).unwrap();
+            decoder.configure(&config, &NoPulse).unwrap();
             let mut packet = packet
                 .clone()
                 .with_pts(Timestamp::new(i as i64 * 40, config.time_base))
                 .with_config_epoch(config.epoch)
                 .with_ordinal(7)
                 .with_input_offset(1000 + i as u64);
-            while decoder.send(&mut packet, &Unstoppable).unwrap() != SendStatus::Accepted {
-                let Receive::Ready(frame) = decoder.receive(&Unstoppable).unwrap() else {
+            while decoder.send(&mut packet, &NoPulse).unwrap() != SendStatus::Accepted {
+                let Receive::Ready(frame) = decoder.receive(&NoPulse).unwrap() else {
                     panic!("decoder stalled")
                 };
                 outputs.push(frame);
             }
         }
         decoder
-            .configure(&base.clone().with_epoch(99), &Unstoppable)
+            .configure(&base.clone().with_epoch(99), &NoPulse)
             .unwrap();
         decoder.end_input().unwrap();
         loop {
-            match decoder.receive(&Unstoppable).unwrap() {
+            match decoder.receive(&NoPulse).unwrap() {
                 Receive::Ready(frame) => outputs.push(frame),
                 Receive::EndOfStream => break,
                 other => panic!("drain stalled: {other:?}"),
@@ -273,7 +274,7 @@ fn one_native_packet_with_multiple_presentations_asks_for_each() {
             Ok(Decision::UsePreset)
         },
     );
-    let outputs = decode(&mut decoder, &config, &[combined], &Unstoppable).unwrap();
+    let outputs = decode(&mut decoder, &config, &[combined], &NoPulse).unwrap();
     drop(decoder);
     assert_eq!(seen, 3);
     assert_eq!(
@@ -379,7 +380,7 @@ fn native_refusal_stale_choice_error_cancel_and_unwind_release_held_picture() {
         assert!(decoder.is_failed());
         assert!(observed.dropped.load(Ordering::SeqCst));
         assert!(matches!(
-            decoder.receive(&Unstoppable),
+            decoder.receive(&NoPulse),
             Err(SessionError::Finished)
         ));
         assert!(matches!(decoder.reset(), Err(SessionError::Finished)));
@@ -400,17 +401,17 @@ fn native_refusal_stale_choice_error_cancel_and_unwind_release_held_picture() {
 fn native_error_keeps_rav1d_whereat_trace_through_policy_and_erasure() {
     fn check<D: VideoDecoder + ?Sized>(decoder: &mut D, observed: &Observed) {
         decoder
-            .configure(&CodecConfig::new(CodecId::Av1, TB), &Unstoppable)
+            .configure(&CodecConfig::new(CodecId::Av1, TB), &NoPulse)
             .unwrap();
         let error = decoder
-            .send(&mut Packet::from_vec(vec![0xff]).unwrap(), &Unstoppable)
+            .send(&mut Packet::from_vec(vec![0xff]).unwrap(), &NoPulse)
             .unwrap_err();
         let trace = cause::<At<rav1d_safe::Error>>(&error);
         assert_eq!(trace.error(), &rav1d_safe::Error::InvalidData);
         assert!(trace.frame_count() > 0);
         assert!(observed.dropped.load(Ordering::SeqCst));
         assert!(matches!(
-            decoder.receive(&Unstoppable),
+            decoder.receive(&NoPulse),
             Err(SessionError::Finished)
         ));
     }
@@ -428,7 +429,7 @@ fn guide_default_and_midstream_preview_rule_execute_on_native_frames() {
     let inputs: Vec<_> = (0..2).map(|i| frame(&s, i)).collect();
     let (config, packets) = encode(s, &inputs);
     let mut ordinary = crate::checked_video::open_video().unwrap();
-    let frames = decode(&mut ordinary, &config, &packets, &Unstoppable).unwrap();
+    let frames = decode(&mut ordinary, &config, &packets, &NoPulse).unwrap();
     assert_eq!(
         frames.iter().map(samples).collect::<Vec<_>>(),
         inputs.iter().map(samples).collect::<Vec<_>>()
@@ -440,21 +441,21 @@ fn guide_default_and_midstream_preview_rule_execute_on_native_frames() {
             .clone()
             .with_epoch(i as u32)
             .with_video(VideoTrackInfo::new(17, 13).with_color(color));
-        preview.configure(&config, &Unstoppable).unwrap();
+        preview.configure(&config, &NoPulse).unwrap();
         let mut packet = packet.clone().with_config_epoch(config.epoch);
         assert_eq!(
-            preview.send(&mut packet, &Unstoppable).unwrap(),
+            preview.send(&mut packet, &NoPulse).unwrap(),
             SendStatus::Accepted
         );
         if i == 0 {
-            let Receive::Ready(frame) = preview.receive(&Unstoppable).unwrap() else {
+            let Receive::Ready(frame) = preview.receive(&NoPulse).unwrap() else {
                 panic!("accepted preview frame missing")
             };
             assert_eq!(samples(&frame), samples(&inputs[0]));
         }
     }
     preview.end_input().unwrap();
-    let error = preview.receive(&Unstoppable).unwrap_err();
+    let error = preview.receive(&NoPulse).unwrap_err();
     assert!(cause::<At<crate::checked_video::PreviewTransfer>>(&error).frame_count() > 0);
     assert!(preview.is_failed());
     let record = preview.report().decisions().last().unwrap();
@@ -471,7 +472,7 @@ fn guide_native_storage_refusal_precedes_publication_and_keeps_native_cause() {
     let inputs: Vec<_> = (0..3).map(|i| frame(&s, i)).collect();
     let (config, packets) = encode(s, &inputs);
     let mut decoder = crate::checked_video::open_video_with_picture_limit(0).unwrap();
-    let error = decode(&mut decoder, &config, &packets, &Unstoppable).unwrap_err();
+    let error = decode(&mut decoder, &config, &packets, &NoPulse).unwrap_err();
     let trace = cause::<At<rav1d_safe::Error>>(&error);
     assert!(matches!(trace.error(), rav1d_safe::Error::Other(message)
         if message == "native picture storage limit exceeded"));
@@ -483,7 +484,7 @@ fn guide_native_storage_refusal_precedes_publication_and_keeps_native_cause() {
     assert!(decoder.is_failed());
 
     let mut decoder = crate::checked_video::open_video_with_picture_limit(1024 * 1024).unwrap();
-    let frames = decode(&mut decoder, &config, &packets, &Unstoppable).unwrap();
+    let frames = decode(&mut decoder, &config, &packets, &NoPulse).unwrap();
     assert_eq!(decoder.report().decisions().count(), inputs.len());
     drop(decoder);
     assert_eq!(
@@ -499,7 +500,7 @@ fn guide_native_storage_refusal_precedes_publication_and_keeps_native_cause() {
                 panic!("publication policy ran despite native storage refusal")
             },
         );
-        assert!(decode(&mut decoder, &config, &packets, &Unstoppable).is_err());
+        assert!(decode(&mut decoder, &config, &packets, &NoPulse).is_err());
         assert!(decoder.is_failed());
         assert!(observed.dropped.load(Ordering::SeqCst));
         assert!(observed.pictures.lock().unwrap().is_empty());

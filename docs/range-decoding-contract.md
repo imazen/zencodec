@@ -51,11 +51,11 @@ pub trait IncrementalDecode {
     type Error: core::error::Error + Send + Sync + 'static;
 
     /// Take bytes from the front of `input` and advance by one event.
-    fn step(&mut self, input: Input<'_>, sink: &mut dyn DecodeRowSink, stop: &dyn Stop)
+    fn step(&mut self, input: Input<'_>, sink: &mut dyn DecodeRowSink, pulse: &dyn Pulse)
         -> Result<Progress, StepError<Self::Error>>;
 
     /// What the decoder needs, valid after a step returned `Event::Need`.
-    fn requested(&self) -> &[Request];
+    fn requested(&self) -> &[InputRequest];
 
     fn info(&self) -> Option<&ImageInfo>;
     fn output_descriptor(&self) -> Option<PixelDescriptor>;   // default None
@@ -69,7 +69,7 @@ pub struct Progress { pub consumed: usize, pub event: Event }
 pub enum Event { Need, Rows { meta: BatchMeta, rows: u32 }, Metadata(MetadataUpdate), Done(OutputInfo) }
 
 #[non_exhaustive]
-pub enum Request {
+pub enum InputRequest {
     AtLeast { offset: u64, min_len: usize },   // bytes from `offset`, at least `min_len`
     Range(ByteRange),                          // exactly this span
     Len,                                       // the total length, as Input::total_len
@@ -161,7 +161,7 @@ returns, applies it.
 
 **Events.** `Event` is non-exhaustive. Variants added later are
 informational: a driver that does not recognise one steps again. Anything
-that needs the driver to act is a `Need` plus a `Request`.
+that needs the driver to act is a `Need` plus a `InputRequest`.
 
 **Crop and region intent** stay on the job; the sink's coordinate space is
 the output image.

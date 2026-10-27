@@ -8,8 +8,8 @@
 use std::io::Cursor;
 
 use zencodec::decode::{
-    BatchMeta, DecodeRowSink, Event, IncrementalDecode, Input, MetadataUpdate, OutputInfo,
-    Progress, Request, SinkError, StepError,
+    BatchMeta, DecodeRowSink, Event, IncrementalDecode, Input, InputRequest, MetadataUpdate,
+    OutputInfo, Progress, SinkError, StepError,
 };
 use zencodec::source::{AccessPattern, ReadAt, SliceReadAt, SourceError};
 use zencodec::{ImageFormat, ImageInfo};
@@ -251,7 +251,7 @@ fn stream_pump_rejects_random_access_with_a_pointer_to_the_fix() {
     let err =
         pump_read_to_sink(Cursor::new(&file), &mut dec, &mut sink, None, 512, 1 << 20).unwrap_err();
     assert!(
-        matches!(err, PumpError::NeedsRandomAccess(Request::Range(r)) if r.offset == 32),
+        matches!(err, PumpError::NeedsRandomAccess(InputRequest::Range(r)) if r.offset == 32),
         "{err:?}"
     );
     assert!(err.to_string().contains("random access"), "{err}");
@@ -425,7 +425,7 @@ struct Trickle {
     cap: usize,
     total: usize,
     got: Vec<u8>,
-    req: [Request; 1],
+    req: [InputRequest; 1],
     begun: bool,
     done: bool,
 }
@@ -436,7 +436,7 @@ impl Trickle {
             cap,
             total,
             got: Vec::new(),
-            req: [Request::at_least(0, 1)],
+            req: [InputRequest::at_least(0, 1)],
             begun: false,
             done: false,
         }
@@ -458,7 +458,7 @@ impl IncrementalDecode for Trickle {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        _stop: &dyn enough::Stop,
+        _stop: &dyn zencodec::Pulse,
     ) -> Result<Progress, StepError<Never>> {
         if self.done {
             return Ok(Progress::new(
@@ -491,7 +491,7 @@ impl IncrementalDecode for Trickle {
             ));
         }
         if input.offset != pos || input.bytes.is_empty() {
-            self.req = [Request::at_least(pos, 1)];
+            self.req = [InputRequest::at_least(pos, 1)];
             return Ok(Progress::need(0));
         }
         let n = input
@@ -500,10 +500,10 @@ impl IncrementalDecode for Trickle {
             .min(self.cap)
             .min(self.total - self.got.len());
         self.got.extend_from_slice(&input.bytes[..n]);
-        self.req = [Request::at_least(self.got.len() as u64, 1)];
+        self.req = [InputRequest::at_least(self.got.len() as u64, 1)];
         Ok(Progress::new(n, Event::Need))
     }
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         &self.req
     }
     fn info(&self) -> Option<&ImageInfo> {
@@ -565,7 +565,7 @@ enum Misbehave {
 
 struct Bad {
     how: Misbehave,
-    req: Vec<Request>,
+    req: Vec<InputRequest>,
 }
 
 impl IncrementalDecode for Bad {
@@ -574,16 +574,19 @@ impl IncrementalDecode for Bad {
         &mut self,
         input: Input<'_>,
         _sink: &mut dyn DecodeRowSink,
-        _stop: &dyn enough::Stop,
+        _stop: &dyn zencodec::Pulse,
     ) -> Result<Progress, StepError<Never>> {
         self.req = match self.how {
             Misbehave::EmptyRequest => Vec::new(),
-            Misbehave::Spin => vec![Request::at_least(0, 4)],
-            Misbehave::PastEnd => vec![Request::range(input.total_len.unwrap_or(1 << 20) + 10, 4)],
+            Misbehave::Spin => vec![InputRequest::at_least(0, 4)],
+            Misbehave::PastEnd => vec![InputRequest::range(
+                input.total_len.unwrap_or(1 << 20) + 10,
+                4,
+            )],
         };
         Ok(Progress::need(0))
     }
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         &self.req
     }
     fn info(&self) -> Option<&ImageInfo> {
@@ -1640,7 +1643,7 @@ mod tokio_drivers {
 /// Asks for a range, then claims far more bytes than it was offered.
 struct Greedy {
     step: u32,
-    req: Vec<Request>,
+    req: Vec<InputRequest>,
 }
 
 impl IncrementalDecode for Greedy {
@@ -1649,12 +1652,12 @@ impl IncrementalDecode for Greedy {
         &mut self,
         input: Input<'_>,
         _sink: &mut dyn DecodeRowSink,
-        _stop: &dyn enough::Stop,
+        _stop: &dyn zencodec::Pulse,
     ) -> Result<Progress, StepError<Never>> {
         self.step += 1;
         match self.step {
             1 => {
-                self.req = vec![Request::range(4, 8)];
+                self.req = vec![InputRequest::range(4, 8)];
                 Ok(Progress::need(0))
             }
             2 => Ok(Progress::new(
@@ -1667,7 +1670,7 @@ impl IncrementalDecode for Greedy {
             )),
         }
     }
-    fn requested(&self) -> &[Request] {
+    fn requested(&self) -> &[InputRequest] {
         &self.req
     }
     fn info(&self) -> Option<&ImageInfo> {

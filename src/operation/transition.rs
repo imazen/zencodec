@@ -205,7 +205,7 @@ pub fn resolve_frame_route<R: PolicyResolver + ?Sized>(
     offers: &[FrameRouteOffer],
     resolver: &mut R,
     preset: PolicySet,
-    stop: &dyn enough::Stop,
+    pulse: &dyn crate::Pulse,
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>> {
     let facts = FrameRouteFacts {
         input: FrameFacts::new(interpretation, timing),
@@ -222,6 +222,6 @@ pub fn resolve_frame_route<R: PolicyResolver + ?Sized>(
         Selection::FrameRoute,
         resolver,
         preset,
-        stop,
+        pulse,
     )
 }

@@ -278,7 +278,7 @@ pub fn rewrite::Context<'a>::check(&self) -> core::result::Result<(), zencodec::
 pub fn rewrite::Context<'a>::decompress(&self, zencodec::metadata_rewrite::Compression, &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, zencodec::metadata_rewrite::Error>
 pub fn rewrite::Context<'a>::exif(&self, &[u8]) -> core::result::Result<alloc::vec::Vec<u8>, zencodec::metadata_rewrite::Error>
 pub fn rewrite::Context<'a>::icc(&self, &[u8]) -> core::result::Result<core::option::Option<alloc::vec::Vec<u8>>, zencodec::metadata_rewrite::Error>
-pub fn rewrite::Context<'a>::new(&zencodec::metadata_rewrite::Request<'a>) -> core::result::Result<Self, zencodec::metadata_rewrite::Error>
+pub fn rewrite::Context<'a>::new(&zencodec::metadata_rewrite::RewriteRequest<'a>) -> core::result::Result<Self, zencodec::metadata_rewrite::Error>
 pub fn rewrite::Context<'a>::packet(&self, usize) -> core::result::Result<(), zencodec::metadata_rewrite::Error>
 pub fn rewrite::Context<'a>::services(&self) -> core::result::Result<&dyn zencodec::metadata_rewrite::Services, zencodec::metadata_rewrite::Error>
 pub fn rewrite::Context<'a>::with_input(self, &'a [u8]) -> Self

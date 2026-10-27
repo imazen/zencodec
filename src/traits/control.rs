@@ -9,7 +9,7 @@ use core::{
     fmt,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use enough::Stop;
+
 use zenpixels::PixelDescriptor;
 
 /// How much a decoder knows about the interpretation of its proposed pixels.
@@ -227,7 +227,7 @@ pub trait ControlledIncrementalDecode: IncrementalDecode {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn Stop,
+        pulse: &dyn crate::Pulse,
     ) -> Result<ControlledProgress, StepError<Self::Error>>;
     /// Resume exactly one outstanding boundary. A stale, invalid or cancelled
     /// reply is terminal. This performs no sink work.
@@ -235,7 +235,7 @@ pub trait ControlledIncrementalDecode: IncrementalDecode {
         &mut self,
         boundary: BoundaryId,
         action: BoundaryAction,
-        stop: &dyn Stop,
+        pulse: &dyn crate::Pulse,
     ) -> Result<(), StepError<Self::Error>>;
 }
 
@@ -247,17 +247,17 @@ impl<D: ControlledIncrementalDecode + ?Sized> ControlledIncrementalDecode for Bo
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn Stop,
+        pulse: &dyn crate::Pulse,
     ) -> Result<ControlledProgress, StepError<Self::Error>> {
-        (**self).step_controlled(input, sink, stop)
+        (**self).step_controlled(input, sink, pulse)
     }
     fn resume(
         &mut self,
         boundary: BoundaryId,
         action: BoundaryAction,
-        stop: &dyn Stop,
+        pulse: &dyn crate::Pulse,
     ) -> Result<(), StepError<Self::Error>> {
-        (**self).resume(boundary, action, stop)
+        (**self).resume(boundary, action, pulse)
     }
 }
 impl<D: ControlledIncrementalDecode + ?Sized> ControlledIncrementalDecode for &mut D {
@@ -265,17 +265,17 @@ impl<D: ControlledIncrementalDecode + ?Sized> ControlledIncrementalDecode for &m
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn Stop,
+        pulse: &dyn crate::Pulse,
     ) -> Result<ControlledProgress, StepError<Self::Error>> {
-        (**self).step_controlled(input, sink, stop)
+        (**self).step_controlled(input, sink, pulse)
     }
     fn resume(
         &mut self,
         boundary: BoundaryId,
         action: BoundaryAction,
-        stop: &dyn Stop,
+        pulse: &dyn crate::Pulse,
     ) -> Result<(), StepError<Self::Error>> {
-        (**self).resume(boundary, action, stop)
+        (**self).resume(boundary, action, pulse)
     }
 }
 impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for IncrementalDecoderShim<D> {
@@ -283,20 +283,20 @@ impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Incremental
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn Stop,
+        pulse: &dyn crate::Pulse,
     ) -> Result<ControlledProgress, StepError<ErasedError>> {
         self.0
-            .step_controlled(input, sink, stop)
+            .step_controlled(input, sink, pulse)
             .map_err(|e| e.map_codec(|c| ErasedError::new(Box::new(c))))
     }
     fn resume(
         &mut self,
         boundary: BoundaryId,
         action: BoundaryAction,
-        stop: &dyn Stop,
+        pulse: &dyn crate::Pulse,
     ) -> Result<(), StepError<ErasedError>> {
         self.0
-            .resume(boundary, action, stop)
+            .resume(boundary, action, pulse)
             .map_err(|e| e.map_codec(|c| ErasedError::new(Box::new(c))))
     }
 }
@@ -403,7 +403,7 @@ impl DecodeRowSink for GuardedSink<'_> {
 mod tests {
     use super::*;
     use crate::ImageInfo;
-    use crate::decode::{Event, OutputInfo, Request, SinkError};
+    use crate::decode::{Event, InputRequest, OutputInfo, SinkError};
     use alloc::sync::Arc;
     use zenpixels::PixelSliceMut;
 
@@ -418,7 +418,7 @@ mod tests {
             &mut self,
             _: Input<'_>,
             sink: &mut dyn DecodeRowSink,
-            _: &dyn Stop,
+            _: &dyn crate::Pulse,
         ) -> Result<Progress, StepError<Self::Error>> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             sink.begin(1, 1, PixelDescriptor::RGBA8_SRGB)
@@ -428,7 +428,7 @@ mod tests {
                 Event::Done(OutputInfo::full_decode(1, 1, PixelDescriptor::RGBA8_SRGB)),
             ))
         }
-        fn requested(&self) -> &[Request] {
+        fn requested(&self) -> &[InputRequest] {
             &[]
         }
         fn info(&self) -> Option<&ImageInfo> {
@@ -440,7 +440,7 @@ mod tests {
             &mut self,
             _: Input<'_>,
             sink: &mut dyn DecodeRowSink,
-            _: &dyn Stop,
+            _: &dyn crate::Pulse,
         ) -> Result<ControlledProgress, StepError<Self::Error>> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             match self.early_output {
@@ -472,7 +472,7 @@ mod tests {
             &mut self,
             _: BoundaryId,
             _: BoundaryAction,
-            _: &dyn Stop,
+            _: &dyn crate::Pulse,
         ) -> Result<(), StepError<Self::Error>> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             Ok(()) // Intentionally accepts every reply: the framework must check.
@@ -531,7 +531,7 @@ mod tests {
             let mut sink = NoEffects;
             for _ in 0..3 {
                 assert!(
-                    matches!(dec.step_controlled(Input::empty(), &mut sink, &enough::Unstoppable).unwrap(), ControlledProgress::Suspended { consumed: 0, boundary: b } if b == boundary)
+                    matches!(dec.step_controlled(Input::empty(), &mut sink, &crate::how_far::NoPulse).unwrap(), ControlledProgress::Suspended { consumed: 0, boundary: b } if b == boundary)
                 );
             }
             assert_eq!(calls.load(Ordering::SeqCst), 1);
@@ -540,29 +540,29 @@ mod tests {
                     dec.resume(
                         boundary.id(),
                         BoundaryAction::ContinueReading,
-                        &enough::Unstoppable
+                        &crate::how_far::NoPulse
                     ),
                     Err(StepError::Control(ControlError::InvalidReply))
                 ));
             } else {
                 assert!(matches!(
-                    dec.step(Input::empty(), &mut sink, &enough::Unstoppable),
+                    dec.step(Input::empty(), &mut sink, &crate::how_far::NoPulse),
                     Err(StepError::Control(ControlError::UnhandledBoundary))
                 ));
             }
             assert!(matches!(
-                dec.step_controlled(Input::empty(), &mut sink, &enough::Unstoppable),
+                dec.step_controlled(Input::empty(), &mut sink, &crate::how_far::NoPulse),
                 Err(StepError::Finished)
             ));
             assert_eq!(calls.load(Ordering::SeqCst), 1);
         }
         let (calls, mut dec, boundary) = fixture();
-        dec.step_controlled(Input::empty(), &mut NoEffects, &enough::Unstoppable)
+        dec.step_controlled(Input::empty(), &mut NoEffects, &crate::how_far::NoPulse)
             .unwrap();
         dec.resume(
             boundary.id(),
             BoundaryAction::AdoptInterpretation,
-            &enough::Unstoppable,
+            &crate::how_far::NoPulse,
         )
         .unwrap();
         assert_eq!(calls.load(Ordering::SeqCst), 2);
@@ -575,7 +575,7 @@ mod tests {
             inner.early_output = effect;
             let mut dec = Fused::new(inner);
             assert!(matches!(
-                dec.step_controlled(Input::empty(), &mut NoEffects, &enough::Unstoppable),
+                dec.step_controlled(Input::empty(), &mut NoEffects, &crate::how_far::NoPulse),
                 Err(StepError::Control(ControlError::OutputBeforeInterpretation))
             ));
             assert_eq!(calls.load(Ordering::SeqCst), 1);

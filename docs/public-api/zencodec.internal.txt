@@ -64,10 +64,10 @@ pub fn decode::DecodeCapabilities::assert_fields_are_eq(&self)
 pub fn decode::DecodePolicy::assert_fields_are_eq(&self)
 pub fn decode::Event::assert_fields_are_eq(&self)
 pub fn decode::Input<'a>::assert_fields_are_eq(&self)
+pub fn decode::InputRequest::assert_fields_are_eq(&self)
 pub fn decode::InterpretationFacts::assert_fields_are_eq(&self)
 pub fn decode::OutputInfo::assert_fields_are_eq(&self)
 pub fn decode::Progress::assert_fields_are_eq(&self)
-pub fn decode::Request::assert_fields_are_eq(&self)
 pub fn encode::AnimationOutputTiming::assert_fields_are_eq(&self)
 pub fn encode::EncodePolicy::assert_fields_are_eq(&self)
 pub fn encode::OutputBuffer::assert_fields_are_eq(&self)
@@ -161,11 +161,11 @@ decode::ControlError: TrivialClone
 decode::DecodeBoundary: TrivialClone
 decode::DecodePolicy: TrivialClone
 decode::Input<'a>: TrivialClone
+decode::InputRequest: TrivialClone
 decode::InterpretationFacts: TrivialClone
 decode::InterpretationState: TrivialClone
 decode::InterpretationUnavailable: TrivialClone
 decode::MetadataUpdate: TrivialClone
-decode::Request: TrivialClone
 encode::AnimationOutputTiming: TrivialClone
 encode::EncodePolicy: TrivialClone
 encode::Fidelity: TrivialClone

@@ -1,3 +1,7 @@
+> The current review uses `Pulse` / `SharedPulse` for operation control.
+> See [the control migration](pulse-migration.md) for caller and codec changes.
+> Bare byte requests are `InputRequest`; metadata rewriting uses `RewriteRequest`.
+
 # zencodec API Specification
 
 Shared traits and types for zen* image codecs. This is the canonical reference
@@ -558,7 +562,7 @@ struct ImageConversionOffer { // non_exhaustive
 }
 fn resolve_image_conversion<R: PolicyResolver + ?Sized>(
     image: &image::ImageOutput, offers: &[ImageConversionOffer], resolver: &mut R,
-    preset: PolicySet, stop: &dyn Stop,
+    preset: PolicySet, pulse: &dyn Pulse,
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>>;
 ```
 
@@ -640,7 +644,7 @@ fn resolve_frame_route<R: PolicyResolver + ?Sized>(
     offers: &[FrameRouteOffer],
     resolver: &mut R,
     preset: PolicySet,
-    stop: &dyn enough::Stop,
+    pulse: &dyn Pulse,
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>>;
 ```
 
@@ -701,7 +705,7 @@ struct TranscodeOffer { // non_exhaustive; fields public
 }
 fn resolve_transcode<R: PolicyResolver + ?Sized>(
     boundary: DecodeBoundary, offers: &[TranscodeOffer], resolver: &mut R,
-    preset: PolicySet, stop: &dyn Stop,
+    preset: PolicySet, pulse: &dyn Pulse,
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>>;
 ```
 
@@ -730,7 +734,7 @@ The [controlled protocol](controlled-decoding.md) adds
 `ControlledIncrementalDecode::step_controlled` and `resume` alongside the
 legacy incremental methods. `ControlledProgress::Suspended` holds an opaque
 `BoundaryId` and `InterpretationFacts`; it is separate from `Event::Metadata`
-and from byte `Request`s. `erase_controlled` preserves native errors and enforces
+and from byte `InputRequest`s. `erase_controlled` preserves native errors and enforces
 suspension, cancellation and terminal failures through `Fused`.
 
 ```rust
@@ -739,7 +743,7 @@ fn resolve_boundary<R: PolicyResolver + ?Sized>(
     boundary: DecodeBoundary,
     resolver: &mut R,
     preset: PolicySet,
-    stop: &dyn Stop,
+    pulse: &dyn Pulse,
 ) -> Result<(BoundaryAction, DecisionRecord), At<PolicyFailure>>;
 
 // zencodec_io: runs with the existing slice/read-at/stream/async drivers
@@ -765,7 +769,7 @@ impl<'a, D: decode::ControlledIncrementalDecode, S: decode::DecodeRowSink>
     fn sink(&self) -> &S;
     fn sink_mut(&mut self) -> &mut S;
     fn resume(&mut self, boundary: decode::BoundaryId,
-        action: decode::BoundaryAction, stop: &dyn Stop)
+        action: decode::BoundaryAction, pulse: &dyn Pulse)
         -> Result<(), decode::StepError<D::Error>>;
 }
 // ByteStepper<Output = ControlledEvent, Error = decode::StepError<D::Error>>
@@ -852,11 +856,11 @@ impl SampleEncoding {
 // zencodec::operation
 enum PublicationOffer { ReturnHeld } // non_exhaustive
 fn resolve_image<R: PolicyResolver + ?Sized>(
-    image: image::ImageOutput, resolver: &mut R, preset: PolicySet, stop: &dyn Stop,
+    image: image::ImageOutput, resolver: &mut R, preset: PolicySet, pulse: &dyn Pulse,
 ) -> Result<Outcome<image::ImageOutput>, At<PolicyFailure>>;
 fn resolve_frame<R: PolicyResolver + ?Sized>(
     interpretation: &frame::FrameInterpretation, timing: frame::FrameTiming,
-    resolver: &mut R, preset: PolicySet, stop: &dyn Stop,
+    resolver: &mut R, preset: PolicySet, pulse: &dyn Pulse,
 ) -> Result<DecisionRecord, At<PolicyFailure>>;
 
 // zencodec_media::policy, implements VideoDecoder
@@ -969,7 +973,7 @@ trait EncodeJob: Sized {
     type Enc: Sized + 'static;                    // single-image encoder
     type AnimationFrameEnc: Sized + Send + 'static; // animation encoder
 
-    fn with_stop(self, stop: StopToken) -> Self;
+    fn with_pulse(self, pulse: SharedPulse) -> Self;
     fn with_limits(self, limits: ResourceLimits) -> Self;
     fn with_policy(self, policy: EncodePolicy) -> Self;         // default: self
     // Blessed metadata path: filters via Metadata::filtered(&policy) before the
@@ -1101,13 +1105,13 @@ trait AnimationFrameEncoder: Sized {
     fn consume_output(&mut self, n: usize);                // default: no-op
     fn take_output(&mut self, into: &mut Vec<u8>);         // default: copy + consume
     fn push_frame(
-        &mut self, pixels: PixelSlice<'_>, duration_ms: u32, stop: Option<&dyn Stop>,
+        &mut self, pixels: PixelSlice<'_>, duration_ms: u32, pulse: Option<&dyn Pulse>,
     ) -> Result<(), Self::Error>;
     fn push_frame_timed(&mut self, pixels: PixelSlice<'_>, duration: FrameDuration,
-        stop: Option<&dyn Stop>) -> Result<FrameDuration, Self::Error>;   // default: exact
+        pulse: Option<&dyn Pulse>) -> Result<FrameDuration, Self::Error>;   // default: exact
     fn push_frame_exact(&mut self, pixels: PixelSlice<'_>, duration: FrameDuration,
-        stop: Option<&dyn Stop>) -> Result<(), Self::Error>;              // default: Err
-    fn finish(self, stop: Option<&dyn Stop>) -> Result<EncodeOutput, Self::Error>;
+        pulse: Option<&dyn Pulse>) -> Result<(), Self::Error>;              // default: Err
+    fn finish(self, pulse: Option<&dyn Pulse>) -> Result<EncodeOutput, Self::Error>;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -1166,7 +1170,7 @@ trait DecodeJob<'a>: Sized {
     type StreamDec: StreamingDecode<Error = Self::Error>;
     type AnimationFrameDec: AnimationFrameDecoder<Error = Self::Error> + 'static;
 
-    fn with_stop(self, stop: StopToken) -> Self;
+    fn with_pulse(self, pulse: SharedPulse) -> Self;
     fn with_limits(self, limits: ResourceLimits) -> Self;
     fn with_policy(self, policy: DecodePolicy) -> Self;  // default: self
 
@@ -1240,11 +1244,11 @@ trait AnimationFrameDecoder: Sized {
     fn frame_count(&self) -> Option<u32>;       // default: None
     fn loop_count(&self) -> Option<u32>;        // default: None
 
-    fn render_next_frame(&mut self, stop: Option<&dyn Stop>)
+    fn render_next_frame(&mut self, pulse: Option<&dyn Pulse>)
         -> Result<Option<AnimationFrame<'_>>, Self::Error>;
-    fn render_next_frame_owned(&mut self, stop: Option<&dyn Stop>)
+    fn render_next_frame_owned(&mut self, pulse: Option<&dyn Pulse>)
         -> Result<Option<OwnedAnimationFrame>, Self::Error>;   // default: copies from render_next_frame
-    fn render_next_frame_to_sink(&mut self, stop: Option<&dyn Stop>,
+    fn render_next_frame_to_sink(&mut self, pulse: Option<&dyn Pulse>,
         sink: &mut dyn DecodeRowSink) -> Result<Option<OutputInfo>, Self::Error>;
 }
 ```
@@ -1256,9 +1260,9 @@ Use `Unsupported<E>` as the associated type for codecs without animation support
 ```rust
 trait IncrementalDecode {
     type Error: core::error::Error + Send + Sync + 'static;
-    fn step(&mut self, input: Input<'_>, sink: &mut dyn DecodeRowSink, stop: &dyn Stop)
+    fn step(&mut self, input: Input<'_>, sink: &mut dyn DecodeRowSink, pulse: &dyn Pulse)
         -> Result<Progress, StepError<Self::Error>>;
-    fn requested(&self) -> &[Request];                         // after Event::Need, never empty
+    fn requested(&self) -> &[InputRequest];                         // after Event::Need, never empty
     fn info(&self) -> Option<&ImageInfo>;
     fn output_descriptor(&self) -> Option<PixelDescriptor>;   // default None
     fn access_pattern(&self) -> source::AccessPattern;         // default Sequential
@@ -1267,7 +1271,7 @@ trait IncrementalDecode {
 struct Input<'a> { offset: u64, bytes: &'a [u8], total_len: Option<u64> }
 struct Progress { consumed: usize, event: Event }
 #[non_exhaustive] enum Event { Need, Rows { meta: BatchMeta, rows: u32 }, Metadata(MetadataUpdate), Done(OutputInfo) }
-#[non_exhaustive] enum Request { AtLeast { offset: u64, min_len: usize }, Range(ByteRange), Len }
+#[non_exhaustive] enum InputRequest { AtLeast { offset: u64, min_len: usize }, Range(ByteRange), Len }
 #[non_exhaustive] enum StepError<E> { Codec(E), Sink(SinkError), Cancelled(StopReason), Finished }
 
 struct Fused<D>;                                   // enforces Done/error/stop termination
@@ -1394,7 +1398,7 @@ trait DynEncoderConfig: Send + Sync {
 }
 
 trait DynEncodeJob {
-    fn set_stop(&mut self, stop: StopToken);
+    fn set_pulse(&mut self, pulse: SharedPulse);
     fn set_limits(&mut self, limits: ResourceLimits);
     fn set_policy(&mut self, policy: EncodePolicy);
     fn set_metadata_policy(&mut self, meta: Metadata, policy: MetadataPolicy); // blessed
@@ -1435,12 +1439,12 @@ trait DynAnimationFrameEncoder {
     fn consume_output(&mut self, n: usize);
     fn take_output(&mut self, into: &mut Vec<u8>);
     fn push_frame(&mut self, pixels: PixelSlice<'_>, duration_ms: u32,
-        stop: Option<&dyn Stop>) -> Result<(), BoxedError>;
+        pulse: Option<&dyn Pulse>) -> Result<(), BoxedError>;
     fn push_frame_timed(&mut self, pixels: PixelSlice<'_>, duration: FrameDuration,
-        stop: Option<&dyn Stop>) -> Result<FrameDuration, BoxedError>;
+        pulse: Option<&dyn Pulse>) -> Result<FrameDuration, BoxedError>;
     fn push_frame_exact(&mut self, pixels: PixelSlice<'_>, duration: FrameDuration,
-        stop: Option<&dyn Stop>) -> Result<(), BoxedError>;
-    fn finish(self: Box<Self>, stop: Option<&dyn Stop>) -> Result<EncodeOutput, BoxedError>;
+        pulse: Option<&dyn Pulse>) -> Result<(), BoxedError>;
+    fn finish(self: Box<Self>, pulse: Option<&dyn Pulse>) -> Result<EncodeOutput, BoxedError>;
 }
 ```
 
@@ -1456,7 +1460,7 @@ trait DynDecoderConfig: Send + Sync {
 }
 
 trait DynDecodeJob<'a> {
-    fn set_stop(&mut self, stop: StopToken);
+    fn set_pulse(&mut self, pulse: SharedPulse);
     fn set_limits(&mut self, limits: ResourceLimits);
     fn set_policy(&mut self, policy: DecodePolicy);
     fn probe(&self, data: &[u8]) -> Result<ImageInfo, BoxedError>;
@@ -1491,9 +1495,9 @@ trait DynAnimationFrameDecoder {
     fn info(&self) -> &ImageInfo;
     fn frame_count(&self) -> Option<u32>;
     fn loop_count(&self) -> Option<u32>;
-    fn render_next_frame_owned(&mut self, stop: Option<&dyn Stop>)
+    fn render_next_frame_owned(&mut self, pulse: Option<&dyn Pulse>)
         -> Result<Option<OwnedAnimationFrame>, BoxedError>;
-    fn render_next_frame_to_sink(&mut self, stop: Option<&dyn Stop>,
+    fn render_next_frame_to_sink(&mut self, pulse: Option<&dyn Pulse>,
         sink: &mut dyn DecodeRowSink) -> Result<Option<OutputInfo>, BoxedError>;
 }
 
@@ -1967,7 +1971,7 @@ impl CodecSet {
     fn with_collection(self, factory: impl collection::CollectionFactory + 'static) -> Self;
     fn open_collection<'a, R: operation::PolicyResolver>(&self, format: ImageFormat,
         source: &'a mut dyn source::DynReadAt, request: collection::OpenRequest,
-        resolver: R, stop: StopToken)
+        resolver: R, pulse: SharedPulse)
         -> Result<operation::CheckedCollection<collection::Discovery<collection::ErasedCollection<'a>>, R>,
             At<operation::CollectionOperationError>>;
     fn new() -> Self;
@@ -1982,7 +1986,7 @@ impl CodecSet {
 
     // Defaults stamped onto every job the set creates.
     fn with_limits(self, limits: ResourceLimits) -> Self;
-    fn with_stop(self, stop: StopToken) -> Self;
+    fn with_pulse(self, pulse: SharedPulse) -> Self;
     fn with_decode_policy(self, policy: DecodePolicy) -> Self;
     fn with_encode_policy(self, policy: EncodePolicy) -> Self;
 
@@ -2527,20 +2531,20 @@ synchronous writer ownership as an opt-in adapter:
 
 ```rust
 impl<M: Muxer, D: Destination> PreparedOutput<M, D> {
-    pub fn new(mux: M, destination: D, tracks: &[TrackInfo], stop: &dyn Stop)
+    pub fn new(mux: M, destination: D, tracks: &[TrackInfo], pulse: &dyn Pulse)
         -> Result<Self, Failure>;
     pub const fn timing(&self) -> MuxTiming;
-    pub fn publish(self, stop: &dyn Stop) -> Result<Output<M, D>, Failure>;
+    pub fn publish(self, pulse: &dyn Pulse) -> Result<Output<M, D>, Failure>;
 }
 impl<M: Muxer, D: Destination> Output<M, D> {
-    pub fn new(mux: M, destination: D, tracks: &[TrackInfo], stop: &dyn Stop)
+    pub fn new(mux: M, destination: D, tracks: &[TrackInfo], pulse: &dyn Pulse)
         -> Result<Self, Failure>;
-    pub fn with_container_timing(mux: M, destination: D, tracks: &[TrackInfo], stop: &dyn Stop)
+    pub fn with_container_timing(mux: M, destination: D, tracks: &[TrackInfo], pulse: &dyn Pulse)
         -> Result<Self, Failure>;
     pub const fn stats(&self) -> &Stats;
     pub fn is_failed(&self) -> bool;
-    pub fn send(&mut self, packet: Packet, stop: &dyn Stop) -> Result<(), Failure>;
-    pub fn finish(self, stop: &dyn Stop) -> Result<Stats, Failure>;
+    pub fn send(&mut self, packet: Packet, pulse: &dyn Pulse) -> Result<(), Failure>;
+    pub fn finish(self, pulse: &dyn Pulse) -> Result<Stats, Failure>;
 }
 ```
 

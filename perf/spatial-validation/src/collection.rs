@@ -57,7 +57,7 @@ mod checked_consumer {
     // EXAMPLE: checked_jxl_first
     use crate::jxl_items::{JxlItems, Limits};
     use zencodec::{
-        At, StopToken,
+        At, SharedPulse,
         collection::{Composition, ImageRequest},
         image::ImageOutput,
         operation::{CheckedCollection, CollectionOperationError, Outcome, PolicyResolver},
@@ -70,7 +70,7 @@ mod checked_consumer {
         bytes: &[u8],
         limits: Limits,
         resolver: R,
-        stop: StopToken,
+        stop: SharedPulse,
     ) -> Result<Option<Outcome<ImageOutput>>, At<CollectionOperationError>> {
         let mut images = CheckedCollection::open(stop, resolver, |stop| {
             JxlItems::open_with_stop(bytes, Composition::Composited, limits, stop)
@@ -118,7 +118,7 @@ mod registered_consumer {
     // EXAMPLE: checked_registered_first
     use crate::{collection_factories::TiffFactory, tiff_region::Allowances};
     use zencodec::{
-        At, CodecSet, ImageFormat, StopToken,
+        At, CodecSet, ImageFormat, SharedPulse,
         collection::{ImageRequest, OpenRequest},
         image::ImageOutput,
         operation::{CollectionOperationError, Outcome, PolicyResolver},
@@ -145,7 +145,7 @@ mod registered_consumer {
         source: &mut dyn DynReadAt,
         request: OpenRequest,
         resolver: R,
-        stop: StopToken,
+        stop: SharedPulse,
     ) -> Result<Option<Outcome<ImageOutput>>, At<CollectionOperationError>> {
         // ANCHOR: checked_registered_first
         let mut images = factories.open_collection(format, source, request, resolver, stop)?;
@@ -163,7 +163,7 @@ mod checked_layer_consumer {
     // EXAMPLE: checked_jxl_layer_first
     use crate::{jxl_items::Limits, jxl_layers::JxlLayers};
     use zencodec::{
-        At, StopToken,
+        At, SharedPulse,
         collection::ImageRequest,
         image::ImageOutput,
         operation::{CheckedCollection, CollectionOperationError, Outcome, PolicyResolver},
@@ -175,7 +175,7 @@ mod checked_layer_consumer {
         bytes: &[u8],
         limits: Limits,
         resolver: R,
-        stop: StopToken,
+        stop: SharedPulse,
     ) -> Result<Option<Outcome<ImageOutput>>, At<CollectionOperationError>> {
         let mut images =
             CheckedCollection::open(stop, resolver, |stop| JxlLayers::open(bytes, limits, stop))?;
@@ -199,7 +199,7 @@ fn raw_collection_guide_uses_the_same_checked_consumer_call() {
             frame_headers: Some(64),
         },
         zencodec::operation::PolicySet::default(),
-        zencodec::StopToken::new(zencodec::Unstoppable),
+        zencodec::SharedPulse::default(),
     )
     .unwrap()
     .unwrap();

@@ -27,19 +27,19 @@ pub type zencodec_testkit::reference::RefAnimDec::Error = zencodec_testkit::refe
 pub fn zencodec_testkit::reference::RefAnimDec::frame_count(&self) -> core::option::Option<u32>
 pub fn zencodec_testkit::reference::RefAnimDec::info(&self) -> &zencodec::info::ImageInfo
 pub fn zencodec_testkit::reference::RefAnimDec::loop_count(&self) -> core::option::Option<u32>
-pub fn zencodec_testkit::reference::RefAnimDec::render_next_frame(&mut self, stop: core::option::Option<&dyn enough::Stop>) -> core::result::Result<core::option::Option<zencodec::output::AnimationFrame<'_>>, zencodec_testkit::reference::RefError>
-pub fn zencodec_testkit::reference::RefAnimDec::render_next_frame_to_sink(&mut self, stop: core::option::Option<&dyn enough::Stop>, sink: &mut dyn zencodec::sink::DecodeRowSink) -> core::result::Result<core::option::Option<zencodec::cost::OutputInfo>, zencodec_testkit::reference::RefError>
+pub fn zencodec_testkit::reference::RefAnimDec::render_next_frame(&mut self, stop: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<core::option::Option<zencodec::output::AnimationFrame<'_>>, zencodec_testkit::reference::RefError>
+pub fn zencodec_testkit::reference::RefAnimDec::render_next_frame_to_sink(&mut self, stop: core::option::Option<&dyn how_far::pulse::Pulse>, sink: &mut dyn zencodec::sink::DecodeRowSink) -> core::result::Result<core::option::Option<zencodec::cost::OutputInfo>, zencodec_testkit::reference::RefError>
 pub fn zencodec_testkit::reference::RefAnimDec::wrap_sink_error(err: zencodec::sink::SinkError) -> zencodec_testkit::reference::RefError
 pub struct zencodec_testkit::reference::RefAnimEnc
 impl zencodec::traits::encoder::AnimationFrameEncoder for zencodec_testkit::reference::RefAnimEnc
 pub type zencodec_testkit::reference::RefAnimEnc::Error = zencodec_testkit::reference::RefError
 pub fn zencodec_testkit::reference::RefAnimEnc::begin(&mut self, width: u32, height: u32, desc: zenpixels::descriptor::PixelDescriptor, frame_count: core::option::Option<u32>) -> core::result::Result<zencodec::output::AnimationOutputTiming, zencodec_testkit::reference::RefError>
 pub fn zencodec_testkit::reference::RefAnimEnc::consume_output(&mut self, n: usize)
-pub fn zencodec_testkit::reference::RefAnimEnc::finish(self, stop: core::option::Option<&dyn enough::Stop>) -> core::result::Result<zencodec::output::EncodeOutput, zencodec_testkit::reference::RefError>
+pub fn zencodec_testkit::reference::RefAnimEnc::finish(self, stop: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::output::EncodeOutput, zencodec_testkit::reference::RefError>
 pub fn zencodec_testkit::reference::RefAnimEnc::pending_output(&self) -> &[u8]
-pub fn zencodec_testkit::reference::RefAnimEnc::push_frame(&mut self, pixels: zenpixels::buffer::PixelSlice<'_>, duration_ms: u32, stop: core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), zencodec_testkit::reference::RefError>
-pub fn zencodec_testkit::reference::RefAnimEnc::push_frame_exact(&mut self, pixels: zenpixels::buffer::PixelSlice<'_>, duration: zencodec::animation::FrameDuration, stop: core::option::Option<&dyn enough::Stop>) -> core::result::Result<(), zencodec_testkit::reference::RefError>
-pub fn zencodec_testkit::reference::RefAnimEnc::push_frame_timed(&mut self, pixels: zenpixels::buffer::PixelSlice<'_>, duration: zencodec::animation::FrameDuration, stop: core::option::Option<&dyn enough::Stop>) -> core::result::Result<zencodec::animation::FrameDuration, zencodec_testkit::reference::RefError>
+pub fn zencodec_testkit::reference::RefAnimEnc::push_frame(&mut self, pixels: zenpixels::buffer::PixelSlice<'_>, duration_ms: u32, stop: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec_testkit::reference::RefError>
+pub fn zencodec_testkit::reference::RefAnimEnc::push_frame_exact(&mut self, pixels: zenpixels::buffer::PixelSlice<'_>, duration: zencodec::animation::FrameDuration, stop: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<(), zencodec_testkit::reference::RefError>
+pub fn zencodec_testkit::reference::RefAnimEnc::push_frame_timed(&mut self, pixels: zenpixels::buffer::PixelSlice<'_>, duration: zencodec::animation::FrameDuration, stop: core::option::Option<&dyn how_far::pulse::Pulse>) -> core::result::Result<zencodec::animation::FrameDuration, zencodec_testkit::reference::RefError>
 pub fn zencodec_testkit::reference::RefAnimEnc::reject(op: zencodec::capabilities::UnsupportedOperation) -> zencodec_testkit::reference::RefError
 pub fn zencodec_testkit::reference::RefAnimEnc::take_output(&mut self, into: &mut alloc::vec::Vec<u8>)
 pub struct zencodec_testkit::reference::RefDec<'a>
@@ -64,7 +64,7 @@ pub fn zencodec_testkit::reference::RefDecodeJob::streaming_decoder(self, data: 
 pub fn zencodec_testkit::reference::RefDecodeJob::with_extract_gain_map(self, extract: bool) -> Self
 pub fn zencodec_testkit::reference::RefDecodeJob::with_gain_map_render(self, render: zencodec::gainmap::GainMapRender) -> Self
 pub fn zencodec_testkit::reference::RefDecodeJob::with_limits(self, limits: zencodec::limits::ResourceLimits) -> Self
-pub fn zencodec_testkit::reference::RefDecodeJob::with_stop(self, _stop: almost_enough::stop_token::StopToken) -> Self
+pub fn zencodec_testkit::reference::RefDecodeJob::with_pulse(self, _stop: how_far::pulse::SharedPulse) -> Self
 pub struct zencodec_testkit::reference::RefEnc
 impl zencodec::traits::encoder::Encoder for zencodec_testkit::reference::RefEnc
 pub type zencodec_testkit::reference::RefEnc::Error = zencodec_testkit::reference::RefError
@@ -91,15 +91,15 @@ pub fn zencodec_testkit::reference::RefEncodeJob::with_limits(self, _limits: zen
 pub fn zencodec_testkit::reference::RefEncodeJob::with_loop_count(self, count: core::option::Option<u32>) -> Self
 pub fn zencodec_testkit::reference::RefEncodeJob::with_metadata(self, meta: zencodec::metadata::Metadata) -> Self
 pub fn zencodec_testkit::reference::RefEncodeJob::with_policy(self, policy: zencodec::policy::EncodePolicy) -> Self
-pub fn zencodec_testkit::reference::RefEncodeJob::with_stop(self, _stop: almost_enough::stop_token::StopToken) -> Self
+pub fn zencodec_testkit::reference::RefEncodeJob::with_pulse(self, _stop: how_far::pulse::SharedPulse) -> Self
 pub struct zencodec_testkit::reference::RefIncDec
 impl zencodec::traits::incremental::IncrementalDecode for zencodec_testkit::reference::RefIncDec
 pub type zencodec_testkit::reference::RefIncDec::Error = zencodec_testkit::reference::RefError
 pub fn zencodec_testkit::reference::RefIncDec::access_pattern(&self) -> zencodec::source::AccessPattern
 pub fn zencodec_testkit::reference::RefIncDec::info(&self) -> core::option::Option<&zencodec::info::ImageInfo>
 pub fn zencodec_testkit::reference::RefIncDec::output_descriptor(&self) -> core::option::Option<zenpixels::descriptor::PixelDescriptor>
-pub fn zencodec_testkit::reference::RefIncDec::requested(&self) -> &[zencodec::traits::incremental::Request]
-pub fn zencodec_testkit::reference::RefIncDec::step(&mut self, input: zencodec::traits::incremental::Input<'_>, sink: &mut dyn zencodec::sink::DecodeRowSink, _stop: &dyn enough::Stop) -> core::result::Result<zencodec::traits::incremental::Progress, zencodec::traits::incremental::StepError<zencodec_testkit::reference::RefError>>
+pub fn zencodec_testkit::reference::RefIncDec::requested(&self) -> &[zencodec::traits::incremental::InputRequest]
+pub fn zencodec_testkit::reference::RefIncDec::step(&mut self, input: zencodec::traits::incremental::Input<'_>, sink: &mut dyn zencodec::sink::DecodeRowSink, _stop: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec::traits::incremental::Progress, zencodec::traits::incremental::StepError<zencodec_testkit::reference::RefError>>
 pub struct zencodec_testkit::reference::RefStreamDec<'a>
 impl zencodec::traits::decoder::StreamingDecode for zencodec_testkit::reference::RefStreamDec<'_>
 pub type zencodec_testkit::reference::RefStreamDec<'_>::Error = zencodec_testkit::reference::RefError
@@ -239,7 +239,7 @@ pub fn zencodec_testkit::check_inventory<D>(dec: D, valid: &[u8]) -> zencodec_te
 pub fn zencodec_testkit::check_inventory_dispatch<D: zencodec::traits::decoding::DecoderConfig + 'static>(dec: D, valid: &[u8]) -> zencodec_testkit::Conformance
 pub fn zencodec_testkit::check_inventory_input_limit<D: zencodec::traits::decoding::DecoderConfig + 'static>(dec: D, valid: &[u8]) -> zencodec_testkit::Conformance
 pub fn zencodec_testkit::check_metadata_no_leak<E, D>(enc: E, dec: D, img: &zencodec_testkit::TestImage) -> zencodec_testkit::Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
-pub fn zencodec_testkit::check_metadata_rewrite<'a>(request: zencodec::metadata_rewrite::Request<'a>, rewrite: impl core::ops::function::Fn(&zencodec::metadata_rewrite::Request<'a>) -> core::result::Result<zencodec::metadata_rewrite::Plan<'a>, zencodec::metadata_rewrite::Error>, observe: impl core::ops::function::Fn(&[u8]) -> zencodec_testkit::Conformance) -> zencodec_testkit::Conformance
+pub fn zencodec_testkit::check_metadata_rewrite<'a>(request: zencodec::metadata_rewrite::RewriteRequest<'a>, rewrite: impl core::ops::function::Fn(&zencodec::metadata_rewrite::RewriteRequest<'a>) -> core::result::Result<zencodec::metadata_rewrite::Plan<'a>, zencodec::metadata_rewrite::Error>, observe: impl core::ops::function::Fn(&[u8]) -> zencodec_testkit::Conformance) -> zencodec_testkit::Conformance
 pub fn zencodec_testkit::check_native_hdr_roundtrip<E, D>(enc: E, dec: D) -> zencodec_testkit::Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
 pub fn zencodec_testkit::check_orientation_roundtrip<E, D>(enc: E, dec: D, img: &zencodec_testkit::TestImage) -> zencodec_testkit::Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>
 pub fn zencodec_testkit::check_pixel_roundtrip<E, D>(enc: E, dec: D, img: &zencodec_testkit::TestImage) -> zencodec_testkit::Conformance where E: zencodec::traits::encoding::EncoderConfig, D: zencodec::traits::decoding::DecoderConfig, <<E as zencodec::traits::encoding::EncoderConfig>::Job as zencodec::traits::encoding::EncodeJob>::Enc: zencodec::traits::encoder::Encoder<Error = <E as zencodec::traits::encoding::EncoderConfig>::Error>

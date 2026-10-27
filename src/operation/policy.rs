@@ -14,7 +14,7 @@ use core::{
     fmt,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use enough::{Stop, StopReason};
+use enough::StopReason;
 use zenpixels::PixelDescriptor;
 
 /// A token for one offer at one decision. Tokens cannot authorize a different
@@ -821,7 +821,7 @@ pub(super) fn choose_encode<R: PolicyResolver + ?Sized>(
     offers: &[EncodeOffer],
     resolver: &mut R,
     preset: PolicySet,
-    stop: &dyn Stop,
+    pulse: &dyn crate::Pulse,
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>> {
     choose(
         offers,
@@ -830,7 +830,7 @@ pub(super) fn choose_encode<R: PolicyResolver + ?Sized>(
         Selection::Encode,
         resolver,
         preset,
-        stop,
+        pulse,
     )
 }
 
@@ -841,7 +841,7 @@ pub fn resolve_boundary<R: PolicyResolver + ?Sized>(
     boundary: DecodeBoundary,
     resolver: &mut R,
     preset: PolicySet,
-    stop: &dyn Stop,
+    pulse: &dyn crate::Pulse,
 ) -> Result<(BoundaryAction, DecisionRecord), At<PolicyFailure>> {
     let facts = boundary.facts();
     let action = match facts.state {
@@ -863,7 +863,7 @@ pub fn resolve_boundary<R: PolicyResolver + ?Sized>(
         |offer| Selection::Boundary(offer.action),
         resolver,
         preset,
-        stop,
+        pulse,
     )?;
     Ok((offers[index].action, record))
 }
@@ -875,7 +875,7 @@ pub(super) fn choose<'a, T: Copy, R: PolicyResolver + ?Sized>(
     selection: impl FnOnce(T) -> Selection,
     resolver: &mut R,
     mut preset: PolicySet,
-    stop: &dyn Stop,
+    pulse: &dyn crate::Pulse,
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>> {
     let mut record = DecisionRecord {
         question: 0,
@@ -892,7 +892,7 @@ pub(super) fn choose<'a, T: Copy, R: PolicyResolver + ?Sized>(
     }
     record.question = ticket(&NEXT_QUESTION)
         .ok_or_else(|| At::wrap(PolicyFailure::new(record, Cause::Framework)).at())?;
-    if let Err(reason) = stop.check() {
+    if let Err(reason) = pulse.check() {
         record.code = DecisionCode::Stopped;
         return Err(At::wrap(PolicyFailure::new(record, Cause::Stopped(reason))).at());
     }
@@ -949,7 +949,7 @@ pub(super) fn choose<'a, T: Copy, R: PolicyResolver + ?Sized>(
         At::wrap(PolicyFailure::new(record, Cause::Callback(Box::new(error))))
             .at_named("application policy callback")
     })?;
-    if let Err(reason) = stop.check() {
+    if let Err(reason) = pulse.check() {
         record.code = DecisionCode::Stopped;
         return Err(At::wrap(PolicyFailure::new(record, Cause::Stopped(reason))).at());
     }
@@ -1001,7 +1001,7 @@ mod tests {
                 Ok(Decision::UsePreset)
             },
             PolicySet::new(),
-            &enough::Unstoppable,
+            &crate::how_far::NoPulse,
         )
         .unwrap_err();
         assert!(called);
@@ -1041,7 +1041,7 @@ mod tests {
                 Ok(Decision::UsePreset)
             },
             PolicySet::new(),
-            &enough::Unstoppable,
+            &crate::how_far::NoPulse,
         )
         .unwrap();
         let final_facts = DecodeBoundary::new(InterpretationFacts::new(
@@ -1057,7 +1057,7 @@ mod tests {
                 Ok(Decision::Choose(token.unwrap()))
             },
             PolicySet::new(),
-            &enough::Unstoppable,
+            &crate::how_far::NoPulse,
         )
         .unwrap_err();
         assert_eq!(error.error().record().code, DecisionCode::InvalidChoice);

@@ -73,7 +73,7 @@ fn failed(
     })
     .at()
 }
-fn check(stop: &dyn Stop, stage: Stage, report: &OperationReport) -> Result<(), At<Failure>> {
+fn check(stop: &dyn zencodec::Pulse, stage: Stage, report: &OperationReport) -> Result<(), At<Failure>> {
     stop.check().map_err(|reason| {
         failed(
             stage,
@@ -143,7 +143,7 @@ impl<'a> Prepared<'a> {
         mapped: &'a dyn MappedPlanes,
         pool: &StorageBudget,
         target: Target,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<Self, At<Failure>> {
         let report = OperationReport::default();
         let fail = |e| failed(Stage::Prepare, &report, e);
@@ -298,7 +298,7 @@ impl<'a> Prepared<'a> {
         self,
         resolver: &mut R,
         preset: PolicySet,
-        stop: &dyn Stop,
+        stop: &dyn zencodec::Pulse,
     ) -> Result<Outcome<ImageOutput>, At<Failure>> {
         let mut report = OperationReport::default();
         let source = ImageOutput::from_frame(self.frame.clone());
@@ -435,7 +435,7 @@ fn convert<R: PolicyResolver + ?Sized>(
     pool: &StorageBudget,
     resolver: &mut R,
     preset: PolicySet,
-    stop: &dyn Stop,
+    stop: &dyn zencodec::Pulse,
 ) -> Result<Outcome<ImageOutput>, At<Failure>> {
     convert_target(frame, pool, resolver, preset, Target::Rgb16, stop)
 }
@@ -446,7 +446,7 @@ fn convert_target<R: PolicyResolver + ?Sized>(
     resolver: &mut R,
     preset: PolicySet,
     target: Target,
-    stop: &dyn Stop,
+    stop: &dyn zencodec::Pulse,
 ) -> Result<Outcome<ImageOutput>, At<Failure>> {
     check(stop, Stage::Prepare, &OperationReport::default())?;
     let map = frame
@@ -496,7 +496,7 @@ pub(super) fn qualify(native: &Frame, expected: &[[u16; 3]]) {
             Ok(Decision::UsePreset)
         },
         PolicySet::new().allow_assumed_chroma_siting(true),
-        &enough::Unstoppable,
+        &zencodec::how_far::NoPulse,
     )
     .unwrap();
     assert_eq!(calls.get(), 1);
@@ -567,7 +567,7 @@ pub(super) fn float_pixels_with_processing(
             .allow_assumed_chroma_siting(true)
             .require_extended_range(true),
         Target::RgbF32,
-        &enough::Unstoppable,
+        &zencodec::how_far::NoPulse,
     )
     .unwrap();
     assert_eq!(calls.get(), 1);
@@ -633,7 +633,7 @@ pub(super) fn reject_declared_siting(native: &Frame) {
             },
             PolicySet::new().allow_assumed_chroma_siting(true),
             target,
-            &enough::Unstoppable,
+            &zencodec::how_far::NoPulse,
         )
         .unwrap_err();
         assert_eq!(error.error().stage, Stage::Prepare);
@@ -649,7 +649,8 @@ pub(super) fn reject_declared_siting(native: &Frame) {
 mod tests {
     use super::*;
     use crate::fixtures;
-    use enough::{StopReason, Unstoppable};
+    use enough::{StopReason, };
+use zencodec::how_far::NoPulse;
     use std::{
         cell::Cell,
         convert::Infallible,
@@ -666,7 +667,7 @@ mod tests {
         let mut settings = rav1d_safe::Settings::default();
         settings.threads = 1;
         let mut decoder = zenavif::media::Av1VideoDecoder::with_settings(settings).unwrap();
-        let mut frames = fixtures::decode(&mut decoder, &config, &packets, &Unstoppable).unwrap();
+        let mut frames = fixtures::decode(&mut decoder, &config, &packets, &NoPulse).unwrap();
         decoder.reset().unwrap();
         frames.remove(0)
     }
@@ -690,7 +691,7 @@ mod tests {
         ] {
             let pool = StorageBudget::new(32_768, 2);
             let error =
-                convert(frame.clone(), &pool, &mut preset, policy, &Unstoppable).unwrap_err();
+                convert(frame.clone(), &pool, &mut preset, policy, &NoPulse).unwrap_err();
             assert_eq!(error.error().stage, Stage::Policy);
             let record = error.error().report.decisions().next().unwrap();
             assert_eq!(record.code, DecisionCode::Declined);
@@ -703,7 +704,7 @@ mod tests {
         }
         // Partial preparation releases the already-admitted destination.
         let pool = StorageBudget::new(32_768, 1);
-        let error = convert(frame, &pool, &mut preset, PolicySet::new(), &Unstoppable).unwrap_err();
+        let error = convert(frame, &pool, &mut preset, PolicySet::new(), &NoPulse).unwrap_err();
         assert_eq!(error.error().stage, Stage::Prepare);
         assert!(matches!(
             zencodec::find_cause::<StorageError>(&error),
@@ -734,7 +735,7 @@ mod tests {
                 },
                 PolicySet::new(),
                 target,
-                &Unstoppable,
+                &NoPulse,
             )
             .unwrap_err();
             assert_eq!(error.error().stage, Stage::Policy);
@@ -759,7 +760,7 @@ mod tests {
                 },
                 PolicySet::new(),
                 target,
-                &Unstoppable,
+                &NoPulse,
             )
             .unwrap();
             drop(image);
@@ -771,7 +772,7 @@ mod tests {
                 },
                 PolicySet::new(),
                 target,
-                &Unstoppable,
+                &NoPulse,
             )
             .unwrap_err();
             assert_eq!(
@@ -794,7 +795,7 @@ mod tests {
                     },
                     PolicySet::new(),
                     target,
-                    &Unstoppable,
+                    &NoPulse,
                 );
             }));
             assert!(unwound.is_err());
@@ -923,7 +924,7 @@ mod tests {
                     &mut preset,
                     PolicySet::new().allow_assumed_chroma_siting(true),
                     target,
-                    &Unstoppable,
+                    &NoPulse,
                 );
                 assert_eq!(calls.load(Ordering::SeqCst), 1);
                 assert!(weak.upgrade().is_none());

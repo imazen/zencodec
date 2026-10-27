@@ -1,7 +1,8 @@
 //! Registered factories keep configuration separate from an opened source.
 use super::{Cause, Composition, ErasedCollection};
 use crate::{
-    DecodePolicy, ImageFormat, ResourceLimits, StopToken, source::DynReadAt, storage::StorageBudget,
+    DecodePolicy, ImageFormat, ResourceLimits, SharedPulse, source::DynReadAt,
+    storage::StorageBudget,
 };
 
 /// Resolved requirements for one native collection opening.
@@ -21,7 +22,7 @@ pub struct CollectionOpenContext {
     /// Inherited decode requirements; `None` keeps the native template.
     pub policy: Option<DecodePolicy>,
     /// Shared latched cancellation, retained throughout the native operation.
-    pub stop: StopToken,
+    pub pulse: SharedPulse,
     /// Required pool for retained output payloads, including row padding.
     ///
     /// Admission must precede native output allocation. Published owners and
@@ -32,13 +33,13 @@ pub struct CollectionOpenContext {
 }
 impl CollectionOpenContext {
     /// Create an opening with no shared resource, policy or storage overrides.
-    pub fn new(format: ImageFormat, view: Composition, stop: StopToken) -> Self {
+    pub fn new(format: ImageFormat, view: Composition, pulse: SharedPulse) -> Self {
         Self {
             format,
             view,
             limits: None,
             policy: None,
-            stop,
+            pulse,
             output_storage: None,
         }
     }

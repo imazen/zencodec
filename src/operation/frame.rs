@@ -72,7 +72,7 @@ pub fn resolve_frame<R: PolicyResolver + ?Sized>(
     timing: FrameTiming,
     resolver: &mut R,
     preset: PolicySet,
-    stop: &dyn enough::Stop,
+    pulse: &dyn crate::Pulse,
 ) -> Result<DecisionRecord, At<PolicyFailure>> {
     let facts = FrameFacts::new(interpretation, timing);
     let (_, record) = policy::choose(
@@ -86,7 +86,7 @@ pub fn resolve_frame<R: PolicyResolver + ?Sized>(
         Selection::Frame,
         resolver,
         preset,
-        stop,
+        pulse,
     )?;
     Ok(record)
 }
