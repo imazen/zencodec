@@ -937,12 +937,21 @@ jpeg-policy-sync export:
     mkdir -p "{{export}}/perf/jpeg-policy-validation/src"
     cp perf/jpeg-policy-validation/Cargo.toml perf/jpeg-policy-validation/dependencies.lock "{{export}}/perf/jpeg-policy-validation/"
     cp perf/jpeg-policy-validation/src/*.rs "{{export}}/perf/jpeg-policy-validation/src/"
+    mkdir -p "{{export}}/perf/jpeg-policy-validation/src/bin"
+    cp perf/jpeg-policy-validation/src/bin/*.rs "{{export}}/perf/jpeg-policy-validation/src/bin/"
     mkdir -p "{{export}}/zencodec-testkit/src"
     cp zencodec-testkit/src/fixtures.rs "{{export}}/zencodec-testkit/src/"
     mkdir -p "{{export}}/docs/examples"
     cp docs/examples/jpeg_policy.rs "{{export}}/docs/examples/"
     cp docs/examples/pixel_conversion.rs docs/examples/checked_operations.rs "{{export}}/docs/examples/"
     cp justfile "{{export}}/justfile"
+
+jpeg-preparation-build:
+    cargo build --manifest-path perf/jpeg-policy-validation/Cargo.toml --bin encode_preparation --locked
+    cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --bin encode_preparation --locked -- -D warnings
+
+jpeg-preparation-profile executable output revision:
+    python3 perf/jpeg-policy-validation/profile-preparation.py "{{executable}}" "{{output}}" --source-revision "{{revision}}"
 
 # Paths are required; this integration never silently skips missing fixtures.
 io-policy-media-check +fixtures:
