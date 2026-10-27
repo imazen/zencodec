@@ -969,6 +969,9 @@ jpeg-preflight-profile executable output revision:
     python3 -m unittest discover -s perf/jpeg-policy-validation -p test_preparation_profile.py
     python3 perf/jpeg-policy-validation/profile-preparation.py "{{executable}}" "{{output}}" --source-revision "{{revision}}" --native-patch perf/jpeg-policy-validation/native-preflight.patch
 
+jpeg-preflight-ci directory target:
+    python3 perf/jpeg-policy-validation/check-native-preflight.py "{{directory}}" --target "{{target}}"
+
 jpeg-preparation-profile executable output revision:
     python3 -m unittest discover -s perf/jpeg-policy-validation -p test_preparation_profile.py
     python3 perf/jpeg-policy-validation/profile-preparation.py "{{executable}}" "{{output}}" --source-revision "{{revision}}"
