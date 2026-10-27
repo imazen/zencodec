@@ -3,7 +3,7 @@
 const gaps = [
   ['Video output transitions', 'Question::FrameRoute · FrameRouteOffer · resolve_frame_route',
     'Prepared native encoders share the fallible resolver. Independent segments preserve exact AV1 samples; fixed output refuses changed dimensions after header publication. Cancellation, partial publication and unwind are terminal.',
-    'No in-band muxer reconfiguration or coupled converter transition. Committed-output facts do not reserve destination support. Finite compressed staging does not establish live sequential-output or complete workspace bounds.',
+    'The coupled native converter/encoder witness now covers changing BT.709/sRGB YCbCr to fixed RGB8 output. No HDR, resizing, retiming or in-band muxer reconfiguration. Committed-output facts do not reserve destination support. Finite compressed staging does not establish live sequential-output or complete workspace bounds.',
     'Prepared adapters, destination admission and native sessions.', 'https://github.com/imazen/zencodec/issues/166'],
   ['Display rendering', 'CodecSet::open_collection · OpenRequest · ImageRequest · Placement::visible',
     'Explicit native composited/raw selection retained before policy, contradiction checks and checked placement intersection. A private projection validates all eight orientations and display-coordinate regions on native TIFF/JXL, requiring explicit ColorSamples registration for auxiliaries.',
@@ -11,7 +11,7 @@ const gaps = [
     'Shared request/result contract; codec composition; consumer adapter.', 'https://github.com/imazen/zencodec/issues/170'],
   ['Planar video conversion', 'ImageConversionOffer · resolve_image_conversion · PreparedStorage · ImageOutput::from_frame_pixels',
     'Native AV1 borrowed-plane conversion with policy before destination initialization. Scoped reservations, declared siting assumptions, clipping disclosure, cancellation, original error causes and converted ImageOutput ownership are exercised across the native crop matrix.',
-    'The shared CodePlane and YcbcrToRgbF32 now replace the private float kernel, with typed pre-write refusals and identical native output. OutputPlan processes that result. Other matrices/siting, integer/mono/GBR output, sample-type consolidation, numerical-model guarantees, coupled converter/encoder transitions and native workspace admission remain open. Native preparation still scans all active source words even for small crops.',
+    'The shared CodePlane and YcbcrToRgbF32 now replace the private float kernel, with typed pre-write refusals and identical native output. OutputPlan processes that result. Other matrices/siting, integer/mono/GBR output, sample-type consolidation, numerical-model guarantees, broader converter/encoder transitions and native workspace admission remain open. Native preparation still scans all active source words even for small crops.',
     'zenpixels-convert and video adapters; shared facts/decisions in zencodec.', 'perf/av1-policy-validation/README.md'],
   ['Opaque and nested privacy', 'PolicyResolver::resolve · Question::Transcode · MetadataTransfer',
     'One fallible callback, scoped offers and reported metadata/color treatment.',

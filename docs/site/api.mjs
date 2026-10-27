@@ -19,6 +19,7 @@ export const api = {
   muxFinish: {path:'zencodec_media::container::MuxFinish',file:'zencodec-media/src/container.rs',scope:'impl MuxFinish {',methods:['validate','apply_to']},
   muxExactTiming: {path:'zencodec_media::container::Muxer',file:'zencodec-media/src/container.rs',scope:'pub trait Muxer {',methods:['begin_exact_timing','write_packet']},
   frameRoute: {path:'zencodec::operation::resolve_frame_route',file:'src/operation/transition.rs',methods:['resolve_frame_route']},
+  frameConversionOffer: {path:'zencodec::operation::FrameConversionOffer',file:'src/operation/transition.rs',scope:'pub struct FrameConversionOffer',methods:[],item:true},
   frameRouteOffer: {path:'zencodec::operation::FrameRouteOffer',file:'src/operation/transition.rs',scope:'pub struct FrameRouteOffer',methods:[],item:true},
   frameRouteState: {path:'zencodec::operation::FrameRouteState',file:'src/operation/transition.rs',scope:'pub struct FrameRouteState',methods:[],item:true},
   frameResolution: {path:'zencodec::operation::resolve_frame',file:'src/operation/frame.rs',methods:['resolve_frame']},

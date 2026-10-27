@@ -47,10 +47,12 @@ continuous-container reconfiguration or planar conversion. See the
 The fixed-output guard also rejects equal-size frames whose CICP,
 depth/subsampling or timestamp clock changes after header publication. It keeps
 earlier frame owners valid and does not prepare an unusable replacement encoder.
-Combining conversion with encoding still needs an executable contract: policy
-must see conversion effects alongside encoder fidelity, and the adapter must
-retain both selected mechanisms through execution. A lossless encoder alone
-does not establish lossless transcoding.
+`FrameConversionOffer` now supplies conversion effects and the actual encoder
+input alongside encoder fidelity. A native witness retains both mechanisms and
+normalizes changing BT.709/sRGB YCbCr frames to one fixed RGB8 AV1 sequence.
+Policy can reject sample loss before conversion runs, even with lossless encoding.
+This qualifies that route, not HDR, resizing, retiming or continuous muxer changes.
+See the [executing contract](../perf/av1-policy-validation/README.md#coupled-fixed-output-conversion).
 
 ## What still needs production implementation
 
