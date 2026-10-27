@@ -1,0 +1,108 @@
+{
+  "date": "2026-10-27",
+  "core_contract_commit": "57932bad",
+  "native_mp4_commit": "11b2b1d69ea8ee3ae80bae67b35937b970a8c9ae",
+  "source_sha256": {
+    "zencodec-media/src/container.rs": "911615203dac743131e80deaa805dfe1ebf12ac47968128f34765e634f682af0",
+    "zencodec-media/src/session.rs": "195e7c7f2a84220ba691407e3c2740809f7b6e2ad89f6e7fb8f3a344deffcb41",
+    "perf/av1-policy-validation/src/mux_output.rs": "b354009c1c2d26c74198e221a82b1077fc1a94b7b1a7fb39f75390a01f173bba",
+    "perf/av1-policy-validation/src/mux_output_tests.rs": "694a182f323a3b51bcd737bae697a9fad9daf83f74aa499213a3175c26e98187",
+    "perf/av1-policy-validation/dependencies.lock": "56989c74af4ee5d41f1311656d15cd5e92749850360073a673ced5a910f2fd1c"
+  },
+  "artifacts": "/mnt/v/output/zencodec/platform-regions-20261026-run/mux-exact-timing-1",
+  "host": "r7900x",
+  "commands": [
+    "just qualify-mp4-timing (native normal dependency export)",
+    "AV1_TIMING_FFPROBE=<pinned 8.0.1>/ffprobe just av1-policy-check <fresh artifacts>",
+    "just mux-finish-check",
+    "just api-doc"
+  ],
+  "native_matrix": {
+    "cases": 16,
+    "frames_per_case": 6,
+    "bits": [
+      8,
+      10
+    ],
+    "clocks": [
+      "1/1000",
+      "1/90000"
+    ],
+    "decode_origin_millis": [
+      0,
+      40
+    ],
+    "destinations": [
+      "forward-only short writer",
+      "prefixed disk file with short writes"
+    ],
+    "duration_millis": [
+      17,
+      23,
+      40,
+      1,
+      70,
+      9
+    ],
+    "pts_minus_dts_millis": 3,
+    "timing_oracle": "FFprobe 8.0.1, noparse+nofillin",
+    "pixel_oracle": "FFmpeg/libdav1d exact component comparison"
+  },
+  "validation": {
+    "native_gate": {
+      "rc": 0,
+      "seconds": 42,
+      "peak_rss_gib": 0.54,
+      "min_available_mib": 11346,
+      "peak_load": 0.65,
+      "log": "/home/lilith/tmp/zencodec-native-exact-timing-20261027.log"
+    },
+    "shared_gate": {
+      "rc": 0,
+      "seconds": 3,
+      "peak_rss_gib": 0.22,
+      "min_available_mib": 11334,
+      "peak_load": 0.39
+    },
+    "native_mp4_gate": {
+      "rc": 0,
+      "seconds": 3,
+      "peak_rss_gib": 0.21,
+      "min_available_mib": 11381,
+      "peak_load": 0.21
+    }
+  },
+  "impedance": {
+    "shared_api": [
+      "Muxer::begin_exact_timing",
+      "DynMuxer::begin_exact_timing",
+      "UnsupportedMedia::ExactTiming"
+    ],
+    "native_api": [
+      "Mp4Muxer::begin_exact_timing",
+      "Mp4Error::MissingSampleDuration"
+    ],
+    "temporary_bridge": "Delegates native inherent method to review trait without packet buffering or copying; removal requires shared dependency alignment.",
+    "qualified_native_containers": 1,
+    "tested_native_containers": 3,
+    "unqualified_native_containers": [
+      "IVF",
+      "WebM"
+    ],
+    "pixel_api_changes_required_for_this_packet_path": 0,
+    "pixel_kernel_changes_required_for_this_packet_path": 0,
+    "disk_layout": "fragmented; progressive optimization needs prior decode-origin evidence"
+  },
+  "oracle_reproduction": {
+    "6.1.1": "Reads WebM/progressive MP4 durations; omits these fragmented MP4 durations even with noparse+nofillin.",
+    "8.0.1": "Reads every authored duration in all 16 exact native cases.",
+    "source_checksums_recorded_in": "perf/av1-policy-validation/build_timing_oracle.py"
+  },
+  "limits": [
+    "This is correctness and byte accounting, not throughput or compile-time measurement.",
+    "Pending-output length is not an allocation or whole-operation memory bound.",
+    "IVF/WebM exact-timing implementations and coupled encoder/converter/container policy admission remain incomplete.",
+    "Per-packet failures can follow header or prior-frame publication; no rollback or fallback is promised.",
+    "Metadata/side-data preservation and whole-operation workspace are separate."
+  ]
+}

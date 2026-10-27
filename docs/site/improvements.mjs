@@ -2,6 +2,19 @@
 // Signatures come from Rust through apiPanels; examples remain executable files.
 export const improvements = [
   {
+    id:'mux-timing', title:'Ask for exact packet timing before publishing a header',
+    state:'Shared hook implemented · native MP4 qualified through adapter', date:'2026-10-27',
+    summary:'begin_exact_timing prepares the actual muxer. Unsupported implementations refuse before legacy setup. Later unrepresentable packets fail before their output changes.',
+    why:'Transport success does not guarantee timing preservation. IVF cannot store explicit durations; progressive MP4 cannot record an unknown nonzero decode origin with the current sample tables.',
+    consumer:'The checked writer requests exact timing directly. It reports the original cause, failed stage and already appended bytes; no capability query or silent rebase is required.',
+    adapter:'Keep the actual prepared writer, bind packet epochs and clocks, and make failures terminal. A future packet can still be invalid. Preparation does not roll back bytes already accepted by a destination.',
+    implementor:'Native MP4 selects fragmented output before publishing, preserves supplied PTS/DTS and requires explicit durations. Sixteen native cases retain variable durations, two clocks and origins, 8/10-bit components, and prefixed files under short writes.',
+    open:'IVF/WebM remain unqualified for this stronger hook. The MP4 trait bridge is temporary until dependency alignment. Coupled encoder/converter/container offers, full metadata/side-data retention, progressive disk optimization and whole-operation workspace remain open.',
+    signatures:['muxExactTiming'],
+    flow:[['consumer','Request exact timing','required behavior'],['implementor','Prepare or refuse','retain chosen layout'],['adapter','Validate each packet','before affected output'],['consumer','Observe success or cause','prior publication stays explicit']],
+    evidence:[['Native implementation and scope','perf/av1-policy-validation/README.md#container-destination-and-timing-qualification'],['Shared timing contract','docs/media-contract.md#exact-supplied-timing'],['Remaining admission requirements','https://github.com/imazen/zencodec/issues/172']],
+  },
+  {
     id:'mux-finish', title:'Validate every output patch before changing bytes',
     state:'Replacement implemented · apply_finish immediately deprecated', date:'2026-10-27',
     summary:'MuxFinish::apply_to validates the complete result and reserves fallibly before mutation. External writers call validate before tail and patch effects.',
