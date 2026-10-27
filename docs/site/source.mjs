@@ -35,7 +35,7 @@ function closeBrace(mask,open) {
   for(let i=open+1;i<mask.length;i++){if(mask[i]==='{')depth++;if(mask[i]==='}'&&!--depth)return i;}
   throw Error('Unclosed source scope');
 }
-export function declarations(source,{scope,methods,associated=true,item=false}) {
+export function declarations(source,{scope,methods,associated=true,item=false,includeRequired=false}) {
   if(item&&(!scope||methods.length))throw Error('A complete source item needs a scope and no method selection');
   const mask=maskRust(source);
   let start=0,end=source.length,header='';
@@ -58,13 +58,14 @@ export function declarations(source,{scope,methods,associated=true,item=false}) 
     while(stop<end&&mask[stop]!=='{'&&mask[stop]!==';')stop++;
     if(stop===end)throw Error(`Missing declaration terminator: ${name}`);
     if(!type)available.push({name,required:mask[stop]===';'});
-    if(type?(!scope||!associated):!methods.includes(name))continue;
+    if(type?(!scope||!associated):!(methods.includes(name)||(includeRequired&&mask[stop]===';')))continue;
     const code=deindent(source.slice(offset,stop)).trimEnd().replace(/,$/,'')+';';
     items.push({name,type,code,line:source.slice(0,offset).split('\n').length});
   }
   for(const name of methods)if(items.filter(x=>!x.type&&x.name===name).length!==1)throw Error(`Expected exactly one ${scope||'free function'}::${name}`);
-  const ordered=[...items.filter(x=>x.type),...methods.map(name=>items.find(x=>!x.type&&x.name===name))];
-  return {code:scope?`${header} {\n${ordered.map(x=>x.code.split('\n').map(l=>'    '+l).join('\n')).join('\n\n')}\n}`:ordered.map(x=>x.code).join('\n\n'),line:ordered.find(x=>!x.type).line,omittedMethods:available.filter(x=>!methods.includes(x.name)).map(x=>x.name),requiredMethods:available.filter(x=>x.required).map(x=>x.name)};
+  const selected=[...methods,...items.filter(x=>!x.type&&!methods.includes(x.name)).map(x=>x.name)];
+  const ordered=[...items.filter(x=>x.type),...selected.map(name=>items.find(x=>!x.type&&x.name===name))];
+  return {code:scope?`${header} {\n${ordered.map(x=>x.code.split('\n').map(l=>'    '+l).join('\n')).join('\n\n')}\n}`:ordered.map(x=>x.code).join('\n\n'),line:ordered.find(x=>!x.type).line,omittedMethods:available.filter(x=>!selected.includes(x.name)).map(x=>x.name),requiredMethods:available.filter(x=>x.required).map(x=>x.name)};
 }
 export function example(source,name) {
   if(!/^[a-z0-9_-]+$/.test(name))throw Error(`Invalid example name: ${name}`);

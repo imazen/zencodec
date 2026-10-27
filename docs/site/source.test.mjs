@@ -147,3 +147,19 @@ test('signature selections identify omitted and required methods independently',
   assert.deepEqual(view.requiredMethods,['format','job']);
   assert.ok(!view.code.includes('fn format'));
 });
+
+test('implementor selections include required method signatures but omit unrelated defaults',()=>{
+  const rust=`pub trait Config {
+    type Job;
+    fn format() -> u8;
+    fn job(self) -> Self::Job;
+    fn encode(self) { todo!() }
+    fn estimate(&self) -> usize { 0 }
+  }`;
+  const view=declarations(rust,{scope:'pub trait Config',methods:['encode'],includeRequired:true});
+  assert.match(view.code,/fn format\(\) -> u8;/);
+  assert.match(view.code,/fn job\(self\) -> Self::Job;/);
+  assert.match(view.code,/fn encode\(self\);/);
+  assert.deepEqual(view.omittedMethods,['estimate']);
+  assert.deepEqual(view.requiredMethods,['format','job']);
+});

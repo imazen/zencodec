@@ -72,3 +72,8 @@ fixture setup. Signature cards identify selected methods and enumerate required
 trait methods, so an excerpt cannot silently serve as an incomplete implementor
 checklist. These annotations are extracted from source, including default versus
 required methods; they are not handwritten copies of signatures.
+
+Codec-implementor cards also include every required method signature, even when
+the editorial selection focuses on one operation. Consumer cards retain the
+smaller selection. Both identify omissions and defaults; a required-method list
+is not a claim that optional/default behavior meets an application's needs.

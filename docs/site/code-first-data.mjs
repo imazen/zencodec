@@ -210,7 +210,7 @@ const lessons = {
   ],
   'codec-config': [
     ['Expose a reusable configuration', 'Register format identity and accepted descriptors. This minimal test codec supplies a small implementation to read before a production adapter.'],
-    ['Bind one operation', 'Keep Pulse, limits and requested metadata on the job. Reject unsupported requirements rather than silently accepting setters.'],
+    ['Bind one operation', 'Read the per-operation trait shape. This internal fixture declares cancellation and limits unsupported and ignores those inputs; it is not a production control implementation. A production job must retain supported controls and reject unsupported required behavior.'],
     ['Accept one image', 'The simplest executor consumes PixelSlice, including its stride and interpretation, and returns encoded output or the codec’s own error.'],
   ],
   'codec-decode': [

@@ -26,9 +26,11 @@ const colorSource = await readFile(path.join(root, 'perf/spatial-validation/src/
 const layoutSource = await readFile(path.join(root, 'perf/spatial-validation/src/jxl_planned_color_tests.rs'), 'utf8');
 const sha = process.env.GITHUB_SHA || execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
 const escape = s => String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
-const signatures = new Map();
+const signatures = new Map(), implementorSignatures = new Map();
 for (const [key, spec] of Object.entries(api)) {
-  signatures.set(key, declarations(await readFile(path.join(root, spec.file), 'utf8'), spec));
+  const source = await readFile(path.join(root, spec.file), 'utf8');
+  signatures.set(key, declarations(source, spec));
+  if(spec.scope?.startsWith('pub trait')) implementorSignatures.set(key, declarations(source, {...spec,includeRequired:true}));
 }
 function codePanel(id, name, file = 'docs/examples/journeys.rs') {
   const video = file === 'docs/examples/checked_video.rs';
@@ -55,7 +57,7 @@ function codePanel(id, name, file = 'docs/examples/journeys.rs') {
 function apiPanels(id, keys) {
   if (!keys?.length) throw Error(`No API selection for ${id}`);
   return `<section class="api-section" aria-labelledby="${id}-api-title"><h4 id="${id}-api-title">Signatures <small>from this revision · bodies omitted</small></h4>${keys.map((key, i) => {
-    const spec = api[key], signature = signatures.get(key);
+    const spec = api[key], signature = (id.startsWith('codec-') && implementorSignatures.get(key)) || signatures.get(key);
     const kind = !spec.scope ? 'Function' : spec.scope.startsWith('impl') ? 'Inherent methods' : 'Trait methods';
     const selection = signature.omittedMethods?.length ? `<p class="api-selection">Selected methods · ${signature.omittedMethods.length} more in the full contract.</p>` : '';
     const required = spec.scope?.startsWith('pub trait') && signature.requiredMethods?.length ? `<p class="api-required">Required methods: ${signature.requiredMethods.map(name=>`<code>${escape(name)}</code>`).join(', ')}. Other methods have defaults; read them before relying on their behavior.</p>` : '';
