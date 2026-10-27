@@ -429,7 +429,7 @@ mod publication {
             let error = resolve_image(
                 frame(native, 3, 10),
                 &mut |_: Question<'_>| -> Result<Decision, At<Infallible>> {
-                    Ok(Decision::UsePreset)
+                    panic!("mandatory admission must refuse before callback")
                 },
                 preset,
                 &Unstoppable,
@@ -440,7 +440,10 @@ mod publication {
                 zencodec::find_cause::<Decline>(&error),
                 Some(&Decline::UnsupportedQuestion)
             );
-            assert!(error.error().record().used_preset);
+            let record = error.error().record();
+            assert!(!record.used_preset);
+            assert_eq!(record.admitted, 0);
+            assert!(!record.unmet_requirements.is_empty());
         }
     }
 }

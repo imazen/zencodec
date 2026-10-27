@@ -48,7 +48,9 @@ main; the review branch preview is served separately.
 
 The page describes the review revision, not an already released 0.3 API. A
 signature does not certify codec support, a native allocation bound, or privacy.
-In particular, the callback example identifies the current requirement-bypass
-composition gap tracked in [issue 173](https://github.com/imazen/zencodec/issues/173).
+Mandatory requirements now filter routes before the callback runs, including direct
+`Decision::Choose`. Unknown required evidence refuses. This does not yet provide
+operation-wide deferred-obligation handling or a whole-file privacy certificate;
+remaining work is tracked in [issue 173](https://github.com/imazen/zencodec/issues/173).
 Native TIFF/JXL experiments, protocol fixtures and private multipass/policy
 experiments retain explicit labels.

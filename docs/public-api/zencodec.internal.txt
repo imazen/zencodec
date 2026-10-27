@@ -9,8 +9,8 @@
 
 ## summary
 #
-#   inherent methods                           79
-#   trait roster entries (type × trait)       138
+#   inherent methods                           80
+#   trait roster entries (type × trait)       141
 #
 # per-module pub lines:
 #   (root)                           18
@@ -25,12 +25,12 @@
 #   image                             6
 #   inventory                         6
 #   metadata_rewrite                  2
-#   operation                         6
+#   operation                         7
 #   output_patch                      1
 #   source                            2
 #   time                              2
 
-## items (79 lines)
+## items (80 lines)
 
 pub fn CodecIoKind::assert_fields_are_eq(&self)
 pub fn ColorEmitFields::assert_fields_are_eq(&self)
@@ -106,13 +106,14 @@ pub fn operation::FrameFacts::assert_fields_are_eq(&self)
 pub fn operation::FrameRouteFacts::assert_fields_are_eq(&self)
 pub fn operation::FrameRouteState::assert_fields_are_eq(&self)
 pub fn operation::StagingFacts::assert_fields_are_eq(&self)
+pub fn operation::UnmetRequirements::assert_fields_are_eq(&self)
 pub fn output_patch::Patch::assert_fields_are_eq(&self)
 pub fn source::AccessPattern::assert_fields_are_eq(&self)
 pub fn source::SourceError::assert_fields_are_eq(&self)
 pub fn time::TimeBase::assert_fields_are_eq(&self)
 pub fn time::Timestamp::assert_fields_are_eq(&self)
 
-## trait impls (138 types)
+## trait impls (141 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -239,13 +240,16 @@ operation::OutputSchedule: TrivialClone
 operation::OutputScheduleFacts: TrivialClone
 operation::OutputScheduleOffer: TrivialClone
 operation::OutputSource: TrivialClone
+operation::PolicyRequirement: TrivialClone
 operation::PolicySet: TrivialClone
 operation::PublicationOffer: TrivialClone
 operation::Question<'a>: TrivialClone
+operation::RequirementEvidence: TrivialClone
 operation::Selection: TrivialClone
 operation::StagingFacts: TrivialClone
 operation::StagingKind: TrivialClone
 operation::TranscodeOffer: TrivialClone
+operation::UnmetRequirements: TrivialClone
 output_patch::OutputAccess: TrivialClone
 output_patch::PatchError: TrivialClone
 source::AccessPattern: TrivialClone

@@ -289,11 +289,12 @@ fn public_row_driver_raster_adapter_preserves_strides_and_never_substitutes_sche
                         .with_policy_set(policy),
                     &zencodec::enough::Unstoppable,
                 );
-                assert_eq!(asked, 1);
                 if schedule == OutputSchedule::Live && (progressive || optimized) {
+                    assert_eq!(asked, 0, "mandatory admission precedes callback");
                     assert!(result.is_err());
                     assert!(bytes.is_empty());
                 } else {
+                    assert_eq!(asked, 1);
                     result.unwrap();
                     let reference = config.encode(fixtures::pixels(&raw)).unwrap();
                     assert_eq!(fixtures::oracle(&bytes), fixtures::oracle(reference.data()));

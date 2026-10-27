@@ -13,7 +13,7 @@ export const codeFlows = [
     {example:'convert_display',file:'docs/examples/pixel_conversion.rs',api:['registryCalls']},
     {example:'convert_framebuffer',file:'docs/examples/pixel_conversion.rs',api:['imageOutput']},
   ]},
-  {id:'app-transcode',role:'consumer',title:'Transcode → metadata → custom policy',note:'Current contract gap: direct Decision::Choose can bypass PolicySet requirements. Do not treat this callback composition as a privacy guarantee. Mandatory admission is tracked in issue 173; the code here deliberately matches the current review revision.',steps:[
+  {id:'app-transcode',role:'consumer',title:'Transcode → metadata → custom policy',note:'Mandatory PolicySet requirements filter routes before the callback runs. Decision::Choose selects only an admitted route; unknown required evidence refuses. This is route admission, not a whole-file privacy certificate: deferred obligations and unrelated question domains still need operation-wide handling (issue 173).',steps:[
     {example:'checked_web',file:'docs/examples/checked_operations.rs',api:['operationPreset'],external:['integration-api.json']},
     {example:'checked_callback',file:'docs/examples/checked_operations.rs',api:['operationResolver'],external:['integration-api.json']},
   ]},

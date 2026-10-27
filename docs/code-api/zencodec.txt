@@ -1955,6 +1955,13 @@ pub zencodec::operation::OutputSchedule::Live
 pub zencodec::operation::OutputSource::BorrowedRaster
 pub zencodec::operation::OutputSource::PullRows
 pub zencodec::operation::OutputSource::Unknown
+#[non_exhaustive] pub enum zencodec::operation::PolicyRequirement
+pub zencodec::operation::PolicyRequirement::ExtendedRange
+pub zencodec::operation::PolicyRequirement::Metadata
+pub zencodec::operation::PolicyRequirement::OpaqueProfiles
+pub zencodec::operation::PolicyRequirement::OutputSchedule
+pub zencodec::operation::PolicyRequirement::OutputWait
+pub zencodec::operation::PolicyRequirement::Workspace
 #[non_exhaustive] pub enum zencodec::operation::PublicationOffer
 pub zencodec::operation::PublicationOffer::ReturnHeld
 #[non_exhaustive] pub enum zencodec::operation::Question<'a>
@@ -1986,6 +1993,9 @@ pub zencodec::operation::Question::OutputSchedule::facts: zencodec::operation::O
 pub zencodec::operation::Question::Transcode
 pub zencodec::operation::Question::Transcode::choices: zencodec::operation::Choices<'a, zencodec::operation::TranscodeOffer>
 pub zencodec::operation::Question::Transcode::facts: zencodec::decode::InterpretationFacts
+#[non_exhaustive] pub enum zencodec::operation::RequirementEvidence
+pub zencodec::operation::RequirementEvidence::Contradicted
+pub zencodec::operation::RequirementEvidence::Unknown
 #[non_exhaustive] pub enum zencodec::operation::Selection
 pub zencodec::operation::Selection::Boundary(zencodec::decode::BoundaryAction)
 pub zencodec::operation::Selection::Encode(zencodec::operation::EncodeOffer)
@@ -2042,11 +2052,13 @@ pub fn zencodec::operation::CollectionOperationError::fmt(&self, f: &mut core::f
 impl core::fmt::Display for zencodec::operation::CollectionOperationError
 pub fn zencodec::operation::CollectionOperationError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 #[non_exhaustive] pub struct zencodec::operation::DecisionRecord
+pub zencodec::operation::DecisionRecord::admitted: u8
 pub zencodec::operation::DecisionRecord::code: zencodec::operation::DecisionCode
 pub zencodec::operation::DecisionRecord::context: zencodec::operation::DecisionContext
 pub zencodec::operation::DecisionRecord::offered: u8
 pub zencodec::operation::DecisionRecord::question: u64
 pub zencodec::operation::DecisionRecord::selected: core::option::Option<zencodec::operation::Selection>
+pub zencodec::operation::DecisionRecord::unmet_requirements: zencodec::operation::UnmetRequirements
 pub zencodec::operation::DecisionRecord::used_preset: bool
 pub struct zencodec::operation::DecodeRequest
 impl zencodec::operation::DecodeRequest
@@ -2234,6 +2246,12 @@ pub zencodec::operation::TranscodeOffer::retains_opaque_profile: core::option::O
 pub zencodec::operation::TranscodeOffer::workspace_upper_bound: core::option::Option<u64>
 impl zencodec::operation::TranscodeOffer
 pub const fn zencodec::operation::TranscodeOffer::new(encoder: zencodec::operation::EncodeOffer, output: zenpixels::descriptor::PixelDescriptor, metadata: zencodec::operation::MetadataTransfer) -> Self
+pub struct zencodec::operation::UnmetRequirements
+impl zencodec::operation::UnmetRequirements
+pub const fn zencodec::operation::UnmetRequirements::is_empty(self) -> bool
+pub fn zencodec::operation::UnmetRequirements::iter(self) -> impl core::iter::traits::iterator::Iterator<Item = (zencodec::operation::PolicyRequirement, zencodec::operation::RequirementEvidence)>
+impl core::fmt::Display for zencodec::operation::UnmetRequirements
+pub fn zencodec::operation::UnmetRequirements::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub trait zencodec::operation::PolicyResolver
 pub type zencodec::operation::PolicyResolver::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn zencodec::operation::PolicyResolver::resolve(&mut self, question: zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<Self::Error>>
