@@ -556,9 +556,12 @@ immediate-allocation convenience. Neither admission nor a qualified additional
 workspace bound establishes total operation memory.
 
 The private native AV1 witness executes this boundary for strided RGB16 output,
-with one coded RGB row of admitted scratch. It reuses existing strip kernels;
-independent RGB accuracy, unclipped float/HDR output and a public planar plan in
-zenpixels-convert remain unqualified. See the
+with one coded RGB row of admitted scratch. A second explicit target executes
+unclipped RGB F32 with no managed row scratch and unchanged sRGB transfer.
+The same offer and callback suffice. Native crops are bit-identical to full-frame
+rows; independent zimg agreement has a fixed 1e-6 absolute gate for the tested
+BT.709/sRGB cases. Other matrices/transfers, HDR rendering, downstream processing
+and a public planar plan in zenpixels-convert remain unqualified. See the
 [native qualification](../perf/av1-policy-validation/README.md#prepared-conversion-before-allocation).
 
 ### Prepared frame encoding transitions

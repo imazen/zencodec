@@ -11,7 +11,7 @@ const gaps = [
     'Shared request/result contract; codec composition; consumer adapter.', 'https://github.com/imazen/zencodec/issues/170'],
   ['Planar video conversion', 'ImageConversionOffer · resolve_image_conversion · PreparedStorage · ImageOutput::from_frame_pixels',
     'Native AV1 borrowed-plane conversion with policy before destination initialization. Scoped reservations, declared siting assumptions, clipping disclosure, cancellation, original error causes and converted ImageOutput ownership are exercised across the native crop matrix.',
-    'No public planar conversion plan or coupled converter/encoder reconfiguration. Independent RGB accuracy, float excursions, HDR/other matrices, mono/GBR and native workspace admission remain open. Preparation scans all active source words even for small crops.',
+    'No public planar conversion plan or coupled converter/encoder reconfiguration. The private BT.709/sRGB float route preserves excursions and passes its independent numerical gate. Public output-plan integration, HDR/other matrices, mono/GBR and native workspace admission remain open. Preparation scans all active source words even for small crops.',
     'zenpixels-convert and video adapters; shared facts/decisions in zencodec.', 'perf/av1-policy-validation/README.md'],
   ['Opaque and nested privacy', 'PolicyResolver::resolve · Question::Transcode · MetadataTransfer',
     'One fallible callback, scoped offers and reported metadata/color treatment.',

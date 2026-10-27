@@ -1,6 +1,7 @@
 //! Executing witness: ask policy before materializing destination/scratch.
 //! The native strip kernels remain test-only, not a public planar converter.
 use crate::planar_conversion_tests::{Refusal, SitingChoice, conversion_facts, widen};
+use crate::planar_float::FloatPlan;
 use enough::Stop;
 use std::{error::Error, fmt, sync::Arc};
 use zenavif::yuv_convert::*;
@@ -78,21 +79,22 @@ fn check(stop: &dyn Stop, stage: Stage, report: &OperationReport) -> Result<(), 
     })
 }
 
-struct Owner {
-    data: SharedStorage<[u16; 3]>,
+struct Owner<T> {
+    data: SharedStorage<[T; 3]>,
+    descriptor: PixelDescriptor,
     width: u32,
     height: u32,
     stride: usize,
     color: Arc<ColorContext>,
 }
-impl PackedImageOwner for Owner {
+impl<T: bytemuck::Pod + Send + Sync> PackedImageOwner for Owner<T> {
     fn pixels(&self) -> Result<PixelSlice<'_>, At<OutputError>> {
         PixelSlice::new(
             bytemuck::cast_slice(self.data.as_slice()),
             self.width,
             self.height,
-            self.stride * 6,
-            PixelDescriptor::RGB16_SRGB,
+            self.stride * core::mem::size_of::<[T; 3]>(),
+            self.descriptor,
         )
         .map(|p| p.with_color_context(self.color.clone()))
         .map_err(|e| {
@@ -103,14 +105,31 @@ impl PackedImageOwner for Owner {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Target {
+    Rgb16,
+    RgbF32,
+}
+const FLOAT_SRGB: PixelDescriptor =
+    PixelDescriptor::RGBF32_LINEAR.with_transfer(zenpixels::TransferFunction::Srgb);
+enum OutputStorage {
+    Integer {
+        destination: PreparedStorage<[u16; 3]>,
+        scratch: PreparedStorage<u64>,
+        scratch_bytes: usize,
+    },
+    Float {
+        destination: PreparedStorage<[f32; 3]>,
+        plan: FloatPlan,
+    },
+}
+
 /// Holds the exact mapping, destination reservation and kernel selection.
 /// No destination payload exists during policy; allocation can still fail.
 struct Prepared<'a> {
     frame: &'a Frame,
     planes: [PlaneView<'a>; 3],
-    destination: PreparedStorage<[u16; 3]>,
-    scratch: PreparedStorage<u64>,
-    scratch_bytes: usize,
+    output: OutputStorage,
     stride: usize,
     offer: ImageConversionOffer,
 }
@@ -119,6 +138,7 @@ impl<'a> Prepared<'a> {
         frame: &'a Frame,
         mapped: &'a dyn MappedPlanes,
         pool: &StorageBudget,
+        target: Target,
         stop: &dyn Stop,
     ) -> Result<Self, At<Failure>> {
         let report = OperationReport::default();
@@ -168,17 +188,50 @@ impl<'a> Prepared<'a> {
         let count = stride
             .checked_mul(crop.height as usize)
             .ok_or_else(overflow)?;
-        let scratch_bytes = (geometry.coded_width as usize)
-            .checked_mul(3 * info.encoding.bytes_per_sample())
-            .ok_or_else(overflow)?;
-        let destination = pool
-            .prepare_filled(count, [0xdead; 3])
-            .map_err(|e| failed(Stage::Prepare, &report, e))?;
-        let scratch = pool
-            .prepare_filled(scratch_bytes.div_ceil(8), 0u64)
-            .map_err(|e| failed(Stage::Prepare, &report, e))?;
+        let (output, descriptor, admitted_bytes) = match target {
+            Target::Rgb16 => {
+                let scratch_bytes = (geometry.coded_width as usize)
+                    .checked_mul(3 * info.encoding.bytes_per_sample())
+                    .ok_or_else(overflow)?;
+                let destination = pool
+                    .prepare_filled(count, [0xdead; 3])
+                    .map_err(|e| failed(Stage::Prepare, &report, e))?;
+                let scratch = pool
+                    .prepare_filled(scratch_bytes.div_ceil(8), 0u64)
+                    .map_err(|e| failed(Stage::Prepare, &report, e))?;
+                let bytes = destination
+                    .reserved_bytes()
+                    .checked_add(scratch.reserved_bytes())
+                    .ok_or_else(overflow)?;
+                (
+                    OutputStorage::Integer {
+                        destination,
+                        scratch,
+                        scratch_bytes,
+                    },
+                    PixelDescriptor::RGB16_SRGB,
+                    bytes,
+                )
+            }
+            Target::RgbF32 => {
+                let destination = pool
+                    .prepare_filled(count, [f32::from_bits(0x7fc1_2345); 3])
+                    .map_err(|e| failed(Stage::Prepare, &report, e))?;
+                let bytes = destination.reserved_bytes();
+                let plan = FloatPlan::new(
+                    info.encoding.code_bits(),
+                    info.color.resolved.unwrap().full_range,
+                    info.subsampling,
+                );
+                (
+                    OutputStorage::Float { destination, plan },
+                    FLOAT_SRGB,
+                    bytes,
+                )
+            }
+        };
         let mut offer = ImageConversionOffer::new(
-            PixelDescriptor::RGB16_SRGB,
+            descriptor,
             ImageGeometry {
                 canvas_width: geometry.coded_width,
                 canvas_height: geometry.coded_height,
@@ -192,17 +245,14 @@ impl<'a> Prepared<'a> {
             Orientation::Identity,
         );
         offer.assumed_chroma_siting = facts.assumed_center.then_some(ChromaSiting::Center);
-        // Integer kernels clip. No qualified native workspace bound is claimed.
-        offer.admitted_bytes = destination
-            .reserved_bytes()
-            .checked_add(scratch.reserved_bytes())
-            .ok_or_else(overflow)?;
+        // The float recipe has no saturation; it leaves transfer/primaries
+        // unchanged. It does not establish HDR rendering or exact precision.
+        offer.preserves_extended_range = target == Target::RgbF32;
+        offer.admitted_bytes = admitted_bytes;
         Ok(Self {
             frame,
             planes: planes.map(Option::unwrap),
-            destination,
-            scratch,
-            scratch_bytes,
+            output,
             stride,
             offer,
         })
@@ -228,27 +278,32 @@ impl<'a> Prepared<'a> {
         }
         drop(source);
         check(stop, Stage::Allocate, &report)?;
-        let mut data = self
-            .destination
-            .allocate()
-            .map_err(|e| failed(Stage::Allocate, &report, e))?;
-        let mut scratch = self
-            .scratch
-            .allocate()
-            .map_err(|e| failed(Stage::Allocate, &report, e))?;
-        let scratch_bytes =
-            &mut bytemuck::cast_slice_mut::<u64, u8>(scratch.as_mut_slice())[..self.scratch_bytes];
-        let info = self.frame.interpretation();
-        let crop = info.geometry.crop;
-        let width = info.geometry.coded_width as usize;
-        let height = info.geometry.coded_height as usize;
-        let bits = info.encoding.code_bits();
-        let range = if info.color.resolved.unwrap().full_range {
-            YuvRange::Full
-        } else {
-            YuvRange::Limited
-        };
-        macro_rules! execute {
+        let image = match self.output {
+            OutputStorage::Integer {
+                destination,
+                scratch,
+                scratch_bytes,
+            } => {
+                let mut data = destination
+                    .allocate()
+                    .map_err(|e| failed(Stage::Allocate, &report, e))?;
+                let mut scratch = scratch
+                    .allocate()
+                    .map_err(|e| failed(Stage::Allocate, &report, e))?;
+                let scratch_bytes =
+                    &mut bytemuck::cast_slice_mut::<u64, u8>(scratch.as_mut_slice())
+                        [..scratch_bytes];
+                let info = self.frame.interpretation();
+                let crop = info.geometry.crop;
+                let width = info.geometry.coded_width as usize;
+                let height = info.geometry.coded_height as usize;
+                let bits = info.encoding.code_bits();
+                let range = if info.color.resolved.unwrap().full_range {
+                    YuvRange::Full
+                } else {
+                    YuvRange::Limited
+                };
+                macro_rules! execute {
             ($kind:ident, $f420:ident, $f422:ident, $f444:ident $(, $depth:expr)?) => {{
                 let [y, u, v] = self.planes.each_ref().map(|p| p.as_strided_samples());
                 let (PlaneSamples::$kind(y), PlaneSamples::$kind(u), PlaneSamples::$kind(v)) = (y, u, v)
@@ -271,33 +326,61 @@ impl<'a> Prepared<'a> {
                 }
             }};
         }
-        if bits == 8 {
-            execute!(
-                U8,
-                yuv420_to_rgb8_strip,
-                yuv422_to_rgb8_strip,
-                yuv444_to_rgb8_strip
-            );
-        } else {
-            execute!(
-                U16,
-                yuv420_to_rgb16_strip,
-                yuv422_to_rgb16_strip,
-                yuv444_to_rgb16_strip,
-                bits
-            );
-        }
-        check(stop, Stage::Adopt, &report)?;
-        let owner = Owner {
-            data: data.freeze(),
-            width: crop.width,
-            height: crop.height,
-            stride: self.stride,
-            color: Arc::new(ColorContext::from_cicp(Cicp::SRGB)),
+                if bits == 8 {
+                    execute!(
+                        U8,
+                        yuv420_to_rgb8_strip,
+                        yuv422_to_rgb8_strip,
+                        yuv444_to_rgb8_strip
+                    );
+                } else {
+                    execute!(
+                        U16,
+                        yuv420_to_rgb16_strip,
+                        yuv422_to_rgb16_strip,
+                        yuv444_to_rgb16_strip,
+                        bits
+                    );
+                }
+                check(stop, Stage::Adopt, &report)?;
+                let owner = Owner {
+                    data: data.freeze(),
+                    descriptor: PixelDescriptor::RGB16_SRGB,
+                    width: crop.width,
+                    height: crop.height,
+                    stride: self.stride,
+                    color: Arc::new(ColorContext::from_cicp(Cicp::SRGB)),
+                };
+                ImageOutput::from_frame_pixels(self.frame.clone(), owner, self.offer.orientation)
+                    .map_err(|e| failed(Stage::Adopt, &report, e))?
+            }
+            OutputStorage::Float { destination, plan } => {
+                let mut data = destination
+                    .allocate()
+                    .map_err(|e| failed(Stage::Allocate, &report, e))?;
+                let crop = self.frame.interpretation().geometry.crop;
+                for row in 0..crop.height as usize {
+                    check(stop, Stage::Execute, &report)?;
+                    plan.row(
+                        &self.planes,
+                        crop.x as usize,
+                        crop.y as usize + row,
+                        &mut data.as_mut_slice()[row * self.stride..][..crop.width as usize],
+                    );
+                }
+                check(stop, Stage::Adopt, &report)?;
+                let owner = Owner {
+                    data: data.freeze(),
+                    descriptor: FLOAT_SRGB,
+                    width: crop.width,
+                    height: crop.height,
+                    stride: self.stride,
+                    color: Arc::new(ColorContext::from_cicp(Cicp::SRGB)),
+                };
+                ImageOutput::from_frame_pixels(self.frame.clone(), owner, self.offer.orientation)
+                    .map_err(|e| failed(Stage::Adopt, &report, e))?
+            }
         };
-        let image =
-            ImageOutput::from_frame_pixels(self.frame.clone(), owner, self.offer.orientation)
-                .map_err(|e| failed(Stage::Adopt, &report, e))?;
         Ok(Outcome::from_parts(image, report))
     }
 }
@@ -309,11 +392,22 @@ fn convert<R: PolicyResolver + ?Sized>(
     preset: PolicySet,
     stop: &dyn Stop,
 ) -> Result<Outcome<ImageOutput>, At<Failure>> {
+    convert_target(frame, pool, resolver, preset, Target::Rgb16, stop)
+}
+
+fn convert_target<R: PolicyResolver + ?Sized>(
+    frame: Frame,
+    pool: &StorageBudget,
+    resolver: &mut R,
+    preset: PolicySet,
+    target: Target,
+    stop: &dyn Stop,
+) -> Result<Outcome<ImageOutput>, At<Failure>> {
     check(stop, Stage::Prepare, &OperationReport::default())?;
     let map = frame
         .map()
         .map_err(|e| failed(Stage::Prepare, &OperationReport::default(), e))?;
-    Prepared::new(&frame, map.as_ref(), pool, stop)?.run(resolver, preset, stop)
+    Prepared::new(&frame, map.as_ref(), pool, target, stop)?.run(resolver, preset, stop)
 }
 
 /// Called for every native matrix case, comparing actual selected output to
@@ -394,24 +488,108 @@ pub(super) fn qualify(native: &Frame, expected: &[[u16; 3]]) {
     assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
 }
 
-pub(super) fn reject_declared_siting(native: &Frame) {
-    let pool = StorageBudget::new(32_768, 2);
-    let error = convert(
+/// Actual unclipped float output through the same retained-route callback.
+pub(super) fn float_pixels(native: &Frame) -> Vec<[f32; 3]> {
+    use std::{cell::Cell, convert::Infallible};
+    use zencodec::operation::{Decision, Question, Selection};
+    let crop = native.interpretation().geometry.crop;
+    let bytes = (crop.width as usize + 5) * crop.height as usize * 12;
+    let pool = StorageBudget::new(bytes, 1);
+    let calls = Cell::new(0);
+    let result = convert_target(
         native.clone(),
         &pool,
-        &mut |_: zencodec::operation::Question<'_>| -> Result<_, At<std::convert::Infallible>> {
-            panic!("unsupported signaled siting must not reach policy")
+        &mut |q: Question<'_>| -> Result<Decision, At<Infallible>> {
+            let Question::ImageConversion { choices, .. } = q else {
+                panic!()
+            };
+            let offer = choices.first().unwrap().value();
+            assert_eq!(offer.output, FLOAT_SRGB);
+            assert!(offer.preserves_extended_range);
+            assert_eq!(offer.admitted_bytes, bytes);
+            assert_eq!(pool.reserved_bytes(), bytes);
+            assert_eq!(pool.reserved_objects(), 1);
+            calls.set(calls.get() + 1);
+            Ok(Decision::UsePreset)
         },
-        PolicySet::new().allow_assumed_chroma_siting(true),
+        PolicySet::new()
+            .allow_assumed_chroma_siting(true)
+            .require_extended_range(true),
+        Target::RgbF32,
         &enough::Unstoppable,
     )
-    .unwrap_err();
-    assert_eq!(error.error().stage, Stage::Prepare);
-    assert_eq!(
-        zencodec::find_cause::<Refusal>(&error),
-        Some(&Refusal::Siting)
-    );
+    .unwrap();
+    assert_eq!(calls.get(), 1);
+    assert_eq!(result.report().decisions().count(), 1);
+    let Some(Selection::ImageConversion(offer)) =
+        result.report().decisions().next().unwrap().selected
+    else {
+        panic!()
+    };
+    assert!(offer.preserves_extended_range);
+    assert!(Arc::ptr_eq(
+        result.source_frame().unwrap(),
+        native.interpretation()
+    ));
+    assert_eq!(result.interpretation().timing, Some(native.timing()));
+    let output = result
+        .with_pixels(|p| {
+            assert_eq!(p.descriptor(), FLOAT_SRGB);
+            assert_eq!(p.color_context().unwrap().cicp, Some(Cicp::SRGB));
+            (0..crop.height)
+                .flat_map(|row| {
+                    bytemuck::cast_slice::<u8, [f32; 3]>(p.row(row))
+                        .iter()
+                        .copied()
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap();
+    let retained = result.output().clone();
+    drop(result);
+    assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (bytes, 1));
+    drop(retained);
     assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
+    output
+}
+
+pub(super) fn qualify_float(native: &Frame, expected: &[[f32; 3]]) {
+    let actual = float_pixels(native);
+    let crop = native.interpretation().geometry.crop;
+    for y in 0..crop.height as usize {
+        let wanted = &expected[(y + crop.y as usize)
+            * native.interpretation().geometry.coded_width as usize
+            + crop.x as usize..][..crop.width as usize];
+        let actual = &actual[y * crop.width as usize..][..crop.width as usize];
+        assert_eq!(
+            bytemuck::cast_slice::<_, u8>(actual),
+            bytemuck::cast_slice::<_, u8>(wanted),
+            "float crop/row partition must be bit-identical to the full frame"
+        );
+    }
+}
+
+pub(super) fn reject_declared_siting(native: &Frame) {
+    for target in [Target::Rgb16, Target::RgbF32] {
+        let pool = StorageBudget::new(32_768, 2);
+        let error = convert_target(
+            native.clone(),
+            &pool,
+            &mut |_: zencodec::operation::Question<'_>| -> Result<_, At<std::convert::Infallible>> {
+                panic!("unsupported signaled siting must not reach policy")
+            },
+            PolicySet::new().allow_assumed_chroma_siting(true),
+            target,
+            &enough::Unstoppable,
+        )
+        .unwrap_err();
+        assert_eq!(error.error().stage, Stage::Prepare);
+        assert_eq!(
+            zencodec::find_cause::<Refusal>(&error),
+            Some(&Refusal::Siting)
+        );
+        assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
+    }
 }
 
 #[cfg(test)]
@@ -490,72 +668,82 @@ mod tests {
     #[test]
     fn planar_prepared_callback_error_stale_choice_and_unwind_do_not_publish() {
         let frame = native();
-        let pool = StorageBudget::new(32_768, 2);
-        let error = convert(
-            frame.clone(),
-            &pool,
-            &mut |_: Question<'_>| -> Result<Decision, At<Secret>> {
-                Err(At::wrap(Secret).at_named("conversion user rule"))
-            },
-            PolicySet::new(),
-            &Unstoppable,
-        )
-        .unwrap_err();
-        assert_eq!(error.error().stage, Stage::Policy);
-        assert_eq!(
-            error.error().report.decisions().next().unwrap().code,
-            DecisionCode::CallbackFailed
-        );
-        assert!(zencodec::find_cause::<At<Secret>>(&error).is_some());
-        assert!(!format!("{error} {error:?}").contains("private-callback-data"));
-        assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
-
-        let mut old: Option<ChoiceId> = None;
-        let image = convert(
-            frame.clone(),
-            &pool,
-            &mut |q: Question<'_>| -> Result<_, At<Infallible>> {
-                let Question::ImageConversion { choices, .. } = q else {
-                    panic!()
-                };
-                old = Some(choices.first().unwrap().id());
-                Ok(Decision::Choose(old.unwrap()))
-            },
-            PolicySet::new(),
-            &Unstoppable,
-        )
-        .unwrap();
-        drop(image);
-        let error = convert(
-            frame.clone(),
-            &pool,
-            &mut |_: Question<'_>| -> Result<_, At<Infallible>> {
-                Ok(Decision::Choose(old.unwrap()))
-            },
-            PolicySet::new(),
-            &Unstoppable,
-        )
-        .unwrap_err();
-        assert_eq!(
-            error.error().report.decisions().next().unwrap().code,
-            DecisionCode::InvalidChoice
-        );
-        assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
-
-        let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let _ = convert(
-                frame,
+        for target in [Target::Rgb16, Target::RgbF32] {
+            let pool = StorageBudget::new(32_768, 2);
+            let error = convert_target(
+                frame.clone(),
                 &pool,
-                &mut |_: Question<'_>| -> Result<Decision, At<Infallible>> {
-                    assert_eq!(pool.reserved_objects(), 2);
-                    panic!("application unwound while holding reservations")
+                &mut |_: Question<'_>| -> Result<Decision, At<Secret>> {
+                    Err(At::wrap(Secret).at_named("conversion user rule"))
                 },
                 PolicySet::new(),
+                target,
                 &Unstoppable,
+            )
+            .unwrap_err();
+            assert_eq!(error.error().stage, Stage::Policy);
+            assert_eq!(
+                error.error().report.decisions().next().unwrap().code,
+                DecisionCode::CallbackFailed
             );
-        }));
-        assert!(unwound.is_err());
-        assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
+            assert!(zencodec::find_cause::<At<Secret>>(&error).is_some());
+            assert!(!format!("{error} {error:?}").contains("private-callback-data"));
+            assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
+
+            let mut old: Option<ChoiceId> = None;
+            let image = convert_target(
+                frame.clone(),
+                &pool,
+                &mut |q: Question<'_>| -> Result<_, At<Infallible>> {
+                    let Question::ImageConversion { choices, .. } = q else {
+                        panic!()
+                    };
+                    old = Some(choices.first().unwrap().id());
+                    Ok(Decision::Choose(old.unwrap()))
+                },
+                PolicySet::new(),
+                target,
+                &Unstoppable,
+            )
+            .unwrap();
+            drop(image);
+            let error = convert_target(
+                frame.clone(),
+                &pool,
+                &mut |_: Question<'_>| -> Result<_, At<Infallible>> {
+                    Ok(Decision::Choose(old.unwrap()))
+                },
+                PolicySet::new(),
+                target,
+                &Unstoppable,
+            )
+            .unwrap_err();
+            assert_eq!(
+                error.error().report.decisions().next().unwrap().code,
+                DecisionCode::InvalidChoice
+            );
+            assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
+
+            let unwound = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let _ = convert_target(
+                    frame.clone(),
+                    &pool,
+                    &mut |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+                        if target == Target::Rgb16 {
+                            assert_eq!(pool.reserved_objects(), 2);
+                        } else {
+                            assert_eq!(pool.reserved_objects(), 1);
+                        }
+                        panic!("application unwound while holding reservations")
+                    },
+                    PolicySet::new(),
+                    target,
+                    &Unstoppable,
+                );
+            }));
+            assert!(unwound.is_err());
+            assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
+        }
     }
 
     struct Countdown(AtomicUsize);
@@ -577,60 +765,64 @@ mod tests {
     #[test]
     fn planar_prepared_cancellation_retains_selected_record_and_drops_partial_output() {
         let frame = native();
-        let pool = StorageBudget::new(32_768, 2);
-        let stop = Countdown(AtomicUsize::new(0));
-        let called = Cell::new(false);
-        let error = convert(
-            frame.clone(),
-            &pool,
-            &mut |_: Question<'_>| -> Result<_, At<Infallible>> {
-                called.set(true);
-                Ok(Decision::UsePreset)
-            },
-            PolicySet::new(),
-            &stop,
-        )
-        .unwrap_err();
-        assert_eq!(error.error().stage, Stage::Prepare);
-        assert!(!called.get());
-        for (checks, stage) in [
-            (0, Stage::Policy),
-            (1, Stage::Allocate),
-            (3, Stage::Execute),
-        ] {
-            stop.0.store(usize::MAX, Ordering::SeqCst);
-            let error = convert(
+        for target in [Target::Rgb16, Target::RgbF32] {
+            let pool = StorageBudget::new(32_768, 2);
+            let stop = Countdown(AtomicUsize::new(0));
+            let called = Cell::new(false);
+            let error = convert_target(
                 frame.clone(),
                 &pool,
-                &mut |q: Question<'_>| -> Result<_, At<Infallible>> {
-                    let Question::ImageConversion { choices, .. } = q else {
-                        panic!()
-                    };
-                    stop.0.store(checks, Ordering::SeqCst);
-                    Ok(Decision::choose(choices.first().unwrap()))
+                &mut |_: Question<'_>| -> Result<_, At<Infallible>> {
+                    called.set(true);
+                    Ok(Decision::UsePreset)
                 },
                 PolicySet::new(),
+                target,
                 &stop,
             )
             .unwrap_err();
-            assert_eq!(error.error().stage, stage);
-            let record = error.error().report.decisions().next().unwrap();
-            assert_eq!(record.selected.is_some(), stage != Stage::Policy);
-            if stage == Stage::Policy {
-                assert_eq!(
-                    zencodec::find_cause::<zencodec::operation::PolicyFailure>(&error)
-                        .unwrap()
-                        .stop_reason(),
-                    Some(StopReason::TimedOut)
-                );
-            } else {
-                use zencodec::CodecErrorExt;
-                assert_eq!(
-                    error.error_category(),
-                    Some(zencodec::ErrorCategory::Stopped(StopReason::TimedOut))
-                );
+            assert_eq!(error.error().stage, Stage::Prepare);
+            assert!(!called.get());
+            for (checks, stage) in [
+                (0, Stage::Policy),
+                (1, Stage::Allocate),
+                (3, Stage::Execute),
+            ] {
+                stop.0.store(usize::MAX, Ordering::SeqCst);
+                let error = convert_target(
+                    frame.clone(),
+                    &pool,
+                    &mut |q: Question<'_>| -> Result<_, At<Infallible>> {
+                        let Question::ImageConversion { choices, .. } = q else {
+                            panic!()
+                        };
+                        stop.0.store(checks, Ordering::SeqCst);
+                        Ok(Decision::choose(choices.first().unwrap()))
+                    },
+                    PolicySet::new(),
+                    target,
+                    &stop,
+                )
+                .unwrap_err();
+                assert_eq!(error.error().stage, stage);
+                let record = error.error().report.decisions().next().unwrap();
+                assert_eq!(record.selected.is_some(), stage != Stage::Policy);
+                if stage == Stage::Policy {
+                    assert_eq!(
+                        zencodec::find_cause::<zencodec::operation::PolicyFailure>(&error)
+                            .unwrap()
+                            .stop_reason(),
+                        Some(StopReason::TimedOut)
+                    );
+                } else {
+                    use zencodec::CodecErrorExt;
+                    assert_eq!(
+                        error.error_category(),
+                        Some(zencodec::ErrorCategory::Stopped(StopReason::TimedOut))
+                    );
+                }
+                assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
             }
-            assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
         }
     }
 
@@ -653,39 +845,42 @@ mod tests {
             }
         }
         let frame = native();
-        let pool = StorageBudget::new(32_768, 2);
-        for fail in [false, true] {
-            let calls = Arc::new(AtomicUsize::new(0));
-            let owner = Arc::new(Tracked {
-                inner: frame.picture().clone(),
-                calls: calls.clone(),
-                fail,
-            });
-            let weak = Arc::downgrade(&owner);
-            let tracked = Frame::new(
-                owner,
-                frame.interpretation().clone(),
-                frame.timing(),
-                frame.presentation(),
-            );
-            let result = convert(
-                tracked,
-                &pool,
-                &mut preset,
-                PolicySet::new().allow_assumed_chroma_siting(true),
-                &Unstoppable,
-            );
-            assert_eq!(calls.load(Ordering::SeqCst), 1);
-            assert!(weak.upgrade().is_none());
-            if fail {
-                let error = result.unwrap_err();
-                assert_eq!(error.error().stage, Stage::Prepare);
-                assert!(zencodec::find_cause::<At<Secret>>(&error).is_some());
-                assert!(!format!("{error} {error:?}").contains("private-callback-data"));
-            } else {
-                drop(result.unwrap());
+        for target in [Target::Rgb16, Target::RgbF32] {
+            let pool = StorageBudget::new(32_768, 2);
+            for fail in [false, true] {
+                let calls = Arc::new(AtomicUsize::new(0));
+                let owner = Arc::new(Tracked {
+                    inner: frame.picture().clone(),
+                    calls: calls.clone(),
+                    fail,
+                });
+                let weak = Arc::downgrade(&owner);
+                let tracked = Frame::new(
+                    owner,
+                    frame.interpretation().clone(),
+                    frame.timing(),
+                    frame.presentation(),
+                );
+                let result = convert_target(
+                    tracked,
+                    &pool,
+                    &mut preset,
+                    PolicySet::new().allow_assumed_chroma_siting(true),
+                    target,
+                    &Unstoppable,
+                );
+                assert_eq!(calls.load(Ordering::SeqCst), 1);
+                assert!(weak.upgrade().is_none());
+                if fail {
+                    let error = result.unwrap_err();
+                    assert_eq!(error.error().stage, Stage::Prepare);
+                    assert!(zencodec::find_cause::<At<Secret>>(&error).is_some());
+                    assert!(!format!("{error} {error:?}").contains("private-callback-data"));
+                } else {
+                    drop(result.unwrap());
+                }
+                assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
             }
-            assert_eq!((pool.reserved_bytes(), pool.reserved_objects()), (0, 0));
         }
     }
 }

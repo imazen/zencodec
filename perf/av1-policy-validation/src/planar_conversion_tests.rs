@@ -314,6 +314,18 @@ fn planar_native_borrowed_rows_and_odd_crops_match_full_conversion() {
                             .collect::<Vec<_>>(),
                     )
                     .unwrap();
+                    let full_float = crate::prepared_conversion::float_pixels(&native);
+                    assert!(full_float.iter().flatten().any(|v| *v < 0.0));
+                    assert!(full_float.iter().flatten().any(|v| *v > 1.0));
+                    std::fs::write(
+                        comparison.join(format!("zen-rgbf32-{index}.raw")),
+                        full_float
+                            .iter()
+                            .flatten()
+                            .flat_map(|v| v.to_le_bytes())
+                            .collect::<Vec<_>>(),
+                    )
+                    .unwrap();
                     assert!(Arc::ptr_eq(&facts.source, native.interpretation()));
                     assert_eq!(facts.timing, native.timing());
                     assert_eq!(facts.presentation, native.presentation());
@@ -380,6 +392,7 @@ fn planar_native_borrowed_rows_and_odd_crops_match_full_conversion() {
                         }
                         qualify_packed_publication(&cropped, &full_rgb);
                         crate::prepared_conversion::qualify(&cropped, &full_rgb);
+                        crate::prepared_conversion::qualify_float(&cropped, &full_float);
                         rows.push_str(&format!(
                             "{bits},{sub:?},{full},{index},{},{},{},{},{}\n",
                             crop.x, crop.y, crop.width, crop.height, facts.assumed_center

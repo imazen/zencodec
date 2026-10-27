@@ -247,6 +247,36 @@ quantization, U16 bit replication and independent arithmetic remain distinct.
 The oracle options are documented by
 [FFmpeg](https://ffmpeg.org/ffmpeg-filters.html#zscale).
 
+### Unclipped float route
+
+The private prepared adapter also accepts an explicit RGB F32 target. It keeps
+the source's sRGB transfer and BT.709 primaries: **F32 storage does not mean
+linear light**. `planar_float.rs` reuses zenavif's normalization/matrix recipe
+without the final integer saturation and quantization. Centered interpolation
+retains exact dyadic weights in coded coordinates; odd crops keep the same phase.
+
+The existing `ImageConversionOffer` suffices: this route reports extended-range
+preservation and a destination reservation before initialization. The same
+resolver and owner return the actual result. Float execution needs no managed
+row scratch; source mapping, native decode allocations and metadata remain
+separate costs. The integer path and its existing exact expectations are retained.
+
+All 162 float crop cases match the corresponding full-frame samples bit-for-bit.
+Original callback/error/cancellation/unwind and single-mapping controls now run
+for both targets. The independent FFmpeg/zimg check covers 54 presentations with
+a fixed absolute normalized RGB tolerance of **0.000001**, permitting float
+arithmetic variation but not integer quantization or clipping. The largest
+observed difference is 0.0000001341104507446289. A deliberately clipped float
+control fails this gate for every presentation. CI runs the gate and retains
+commands, binary hashes, source/output bytes and per-presentation measurements.
+
+Run `just av1-planar-float-verify <native-artifacts> <fresh-output>` after the
+native suite. [Receipt](../../benchmarks/planar_float_2026-10-27.json),
+[all measurements](../../benchmarks/planar_float_2026-10-27.csv).
+This adds no public API or zenpixels change. A public planar plan, the downstream
+OutputPlan processing contract, non-centered siting, other matrices/transfers,
+HDR display mapping and complete workspace accounting remain open.
+
 ### Converted video uses the shared image output
 
 `ImageOutput::from_frame_pixels(frame, owner, orientation)` now adopts an actual

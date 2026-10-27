@@ -1165,3 +1165,11 @@ conversion-check artifacts:
 # Independent color inspection reports disagreement; it sets no acceptance tolerance.
 av1-planar-rgb-inspect source output:
     python3 perf/av1-policy-validation/inspect_planar_rgb.py "{{source}}" "{{output}}"
+
+# Inspect required unclipped float artifacts independently alongside integer output.
+av1-planar-float-inspect source output:
+    python3 perf/av1-policy-validation/inspect_planar_rgb.py "{{source}}" "{{output}}" --float-output
+
+# Fixed numerical gate; retain both float and integer observations and negative controls.
+av1-planar-float-verify source output:
+    python3 perf/av1-policy-validation/inspect_planar_rgb.py "{{source}}" "{{output}}" --float-output --verify-float

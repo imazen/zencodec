@@ -112,6 +112,19 @@ jobs:
           cp perf/av1-policy-validation/dependencies.lock perf/av1-policy-validation/Cargo.lock
           timeout --kill-after=15s 10m cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked -- --nocapture --test-threads=1
           timeout --kill-after=15s 5m cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
+      - name: Verify unclipped planar float output independently
+        timeout-minutes: 2
+        run: |
+          timeout --kill-after=5s 90s python3 perf/av1-policy-validation/inspect_planar_rgb.py "$AV1_POLICY_ARTIFACTS" "${AV1_POLICY_ARTIFACTS}-rgb" --float-output --verify-float
+      - name: Retain planar conversion evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: av1-planar-rgb-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            perf/av1-policy-validation/target/oracle-*-rgb/**
+            perf/av1-policy-validation/target/oracle-*/planar-*/**
+          if-no-files-found: error
 
   spatial:
     name: Qualify native TIFF and JXL image selection

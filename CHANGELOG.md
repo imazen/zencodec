@@ -2,6 +2,11 @@
 
 ## Native image selection (unreleased experiment)
 
+- Execute unclipped native AV1 float conversion through the existing policy and
+  owned-image contracts. Preserve sRGB interpretation, exact crop consistency
+  and admitted ownership; compare actual output with an independent float
+  converter under a fixed numerical gate. The public planar plan remains open.
+
 - Resolve retained image-conversion routes before destination initialization.
   Disclose assumed chroma siting, extended-range preservation and scoped storage;
   preserve selected records and original causes on failure. Add deferred

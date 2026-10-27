@@ -29,3 +29,6 @@ mod planar_conversion_tests;
 
 #[cfg(test)]
 mod prepared_conversion;
+
+#[cfg(test)]
+mod planar_float;
