@@ -206,18 +206,29 @@ pub fn oracle_on_clock(
     frames: &[Frame],
     clock: TimeBase,
 ) {
-    let dir = root.join(name);
-    std::fs::create_dir(&dir)
-        .expect("use a fresh artifact directory; previous evidence is retained");
     let mut ivf = ivf_header(s.width, s.height, clock, frames.len() as u32);
     for packet in packets {
         ivf.extend_from_slice(&(packet.bytes().len() as u32).to_le_bytes());
         ivf.extend_from_slice(&(packet.pts().unwrap().ticks() as u64).to_le_bytes());
         ivf.extend_from_slice(packet.bytes());
     }
-    let encoded = dir.join("approved.ivf");
+    oracle_container(root, name, "ivf", s, &ivf, frames);
+}
+
+pub fn oracle_container(
+    root: &Path,
+    name: &str,
+    extension: &str,
+    s: &Av1EncodeSettings,
+    bytes: &[u8],
+    frames: &[Frame],
+) {
+    let dir = root.join(name);
+    std::fs::create_dir(&dir)
+        .expect("use a fresh artifact directory; previous evidence is retained");
+    let encoded = dir.join(format!("approved.{extension}"));
     let decoded = dir.join("dav1d.raw");
-    std::fs::write(&encoded, ivf).unwrap();
+    std::fs::write(&encoded, bytes).unwrap();
     let base = match (s.subsampling, s.color.matrix_coefficients) {
         (Subsampling::Mono, _) => "gray",
         (Subsampling::Yuv420, _) => "yuv420p",

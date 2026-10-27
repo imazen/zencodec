@@ -150,7 +150,10 @@ dependencies = [
  "zenavif",
  "zencodec",
  "zencodec-media",
+ "zenivf",
+ "zenmp4",
  "zenpixels",
+ "zenwebm",
 ]
 
 [[package]]
@@ -1194,10 +1197,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "zenivf"
+version = "0.1.0"
+source = "git+https://github.com/imazen/zenextras?rev=ae920c1e2ac0fe0e6e2fcb709d99934ba36ea49c#ae920c1e2ac0fe0e6e2fcb709d99934ba36ea49c"
+dependencies = [
+ "enough",
+ "zencodec",
+ "zencodec-media",
+]
+
+[[package]]
 name = "zenmeta"
 version = "0.1.0"
 dependencies = [
  "zencodec",
+ "zenpixels",
+]
+
+[[package]]
+name = "zenmp4"
+version = "0.1.0"
+source = "git+https://github.com/imazen/zenavif?rev=feadc4c94b19acdcd82ee545a02263bc67c45d7d#feadc4c94b19acdcd82ee545a02263bc67c45d7d"
+dependencies = [
+ "enough",
+ "zencodec",
+ "zencodec-media",
  "zenpixels",
 ]
 
@@ -1260,6 +1284,16 @@ dependencies = [
  "thiserror",
  "v_frame",
  "whereat",
+]
+
+[[package]]
+name = "zenwebm"
+version = "0.1.0"
+source = "git+https://github.com/imazen/zenextras?rev=ae920c1e2ac0fe0e6e2fcb709d99934ba36ea49c#ae920c1e2ac0fe0e6e2fcb709d99934ba36ea49c"
+dependencies = [
+ "enough",
+ "zencodec",
+ "zencodec-media",
 ]
 
 [[package]]

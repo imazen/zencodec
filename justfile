@@ -1134,3 +1134,8 @@ mux-finish-check:
     cargo test -p zencodec-media-testkit --locked
     cargo clippy -p zencodec-media -p zencodec-media-testkit --all-targets --locked -- -D warnings
     cargo check -p zencodec-media --no-default-features --target wasm32-unknown-unknown --locked
+
+# Real AV1 packets through native container output on network/disk destinations.
+av1-mux-check artifacts:
+    AV1_POLICY_ARTIFACTS="{{artifacts}}" cargo test --manifest-path perf/av1-policy-validation/Cargo.toml --locked mux_native_ -- --nocapture --test-threads=1
+    cargo clippy --manifest-path perf/av1-policy-validation/Cargo.toml --all-targets --locked -- -D warnings

@@ -1,5 +1,55 @@
 # Native AV1 policy qualification
 
+## Container destination and timing qualification
+
+The private `mux_output.rs` adapter runs the same `Muxer` protocol against IVF,
+WebM and MP4. `Forward(writer)` derives a forward-only destination;
+`SeekBack::new(writer)` captures the actual initial file position. The shared
+write loop handles interrupted and short writes, validates packet clocks/epochs
+before native effects, preflights the complete finish, applies relative patches
+and restores the final position. It has no container-specific branch.
+
+The 12-case matrix is three containers × two destinations × 8/10-bit AV1.
+Six frames per case pass independent FFmpeg/libdav1d component readback and
+FFprobe timestamp checks. Disk cases use real files with an existing prefix;
+three-byte writes and an initial interruption preserve their contents. IVF's
+count-patching mode writes one four-byte patch on disk; progressive MP4 writes
+one eight-byte patch; WebM needs none. Forward-only cases use no patches.
+These are correctness/data-movement observations, not throughput measurements.
+
+Timing is a separate contract. The native IVF outputs preserve PTS but report
+no explicit packet durations; WebM and MP4 preserve all six authored durations.
+A second matrix starts at 40 ms: IVF, WebM and fragmented MP4 preserve the shifted
+PTS, while the current progressive MP4 implementation refuses at finish, after
+1748 bytes have been appended in that fixture. `begin` therefore does not certify
+all future timing requirements. The test authors explicit DTS for that origin
+probe; it does not claim the native encoder supplied a DTS field.
+
+The driver retains the original I/O/native cause and the stage plus confirmed
+append count. A malformed final patch changes neither the pending tail nor
+previously written bytes. Partial header failure leaves its confirmed 13-byte
+prefix. Cancellation and timeout between packet writes keep their reason and
+make the operation terminal. This witness uses a synchronous forward-only writer
+and actual files; it is not an HTTP/async-backpressure qualification.
+
+**Replacement now:** `MuxFinish::apply_to` replaces the immediately deprecated
+`apply_finish`. It validates every patch and reserves fallibly before changing
+an in-memory stream. External writers use `MuxFinish::validate(emitted_bytes)`
+before tail/patch effects; real I/O can still fail after partial publication.
+
+**Required before promoting the writer:** checked timing requirements and layout
+admission must distinguish timestamp preservation, explicit durations and nonzero
+decode origins. Native queue/workspace admission, caller packet staging, packet
+side-data preservation and continuous track reconfiguration are not qualified.
+This encoded-packet trial required zero zenpixels or zenpixels-convert API/kernel
+changes. That count excludes the still-open planar conversion and rendering
+work; it is not a claim that the overall migration needs no pixel API changes.
+
+Run `just av1-mux-check <fresh-artifacts>` for the focused controls, or the full
+native gate. [Measured byte/layout matrix](../../benchmarks/native_mux_output_2026-10-27.csv)
+and [qualification receipt](../../benchmarks/native_mux_output_2026-10-27.json)
+record the pinned native implementations and source identities.
+
 ## Prepared output transitions
 
 `epoch_route.rs` is a private native adapter for the shared
