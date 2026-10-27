@@ -28,6 +28,14 @@ with independent above/below expansion, whole-example copying and keyboard
 navigation. The browser gate reports run-heavy rc=0, 8 s, peak RSS 0.17 GiB,
 minimum available 15998 MiB and peak load 1.45; this measures the guide check.
 
+The emitted auxiliary registration now travels with `Values` / `ValueSlice`.
+`AuxiliaryGrid::ColorSamples` establishes the supported same-center relation;
+`Unknown` does not become aligned merely because dimensions match. The JXL
+review adapter supplies this fact, and the private canvas stage requires it
+before output admission. [Native tests](../benchmarks/native_auxiliary_registration_2026-10-27.json)
+cover odd-origin crops of reconstructed extras at source shifts 1/2/3. General
+origins, phases and resampling remain open; this is not a complete render API.
+
 ## What still needs production implementation
 
 The current priority is the API/native-codec validation loop. The shared collection

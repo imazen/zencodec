@@ -2,6 +2,19 @@
 // Signatures come from Rust through apiPanels; examples remain executable files.
 export const improvements = [
   {
+    id:'auxiliary-grid', title:'Establish sample alignment before moving auxiliary planes',
+    state:'Shared contract and JXL adapter implemented · projection remains private', date:'2026-10-27',
+    summary:'AuxiliaryGrid distinguishes unknown registration from emitted samples aligned with color. Equal dimensions and source dim_shift do not establish alignment.',
+    why:'Cropping a depth plane or mask along with color is correct only when their coordinates agree. A codec may reconstruct a subsampled source plane onto the color grid; its stored reduction factor then describes different samples.',
+    consumer:'Keep requesting the intended result. The projection adapter returns a typed refusal when alignment is unknown, before admitting output storage; callers need no preparatory capability query.',
+    adapter:'Declare ColorSamples only when each emitted auxiliary sample center matches color at the same row and column. Shared adoption checks dimensions and freezes this fact through retained owners, cloning and color replacement. Unknown is the default.',
+    implementor:'The native JXL adapter declares the reconstructed output grid separately from original source facts. Odd-origin crops retain exact color and auxiliary values for all seven named roles at source shifts 1/2/3.',
+    open:'General grid origins, phases and resampling are not represented. The private canvas stage still lacks a complete requested-color render contract, native planar conversion and whole-operation workspace admission.',
+    signatures:['auxiliaryGrid','auxiliarySlice','canvasProjection'],
+    flow:[['implementor','Reconstruct actual planes','retain source facts separately'],['adapter','Establish emitted registration','ColorSamples or Unknown'],['adapter','Project or refuse','no dimension-based guess'],['consumer','Keep the result','coordinates and owner stay together']],
+    evidence:[['Native registration and crop qualification','benchmarks/native_auxiliary_registration_2026-10-27.json'],['Contract and reproduction','perf/spatial-validation/README.md#canvas-projection-before-a-complete-render-api'],['Packaged JXL adapter','https://github.com/imazen/zenjxl/commit/f2c0177e153c9308042bfd5fe51a4be1ebac11b0'],['Rendering follow-up','https://github.com/imazen/zencodec/issues/170']],
+  },
+  {
     id:'strided-plane', title:'Borrow complete planes without losing their interpretation',
     state:'Implemented accessor · private native conversion bridge', date:'2026-10-26',
     summary:'PlaneView::as_strided_samples lets existing strip kernels borrow native storage. The span includes row padding and ends after the last active sample; it never shifts or normalizes words.',

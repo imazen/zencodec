@@ -20,8 +20,9 @@ export async function checkIdeal(browser,url,output) {
     assert.ok((await page.locator('h1').textContent()).includes('executes today'));
     assert.equal(await page.locator('.ideal-step').count(),5);
     const changes=page.locator('.api-change');
-    assert.equal(await page.locator('.api-change:not(#change-operation-storage):not(#change-float-color):not(#change-output-descriptor):not(#change-strided-plane)').count(),12);
-    assert.equal(await page.locator('.api-change:not(#change-float-color):not(#change-output-descriptor):not(#change-strided-plane)').count(),13);
+    assert.equal(await page.locator('.api-change:not(#change-operation-storage):not(#change-float-color):not(#change-output-descriptor):not(#change-strided-plane):not(#change-auxiliary-grid)').count(),12);
+    assert.equal(await page.locator('.api-change:not(#change-float-color):not(#change-output-descriptor):not(#change-strided-plane):not(#change-auxiliary-grid)').count(),13);
+    assert.equal(await page.locator('#change-auxiliary-grid').count(),1);
     assert.equal(await page.locator('#change-strided-plane').count(),1);
     assert.equal(await page.locator('#change-output-descriptor').count(),1);
     assert.equal(await page.locator('#change-float-color').count(),1);
@@ -29,6 +30,12 @@ export async function checkIdeal(browser,url,output) {
     assert.ok((await page.locator('#change-images .code-toolbar').textContent()).includes('Private prototype'));
     assert.equal(await page.locator('#change-images [data-example="checked_jxl_first"]').count(),1);
     for(const change of await changes.all()) assert.ok(!await change.evaluate(el=>el.open));
+    const registration=page.locator('#change-auxiliary-grid');
+    await registration.locator(':scope>summary').focus();
+    await page.keyboard.press('Enter');
+    assert.ok(await registration.evaluate(el=>el.open));
+    for(const required of ['pub enum AuxiliaryGrid','ColorSamples','Unknown','with_grid','dim_shift','before admitting output storage']) assert.ok((await registration.textContent()).includes(required),required);
+    assert.equal(await registration.locator('svg .connector').count(),3);
     const colorChange=page.locator('#change-float-color');
     await colorChange.locator(':scope>summary').focus();
     await page.keyboard.press('Enter');
