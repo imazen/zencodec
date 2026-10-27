@@ -197,6 +197,20 @@ impl core::error::Error for PacketError {}
 
 impl Packet {
     #[cfg(feature = "std")]
+    pub(crate) fn map_payloads(
+        mut self,
+        mut map: impl FnMut(&PacketPayload) -> Result<PacketPayload, crate::staged::Cause>,
+    ) -> Result<Self, crate::staged::Cause> {
+        if let Some(payload) = &self.payload {
+            self.payload = Some(map(payload)?);
+        }
+        for addition in &mut self.additions {
+            addition.payload = map(&addition.payload)?;
+        }
+        Ok(self)
+    }
+
+    #[cfg(feature = "std")]
     pub(crate) fn accounted(
         mut self,
         budget: &zencodec::storage::StorageBudget,

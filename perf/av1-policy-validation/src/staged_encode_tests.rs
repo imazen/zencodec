@@ -422,3 +422,213 @@ fn staged_native_changing_ycbcr_converts_to_fixed_rgb_before_owned_output() {
         assert_eq!(encoded.reserved_bytes(), 0);
     }
 }
+
+#[test]
+fn staged_native_disk_spool_preserves_output_and_refuses_before_destination_effects() {
+    use zencodec::operation::StagingKind;
+    use zencodec_media::staging::{DiskLimits, Staging};
+    let settings = settings(8, Subsampling::Yuv420, false);
+    let frames: Vec<_> = (0..3).map(|i| frame(&settings, i)).collect();
+    let mut expected_bytes = None;
+    for mode in [
+        "memory",
+        "disk",
+        "decline",
+        "disk_cap",
+        "replay_cap",
+        "readonly",
+    ] {
+        let live = Rc::new(Cell::new(false));
+        let writes = Rc::new(Cell::new(0));
+        let budget = StorageBudget::new(if mode == "replay_cap" { 0 } else { 1 << 20 }, 64);
+        let mut bytes = Vec::new();
+        let path = root().join(format!("spool-{mode}.scratch"));
+        let prefix = b"preserved scratch prefix";
+        let staging = if mode == "memory" {
+            Staging::memory(budget.clone())
+        } else {
+            let mut file = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create_new(true)
+                .open(&path)
+                .unwrap();
+            file.write_all(prefix).unwrap();
+            if mode == "readonly" {
+                drop(file);
+                file = std::fs::File::open(&path).unwrap();
+                file.seek(SeekFrom::End(0)).unwrap();
+            }
+            Staging::disk(
+                file,
+                DiskLimits::new(if mode == "disk_cap" { 0 } else { 1 << 20 }, 64, 16),
+                budget.clone(),
+            )
+            .unwrap()
+        };
+        let mut operation = StagedEncode::with_staging(
+            encoder(&live),
+            ExactMp4(zenmp4::Mp4Muxer::new()),
+            Forward(Writer {
+                bytes: &mut bytes,
+                live: live.clone(),
+                calls: writes.clone(),
+                fail: false,
+            }),
+            |q: Question<'_>| -> Result<Decision, At<std::convert::Infallible>> {
+                let Question::FrameRoute { choices, .. } = q else {
+                    panic!()
+                };
+                let staging = choices.first().unwrap().value().staging.unwrap();
+                assert_eq!(
+                    staging.kind,
+                    if mode == "memory" {
+                        StagingKind::Memory
+                    } else {
+                        StagingKind::Disk
+                    }
+                );
+                if mode == "decline" {
+                    Ok(Decision::decline(Decline::NoPreferredChoice))
+                } else {
+                    Ok(Decision::UsePreset)
+                }
+            },
+            staging,
+            &Unstoppable,
+        )
+        .unwrap();
+        let mut failure = None;
+        for input in &frames {
+            if let Err(error) = operation.push(input.clone(), &Unstoppable) {
+                failure = Some(error);
+                break;
+            }
+            assert_eq!(writes.get(), 0);
+            if mode != "memory" {
+                assert_eq!(
+                    budget.reserved_bytes(),
+                    0,
+                    "disk payloads accumulated in replay RAM"
+                );
+            }
+        }
+        let result = if let Some(error) = failure {
+            drop(operation);
+            Err(error)
+        } else {
+            operation.finish(&Unstoppable)
+        };
+        assert!(!live.get());
+        assert_eq!(budget.reserved_bytes(), 0);
+        match mode {
+            "memory" => {
+                result.unwrap();
+                expected_bytes = Some(bytes);
+            }
+            "disk" => {
+                result.unwrap();
+                assert_eq!(&bytes, expected_bytes.as_ref().unwrap());
+                oracle_container(
+                    &root(),
+                    "owned-disk-spooled",
+                    "mp4",
+                    &settings,
+                    &bytes,
+                    &frames,
+                );
+            }
+            _ => {
+                let error = result.unwrap_err();
+                assert_eq!(writes.get(), 0);
+                assert!(bytes.is_empty());
+                match mode {
+                    "decline" => assert!(
+                        zencodec::find_cause::<zencodec::operation::PolicyFailure>(&error)
+                            .is_some()
+                    ),
+                    "disk_cap" => assert_eq!(
+                        zencodec::find_cause::<zencodec_media::staging::Refusal>(&error),
+                        Some(&zencodec_media::staging::Refusal::Bytes)
+                    ),
+                    "replay_cap" => assert!(
+                        zencodec::find_cause::<zencodec::storage::StorageError>(&error).is_some()
+                    ),
+                    "readonly" => assert!(zencodec::find_cause::<io::Error>(&error).is_some()),
+                    _ => unreachable!(),
+                }
+            }
+        }
+        if mode != "memory" {
+            let scratch = std::fs::read(path).unwrap();
+            assert!(scratch.starts_with(prefix));
+            if matches!(mode, "decline" | "disk_cap" | "readonly") {
+                assert_eq!(scratch, prefix);
+            }
+        }
+    }
+}
+
+#[test]
+fn staged_native_late_spool_failure_retains_confirmed_output_progress() {
+    use zencodec_media::staging::{DiskLimits, Staging};
+    struct TruncateSpool<'a> {
+        writer: Writer<'a>,
+        scratch: std::fs::File,
+    }
+    impl Write for TruncateSpool<'_> {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            // Deliberate fault injection: ordinary callers must exclusively
+            // own scratch. First replay packet is already held before publication.
+            self.scratch.set_len(0)?;
+            self.writer.write(bytes)
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            self.writer.flush()
+        }
+    }
+    let live = Rc::new(Cell::new(false));
+    let calls = Rc::new(Cell::new(0));
+    let mut bytes = Vec::new();
+    let scratch = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create_new(true)
+        .open(root().join("late-spool-fault.scratch"))
+        .unwrap();
+    let fault = scratch.try_clone().unwrap();
+    let budget = StorageBudget::new(1 << 20, 64);
+    let staging = Staging::disk(scratch, DiskLimits::new(1 << 20, 64, 16), budget.clone()).unwrap();
+    let mut operation = StagedEncode::with_staging(
+        encoder(&live),
+        ExactMp4(zenmp4::Mp4Muxer::new()),
+        Forward(TruncateSpool {
+            writer: Writer {
+                bytes: &mut bytes,
+                live: live.clone(),
+                calls: calls.clone(),
+                fail: false,
+            },
+            scratch: fault,
+        }),
+        PolicySet::new(),
+        staging,
+        &Unstoppable,
+    )
+    .unwrap();
+    let settings = settings(8, Subsampling::Yuv420, false);
+    for i in 0..3 {
+        operation.push(frame(&settings, i), &Unstoppable).unwrap();
+    }
+    let error = operation.finish(&Unstoppable).unwrap_err();
+    let failure = zencodec::find_cause::<zencodec_media::staged::Failure>(&error).unwrap();
+    assert_eq!(failure.stage, EncodeStage::Publish);
+    assert!(!bytes.is_empty(), "fault must follow actual publication");
+    assert_eq!(failure.emitted, bytes.len() as u64);
+    assert_eq!(
+        zencodec::find_cause::<io::Error>(&error).unwrap().kind(),
+        io::ErrorKind::UnexpectedEof
+    );
+    assert!(!live.get());
+    assert_eq!(budget.reserved_bytes(), 0);
+}

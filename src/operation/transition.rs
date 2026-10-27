@@ -80,6 +80,38 @@ impl DestinationFacts {
     }
 }
 
+/// Where compressed payloads are retained before final destination I/O.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum StagingKind {
+    /// Payloads remain in admitted RAM until muxing releases them.
+    Memory,
+    /// Spool I/O may block while the encoder owns raw/work state. This is not
+    /// a live sequential/backpressure qualification.
+    Disk,
+}
+/// Facts of the retained compressed store, separate from encoder workspace.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct StagingFacts {
+    /// Actual selected storage mechanism.
+    pub kind: StagingKind,
+    /// Packet and addition bytes admitted so far; excludes index metadata.
+    pub payload_bytes: u64,
+    /// Store byte allowance, not a guarantee that future admission succeeds.
+    pub payload_limit: u64,
+}
+impl StagingFacts {
+    /// Describe the actual retained store without certifying native memory.
+    pub const fn new(kind: StagingKind, payload_bytes: u64, payload_limit: u64) -> Self {
+        Self {
+            kind,
+            payload_bytes,
+            payload_limit,
+        }
+    }
+}
+
 /// A prepared route for the destination encoder registration fixed by the
 /// request. The adapter retains its encoder/configuration and held input while
 /// policy runs. This question selects continuity, not an arbitrary output codec.
@@ -98,6 +130,9 @@ pub struct FrameRouteOffer {
     /// Actual retained destination evidence. None means unqualified; it does
     /// not imply forward-only, seekable, staged or safe encoder backpressure.
     pub destination: Option<DestinationFacts>,
+    /// Actual compressed store; None means unqualified. Disk may block while
+    /// raw encoder state is retained, independently of final writer access.
+    pub staging: Option<StagingFacts>,
     /// Currently admitted encoded staging held by the operation. This excludes
     /// native input/reference/work buffers and is not a whole-operation bound.
     pub admitted_encoded_bytes: usize,
@@ -112,6 +147,7 @@ impl FrameRouteOffer {
             fidelity: None,
             conversion: None,
             destination: None,
+            staging: None,
             admitted_encoded_bytes: 0,
             workspace_upper_bound: None,
         }

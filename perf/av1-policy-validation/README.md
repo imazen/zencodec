@@ -640,3 +640,19 @@ This synchronous adapter does not qualify a live async encoder-output pipeline
 or a whole-operation allocation bound. It preflights patches but cannot roll
 back a writer that fails after partial overwrite. Native encoder/converter route
 ownership and destination-specific policy diagnostics remain separate work.
+
+### Explicit disk staging
+
+The public owned operation also accepts `Staging::disk` through `with_staging`.
+Native AV1/MP4 tests compare memory and disk output byte-for-byte and decode the
+result independently. They cover callback refusal, exhausted disk/replay budgets,
+read-only scratch, encoder release before final writes, and late spool failure
+after publication with the original I/O cause and exact confirmed append count.
+Packet unit tests preserve additions, clocks, epochs, ordinals and offsets,
+verify scratch-prefix preservation and release shared replay charges.
+
+The scratch file must be exclusively controlled by the caller; permissions and
+deletion are application policy. Fault-injection aliases in tests do not qualify
+external mutation. Spool writes can wait while the encoder retains raw state.
+Only final-destination writes wait for encoder release. No throughput, total
+workspace-memory bound or live sequential guarantee follows from these tests.

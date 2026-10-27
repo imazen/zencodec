@@ -1,8 +1,9 @@
-//! Finite video encoding with no writer waits while the encoder is alive.
+//! Finite video encoding without final-destination waits while the encoder is alive.
 //!
 //! The operation owns the encoder and actual prepared container/destination.
 //! Every frame is resolved through policy before conversion and native input.
-//! Encoded payloads are copied into admitted storage. Finish drains and drops
+//! Encoded payloads use explicit memory or disk staging. Disk writes may block
+//! while the encoder owns raw state. Finish drains and drops
 //! the encoder before publishing any bytes. This intentionally stages the full
 //! compressed sequence; it is not a live streaming/backpressure mechanism.
 //! Caller-held pictures, codec/CMS workspace and bookkeeping are outside the
@@ -23,6 +24,7 @@
 //!     Ok(())
 //! }
 //! ```
+use crate::staging::Staging;
 use crate::{
     container::Muxer,
     output::{Destination, PreparedOutput, Stats},
@@ -30,7 +32,7 @@ use crate::{
     session::{CodecConfig, Receive, SendStatus, VideoEncoder},
     track::TrackInfo,
 };
-use alloc::{boxed::Box, vec::Vec};
+use alloc::boxed::Box;
 use core::{error::Error as StdError, fmt};
 use enough::Stop;
 use zencodec::{
@@ -70,6 +72,9 @@ pub enum Stage {
 pub struct Failure {
     /// Failed boundary.
     pub stage: Stage,
+    /// Confirmed destination appends, excluding spool writes and patch overwrites.
+    /// Failed final patches can also leave partial overwrites; inspect the cause.
+    pub emitted: u64,
     /// Decisions up to this failure.
     pub report: Box<OperationReport>,
     cause: Cause,
@@ -78,6 +83,7 @@ impl fmt::Debug for Failure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("StagedEncodeFailure")
             .field("stage", &self.stage)
+            .field("emitted", &self.emitted)
             .field("report", &self.report)
             .finish_non_exhaustive()
     }
@@ -142,7 +148,7 @@ struct State<E, M, D> {
     output: PreparedOutput<M, D>,
     config: CodecConfig,
     fidelity: Option<zencodec::encode::Fidelity>,
-    packets: Vec<Packet>,
+    packets: Staging,
     previous: Option<FrameFacts>,
 }
 /// Completed output and its bounded application decision history.
@@ -157,14 +163,14 @@ pub struct Completed {
 /// An owned, fixed-configuration video-to-container operation.
 ///
 /// Failure or unwind makes it terminal and drops encoder, staged packets and
-/// private destination preparation. Neither push nor drop writes output. Finish
-/// consumes the operation and releases native state before the first write.
+/// private destination preparation. Push may write an explicit disk spool, but
+/// neither push nor drop writes the final destination. Finish
+/// consumes the operation and releases native state before the first destination write.
 /// No implicit segmentation, timing rewrite or fallback is performed.
 pub struct StagedEncode<E, M, D, R> {
     state: Option<State<E, M, D>>,
     resolver: R,
     preset: PolicySet,
-    storage: StorageBudget,
     report: OperationReport,
 }
 impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<E, M, D, R> {
@@ -176,6 +182,25 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
         destination: D,
         resolver: R,
         storage: StorageBudget,
+        stop: &dyn Stop,
+    ) -> Result<Self, At<Failure>> {
+        Self::with_staging(
+            encoder,
+            mux,
+            destination,
+            resolver,
+            Staging::memory(storage),
+            stop,
+        )
+    }
+    /// Retain an explicit compressed store. Disk staging may block while the
+    /// encoder is alive; policy sees the selected mechanism before accepting each frame.
+    pub fn with_staging(
+        encoder: E,
+        mux: M,
+        destination: D,
+        resolver: R,
+        staging: Staging,
         stop: &dyn Stop,
     ) -> Result<Self, At<Failure>> {
         let prepare = || -> Result<_, Cause> {
@@ -199,13 +224,14 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
                 fidelity,
                 output,
                 config,
-                packets: Vec::new(),
+                packets: staging,
                 previous: None,
             })
         };
         let state = prepare().map_err(|cause| {
             At::wrap(Failure {
                 stage: Stage::Prepare,
+                emitted: 0,
                 report: Box::default(),
                 cause,
             })
@@ -214,7 +240,6 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
             state: Some(state),
             resolver,
             preset: PolicySet::new(),
-            storage,
             report: OperationReport::default(),
         })
     }
@@ -232,8 +257,14 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
         self.state.is_none()
     }
     fn failure(&self, stage: Stage, cause: Cause) -> At<Failure> {
+        self.failure_after(stage, cause, 0)
+    }
+    fn failure_after(&self, stage: Stage, cause: Cause, emitted: u64) -> At<Failure> {
+        let emitted = zencodec::find_cause::<crate::output::Failure>(cause.as_ref())
+            .map_or(emitted, |failure| failure.emitted);
         At::wrap(Failure {
             stage,
+            emitted,
             report: Box::new(self.report.clone()),
             cause,
         })
@@ -281,7 +312,8 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
             offer.conversion = Some(conversion);
             offer.fidelity = state.fidelity;
             offer.destination = Some(state.output.facts());
-            offer.admitted_encoded_bytes = self.storage.reserved_bytes();
+            offer.admitted_encoded_bytes = state.packets.admitted_memory();
+            offer.staging = Some(state.packets.facts());
             let mut progress = FrameRouteState::default();
             progress.previous = state.previous;
             match resolve_frame_route(
@@ -315,7 +347,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
                     SendStatus::Accepted => break,
                     SendStatus::ReceivePending => match state.encoder.receive(stop)? {
                         Receive::Ready(packet) => {
-                            stage_packet(&mut state.packets, packet, &self.storage, &state.output)?
+                            stage_packet(&mut state.packets, packet, &state.output, stop)?
                         }
                         _ => return Err(invalid(Refusal::ReceivePendingWithoutPacket)),
                     },
@@ -325,7 +357,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
                 check(stop)?;
                 match state.encoder.receive(stop)? {
                     Receive::Ready(packet) => {
-                        stage_packet(&mut state.packets, packet, &self.storage, &state.output)?
+                        stage_packet(&mut state.packets, packet, &state.output, stop)?
                     }
                     Receive::NeedInput => break,
                     Receive::EndOfStream => return Err(invalid(Refusal::EarlyEnd)),
@@ -361,7 +393,7 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
                 check(stop)?;
                 match state.encoder.receive(stop)? {
                     Receive::Ready(packet) => {
-                        stage_packet(&mut state.packets, packet, &self.storage, &state.output)?
+                        stage_packet(&mut state.packets, packet, &state.output, stop)?
                     }
                     Receive::EndOfStream => break,
                     Receive::NeedInput => {
@@ -383,18 +415,26 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
         let State {
             encoder,
             output,
-            packets,
+            mut packets,
             ..
         } = state;
         drop(encoder);
+        let mut emitted = 0;
         let publish = || -> Result<Stats, Cause> {
+            packets.begin_replay(stop)?;
+            // Admit/read the first packet before any final destination effects.
+            let mut packet = packets.next(stop)?;
             let mut output = output.publish(stop)?;
-            for packet in packets {
-                output.send(packet, stop)?;
+            emitted = output.stats().emitted;
+            while let Some(held) = packet {
+                output.send(held, stop)?;
+                emitted = output.stats().emitted;
+                packet = packets.next(stop)?;
             }
             Ok(output.finish(stop)?)
         };
-        let stats = publish().map_err(|cause| self.failure(Stage::Publish, cause))?;
+        let stats =
+            publish().map_err(|cause| self.failure_after(Stage::Publish, cause, emitted))?;
         Ok(Completed {
             stats,
             report: self.report,
@@ -402,16 +442,14 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
     }
 }
 fn stage_packet<M: Muxer, D: Destination>(
-    packets: &mut Vec<Packet>,
+    packets: &mut Staging,
     packet: Packet,
-    storage: &StorageBudget,
     output: &PreparedOutput<M, D>,
+    stop: &dyn Stop,
 ) -> Result<(), Cause> {
     output.validate_packet(&packet)?;
     if packet.is_empty() {
         return Err(invalid(Refusal::EmptyPacket));
     }
-    packets.try_reserve(1)?;
-    packets.push(packet.accounted(storage)?);
-    Ok(())
+    packets.push(packet, stop)
 }

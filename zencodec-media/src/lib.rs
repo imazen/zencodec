@@ -43,4 +43,7 @@ pub mod session;
 /// Owned finite video encoding with admitted compressed staging (requires `std`).
 #[cfg(feature = "std")]
 pub mod staged;
+/// Explicit memory/disk compressed packet staging (requires `std`).
+#[cfg(feature = "std")]
+pub mod staging;
 pub mod track;

@@ -35,7 +35,7 @@ pub use policy::{
 pub use transcode::{MetadataTransfer, TranscodeOffer, resolve_transcode};
 pub use transition::{
     DestinationFacts, FrameConversionOffer, FrameRoute, FrameRouteFacts, FrameRouteOffer,
-    FrameRouteState, resolve_frame_route,
+    FrameRouteState, StagingFacts, StagingKind, resolve_frame_route,
 };
 
 /// Successful output and the decisions that selected its permitted contract.

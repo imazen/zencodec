@@ -2,6 +2,11 @@
 
 ## Native image selection (unreleased experiment)
 
+- Add explicit disk staging for owned finite encoding with separate disk/index
+  caps and admitted replay. Expose the actual store to policy; spool I/O may
+  block while the encoder is alive. Preserve confirmed destination appends and
+  original causes on late replay failures.
+
 - Add prepared-instance video encoder fidelity evidence with an unknown default.
   Forward it through shared wrappers, bind it in owned staging, and refuse drift
   before publication; conversion preservation remains independent.

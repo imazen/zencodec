@@ -336,7 +336,7 @@ and stages native packet payloads under `StorageBudget`. Packet additions are
 also charged; copying changes storage ownership without rebuilding or dropping
 packet metadata. Failed partial admission releases all reservations.
 
-Only `finish` writes: it drains and drops the encoder before publishing the
+Only `finish` writes the final destination: it drains and drops the encoder before publishing the
 prepared header, packets and finish patches. This makes the lifetime boundary
 structural instead of relying on the caller remembering to drop an encoder
 before a slow writer. Source pictures retained by the caller are outside this
@@ -347,8 +347,8 @@ The error retains stage, bounded decisions and its concrete cause, including
 partial destination effects. Success returns output stats and the decision
 report. Explicit configuration changes fail; the operation handles one finite
 fixed-configuration video sequence, not implicit segmentation or live streaming.
-It stages the entire compressed sequence; spill-to-disk and independently
-qualified sequential backpressure remain separate mechanisms to implement.
+It stages the entire compressed sequence in memory by default. Explicit disk
+staging is described below; qualified live sequential backpressure remains open.
 
 The executable usage is the module doctest in `zencodec-media/src/staged.rs`.
 Native AV1/MP4 validation lives in
@@ -415,3 +415,36 @@ log `/home/lilith/tmp/zencodec-encoder-fidelity-20261027.log`.
 Run-heavy: `rc=0 45s | peak-RSS 0.58GiB | min-avail 12886MiB | peak-load 0.61`.
 This additive default method leaves unadapted native implementations unknown;
 it does not assume their requested quantizer establishes a generic guarantee.
+
+### Explicit disk staging and replay failures
+
+`staging::Staging::disk(File, DiskLimits, StorageBudget)` owns a private scratch
+file positioned at its end. `StagedEncode::with_staging` accepts that store.
+No implicit file creation or memory-to-disk fallback occurs. The caller owns file
+privacy and deletion. External aliases/mutation are unsupported.
+
+Disk writes happen while the encoder may retain raw buffers. Frame-route policy
+sees the actual store kind, accumulated payload bytes and payload allowance.
+This is explicit finite staging, not a qualification for live backpressure.
+
+Separate limits cover disk bytes, indexed packets and additions per packet.
+Replay admits each packet's payloads into one shared charged owner, preserving
+metadata, timing and additions. Muxer retention keeps charges alive. First-packet
+admission/read precedes header publication; later replay failures may leave
+output. `staged::Failure::emitted` reports confirmed final-destination appends
+for replay and writer failures; the cause retains the concrete error. Failed
+patches can also leave partial overwrites. Spool bytes are not destination bytes.
+
+Validation exercises native AV1 to MP4 with byte-identical memory/disk output,
+independent decoded pixels, refusal before destination effects, separate disk
+and replay caps, read-only scratch, metadata/addition retention, prefix
+preservation and truncated replay. The late-replay fault deliberately mutates
+scratch after header publication to verify the diagnostic boundary; this is not
+support for externally mutable scratch. No zenpixels change is required.
+
+The complete native suite passed on 2026-10-27 with 45 cases, strict lint and
+the independent gamma verifier. Focused media tests/doctests and all five owned
+native cases passed. Resource-wrapper receipt for the full suite:
+`rc=0 39s | peak-RSS 0.05GiB | min-avail 13102MiB | peak-load 0.56`.
+This is a validation-run resource observation, not a staging memory comparison
+or a throughput benchmark.
