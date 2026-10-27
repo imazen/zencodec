@@ -17,6 +17,14 @@ count-patching mode writes one four-byte patch on disk; progressive MP4 writes
 one eight-byte patch; WebM needs none. Forward-only cases use no patches.
 These are correctness/data-movement observations, not throughput measurements.
 
+Timing inspection disables FFprobe's codec parsing and timestamp filling
+(`-fflags +noparse+nofillin`), so the assertions inspect demuxed container fields.
+FFmpeg 6.1's [parser path](https://github.com/FFmpeg/FFmpeg/blob/n6.1/libavformat/demux.c#L1100)
+can clear packet durations. CI exposed that difference from FFmpeg 8.0.1;
+the exact-duration assertions remain unchanged. Pixel readback still uses the
+full independent decoder. The focused native gate passed with these flags
+on 2026-10-27 (run-heavy: 13 s, peak RSS 0.54 GiB).
+
 Timing is a separate contract. The native IVF outputs preserve PTS but report
 no explicit packet durations; WebM and MP4 preserve all six authored durations.
 A second matrix starts at 40 ms: IVF, WebM and fragmented MP4 preserve the shifted

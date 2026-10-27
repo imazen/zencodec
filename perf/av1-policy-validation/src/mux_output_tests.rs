@@ -40,6 +40,11 @@ fn inspect_timing(name: &str, extension: &str, expected: &[Packet]) -> usize {
             "ffprobe",
             "-v",
             "error",
+            // Inspect the container's timing, without parser duration rewriting
+            // or inferred timestamps. FFmpeg 6's AV1 parser otherwise clears
+            // WebM BlockDuration on packets without COMPLETE_FRAMES.
+            "-fflags",
+            "+noparse+nofillin",
             "-select_streams",
             "v:0",
             "-show_entries",
