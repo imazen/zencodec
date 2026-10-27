@@ -370,6 +370,8 @@ impl PolicySet {
     /// This is separate from encoding fidelity and tone mapping; it does not
     /// establish an end-to-end guarantee. Other output questions lack this
     /// evidence and are refused; interpretation discovery may still proceed.
+    /// Frame routes additionally require confirmed lossless encoding, so a
+    /// range-preserving conversion cannot mask an unqualified encoder.
     pub const fn require_extended_range(mut self, required: bool) -> Self {
         self.require_extended_range = required;
         self
@@ -390,7 +392,9 @@ impl PolicyResolver for PolicySet {
         if self.require_extended_range
             && !matches!(
                 question,
-                Question::ImageConversion { .. } | Question::Boundary { .. }
+                Question::ImageConversion { .. }
+                    | Question::FrameRoute { .. }
+                    | Question::Boundary { .. }
             )
         {
             return Ok(Decision::decline(Decline::UnsupportedQuestion));
@@ -427,12 +431,21 @@ impl PolicyResolver for PolicySet {
                 }
                 let permitted = || {
                     choices.iter().filter(|choice| {
-                        self.workspace_limit.is_none_or(|limit| {
-                            choice
-                                .value()
-                                .workspace_upper_bound
-                                .is_some_and(|bound| bound <= limit)
-                        })
+                        let conversion = choice.value().conversion;
+                        let conversion_permitted = conversion.is_none_or(|c| {
+                            (c.assumed_chroma_siting.is_none() || self.allow_assumed_siting)
+                                && c.assumed_chroma_siting
+                                    != Some(crate::frame::ChromaSiting::Unknown)
+                        }) && (!self.require_extended_range
+                            || (choice.value().fidelity == Some(Fidelity::Lossless)
+                                && conversion.is_some_and(|c| c.preserves_extended_range)));
+                        conversion_permitted
+                            && self.workspace_limit.is_none_or(|limit| {
+                                choice
+                                    .value()
+                                    .workspace_upper_bound
+                                    .is_some_and(|bound| bound <= limit)
+                            })
                     })
                 };
                 let selected = if self.prefer_lossless {

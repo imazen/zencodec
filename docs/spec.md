@@ -590,8 +590,16 @@ struct FrameRouteFacts { input: FrameFacts, output: FrameRouteState }
 struct FrameRouteOffer {
     route: FrameRoute,
     fidelity: Option<Fidelity>,
+    conversion: Option<FrameConversionOffer>,
     admitted_encoded_bytes: usize,
     workspace_upper_bound: Option<u64>,
+}
+struct FrameConversionOffer {
+    encoder_input: FrameFacts,
+    preserves_samples: bool,
+    preserves_extended_range: bool,
+    assumed_chroma_siting: Option<frame::ChromaSiting>,
+    admitted_bytes: usize,
 }
 fn resolve_frame_route<R: PolicyResolver + ?Sized>(
     interpretation: &frame::FrameInterpretation,
@@ -626,6 +634,23 @@ The admitted bytes cover compressed payloads, not codec workspace, metadata,
 packet bookkeeping or transient native output. This is not a general bounded
 spool or a live sequential-output qualification. Prepared planar conversion and
 continuous-container configuration changes remain separate contracts.
+
+`FrameRouteOffer::conversion` couples a retained converter to that encoder.
+`None` means unqualified, not identity. Original input facts stay in the
+question; `encoder_input` names the actual post-conversion interpretation and
+timing. The adapter retains the mapping, plan, reservations and encoder through
+one callback, executes only the selected plan, and checks its output before
+encoder acceptance. Conversion failure is terminal and retains the selected
+record. `fidelity` still describes the encoder alone: a sample-preserving
+transcode requires both a preserving conversion and lossless encoding.
+
+The range preset accepts a frame route only with both qualified range-preserving
+conversion and confirmed lossless encoding. Siting assumptions also require
+permission. Unknown workspace and metadata/privacy obligations remain separate
+refusals. These fields are adapter evidence, not runtime verification of math.
+The native coupled witness normalizes changing BT.709/sRGB YCbCr input to fixed
+RGB8 identity-matrix AV1, with explicit saturation/quantization disclosed as
+non-preserving. This does not qualify HDR, resizing, retiming or muxer changes.
 
 ### Coupled transcode offers
 

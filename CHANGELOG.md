@@ -2,6 +2,11 @@
 
 ## Native image selection (unreleased experiment)
 
+- Couple retained frame conversion evidence to encoder routes. Expose target
+  interpretation/timing, sample/range preservation, siting assumptions and
+  scoped admission; qualify fixed-output native AV1 conversion before acceptance.
+  This extends the unpublished review API, without a new callback method.
+
 - Replace the private float conversion kernel with the reviewed public
   `CodePlane` / `YcbcrToRgbF32` mechanism. Preserve exact native outputs and
   existing policy, admission and ownership behavior; capture actual shared

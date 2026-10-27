@@ -417,3 +417,77 @@ fn native_publication_cannot_claim_transcode_metadata_or_workspace_contracts() {
         assert_eq!(budget.reserved_bytes(), 0);
     }
 }
+
+#[test]
+fn frame_route_conversion_evidence_controls_range_and_siting_without_confusing_encoder_fidelity() {
+    use zencodec::{
+        encode::Fidelity,
+        operation::{
+            FrameConversionOffer, FrameFacts, FrameRoute, FrameRouteOffer, FrameRouteState,
+            Selection, resolve_frame_route,
+        },
+    };
+    let budget = StorageBudget::new(16, 1);
+    let held = frame(&budget, 0);
+    let mut unknown = FrameRouteOffer::new(FrameRoute::Continue);
+    unknown.fidelity = Some(Fidelity::Lossless);
+    let mut clipping = unknown;
+    clipping.conversion = Some(FrameConversionOffer::new(FrameFacts::new(
+        held.interpretation(),
+        held.timing(),
+    )));
+    let mut preserving = clipping;
+    preserving
+        .conversion
+        .as_mut()
+        .unwrap()
+        .preserves_extended_range = true;
+    let mut unqualified_encoder = preserving;
+    unqualified_encoder.fidelity = None;
+    let mut assumed = preserving;
+    assumed.conversion.as_mut().unwrap().assumed_chroma_siting = Some(ChromaSiting::Center);
+    let mut impossible = preserving;
+    impossible
+        .conversion
+        .as_mut()
+        .unwrap()
+        .assumed_chroma_siting = Some(ChromaSiting::Unknown);
+    for (offers, allow_assumption, expected) in [
+        (vec![unknown, clipping, preserving], false, Some(2)),
+        (vec![unknown, clipping], true, None),
+        (vec![unqualified_encoder], true, None),
+        (vec![assumed], false, None),
+        (vec![assumed], true, Some(0)),
+        (vec![impossible], true, None),
+    ] {
+        let mut preset = PolicySet::new()
+            .require_extended_range(true)
+            .allow_assumed_chroma_siting(allow_assumption);
+        let result = resolve_frame_route(
+            held.interpretation(),
+            held.timing(),
+            FrameRouteState::default(),
+            &offers,
+            &mut preset,
+            PolicySet::new(),
+            &Unstoppable,
+        );
+        match expected {
+            Some(expected) => {
+                let (selected, record) = result.unwrap();
+                assert_eq!(selected, expected);
+                let Some(Selection::FrameRoute(selected)) = record.selected else {
+                    panic!()
+                };
+                let conversion = selected.conversion.unwrap();
+                assert!(conversion.preserves_extended_range);
+                assert!(!conversion.preserves_samples);
+                assert_eq!(selected.fidelity, Some(Fidelity::Lossless));
+            }
+            None => assert_eq!(
+                result.unwrap_err().error().record().code,
+                DecisionCode::Declined
+            ),
+        }
+    }
+}

@@ -6,7 +6,7 @@ use super::{
 use crate::{
     At,
     encode::Fidelity,
-    frame::{FrameInterpretation, FrameTiming},
+    frame::{ChromaSiting, FrameInterpretation, FrameTiming},
 };
 
 /// Output continuity supplied by a prepared adapter route. This does not grant
@@ -57,6 +57,10 @@ pub struct FrameRouteOffer {
     pub route: FrameRoute,
     /// Fidelity established by the prepared encoder configuration.
     pub fidelity: Option<Fidelity>,
+    /// Effects and target of the retained conversion before this encoder.
+    /// None means unqualified, not identity or sample preservation. Encoder
+    /// fidelity alone never establishes end-to-end transcode fidelity.
+    pub conversion: Option<FrameConversionOffer>,
     /// Currently admitted encoded staging held by the operation. This excludes
     /// native input/reference/work buffers and is not a whole-operation bound.
     pub admitted_encoded_bytes: usize,
@@ -69,8 +73,42 @@ impl FrameRouteOffer {
         Self {
             route,
             fidelity: None,
+            conversion: None,
             admitted_encoded_bytes: 0,
             workspace_upper_bound: None,
+        }
+    }
+}
+
+/// Evidence for the conversion retained together with a frame encoder.
+/// These are adapter guarantees, not instructions to reconstruct a plan.
+#[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
+pub struct FrameConversionOffer {
+    /// Interpretation and timing actually delivered to the encoder. Original
+    /// input facts remain in the question; output epochs are independent.
+    pub encoder_input: FrameFacts,
+    /// True only for a qualified sample-preserving route; false includes
+    /// arithmetic, quantization, clipping and unknown preservation.
+    pub preserves_samples: bool,
+    /// Whether conversion guarantees retention of extended-range values.
+    /// This says nothing about the following encoder's precision or fidelity.
+    pub preserves_extended_range: bool,
+    /// Explicit fallback for undeclared siting. A declaration cannot be replaced.
+    pub assumed_chroma_siting: Option<ChromaSiting>,
+    /// Managed conversion storage retained/reserved for this selected route.
+    /// Shared alternatives must not be summed. Native workspace is separate.
+    pub admitted_bytes: usize,
+}
+impl FrameConversionOffer {
+    /// Target facts with preservation unqualified until the adapter proves it.
+    pub const fn new(encoder_input: FrameFacts) -> Self {
+        Self {
+            encoder_input,
+            preserves_samples: false,
+            preserves_extended_range: false,
+            assumed_chroma_siting: None,
+            admitted_bytes: 0,
         }
     }
 }
