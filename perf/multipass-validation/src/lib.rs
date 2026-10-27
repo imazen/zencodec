@@ -6,6 +6,13 @@
 //! the source has it. A forward source needs explicitly admitted staging or a
 //! refusal before any read. The codec never spools raw rows itself. The output
 //! schedule still goes through zencodec's existing resolver.
+//!
+//! Pass plan candidate (native contract validation): the encoder states its
+//! source passes as a range from its own plan, admission compares the
+//! largest count before any read, and a final-pass output declaration is
+//! enforced before publication. The operation control is a `Pulse`: `check`
+//! is cancellation only, `advance` counts rows actually supplied to the
+//! encoder, and the total is exact only once the pass count is resolved.
 #![forbid(unsafe_code)]
 
 pub mod sources;
@@ -18,7 +25,7 @@ use std::{
     os::unix::fs::FileExt,
 };
 
-
+use zencodec::how_far::Total;
 use zencodec::{
     At,
     encode::{EncodeOutput, OutputTiming},
@@ -118,7 +125,12 @@ impl PassSource for NoSource {
     fn description(&self) -> Description {
         match *self {}
     }
-    fn read_rows(&mut self, _: u32, _: PixelSliceMut<'_>, _: &dyn zencodec::Pulse) -> Result<(), Self::Error> {
+    fn read_rows(
+        &mut self,
+        _: u32,
+        _: PixelSliceMut<'_>,
+        _: &dyn zencodec::Pulse,
+    ) -> Result<(), Self::Error> {
         match *self {}
     }
 }
@@ -143,25 +155,58 @@ impl<S> Input<'_, S> {
 pub enum PassCount {
     /// Known before the first read.
     Exact(u32),
-    /// Lower bound; the rest is decided by the codec's own analysis.
+    /// Lower bound; the codec states no upper bound.
     AtLeast(u32),
+    /// Content decides, within bounds taken from the codec's own plan.
+    Range {
+        /// Passes every input takes.
+        min: u32,
+        /// Most passes any input can take.
+        max: u32,
+    },
 }
 impl PassCount {
     /// Lower bound.
     pub const fn min(self) -> u32 {
         match self {
-            Self::Exact(n) | Self::AtLeast(n) => n,
+            Self::Exact(n) | Self::AtLeast(n) | Self::Range { min: n, .. } => n,
         }
+    }
+    /// Upper bound from the codec's plan; `None` when it states none. A source
+    /// pass budget never re-reads a source for an unbounded count.
+    pub const fn max(self) -> Option<u32> {
+        match self {
+            Self::Exact(n) | Self::Range { max: n, .. } => Some(n),
+            Self::AtLeast(_) => None,
+        }
+    }
+    fn admits(self, passes: u32) -> bool {
+        passes >= self.min() && self.max().is_none_or(|max| passes <= max)
     }
 }
 
-/// What `begin_passes` commits to. Byte timing counts rows within the pass
-/// that emits output; earlier passes publish nothing.
+/// When an encoder's bytes may first be pending, relative to source passes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum PassOutput {
+    /// No byte is pending before the final pass's first request is filled.
+    /// The driver refuses an earlier byte before publishing or staging it.
+    /// This does not promise bytes during the final pass: its timing may be
+    /// `AT_FINISH`, and an empty or cancelled final pass publishes nothing.
+    FinalPass,
+    /// Bytes may be pending during any pass.
+    AnyPass,
+}
+
+/// What `begin_passes` commits to.
 #[derive(Clone, Copy, Debug)]
 pub struct PassPlan {
     /// Source reads per row.
     pub passes: PassCount,
+    /// When bytes may first be pending.
+    pub output: PassOutput,
     /// Byte availability and patches, as `Encoder::begin_output` reports them.
+    /// With `PassOutput::FinalPass`, `lag_rows` counts rows of the final pass.
     pub timing: OutputTiming,
 }
 
@@ -170,6 +215,9 @@ pub struct PassPlan {
 pub struct RowRequest<'a> {
     /// Pass ordinal, non-decreasing, incremented by one at each new pass.
     pub pass: u32,
+    /// This request belongs to the encoder's final source pass. Once set, every
+    /// later request belongs to the same pass.
+    pub final_pass: bool,
     /// Codec-specific pass name, recorded for diagnostics only.
     pub label: u8,
     /// First row of this request.
@@ -315,9 +363,9 @@ impl ReplayResolver for Preset {
 /// Built-in replay preferences (proposed `PolicySet` fields).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ReplayPolicy {
-    /// Most source passes permitted. `Source` routes beyond it are not offered
-    /// when the lower bound exceeds it, and refuse at the start of a pass that
-    /// would exceed it. `None` means unlimited.
+    /// Most source passes permitted. A `Source` route is offered only when the
+    /// encoder's planned maximum is within it, so the budget is decided before
+    /// any read; an unbounded count needs staging. `None` means unlimited.
     pub max_source_passes: Option<u32>,
     /// Never offer memory staging of raw rows.
     pub forbid_memory_staging: bool,
@@ -427,11 +475,25 @@ pub enum Refusal {
     /// or `Done` with a fill.
     Protocol,
     /// `Done` arrived before this pass covered every row, or before the
-    /// declared pass count.
+    /// declared pass count, or without the declared final pass.
     IncompletePass {
         /// Last pass ordinal started (0 when none started).
         pass: u32,
     },
+    /// The encoder asked for a pass beyond its own declared maximum, or for
+    /// another pass after its final one. Refused before reading it.
+    PassLimit {
+        /// Pass ordinal refused before reading.
+        pass: u32,
+    },
+    /// Bytes were pending before the declared final pass began. Refused
+    /// before they were published or staged.
+    EarlyOutput {
+        /// Last pass ordinal started.
+        pass: u32,
+    },
+    /// The pass plan is contradictory (no pass, or maximum below minimum).
+    InvalidPlan,
     /// Output exceeds the allowance.
     OutputLimit,
     /// Patches need a seek-back destination.
@@ -584,6 +646,10 @@ struct Filler<'a, S: PassSource> {
     digests: Option<OwnedStorage<u64>>,
     identity: Option<SourceIdentity>,
     max_source_passes: Option<u32>,
+    /// The encoder's own pass plan, enforced before each pass is read.
+    declared: PassCount,
+    /// The current pass is the encoder's final pass.
+    final_started: bool,
     pass: Option<u32>,
     next_row: u32,
     trace: Trace,
@@ -602,7 +668,7 @@ impl<S: PassSource> Filler<'_, S> {
         }
         Ok(())
     }
-    fn begin_pass(&mut self, pass: u32) -> Result<(), (Stage, Cause)> {
+    fn begin_pass(&mut self, pass: u32, final_pass: bool) -> Result<(), (Stage, Cause)> {
         let stage = Stage::Read;
         match self.pass {
             None if pass == 0 => {}
@@ -610,6 +676,15 @@ impl<S: PassSource> Filler<'_, S> {
             // in particular must hold every row before anything replays from it.
             Some(p) if pass == p + 1 && self.next_row == self.desc.height => {}
             _ => return Err((stage, Refusal::RequestOrder { pass, first: 0 }.into())),
+        }
+        // The encoder's own plan bounds its passes: nothing after its final
+        // pass or beyond its declared maximum, and a final pass that ends below
+        // the declared minimum. All refused before this pass reads anything.
+        if self.final_started || self.declared.max().is_some_and(|max| pass >= max) {
+            return Err((stage, Refusal::PassLimit { pass }.into()));
+        }
+        if final_pass && pass + 1 < self.declared.min() {
+            return Err((stage, Refusal::IncompletePass { pass }.into()));
         }
         if self.source_pass(pass)
             && let Some(max) = self.max_source_passes
@@ -630,20 +705,30 @@ impl<S: PassSource> Filler<'_, S> {
             }
         }
         self.pass = Some(pass);
+        self.final_started = final_pass;
         self.trace.passes = pass + 1;
         self.next_row = 0;
+        if final_pass {
+            // The pass count is resolved: the denominator is exact from here.
+            let rows = u64::from(pass + 1) * u64::from(self.desc.height);
+            let _ = self.stop.set_total(Total::Exact(rows));
+        }
         Ok(())
     }
     fn fill_inner(&mut self, req: RowRequest<'_>) -> Result<(), (Stage, Cause)> {
         let RowRequest {
             pass,
+            final_pass,
             label,
             first,
             mut rows,
         } = req;
         check(self.stop).map_err(|e| (Stage::Read, e))?;
         if self.pass != Some(pass) {
-            self.begin_pass(pass)?;
+            self.begin_pass(pass, final_pass)?;
+        } else if final_pass != self.final_started {
+            // The final flag is a property of the whole pass.
+            return Err((Stage::Read, Refusal::RequestOrder { pass, first }.into()));
         }
         let order = |pass, first| {
             (
@@ -733,6 +818,8 @@ impl<S: PassSource> Filler<'_, S> {
         if from == ReadFrom::Staging {
             self.trace.staging_reads += (rb * count as usize) as u64;
         }
+        // Progress is rows supplied to the encoder, never a cancellation check.
+        self.stop.advance(u64::from(count));
         self.next_row = first + count;
         self.trace.reads.push(ReadRecord {
             pass,
@@ -814,9 +901,13 @@ fn stage_output(
 /// Before any source read or output byte: `begin_passes`, replay route
 /// selection (asking `replay` only when the source is not borrowed and more
 /// than one pass is possible), and the existing output schedule question.
-/// Forward sources with no admitted staging refuse here. Positional replay
-/// is digest-verified per row and identity-checked per pass. Every failure
-/// keeps its original cause, stage, pass and confirmed output counts.
+/// Forward sources with no admitted staging refuse here, and so does a pass
+/// budget below the encoder's planned maximum without staging. Positional
+/// replay is digest-verified per row and identity-checked per pass. Every
+/// failure keeps its original cause, stage, pass and confirmed output counts.
+///
+/// `stop` is a `Pulse`: checked for cancellation and advanced by the rows
+/// supplied to the encoder; its total is exact only when the pass count is known.
 pub fn encode_passes<E, S, D, R, Q>(
     encoder: E,
     input: Input<'_, S>,
@@ -899,11 +990,21 @@ where
         if plan.timing.patches_at_finish() && !writer.can_patch() {
             return Err(Refusal::Patches.into());
         }
+        if plan.passes.min() == 0 || plan.passes.max().is_some_and(|max| max < plan.passes.min()) {
+            return Err(Refusal::InvalidPlan.into());
+        }
         check(stop)?;
+        // Rows supplied to the encoder: exact only when the pass count is.
+        let _ = stop.set_total(match plan.passes.max() {
+            Some(max) if max == plan.passes.min() => {
+                Total::Exact(u64::from(max) * u64::from(desc.height))
+            }
+            _ => Total::Unknown,
+        });
 
         // ---- replay route, before any read
         boundary = Stage::Policy;
-        let single = plan.passes == PassCount::Exact(1);
+        let single = plan.passes.max() == Some(1);
         let max = options.replay.max_source_passes;
         let policy = options.replay;
         // Version evidence is read before any sample; it decides the offer's evidence.
@@ -926,7 +1027,11 @@ where
                 },
             });
         }
-        let borrowed_needs_staging = borrowed && max.is_some_and(|m| plan.passes.min() > m);
+        // A retained raster re-reads its own memory, but a pass budget still
+        // counts it: an encoder whose planned maximum exceeds the budget, or
+        // that states none, needs staging.
+        let borrowed_needs_staging =
+            borrowed && max.is_some_and(|m| plan.passes.max().is_none_or(|x| x > m));
         if !single && (!borrowed || borrowed_needs_staging) {
             if options.stage_file.is_some() && pass_bytes <= options.max_stage_file_bytes {
                 candidates.push(ReplayOffer {
@@ -950,7 +1055,9 @@ where
         }
         // Every route reads the source at least once: gate all of them by the
         // pass budget, and by evidence, before reserving or reading anything.
-        candidates.retain(|o| max.is_none_or(|m| o.source_passes.min() <= m));
+        // A route is admitted by the most source passes its plan can take; an
+        // unbounded plan is never admitted under a budget.
+        candidates.retain(|o| max.is_none_or(|m| o.source_passes.max().is_some_and(|x| x <= m)));
         if candidates.is_empty() {
             return Err(Refusal::PassBudget { pass: 0 }.into());
         }
@@ -1066,6 +1173,8 @@ where
             digests,
             identity,
             max_source_passes: max,
+            declared: plan.passes,
+            final_started: false,
             pass: None,
             next_row: 0,
             trace: core::mem::take(&mut trace),
@@ -1080,6 +1189,17 @@ where
                 check(stop)?;
                 boundary = Stage::Encode;
                 let pending = encoder.pending_output();
+                // A final-pass declaration is checked before any byte leaves
+                // the encoder: nothing is written or staged ahead of it.
+                if plan.output == PassOutput::FinalPass
+                    && !pending.is_empty()
+                    && !filler.final_started
+                {
+                    return Err(Refusal::EarlyOutput {
+                        pass: filler.pass.unwrap_or(0),
+                    }
+                    .into());
+                }
                 count_output(&mut produced, pending.len(), options.max_output_bytes)?;
                 if schedule == OutputSchedule::Live {
                     boundary = Stage::Write;
@@ -1107,11 +1227,11 @@ where
                         }
                         let started = filler.pass.map_or(0, |p| p + 1);
                         let complete = filler.next_row == filler.desc.height;
-                        let count_ok = match plan.passes {
-                            PassCount::Exact(n) => started == n,
-                            PassCount::AtLeast(n) => started >= n,
-                        };
-                        if started == 0 || !complete || !count_ok {
+                        let count_ok = plan.passes.admits(started);
+                        // A final-pass declaration needs its final pass; the
+                        // pass itself may have produced no bytes.
+                        let final_ok = plan.output != PassOutput::FinalPass || filler.final_started;
+                        if started == 0 || !complete || !count_ok || !final_ok {
                             boundary = Stage::Read;
                             return Err(Refusal::IncompletePass {
                                 pass: filler.pass.unwrap_or(0),

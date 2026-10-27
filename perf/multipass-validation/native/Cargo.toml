@@ -15,7 +15,7 @@ zenpixels = ">=0.2.14, <0.4.0"
 enough = "0.4.4"
 # Private repository (imazen/zqi); fetch with CARGO_NET_GIT_FETCH_WITH_CLI=true.
 # imij brings its own zencodec copy; no types cross between the two.
-imij = { git = "https://github.com/imazen/zqi", rev = "70401e2487f5cb2e33ea55f6b96dfc009025f473", default-features = false, features = ["std", "encode"] }
+imij = { git = "https://github.com/imazen/zqi", rev = "0e4419a7fe1c76378a836546a7f686ecfc05b70a", default-features = false, features = ["std", "encode"] }
 # The how-far release imij is built against, for its native progress argument.
 how-far = { git = "https://github.com/imazen/how-far", rev = "571bf1a2fc92e5b99c3777f8ff81bafab7666a75" }
 

@@ -1,15 +1,14 @@
 //! Adversarial controls for the pull protocol and replay gates, driven by a
 //! scripted encoder (no codec, no private dependency). Each control runs the
 //! real driver; native parity lives in `imi_native.rs`.
-use enough::{Stop, };
-use zencodec::how_far::NoPulse;
 use multipass_validation::{
-    Input, Interrupted, MultiPassEncoder, Options, PassCount, PassPlan, PassProgress, PassRows,
-    PassSource, Preset, Refusal, Replay, ReplayDecision, ReplayEvidence, ReplayFacts, ReplayOffer,
-    ReplayPolicy, ReplayRoute, RowRequest, Stage, encode_passes,
+    Input, Interrupted, MultiPassEncoder, Options, PassCount, PassOutput, PassPlan, PassProgress,
+    PassRows, PassSource, Preset, Refusal, Replay, ReplayDecision, ReplayEvidence, ReplayFacts,
+    ReplayOffer, ReplayPolicy, ReplayRoute, RowRequest, Stage, encode_passes,
     sources::{Borrowed, ReaderRows},
 };
 use std::{cell::Cell, error::Error, fmt, io, io::Cursor, rc::Rc};
+use zencodec::how_far::NoPulse;
 use zencodec::{
     At,
     encode::{EncodeOutput, OutputTiming},
@@ -104,6 +103,7 @@ impl Scripted {
         .unwrap();
         let r = rows.fill(RowRequest {
             pass,
+            final_pass: false,
             label: pass as u8,
             first,
             rows: view,
@@ -119,6 +119,7 @@ impl MultiPassEncoder for Scripted {
     fn begin_passes(&mut self, _: &Description, _: OutputAccess) -> Result<PassPlan, MockError> {
         Ok(PassPlan {
             passes: self.plan,
+            output: PassOutput::AnyPass,
             timing: OutputTiming::AT_FINISH,
         })
     }
@@ -335,7 +336,7 @@ fn early_done_short_pass_count_and_gaps_are_refused() {
                 s.plan = PassCount::Exact(2);
                 s
             },
-            Refusal::IncompletePass { pass: 2 },
+            Refusal::PassLimit { pass: 2 },
         ),
         (
             "gap within a replay pass",

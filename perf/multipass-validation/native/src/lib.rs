@@ -11,7 +11,7 @@ use imij::stream_encode::{
 };
 use imij::{Channels, ImageInfo, ImiEncoderConfig, Metadata, SampleType};
 use multipass_validation::{
-    MultiPassEncoder, PassCount, PassPlan, PassProgress, PassRows, RowRequest,
+    MultiPassEncoder, PassCount, PassOutput, PassPlan, PassProgress, PassRows, RowRequest,
 };
 use std::{error::Error, fmt, fs::File, io, os::unix::fs::FileExt, sync::Arc};
 use zencodec::{
@@ -147,7 +147,13 @@ struct Active {
     checksum: Option<Store>,
     last_label: Option<u8>,
     done: bool,
+    /// Every byte stays pending-invisible until finish (single-band images,
+    /// whose header precedes their only band's records).
+    withhold: bool,
 }
+
+/// IMI's coding pass: always the last, and the only one that writes output.
+const CODING_PASS: u8 = 2;
 
 /// IMI bounded lossy configuration with the user's exact quality/effort/tier.
 pub struct ImiBounded {
@@ -258,6 +264,12 @@ impl MultiPassEncoder for ImiBounded {
             self.max_index_bytes,
         )
         .map_err(ImiError::Native)?;
+        // From the native plan, before any source row: the pass range and the
+        // band each request fills.
+        let planned = session.passes();
+        if planned.min == 0 || planned.max < planned.min || planned.band_rows == 0 {
+            return Err(ImiError::State("native pass plan"));
+        }
         // Validated: take scratch only now so a failed begin leaves self unchanged.
         let (index_store, checksum) = match self.scratch.take().expect("unchanged on failure") {
             Scratch::Memory { .. } => (Store::Memory(Vec::new()), Some(Store::Memory(Vec::new()))),
@@ -276,18 +288,30 @@ impl MultiPassEncoder for ImiBounded {
             checksum,
             last_label: None,
             done: false,
+            withhold: planned.band_rows >= desc.height,
         });
-        // Output appears only in the final (coding) pass, a band at a time.
-        // The band height is not exposed before the first request, so the
-        // lag is the conservative bound below the image height.
-        let mut timing = OutputTiming::streaming(desc.height - 1);
+        // Output begins in the coding pass, the last. A pull returns right
+        // after filling a band and the session codes that band on the next
+        // pull, so the coding pass holds one band of rows. A single band can
+        // be held back entirely, which streaming cannot state.
+        let mut timing = if planned.band_rows < desc.height {
+            OutputTiming::streaming(planned.band_rows)
+        } else {
+            OutputTiming::AT_FINISH
+        };
         if access == OutputAccess::SeekBack {
             timing = timing.with_patches();
         }
         Ok(PassPlan {
-            // Native documentation: the source is read at least twice; the
-            // exact count depends on analysis the session does not expose.
-            passes: PassCount::AtLeast(2),
+            passes: if planned.min == planned.max {
+                PassCount::Exact(planned.min)
+            } else {
+                PassCount::Range {
+                    min: planned.min,
+                    max: planned.max,
+                }
+            },
+            output: PassOutput::FinalPass,
             timing,
         })
     }
@@ -319,6 +343,7 @@ impl MultiPassEncoder for ImiBounded {
             checksum,
             last_label,
             done,
+            ..
         } = a;
         loop {
             if stop.check().is_err() {
@@ -344,6 +369,7 @@ impl MultiPassEncoder for ImiBounded {
                     }
                     let request = RowRequest {
                         pass: stats.passes - 1,
+                        final_pass: pass == CODING_PASS,
                         label: pass,
                         first: y0,
                         rows: view,
@@ -436,7 +462,10 @@ impl MultiPassEncoder for ImiBounded {
     }
 
     fn pending_output(&self) -> &[u8] {
-        self.active.as_ref().map_or(&[], |a| &a.pending[a.taken..])
+        match &self.active {
+            Some(a) if !a.withhold => &a.pending[a.taken..],
+            _ => &[],
+        }
     }
 
     fn consume_output(&mut self, n: usize) {

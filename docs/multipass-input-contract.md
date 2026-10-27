@@ -67,3 +67,25 @@ This establishes the tested replay mechanism, not release readiness. Remaining
 API work includes one resolver for replay and output decisions, operation-scoped
 requirement discharge, shared checked request-to-destination execution, bounded
 tracing, total retained-memory evidence and async source lifetime validation.
+
+## Bounded content-dependent passes
+
+The integrated experiment now admits `PassCount::Range { min, max }` against
+the maximum before reading the source. An unknown maximum cannot meet a finite
+pass budget. IMI's native plan supplies the bounds; tests exercise content that
+reaches each end. The driver also refuses extra passes before their source read.
+
+```rust,ignore
+PassPlan {
+    passes: PassCount::Range { min: 2, max: 5 },
+    output: PassOutput::FinalPass,
+    timing: OutputTiming::streaming(band_rows),
+}
+```
+
+This is the shape, not a universal IMI pass count: the native configuration
+determines the actual range. Output phase and row lag are separate facts. The
+driver rejects bytes before the declared final pass, and counts lag within that
+pass. Single-band IMI output is withheld until finish. Pulse reports supplied
+rows; a content-dependent pass count has an unknown total until the final pass
+is identified. See the [integrated validation receipt](../perf/multipass-validation/README.md#bounded-pass-admission-and-final-pass-output).

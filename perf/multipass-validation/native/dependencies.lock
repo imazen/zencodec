@@ -70,7 +70,7 @@ dependencies = [
 [[package]]
 name = "imij"
 version = "0.0.1"
-source = "git+https://github.com/imazen/zqi?rev=70401e2487f5cb2e33ea55f6b96dfc009025f473#70401e2487f5cb2e33ea55f6b96dfc009025f473"
+source = "git+https://github.com/imazen/zqi?rev=0e4419a7fe1c76378a836546a7f686ecfc05b70a#0e4419a7fe1c76378a836546a7f686ecfc05b70a"
 dependencies = [
  "archmage",
  "how-far",

@@ -2,8 +2,7 @@
 //! encoder. Byte parity with the native public entry point (same settings,
 //! same index placement) and exact decoded-sample parity with the ordinary
 //! whole-image encoder. Every failure boundary keeps its original cause.
-use enough::{Stop, StopReason, };
-use zencodec::how_far::NoPulse;
+use enough::{Stop, StopReason};
 use imij::stream_encode::{BoundedLossyConfig, LossyUnitIndex, encode_lossy_bounded};
 use imij::{DecodeSpeed, ImageRef, ImiEncoderConfig, Metadata};
 use multipass_native::{ImiBounded, ImiError, Scratch, image_info};
@@ -25,6 +24,7 @@ use std::{
         atomic::{AtomicUsize, Ordering},
     },
 };
+use zencodec::how_far::{NoPulse, StopOnly};
 use zencodec::{
     At, find_cause,
     operation::{OutputSchedule, PolicySet, StagingKind},
@@ -590,8 +590,9 @@ fn source_pass_budget_stages_or_refuses_before_reading() {
 }
 
 #[test]
-fn source_pass_budget_refuses_at_the_pass_that_exceeds_it() {
-    // Find a configuration needing more than two passes, then cap at two.
+fn source_pass_budget_below_the_planned_maximum_refuses_before_reading() {
+    // Find a configuration needing more than two passes, then cap at two:
+    // the plan's maximum exceeds the budget, so nothing is read.
     let c = &cases()[1];
     let (tight, stride) = c.raster(0);
     let (_, done) = run_borrowed(c, &tight, stride, true);
@@ -613,9 +614,11 @@ fn source_pass_budget_refuses_at_the_pass_that_exceeds_it() {
         &NoPulse,
     )
     .unwrap_err();
-    assert_eq!(refusal(&err), Some(Refusal::PassBudget { pass: 2 }));
+    assert_eq!(refusal(&err), Some(Refusal::PassBudget { pass: 0 }));
+    assert_eq!(err.error().stage, Stage::Policy);
     assert_eq!(err.error().emitted, 0);
-    assert_eq!(err.error().trace.passes, 2);
+    assert_eq!(err.error().trace.passes, 0);
+    assert_eq!(err.error().trace.source_bytes, 0);
 }
 
 /// A positional source whose content changes when pass `at` starts. With
@@ -778,7 +781,7 @@ fn cancellation_at_every_boundary_keeps_reason_and_writes_nothing_finish_first()
         PolicySet::new(),
         Preset,
         options(),
-        &probe,
+        &StopOnly::borrowed(&probe),
     )
     .unwrap();
     let total = probe.count.load(Ordering::Relaxed);
@@ -797,7 +800,7 @@ fn cancellation_at_every_boundary_keeps_reason_and_writes_nothing_finish_first()
             PolicySet::new(),
             Preset,
             options(),
-            &stop,
+            &StopOnly::borrowed(&stop),
         )
         .unwrap_err();
         assert!(

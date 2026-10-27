@@ -1,12 +1,11 @@
 //! Independent regression for the multipass prototype at 0ec4726.
 //! Copy into that prototype's tests/ directory; it must refuse a detached proof.
-use enough::{Stop, };
-use zencodec::how_far::NoPulse;
 use multipass_validation::{
-    Input, MultiPassEncoder, Options, PassCount, PassPlan, PassProgress, PassRows, PassSource,
-    Preset, Replay, ReplayPolicy, RowRequest, encode_passes, sources::Borrowed,
+    Input, MultiPassEncoder, Options, PassCount, PassOutput, PassPlan, PassProgress, PassRows,
+    PassSource, Preset, Replay, ReplayPolicy, RowRequest, encode_passes, sources::Borrowed,
 };
 use std::{cell::RefCell, io, rc::Rc};
+use zencodec::how_far::NoPulse;
 use zencodec::{
     encode::{EncodeOutput, OutputTiming},
     operation::PolicySet,
@@ -28,7 +27,12 @@ impl PassSource for Changing {
     fn replay(&self) -> Replay {
         self.proof
     }
-    fn read_rows(&mut self, _: u32, mut rows: PixelSliceMut<'_>, _: &dyn zencodec::Pulse) -> io::Result<()> {
+    fn read_rows(
+        &mut self,
+        _: u32,
+        mut rows: PixelSliceMut<'_>,
+        _: &dyn zencodec::Pulse,
+    ) -> io::Result<()> {
         rows.row_mut(0).fill(self.calls);
         self.calls += 1;
         Ok(())
@@ -43,16 +47,22 @@ impl MultiPassEncoder for Twice {
     fn begin_passes(&mut self, _: &Description, _: OutputAccess) -> io::Result<PassPlan> {
         Ok(PassPlan {
             passes: PassCount::Exact(2),
+            output: PassOutput::AnyPass,
             timing: OutputTiming::AT_FINISH,
         })
     }
-    fn pull_rows(&mut self, rows: &mut dyn PassRows, _: &dyn zencodec::Pulse) -> io::Result<PassProgress> {
+    fn pull_rows(
+        &mut self,
+        rows: &mut dyn PassRows,
+        _: &dyn zencodec::Pulse,
+    ) -> io::Result<PassProgress> {
         if self.pass == 2 {
             return Ok(PassProgress::Done);
         }
         let mut pixels = [0; 3];
         rows.fill(RowRequest {
             pass: self.pass,
+            final_pass: false,
             label: 0,
             first: 0,
             rows: PixelSliceMut::new(&mut pixels, 1, 1, 3, PixelDescriptor::RGB8_SRGB).unwrap(),
