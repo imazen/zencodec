@@ -122,3 +122,11 @@ These include compilation/testing and are not codec memory or speed benchmarks.
 The native witness excludes planning, source and destination allocation from its
 fixed-state driver's accounting. Production effect deadlines, arbitrary opaque
 metadata qualification and cross-operation NotApplicable remain unimplemented.
+
+The native failure control also cancels before publication and after the first
+accepted two-byte chunk. Both preserve the timeout reason and the exact accepted
+prefix. A writer failing after three bytes preserves its original BrokenPipe
+error and leaves exactly that output prefix. These counts are observed at the
+test destination; this witness does not add a production failure-report API.
+The expanded native suite and strict lint passed:
+`rc=0 3s | peak-RSS 0.53GiB | min-avail 9276MiB | peak-load 0.29`.

@@ -314,3 +314,93 @@ fn conflicting_native_metadata_requirement_refuses_before_metadata_callback_or_o
         "source planning proceeds; noncompliant metadata is never offered"
     );
 }
+
+#[test]
+fn admitted_native_rewrite_still_honors_cancellation_and_preserves_partial_writer_errors() {
+    use std::{
+        io,
+        sync::atomic::{AtomicBool, Ordering},
+    };
+    use zencodec::enough::StopReason;
+    struct Cancel<'a>(&'a AtomicBool);
+    impl Stop for Cancel<'_> {
+        fn check(&self) -> std::result::Result<(), StopReason> {
+            if self.0.load(Ordering::Relaxed) {
+                Err(StopReason::TimedOut)
+            } else {
+                Ok(())
+            }
+        }
+    }
+    struct Sink<'a> {
+        bytes: Vec<u8>,
+        cancel: Option<&'a AtomicBool>,
+        fail_after: Option<usize>,
+    }
+    impl Write for Sink<'_> {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            let count = bytes.len().min(
+                self.fail_after
+                    .map_or(usize::MAX, |cap| cap - self.bytes.len()),
+            );
+            if count == 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::BrokenPipe,
+                    "scope writer failed",
+                ));
+            }
+            self.bytes.extend_from_slice(&bytes[..count]);
+            if let Some(cancel) = self.cancel {
+                cancel.store(true, Ordering::Relaxed);
+            }
+            Ok(count)
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+    let source = source_with_gps(true, fixtures::Placement::BeforeEoi);
+    let expected = zenjpeg::metadata::rewrite(&Request::new(&source))
+        .unwrap()
+        .to_vec()
+        .unwrap();
+    let prepare = || {
+        let mut engine = Engine::new(PolicySet::default(), 8);
+        let mut preset = PolicySet::default();
+        DeferredRewrite::begin(&source, requirements(), &mut engine, &mut preset)
+            .unwrap()
+            .inspect(&mut engine, &mut preset)
+            .unwrap()
+    };
+    for initially_cancelled in [true, false] {
+        let cancelled = AtomicBool::new(initially_cancelled);
+        let mut sink = Sink {
+            bytes: Vec::new(),
+            cancel: Some(&cancelled),
+            fail_after: None,
+        };
+        let error = prepare()
+            .write(context(), &mut sink, &Cancel(&cancelled))
+            .unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<zencodec::metadata_rewrite::Error>(),
+            Some(zencodec::metadata_rewrite::Error::Stopped(
+                StopReason::TimedOut
+            ))
+        ));
+        assert_eq!(sink.bytes.len(), if initially_cancelled { 0 } else { 2 });
+        assert_eq!(sink.bytes, expected[..sink.bytes.len()]);
+    }
+    let mut sink = Sink {
+        bytes: Vec::new(),
+        cancel: None,
+        fail_after: Some(3),
+    };
+    let error = prepare()
+        .write(context(), &mut sink, &Unstoppable)
+        .unwrap_err();
+    let original = error.downcast_ref::<io::Error>().unwrap();
+    assert_eq!(original.kind(), io::ErrorKind::BrokenPipe);
+    assert_eq!(original.to_string(), "scope writer failed");
+    assert_eq!(sink.bytes, expected[..3]);
+}
