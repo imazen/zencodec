@@ -1,8 +1,8 @@
 //! Checked synchronous container output for forward writers and seekable files.
 //!
-//! [`PreparedOutput::new`] requires exact packet timing and owns the actual begun
-//! muxer and destination without publishing its header. [`PreparedOutput::publish`]
-//! consumes that preparation. [`Output::new`] combines those steps for callers
+//! [`PreparedOutput::new`](crate::output::PreparedOutput::new) requires exact packet timing and owns the actual begun
+//! muxer and destination without publishing its header. [`PreparedOutput::publish`](crate::output::PreparedOutput::publish)
+//! consumes that preparation. [`Output::new`](crate::output::Output::new) combines those steps for callers
 //! that do not need a policy decision between them. Unsupported timing is an
 //! error, never a fallback to container-chosen timing.
 //!
@@ -20,8 +20,8 @@
 //! ```
 //!
 //! To ask policy before any write, replace `Output::new` with
-//! [`PreparedOutput::new`], retain the result while deciding, then call
-//! [`PreparedOutput::publish`]. Use [`SeekBack::new`] instead of [`Forward`] for
+//! [`PreparedOutput::new`](crate::output::PreparedOutput::new), retain the result while deciding, then call
+//! [`PreparedOutput::publish`](crate::output::PreparedOutput::publish). Use [`SeekBack::new`](crate::output::SeekBack::new) instead of [`Forward`](crate::output::Forward) for
 //! a file whose current position is the start of this output.
 //!
 //! These drivers may block on `Write`. Byte availability does not establish safe
@@ -191,7 +191,7 @@ fn write_all(
 
 impl<M: Muxer, D: Destination> Output<M, D> {
     /// Explicitly allow the muxer's ordinary timing behavior, then publish.
-    /// This does not guarantee exact packet durations. Prefer [`Output::new`].
+    /// This does not guarantee exact packet durations. Prefer [`Output::new`](crate::output::Output::new).
     pub fn with_container_timing(
         mux: M,
         destination: D,

@@ -659,3 +659,10 @@ CI on Windows x64/ARM64 found the new raw-disk replay fixture assumed `HOME`.
 It now also accepts `USERPROFILE` and closes its owned file before removal.
 The three raw-disk behavioral checks remain enabled with unchanged assertions.
 Windows runtime qualification awaits the CI rerun; Linux controls already passed.
+
+## Full Rustdoc reference links (2026-10-28)
+
+The new all-feature eight-crate HTML reference exposed seven unresolved short
+links in media output module documentation. They now use explicit
+`crate::output` targets; signatures and behavior are unchanged. Strict Rustdoc
+warnings remain enabled; final reference generation verifies the correction.
