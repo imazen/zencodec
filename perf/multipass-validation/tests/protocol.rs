@@ -60,6 +60,7 @@ struct Scripted {
     buf: Vec<u8>,
     seen: Rc<Cell<u32>>,
     finished: Rc<Cell<bool>>,
+    started: Rc<Cell<bool>>,
 }
 impl Scripted {
     fn new(plan: PassCount, steps: Vec<Step>) -> Self {
@@ -70,6 +71,7 @@ impl Scripted {
             buf: vec![0; RB * H as usize],
             seen: Rc::new(Cell::new(0)),
             finished: Rc::new(Cell::new(false)),
+            started: Rc::new(Cell::new(false)),
         }
     }
     /// Every pass, `band` rows at a time, then Done.
@@ -117,6 +119,7 @@ impl Scripted {
 impl MultiPassEncoder for Scripted {
     type Error = MockError;
     fn begin_passes(&mut self, _: &Description, _: OutputAccess) -> Result<PassPlan, MockError> {
+        self.started.set(true);
         Ok(PassPlan {
             passes: self.plan,
             output: PassOutput::AnyPass,
@@ -242,6 +245,83 @@ fn baseline_scripted_encode_completes() {
     let done = done.unwrap();
     assert_eq!(out, b"ok");
     assert_eq!(done.trace.passes, 3);
+}
+
+/// Attach the same strict declaration used by the production row driver.
+struct Claimed<S>(S, zenpixels::sample::ExactDepth);
+impl<S: PassSource> PassSource for Claimed<S> {
+    type Error = S::Error;
+    fn description(&self) -> Description {
+        self.0.description().with_exact_depth(self.1)
+    }
+    fn replay(&self) -> Replay {
+        self.0.replay()
+    }
+    fn read_rows(
+        &mut self,
+        first: u32,
+        rows: PixelSliceMut<'_>,
+        pulse: &dyn zencodec::Pulse,
+    ) -> Result<(), Self::Error> {
+        self.0.read_rows(first, rows, pulse)
+    }
+}
+
+#[test]
+fn sample_claim_rejects_the_entire_bad_strip_even_if_native_swallows_failure() {
+    use zenpixels::{ChannelType, SignalRange, sample::ExactDepth};
+    let claim = ExactDepth::new(ChannelType::U8, SignalRange::Full, 1, 8).unwrap();
+    for replay in [Replay::Positional, Replay::Forward] {
+        for swallow in [Swallow::No, Swallow::AsFilled, Swallow::AsDone] {
+            let mut enc = Scripted::full(2, 2);
+            enc.steps[1] = Step::Fill(0, 2, 2, swallow);
+            let seen = enc.seen.clone();
+            let finished = enc.finished.clone();
+            let src = Claimed(
+                Callback {
+                    make: |_: u32, row: u32| u8::from(row == 3),
+                    calls: Rc::new(Cell::new(0)),
+                    fail_at: None,
+                    replay,
+                },
+                claim,
+            );
+            let (result, output) = run(enc, src, options());
+            let error = result.unwrap_err();
+            let detail = find_cause::<zencodec_io::row_encode::ExactDepthContradiction>(&error)
+                .expect("retain the typed precision refusal");
+            assert_eq!(detail.first_row, 3);
+            assert_eq!(detail.claim, claim);
+            assert_eq!(error.error().stage, Stage::Read);
+            assert_eq!(seen.get(), 2, "neither row of the bad strip is accepted");
+            assert!(!finished.get());
+            assert!(output.is_empty());
+        }
+    }
+}
+
+#[test]
+fn incompatible_sample_claim_refuses_before_native_startup_or_source_read() {
+    use zenpixels::{ChannelType, SignalRange, sample::ExactDepth};
+    let enc = Scripted::full(2, 2);
+    let started = enc.started.clone();
+    let calls = Rc::new(Cell::new(0));
+    let src = Claimed(
+        Callback {
+            make: stable,
+            calls: calls.clone(),
+            fail_at: None,
+            replay: Replay::Positional,
+        },
+        ExactDepth::new(ChannelType::U16, SignalRange::Full, 8, 16).unwrap(),
+    );
+    let (result, output) = run(enc, src, options());
+    let error = result.unwrap_err();
+    assert!(find_cause::<zenpixels::sample::ExactDepthError>(&error).is_some());
+    assert_eq!(error.error().stage, Stage::Prepare);
+    assert!(!started.get());
+    assert_eq!(calls.get(), 0);
+    assert!(output.is_empty());
 }
 
 #[test]
