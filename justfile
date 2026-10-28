@@ -732,6 +732,11 @@ spatial-samples-check:
     cargo test --manifest-path perf/spatial-validation/Cargo.toml --locked common_ -- --nocapture
     cargo clippy --manifest-path perf/spatial-validation/Cargo.toml --all-targets --locked -- -D warnings
 
+# Private concrete policy-binding experiment; no production API added.
+policy-binding-check:
+    cargo test -p zencodec-testkit --test policy_binding --locked
+    cargo clippy -p zencodec-testkit --test policy_binding --locked -- -D warnings
+
 operation-policy-check:
     cargo test -p zencodec-testkit --test operation_policy --test operation_requests --locked
     cargo test -p zencodec --lib operation:: --locked

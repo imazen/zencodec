@@ -188,3 +188,8 @@ refuse. Acceptance must be implemented and tested in those adapters; replacing a
 checked setter with the deprecated best-effort setter would restore silent
 policy loss. Native capability work and named policy diagnostics are separate
 acceptance gates.
+
+The [policy-binding experiment](policy-binding-experiment.md) exercises a concrete
+binding outside callback wrappers. Its five controls and strict Clippy pass; it
+adds no production API and does not close the deferred-obligation or duplicate
+preset-placement gaps.
