@@ -14,8 +14,9 @@ zencodec-io = { path = "../../../zencodec-io", features = ["std"] }
 zenpixels = ">=0.2.14, <0.4.0"
 enough = "0.4.4"
 # Private repository (imazen/zqi); fetch with CARGO_NET_GIT_FETCH_WITH_CLI=true.
-# imij brings its own zencodec copy; no types cross between the two.
-imij = { git = "https://github.com/imazen/zqi", rev = "0e4419a7fe1c76378a836546a7f686ecfc05b70a", default-features = false, features = ["std", "encode"] }
+# imij takes zencodec, zenpixels and how-far as registry versions, so the patches
+# below give it this harness's core and pixel types.
+imij = { git = "https://github.com/imazen/zqi", rev = "0007b75a9d2bd965b96433e3dd0ed8ba74aac4f5", default-features = false, features = ["std", "encode"] }
 # The how-far release imij is built against, for its native progress argument.
 how-far = { git = "https://github.com/imazen/how-far", rev = "571bf1a2fc92e5b99c3777f8ff81bafab7666a75" }
 
@@ -32,8 +33,8 @@ overflow-checks = true
 [profile.dev.package.imij]
 opt-level = 2
 
-# imij is built against these exact revisions (its own workspace patches);
-# mirror them so imij's zencodec copy and its zenpixels/how-far unify.
+# One source per shared crate for this harness and imij.
 [patch.crates-io]
+zencodec = { path = "../../.." }
 zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "789d69dbc314e748676b7f2f19542c17473ba40b" }
 how-far = { git = "https://github.com/imazen/how-far", rev = "571bf1a2fc92e5b99c3777f8ff81bafab7666a75" }

@@ -67,3 +67,18 @@ Command: `just multipass-check && just multipass-native-check <scratch>`.
 Receipt: `rc=0 54s | peak-RSS 1.24GiB | min-avail 7907MiB | peak-load 1.16`.
 Log: `~/tmp/zencodec-multipass-integrated-20261027.log`. These are validation
 resources, not codec throughput or whole-operation memory measurements.
+
+## Shared-core native validation (2026-10-28)
+
+The native harness pins IMI revision `0007b75a` from
+[its Pulse migration PR](https://github.com/imazen/zqi/pull/85). Its registry
+dependencies now use the harness's zencodec through a root patch. The locked
+graph contains one zencodec, one zenpixels and one how-far; the former second
+zencodec 0.1.27 dependency is gone.
+
+An isolated source export passed all 17 native tests and strict Clippy using
+`just multipass-native-check <artifacts>`. The tracked dependency lock matched
+the lock used by the run. This qualifies the existing multipass experiment;
+it does not promote the candidate driver into the production API or qualify
+the separate zenpixels precision migration. The run receipt is in
+[`benchmarks/imij_core_unification_2026-10-28.json`](../../benchmarks/imij_core_unification_2026-10-28.json).

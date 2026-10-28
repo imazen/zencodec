@@ -70,12 +70,12 @@ dependencies = [
 [[package]]
 name = "imij"
 version = "0.0.1"
-source = "git+https://github.com/imazen/zqi?rev=0e4419a7fe1c76378a836546a7f686ecfc05b70a#0e4419a7fe1c76378a836546a7f686ecfc05b70a"
+source = "git+https://github.com/imazen/zqi?rev=0007b75a9d2bd965b96433e3dd0ed8ba74aac4f5#0007b75a9d2bd965b96433e3dd0ed8ba74aac4f5"
 dependencies = [
  "archmage",
  "how-far",
  "magetypes",
- "zencodec 0.1.27 (git+https://github.com/imazen/zencodec?rev=5ed2daded81407e7206fd8de6e8f1d93a5447b5b)",
+ "zencodec",
  "zenhash",
  "zenpixels",
 ]
@@ -105,7 +105,7 @@ dependencies = [
  "how-far",
  "imij",
  "multipass-validation",
- "zencodec 0.2.0",
+ "zencodec",
  "zencodec-io",
  "zenpixels",
 ]
@@ -115,7 +115,7 @@ name = "multipass-validation"
 version = "0.0.0"
 dependencies = [
  "enough",
- "zencodec 0.2.0",
+ "zencodec",
  "zencodec-io",
  "zenpixels",
 ]
@@ -198,24 +198,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "zencodec"
-version = "0.1.27"
-source = "git+https://github.com/imazen/zencodec?rev=5ed2daded81407e7206fd8de6e8f1d93a5447b5b#5ed2daded81407e7206fd8de6e8f1d93a5447b5b"
-dependencies = [
- "almost-enough",
- "enough",
- "how-far",
- "whereat",
- "zenpixels",
-]
-
-[[package]]
 name = "zencodec-io"
 version = "0.1.0"
 dependencies = [
  "enough",
  "how-far",
- "zencodec 0.2.0",
+ "zencodec",
  "zenpixels",
 ]
 
