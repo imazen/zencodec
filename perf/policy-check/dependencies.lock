@@ -51,6 +51,7 @@ name = "policy-portability-check"
 version = "0.0.0"
 dependencies = [
  "enough",
+ "how-far",
  "whereat",
  "zencodec",
  "zenpixels",
