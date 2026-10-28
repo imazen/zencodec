@@ -11,6 +11,10 @@ change. It shows the problem, each role’s responsibilities, source-extracted
 signatures, evidence and remaining scope. The [maintenance contract](site/README.md)
 keeps the native examples and dependency revisions tied to that record.
 
+The [native integration follow-through](native-integration-followthrough.md)
+records independently checked JPEG/PNG/bitmap CI revisions, pipeline build gaps,
+and the contract decisions raised by the paired pixel and pipeline work.
+
 The CMS validation loop now exercises failures inside the native renderer,
 including initialization, first/later row chunks and threaded execution.
 Native JXL returns the original `whereat` error instead of panicking or
