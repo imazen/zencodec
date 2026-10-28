@@ -440,3 +440,20 @@ behavior from checked policy admission, without weakening authoritative
 metadata. Required controls include setter ordering, failed setter atomicity,
 unknown and Display P3 interpretation, and refusal before output. No production
 API repair or new ICC validity guarantee is claimed here.
+
+## Consumer replay after the zenresize pin
+
+The adapter review stack at
+[`3cd6685f`](https://github.com/imazen/zenpipe/commit/3cd6685f5c5ef5975cb9cb68f51f19bffdb07001)
+now includes the qualified zenresize pin. Its isolated I/O integration tests
+pass 54 of 56 controls, including both exact-layout/padding regressions.
+The two remaining failures require named refusal evidence when a strict
+`PolicySet` is supplied only as the resolver. They are genuine unresolved
+diagnostic failures; the operations refuse before output, and the assertions
+remain unchanged. They do not invalidate the narrower padding repair, nor do
+they permit calling the whole suite green.
+
+All three strict Clippy configurations, examples and locked metadata checks for
+the four other dependency graphs pass. Receipt: `rc=1`, 51 seconds, peak RSS
+0.63 GiB, minimum available memory 4374 MiB, peak load 1.25. The main-branch
+padding fix and registry-based shared row-driver adoption remain separate gates.
