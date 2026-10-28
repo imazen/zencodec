@@ -14,7 +14,10 @@ source abstraction or rendering redesign enters this landing batch.
 
 Keep conservative explicit refusals for unknown evidence. Native AT_FINISH
 continues to retain compressed output; this is not a streaming memory guarantee.
-The provided erasure method remains unqualified until its executable gates pass.
+The provided erasure method passes core ownership controls and the native public
+replay-driver matrix with strict Clippy on `a39616ba`. The separate native final
+integration gate passes its runtime controls but still needs its fixture-only
+Clippy correction qualified. See [the receipts](../benchmarks/replay_driver_2026-10-28.md).
 
 ## Required before merging this batch
 

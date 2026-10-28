@@ -4,10 +4,11 @@
 
 ### Added
 
-- Source candidate: `EncodeJob::into_dyn_job` moves an owned Send job into shared
-  dispatch before native startup, preserving codec-specific settings and retained
-  preparation without a configuration clone. Core and native controls prepared;
-  execution remains pending.
+- `EncodeJob::into_dyn_job` moves an owned Send job into shared dispatch before
+  native startup, preserving codec-specific settings and retained preparation
+  without a configuration clone. Core ownership controls and the native public
+  replay-driver matrix pass, including strict Clippy; see
+  `benchmarks/replay_driver_2026-10-28.md`.
 
 ### Fixed
 

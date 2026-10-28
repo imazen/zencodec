@@ -70,7 +70,10 @@ CI run `40786606889` on `62b92eff` failed three new raw-disk controls on both
 Windows targets before opening a file: the fixture required `HOME`, while those
 runners expose `USERPROFILE`. The fixture now accepts that home-directory variable
 and closes any still-owned file before cleanup. No production behavior, test
-expectation or disk-control applicability changed. The Windows rerun is pending.
+expectation or disk-control applicability changed. CI run `40787178376` on
+`d7b5a159` passes, including both Windows targets. The Documentation and Fuzz
+workflows on that revision also pass. New configured-job and documentation
+changes are qualified separately below.
 
 ## Native public driver and configured erasure
 

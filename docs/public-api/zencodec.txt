@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 3260 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 238 lines (238 hidden + 0 excluded-feature)
+# files: zencodec.txt 3262 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 238 lines (238 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -14,7 +14,7 @@
 #   pub types (struct/enum/trait/alias)       387
 #   pub consts/statics                        340
 #   free functions                             95
-#   inherent methods                         1105
+#   inherent methods                         1107
 #   struct fields                             518
 #   enum variants                             543
 #   re-exports                                 18
@@ -28,7 +28,7 @@
 #   animation                        11
 #   collection                      100
 #   decode                          284
-#   encode                          249
+#   encode                          250
 #   estimate                         48
 #   exif                             94
 #   frame                            97
@@ -40,12 +40,12 @@
 #   metadata_rewrite                 59
 #   operation                       329
 #   output_patch                     15
-#   prelude                         244
+#   prelude                         245
 #   source                           37
 #   storage                          38
 #   time                             22
 
-## items (2940 lines)
+## items (2942 lines)
 
 pub mod zencodec
 pub use At
@@ -895,6 +895,7 @@ pub fn encode::EncodeJob::encode(self, zenpixels::buffer::PixelSlice<'_>) -> cor
 pub fn encode::EncodeJob::encoder(self) -> core::result::Result<Self::Enc, Self::Error>
 pub fn encode::EncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn encode::EncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn encode::EncodeJob::into_dyn_job(self) -> alloc::boxed::Box<(dyn encode::DynEncodeJob + core::marker::Send)> where Self: core::marker::Send + 'static, Self::Enc: encode::Encoder + core::marker::Send, Self::AnimationFrameEnc: encode::AnimationFrameEncoder
 pub fn encode::EncodeJob::plan_encode(&self, &encode::EncodeDeclaration<'_>) -> core::result::Result<encode::EncodePlan, encode::BoxedError>
 pub fn encode::EncodeJob::try_set_policy(&mut self, encode::EncodePolicy) -> core::result::Result<(), UnsupportedOperation>
 pub fn encode::EncodeJob::try_set_resolution(&mut self, Resolution) -> core::result::Result<(), ResolutionError>
@@ -2173,6 +2174,7 @@ pub fn prelude::EncodeJob::encode(self, zenpixels::buffer::PixelSlice<'_>) -> co
 pub fn prelude::EncodeJob::encoder(self) -> core::result::Result<Self::Enc, Self::Error>
 pub fn prelude::EncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn prelude::EncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn prelude::EncodeJob::into_dyn_job(self) -> alloc::boxed::Box<(dyn encode::DynEncodeJob + core::marker::Send)> where Self: core::marker::Send + 'static, Self::Enc: encode::Encoder + core::marker::Send, Self::AnimationFrameEnc: encode::AnimationFrameEncoder
 pub fn prelude::EncodeJob::plan_encode(&self, &encode::EncodeDeclaration<'_>) -> core::result::Result<encode::EncodePlan, encode::BoxedError>
 pub fn prelude::EncodeJob::try_set_policy(&mut self, encode::EncodePolicy) -> core::result::Result<(), UnsupportedOperation>
 pub fn prelude::EncodeJob::try_set_resolution(&mut self, Resolution) -> core::result::Result<(), ResolutionError>

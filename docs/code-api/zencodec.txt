@@ -1129,6 +1129,7 @@ pub fn zencodec::encode::EncodeJob::encode(self, pixels: zenpixels::buffer::Pixe
 pub fn zencodec::encode::EncodeJob::encoder(self) -> core::result::Result<Self::Enc, Self::Error>
 pub fn zencodec::encode::EncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn zencodec::encode::EncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn zencodec::encode::EncodeJob::into_dyn_job(self) -> alloc::boxed::Box<(dyn zencodec::encode::DynEncodeJob + core::marker::Send)> where Self: core::marker::Send + 'static, Self::Enc: zencodec::encode::Encoder + core::marker::Send, Self::AnimationFrameEnc: zencodec::encode::AnimationFrameEncoder
 pub fn zencodec::encode::EncodeJob::plan_encode(&self, _declaration: &zencodec::encode::EncodeDeclaration<'_>) -> core::result::Result<zencodec::encode::EncodePlan, zencodec::encode::BoxedError>
 pub fn zencodec::encode::EncodeJob::try_set_policy(&mut self, policy: zencodec::encode::EncodePolicy) -> core::result::Result<(), zencodec::UnsupportedOperation>
 pub fn zencodec::encode::EncodeJob::try_set_resolution(&mut self, resolution: zencodec::Resolution) -> core::result::Result<(), zencodec::ResolutionError>
@@ -2691,6 +2692,7 @@ pub fn zencodec::prelude::EncodeJob::encode(self, pixels: zenpixels::buffer::Pix
 pub fn zencodec::prelude::EncodeJob::encoder(self) -> core::result::Result<Self::Enc, Self::Error>
 pub fn zencodec::prelude::EncodeJob::extensions(&self) -> core::option::Option<&dyn core::any::Any>
 pub fn zencodec::prelude::EncodeJob::extensions_mut(&mut self) -> core::option::Option<&mut dyn core::any::Any>
+pub fn zencodec::prelude::EncodeJob::into_dyn_job(self) -> alloc::boxed::Box<(dyn zencodec::encode::DynEncodeJob + core::marker::Send)> where Self: core::marker::Send + 'static, Self::Enc: zencodec::encode::Encoder + core::marker::Send, Self::AnimationFrameEnc: zencodec::encode::AnimationFrameEncoder
 pub fn zencodec::prelude::EncodeJob::plan_encode(&self, _declaration: &zencodec::encode::EncodeDeclaration<'_>) -> core::result::Result<zencodec::encode::EncodePlan, zencodec::encode::BoxedError>
 pub fn zencodec::prelude::EncodeJob::try_set_policy(&mut self, policy: zencodec::encode::EncodePolicy) -> core::result::Result<(), zencodec::UnsupportedOperation>
 pub fn zencodec::prelude::EncodeJob::try_set_resolution(&mut self, resolution: zencodec::Resolution) -> core::result::Result<(), zencodec::ResolutionError>
