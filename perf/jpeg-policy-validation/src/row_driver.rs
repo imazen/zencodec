@@ -190,7 +190,7 @@ fn public_row_driver_native_schedules_preserve_pixels_owners_and_failure_context
                     },
                     PolicySet::new().require_output_schedule(schedule),
                     Options::new(budget.clone(), if fault == "limit" { 0 } else { 1 << 20 }),
-                    &stop,
+                    &zencodec::how_far::StopOnly::borrowed(&stop),
                 )
             }));
             assert!(!enc_live.get());
@@ -358,7 +358,7 @@ fn public_row_driver_staging_admission_failure_releases_owners_before_any_output
         &mut bytes,
         PolicySet::new(),
         Options::new(budget.clone(), 1 << 20),
-        &Cancel(flag),
+        &zencodec::how_far::StopOnly::borrowed(&Cancel(flag)),
     )
     .unwrap_err();
     assert!(
@@ -571,7 +571,7 @@ fn public_row_driver_disk_staging_preserves_pixels_prefix_policy_and_failure_eff
                         Ok(Decision::choose(offer))
                     },
                     options,
-                    &stop,
+                    &zencodec::how_far::StopOnly::borrowed(&stop),
                 );
                 assert!(!enc_live.get());
                 assert!(!src_live.get());

@@ -973,9 +973,9 @@ jpeg-preparation-check:
     cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked preparation:: -- --test-threads=1
     cargo clippy --manifest-path perf/jpeg-policy-validation/Cargo.toml --all-targets --locked -- -D warnings
 
-# Requires an isolated export configured by prepare-native-preflight.py.
-jpeg-preflight-setup export native_repository native_directory: (jpeg-policy-sync export)
-    python3 perf/jpeg-policy-validation/prepare-native-preflight.py "{{export}}" "{{native_repository}}" "{{native_directory}}"
+# Copies the harness into an isolated export. The preflight scenarios run on
+# the pinned zenjpeg's shared hooks; nothing is patched.
+jpeg-preflight-setup export: (jpeg-policy-sync export)
 
 jpeg-preflight-check:
     cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --features native-preflight --locked native_preflight:: -- --test-threads=1
@@ -986,7 +986,7 @@ jpeg-preflight-build:
 
 jpeg-preflight-profile executable output revision:
     python3 -m unittest discover -s perf/jpeg-policy-validation -p test_preparation_profile.py
-    python3 perf/jpeg-policy-validation/profile-preparation.py "{{executable}}" "{{output}}" --source-revision "{{revision}}" --native-patch perf/jpeg-policy-validation/native-preflight.patch
+    python3 perf/jpeg-policy-validation/profile-preparation.py "{{executable}}" "{{output}}" --source-revision "{{revision}}" --native-hooks
 
 jpeg-preflight-ci directory target:
     python3 perf/jpeg-policy-validation/check-native-preflight.py "{{directory}}" --target "{{target}}"

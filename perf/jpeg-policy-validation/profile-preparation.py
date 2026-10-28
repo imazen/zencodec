@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import tomllib
 
 
 def peak_heap(trace):
@@ -74,6 +75,12 @@ def verify_peak(measured, analysis):
         raise ValueError("Allocation events disagree with heaptrack_print peak")
 
 
+def native_revision():
+    """The zenjpeg revision the harness manifest pins."""
+    manifest = tomllib.loads(Path(__file__).with_name("Cargo.toml").read_text())
+    return manifest["dependencies"]["zenjpeg"]["rev"]
+
+
 def run(args, log, **kwargs):
     with log.open("wb") as output:
         subprocess.run(args, stdout=output, stderr=subprocess.STDOUT,
@@ -85,7 +92,9 @@ def main():
     parser.add_argument("executable", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--source-revision", required=True)
-    parser.add_argument("--native-patch", type=Path)
+    parser.add_argument("--native-hooks", action="store_true",
+                        help="profile direct native jobs through plan_encode/begin "
+                             "(binary built with --features native-preflight)")
     parser.add_argument("--heaptrack-lib", type=Path,
                         default=Path("/usr/lib/heaptrack/libheaptrack_preload.so"))
     parser.add_argument("--interpreter", type=Path,
@@ -98,15 +107,14 @@ def main():
               "binary_sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
               "profile": "debug; heaptrack; no pixel reads or output publication",
               "dimensions": [2048, 2048], "format": "RGB8_SRGB",
-              "native_revision": "4535ec499d88b04f58882df03e61761526c35756",
+              "native_revision": native_revision(),
               "started": datetime.now(timezone.utc).isoformat(), "cells": []}
-    if args.native_patch:
-        report["native_patch_sha256"] = hashlib.sha256(args.native_patch.read_bytes()).hexdigest()
+    if args.native_hooks:
         report["configuration_scope"] = "direct native jobs, identical default quality; no registry"
     (output / "progress.json").write_text(json.dumps(report, indent=2) + "\n")
     for configuration in ["fixed", "progressive"]:
         cases = ([(s, n) for s in ["native-prepare", "native-plan", "native-begin"] for n in [1, 4]]
-                 if args.native_patch else
+                 if args.native_hooks else
                  [(s, n) for s in ["prepare", "construct", "begin"] for n in [1, 4]] + [("refuse", 1)])
         for stage, count in cases:
             name = f"{configuration}-{stage}-{count}"

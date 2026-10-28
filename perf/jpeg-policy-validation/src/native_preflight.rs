@@ -1,5 +1,8 @@
-//! Executes the native patch, not a model of JPEG's output schedule.
-use zencodec::encode::{EncodeJob, Encoder, EncoderConfig};
+//! Executes zenjpeg's shared planning hooks (`EncodeJob::plan_encode`,
+//! `Encoder::begin_declared`), not a model of JPEG's output schedule. These
+//! scenarios first ran against a native patch experiment; the pinned zenjpeg
+//! now implements them natively.
+use zencodec::encode::{EncodeDeclaration, EncodeJob, Encoder, EncoderConfig};
 use zencodec::output_patch::OutputAccess;
 use zenjpeg::JpegEncoderConfig;
 use zenjpeg::encoder::{ChromaSubsampling, EncoderConfig as NativeConfig, XybSubsampling};
@@ -48,19 +51,28 @@ fn effective_plan_matches_native_startup_across_modes_and_geometry() {
                 for descriptor in [PixelDescriptor::RGB8_SRGB, PixelDescriptor::GRAY8_SRGB] {
                     for access in [OutputAccess::Forward, OutputAccess::SeekBack] {
                         let job = config.clone().job();
-                        let planned = job.plan_rows(width, height, descriptor, None, access);
+                        let declaration =
+                            EncodeDeclaration::new(width, height, descriptor).with_access(access);
+                        let planned = job.plan_encode(&declaration);
+                        let declared = job.clone().encoder().unwrap().begin_declared(&declaration);
                         let actual = job
                             .encoder()
                             .unwrap()
                             .begin_output(width, height, descriptor, access);
-                        match (planned, actual) {
-                            (Ok(planned), Ok(actual)) => assert_eq!(
-                                planned, actual,
-                                "{width}x{height} {descriptor:?} {config:?}"
-                            ),
-                            (Err(_), Err(_)) => {}
-                            (planned, actual) => panic!(
-                                "planning/startup disagreement: {planned:?} / {actual:?}; {config:?}"
+                        match (planned, actual, declared) {
+                            (Ok(planned), Ok(actual), Ok(declared)) => {
+                                assert_eq!(
+                                    planned.timing, actual,
+                                    "{width}x{height} {descriptor:?} {config:?}"
+                                );
+                                assert_eq!(
+                                    planned, declared,
+                                    "{width}x{height} {descriptor:?} {config:?}"
+                                );
+                            }
+                            (Err(_), Err(_), Err(_)) => {}
+                            (planned, actual, declared) => panic!(
+                                "planning/startup disagreement: {planned:?} / {actual:?} / {declared:?}; {config:?}"
                             ),
                         }
                         cells += 1;
@@ -91,24 +103,10 @@ fn planning_is_repeatable_and_does_not_change_strided_encode_bytes() {
             .encode(pixels())
             .unwrap();
         let job = config.clone().job();
-        let first = job
-            .plan_rows(
-                17,
-                33,
-                PixelDescriptor::RGB8_SRGB,
-                None,
-                OutputAccess::Forward,
-            )
-            .unwrap();
-        let second = job
-            .plan_rows(
-                17,
-                33,
-                PixelDescriptor::RGB8_SRGB,
-                None,
-                OutputAccess::Forward,
-            )
-            .unwrap();
+        let declaration = EncodeDeclaration::new(17, 33, PixelDescriptor::RGB8_SRGB)
+            .with_access(OutputAccess::Forward);
+        let first = job.plan_encode(&declaration).unwrap();
+        let second = job.plan_encode(&declaration).unwrap();
         assert_eq!(first, second);
         let actual = job.encoder().unwrap().encode(pixels()).unwrap();
         assert_eq!(expected.data(), actual.data());
@@ -118,18 +116,16 @@ fn planning_is_repeatable_and_does_not_change_strided_encode_bytes() {
 #[test]
 fn invalid_input_limits_canvas_and_metadata_refuse_during_planning() {
     let config = JpegEncoderConfig::new();
+    let declaration = |width, height| {
+        EncodeDeclaration::new(width, height, PixelDescriptor::RGB8_SRGB)
+            .with_access(OutputAccess::Forward)
+    };
     for (width, height) in [(0, 32), (32, 0), (u32::MAX, 2)] {
         assert!(
             config
                 .clone()
                 .job()
-                .plan_rows(
-                    width,
-                    height,
-                    PixelDescriptor::RGB8_SRGB,
-                    None,
-                    OutputAccess::Forward
-                )
+                .plan_encode(&declaration(width, height))
                 .is_err()
         );
     }
@@ -144,32 +140,14 @@ fn invalid_input_limits_canvas_and_metadata_refuse_during_planning() {
             .job()
             .with_limits(zencodec::ResourceLimits::none().with_max_memory(1)),
     ] {
-        assert!(
-            job.plan_rows(
-                32,
-                32,
-                PixelDescriptor::RGB8_SRGB,
-                None,
-                OutputAccess::Forward
-            )
-            .is_err()
-        );
+        assert!(job.plan_encode(&declaration(32, 32)).is_err());
     }
     let meta = zencodec::Metadata::default().with_exif(vec![0; 70_000]);
     let job = config
         .clone()
         .job()
         .with_metadata_policy(meta, zencodec::MetadataPolicy::PreserveExact);
-    assert!(
-        job.plan_rows(
-            32,
-            32,
-            PixelDescriptor::RGB8_SRGB,
-            None,
-            OutputAccess::Forward
-        )
-        .is_err()
-    );
+    assert!(job.plan_encode(&declaration(32, 32)).is_err());
 }
 
 #[test]
@@ -184,18 +162,17 @@ fn current_color_context_is_checked_before_startup() {
         zencodec::MetadataPolicy::PreserveExact,
     );
     let matching = ColorContext::default().with_icc(profile);
-    assert!(
-        job.plan_rows(32, 32, descriptor, Some(&matching), OutputAccess::Forward)
-            .is_ok()
-    );
+    fn declaration(descriptor: PixelDescriptor, context: &ColorContext) -> EncodeDeclaration<'_> {
+        EncodeDeclaration::new(32, 32, descriptor)
+            .with_color(context)
+            .with_access(OutputAccess::Forward)
+    }
+    assert!(job.plan_encode(&declaration(descriptor, &matching)).is_ok());
     for context in [
         ColorContext::default(),
         matching.with_cicp(zencodec::Cicp::new(1, 13, 0, true)),
     ] {
-        assert!(
-            job.plan_rows(32, 32, descriptor, Some(&context), OutputAccess::Forward)
-                .is_err()
-        );
+        assert!(job.plan_encode(&declaration(descriptor, &context)).is_err());
     }
 }
 
@@ -210,15 +187,10 @@ fn cancelled_planning_refuses_before_begin() {
     }
     let job = JpegEncoderConfig::new()
         .job()
-        .with_pulse(zencodec::SharedPulse::new(Cancel));
-    assert!(
-        job.plan_rows(
-            32,
-            32,
-            PixelDescriptor::RGB8_SRGB,
-            None,
-            OutputAccess::Forward
-        )
-        .is_err()
-    );
+        .with_pulse(zencodec::SharedPulse::new(zencodec::how_far::StopOnly::new(
+            Cancel,
+        )));
+    let declaration = EncodeDeclaration::new(32, 32, PixelDescriptor::RGB8_SRGB)
+        .with_access(OutputAccess::Forward);
+    assert!(job.plan_encode(&declaration).is_err());
 }

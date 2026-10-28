@@ -28,7 +28,7 @@ use zenpixels::{PixelDescriptor, PixelSliceMut};
 
 #[test]
 fn registered_native_jpeg_stays_suspended_while_an_adapter_prepares_its_destination() {
-    use zencodec::{CodecSet, zencodec::how_far::NoPulse, operation::DecodeRequest};
+    use zencodec::{CodecSet, NoPulse, operation::DecodeRequest};
     use zencodec_io::{ControlledEvent, ControlledStepper, ReadAtCursor, Yield};
     let codecs = CodecSet::new().with_decoder(JpegDecoderConfig::new());
     for progressive in [false, true] {

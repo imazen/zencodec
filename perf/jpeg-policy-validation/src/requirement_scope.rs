@@ -380,7 +380,11 @@ fn admitted_native_rewrite_still_honors_cancellation_and_preserves_partial_write
             fail_after: None,
         };
         let error = prepare()
-            .write(context(), &mut sink, &Cancel(&cancelled))
+            .write(
+                context(),
+                &mut sink,
+                &zencodec::how_far::StopOnly::borrowed(&Cancel(&cancelled)),
+            )
             .unwrap_err();
         assert!(matches!(
             error.downcast_ref::<zencodec::metadata_rewrite::Error>(),

@@ -7,7 +7,9 @@ publish = false
 [workspace]
 
 [features]
-# Explicitly requires the native-preflight.patch experiment; never silently skip.
+# The effective-job preflight scenarios: planning (`EncodeJob::plan_encode`)
+# against native startup (`Encoder::begin_declared`) on the pinned zenjpeg.
+# They began as a patch experiment and now run on zenjpeg's shared hooks.
 native-preflight = []
 
 [dependencies]
@@ -17,16 +19,20 @@ zencodec-coroutine = { path = "../../zencodec-coroutine", version = "0.1.0" }
 zenmeta = { path = "../../zenmeta", features = ["rewrite", "xmp"] }
 zenpixels = ">=0.2.16, <0.4.0"
 zenpixels-convert = { version = ">=0.2.16, <0.4.0", features = ["icc-db"] }
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "4535ec499d88b04f58882df03e61761526c35756", features = ["controlled-decode", "metadata-rewrite", "extended-metadata"] }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "8672e549793a7e1b515f292bd9fd77109118cb83", features = ["controlled-decode", "metadata-rewrite", "extended-metadata"] }
 
-zencodecs = { git = "https://github.com/imazen/zenpipe", rev = "77d316ba827a9d8e3d6b2aaed892beaef1c58f25", default-features = false, features = ["std", "cms", "jpeg", "png", "checked-transcode-async"] }
+zencodecs = { git = "https://github.com/imazen/zenpipe", rev = "874a3856841bfcf5f8e223ec62d75a159fa42895", default-features = false, features = ["std", "cms", "jpeg", "png", "checked-transcode-async"] }
 
 [patch.crates-io]
-zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "4535ec499d88b04f58882df03e61761526c35756" }
-zenpng = { git = "https://github.com/imazen/zenpng", rev = "7f13367f8f2d8ad78f60c9638c07214997451f54" }
+zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "8672e549793a7e1b515f292bd9fd77109118cb83" }
+zenpng = { git = "https://github.com/imazen/zenpng", rev = "5422b6d213e41f9764e7c4cf98e5c44eb8acbd85" }
 zencodec = { path = "../.." }
-# Reproduce zenjpeg main's unpublished workspace bridges at immutable commits.
-zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "8ca647c525cf488c61bbf35475ca8ba3db6b628e" }
+# zenjpeg depends on ultrahdr-core unconditionally; crates.io 0.6.0 requires
+# zencodec ^0.1, so use the review revision on the zencodec 0.2 family pin.
+ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "cc57c57abc491001c69ca85dab8213102df93825" }
+# The harness's own zenpixels revision: the docs examples it compiles use its
+# `ConvertOptions::retain_channels`. It descends from f8596aae, the revision the
+# pinned zenjpeg and zenpng heads (and zenpipe 874a3856) were tested with.
 zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "86d0e2d30406a006bf8332f142029b7f58353086" }
 zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "86d0e2d30406a006bf8332f142029b7f58353086" }
 

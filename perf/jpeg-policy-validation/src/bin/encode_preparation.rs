@@ -71,16 +71,16 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
                 black_box(jobs);
             }
             "native-plan" => {
+                let declaration = zencodec::encode::EncodeDeclaration::new(
+                    WIDTH,
+                    HEIGHT,
+                    PixelDescriptor::RGB8_SRGB,
+                )
+                .with_access(zencodec::output_patch::OutputAccess::Forward);
                 for job in &jobs {
-                    let timing = job.plan_rows(
-                        WIDTH,
-                        HEIGHT,
-                        PixelDescriptor::RGB8_SRGB,
-                        None,
-                        zencodec::output_patch::OutputAccess::Forward,
-                    )?;
-                    assert_eq!(timing.streams(), args[3] == "fixed");
-                    black_box(timing);
+                    let plan = job.plan_encode(&declaration)?;
+                    assert_eq!(plan.timing.streams(), args[3] == "fixed");
+                    black_box(plan);
                 }
                 black_box(jobs);
             }
