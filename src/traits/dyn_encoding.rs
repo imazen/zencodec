@@ -91,6 +91,16 @@ pub trait DynEncoder: Send {
         Err(Box::new(crate::UnsupportedOperation::EncodePlanning))
     }
 
+    /// Encoder-driven row acquisition; see [`Encoder::pull_rows`].
+    /// The default refuses before calling the source or changing state.
+    fn pull_rows(
+        &mut self,
+        _rows: &mut dyn crate::encode::EncodeRows,
+        _pulse: &dyn crate::Pulse,
+    ) -> Result<crate::encode::PullProgress, BoxedError> {
+        Err(Box::new(crate::UnsupportedOperation::PullEncode))
+    }
+
     /// Prepare actual destination access; see [`Encoder::begin_output`].
     fn begin_output(
         &mut self,
@@ -152,6 +162,16 @@ impl core::fmt::Debug for dyn DynEncoder + '_ {
 pub(super) struct EncoderShim<E>(pub(super) E);
 
 impl<E: Encoder + Send> DynEncoder for EncoderShim<E> {
+    fn pull_rows(
+        &mut self,
+        rows: &mut dyn crate::encode::EncodeRows,
+        pulse: &dyn crate::Pulse,
+    ) -> Result<crate::encode::PullProgress, BoxedError> {
+        self.0
+            .pull_rows(rows, pulse)
+            .map_err(|error| Box::new(error) as BoxedError)
+    }
+
     fn begin_declared(
         &mut self,
         declaration: &crate::encode::EncodeDeclaration<'_>,
@@ -874,6 +894,39 @@ mod begin_dispatch_tests {
         }
     }
 
+    struct NoFill;
+    impl crate::encode::EncodeRows for NoFill {
+        fn fill(
+            &mut self,
+            _: crate::encode::RowDemand<'_>,
+        ) -> Result<(), crate::encode::RowFillError> {
+            panic!("unsupported pull must never call the source")
+        }
+    }
+
+    #[test]
+    fn default_pull_refuses_before_source_for_typed_shim_and_direct_dyn() {
+        let mut typed = OneShot;
+        assert_eq!(
+            Encoder::pull_rows(&mut typed, &mut NoFill, &crate::how_far::NoPulse),
+            Err(UnsupportedOperation::PullEncode)
+        );
+        for mut erased in [
+            Box::new(EncoderShim(OneShot)) as Box<dyn DynEncoder>,
+            Box::new(OneShot) as Box<dyn DynEncoder>,
+        ] {
+            let error = erased
+                .pull_rows(&mut NoFill, &crate::how_far::NoPulse)
+                .unwrap_err();
+            assert_eq!(
+                error.downcast_ref::<UnsupportedOperation>(),
+                Some(&UnsupportedOperation::PullEncode)
+            );
+            let pixels = zenpixels::PixelBuffer::new(1, 1, PixelDescriptor::RGB8_SRGB);
+            assert!(erased.encode(pixels.as_slice()).is_ok());
+        }
+    }
+
     #[test]
     fn direct_dyn_declared_start_refuses_without_losing_one_shot() {
         let mut encoder: Box<dyn DynEncoder> = Box::new(OneShot);
@@ -1080,6 +1133,134 @@ mod negotiated_output_tests {
         assert_eq!(finish.tail.extras::<u32>(), Some(&7));
         assert_eq!(finish.tail.extension(), "qualified");
         assert_eq!(finish.patches[0].bytes, [9]);
+    }
+}
+
+#[cfg(test)]
+mod pull_dispatch_tests {
+    use super::*;
+    use crate::encode::{EncodeRows, PullProgress, RowDemand, RowFillError};
+    use crate::{At, UnsupportedOperation};
+
+    struct Pulling {
+        pixels: [u8; 18],
+        done: bool,
+    }
+    impl Encoder for Pulling {
+        type Error = At<UnsupportedOperation>;
+        fn reject(op: UnsupportedOperation) -> Self::Error {
+            At::wrap(op)
+        }
+        fn encode(self, _: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error> {
+            Err(Self::reject(UnsupportedOperation::PullEncode))
+        }
+        fn pull_rows(
+            &mut self,
+            rows: &mut dyn EncodeRows,
+            _: &dyn crate::Pulse,
+        ) -> Result<PullProgress, Self::Error> {
+            if self.done {
+                return Ok(PullProgress::Done);
+            }
+            let view =
+                PixelSliceMut::new(&mut self.pixels, 2, 2, 9, PixelDescriptor::RGB8_SRGB).unwrap();
+            rows.fill(
+                RowDemand::new(2, 3, view)
+                    .with_final_pass(true)
+                    .with_label(7),
+            )
+            .map_err(|_| Self::reject(UnsupportedOperation::PullEncode))?;
+            assert_eq!(
+                self.pixels,
+                [
+                    1, 2, 3, 4, 5, 6, 165, 165, 165, 7, 8, 9, 10, 11, 12, 165, 165, 165
+                ]
+            );
+            self.done = true;
+            Ok(PullProgress::Filled)
+        }
+    }
+    struct Fill {
+        calls: usize,
+        fail: bool,
+    }
+    impl EncodeRows for Fill {
+        fn fill(&mut self, mut demand: RowDemand<'_>) -> Result<(), RowFillError> {
+            self.calls += 1;
+            assert_eq!(
+                (demand.pass, demand.first, demand.label, demand.final_pass),
+                (2, 3, 7, true)
+            );
+            assert_eq!((demand.rows.width(), demand.rows.rows()), (2, 2));
+            if self.fail {
+                return Err(RowFillError);
+            }
+            demand.rows.row_mut(0).copy_from_slice(&[1, 2, 3, 4, 5, 6]);
+            demand
+                .rows
+                .row_mut(1)
+                .copy_from_slice(&[7, 8, 9, 10, 11, 12]);
+            Ok(())
+        }
+    }
+    fn encoder() -> Pulling {
+        Pulling {
+            pixels: [165; 18],
+            done: false,
+        }
+    }
+
+    #[test]
+    fn erased_pull_preserves_native_row_loan_and_progress() {
+        let mut typed = encoder();
+        let mut source = Fill {
+            calls: 0,
+            fail: false,
+        };
+        assert_eq!(
+            typed
+                .pull_rows(&mut source, &crate::how_far::NoPulse)
+                .unwrap(),
+            PullProgress::Filled
+        );
+        assert_eq!(
+            typed
+                .pull_rows(&mut source, &crate::how_far::NoPulse)
+                .unwrap(),
+            PullProgress::Done
+        );
+        assert_eq!(source.calls, 1);
+        let mut erased: Box<dyn DynEncoder> = Box::new(EncoderShim(encoder()));
+        assert_eq!(
+            erased
+                .pull_rows(&mut source, &crate::how_far::NoPulse)
+                .unwrap(),
+            PullProgress::Filled
+        );
+        assert_eq!(
+            erased
+                .pull_rows(&mut source, &crate::how_far::NoPulse)
+                .unwrap(),
+            PullProgress::Done
+        );
+        assert_eq!(source.calls, 2);
+    }
+
+    #[test]
+    fn erased_pull_preserves_the_located_native_failure() {
+        let mut erased: Box<dyn DynEncoder> = Box::new(EncoderShim(encoder()));
+        let mut source = Fill {
+            calls: 0,
+            fail: true,
+        };
+        let error = erased
+            .pull_rows(&mut source, &crate::how_far::NoPulse)
+            .unwrap_err();
+        assert_eq!(source.calls, 1);
+        let native = error
+            .downcast_ref::<At<UnsupportedOperation>>()
+            .expect("original located native error");
+        assert_eq!(native.error(), &UnsupportedOperation::PullEncode);
     }
 }
 

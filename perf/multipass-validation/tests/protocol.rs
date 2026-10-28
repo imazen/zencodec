@@ -105,13 +105,7 @@ impl Scripted {
             PixelDescriptor::RGB8_SRGB,
         )
         .unwrap();
-        let r = rows.fill(RowRequest {
-            pass,
-            final_pass: false,
-            label: pass as u8,
-            first,
-            rows: view,
-        });
+        let r = rows.fill(RowRequest::new(pass, first, view).with_label(pass as u8));
         if r.is_ok() {
             self.seen.set(self.seen.get() + n);
         }
@@ -713,4 +707,66 @@ fn reader_rows_refuse_rewind_even_if_misused() {
         options(),
     );
     assert_eq!(res.unwrap().trace.source_bytes, (RB * H as usize) as u64);
+}
+
+#[test]
+fn shared_plan_projection_refusal_drops_committed_encoder_without_effects() {
+    use zencodec::UnsupportedOperation;
+    use zencodec::encode::{EncodeDeclaration, EncodePlan, Encoder};
+
+    struct Committed {
+        starts: Rc<Cell<u32>>,
+        dropped: Rc<Cell<bool>>,
+    }
+    impl Drop for Committed {
+        fn drop(&mut self) {
+            self.dropped.set(true);
+        }
+    }
+    impl Encoder for Committed {
+        type Error = UnsupportedOperation;
+        fn reject(op: Self::Error) -> Self::Error {
+            op
+        }
+        fn encode(self, _: PixelSlice<'_>) -> Result<EncodeOutput, Self::Error> {
+            panic!("must not retry after committed startup")
+        }
+        fn begin_declared(&mut self, _: &EncodeDeclaration<'_>) -> Result<EncodePlan, Self::Error> {
+            self.starts.set(self.starts.get() + 1);
+            // Legal row-push plan, unsupported by the compatibility driver.
+            Ok(EncodePlan::rows(OutputTiming::streaming(0)))
+        }
+        fn pending_output(&self) -> &[u8] {
+            panic!("must not inspect or drain a refused plan's header")
+        }
+        fn finish_output(self) -> Result<OutputFinish<EncodeOutput>, Self::Error> {
+            panic!("must not finish a refused plan")
+        }
+    }
+    let starts = Rc::new(Cell::new(0));
+    let dropped = Rc::new(Cell::new(false));
+    let data = [1u8; 3];
+    let pixels = PixelSlice::new(&data, 1, 1, 3, PixelDescriptor::RGB8_SRGB).unwrap();
+    let mut output = Vec::new();
+    let failure = encode_passes(
+        Committed {
+            starts: starts.clone(),
+            dropped: dropped.clone(),
+        },
+        Input::raster(pixels),
+        Forward(&mut output),
+        PolicySet::new(),
+        Preset,
+        Options::new(StorageBudget::new(1024, 4), 1024),
+        &NoPulse,
+    )
+    .unwrap_err();
+    assert_eq!(failure.error().stage, Stage::Prepare);
+    assert_eq!(
+        find_cause::<UnsupportedOperation>(&failure),
+        Some(&UnsupportedOperation::PullEncode)
+    );
+    assert_eq!(starts.get(), 1);
+    assert!(dropped.get());
+    assert!(output.is_empty());
 }

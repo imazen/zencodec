@@ -11,6 +11,7 @@ retain the remaining design and qualification work.
 | --- | --- | --- | --- |
 | zencodec | [PR 168](https://github.com/imazen/zencodec/pull/168) | `f552d338fc5af8dbc623129f3040b65c9f074a71` | Merge `f02a17ec6001a9efcad1267f92a3ea928ed06e57`; ancestry verified |
 | zenextras | [PR 54](https://github.com/imazen/zenextras/pull/54) | `3e5267e363e339a2af86c6bb838e3ab0c4a7f0b2` | Merge `635609fba4bf073ff68a1e1ccb55fa3dd170b1d8`; remote comparison verified |
+| zenbitmaps | [PR 34](https://github.com/imazen/zenbitmaps/pull/34) | `9ad4582bc51b6259829a421fe1e6564f617d31ce` | Merge `9cab06f86eb6582d2253410285f38a76185ba39b`; remote comparison verified |
 | zenjxl | [PR 31](https://github.com/imazen/zenjxl/pull/31) | `f2c0177e153c9308042bfd5fe51a4be1ebac11b0` | Merge `bf3a4a801cd293bb59b13ecf3791c50c0acf9059`; remote comparison verified |
 
 Before merging, every job passed in zencodec's
@@ -18,7 +19,8 @@ Before merging, every job passed in zencodec's
 [native/guide qualification](https://github.com/imazen/zencodec/actions/runs/40767258147)
 and [fuzz build](https://github.com/imazen/zencodec/actions/runs/40767258149),
 zenextras' [CI](https://github.com/imazen/zenextras/actions/runs/40766323747),
-and zenjxl's [CI](https://github.com/imazen/zenjxl/actions/runs/40429930768).
+zenjxl's [CI](https://github.com/imazen/zenjxl/actions/runs/40429930768),
+and zenbitmaps' [CI](https://github.com/imazen/zenbitmaps/actions/runs/40624740502).
 The native/guide workflow skips deployment on a PR; that is distinct from its
 successful source, browser and native-oracle checks. Core semver acceptance is
 for the intended breaking version, not a backward-compatibility certificate.
@@ -30,10 +32,12 @@ for the intended breaking version, not a backward-compatibility certificate.
 [its manually dispatched complete CI](https://github.com/imazen/zenpixels/actions/runs/40668717147),
 including API snapshots, feature powerset, i686 and Windows/macOS ARM.
 It merged into the `output-plan` review branch at
-`9dbbdde8a4971d66deda43d6a06ed70022ac7f22`. This is **not yet on main**.
-The combined [PR 92](https://github.com/imazen/zenpixels/pull/92) is running
+`9dbbdde8a4971d66deda43d6a06ed70022ac7f22`. The combined
+[PR 92](https://github.com/imazen/zenpixels/pull/92) passed every job in
 [CI on that exact head](https://github.com/imazen/zenpixels/actions/runs/40769496153)
-before its main merge. No release was requested or performed.
+and merged to main as `7d28c4b73ab7af01d79079af30a623b46bd4041d`.
+Remote comparison verifies the tested head is its ancestor. No release was
+requested or performed.
 
 ## Dependency alignment remains a gate
 
@@ -52,12 +56,24 @@ rav1d revision. The old and new parse trees are identical but their Cargo source
 IDs differ. The existing full-profile failure stays visible until that graph
 and its native controls pass.
 
-The merged TIFF adapter still has direct git edges to an earlier zencodec and
-zenmeta. A registry-only consumer patch cannot replace those edges. Prefer
-owned dependency alignment with registry requirements and a coordinated root
-patch during the unpublished rollout; an isolated same-path patch can diagnose
-the graph but does not establish a portable landing.
+Zenextras main `a5e792612145e0d544fa0243677d935fbcd487f0` replaces the TIFF, IVF
+and WebM direct shared git edges with registry requirements and coordinated
+root patches. Its root plus five fuzz graphs have one source per shared crate.
+Default/all-feature tests, strict Clippy, public API snapshots and all five fuzz
+target compilations pass locally. The new graph requires the paired canonical
+P3 ICC test expectation; exact carrier and sample checks remain.
+[Portable graph evidence](https://github.com/imazen/zenextras/blob/a5e792612145e0d544fa0243677d935fbcd487f0/docs/shared-contract-graph.md)
+records the preserved initial failures and remaining platform-CI gate.
 
 The shared pull-row extension, retained native multipass preparation and movable
 session are under implementation and validation. These do not yet qualify the
 single-policy production multipass driver or asynchronous row ownership.
+
+## PNG review stack
+
+[PNG PR 47](https://github.com/imazen/zenpng/pull/47) at `b5e67cf3` passed
+[all-platform CI](https://github.com/imazen/zenpng/actions/runs/40664772244),
+including ImageIO iDOT compatibility. It merged into the `checked-color`
+review branch as `c81f04cff3780d4be99dd43496d383e348ce987b`. The combined
+[PR 46](https://github.com/imazen/zenpng/pull/46) still needs its new CI result
+before a main merge. This stack merge is not a main-branch completion claim.

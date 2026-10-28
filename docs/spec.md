@@ -1083,14 +1083,19 @@ trait Encoder: Sized {
     fn take_output(&mut self, into: &mut Vec<u8>);                              // default: copy + consume
     fn finish(self) -> Result<EncodeOutput, Self::Error>;                       // default: Err
 
-    // Pull from source callback
+    // Declared, stepwise pull. InputRequirement::Replay selects this protocol.
+    fn pull_rows(&mut self, rows: &mut dyn EncodeRows, pulse: &dyn Pulse)
+        -> Result<PullProgress, Self::Error>; // default: Err(PullEncode), no source call
+
+    // Legacy one-call pull from source callback
     fn encode_from(
         self, source: &mut dyn FnMut(u32, PixelSliceMut<'_>) -> usize,
     ) -> Result<EncodeOutput, Self::Error>;  // default: Err
 }
 ```
 
-Three mutually exclusive paths: `encode()`/`encode_srgba8()`, `push_rows()+finish()`, `encode_from()`.
+Mutually exclusive paths: `encode()`/`encode_srgba8()`, `push_rows()+finish()`,
+legacy `encode_from()`, or declared `pull_rows()+finish_output()`.
 
 `begin` is optional before `push_rows`. It declares the image and returns
 an `OutputTiming`: when *this* encoder's bytes arrive, given its
@@ -2981,3 +2986,37 @@ remain available on failure. This is not yet the checked registry
 `EncodeRequest`-to-destination convenience: it does not infer metadata or fidelity
 requirements on the configured job. Existing raw-encoder entry points retain
 their startup behavior.
+
+### Encoder-driven source passes
+
+```rust
+use zencodec::encode::{EncodeRows, PullProgress, RowDemand, RowFillError};
+
+// Adapter supplies samples into a native-owned, strided strip.
+trait EncodeRows {
+    fn fill(&mut self, demand: RowDemand<'_>) -> Result<(), RowFillError>;
+}
+
+// Typed Encoder and object-safe DynEncoder expose the same protocol.
+fn pull_rows(&mut self, rows: &mut dyn EncodeRows, pulse: &dyn Pulse)
+    -> Result<PullProgress, Self::Error>;
+```
+
+`begin_declared` binds geometry, interpretation and output access. A replay plan
+supplies source-pass bounds before the driver reads pixels. Each `RowDemand`
+contains a zero-based pass, final-pass marker, absolute first row and native
+`PixelSliceMut`; its optional diagnostic label has no scheduling meaning. The
+final-pass marker stays constant across every strip in a traversal.
+The row loan ends when `fill` returns, so it cannot cross an async suspension.
+The driver validates ordering, geometry, interpretation and any exact-depth
+assertion and retains its original typed failure. `RowFillError` is only the
+signal returned to the codec; swallowing that signal cannot authorize output.
+
+`Filled` means exactly one successful fill; `Done` means no fill and all passes
+completed. Both use the existing pending-output/consume/finish methods. The
+provided default refuses before calling the source. The erased shim forwards
+the native result without replacing its error. This method does not itself
+admit replay, storage or publication policy, and does not implement async I/O.
+The experimental IMI adapter uses the shared typed method. Production joint
+policy, native retained preparation and native `Send` qualification remain
+separate gates; the production row job driver still refuses replay input.

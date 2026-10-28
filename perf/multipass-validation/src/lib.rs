@@ -213,52 +213,17 @@ pub struct PassPlan {
     pub timing: OutputTiming,
 }
 
-/// One native row request. `rows` is the encoder's own buffer (no driver row
-/// copy). `pass` is an ordinal from 0. `label` is the codec's diagnostic name for the pass.
-pub struct RowRequest<'a> {
-    /// Pass ordinal, non-decreasing, incremented by one at each new pass.
-    pub pass: u32,
-    /// This request belongs to the encoder's final source pass. Once set, every
-    /// later request belongs to the same pass.
-    pub final_pass: bool,
-    /// Codec-specific pass name, recorded for diagnostics only.
-    pub label: u8,
-    /// First row of this request.
-    pub first: u32,
-    /// Destination for the requested rows, carrying the declared descriptor
-    /// and color context.
-    pub rows: PixelSliceMut<'a>,
-}
+// Compatibility names keep the experiment's callers on the shared row protocol.
+pub use zencodec::encode::{
+    EncodeRows as PassRows, PullProgress as PassProgress, RowDemand as RowRequest,
+    RowFillError as Interrupted,
+};
 
-/// The driver could not fill a request. The driver retains the original cause.
-/// The encoder must stop. Its own error is discarded in favor of that cause.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Interrupted;
-impl fmt::Display for Interrupted {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("row request interrupted by the driver")
-    }
-}
-impl Error for Interrupted {}
-
-/// Filled by the driver; the encoder calls it at most once per `pull_rows`.
-pub trait PassRows {
-    /// Fill the request completely, or fail with the cause retained by the driver.
-    fn fill(&mut self, request: RowRequest<'_>) -> Result<(), Interrupted>;
-}
-
-/// Result of one `pull_rows` call.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PassProgress {
-    /// One request was filled; output may be pending.
-    Filled,
-    /// Every pass is complete; call `finish_output`.
-    Done,
-}
-
-/// Proposed `Encoder` methods (defaults would reject with a new
-/// `UnsupportedOperation::MultiPassEncode`). A failed `begin_passes` leaves
-/// the encoder unchanged so a driver can still try `begin_output`.
+/// Compatibility interface for the experimental driver and protocol fixtures.
+/// Shared `Encoder` implementations use the blanket projection below. The
+/// driver owns and drops the encoder on any refusal. In particular, projection
+/// can refuse after successful `begin_declared` committed native state; callers
+/// must discard that instance instead of retrying or draining its output.
 pub trait MultiPassEncoder: Sized {
     /// Codec error.
     type Error: Error + Send + Sync + 'static;
@@ -281,6 +246,60 @@ pub trait MultiPassEncoder: Sized {
     fn consume_output(&mut self, n: usize);
     /// Remaining bytes and ordered patches, as `Encoder::finish_output`.
     fn finish_output(self) -> Result<OutputFinish<EncodeOutput>, Self::Error>;
+}
+
+// Drive a real shared Encoder through the existing experimental replay and
+// publication checks. The duplicate plan is only a compatibility projection;
+// production policy/driver integration remains a separate gate.
+impl<E: zencodec::encode::Encoder> MultiPassEncoder for E {
+    type Error = E::Error;
+    fn begin_passes(
+        &mut self,
+        desc: &Description,
+        access: OutputAccess,
+    ) -> Result<PassPlan, E::Error> {
+        let mut declaration =
+            EncodeDeclaration::new(desc.width, desc.height, desc.descriptor).with_access(access);
+        declaration.color = desc.color_context.as_deref();
+        declaration.exact_depth = desc.exact_depth;
+        let plan = self.begin_declared(&declaration)?;
+        let zencodec::encode::InputRequirement::Replay(range) = plan.input else {
+            return Err(E::reject(zencodec::UnsupportedOperation::PullEncode));
+        };
+        let passes = match range.max() {
+            Some(max) => PassCount::Range {
+                min: range.min(),
+                max,
+            },
+            None => PassCount::AtLeast(range.min()),
+        };
+        let output = match plan.output_phase {
+            zencodec::encode::OutputPhase::AnyPass => PassOutput::AnyPass,
+            zencodec::encode::OutputPhase::FinalPass => PassOutput::FinalPass,
+            _ => return Err(E::reject(zencodec::UnsupportedOperation::PullEncode)),
+        };
+        Ok(PassPlan {
+            passes,
+            output,
+            timing: plan.timing,
+        })
+    }
+    fn pull_rows(
+        &mut self,
+        rows: &mut dyn PassRows,
+        pulse: &dyn zencodec::Pulse,
+    ) -> Result<PassProgress, E::Error> {
+        zencodec::encode::Encoder::pull_rows(self, rows, pulse)
+    }
+    fn pending_output(&self) -> &[u8] {
+        zencodec::encode::Encoder::pending_output(self)
+    }
+    fn consume_output(&mut self, n: usize) {
+        zencodec::encode::Encoder::consume_output(self, n)
+    }
+    fn finish_output(self) -> Result<OutputFinish<EncodeOutput>, E::Error> {
+        zencodec::encode::Encoder::finish_output(self)
+    }
 }
 
 // --------------------------------------------------------------- replay policy
@@ -725,6 +744,7 @@ impl<S: PassSource> Filler<'_, S> {
             label,
             first,
             mut rows,
+            ..
         } = req;
         check(self.stop).map_err(|e| (Stage::Read, e))?;
         if self.pass != Some(pass) {
@@ -1276,6 +1296,7 @@ where
                         }
                         return Ok(());
                     }
+                    Ok(_) => return Err(Refusal::Protocol.into()),
                     Err(e) => {
                         if let Some((stage, cause)) = filler.failure.take() {
                             boundary = stage;

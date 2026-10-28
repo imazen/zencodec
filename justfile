@@ -1424,6 +1424,12 @@ multipass-sync export:
     cp perf/multipass-validation/native/src/*.rs "{{export}}/perf/multipass-validation/native/src/"
     cp perf/multipass-validation/native/tests/*.rs "{{export}}/perf/multipass-validation/native/tests/"
 
+# Shared typed/dyn pull defaults, loans and original-error forwarding.
+encoder-pull-check:
+    cargo test -p zencodec --all-features --locked --lib
+    cargo clippy -p zencodec --all-targets --all-features --locked -- -D warnings
+    cargo test -p zencodec --all-features --locked --doc
+
 multipass-check:
     cp perf/multipass-validation/dependencies.lock perf/multipass-validation/Cargo.lock
     cargo test --manifest-path perf/multipass-validation/Cargo.toml --locked

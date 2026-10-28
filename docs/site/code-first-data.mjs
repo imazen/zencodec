@@ -109,7 +109,7 @@ export const codeFlows = [
     {scope:'pub fn first_child<C: Collection>',file:'perf/spatial-validation/src/collection.rs',api:['collectionSelection'],state:'Shared collection selection helper'},
   ]},
   {id:'adapter-replay',role:'adapter',title:'Retain raster → replay exact rows',steps:[
-    {scope:'fn driver_retained_raster_is_exact_without_digest_or_raw_staging()',file:'perf/multipass-validation/tests/proof_substitution.rs',api:['multipassInput','multipassEncode','multipassEncoder'],state:'Private multipass contract experiment'},
+    {scope:'fn driver_retained_raster_is_exact_without_digest_or_raw_staging()',file:'perf/multipass-validation/tests/proof_substitution.rs',api:['multipassInput','multipassEncode','rasterOutput','encodeRows','rowDemand'],state:'Experimental driver over shared Encoder::pull_rows; native typed controls qualified separately'},
     {scope:'fn unaligned_source_pitch_and_destination_padding_preserve_samples()',file:'perf/multipass-validation/tests/sources.rs',api:['multipassReader','multipassFile'],state:'Executed source contract: raw rows with independent source/destination padding'},
     {scope:'fn cancellation_before_read_keeps_typed_timeout()',file:'perf/multipass-validation/tests/sources.rs',api:['multipassReader'],state:'Executed source contract: typed cancellation before input effects'},
   ]},
@@ -245,7 +245,7 @@ const lessons = {
   'adapter-scope': [['Keep a late metadata obligation alive', 'An early decision cannot certify packets not yet seen. This private experiment retains the obligation until later inspection and final-effect admission.']],
   'adapter-children': [['Select a child image', 'A TIFF thumbnail or pyramid level is a child, not another animation frame. Use explicit child selection and preserve the parent relationship.']],
   'adapter-replay': [
-    ['Retain the exact raster for another pass', 'The codec needs analysis before coding. Driver-held immutable pixels provide replay identity; a caller-supplied digest alone does not.'],
+    ['Retain the exact raster for another pass', 'The codec needs analysis before coding. The shared Encoder::pull_rows asks EncodeRows to fill a strided RowDemand. Driver-held immutable pixels provide replay identity; a caller-supplied digest alone does not. This experimental driver still has a separate replay policy; the production row driver refuses replay.'],
     ['Read raw rows with file padding', 'A larger image arrives through a reader with padding after each row. Supply the source pitch once; the adapter fills active destination samples while preserving destination padding. Encoded image bytes require a decoder first.'],
     ['Keep the reason when a read is cancelled', 'The same reader now has a deadline. Pulse stops before input effects and the original timeout category survives the I/O error chain. Blocking backend reads still need their own interruption mechanism.'],
   ],

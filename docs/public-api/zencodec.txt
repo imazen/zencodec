@@ -6,29 +6,29 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 3184 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 231 lines (231 hidden + 0 excluded-feature)
+# files: zencodec.txt 3206 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 233 lines (233 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                20
-#   pub types (struct/enum/trait/alias)       378
-#   pub consts/statics                        330
+#   pub types (struct/enum/trait/alias)       382
+#   pub consts/statics                        332
 #   free functions                             94
-#   inherent methods                         1099
-#   struct fields                             496
-#   enum variants                             523
+#   inherent methods                         1105
+#   struct fields                             501
+#   enum variants                             525
 #   re-exports                                 18
-#   trait roster entries (type × trait)      1116
+#   trait roster entries (type × trait)      1128
 #   conditional trait impls (verbatim)          9
-#   auto-trait-complete types                 203
-#   auto-trait exceptions                      44
+#   auto-trait-complete types                 205
+#   auto-trait exceptions                      45
 #
 # per-module pub lines:
-#   (root)                         1004
+#   (root)                         1006
 #   animation                        11
 #   collection                      100
 #   decode                          284
-#   encode                          234
+#   encode                          249
 #   estimate                         48
 #   exif                             94
 #   frame                            97
@@ -40,12 +40,12 @@
 #   metadata_rewrite                 59
 #   operation                       288
 #   output_patch                     15
-#   prelude                         242
+#   prelude                         244
 #   source                           37
 #   storage                          38
 #   time                             22
 
-## items (2872 lines)
+## items (2891 lines)
 
 pub mod zencodec
 pub use At
@@ -644,6 +644,9 @@ pub encode::LossyTarget::CodecSpecificQuality(f32)
 #[non_exhaustive] pub enum encode::OutputPhase
 pub encode::OutputPhase::AnyPass
 pub encode::OutputPhase::FinalPass
+#[non_exhaustive] pub enum encode::PullProgress
+pub encode::PullProgress::Done
+pub encode::PullProgress::Filled
 pub struct encode::AnimationOutputTiming
 pub const encode::AnimationOutputTiming::AT_FINISH: Self
 pub const fn encode::AnimationOutputTiming::lag_frames(&self) -> core::option::Option<u32>
@@ -790,6 +793,16 @@ pub const fn encode::OutputTiming::patches_at_finish(&self) -> bool
 pub const fn encode::OutputTiming::streaming(u32) -> Self
 pub const fn encode::OutputTiming::streams(&self) -> bool
 pub const fn encode::OutputTiming::with_patches(self) -> Self
+#[non_exhaustive] pub struct encode::RowDemand<'a>
+pub encode::RowDemand::final_pass: bool
+pub encode::RowDemand::first: u32
+pub encode::RowDemand::label: u8
+pub encode::RowDemand::pass: u32
+pub encode::RowDemand::rows: zenpixels::buffer::PixelSliceMut<'a>
+pub fn encode::RowDemand<'a>::new(u32, u32, zenpixels::buffer::PixelSliceMut<'a>) -> Self
+pub const fn encode::RowDemand<'a>::with_final_pass(self, bool) -> Self
+pub const fn encode::RowDemand<'a>::with_label(self, u8) -> Self
+pub struct encode::RowFillError
 pub struct encode::SourcePasses
 pub const encode::SourcePasses::ONCE: Self
 pub const fn encode::SourcePasses::fits(self, u32) -> bool
@@ -858,6 +871,7 @@ pub fn encode::DynEncoder::finish(alloc::boxed::Box<Self>) -> core::result::Resu
 pub fn encode::DynEncoder::finish_output(alloc::boxed::Box<Self>) -> core::result::Result<output_patch::OutputFinish<encode::EncodeOutput>, encode::BoxedError>
 pub fn encode::DynEncoder::pending_output(&self) -> &[u8]
 pub fn encode::DynEncoder::preferred_strip_height(&self) -> u32
+pub fn encode::DynEncoder::pull_rows(&mut self, &mut dyn encode::EncodeRows, &dyn how_far::pulse::Pulse) -> core::result::Result<encode::PullProgress, encode::BoxedError>
 pub fn encode::DynEncoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), encode::BoxedError>
 pub fn encode::DynEncoder::take_output(&mut self, &mut alloc::vec::Vec<u8>)
 pub trait encode::DynEncoderConfig: core::marker::Send + core::marker::Sync [also: prelude]
@@ -896,6 +910,8 @@ pub fn encode::EncodeJob::with_metadata_policy(self, Metadata, MetadataPolicy) -
 pub fn encode::EncodeJob::with_policy(self, encode::EncodePolicy) -> Self
 pub fn encode::EncodeJob::with_pulse(self, how_far::pulse::SharedPulse) -> Self
 pub fn encode::EncodeJob::with_stop(self, almost_enough::stop_token::StopToken) -> Self
+pub trait encode::EncodeRows
+pub fn encode::EncodeRows::fill(&mut self, encode::RowDemand<'_>) -> core::result::Result<(), encode::RowFillError>
 pub trait encode::Encoder: core::marker::Sized [also: prelude]
 pub type encode::Encoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn encode::Encoder::begin(&mut self, u32, u32, zenpixels::descriptor::PixelDescriptor) -> core::result::Result<encode::OutputTiming, Self::Error>
@@ -909,6 +925,7 @@ pub fn encode::Encoder::finish(self) -> core::result::Result<encode::EncodeOutpu
 pub fn encode::Encoder::finish_output(self) -> core::result::Result<output_patch::OutputFinish<encode::EncodeOutput>, Self::Error>
 pub fn encode::Encoder::pending_output(&self) -> &[u8]
 pub fn encode::Encoder::preferred_strip_height(&self) -> u32
+pub fn encode::Encoder::pull_rows(&mut self, &mut dyn encode::EncodeRows, &dyn how_far::pulse::Pulse) -> core::result::Result<encode::PullProgress, Self::Error>
 pub fn encode::Encoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), Self::Error>
 pub fn encode::Encoder::reject(UnsupportedOperation) -> Self::Error
 pub fn encode::Encoder::take_output(&mut self, &mut alloc::vec::Vec<u8>)
@@ -2083,6 +2100,7 @@ pub fn prelude::DynEncoder::finish(alloc::boxed::Box<Self>) -> core::result::Res
 pub fn prelude::DynEncoder::finish_output(alloc::boxed::Box<Self>) -> core::result::Result<output_patch::OutputFinish<encode::EncodeOutput>, encode::BoxedError>
 pub fn prelude::DynEncoder::pending_output(&self) -> &[u8]
 pub fn prelude::DynEncoder::preferred_strip_height(&self) -> u32
+pub fn prelude::DynEncoder::pull_rows(&mut self, &mut dyn encode::EncodeRows, &dyn how_far::pulse::Pulse) -> core::result::Result<encode::PullProgress, encode::BoxedError>
 pub fn prelude::DynEncoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), encode::BoxedError>
 pub fn prelude::DynEncoder::take_output(&mut self, &mut alloc::vec::Vec<u8>)
 pub fn prelude::DynEncoderConfig::as_any(&self) -> &dyn core::any::Any
@@ -2133,6 +2151,7 @@ pub fn prelude::Encoder::finish(self) -> core::result::Result<encode::EncodeOutp
 pub fn prelude::Encoder::finish_output(self) -> core::result::Result<output_patch::OutputFinish<encode::EncodeOutput>, Self::Error>
 pub fn prelude::Encoder::pending_output(&self) -> &[u8]
 pub fn prelude::Encoder::preferred_strip_height(&self) -> u32
+pub fn prelude::Encoder::pull_rows(&mut self, &mut dyn encode::EncodeRows, &dyn how_far::pulse::Pulse) -> core::result::Result<encode::PullProgress, Self::Error>
 pub fn prelude::Encoder::push_rows(&mut self, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), Self::Error>
 pub fn prelude::Encoder::reject(UnsupportedOperation) -> Self::Error
 pub fn prelude::Encoder::take_output(&mut self, &mut alloc::vec::Vec<u8>)
@@ -2920,7 +2939,7 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (258 types)
+## trait impls (260 types)
 
 &mut D: decode::ControlledIncrementalDecode, decode::IncrementalDecode
 &mut S: source::DynReadAt
@@ -3039,6 +3058,8 @@ encode::LossyTarget: Clone, Copy, Debug, PartialEq
 encode::OutputBuffer: Clone, Debug, Default, Eq, PartialEq
 encode::OutputPhase: Clone, Copy, Debug, Eq, PartialEq
 encode::OutputTiming: Clone, Copy, Debug, Default, Eq, Hash, PartialEq
+encode::PullProgress: Clone, Copy, Debug, Eq, PartialEq
+encode::RowFillError: Clone, Copy, Debug, Display, Eq, Error, PartialEq
 encode::SourcePasses: Clone, Copy, Debug, Eq, PartialEq
 enough::reason::StopReason: CategorizedError
 estimate::ComputeEnvironment: Clone, Copy, Debug, Default, Eq, PartialEq
@@ -3192,7 +3213,7 @@ impl<J, E> decode::IncrementalDecode for helpers::WholeFileIncremental<J> where 
 
 ## auto traits
 
-203 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
+205 types implement all of: Freeze, RefUnwindSafe, Send, Sync, Unpin, UnwindSafe
 CodecError: !RefUnwindSafe !UnwindSafe
 CodecSet: !RefUnwindSafe !UnwindSafe
 CodecSetError: !RefUnwindSafe !UnwindSafe
@@ -3212,6 +3233,7 @@ decode::Fused<D>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 decode::IncrementalDecoderShim<D>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 decode::StepError<E>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 encode::EncodeOutput: !RefUnwindSafe !UnwindSafe
+encode::RowDemand<'a>: !UnwindSafe
 frame::Frame: !RefUnwindSafe !UnwindSafe
 frame::MapError: !RefUnwindSafe !UnwindSafe
 helpers::WholeFileIncremental<J>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
