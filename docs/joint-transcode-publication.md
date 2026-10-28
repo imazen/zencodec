@@ -27,13 +27,50 @@ preferences. Missing evidence and contradictory evidence remain distinct named
 refusals.
 
 The shared implementation and adversarial controls are qualified. The native
-publication-owner experiment is now qualified as an isolated prototype; its
-public convenience API is not adopted. This change does
+publication-owner experiment passed the isolated controls listed below; early
+workspace admission and source metadata completeness were not established by
+those controls. Its public convenience API is not adopted. This change does
 not add a high-level writer convenience, establish a native workspace bound or
 implement deferred requirements across arbitrary question domains. A successful
 transcode decision does not authorize a separate bare decoder boundary.
 
 ## What remains to prove in the executing adapter
+
+```rust,ignore
+// Adapter entry: freeze and check both sets before native preparation.
+let legacy = request_policy;
+let bound = policy.requirements();
+legacy.check_workspace(None)?;
+if let Some(bound) = bound {
+    bound.check_workspace(None)?;
+}
+// Keep both snapshots for discovery and the later joint decision.
+```
+
+The shared `check_workspace` helper is implemented. It reports named typed
+`UnmetRequirements` without invoking a callback or inventing an offer. Unknown
+refuses every configured limit, including `u64::MAX`. A successful check leaves
+the other requirements intact. The native owner must call it before creating
+jobs or decoders and before conversion preparation; refusal at its later joint
+question cannot undo workspace already used. That native ordering still needs
+its own execution controls. The helper's tests and limits are recorded in the
+[admission receipt](../benchmarks/workspace_admission_2026-10-28.json).
+
+Final pixel interpretation is separate from source metadata completeness. The
+prototype snapshots its output metadata expectation at the final boundary and
+ignores ordinary later decode events. The generic decoder contract permits
+later EXIF/XMP updates without changing the final pixels. Comparing the encoded
+output only against that earlier expectation can therefore miss reported source
+metadata. This is a source-level counterexample, not an executed native failure.
+
+The production owner must qualify the metadata required by its treatment over
+the same retained source, track relevant later metadata/color/orientation
+changes, and fail before releasing output when that obligation cannot be met.
+An extra scan cannot silently bypass input/replay admission. Copying no source
+descriptive carriers may establish `DiscardDescriptive`, but does not remove
+color/orientation obligations or certify arbitrary PII removal. `probe_full`'s
+name alone is not proof: its trait default may return only a header probe.
+Keep the [standalone final-boundary refusal](controlled-decoding.md) unchanged.
 
 A finished `EncodeOutput` may retain spare vector capacity and arbitrary backend
 extensions. Releasing the encoder alone does not establish the retained memory

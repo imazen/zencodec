@@ -44,3 +44,12 @@ passed. The wrapper reported `rc=0 11s | peak-RSS 0.33GiB | min-avail 4726MiB |
 peak-load 0.65`. [Receipt](../../benchmarks/publication_replay_2026-10-28.json).
 No throughput,
 copy-cost, native workspace or whole-container privacy result is claimed.
+
+Source review found two additional production gates outside those executed
+controls: refuse unknown required workspace before native preparation, and
+qualify source metadata completeness independently of final pixel interpretation.
+The prototype captures its expectation at the final boundary and ignores later
+ordinary decode events. Preserve these patches as the historical experiment;
+do not treat its passing controls as proof of those missing deadlines. The
+[owning contract](../../docs/joint-transcode-publication.md#what-remains-to-prove-in-the-executing-adapter)
+records the required execution changes and the implemented shared early check.
