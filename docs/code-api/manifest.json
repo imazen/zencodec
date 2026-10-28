@@ -55,15 +55,15 @@
       "features": "all",
       "fingerprint": "ab64c6c7f3bc56a47a81c8d5b61b39c0c23b1ed28224cace39957f7f151e1d33",
       "surface_sha256": "82a2ec3c646e349305e23e6ee0325cf0fdd9751c150bd22d74222a5e53ede41d",
-      "details_sha256": "0dc978732939d8dd75b7b053478cb5df2e42445f3e9a1aad9b46a63d287f3dd0"
+      "details_sha256": "d2c79d2e4caca29e45614e4b3df216828606aa9126f32a3ac86207c27a98bf26"
     },
     {
       "name": "zencodec-render",
       "directory": "zencodec-render",
       "features": "all",
-      "fingerprint": "b5f84c3681bbf9674355b1e1996c478898cd6ed0997178391f21ae2628b60d1d",
+      "fingerprint": "efb5002aa8d0493d3fd71a4ba57c654e1b4c9a9e01371f99fbb26e6abffd5173",
       "surface_sha256": "69ee6bff2b9e23ba4d4974619d4c2b2e5da04f8d16a41428806ae70fb29e2f47",
-      "details_sha256": "45616386286160ad2e2eb872b7b7461f425f5b36cc9096f47a9613f79b50c230"
+      "details_sha256": "169dfc30accd8b29e87911264d1d5f175598f39a3233d82d0bf185f4f1e4b1c3"
     }
   ]
 }
