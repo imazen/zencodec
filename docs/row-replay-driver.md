@@ -5,7 +5,7 @@ job's `Rows` or `Replay` plan through the shared `Encoder`/`DynEncoder` traits.
 The raw-encoder entry points keep their existing push-only ordering. Whole-raster
 jobs refuse with the original typed `EncodePlanError::InputProtocol`; there is
 no allocating fallback. This implementation is source-only and unqualified until
-the core evidence dependency below and the serialized controls are completed.
+the serialized controls and native integration are completed.
 
 ## Admission and execution
 
@@ -68,23 +68,22 @@ cursor and before flushing, retaining confirmed append/patch counts. Earlier
 live output and failed external writes cannot be rolled back. Arbitrary callback,
 Pulse, destination and native allocations have no inferred bound.
 
-## Shared evidence constructor required before compilation
+## Unknown generic-job evidence
 
 The driver isolates one core dependency in private `unknown_job_evidence()`:
 
-```text
-impl EncodeEvidence: pub const fn unknown() -> Self
+```rust
+let evidence = zencodec::operation::EncodeEvidence::unknown();
 ```
 
 `EncodeJob` and `DynEncodeJob` expose neither the destination format nor fidelity.
 The existing non-exhaustive `EncodeOffer` cannot be constructed outside core;
-`EncodeEvidence::new` requires one. Core can implement the constructor with
+`EncodeEvidence::new` requires one. The constructor uses
 `ImageFormat::Unknown`, `fidelity: None`, `preference_index: 0`,
 `resolution: None`, `metadata: None`, and `retains_opaque_profile: None`.
 This preserves the current `EncodeOffer` representation and avoids pretending to
 know the codec or introducing a parallel public job hierarchy. This source
-candidate deliberately calls the missing constructor as a private integration
-witness; it does not compile until the core change is integrated. There is no
+candidate now includes that core constructor. There is no
 permissive policy bypass or invented encoder configuration.
 
 ## Migration and costs
@@ -121,7 +120,7 @@ question/selection variants migrate to the joint route.
 
 No Cargo command, build, test, native codec or performance tool was run for this
 source implementation. Formatting and source review do not establish compilation
-or passing behavior. After implementing the constructor, run these **serially**
+or passing behavior. Run these **serially**
 in the root's authorized build slot; retain complete logs:
 
 ```sh

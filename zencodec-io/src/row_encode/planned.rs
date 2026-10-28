@@ -13,9 +13,8 @@ pub(super) struct RawDisk {
     pub(super) max_bytes: u64,
 }
 
-/// Narrow core integration witness: generic EncodeJob/DynEncodeJob currently
-/// expose neither format nor fidelity. The core needs this unknown constructor;
-/// inventing an EncodeOffer or certifying metadata from setters would be false.
+/// Generic EncodeJob/DynEncodeJob expose neither format nor fidelity.
+/// Successful setters and carrier facts do not certify metadata treatment.
 fn unknown_job_evidence() -> EncodeEvidence {
     EncodeEvidence::unknown()
 }

@@ -69,6 +69,20 @@ pub struct EncodeEvidence {
     pub retains_opaque_profile: Option<bool>,
 }
 impl EncodeEvidence {
+    /// No qualified format, fidelity, metadata, profile or resolution facts.
+    ///
+    /// Use for a retained generic job whose trait does not expose these facts.
+    /// Unknown evidence cannot satisfy a requirement for a known property;
+    /// callers must not infer configuration from successful setters or timing.
+    pub const fn unknown() -> Self {
+        Self::new(EncodeOffer {
+            format: crate::ImageFormat::Unknown,
+            fidelity: None,
+            preference_index: 0,
+            resolution: None,
+        })
+    }
+
     /// Retain checked configuration with unknown metadata/profile evidence.
     pub const fn new(encoder: EncodeOffer) -> Self {
         Self {
