@@ -401,3 +401,42 @@ the intended tests because the sibling dependency did not match the committed
 lock and a probe requested a tier outside the adapter's configured support.
 Matching empty result inventories from failed commands do not establish parity;
 the rerun requires both test commands to succeed and nonempty matching outcomes.
+
+### SIMD compatibility qualified on the committed graph
+
+Zenpipe main
+[`1b788757`](https://github.com/imazen/zenpipe/commit/1b788757076d239769ead495dab77f67936a5214)
+adds the private compatibility helper without moving the committed SIMD
+dependency version. Both before and after runs pass 596 tests and retain the
+same six ignored documentation examples. All 602 recorded outcomes match;
+the ignored examples are not counted as passing coverage. Strict Clippy passes
+for x86-64, with library compilation/lint checks for aarch64 and WASM.
+
+Against the newer SIMD source, the helper matches `mul_add_relaxed` bit for bit
+on 6,561 vector triples on each of scalar and x86-64-v3. This does not establish
+runtime NEON equivalence or qualify the whole sibling-main dependency graph.
+The batch receipt is `rc=0`, 260 seconds, peak RSS 0.77 GiB, minimum available
+memory 2770 MiB and peak load 6.50; no throughput claim is made.
+
+## Malformed ICC bytes: compatibility is not color evidence
+
+Native source review found that `zenpixels::icc::profile_color_space` reads a
+header field after checking only that the first 20 bytes exist. It can return a
+color-space name for truncated or structurally inconsistent data. It must not
+be used as an ICC validity test. Likewise, a profile that cannot be identified
+as a known profile is not thereby safe to discard.
+
+The native lane's lcms 2.17 experiment rejects several malformed fixtures but
+opens others, including some inconsistent declared-size/tag-bound cases.
+Those observations describe one reader and version. They do not establish that
+every reader rejects a given byte sequence or that removing it preserves color.
+The proposed generalized malformed-profile stripping exception remains unmerged.
+
+The existing JPEG `encoding_with_policy_strips_metadata` test explicitly uses
+the deprecated best-effort setter. Its compatibility expectation remains
+unchanged. The next implementation experiment must distinguish that legacy
+behavior from checked policy admission, without weakening authoritative
+`ColorContext` handling—even when identical ICC bytes also appear in job
+metadata. Required controls include setter ordering, failed setter atomicity,
+unknown and Display P3 interpretation, and refusal before output. No production
+API repair or new ICC validity guarantee is claimed here.
