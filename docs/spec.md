@@ -2874,8 +2874,42 @@ output-wait bounds remain unproven. A final descriptor is not evidence for those
 separate obligations. A coupled adapter can prepare the relevant routes and
 resolve their question before explicitly adopting the same held interpretation.
 This refuses unsupported requirements; it does not turn discovery into a
-whole-operation allocation cap. Custom callbacks retain decision authority and
-must discharge any requirements they accept without delegating to the preset.
+whole-operation allocation cap. Mandatory requirements filter the offered routes
+before custom callbacks run. Direct selection cannot bypass that filter.
+
+### Workspace deadlines before native preparation
+
+```rust,ignore
+// Adapter entry: snapshot once, before creating native jobs or decoders.
+let bound = policy.requirements();
+legacy.check_workspace(None)?;
+if let Some(bound) = bound {
+    bound.check_workspace(None)?;
+}
+// Retain both snapshots for the later joint route decision.
+// Only now may an unqualified native route begin preparation.
+```
+
+`PolicySet::check_workspace(Option<u64>) -> Result<(), UnmetRequirements>`
+uses the same predicate and typed diagnostics as joint route admission. An
+unknown bound refuses every configured workspace cap, including `u64::MAX`.
+An adapter must check before preparation uses covered workspace: rejection at
+the later policy callback cannot undo earlier native allocation. Managed row
+storage is not a bound on codec/conversion workspace. A supplied qualified bound
+must cover preparation and verification too, within the documented workspace
+scope; it is not a whole-operation memory limit.
+
+This check neither invokes the callback nor clears any requirement. Both legacy
+and bound requirements remain mandatory. `UnmetRequirements` implements
+`core::error::Error` so adapters can retain its named enum evidence through a
+typed cause chain without inventing a question, ticket or selected offer.
+
+The shared helper does not itself enforce an adapter's call order. Native
+integration must prove refusal before job/decoder/conversion preparation and
+preserve the existing final-boundary refusal. Likewise final pixel facts do
+not prove a complete source metadata inventory: a publication owner must qualify
+the metadata required by its treatment and reject relevant late changes before
+releasing its output. See [controlled decoding](controlled-decoding.md).
 
 ## Encode declaration and preflight (review API)
 

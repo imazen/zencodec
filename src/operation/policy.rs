@@ -405,6 +405,8 @@ impl PolicySet {
     /// Unknown bounds refuse. This excludes managed storage, source storage and
     /// encoded staging: it is deliberately not a whole-operation memory cap.
     /// Encode-only questions have no such bound and are refused.
+    /// Adapters must also call [`Self::check_workspace`] before preparation uses
+    /// covered workspace; checking only the later route choice is too late.
     pub const fn with_workspace_limit(mut self, bytes: u64) -> Self {
         self.workspace_limit = Some(bytes);
         self

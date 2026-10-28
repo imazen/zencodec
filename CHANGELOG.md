@@ -4,11 +4,16 @@
 
 ### QUEUED BREAKING CHANGES
 
+- Add `PolicySet::check_workspace` for adapter admission before native
+  preparation, using the same typed requirement diagnostics as joint selection.
+  `UnmetRequirements` now implements `core::error::Error`; early success never
+  clears later requirements or authorizes publication.
+
 - Carry canonical sample-depth assertions through encode declarations and row
   sources; verify complete strips before native push, including typed/erased
   routes. Exhaustive `row_encode::Description` literals add `exact_depth`.
   Pair zenpixels `283655c5` and the approved 368-byte DecodeOutput layout;
-  lower-depth native fidelity remains separate from grid membership.
+  lower-depth native fidelity remains separate from grid membership (`68e68503`).
 
 - Add optional output-schedule evidence to `TranscodeOffer`, admitting metadata
   and publication requirements on the same retained route. Unknown still refuses;

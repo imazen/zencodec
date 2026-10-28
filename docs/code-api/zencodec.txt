@@ -2294,6 +2294,8 @@ pub const fn zencodec::operation::PolicySet::require_metadata(self, treatment: z
 pub const fn zencodec::operation::PolicySet::require_output_schedule(self, schedule: zencodec::operation::OutputSchedule) -> Self
 pub const fn zencodec::operation::PolicySet::with_output_wait_limit(self, bytes: u64) -> Self
 pub const fn zencodec::operation::PolicySet::with_workspace_limit(self, bytes: u64) -> Self
+impl zencodec::operation::PolicySet
+pub fn zencodec::operation::PolicySet::check_workspace(self, qualified_upper_bound: core::option::Option<u64>) -> core::result::Result<(), zencodec::operation::UnmetRequirements>
 impl core::default::Default for zencodec::operation::PolicySet
 pub fn zencodec::operation::PolicySet::default() -> Self
 impl zencodec::operation::OperationPolicy for &mut zencodec::operation::PolicySet
@@ -2340,6 +2342,7 @@ pub struct zencodec::operation::UnmetRequirements
 impl zencodec::operation::UnmetRequirements
 pub const fn zencodec::operation::UnmetRequirements::is_empty(self) -> bool
 pub fn zencodec::operation::UnmetRequirements::iter(self) -> impl core::iter::traits::iterator::Iterator<Item = (zencodec::operation::PolicyRequirement, zencodec::operation::RequirementEvidence)>
+impl core::error::Error for zencodec::operation::UnmetRequirements
 impl core::fmt::Display for zencodec::operation::UnmetRequirements
 pub fn zencodec::operation::UnmetRequirements::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub trait zencodec::operation::OperationPolicy: zencodec::operation::binding::sealed::Sealed

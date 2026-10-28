@@ -744,6 +744,12 @@ policy-binding-check:
     cargo test -p zencodec-testkit --test policy_binding --locked
     cargo clippy -p zencodec-testkit --test policy_binding --locked -- -D warnings
 
+# Early resource deadlines share the same predicate as joint route admission.
+policy-workspace-check:
+    cargo test -p zencodec --lib operation::policy::requirements::tests --locked
+    cargo test -p zencodec-testkit --test policy_binding --locked
+    cargo clippy -p zencodec --all-targets --locked -- -D warnings
+
 # Independent review probes, kept outside the product dependency graph.
 api-usability-runner-check:
     timeout 60s bash perf/api-usability-validation/head-replay-controls.sh

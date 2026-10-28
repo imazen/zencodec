@@ -6,7 +6,7 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 3183 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 231 lines (231 hidden + 0 excluded-feature)
+# files: zencodec.txt 3184 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 231 lines (231 hidden + 0 excluded-feature)
 
 ## summary
 #
@@ -14,11 +14,11 @@
 #   pub types (struct/enum/trait/alias)       378
 #   pub consts/statics                        330
 #   free functions                             94
-#   inherent methods                         1098
+#   inherent methods                         1099
 #   struct fields                             496
 #   enum variants                             523
 #   re-exports                                 18
-#   trait roster entries (type × trait)      1115
+#   trait roster entries (type × trait)      1116
 #   conditional trait impls (verbatim)          9
 #   auto-trait-complete types                 203
 #   auto-trait exceptions                      44
@@ -38,14 +38,14 @@
 #   image                           138
 #   inventory                       103
 #   metadata_rewrite                 59
-#   operation                       287
+#   operation                       288
 #   output_patch                     15
 #   prelude                         242
 #   source                           37
 #   storage                          38
 #   time                             22
 
-## items (2871 lines)
+## items (2872 lines)
 
 pub mod zencodec
 pub use At
@@ -1883,6 +1883,7 @@ pub const fn operation::PolicySet::require_metadata(self, operation::MetadataTra
 pub const fn operation::PolicySet::require_output_schedule(self, operation::OutputSchedule) -> Self
 pub const fn operation::PolicySet::with_output_wait_limit(self, u64) -> Self
 pub const fn operation::PolicySet::with_workspace_limit(self, u64) -> Self
+pub fn operation::PolicySet::check_workspace(self, core::option::Option<u64>) -> core::result::Result<(), operation::UnmetRequirements>
 pub type &mut operation::PolicySet::Error = never [also: (root)]
 pub fn &mut operation::PolicySet::decide(&mut self, operation::Question<'_>) -> core::result::Result<operation::Decision, whereat::at::At<core::convert::Infallible>> [also: (root)]
 pub fn &mut operation::PolicySet::requirements(&self) -> core::option::Option<operation::PolicySet> [also: (root)]
@@ -3160,7 +3161,7 @@ operation::Selection: Clone, Copy, Debug
 operation::StagingFacts: Clone, Copy, Debug, Eq, PartialEq
 operation::StagingKind: Clone, Copy, Debug, Eq, PartialEq
 operation::TranscodeOffer: Clone, Copy, Debug
-operation::UnmetRequirements: Clone, Copy, Debug, Default, Display, Eq, PartialEq
+operation::UnmetRequirements: Clone, Copy, Debug, Default, Display, Eq, Error, PartialEq
 output_patch::OutputAccess: Clone, Copy, Debug, Eq, PartialEq
 output_patch::OutputFinish<T>: Debug, Default
 output_patch::Patch: Clone, Debug, Eq, PartialEq

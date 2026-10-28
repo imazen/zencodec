@@ -476,7 +476,7 @@
       "receipt": "run-heavy: done rc=0 19s | peak-RSS 0.33GiB | min-avail 4653MiB | peak-load 0.56"
     },
     "site": {
-      "command": "just site-check",
+      "command": "just docs-site-browser-check 3547",
       "result": "PASS; 24 Node checks and responsive browser suites, including source scopes and inline expansion",
       "initial_failure": "Stale OutputPlan API snapshot referenced prior zenpixels pin. Recaptured OutputPlan and YCbCr snapshots from paired 283655c5; existing guards unchanged.",
       "receipt": "run-heavy: done rc=0 38s | peak-RSS 0.32GiB | min-avail 3994MiB | peak-load 1.01"

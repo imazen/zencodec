@@ -92,8 +92,40 @@ impl fmt::Display for UnmetRequirements {
         Ok(())
     }
 }
+impl core::error::Error for UnmetRequirements {}
 
 impl PolicySet {
+    /// Check the qualified additional codec/conversion workspace bound before
+    /// preparing or running native code that uses that workspace.
+    ///
+    /// Adapter authors call this on each operation-entry snapshot (including
+    /// both legacy and bound requirements) before the first covered allocation.
+    /// `None` means unknown, not zero: it refuses every configured limit, even
+    /// [`u64::MAX`]. With no workspace requirement, unknown is permitted.
+    ///
+    /// The bound must cover the same scope as [`Self::with_workspace_limit`],
+    /// including preparation and verification workspace. A per-stage estimate
+    /// or managed-buffer limit is not a qualified bound for that scope.
+    ///
+    /// Success checks only workspace. It does not discharge other requirements,
+    /// select a route, or authorize publication. Keep the unchanged requirements
+    /// for the later joint decision; do not manufacture an offer to run this
+    /// early check. This method allocates nothing and invokes no callback.
+    pub fn check_workspace(
+        self,
+        qualified_upper_bound: Option<u64>,
+    ) -> Result<(), UnmetRequirements> {
+        let mut unmet = UnmetRequirements::default();
+        unmet.check(
+            2,
+            self.workspace_limit.is_some(),
+            self.workspace_limit
+                .zip(qualified_upper_bound)
+                .map(|(limit, bound)| bound <= limit),
+        );
+        if unmet.is_empty() { Ok(()) } else { Err(unmet) }
+    }
+
     pub(super) const fn has_requirements(self) -> bool {
         self.metadata.is_some()
             || !self.allow_opaque_profiles
@@ -156,13 +188,9 @@ impl PolicySet {
             self.metadata.zip(metadata).map(|(a, b)| a == b),
         );
         unmet.check(1, !self.allow_opaque_profiles, opaque);
-        unmet.check(
-            2,
-            self.workspace_limit.is_some(),
-            self.workspace_limit
-                .zip(workspace)
-                .map(|(limit, bound)| bound <= limit),
-        );
+        if let Err(workspace) = self.check_workspace(workspace) {
+            unmet.merge(workspace);
+        }
         unmet.check(3, self.require_extended_range, range);
         unmet.check(
             4,
@@ -222,6 +250,128 @@ mod tests {
             .require_metadata(MetadataTransfer::DiscardDescriptive)
             .allow_opaque_profiles(false)
             .with_workspace_limit(8)
+    }
+    #[test]
+    fn early_workspace_admission_agrees_with_joint_selection() {
+        for limit in [None, Some(0), Some(8), Some(u64::MAX)] {
+            let preset = limit.map_or(PolicySet::new(), |limit| {
+                PolicySet::new().with_workspace_limit(limit)
+            });
+            for bound in [None, Some(0), Some(8), Some(9), Some(u64::MAX)] {
+                let early = preset.check_workspace(bound);
+                let mut candidate = offer();
+                candidate.workspace_upper_bound = bound;
+                for use_preset in [false, true] {
+                    let mut callbacks = 0;
+                    let joint = resolve_transcode(
+                        boundary(),
+                        &[candidate],
+                        &mut |question: Question<'_>| -> Result<Decision, At<Infallible>> {
+                            callbacks += 1;
+                            let Question::Transcode { choices, .. } = question else {
+                                panic!()
+                            };
+                            Ok(if use_preset {
+                                Decision::UsePreset
+                            } else {
+                                Decision::choose(choices.first().unwrap())
+                            })
+                        },
+                        preset,
+                        &crate::how_far::NoPulse,
+                    );
+                    match (early, joint) {
+                        (Ok(()), Ok(_)) => assert_eq!(callbacks, 1),
+                        (Err(early), Err(joint)) => {
+                            assert_eq!(callbacks, 0);
+                            assert_eq!(early, joint.error().record().unmet_requirements);
+                        }
+                        _ => panic!("early and joint workspace admission differ"),
+                    }
+                }
+            }
+        }
+        let unknown = PolicySet::new()
+            .with_workspace_limit(u64::MAX)
+            .check_workspace(None)
+            .unwrap_err();
+        assert_eq!(
+            unknown.iter().collect::<alloc::vec::Vec<_>>(),
+            [(PolicyRequirement::Workspace, RequirementEvidence::Unknown)]
+        );
+        let exceeded = PolicySet::new()
+            .with_workspace_limit(0)
+            .check_workspace(Some(1))
+            .unwrap_err();
+        assert_eq!(
+            exceeded.iter().collect::<alloc::vec::Vec<_>>(),
+            [(
+                PolicyRequirement::Workspace,
+                RequirementEvidence::Contradicted
+            )]
+        );
+    }
+
+    #[test]
+    fn early_workspace_success_does_not_discharge_metadata_or_final_adoption() {
+        let preset = requirements();
+        preset.check_workspace(Some(8)).unwrap();
+        let mut candidate = offer();
+        candidate.metadata = MetadataTransfer::PreserveReported;
+        let error = resolve_transcode(
+            boundary(),
+            &[candidate],
+            &mut |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+                panic!("workspace success must not clear metadata requirements")
+            },
+            preset,
+            &crate::how_far::NoPulse,
+        )
+        .unwrap_err();
+        assert_eq!(
+            error
+                .error()
+                .record()
+                .unmet_requirements
+                .iter()
+                .collect::<alloc::vec::Vec<_>>(),
+            [(
+                PolicyRequirement::Metadata,
+                RequirementEvidence::Contradicted
+            )]
+        );
+        let error = super::super::super::resolve_boundary(
+            boundary(),
+            &mut |_: Question<'_>| -> Result<Decision, At<Infallible>> {
+                panic!("standalone final adoption must remain refused")
+            },
+            preset,
+            &crate::how_far::NoPulse,
+        )
+        .unwrap_err();
+        assert!(
+            error
+                .error()
+                .record()
+                .unmet_requirements
+                .iter()
+                .any(|(requirement, _)| { requirement == PolicyRequirement::Workspace })
+        );
+    }
+
+    #[test]
+    fn early_workspace_refusal_retains_typed_cause() {
+        let error = PolicySet::new()
+            .with_workspace_limit(1)
+            .check_workspace(None)
+            .unwrap_err();
+        let cause: alloc::boxed::Box<dyn core::error::Error + Send + Sync> =
+            alloc::boxed::Box::new(At::wrap(error));
+        assert_eq!(
+            crate::find_cause::<UnmetRequirements>(cause.as_ref()),
+            Some(&error)
+        );
+        assert!(alloc::format!("{cause}").contains("Workspace(Unknown)"));
     }
     #[test]
     fn callback_only_sees_admitted_original_indices_including_bit_63() {

@@ -24,6 +24,10 @@ export const codeFlows = [
   {id:'adapter-declaration',role:'adapter',title:'Declare color → plan without startup → verify start',note:'Shared trait hooks are implemented and tested. Native JPEG shared-hook adoption is qualified. PNG planning qualification and the full checked EncodeRequest-to-destination convenience remain separate gates. Carrier evidence can be unknown; planning does not establish a native memory bound.',steps:[
     {scope:'fn erased_preflight_retains_job_color_access_and_native_error()',file:'src/traits/dyn_encoding.rs',api:['encodeDeclaration','encodePlan','encodePreflight','declaredBegin'],state:'Shared contract test; scripted codec, not native qualification'},
   ]},
+  {id:'adapter-workspace',role:'adapter',title:'Check before preparation → keep later requirements',evidence:'docs/spec.md#workspace-deadlines-before-native-preparation',note:'A later route refusal cannot undo native workspace already allocated. This adapter helper checks the existing workspace requirement before preparation. It does not select a route or discharge metadata, publication or other requirements. Native entry-order qualification is separate.',steps:[
+    {scope:'pub fn check_workspace(',file:'src/operation/policy/requirements.rs',api:['operationPreset'],state:'Adapter hook: unknown is not zero, and failure retains named evidence'},
+    {scope:'fn early_workspace_success_does_not_discharge_metadata_or_final_adoption()',file:'src/operation/policy/requirements.rs',api:['operationPreset','operationPolicy'],state:'Shared control: an early success cannot authorize later publication'},
+  ]},
   {id:'adapter-precision',role:'adapter',title:'Declare sample depth → verify rows → preserve failure effects',evidence:'docs/precision-admission.md',note:'A depth claim describes current canonical samples; it does not certify native codec fidelity. Constructor defaults stay unclaimed. With a claim, the driver checks each complete strip before push. FinishFirst withholds final publication on a late contradiction; Live may already have published earlier bytes.',steps:[
     {scope:'fn description_defaults_builders_debug_and_eq_include_evidence()',file:'zencodec-io/tests/planned_row_encode/exact_depth.rs',api:['encodeDeclaration','plannedRowEncode'],state:'Start without a claim; add one explicitly'},
     {scope:'fn false_initial_and_later_claims_never_push_a_partial_bad_strip_or_retry()',file:'zencodec-io/tests/planned_row_encode/exact_depth.rs',api:['plannedRowEncode'],state:'Executed strip-verification and publication controls'},
@@ -163,6 +167,10 @@ const lessons = {
   'adapter-registry-output': [
     ['Send the configured registry job to a writer', 'The gallery already chose and configured an encoder. Pass that job directly to the planned driver; it retains the job through admission and starts with the current pixel color. The example uses a small test output budget, not a production recommendation.'],
     ['Allow patches only on an actual seek-back destination', 'A layout that overwrites earlier bytes must refuse a forward writer before startup. When the destination can seek, preserve the final patch plan and account for appended and overwritten bytes separately.'],
+  ],
+  'adapter-workspace': [
+    ['Reject an impossible limit before native work', 'The gallery adds a workspace cap. The adapter checks both operation-entry requirement snapshots before constructing native jobs or decoders. Pass None when the complete covered workspace is unknown; even the largest cap must then refuse. This is an adapter responsibility, not another caller capability query.'],
+    ['Keep the remaining decisions intact', 'A known workspace bound does not prove metadata treatment or make final pixels safe to publish. Retain the same requirements through the joint decision. This control shows metadata mismatch and bare final adoption still refusing after a successful workspace check.'],
   ],
   'adapter-precision': [
     ['Keep the ordinary path simple', 'The image service starts with Description::new and no precision claim. An upstream source that deliberately preserves a canonical grid may attach ExactDepth; resizing or mutable processing must not reuse stale evidence. The declaration is an assertion, so structural validation alone cannot prove the samples.'],

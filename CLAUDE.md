@@ -597,3 +597,14 @@ fails closed if either acquires features or optional dependencies, requiring an
 explicit gate update rather than silently reducing coverage. Baseline metadata
 also rejects inherited non-registry dependencies and records the graph resolved
 for this run; it does not claim to reconstruct a historical lockfile.
+
+## Workspace admission deadline (2026-10-28)
+
+`PolicySet::check_workspace` exposes the existing shared workspace predicate for
+adapters to run before native preparation. Unknown refuses every configured
+limit; named `UnmetRequirements` survives typed error erasure. Success neither
+clears other requirements nor permits bare final adoption. Core admission,
+binding, strict Clippy and guide controls pass; the actual native call-order and
+metadata-completeness controls belong to the retained publication adapter and
+remain a separate integration gate. See `docs/spec.md` and
+`benchmarks/workspace_admission_2026-10-28.json`.
