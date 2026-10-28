@@ -14,6 +14,8 @@ export const api = {
   multipassInput: {path:'multipass_validation::Input (contract experiment)',file:'perf/multipass-validation/src/lib.rs',scope:"pub enum Input<'a, S = NoSource>",methods:[],item:true},
   multipassEncode: {path:'multipass_validation::encode_passes (contract experiment)',file:'perf/multipass-validation/src/lib.rs',methods:['encode_passes']},
   multipassEncoder: {path:'multipass_validation::MultiPassEncoder (contract experiment)',file:'perf/multipass-validation/src/lib.rs',scope:'pub trait MultiPassEncoder',methods:['begin_passes','pull_rows','pending_output','consume_output','finish_output']},
+  multipassReader: {path:'multipass_validation::sources::ReaderRows (contract experiment)',file:'perf/multipass-validation/src/sources.rs',scope:'impl<R: Read> ReaderRows<R>',methods:['new']},
+  multipassFile: {path:'multipass_validation::sources::FileRows (contract experiment)',file:'perf/multipass-validation/src/sources.rs',scope:'impl FileRows',methods:['new']},
   operationDecisionRecord: {path:'zencodec::operation::DecisionRecord',file:'src/operation/policy.rs',scope:'pub struct DecisionRecord',methods:[],item:true},
   stridedPlane: {path:'zencodec::frame::PlaneView',file:'src/frame_storage.rs',scope:"impl<'a> PlaneView<'a>",methods:['encoding','stride_bytes','as_strided_samples','row','code']},
   floatColorPlan: {path:'candidate::plan_float_export (private native color-stage prototype)',file:'perf/spatial-validation/src/jxl_color_oracle_tests.rs',scope:'mod planning {',methods:['plan_float_export'],associated:false},

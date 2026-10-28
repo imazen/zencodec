@@ -9,7 +9,7 @@ use multipass_validation::{Input, encode_passes};
 
 let input = Input::raster(pixels);
 let result = encode_passes(encoder, input, destination, output_policy,
-                           replay_policy, options, stop)?;
+                           replay_policy, options, pulse)?;
 ```
 
 This is an executing experiment in
@@ -30,6 +30,29 @@ source can supply the first pass once; subsequent passes require admitted
 staging. If exact replay is required, driver-owned memory provides the snapshot.
 A caller-owned staging file plus a digest has weaker evidence and does not pass
 that requirement. No unknown source promise becomes an exactness guarantee.
+
+```rust,ignore
+use multipass_validation::{Input, sources::{FileRows, ReaderRows}};
+use zencodec_io::row_encode::Description;
+use zenpixels::PixelDescriptor;
+
+// Raw RGB rows from a forward reader, not an encoded JPEG/PNG stream.
+let description = Description::new(width, height, PixelDescriptor::RGB8_SRGB);
+let input = Input::source(ReaderRows::new(reader, stride_bytes, description));
+
+// Raw rows already in a file: positional replay starts at the given byte offset.
+let description = Description::new(width, height, PixelDescriptor::RGB8_SRGB);
+let input = Input::source(FileRows::new(file, origin, stride_bytes_u64, description));
+```
+
+`stride_bytes` is the distance between source rows, including padding. It must
+cover all active samples. Source padding and destination padding are independent:
+the [seven-byte source-pitch example](../perf/multipass-validation/tests/sources.rs)
+fills six active RGB bytes per row into a nine-byte destination pitch. The driver
+does not copy padding into pixels. Malformed requests refuse before input or
+destination effects; a read can still fail partway through a valid request.
+Cancellation retains its typed cause. Padding discard checks cancellation between
+bounded chunks; an arbitrary blocking `Read` cannot be interrupted mid-call.
 
 A pass limit can change the route even for an immutable raster. If the encoder
 needs two source passes and the caller permits one, the driver offers staging
@@ -67,6 +90,9 @@ This establishes the tested replay mechanism, not release readiness. Remaining
 API work includes one resolver for replay and output decisions, operation-scoped
 requirement discharge, shared checked request-to-destination execution, bounded
 tracing, total retained-memory evidence and async source lifetime validation.
+The [precision/color](../benchmarks/multipass_declarations_2026-10-28.json) and
+[source-validation](../benchmarks/multipass_sources_2026-10-28.json) receipts record
+the subsequent failing-first controls and unchanged native parity gates.
 
 ## Bounded content-dependent passes
 
