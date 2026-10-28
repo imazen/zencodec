@@ -1084,6 +1084,46 @@ fn live_output_starts_only_in_the_final_pass_and_matches() {
 }
 
 #[test]
+fn descriptor_color_cannot_be_relabelled_by_native_defaults() {
+    use zenpixels::{ColorPrimaries, SignalRange};
+    let c = &cases()[0];
+    let (raster, stride) = c.raster(0);
+    for descriptor in [
+        c.desc.with_primaries(ColorPrimaries::DisplayP3),
+        c.desc.with_primaries(ColorPrimaries::Unknown),
+        c.desc.with_signal_range(SignalRange::Narrow),
+    ] {
+        for context in [
+            None,
+            Some(Arc::new(ColorContext::from_cicp(zencodec::Cicp::SRGB))),
+        ] {
+            let mut pixels = PixelSlice::new(&raster, c.w, c.h, stride, descriptor).unwrap();
+            if let Some(context) = context {
+                pixels = pixels.with_color_context(context);
+            }
+            let mut output = Vec::new();
+            let error = encode_passes(
+                c.encoder(),
+                Input::raster(pixels),
+                Forward(&mut output),
+                PolicySet::new(),
+                Preset,
+                options(),
+                &NoPulse,
+            )
+            .unwrap_err();
+            assert_eq!(error.error().stage, Stage::Prepare);
+            assert!(matches!(
+                find_cause::<ImiError>(&error),
+                Some(ImiError::Unsupported(_))
+            ));
+            assert!(error.error().trace.reads.is_empty());
+            assert!(output.is_empty());
+        }
+    }
+}
+
+#[test]
 fn unsupported_interpretation_refuses_at_prepare_without_relabeling() {
     let c = &cases()[0];
     let (tight, stride) = c.raster(0);
