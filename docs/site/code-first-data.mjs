@@ -1,5 +1,20 @@
 // Every code body is extracted from a compiled source file, never transcribed.
 export const codeFlows = [
+  {id:'app-start',role:'consumer',manifest:'perf/jpeg-policy-validation/Cargo.toml',title:'Register → decode → transcode',steps:[
+    {example:'checked_registry',file:'docs/examples/checked_operations.rs',api:['operationRegistration']},
+    {example:'checked_decode',file:'docs/examples/checked_operations.rs',api:['operationDecode','operationOutcome','decodedOutput']},
+    {example:'checked_default',file:'docs/examples/checked_operations.rs',api:[],external:['integration-api.json']},
+  ]},
+  {id:'adapter-input',role:'adapter',title:'Slice → positional reads → batched ranges',steps:[
+    {example:'slice',file:'docs/examples/journeys.rs',api:['sliceDriver']},
+    {example:'positioned',file:'docs/examples/journeys.rs',api:['positionedDriver']},
+    {example:'batch',file:'docs/examples/journeys.rs',api:['readAt']},
+  ]},
+  {id:'codec-config',role:'implementor',title:'EncoderConfig → EncodeJob → Encoder',project:{manifest:'zencodec-testkit/Cargo.toml',helpers:'zencodec-testkit/src/reference.rs',command:'cargo test -p zencodec-testkit --lib --test usage'},steps:[
+    {scope:'impl EncoderConfig for MinimalEncoderConfig',file:'zencodec-testkit/src/minimal.rs',api:['encoderConfig','codecErrorBuild'],state:'Internal testkit fixture; requires reference.rs helpers'},
+    {scope:'impl EncodeJob for MinEncodeJob',file:'zencodec-testkit/src/minimal.rs',api:['encodeJob','checkedEncodePolicy'],state:'Testkit codec: minimal supported capabilities'},
+    {scope:'impl Encoder for MinEnc',file:'zencodec-testkit/src/minimal.rs',api:['rasterOutput','encodedOutput'],state:'Testkit codec: one-shot encode'},
+  ]},
   {id:'app-bound-policy',role:'consumer',title:'Preset → situational callback → reusable callback object',note:'One policy argument carries mandatory requirements. The callback sees only admitted choices. These executable controls show refusal diagnostics, choice indices and a logging wrapper; native workspace evidence and operation-wide deferred obligations remain separate qualifications.',steps:[
     {scope:'fn direct_preset_names_unknown_wait_and_contradictory_schedule()',file:'zencodec-testkit/tests/policy_binding.rs',api:['operationPreset','operationPolicy'],state:'Direct preset: refuse before effects and name the unmet requirement'},
     {scope:'fn bound_direct_choice_sees_only_compliant_original_indices()',file:'zencodec-testkit/tests/policy_binding.rs',api:['boundPolicy','operationResolver'],state:'Callback: select only among compliant routes'},
@@ -11,11 +26,6 @@ export const codeFlows = [
   {id:'codec-preflight',role:'implementor',title:'One effective plan → declared startup',steps:[
     {scope:'impl EncodeJob for Job',file:'src/traits/dyn_encoding.rs',api:['encodePreflight'],state:'Shared contract fixture: planning without encoder construction'},
     {scope:'impl Encoder for Declared',file:'src/traits/dyn_encoding.rs',api:['declaredBegin'],state:'Shared contract fixture: current color reaches startup'},
-  ]},
-  {id:'app-start',role:'consumer',title:'Register → decode → transcode',steps:[
-    {example:'checked_registry',file:'docs/examples/checked_operations.rs',api:['operationRegistration']},
-    {example:'checked_decode',file:'docs/examples/checked_operations.rs',api:['operationDecode','operationOutcome','decodedOutput']},
-    {example:'checked_default',file:'docs/examples/checked_operations.rs',api:[],external:['integration-api.json']},
   ]},
   {id:'app-render',role:'consumer',title:'Select → crop canvas → render',steps:[
     {example:'checked_registered_first',file:'perf/spatial-validation/src/collection.rs',api:['collectionFactories','checkedCollection']},
@@ -58,11 +68,6 @@ export const codeFlows = [
   {id:'app-layout',role:'consumer',title:'Plan color + layout → execute on held pixels',steps:[
     {example:'native_required_layout',file:'perf/spatial-validation/src/jxl_planned_color_tests.rs',api:['imageOutput'],external:['output-plan-api.json'],state:'Native JXL + zenpixels-convert qualification'},
   ]},
-  {id:'adapter-input',role:'adapter',title:'Slice → positional reads → batched ranges',steps:[
-    {example:'slice',file:'docs/examples/journeys.rs',api:['sliceDriver']},
-    {example:'positioned',file:'docs/examples/journeys.rs',api:['positionedDriver']},
-    {example:'batch',file:'docs/examples/journeys.rs',api:['readAt']},
-  ]},
   {id:'adapter-seek',role:'adapter',title:'ReadAt → existing Read + Seek parser',steps:[
     {example:'positional_parser',file:'docs/examples/checked_source.rs',api:['seekReader','seekCursor']},
   ]},
@@ -102,11 +107,6 @@ export const codeFlows = [
   {id:'adapter-metadata',role:'adapter',title:'Inspect EXIF / XMP → diff → report unknowns',steps:[
     {scope:'fn main()',file:'zenmeta/examples/audit_metadata.rs',api:['metadataAudit'],state:'Metadata audit CLI example'},
     {scope:'fn duplicates_spoofing_and_qualifiers_are_not_silently_selected()',file:'zenmeta/tests/metadata_inspection.rs',api:['xmpPacket'],state:'XMP ambiguity contract test; not whole-file PII certification'},
-  ]},
-  {id:'codec-config',role:'implementor',title:'EncoderConfig → EncodeJob → Encoder',project:{manifest:'zencodec-testkit/Cargo.toml',helpers:'zencodec-testkit/src/reference.rs',command:'cargo test -p zencodec-testkit --lib --test usage'},steps:[
-    {scope:'impl EncoderConfig for MinimalEncoderConfig',file:'zencodec-testkit/src/minimal.rs',api:['encoderConfig','codecErrorBuild'],state:'Internal testkit fixture; requires reference.rs helpers'},
-    {scope:'impl EncodeJob for MinEncodeJob',file:'zencodec-testkit/src/minimal.rs',api:['encodeJob','checkedEncodePolicy'],state:'Testkit codec: minimal supported capabilities'},
-    {scope:'impl Encoder for MinEnc',file:'zencodec-testkit/src/minimal.rs',api:['rasterOutput','encodedOutput'],state:'Testkit codec: one-shot encode'},
   ]},
   {id:'codec-decode',role:'implementor',title:'DecoderConfig → DecodeJob → Decode',project:{manifest:'zencodec-testkit/Cargo.toml',helpers:'zencodec-testkit/src/reference.rs',command:'cargo test -p zencodec-testkit --lib --test usage'},steps:[
     {scope:'impl DecoderConfig for MinimalDecoderConfig',file:'zencodec-testkit/src/minimal.rs',api:['decoder'],state:'Testkit codec: minimal supported capabilities'},

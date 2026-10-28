@@ -109,11 +109,15 @@ export async function codeFirstPage({sha,apiPanels,docs,dest}) {
     const imports=exampleImports(parts.above);
     const origins=imports?`<div class="code-imports"><small>Imports used by this source</small><pre><code>${highlight(imports)}</code></pre></div>`:'';
     const context=(key,label)=>`<details class="code-context" data-direction="${key}"><summary>${label}<span>${parts[key].split('\n').length} lines</span></summary><pre><code data-example-part="${key}">${highlight(parts[key])}</code></pre></details>`;
-    return `<div class="code-panel" id="${id}" data-example-source="${esc(step.file)}" data-example="${esc(step.example||'')}" data-scope="${esc(step.scope||'')}"><div class="code-toolbar"><span>${esc(step.state||'Implemented · review API')}</span><div class="code-actions"><a href="https://github.com/imazen/zencodec/blob/${sha}/${step.file}#L${parts.line}">Source ↗</a><button data-copy-full="${id}">Copy ${step.example?'full example':'source file'}</button></div></div>${origins}${context('above',step.example?'Imports & setup':'Imports & preceding definitions')}<pre class="code-focus"><code data-example-part="focus">${highlight(parts.focus)}</code></pre>${context('below',step.example?'Return & continuation':'Following definitions & tests')}<span class="copy-status sr-only" role="status"></span></div><details class="cf-contract"><summary>Signatures & related contracts</summary>${step.api?.length?apiPanels(id,step.api):''}${await externalPanels(step.external)}</details>`;
+    return `<div class="code-panel" id="${id}" data-example-source="${esc(step.file)}" data-example="${esc(step.example||'')}" data-scope="${esc(step.scope||'')}"><div class="code-toolbar"><span>${esc(step.state||'Implemented · review API')}</span><div class="code-actions"><a href="https://github.com/imazen/zencodec/blob/${sha}/${step.file}#L${parts.line}">Source ↗</a><button data-copy-full="${id}">Copy ${step.example?'full example':'source file'}</button></div></div>${origins}${context('above',step.example?'Show setup above ↑':'Show preceding definitions ↑')}<pre class="code-focus"><code data-example-part="focus">${highlight(parts.focus)}</code></pre>${context('below',step.example?'Show continuation below ↓':'Show following definitions ↓')}<span class="copy-status sr-only" role="status"></span></div><details class="cf-contract"><summary>Signatures & related contracts</summary>${step.api?.length?apiPanels(id,step.api):''}${await externalPanels(step.external)}</details>`;
   }
   const rendered=new Map();
   for(const flow of codeFlows) {
     let project='';
+    if(flow.manifest) {
+      await readFile(path.join(root,flow.manifest));
+      project=`<aside class="cf-project"><a href="https://github.com/imazen/zencodec/blob/${sha}/${flow.manifest}">Native example manifest, dependency pins &amp; features ↗</a><p>This is the qualification harness configuration. Use the source revision shown on this page and retain its dependency patches.</p></aside>`;
+    }
     if(flow.project) {
       const setup=flow.project;
       await readFile(path.join(root,setup.manifest));

@@ -12,6 +12,7 @@ export async function checkCodeFirst(browser,url,output) {
     await page.waitForFunction(()=>document.getElementById('cf-count').textContent.includes('matching declarations'));
     assert.equal(await page.locator('[role=tabpanel]:visible').count(),1);
     assert.equal(await page.locator('[data-flow]:visible').count(),1);
+    assert.equal(await page.locator('[data-flow]:visible').getAttribute('id'),'app-start');
     const contrast=await page.evaluate(()=>{
       const rgb=value=>value.match(/[\d.]+/g).map(Number);
       const lum=color=>color.slice(0,3).map(x=>x/255).map(x=>x<=.04045?x/12.92:((x+.055)/1.055)**2.4).reduce((n,x,i)=>n+x*[.2126,.7152,.0722][i],0);

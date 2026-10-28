@@ -117,7 +117,7 @@ export const api = {
   policyResolver: {path:'prototype::PolicyResolver (private)',file:'perf/io-validation/src/policy/resolver.rs',scope:'pub(crate) trait PolicyResolver',methods:['resolve']},
   policyRequest: {path:'prototype::Request (private)',file:'perf/io-validation/src/policy_native.rs',scope:'impl Request {',methods:['new','via_registry','encode','encode_with']},
   decoder: {path:'zencodec::decode::DecoderConfig',file:'src/traits/decoding.rs',scope:'pub trait DecoderConfig',methods:['decode','probe','job']},
-  decodeJob: {path:"zencodec::decode::DecodeJob<'a>",file:'src/traits/decoding.rs',scope:"pub trait DecodeJob<'a>",methods:['with_limits','decoder','dyn_incremental_decoder']},
+  decodeJob: {path:"zencodec::decode::DecodeJob<'a>",file:'src/traits/decoding.rs',scope:"pub trait DecodeJob<'a>",methods:['with_limits','with_pulse','decoder','dyn_incremental_decoder']},
   decode: {path:'zencodec::decode::Decode',file:'src/traits/decoder.rs',scope:'pub trait Decode: Sized',methods:['decode']},
   encoderConfig: {path:'zencodec::encode::EncoderConfig',file:'src/traits/encoding.rs',scope:'pub trait EncoderConfig',methods:['format','supported_descriptors','capabilities','job','encode']},
   encodeJob: {path:'zencodec::encode::EncodeJob',file:'src/traits/encoding.rs',scope:'pub trait EncodeJob: Sized',methods:['with_metadata_policy','encode','encoder']},
