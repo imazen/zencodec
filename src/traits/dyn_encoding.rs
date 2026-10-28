@@ -1432,3 +1432,7 @@ mod declared_encode_tests {
 #[cfg(test)]
 #[path = "dyn_encoding/precision_tests.rs"]
 mod precision_tests;
+
+#[cfg(test)]
+#[path = "dyn_encoding/job_erasure_tests.rs"]
+mod job_erasure_tests;

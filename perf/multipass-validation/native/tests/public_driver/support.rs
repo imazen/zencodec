@@ -169,13 +169,18 @@ fn erased(
 pub enum Dispatch {
     Typed,
     Erased,
+    ConfiguredErased,
 }
 #[derive(Clone, Copy, Debug)]
 pub enum Access {
     Forward,
     SeekBack,
 }
-pub const DISPATCHES: [Dispatch; 2] = [Dispatch::Typed, Dispatch::Erased];
+pub const DISPATCHES: [Dispatch; 3] = [
+    Dispatch::Typed,
+    Dispatch::Erased,
+    Dispatch::ConfiguredErased,
+];
 pub const ACCESSES: [Access; 2] = [Access::Forward, Access::SeekBack];
 
 pub struct Run {
@@ -212,6 +217,24 @@ impl Run {
                 self.options,
                 pulse,
             ),
+            (Dispatch::ConfiguredErased, Access::Forward) => row_encode::encode_dyn_job(
+                job(self.config, self.scratch, self.metadata, self.limits).into_dyn_job(),
+                source,
+                self.writer,
+                policy,
+                self.options,
+                pulse,
+            ),
+            (Dispatch::ConfiguredErased, Access::SeekBack) => {
+                row_encode::encode_dyn_job_to_destination(
+                    job(self.config, self.scratch, self.metadata, self.limits).into_dyn_job(),
+                    source,
+                    SeekBack::new(self.writer).unwrap(),
+                    policy,
+                    self.options,
+                    pulse,
+                )
+            }
             (Dispatch::Erased, Access::Forward) => row_encode::encode_dyn_job(
                 erased(self.config, self.scratch, self.metadata, self.limits),
                 source,

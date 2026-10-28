@@ -51,7 +51,19 @@ For a seek-back destination, use `encode_job_to_destination` with
 `zencodec_io::destination::SeekBack::new(writer)?`. For an already erased job,
 the corresponding functions are `encode_dyn_job` and
 `encode_dyn_job_to_destination`. No native codec type is needed by the source or
-destination adapters. These are configured-job primitives; the checked registry
+destination adapters. The proposed provided `EncodeJob::into_dyn_job()` moves a
+configured native job into that shared interface without recreating it:
+
+```rust,ignore
+let job = imi_config.job().with_scratch(native_scratch).into_dyn_job();
+let result = row_encode::encode_dyn_job(job, source, writer, policy, options, pulse)?;
+```
+
+The method allocates one adapter box; it does not clone settings, plan again or
+create an encoder. It requires an owned `Send` job. Typed drivers remain available
+for borrowed or non-`Send` jobs. This convenience and its additional native matrix
+are source candidates awaiting execution; the earlier private configuration-wrapper
+controls remain in place. These are configured-job primitives; the checked registry
 request-to-destination convenience is still a separate integration obligation.
 
 ## Admission and execution

@@ -1057,6 +1057,11 @@ trait EncodeJob: Sized {
         where Self::Enc: Encoder<Error = Self::Error>;
 
     // Type-erased convenience (default impls via shims)
+    // Move a configured, retained job into shared dispatch before native startup.
+    fn into_dyn_job(self) -> Box<dyn DynEncodeJob + Send>
+    where Self: Send + 'static, Self::Enc: Encoder + Send,
+          Self::AnimationFrameEnc: AnimationFrameEncoder;
+
     fn dyn_encoder(self) -> Result<Box<dyn DynEncoder>, BoxedError>
         where Self::Enc: Encoder;
     fn dyn_animation_frame_encoder(self) -> Result<Box<dyn DynAnimationFrameEncoder>, BoxedError>

@@ -2,6 +2,13 @@
 
 ## Native image selection (unreleased experiment)
 
+### Added
+
+- Source candidate: `EncodeJob::into_dyn_job` moves an owned Send job into shared
+  dispatch before native startup, preserving codec-specific settings and retained
+  preparation without a configuration clone. Core and native controls prepared;
+  execution remains pending.
+
 ### Fixed
 
 - Refuse unknown strict workspace bounds before row-job planning, applying both
@@ -16,7 +23,8 @@
 - Source candidate: planned row drivers execute shared replay pulls with actual
   retained raster borrows, private RAM snapshots, positional digests or a separate
   raw disk store. Planned callbacks/records use the joint route. Core unknown-job
-  evidence construction and all executable/native qualification remain pending;
+  evidence construction and shared-driver qualification pass; complete native
+  qualification remains pending;
   see `docs/row-replay-driver.md`.
 
 - Add joint `Question::EncodeRoute` admission over a borrowed retained plan,
@@ -24,8 +32,7 @@
   staging restrictions join existing mandatory requirements; diagnostics use
   widened masks. Exact replay needs no snapshot when the retained native plan
   proves one pass. `EncodeEvidence` carries metadata/profile facts once per job;
-  invalid plans retain their original typed cause. Driver/native qualification
-  remains separate and unrun.
+  invalid plans retain their original typed cause. Shared-driver qualification passes; the native full gate remains separate.
 
 - Add default-refusing `Encoder::pull_rows` and erased forwarding, with shared
   `EncodeRows`, `RowDemand`, `RowFillError` and `PullProgress`. The experimental

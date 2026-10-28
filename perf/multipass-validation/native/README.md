@@ -101,3 +101,13 @@ strict all-target Clippy, all locked. No broad update or fresh lock generation i
 permitted. Unexplained resolution changes require source review, not an expanded
 allowlist to make the gate pass. Keep failed exports and logs intact; prepare a
 new export for another attempt. Root owns qualification and any landing.
+
+## Configured-job erasure follow-through (source candidate)
+
+The corrected first-run controls now also have a third `ConfiguredErased` dispatch:
+`job(config, scratch, metadata, limits).into_dyn_job()`. This uses the proposed
+provided core method to move the real native job directly, preserving its native
+scratch selection without the private configuration wrapper. The original typed,
+configuration-erased and unconfigured-registry-refusal controls remain unchanged.
+No new dispatch is qualified until its frozen run passes. This does not supply
+unknown metadata/workspace evidence or enable live native output.
