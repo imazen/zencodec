@@ -122,6 +122,10 @@ pub enum Refusal {
     EmptyPacket,
     /// Operation previously failed or unwound.
     Terminal,
+    /// No input frame completed policy admission. Empty output is unsupported.
+    NoAdmittedFrames,
+    /// The legacy preset setter was called after input had been accepted.
+    PolicyChangedAfterInput,
 }
 impl fmt::Display for Refusal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -173,6 +177,7 @@ pub struct StagedEncode<E, M, D, R> {
     resolver: R,
     preset: PolicySet,
     report: OperationReport,
+    policy_changed_after_input: bool,
 }
 impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode<E, M, D, R> {
     /// Retain the encoder and prepare exact-timing output from its actual config.
@@ -242,13 +247,20 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
             resolver,
             preset: PolicySet::new(),
             report: OperationReport::default(),
+            policy_changed_after_input: false,
         })
     }
     /// Preset consulted when the resolver returns `UsePreset`.
     /// During migration, these requirements and the policy argument
     /// both apply. A bound policy supplies preferences in place of these.
+    /// Call before the first accepted frame. Calling it afterward makes the
+    /// next push or finish refuse without publishing the staged output.
     #[deprecated(note = "Pass PolicySet or BoundPolicy as the operation policy argument")]
     pub fn with_policy_set(mut self, preset: PolicySet) -> Self {
+        self.policy_changed_after_input |= self
+            .state
+            .as_ref()
+            .is_some_and(|state| state.previous.is_some());
         self.preset = preset;
         self
     }
@@ -301,6 +313,9 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
         let mut stage = Stage::Policy;
         let run = || -> Result<(), Cause> {
             check(pulse)?;
+            if self.policy_changed_after_input {
+                return Err(invalid(Refusal::PolicyChangedAfterInput));
+            }
             if state.encoder.output_fidelity() != state.fidelity {
                 return Err(invalid(Refusal::ConfigurationChanged));
             }
@@ -388,6 +403,8 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
     /// Drain, release all owned encoder state, then publish the retained output.
     /// Writer failure may leave partial bytes; its concrete output failure and
     /// confirmed append count remain in the error chain. No retry is performed.
+    /// An operation with no admitted input frames refuses before draining;
+    /// empty-container publication has no supported admission route.
     pub fn finish(mut self, pulse: &dyn zencodec::Pulse) -> Result<Completed, At<Failure>> {
         let mut state = self
             .state
@@ -395,6 +412,12 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode
             .ok_or_else(|| self.failure(Stage::Terminal, invalid(Refusal::Terminal)))?;
         let mut drain = || -> Result<(), Cause> {
             check(pulse)?;
+            if self.policy_changed_after_input {
+                return Err(invalid(Refusal::PolicyChangedAfterInput));
+            }
+            if state.previous.is_none() {
+                return Err(invalid(Refusal::NoAdmittedFrames));
+            }
             state.encoder.end_input()?;
             loop {
                 check(pulse)?;

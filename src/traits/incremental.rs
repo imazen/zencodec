@@ -739,7 +739,16 @@ impl<D: ControlledIncrementalDecode> ControlledIncrementalDecode for Fused<D> {
             ControlledProgress::Decode(Progress {
                 event: Event::Done(info),
                 ..
-            }) => FusedState::Done(info.clone()),
+            }) => {
+                if self.interpretation.is_some_and(|facts| {
+                    facts.width != info.width
+                        || facts.height != info.height
+                        || facts.descriptor != Some(info.native_format)
+                }) {
+                    return Err(StepError::Control(ControlError::InconsistentFacts));
+                }
+                FusedState::Done(info.clone())
+            }
             ControlledProgress::Suspended { boundary, .. } => FusedState::Suspended(*boundary),
             _ => FusedState::Running,
         };

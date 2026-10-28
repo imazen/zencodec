@@ -1422,3 +1422,8 @@ capture-ycbcr-api checkout revision:
 # Public-source checkout smoke test; no codec checkout or local path patches.
 guide-starter-check checkout:
     cd "{{checkout}}" && cargo test -p zencodec-testkit --lib --test usage
+
+# Policy admission remains valid through completion and terminal cleanup.
+policy-completion-check:
+    cargo test --locked -p zencodec-media-testkit --features zencodec-media/std --test policy_completion_review
+    cargo test --locked -p zencodec-testkit --test policy_final_facts_review

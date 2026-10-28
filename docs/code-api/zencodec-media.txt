@@ -558,7 +558,9 @@ pub zencodec_media::staged::Refusal::ConversionMismatch
 pub zencodec_media::staged::Refusal::EarlyEnd
 pub zencodec_media::staged::Refusal::EmptyPacket
 pub zencodec_media::staged::Refusal::InputAfterEnd
+pub zencodec_media::staged::Refusal::NoAdmittedFrames
 pub zencodec_media::staged::Refusal::OfferMismatch
+pub zencodec_media::staged::Refusal::PolicyChangedAfterInput
 pub zencodec_media::staged::Refusal::ReceivePendingWithoutPacket
 pub zencodec_media::staged::Refusal::Terminal
 pub zencodec_media::staged::Refusal::VideoConfigurationRequired

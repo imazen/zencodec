@@ -529,3 +529,18 @@ terminator, truncating YcbcrToRgbF32::new after `[CodePlane;`. It now tracks
 parentheses, array brackets and generic arguments, including const blocks. The
 pinned converter snapshot was regenerated from identical source hashes; existing
 assertions remain, with a regression for arrays and const-generic return types.
+
+## Completion admission regressions (2026-10-28)
+
+The independent policy review reproduced header publication from an empty
+`StagedEncode` without invoking its resolver. Completion now refuses before
+draining when no frame has been admitted. Replacing the deprecated preset
+after accepted input also refuses on the next push or finish, before final
+destination publication. Empty-container admission is not implemented.
+
+A controlled decoder could also return `Done` dimensions or format inconsistent
+with its adopted interpretation while all sink calls matched. `Fused` now
+rejects that successful completion with `InconsistentFacts` and remains terminal,
+matching the coroutine helper. This does not roll back already delivered rows
+or a sink finish callback. Regression controls live in the two testkits'
+`policy_completion_review` and `policy_final_facts_review` targets.

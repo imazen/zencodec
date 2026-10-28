@@ -4,6 +4,10 @@
 
 ### QUEUED BREAKING CHANGES
 
+- Refuse staged video completion without an admitted frame, and refuse further
+  execution if the legacy preset is replaced after accepted input. Reject
+  controlled-decoder completion facts that contradict the adopted interpretation.
+
 - Review API: operation entry points accept `OperationPolicy`. Pass `PolicySet`
   directly, or wrap a custom `PolicyResolver` in `BoundPolicy`. Mandatory
   requirements are admitted outside callbacks and retain named diagnostics.
