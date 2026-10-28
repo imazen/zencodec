@@ -3,7 +3,7 @@
 //! No claim about image samples, arbitrary ICC, all XMP semantics or whole files.
 #![allow(dead_code)]
 use crate::policy::*;
-use zencodec::{At, enough::Stop};
+use zencodec::At;
 
 const TIFF: &str = "http://ns.adobe.com/tiff/1.0/";
 

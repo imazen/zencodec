@@ -10,7 +10,7 @@ use core::{
 };
 use zencodec::{
     At,
-    enough::{Stop, StopReason},
+    enough::StopReason,
 };
 
 static NEXT_QUESTION: AtomicUsize = AtomicUsize::new(1);

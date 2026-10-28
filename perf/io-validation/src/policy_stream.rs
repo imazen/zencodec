@@ -4,7 +4,7 @@
 use crate::admission::{Identity, Lease, Limits, Refusal, Storage, Transfer};
 use crate::policy::*;
 use core::{error::Error, fmt, sync::atomic::AtomicUsize};
-use zencodec::{At, decode::ByteRange, enough::Stop};
+use zencodec::{At, decode::ByteRange};
 
 static NEXT_GATE: AtomicUsize = AtomicUsize::new(1);
 

@@ -231,6 +231,16 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed during standalone documentation qualification (2026-10-28): the guide
+  vendor setup still fetched pre-Pulse bitmap/container revisions, while private
+  resolver cancellation fixtures passed `Stop` directly to Pulse methods. The
+  setup now pins the migrated native revisions, and the fixtures use explicit
+  `StopOnly` adapters without changing their assertions. Stale imports also broke
+  strict Clippy in the standalone renderer. The guide test/Clippy command,
+  unchanged transport-model CSV comparison, and `just render-check` pass in an
+  export outside workspace overrides. The JPEG harness's separate migration is
+  still pending.
+
 - Fixed on the API review branch (2026-10-27): the new row driver could publish
   a live header after policy changed source dimensions/context/acquisition.
   It now revalidates the retained declaration before output and before/after

@@ -10,7 +10,7 @@ use std::{error::Error, fmt, sync::Arc};
 use zencodec::{
     At,
     decode::ByteRange,
-    enough::{Stop, StopReason},
+    enough::StopReason,
 };
 
 #[derive(Debug)]

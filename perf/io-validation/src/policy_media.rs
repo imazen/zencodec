@@ -2,7 +2,7 @@
 //! decision. No codec or container is reconfigured by the resolver itself.
 #![allow(dead_code)]
 use crate::policy::*;
-use zencodec::{At, enough::Stop};
+use zencodec::At;
 use zencodec_media::{
     packet::{Packet, RandomAccess},
     track::{TrackInfo, TrackKind},
