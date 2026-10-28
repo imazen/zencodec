@@ -10,14 +10,14 @@ trait ControlledIncrementalDecode: IncrementalDecode {
         &mut self,
         input: Input<'_>,
         sink: &mut dyn DecodeRowSink,
-        stop: &dyn Stop,
+        pulse: &dyn Pulse,
     ) -> Result<ControlledProgress, StepError<Self::Error>>;
 
     fn resume(
         &mut self,
         boundary: BoundaryId,
         action: BoundaryAction,
-        stop: &dyn Stop,
+        pulse: &dyn Pulse,
     ) -> Result<(), StepError<Self::Error>>;
 }
 ```
@@ -77,7 +77,7 @@ Neither constructor certifies native parser/workspace, image metadata, request
 bookkeeping or sink allocations; this is no whole-operation memory claim.
 
 `zencodec_io::PolicyDecoder::new(decoder, resolver)` serves these suspensions
-through the shared `PolicyResolver`. It implements the existing
+through the shared `OperationPolicy`. It implements the existing
 `IncrementalDecode`, so slice, positional-read, stream and async drivers retain
 their input admission and scheduling behavior. The adapter records the chosen
 mechanism, resumes the same native session, and returns to the driver before
@@ -99,6 +99,10 @@ progressive JPEG qualification holds both boundaries through positional reads,
 checks no sink effects or row-staging allocation, then compares every output
 row with the same stored request's direct decode. This validates an adapter
 primitive, not a complete transcode planner.
+
+The retained job control and any per-call control have different lifetimes.
+[Pulse composition and native qualification](pulse-composition.md) records the
+current setter behavior, progress limits and cancellation checks at these seams.
 
 The authored late-fact fixture exercises short slices and positional reads,
 strided rows, stale/replayed replies, callback error traces and redacted default

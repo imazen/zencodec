@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-28",
+  "scope": "Native-lane local correctness probes; poll counts, not timing performance. Migrated WebP head remains unqualified.",
+  "webp": {
+    "public_baseline": "872289ffd22065f02a58d3141feba57cf67b4a5f",
+    "executed_baseline": "33b75d3733d244384533a0f73f8692c46c0ce382",
+    "baseline_delta": "zensim git URL repair only, same dependency revisions",
+    "local_test_commit": "a6a57c7268a18df24170178d474093d70f182a68",
+    "test_file": "tests/pulse_polls.rs",
+    "command": "cargo test --no-fail-fast --color never --features inventory --test pulse_polls",
+    "result": "2 passed, 4 failed; three double-poll/equation witnesses and one timeout-reason mismatch",
+    "counts": {
+      "lossy_decode": {
+        "legacy": 6,
+        "quiet": 11,
+        "reporting": 11
+      },
+      "animation_render_next_frame": {
+        "legacy": 99,
+        "quiet": 193,
+        "reporting": 193
+      },
+      "lossy_encode": {
+        "native_stop": 24,
+        "native_pulse": 28,
+        "legacy": 24,
+        "quiet": 56,
+        "reporting": 56
+      }
+    },
+    "reason_failure": {
+      "route": "lossy decode, Legacy",
+      "poll": 5,
+      "total_polls": 6,
+      "expected": "Stopped(TimedOut)",
+      "observed": "Stopped(Cancelled)"
+    },
+    "whole_run_receipt": "run-heavy: done rc=1 345s | peak-RSS 0.67GiB | min-avail 5603MiB | peak-load 2.16",
+    "receipt_scope": "Whole run52, including builds and failing migrated-head/mutation gates; not native working-memory or throughput measurement"
+  },
+  "gif": {
+    "revision": "efb7e43bee86df097f572589dc17b2a9903faa3f",
+    "ci": "https://github.com/imazen/zengif/actions/runs/40673732867",
+    "ci_result": "12/12 jobs success",
+    "poll_census": "11 native operations retain baseline counts; no throughput claim"
+  },
+  "pending": [
+    "Final passing WebP fix and published probe sources",
+    "Zenpipe animation-request pulse behavioral witness (first attempt failed to compile)",
+    "Portable per-call progress composition with a retained job pulse"
+  ]
+}
