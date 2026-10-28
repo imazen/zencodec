@@ -180,6 +180,11 @@ The current route facts do not provide a portable selector between tagging and
 baking; they must not be used to claim that choice is implemented. Existing
 orientation-carriage requirements remain in force while native routes are
 qualified against both stored samples and container properties.
+The [reader-compatibility defaults](https://github.com/imazen/zencodec/issues/132)
+deliberately selected baked re-encodes, and the existing testkit checks display
+equivalence rather than storage strategy. Adding a required pass-through route
+must preserve that distinction instead of silently reversing defaults or
+weakening a caller's explicit carriage requirement.
 
 Finally, `AT_FINISH` says when output becomes available, not where it is retained.
 A native adapter that buffers the complete compressed file still has that
