@@ -123,7 +123,7 @@ impl Write for ShortWriter {
 
 // This is the executing adapter witness for the shared schedule resolver.
 // Source, encoder and destination stay held across selection; no re-preparation.
-fn execute_prepared<E: Encoder, R: zencodec::operation::PolicyResolver>(
+fn execute_prepared<E: Encoder, R: zencodec::operation::OperationPolicy>(
     encoder: E,
     resolver: R,
     source_calls: &std::cell::Cell<u32>,

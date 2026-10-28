@@ -41,8 +41,8 @@ use zencodec::{
         EncodePlanError, Encoder, InputRequirement,
     },
     operation::{
-        OperationReport, OutputSchedule, OutputScheduleFacts, OutputScheduleOffer, OutputSource,
-        PolicyResolver, PolicySet, StagingFacts, StagingKind, resolve_output_schedule,
+        OperationPolicy, OperationReport, OutputSchedule, OutputScheduleFacts, OutputScheduleOffer,
+        OutputSource, PolicySet, StagingFacts, StagingKind, resolve_output_schedule,
     },
     storage::{OwnedStorage, StorageBudget},
 };
@@ -194,6 +194,9 @@ impl Options {
         self
     }
     /// Built-in policy used when the supplied callback returns UsePreset.
+    /// During migration, these requirements and the policy argument
+    /// both apply. A bound policy supplies preferences in place of these.
+    #[deprecated(note = "Pass PolicySet or BoundPolicy as the operation policy argument")]
     pub fn with_policy_set(mut self, preset: PolicySet) -> Self {
         self.preset = preset;
         self
@@ -409,7 +412,7 @@ fn stage(
 /// reads during synchronous writes; this alone proves no native memory bound.
 /// Cancellation is checked around native calls and each writer operation; it
 /// cannot interrupt a blocking OS write. No retries or implicit finish on drop.
-pub fn encode<E: Encoder, S: Source, W: Write, R: PolicyResolver>(
+pub fn encode<E: Encoder, S: Source, W: Write, R: OperationPolicy>(
     encoder: E,
     source: S,
     writer: W,
@@ -425,7 +428,7 @@ pub fn encode<E: Encoder, S: Source, W: Write, R: PolicyResolver>(
 /// before final tail writes. I/O failure can leave partial overwrites; their
 /// confirmed byte count is distinct from appended extent. No automatic spooling
 /// converts a forward destination into a seekable one.
-pub fn encode_to_destination<E: Encoder, S: Source, D: Destination, R: PolicyResolver>(
+pub fn encode_to_destination<E: Encoder, S: Source, D: Destination, R: OperationPolicy>(
     encoder: E,
     source: S,
     writer: D,
@@ -448,10 +451,10 @@ pub fn encode_to_destination<E: Encoder, S: Source, D: Destination, R: PolicyRes
 /// Unlike the raw-encoder adapter, this retains the lightweight job across policy
 /// and supplies current color before header creation. Unsupported preflight or
 /// non-row input refuses before encoder construction; there is no fallback.
-/// Use `options.with_policy_set` for mandatory schedule/wait requirements. This
+/// Pass a `PolicySet` or `BoundPolicy` for mandatory schedule/wait requirements. This
 /// primitive does not add or infer metadata/fidelity requirements on the job.
 /// The complete checked request-to-destination convenience is a separate layer.
-pub fn encode_job<J: EncodeJob, S: Source, W: Write, R: PolicyResolver>(
+pub fn encode_job<J: EncodeJob, S: Source, W: Write, R: OperationPolicy>(
     job: J,
     source: S,
     writer: W,
@@ -475,7 +478,7 @@ where
 ///
 /// This is an adapter primitive for an already configured job. It does not
 /// select registry configurations or certify descriptive metadata treatment.
-pub fn encode_job_to_destination<J: EncodeJob, S: Source, D: Destination, R: PolicyResolver>(
+pub fn encode_job_to_destination<J: EncodeJob, S: Source, D: Destination, R: OperationPolicy>(
     job: J,
     source: S,
     writer: D,
@@ -502,7 +505,7 @@ where
 /// before policy and constructs its encoder only after admission. Native errors
 /// keep their concrete causes; no typed-job shim or policy error conversion is
 /// required from the caller. This does not add metadata/fidelity requirements.
-pub fn encode_dyn_job<S: Source, W: Write, R: PolicyResolver>(
+pub fn encode_dyn_job<S: Source, W: Write, R: OperationPolicy>(
     job: Box<dyn DynEncodeJob>,
     source: S,
     writer: W,
@@ -518,7 +521,7 @@ pub fn encode_dyn_job<S: Source, W: Write, R: PolicyResolver>(
 /// Admission, source revalidation, declared startup, output limits, staging and
 /// partial-publication reporting are identical to [`encode_job_to_destination`].
 /// Only construction and native calls use the existing object-safe codec traits.
-pub fn encode_dyn_job_to_destination<S: Source, D: Destination, R: PolicyResolver>(
+pub fn encode_dyn_job_to_destination<S: Source, D: Destination, R: OperationPolicy>(
     job: Box<dyn DynEncodeJob>,
     source: S,
     writer: D,
@@ -646,7 +649,7 @@ impl Encoder for DynRows {
     }
 }
 
-fn run_rows<P: RowStartup, S: Source, D: Destination, R: PolicyResolver>(
+fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
     mut startup: P,
     mut source: S,
     mut writer: D,

@@ -1,6 +1,6 @@
 //! Decide on an actual prepared frame-encoding route before accepting its input.
 use super::{
-    DecisionContext, DecisionRecord, FrameFacts, PolicyFailure, PolicyResolver, PolicySet,
+    DecisionContext, DecisionRecord, FrameFacts, OperationPolicy, PolicyFailure, PolicySet,
     Question, Selection, policy,
 };
 use crate::{
@@ -198,7 +198,7 @@ impl FrameConversionOffer {
 /// preserve prior-frame ordering while draining, and keep old frames immutable.
 /// A successful decision does not certify privacy or make native allocation
 /// infallible. An admission/runtime failure must not retry a different route.
-pub fn resolve_frame_route<R: PolicyResolver + ?Sized>(
+pub fn resolve_frame_route<R: OperationPolicy + ?Sized>(
     interpretation: &FrameInterpretation,
     timing: FrameTiming,
     output: FrameRouteState,

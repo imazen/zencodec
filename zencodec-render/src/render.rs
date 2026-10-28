@@ -5,7 +5,7 @@ use zencodec::{
     collection::{Cause, Collection, ImageId, ImageRequest},
     image::{ImageOutput, OutputError, PackedImageOwner, Rect},
     operation::{
-        CheckedCollection, CollectionOperationError, Outcome, PolicyResolver, PolicySet,
+        CheckedCollection, CollectionOperationError, OperationPolicy, Outcome, PolicySet,
         resolve_image,
     },
     storage::{SharedStorage, StorageBudget, StorageError},
@@ -115,7 +115,8 @@ fn fail(stage: RenderStage, cause: impl Into<Cause>) -> At<RenderFailure> {
     })
 }
 fn check(pulse: &dyn zencodec::Pulse) -> Result<(), Cause> {
-    pulse.check()
+    pulse
+        .check()
         .map_err(|reason| At::wrap(CodecError::new(None, reason.into())).into())
 }
 
@@ -182,7 +183,7 @@ impl<'a> Renderer<'a> {
     /// and policy errors propagate; unsupported images are never skipped.
     /// Each call starts discovery anew; use a cursor and `render_selected` to
     /// traverse a collection. This does not choose a thumbnail or child image.
-    pub fn render_first<C: Collection, R: PolicyResolver>(
+    pub fn render_first<C: Collection, R: OperationPolicy>(
         &self,
         images: &mut CheckedCollection<C, R>,
     ) -> Result<Option<Outcome<ImageOutput>>, At<CollectionOperationError>> {
@@ -196,7 +197,7 @@ impl<'a> Renderer<'a> {
     /// Consumer convenience over the shared collection operation. The current
     /// candidate reconstructs the full native selection; its display crop does
     /// not promise proportional native work or bypass native dimension limits.
-    pub fn render_selected<C: Collection, R: PolicyResolver>(
+    pub fn render_selected<C: Collection, R: OperationPolicy>(
         &self,
         images: &mut CheckedCollection<C, R>,
         image: &ImageId,
@@ -207,7 +208,21 @@ impl<'a> Renderer<'a> {
     }
 
     /// Render an already decoded image, then publish once through policy.
-    pub fn render<R: PolicyResolver + ?Sized>(
+    pub fn render<R: OperationPolicy + ?Sized>(
+        &self,
+        image: ImageOutput,
+        policy: &mut R,
+        pulse: &dyn zencodec::Pulse,
+    ) -> Result<Outcome<ImageOutput>, At<RenderFailure>> {
+        let output = self.apply(image, pulse)?;
+        resolve_image(output, policy, PolicySet::new(), pulse)
+            .map_err(|e| fail(RenderStage::Publication, e))
+    }
+
+    /// Compatibility entry point for separately configured presets.
+    /// Both sets of requirements apply; bound policy preferences take priority.
+    #[deprecated(note = "use render with a PolicySet or BoundPolicy")]
+    pub fn render_with_preset<R: OperationPolicy + ?Sized>(
         &self,
         image: ImageOutput,
         resolver: &mut R,
@@ -215,10 +230,15 @@ impl<'a> Renderer<'a> {
         pulse: &dyn zencodec::Pulse,
     ) -> Result<Outcome<ImageOutput>, At<RenderFailure>> {
         let output = self.apply(image, pulse)?;
-        resolve_image(output, resolver, preset, pulse).map_err(|e| fail(RenderStage::Publication, e))
+        resolve_image(output, resolver, preset, pulse)
+            .map_err(|e| fail(RenderStage::Publication, e))
     }
 
-    fn apply(&self, image: ImageOutput, pulse: &dyn zencodec::Pulse) -> Result<ImageOutput, At<RenderFailure>> {
+    fn apply(
+        &self,
+        image: ImageOutput,
+        pulse: &dyn zencodec::Pulse,
+    ) -> Result<ImageOutput, At<RenderFailure>> {
         check(pulse).map_err(|e| fail(RenderStage::ColorPlan, e))?;
         // Prepare the actual transform before allocating projected samples.
         let mut plan = image

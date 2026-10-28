@@ -17,9 +17,9 @@ pub use render::{ColorTarget, RenderFailure, RenderRequest, RenderStage, Rendere
 ///
 /// ```
 /// use zencodec::{collection::{Collection, ImageId},
-///     operation::{CheckedCollection, PolicyResolver}, storage::StorageBudget};
+///     operation::{CheckedCollection, OperationPolicy}, storage::StorageBudget};
 /// use zencodec_render::Renderer;
-/// fn render<C: Collection, R: PolicyResolver>(
+/// fn render<C: Collection, R: OperationPolicy>(
 ///     images: &mut CheckedCollection<C, R>, id: &ImageId,
 /// ) -> Result<(), Box<dyn core::error::Error>> {
 ///     let renderer = Renderer::new(StorageBudget::new(64 * 1024 * 1024, 32));

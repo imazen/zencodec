@@ -49,7 +49,7 @@ mod tenant {
     use zenavif::media::{Av1SessionError, Av1VideoDecoder};
     use zencodec::{
         At,
-        operation::{Decision, PolicyResolver, Question},
+        operation::{Decision, OperationPolicy, Question},
     };
     use zencodec_media::policy::PolicyDecoder;
 
@@ -63,7 +63,7 @@ mod tenant {
     impl core::error::Error for PreviewTransfer {}
 
     pub fn open_preview() -> Result<
-        PolicyDecoder<Av1VideoDecoder, impl PolicyResolver<Error = PreviewTransfer>>,
+        PolicyDecoder<Av1VideoDecoder, impl OperationPolicy<Error = PreviewTransfer>>,
         Av1SessionError,
     > {
         let native = Av1VideoDecoder::new()?;

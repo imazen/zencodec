@@ -175,7 +175,7 @@ fn collection_view_conflicts_refuse_before_publication_with_typed_facts() {
     }
 }
 
-fn transformed_collection<R: PolicyResolver>(
+fn transformed_collection<R: OperationPolicy>(
     resolver: R,
     pulse: SharedPulse,
 ) -> CheckedCollection<Adapter, R> {

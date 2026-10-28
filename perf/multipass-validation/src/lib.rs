@@ -31,7 +31,7 @@ use zencodec::{
     encode::{EncodeOutput, OutputTiming},
     operation::{
         OperationReport, OutputSchedule, OutputScheduleFacts, OutputScheduleOffer, OutputSource,
-        PolicyResolver, PolicySet, StagingFacts, StagingKind, resolve_output_schedule,
+        OperationPolicy, PolicySet, StagingFacts, StagingKind, resolve_output_schedule,
     },
     output_patch::{OutputAccess, OutputFinish},
     storage::{OwnedStorage, PreparedStorage, StorageBudget},
@@ -921,7 +921,7 @@ where
     E: MultiPassEncoder,
     S: PassSource,
     D: Destination,
-    R: PolicyResolver,
+    R: OperationPolicy,
     Q: ReplayResolver,
 {
     match input {
@@ -958,7 +958,7 @@ where
     E: MultiPassEncoder,
     S: PassSource,
     D: Destination,
-    R: PolicyResolver,
+    R: OperationPolicy,
     Q: ReplayResolver,
 {
     let mut boundary = Stage::Prepare;

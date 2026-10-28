@@ -15,6 +15,7 @@ use alloc::vec::Vec;
 use core::fmt;
 use zenpixels::{PixelDescriptor, PixelSlice};
 
+mod binding;
 mod collection;
 mod conversion;
 mod decoding;
@@ -24,6 +25,7 @@ mod policy;
 mod scheduling;
 mod transcode;
 mod transition;
+pub use binding::{BoundPolicy, OperationPolicy};
 pub use collection::{CheckedCollection, CollectionOperationError, CollectionStage};
 pub use conversion::{ImageConversionOffer, resolve_image_conversion};
 pub use frame::{FrameFacts, PublicationOffer, resolve_frame};
@@ -418,6 +420,9 @@ impl EncodeRequest {
     }
 
     /// Configure the built-in policy used by ordinary execution and delegation.
+    /// During migration, these requirements and the policy argument
+    /// both apply. A bound policy supplies preferences in place of these.
+    #[deprecated(note = "Pass PolicySet or BoundPolicy as the operation policy argument")]
     pub const fn with_policy_set(mut self, preset: PolicySet) -> Self {
         self.preset = preset;
         self
@@ -592,7 +597,7 @@ impl EncodeRequest {
     /// callback failures retain their concrete `At<E>` in the error chain.
     /// Callback success cannot authorize a stale or fabricated choice.
     #[track_caller]
-    pub fn encode_with<R: PolicyResolver + ?Sized>(
+    pub fn encode_with<R: OperationPolicy + ?Sized>(
         &self,
         codecs: &CodecSet,
         pixels: PixelSlice<'_>,

@@ -16,7 +16,7 @@ use zencodec::{
         PlaneSamples, SampleEncoding, Subsampling,
     },
     operation::{
-        Decision, DecisionCode, FrameConversionOffer, FrameFacts, PolicyFailure, PolicyResolver,
+        Decision, DecisionCode, FrameConversionOffer, FrameFacts, PolicyFailure, OperationPolicy,
         PolicySet, Question, Selection,
     },
     storage::StorageBudget,
@@ -38,7 +38,7 @@ pub(crate) trait ConversionRoute {
         execute: impl FnOnce() -> Result<Frame, Cause>,
     ) -> Result<(), Cause>;
 }
-impl<R: PolicyResolver> ConversionRoute for Candidate<R> {
+impl<R: OperationPolicy> ConversionRoute for Candidate<R> {
     fn push_conversion(
         &mut self,
         input: &Frame,
@@ -59,7 +59,7 @@ impl<
     E: zencodec_media::session::VideoEncoder,
     M: zencodec_media::container::Muxer,
     D: zencodec_media::output::Destination,
-    R: PolicyResolver,
+    R: OperationPolicy,
 > ConversionRoute for zencodec_media::staged::StagedEncode<E, M, D, R>
 {
     fn push_conversion(

@@ -242,7 +242,9 @@ fn every_native_presentation_keeps_samples_and_facts_and_the_report_is_bounded()
     assert_eq!(seen, 24);
 }
 
-fn assert_finished<R: zencodec::operation::PolicyResolver>(decoder: &mut PolicyDecoder<Queued, R>) {
+fn assert_finished<R: zencodec::operation::OperationPolicy>(
+    decoder: &mut PolicyDecoder<Queued, R>,
+) {
     let mut packet = Packet::from_vec(vec![1]).unwrap();
     assert!(matches!(
         decoder.configure(&config(), &NoPulse),

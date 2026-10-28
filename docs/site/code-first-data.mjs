@@ -1,5 +1,10 @@
 // Every code body is extracted from a compiled source file, never transcribed.
 export const codeFlows = [
+  {id:'app-bound-policy',role:'consumer',title:'Preset → situational callback → reusable callback object',note:'One policy argument carries mandatory requirements. The callback sees only admitted choices. These executable controls show refusal diagnostics, choice indices and a logging wrapper; native workspace evidence and operation-wide deferred obligations remain separate qualifications.',steps:[
+    {scope:'fn direct_preset_names_unknown_wait_and_contradictory_schedule()',file:'zencodec-testkit/tests/policy_binding.rs',api:['operationPreset','operationPolicy'],state:'Direct preset: refuse before effects and name the unmet requirement'},
+    {scope:'fn bound_direct_choice_sees_only_compliant_original_indices()',file:'zencodec-testkit/tests/policy_binding.rs',api:['boundPolicy','operationResolver'],state:'Callback: select only among compliant routes'},
+    {scope:'fn bound_requirements_survive_a_callback_only_logging_wrapper()',file:'zencodec-testkit/tests/policy_binding.rs',api:['boundPolicy','operationDecisionRecord'],state:'Custom callback wrapper: requirements remain outside the wrapper'},
+  ]},
   {id:'adapter-declaration',role:'adapter',title:'Declare color → plan without startup → verify start',note:'Shared trait hooks are implemented and tested. Native JPEG/PNG adoption and the checked request-to-destination driver remain in progress. Carrier evidence can be unknown; planning does not establish a native memory bound.',steps:[
     {scope:'fn erased_preflight_retains_job_color_access_and_native_error()',file:'src/traits/dyn_encoding.rs',api:['encodeDeclaration','encodePlan','encodePreflight','declaredBegin'],state:'Shared contract test; scripted codec, not native qualification'},
   ]},
@@ -144,6 +149,11 @@ export const roleStories = {
   implementor: 'Expose an existing codec: start with a still image, then add byte acquisition, row output, collections or video where the codec can honor the contract.',
 };
 const lessons = {
+  'app-bound-policy': [
+    ['Start with a preset', 'The gallery has a fixed output rule: do not wait on a destination without a qualified retained-memory bound. Pass PolicySet directly. This executable control checks that unknown evidence refuses and names OutputWait before work starts.'],
+    ['Choose among admitted routes', 'The gallery later needs a situational choice. Add BoundPolicy::new(requirements, callback); required limits still filter the offers first. The callback selects using the current facts without repeating those checks.'],
+    ['Keep tracing outside the requirements', 'The application now wraps its callback to count or log decisions. Put that wrapper inside BoundPolicy so forwarding the callback cannot forget mandatory requirements. Reuse the binding through a mutable borrow; operation progress stays with each operation.'],
+  ],
   'adapter-registry-output': [
     ['Send the configured registry job to a writer', 'The gallery already chose and configured an encoder. Pass that job directly to the planned driver; it retains the job through admission and starts with the current pixel color. The example uses a small test output budget, not a production recommendation.'],
     ['Allow patches only on an actual seek-back destination', 'A layout that overwrites earlier bytes must refuse a forward writer before startup. When the destination can seek, preserve the final patch plan and account for appended and overwritten bytes separately.'],

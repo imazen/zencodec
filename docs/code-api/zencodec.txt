@@ -2071,10 +2071,27 @@ pub zencodec::operation::Selection::Transcode(zencodec::operation::TranscodeOffe
 #[non_exhaustive] pub enum zencodec::operation::StagingKind
 pub zencodec::operation::StagingKind::Disk
 pub zencodec::operation::StagingKind::Memory
+pub struct zencodec::operation::BoundPolicy<R: ?core::marker::Sized>
+impl<R: ?core::marker::Sized> zencodec::operation::BoundPolicy<R>
+pub const fn zencodec::operation::BoundPolicy<R>::requirements(&self) -> zencodec::operation::PolicySet
+pub fn zencodec::operation::BoundPolicy<R>::resolver_mut(&mut self) -> &mut R
+impl<R: zencodec::operation::PolicyResolver> zencodec::operation::BoundPolicy<R>
+pub fn zencodec::operation::BoundPolicy<R>::into_parts(self) -> (zencodec::operation::PolicySet, R)
+pub const fn zencodec::operation::BoundPolicy<R>::new(requirements: zencodec::operation::PolicySet, resolver: R) -> Self
+impl<R: ?core::marker::Sized> core::fmt::Debug for zencodec::operation::BoundPolicy<R>
+pub fn zencodec::operation::BoundPolicy<R>::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<R: zencodec::operation::PolicyResolver + ?core::marker::Sized> zencodec::operation::OperationPolicy for &mut zencodec::operation::BoundPolicy<R>
+pub type &mut zencodec::operation::BoundPolicy<R>::Error = <R as zencodec::operation::PolicyResolver>::Error
+pub fn &mut zencodec::operation::BoundPolicy<R>::decide(&mut self, question: zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<<R as zencodec::operation::PolicyResolver>::Error>>
+pub fn &mut zencodec::operation::BoundPolicy<R>::requirements(&self) -> core::option::Option<zencodec::operation::PolicySet>
+impl<R: zencodec::operation::PolicyResolver + ?core::marker::Sized> zencodec::operation::OperationPolicy for zencodec::operation::BoundPolicy<R>
+pub type zencodec::operation::BoundPolicy<R>::Error = <R as zencodec::operation::PolicyResolver>::Error
+pub fn zencodec::operation::BoundPolicy<R>::decide(&mut self, question: zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<<R as zencodec::operation::PolicyResolver>::Error>>
+pub fn zencodec::operation::BoundPolicy<R>::requirements(&self) -> core::option::Option<zencodec::operation::PolicySet>
 #[non_exhaustive] pub struct zencodec::operation::BoundaryOffer
 pub zencodec::operation::BoundaryOffer::action: zencodec::decode::BoundaryAction
 pub struct zencodec::operation::CheckedCollection<C, R>
-impl<C: zencodec::collection::Collection, R: zencodec::operation::PolicyResolver> zencodec::operation::CheckedCollection<C, R>
+impl<C: zencodec::collection::Collection, R: zencodec::operation::OperationPolicy> zencodec::operation::CheckedCollection<C, R>
 pub fn zencodec::operation::CheckedCollection<C, R>::children(&mut self, image: &zencodec::collection::ImageId) -> core::result::Result<<C as zencodec::collection::Collection>::Cursor, whereat::at::At<zencodec::operation::CollectionOperationError>>
 pub fn zencodec::operation::CheckedCollection<C, R>::decode(&mut self, image: &zencodec::collection::ImageId, request: &zencodec::collection::ImageRequest) -> core::result::Result<zencodec::operation::Outcome<zencodec::image::ImageOutput>, whereat::at::At<zencodec::operation::CollectionOperationError>>
 pub fn zencodec::operation::CheckedCollection<C, R>::decode_with<E: core::convert::Into<zencodec::collection::Cause>>(&mut self, image: &zencodec::collection::ImageId, request: &zencodec::collection::ImageRequest, transform: impl core::ops::function::FnOnce(zencodec::image::ImageOutput, &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec::image::ImageOutput, E>) -> core::result::Result<zencodec::operation::Outcome<zencodec::image::ImageOutput>, whereat::at::At<zencodec::operation::CollectionOperationError>>
@@ -2151,7 +2168,7 @@ pub zencodec::operation::EncodeOffer::resolution: core::option::Option<zencodec:
 pub struct zencodec::operation::EncodeRequest
 impl zencodec::operation::EncodeRequest
 pub fn zencodec::operation::EncodeRequest::encode(&self, codecs: &zencodec::CodecSet, pixels: zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<zencodec::operation::Outcome<zencodec::encode::EncodeOutput>, whereat::at::At<zencodec::operation::OperationError>>
-pub fn zencodec::operation::EncodeRequest::encode_with<R: zencodec::operation::PolicyResolver + ?core::marker::Sized>(&self, codecs: &zencodec::CodecSet, pixels: zenpixels::buffer::PixelSlice<'_>, resolver: &mut R) -> core::result::Result<zencodec::operation::Outcome<zencodec::encode::EncodeOutput>, whereat::at::At<zencodec::operation::OperationError>>
+pub fn zencodec::operation::EncodeRequest::encode_with<R: zencodec::operation::OperationPolicy + ?core::marker::Sized>(&self, codecs: &zencodec::CodecSet, pixels: zenpixels::buffer::PixelSlice<'_>, resolver: &mut R) -> core::result::Result<zencodec::operation::Outcome<zencodec::encode::EncodeOutput>, whereat::at::At<zencodec::operation::OperationError>>
 pub const fn zencodec::operation::EncodeRequest::new(format: zencodec::ImageFormat) -> Self
 pub fn zencodec::operation::EncodeRequest::preferring_fidelity(self, targets: impl core::convert::Into<alloc::vec::Vec<zencodec::encode::Fidelity>>) -> Self
 pub fn zencodec::operation::EncodeRequest::prepare(&self, codecs: &zencodec::CodecSet) -> core::result::Result<alloc::vec::Vec<zencodec::operation::PreparedEncode>, whereat::at::At<zencodec::operation::OperationError>>
@@ -2275,9 +2292,14 @@ pub const fn zencodec::operation::PolicySet::with_output_wait_limit(self, bytes:
 pub const fn zencodec::operation::PolicySet::with_workspace_limit(self, bytes: u64) -> Self
 impl core::default::Default for zencodec::operation::PolicySet
 pub fn zencodec::operation::PolicySet::default() -> Self
-impl zencodec::operation::PolicyResolver for zencodec::operation::PolicySet
+impl zencodec::operation::OperationPolicy for &mut zencodec::operation::PolicySet
+pub type &mut zencodec::operation::PolicySet::Error = never
+pub fn &mut zencodec::operation::PolicySet::decide(&mut self, question: zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<core::convert::Infallible>>
+pub fn &mut zencodec::operation::PolicySet::requirements(&self) -> core::option::Option<zencodec::operation::PolicySet>
+impl zencodec::operation::OperationPolicy for zencodec::operation::PolicySet
 pub type zencodec::operation::PolicySet::Error = never
-pub fn zencodec::operation::PolicySet::resolve(&mut self, question: zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<core::convert::Infallible>>
+pub fn zencodec::operation::PolicySet::decide(&mut self, question: zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<core::convert::Infallible>>
+pub fn zencodec::operation::PolicySet::requirements(&self) -> core::option::Option<zencodec::operation::PolicySet>
 pub struct zencodec::operation::PreparedEncode
 impl zencodec::operation::PreparedEncode
 pub fn zencodec::operation::PreparedEncode::into_job(self) -> alloc::boxed::Box<dyn zencodec::encode::DynEncodeJob>
@@ -2315,22 +2337,43 @@ pub const fn zencodec::operation::UnmetRequirements::is_empty(self) -> bool
 pub fn zencodec::operation::UnmetRequirements::iter(self) -> impl core::iter::traits::iterator::Iterator<Item = (zencodec::operation::PolicyRequirement, zencodec::operation::RequirementEvidence)>
 impl core::fmt::Display for zencodec::operation::UnmetRequirements
 pub fn zencodec::operation::UnmetRequirements::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub trait zencodec::operation::OperationPolicy: zencodec::operation::binding::sealed::Sealed
+pub type zencodec::operation::OperationPolicy::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn zencodec::operation::OperationPolicy::decide(&mut self, question: zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<Self::Error>>
+pub fn zencodec::operation::OperationPolicy::requirements(&self) -> core::option::Option<zencodec::operation::PolicySet>
+impl zencodec::operation::OperationPolicy for &mut zencodec::operation::PolicySet
+pub type &mut zencodec::operation::PolicySet::Error = never
+pub fn &mut zencodec::operation::PolicySet::decide(&mut self, question: zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<core::convert::Infallible>>
+pub fn &mut zencodec::operation::PolicySet::requirements(&self) -> core::option::Option<zencodec::operation::PolicySet>
+impl zencodec::operation::OperationPolicy for zencodec::operation::PolicySet
+pub type zencodec::operation::PolicySet::Error = never
+pub fn zencodec::operation::PolicySet::decide(&mut self, question: zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<core::convert::Infallible>>
+pub fn zencodec::operation::PolicySet::requirements(&self) -> core::option::Option<zencodec::operation::PolicySet>
+impl<F, E> zencodec::operation::OperationPolicy for F where F: core::ops::function::FnMut(zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<E>>, E: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub type F::Error = E
+pub fn F::decide(&mut self, question: zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<E>>
+pub fn F::requirements(&self) -> core::option::Option<zencodec::operation::PolicySet>
+impl<R: zencodec::operation::PolicyResolver + ?core::marker::Sized> zencodec::operation::OperationPolicy for &mut zencodec::operation::BoundPolicy<R>
+pub type &mut zencodec::operation::BoundPolicy<R>::Error = <R as zencodec::operation::PolicyResolver>::Error
+pub fn &mut zencodec::operation::BoundPolicy<R>::decide(&mut self, question: zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<<R as zencodec::operation::PolicyResolver>::Error>>
+pub fn &mut zencodec::operation::BoundPolicy<R>::requirements(&self) -> core::option::Option<zencodec::operation::PolicySet>
+impl<R: zencodec::operation::PolicyResolver + ?core::marker::Sized> zencodec::operation::OperationPolicy for zencodec::operation::BoundPolicy<R>
+pub type zencodec::operation::BoundPolicy<R>::Error = <R as zencodec::operation::PolicyResolver>::Error
+pub fn zencodec::operation::BoundPolicy<R>::decide(&mut self, question: zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<<R as zencodec::operation::PolicyResolver>::Error>>
+pub fn zencodec::operation::BoundPolicy<R>::requirements(&self) -> core::option::Option<zencodec::operation::PolicySet>
 pub trait zencodec::operation::PolicyResolver
 pub type zencodec::operation::PolicyResolver::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn zencodec::operation::PolicyResolver::resolve(&mut self, question: zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<Self::Error>>
-impl zencodec::operation::PolicyResolver for zencodec::operation::PolicySet
-pub type zencodec::operation::PolicySet::Error = never
-pub fn zencodec::operation::PolicySet::resolve(&mut self, question: zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<core::convert::Infallible>>
 impl<F, E> zencodec::operation::PolicyResolver for F where F: core::ops::function::FnMut(zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<E>>, E: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub type F::Error = E
 pub fn F::resolve(&mut self, question: zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<E>>
-pub fn zencodec::operation::resolve_boundary<R: zencodec::operation::PolicyResolver + ?core::marker::Sized>(boundary: zencodec::decode::DecodeBoundary, resolver: &mut R, preset: zencodec::operation::PolicySet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(zencodec::decode::BoundaryAction, zencodec::operation::DecisionRecord), whereat::at::At<zencodec::operation::PolicyFailure>>
-pub fn zencodec::operation::resolve_frame<R: zencodec::operation::PolicyResolver + ?core::marker::Sized>(interpretation: &zencodec::frame::FrameInterpretation, timing: zencodec::frame::FrameTiming, resolver: &mut R, preset: zencodec::operation::PolicySet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec::operation::DecisionRecord, whereat::at::At<zencodec::operation::PolicyFailure>>
-pub fn zencodec::operation::resolve_frame_route<R: zencodec::operation::PolicyResolver + ?core::marker::Sized>(interpretation: &zencodec::frame::FrameInterpretation, timing: zencodec::frame::FrameTiming, output: zencodec::operation::FrameRouteState, offers: &[zencodec::operation::FrameRouteOffer], resolver: &mut R, preset: zencodec::operation::PolicySet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, zencodec::operation::DecisionRecord), whereat::at::At<zencodec::operation::PolicyFailure>>
-pub fn zencodec::operation::resolve_image<R: zencodec::operation::PolicyResolver + ?core::marker::Sized>(image: zencodec::image::ImageOutput, resolver: &mut R, preset: zencodec::operation::PolicySet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec::operation::Outcome<zencodec::image::ImageOutput>, whereat::at::At<zencodec::operation::PolicyFailure>>
-pub fn zencodec::operation::resolve_image_conversion<R: zencodec::operation::PolicyResolver + ?core::marker::Sized>(image: &zencodec::image::ImageOutput, offers: &[zencodec::operation::ImageConversionOffer], resolver: &mut R, preset: zencodec::operation::PolicySet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, zencodec::operation::DecisionRecord), whereat::at::At<zencodec::operation::PolicyFailure>>
-pub fn zencodec::operation::resolve_output_schedule<R: zencodec::operation::PolicyResolver + ?core::marker::Sized>(facts: zencodec::operation::OutputScheduleFacts, offers: &[zencodec::operation::OutputScheduleOffer], resolver: &mut R, preset: zencodec::operation::PolicySet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, zencodec::operation::DecisionRecord), whereat::at::At<zencodec::operation::PolicyFailure>>
-pub fn zencodec::operation::resolve_transcode<R: zencodec::operation::PolicyResolver + ?core::marker::Sized>(boundary: zencodec::decode::DecodeBoundary, offers: &[zencodec::operation::TranscodeOffer], resolver: &mut R, preset: zencodec::operation::PolicySet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, zencodec::operation::DecisionRecord), whereat::at::At<zencodec::operation::PolicyFailure>>
+pub fn zencodec::operation::resolve_boundary<R: zencodec::operation::OperationPolicy + ?core::marker::Sized>(boundary: zencodec::decode::DecodeBoundary, resolver: &mut R, preset: zencodec::operation::PolicySet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(zencodec::decode::BoundaryAction, zencodec::operation::DecisionRecord), whereat::at::At<zencodec::operation::PolicyFailure>>
+pub fn zencodec::operation::resolve_frame<R: zencodec::operation::OperationPolicy + ?core::marker::Sized>(interpretation: &zencodec::frame::FrameInterpretation, timing: zencodec::frame::FrameTiming, resolver: &mut R, preset: zencodec::operation::PolicySet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec::operation::DecisionRecord, whereat::at::At<zencodec::operation::PolicyFailure>>
+pub fn zencodec::operation::resolve_frame_route<R: zencodec::operation::OperationPolicy + ?core::marker::Sized>(interpretation: &zencodec::frame::FrameInterpretation, timing: zencodec::frame::FrameTiming, output: zencodec::operation::FrameRouteState, offers: &[zencodec::operation::FrameRouteOffer], resolver: &mut R, preset: zencodec::operation::PolicySet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, zencodec::operation::DecisionRecord), whereat::at::At<zencodec::operation::PolicyFailure>>
+pub fn zencodec::operation::resolve_image<R: zencodec::operation::OperationPolicy + ?core::marker::Sized>(image: zencodec::image::ImageOutput, resolver: &mut R, preset: zencodec::operation::PolicySet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec::operation::Outcome<zencodec::image::ImageOutput>, whereat::at::At<zencodec::operation::PolicyFailure>>
+pub fn zencodec::operation::resolve_image_conversion<R: zencodec::operation::OperationPolicy + ?core::marker::Sized>(image: &zencodec::image::ImageOutput, offers: &[zencodec::operation::ImageConversionOffer], resolver: &mut R, preset: zencodec::operation::PolicySet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, zencodec::operation::DecisionRecord), whereat::at::At<zencodec::operation::PolicyFailure>>
+pub fn zencodec::operation::resolve_output_schedule<R: zencodec::operation::OperationPolicy + ?core::marker::Sized>(facts: zencodec::operation::OutputScheduleFacts, offers: &[zencodec::operation::OutputScheduleOffer], resolver: &mut R, preset: zencodec::operation::PolicySet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, zencodec::operation::DecisionRecord), whereat::at::At<zencodec::operation::PolicyFailure>>
+pub fn zencodec::operation::resolve_transcode<R: zencodec::operation::OperationPolicy + ?core::marker::Sized>(boundary: zencodec::decode::DecodeBoundary, offers: &[zencodec::operation::TranscodeOffer], resolver: &mut R, preset: zencodec::operation::PolicySet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, zencodec::operation::DecisionRecord), whereat::at::At<zencodec::operation::PolicyFailure>>
 pub mod zencodec::output_patch
 #[non_exhaustive] pub enum zencodec::output_patch::OutputAccess
 pub zencodec::output_patch::OutputAccess::Forward
@@ -3292,7 +3335,7 @@ pub fn zencodec::CodecSet::with_pulse(self, pulse: how_far::pulse::SharedPulse) 
 pub fn zencodec::CodecSet::with_send_encoder<C>(self, config: C) -> Self where C: zencodec::encode::EncoderConfig + 'static, <C as zencodec::encode::EncoderConfig>::Job: core::marker::Send, <<C as zencodec::encode::EncoderConfig>::Job as zencodec::encode::EncodeJob>::Enc: zencodec::encode::Encoder + core::marker::Send, <<C as zencodec::encode::EncoderConfig>::Job as zencodec::encode::EncodeJob>::AnimationFrameEnc: zencodec::encode::AnimationFrameEncoder
 pub fn zencodec::CodecSet::with_stop(self, stop: almost_enough::stop_token::StopToken) -> Self
 impl zencodec::CodecSet
-pub fn zencodec::CodecSet::open_collection<'a, R: zencodec::operation::PolicyResolver>(&self, format: zencodec::ImageFormat, source: &'a mut dyn zencodec::source::DynReadAt, request: zencodec::collection::OpenRequest, resolver: R, pulse: how_far::pulse::SharedPulse) -> core::result::Result<zencodec::operation::CheckedCollection<zencodec::collection::Discovery<zencodec::collection::ErasedCollection<'a>>, R>, whereat::at::At<zencodec::operation::CollectionOperationError>>
+pub fn zencodec::CodecSet::open_collection<'a, R: zencodec::operation::OperationPolicy>(&self, format: zencodec::ImageFormat, source: &'a mut dyn zencodec::source::DynReadAt, request: zencodec::collection::OpenRequest, resolver: R, pulse: how_far::pulse::SharedPulse) -> core::result::Result<zencodec::operation::CheckedCollection<zencodec::collection::Discovery<zencodec::collection::ErasedCollection<'a>>, R>, whereat::at::At<zencodec::operation::CollectionOperationError>>
 pub fn zencodec::CodecSet::with_collection(self, factory: impl zencodec::collection::CollectionFactory + 'static) -> Self
 impl core::clone::Clone for zencodec::CodecSet
 pub fn zencodec::CodecSet::clone(&self) -> Self

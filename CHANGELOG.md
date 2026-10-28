@@ -2,6 +2,16 @@
 
 ## Native image selection (unreleased experiment)
 
+### QUEUED BREAKING CHANGES
+
+- Review API: operation entry points accept `OperationPolicy`. Pass `PolicySet`
+  directly, or wrap a custom `PolicyResolver` in `BoundPolicy`. Mandatory
+  requirements are admitted outside callbacks and retain named diagnostics.
+  Deprecate separate `with_policy_set` placement; compatibility requirements
+  remain enforced. `Renderer::render` takes one policy argument, with
+  `render_with_preset` as the deprecated compatibility form.
+
+
 - Yield one admitted sink strip per coroutine progress event. Retain the
   unfinished native batch without advancing the producer, preserve strided
   samples/pass coordinates, and keep cancellation terminal between deliveries.

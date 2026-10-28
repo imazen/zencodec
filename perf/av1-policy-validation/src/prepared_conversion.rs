@@ -9,7 +9,7 @@ use zencodec::{
     frame::{ChromaSiting, Frame, MappedPlanes, PlaneSamples, PlaneView, Subsampling},
     image::{ImageGeometry, ImageOutput, OutputError, PackedImageOwner, Rect},
     operation::{
-        ImageConversionOffer, OperationReport, Outcome, PolicyResolver, PolicySet,
+        ImageConversionOffer, OperationReport, Outcome, OperationPolicy, PolicySet,
         resolve_image_conversion,
     },
     storage::{PreparedStorage, SharedStorage, StorageBudget, StorageError},
@@ -294,7 +294,7 @@ impl<'a> Prepared<'a> {
         })
     }
 
-    fn run<R: PolicyResolver + ?Sized>(
+    fn run<R: OperationPolicy + ?Sized>(
         self,
         resolver: &mut R,
         preset: PolicySet,
@@ -430,7 +430,7 @@ impl<'a> Prepared<'a> {
     }
 }
 
-fn convert<R: PolicyResolver + ?Sized>(
+fn convert<R: OperationPolicy + ?Sized>(
     frame: Frame,
     pool: &StorageBudget,
     resolver: &mut R,
@@ -440,7 +440,7 @@ fn convert<R: PolicyResolver + ?Sized>(
     convert_target(frame, pool, resolver, preset, Target::Rgb16, stop)
 }
 
-fn convert_target<R: PolicyResolver + ?Sized>(
+fn convert_target<R: OperationPolicy + ?Sized>(
     frame: Frame,
     pool: &StorageBudget,
     resolver: &mut R,

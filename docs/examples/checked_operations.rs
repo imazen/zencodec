@@ -94,21 +94,20 @@ mod web {
     use zenpixels::{Cicp, ConvertOptions, PixelFormat};
     use zenpixels_convert::{OutputProfile, cms_moxcms::MoxCms};
 
-    pub fn web_request() -> TranscodeRequest<'static> {
+    pub fn web_request() -> (TranscodeRequest<'static>, PolicySet) {
         // ANCHOR: checked_web
-        TranscodeRequest::new(ImageFormat::Png)
+        let request = TranscodeRequest::new(ImageFormat::Png)
             .with_cms(&MoxCms)
             .with_output(
                 OutputProfile::Named(Cicp::SRGB),
                 PixelFormat::Rgb8,
                 ConvertOptions::retain_channels(),
             )
-            .with_metadata(MetadataTransfer::DiscardDescriptive)
-            .with_policy_set(
-                PolicySet::new()
-                    .require_metadata(MetadataTransfer::DiscardDescriptive)
-                    .allow_opaque_profiles(false),
-            )
+            .with_metadata(MetadataTransfer::DiscardDescriptive);
+        let policy = PolicySet::new()
+            .require_metadata(MetadataTransfer::DiscardDescriptive)
+            .allow_opaque_profiles(false);
+        (request, policy)
         // END: checked_web
         // Accept JPEG's RGB samples here. Alpha removal and depth loss are not permitted.
         // Current color is converted; orientation needed for rendering is retained.
@@ -122,7 +121,7 @@ mod tenant {
     use zencodec::{
         At, CodecSet,
         encode::EncodeOutput,
-        operation::{Decision, Outcome, Question},
+        operation::{BoundPolicy, Decision, Outcome, PolicySet, Question},
     };
     use zencodecs::checked_transcode::{Error, TranscodeRequest};
 
@@ -139,24 +138,26 @@ mod tenant {
         request: &TranscodeRequest<'_>,
         codecs: &CodecSet,
         bytes: &[u8],
+        requirements: PolicySet,
         require_workspace_evidence: bool,
     ) -> Result<Outcome<EncodeOutput>, At<Error>> {
         // ANCHOR: checked_callback
-        request.transcode_with(codecs, bytes, &mut |question: Question<'_>| -> Result<
-            Decision,
-            At<WorkspaceEvidenceRequired>,
-        > {
-            if let Question::Transcode { choices, .. } = question
-                && require_workspace_evidence
-            {
-                let choice = choices
-                    .iter()
-                    .find(|choice| choice.value().workspace_upper_bound.is_some())
-                    .ok_or_else(|| At::wrap(WorkspaceEvidenceRequired))?;
-                return Ok(Decision::choose(choice));
-            }
-            Ok(Decision::UsePreset)
-        })
+        let mut policy = BoundPolicy::new(
+            requirements,
+            |question: Question<'_>| -> Result<Decision, At<WorkspaceEvidenceRequired>> {
+                if let Question::Transcode { choices, .. } = question
+                    && require_workspace_evidence
+                {
+                    let choice = choices
+                        .iter()
+                        .find(|choice| choice.value().workspace_upper_bound.is_some())
+                        .ok_or_else(|| At::wrap(WorkspaceEvidenceRequired))?;
+                    return Ok(Decision::choose(choice));
+                }
+                Ok(Decision::UsePreset)
+            },
+        );
+        request.transcode_with(codecs, bytes, &mut policy)
         // END: checked_callback
         // The current native route has an unknown workspace bound, so the strict
         // tenant gets this traced refusal. Managed row storage is not that bound.
@@ -167,17 +168,22 @@ pub(crate) use tenant::{WorkspaceEvidenceRequired, for_tenant};
 
 mod transports {
     // EXAMPLE: checked_file
-    use zencodec::{CodecSet, encode::EncodeOutput, operation::Outcome};
+    use zencodec::{
+        CodecSet,
+        encode::EncodeOutput,
+        operation::{OperationPolicy, Outcome},
+    };
     use zencodecs::checked_transcode::TranscodeRequest;
 
-    pub fn from_file(
+    pub fn from_file<P: OperationPolicy + ?Sized>(
         request: &TranscodeRequest<'_>,
         codecs: &CodecSet,
         path: &std::path::Path,
+        policy: &mut P,
     ) -> Result<Outcome<EncodeOutput>, Box<dyn std::error::Error + Send + Sync>> {
         // ANCHOR: checked_file
         let mut source = zencodec_io::FileReadAt::open(path)?;
-        let output = request.transcode_from_read_at(codecs, &mut source)?;
+        let output = request.transcode_from_read_at_with(codecs, &mut source, policy)?;
         // END: checked_file
         // FileReadAt keeps positional reads below the codec; the request is unchanged.
         Ok(output)
@@ -188,18 +194,23 @@ pub(crate) use transports::from_file;
 
 mod network {
     // EXAMPLE: checked_async
-    use zencodec::{At, CodecSet, encode::EncodeOutput, operation::Outcome};
+    use zencodec::{
+        At, CodecSet,
+        encode::EncodeOutput,
+        operation::{OperationPolicy, Outcome},
+    };
     use zencodec_io::tokio_io::AsyncSource;
     use zencodecs::checked_transcode::Error;
     use zencodecs::checked_transcode::TranscodeRequest;
 
-    pub async fn from_network<S: AsyncSource + ?Sized>(
+    pub async fn from_network<S: AsyncSource + ?Sized, P: OperationPolicy + ?Sized>(
         request: &TranscodeRequest<'_>,
         codecs: &CodecSet,
         source: &mut S,
+        policy: &mut P,
     ) -> Result<Outcome<EncodeOutput>, At<Error>> {
         // ANCHOR: checked_async
-        let output = request.transcode_async(codecs, source).await?;
+        let output = request.transcode_async_with(codecs, source, policy).await?;
         // END: checked_async
         // Send the finished, checked bytes afterwards. Codec CPU work runs on
         // this task: use a suitable worker runtime for expensive configurations.

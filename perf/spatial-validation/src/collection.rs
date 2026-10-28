@@ -60,13 +60,13 @@ mod checked_consumer {
         At, SharedPulse,
         collection::{Composition, ImageRequest},
         image::ImageOutput,
-        operation::{CheckedCollection, CollectionOperationError, Outcome, PolicyResolver},
+        operation::{CheckedCollection, CollectionOperationError, Outcome, OperationPolicy},
     };
 
     // Native factory setup stays in the adapter. Limits are application input:
     // images bounds selected-item storage; frame_headers counts hidden work.
     // The consumer uses the same checked operation for later selections.
-    pub fn checked_jxl_first<R: PolicyResolver>(
+    pub fn checked_jxl_first<R: OperationPolicy>(
         bytes: &[u8],
         limits: Limits,
         resolver: R,
@@ -91,12 +91,12 @@ mod checked_inspection {
     use zencodec::{
         At,
         collection::{Collection, ImageDescription, ImageId},
-        operation::{CheckedCollection, CollectionOperationError, PolicyResolver},
+        operation::{CheckedCollection, CollectionOperationError, OperationPolicy},
     };
 
     // The caller keeps this opened operation, so the returned ID can be used
     // for later region requests. No pixel-format capability query is needed.
-    pub fn checked_first_description<C: Collection, R: PolicyResolver>(
+    pub fn checked_first_description<C: Collection, R: OperationPolicy>(
         images: &mut CheckedCollection<C, R>,
     ) -> Result<Option<(ImageId, ImageDescription)>, At<CollectionOperationError>> {
         let mut roots = images.images()?;
@@ -121,7 +121,7 @@ mod registered_consumer {
         At, CodecSet, ImageFormat, SharedPulse,
         collection::{ImageRequest, OpenRequest},
         image::ImageOutput,
-        operation::{CollectionOperationError, Outcome, PolicyResolver},
+        operation::{CollectionOperationError, Outcome, OperationPolicy},
         source::DynReadAt,
     };
 
@@ -139,7 +139,7 @@ mod registered_consumer {
 
     // The caller supplies a stable source: immutable bytes, a conditional HTTP
     // object, or a file held unchanged. Choose one view and discovery allowance.
-    pub fn checked_registered_first<R: PolicyResolver>(
+    pub fn checked_registered_first<R: OperationPolicy>(
         factories: &CodecSet,
         format: ImageFormat,
         source: &mut dyn DynReadAt,
@@ -166,12 +166,12 @@ mod checked_layer_consumer {
         At, SharedPulse,
         collection::ImageRequest,
         image::ImageOutput,
-        operation::{CheckedCollection, CollectionOperationError, Outcome, PolicyResolver},
+        operation::{CheckedCollection, CollectionOperationError, Outcome, OperationPolicy},
     };
 
     // The adapter fixes the uncomposited view before IDs are discovered.
     // This qualified F32 path retains stored orientation and unrendered spots.
-    pub fn checked_jxl_layer_first<R: PolicyResolver>(
+    pub fn checked_jxl_layer_first<R: OperationPolicy>(
         bytes: &[u8],
         limits: Limits,
         resolver: R,

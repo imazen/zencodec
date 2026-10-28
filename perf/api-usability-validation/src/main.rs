@@ -217,6 +217,7 @@ fn row_encode_copies_and_staging() {
 }
 
 /// O2: one reusable tenant preset applied to a plain encode.
+#[allow(deprecated)] // Compare legacy policy placement with earlier probe runs.
 fn tenant_preset_on_encode() {
     let (width, height) = (16u32, 16u32);
     let data = gradient(width, height);

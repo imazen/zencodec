@@ -1,6 +1,6 @@
 //! Policy before executing a retained image conversion route.
 use super::{
-    DecisionContext, DecisionRecord, ImageFacts, PolicyFailure, PolicyResolver, PolicySet,
+    DecisionContext, DecisionRecord, ImageFacts, OperationPolicy, PolicyFailure, PolicySet,
     Question, Selection, policy,
 };
 use crate::{
@@ -68,7 +68,7 @@ impl ImageConversionOffer {
 /// preserve this record on execution failure. This function verifies policy
 /// tokens/cancellation, not conversion math or adapter factual claims. It does
 /// not certify metadata/privacy treatment or publish an intermediate image.
-pub fn resolve_image_conversion<R: PolicyResolver + ?Sized>(
+pub fn resolve_image_conversion<R: OperationPolicy + ?Sized>(
     image: &ImageOutput,
     offers: &[ImageConversionOffer],
     resolver: &mut R,

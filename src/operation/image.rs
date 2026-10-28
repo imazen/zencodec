@@ -1,6 +1,6 @@
 //! Resolve publication of the exact owned selected-image output.
 use super::{
-    DecisionContext, FrameFacts, Outcome, PolicyFailure, PolicyResolver, PolicySet,
+    DecisionContext, FrameFacts, OperationPolicy, Outcome, PolicyFailure, PolicySet,
     PublicationOffer, Question, Selection, policy,
 };
 use crate::{
@@ -81,7 +81,7 @@ impl ImageFacts {
 /// Call for each selected output; item identity or an equal epoch does not permit
 /// reusing a prior choice. This follows reconstruction and is not allocation
 /// admission, display conversion or a whole-container privacy boundary.
-pub fn resolve_image<R: PolicyResolver + ?Sized>(
+pub fn resolve_image<R: OperationPolicy + ?Sized>(
     image: ImageOutput,
     resolver: &mut R,
     preset: PolicySet,

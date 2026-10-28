@@ -262,6 +262,7 @@ fn public_row_driver_native_schedules_preserve_pixels_owners_and_failure_context
 }
 
 #[test]
+#[allow(deprecated)] // Preserve the legacy-placement regression during migration.
 fn public_row_driver_raster_adapter_preserves_strides_and_never_substitutes_schedule() {
     use row_encode::Raster;
     use zencodec::operation::{Decision, OutputSource, Question};
@@ -374,6 +375,7 @@ fn public_row_driver_staging_admission_failure_releases_owners_before_any_output
 }
 
 #[test]
+#[allow(deprecated)] // Preserve the legacy-placement regression during migration.
 fn public_row_driver_revalidates_source_across_policy_and_writer_callbacks() {
     use zencodec::operation::{Decision, OutputSource, Question};
     struct Changed {

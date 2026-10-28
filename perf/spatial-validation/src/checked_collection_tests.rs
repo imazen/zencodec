@@ -17,10 +17,10 @@ use std::{
 use zencodec::{
     At, SharedPulse,
     enough::{Stop, StopReason},
-    operation::{Decision, DecisionCode, Decline, PolicyResolver, PolicySet, Question},
+    operation::{Decision, DecisionCode, Decline, OperationPolicy, PolicySet, Question},
 };
 
-fn open<'a, R: PolicyResolver>(
+fn open<'a, R: OperationPolicy>(
     data: &'a [u8],
     stop: SharedPulse,
     resolver: R,
@@ -158,6 +158,7 @@ fn checked_collection_request_and_policy_failures_remain_request_local() {
 }
 
 #[test]
+#[allow(deprecated)] // Preserve the legacy-placement regression during migration.
 fn checked_collection_configured_preset_refuses_unproven_obligations() {
     let data = fixture("named_frame_test.jxl");
     for preset in [

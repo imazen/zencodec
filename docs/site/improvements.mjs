@@ -2,6 +2,19 @@
 // Signatures come from Rust through apiPanels; examples remain executable files.
 export const improvements = [
   {
+    id:'bound-operation-policy', title:'Carry requirements outside the callback',
+    state:'Implemented on review API · native consumer migration in progress', date:'2026-10-28',
+    summary:'Pass PolicySet directly, or bind it to a callback with BoundPolicy. Admission filters choices before application code and names unmet requirements.',
+    why:'A preset passed only as a callback could refuse without recording the failed requirement. Callback decorators also had no safe way to forward mandatory settings.',
+    consumer:'Use a preset first. Add BoundPolicy when the route needs a situational decision; keep the same preset. Direct selection cannot bypass required evidence.',
+    adapter:'Accept OperationPolicy at operation entry points. Read requirements before selection and retain the original choice indices and typed failure cause. Compatibility setter requirements remain enforced alongside the binding.',
+    implementor:'Continue supplying evidence for the actual retained route. A binding does not invent workspace, metadata or output guarantees.',
+    open:'Requirements cannot yet move safely across unrelated question domains. A decoder still refuses unproven output obligations at final adoption. Native zenpipe integration is a separate gate; the binding is not a pending-obligation ledger.',
+    signatures:['operationPolicy','boundPolicy','operationResolver','operationPreset','operationDecisionRecord'],
+    flow:[['consumer','State requirements','one policy argument'],['adapter','Admit offers','qualified evidence only'],['consumer','Choose a route','callback or built-in preference'],['adapter','Execute selected route','preserve report and native errors']],
+    evidence:[['Canonical binding contract','docs/spec.md#operation-policy-binding-review-api'],['Composition controls','zencodec-testkit/tests/policy_binding.rs'],['Refusal cause regression','zencodec-media-testkit/tests/image_output.rs']],
+  },
+  {
     id:'pending-requirements', title:'Keep requirements pending until the affected work is allowed',
     state:'Native JPEG experiment qualified · production scope integration open', date:'2026-10-27',
     summary:'Source planning can proceed before metadata inspection. PendingPlan retains the requirements independently of the diagnostic report and blocks incomplete execution.',

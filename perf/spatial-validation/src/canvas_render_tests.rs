@@ -395,7 +395,7 @@ pub(crate) fn qualify_auxiliaries(source: &ImageOutput, region: Rect) {
         .render(
             source.clone(),
             &mut PolicySet::new(),
-            PolicySet::new(),
+
             &NoPulse,
         )
         .unwrap();
@@ -424,7 +424,7 @@ fn canvas_render_traced_callback_failure_and_color_admission_are_explicit() {
             &mut |_: Question<'_>| -> Result<Decision, At<ApplicationFailure>> {
                 Err(At::wrap(ApplicationFailure))
             },
-            PolicySet::new(),
+
             &NoPulse,
         )
         .unwrap_err();
@@ -441,7 +441,7 @@ fn canvas_render_traced_callback_failure_and_color_admission_are_explicit() {
         .render(
             source,
             &mut PolicySet::new(),
-            PolicySet::new(),
+
             &NoPulse,
         )
         .unwrap_err();
@@ -484,7 +484,7 @@ fn canvas_render_native_tiff_all_orientations_depths_and_containers() {
                                 exact(&source, image, true);
                                 Ok(Decision::UsePreset)
                             },
-                            PolicySet::new(),
+
                             &NoPulse,
                         )
                         .unwrap();
@@ -521,7 +521,7 @@ fn canvas_render_native_jxl_color_auxiliaries_and_named_profile() {
             .render(
                 source.clone(),
                 &mut PolicySet::new(),
-                PolicySet::new(),
+
                 &NoPulse,
             )
             .unwrap();
@@ -548,7 +548,7 @@ fn canvas_render_every_stop_seam_and_refusal_drops_unpublished_storage() {
             .render(
                 source.clone(),
                 &mut PolicySet::new(),
-                PolicySet::new(),
+
                 &zencodec::how_far::StopOnly::borrowed(&counted),
             )
             .unwrap(),
@@ -565,7 +565,7 @@ fn canvas_render_every_stop_seam_and_refusal_drops_unpublished_storage() {
                 .render(
                     source.clone(),
                     &mut PolicySet::new(),
-                    PolicySet::new(),
+
                     &zencodec::how_far::StopOnly::borrowed(&stop),
                 )
                 .unwrap_err();
@@ -584,7 +584,7 @@ fn canvas_render_every_stop_seam_and_refusal_drops_unpublished_storage() {
             &mut |_: Question<'_>| -> Result<Decision, At<Infallible>> {
                 Ok(Decision::decline(Decline::ApplicationRule))
             },
-            PolicySet::new(),
+
             &NoPulse,
         )
         .unwrap_err();
@@ -597,7 +597,7 @@ fn canvas_render_every_stop_seam_and_refusal_drops_unpublished_storage() {
             &mut |_: Question<'_>| -> Result<Decision, At<Infallible>> {
                 panic!("injected publication panic")
             },
-            PolicySet::new(),
+
             &NoPulse,
         )
     }));
@@ -609,7 +609,7 @@ fn canvas_render_every_stop_seam_and_refusal_drops_unpublished_storage() {
         tiny.render(
             source,
             &mut PolicySet::new(),
-            PolicySet::new(),
+
             &NoPulse
         )
         .unwrap_err()
@@ -631,7 +631,7 @@ fn canvas_render_refuses_wrong_color_before_projection_and_raw_layers_before_pub
         Ok(Decision::UsePreset)
     };
     let error = renderer
-        .render(source, &mut policy, PolicySet::new(), &NoPulse)
+        .render(source, &mut policy, &NoPulse)
         .unwrap_err();
     assert_eq!(error.error().stage, Stage::ColorPlan);
     assert_eq!(renderer.storage.reserved_bytes(), 0);
@@ -641,7 +641,7 @@ fn canvas_render_refuses_wrong_color_before_projection_and_raw_layers_before_pub
     );
     renderer.request.required = p3_descriptor(&raw);
     let error = renderer
-        .render(raw, &mut policy, PolicySet::new(), &NoPulse)
+        .render(raw, &mut policy, &NoPulse)
         .unwrap_err();
     assert_eq!(error.error().stage, Stage::Geometry);
     assert!(zencodec::find_cause::<crate::canvas_projection::Refusal>(&error).is_some());
@@ -659,7 +659,7 @@ fn canvas_render_public_default_delivers_oriented_srgb_rgba_and_retains_alpha() 
             .render(
                 source,
                 &mut PolicySet::new(),
-                PolicySet::new(),
+
                 &NoPulse,
             )
             .unwrap();

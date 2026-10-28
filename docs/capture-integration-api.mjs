@@ -14,7 +14,7 @@ if(!methods.length)throw Error('Missing integration API');
 const imports=`use zencodec::{
     At, CodecSet, ImageFormat,
     encode::EncodeOutput,
-    operation::{self, OperationReport, Outcome, PolicyResolver, PolicySet, MetadataTransfer},
+    operation::{self, OperationReport, Outcome, OperationPolicy, PolicySet, MetadataTransfer},
     storage::StorageBudget,
 };
 use zencodec_io::{DriveOptions, tokio_io::AsyncSource};

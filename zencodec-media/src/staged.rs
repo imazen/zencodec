@@ -40,7 +40,7 @@ use zencodec::{
     frame::{Frame, FrameInterpretation},
     operation::{
         FrameConversionOffer, FrameFacts, FrameRoute, FrameRouteOffer, FrameRouteState,
-        OperationReport, PolicyResolver, PolicySet, resolve_frame_route,
+        OperationPolicy, OperationReport, PolicySet, resolve_frame_route,
     },
     storage::StorageBudget,
 };
@@ -174,7 +174,7 @@ pub struct StagedEncode<E, M, D, R> {
     preset: PolicySet,
     report: OperationReport,
 }
-impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<E, M, D, R> {
+impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode<E, M, D, R> {
     /// Retain the encoder and prepare exact-timing output from its actual config.
     /// This single-video-track operation requires configuration before input.
     pub fn new(
@@ -245,6 +245,9 @@ impl<E: VideoEncoder, M: Muxer, D: Destination, R: PolicyResolver> StagedEncode<
         })
     }
     /// Preset consulted when the resolver returns `UsePreset`.
+    /// During migration, these requirements and the policy argument
+    /// both apply. A bound policy supplies preferences in place of these.
+    #[deprecated(note = "Pass PolicySet or BoundPolicy as the operation policy argument")]
     pub fn with_policy_set(mut self, preset: PolicySet) -> Self {
         self.preset = preset;
         self

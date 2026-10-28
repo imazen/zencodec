@@ -16,7 +16,7 @@ use zencodec::{
     frame::{ChromaSiting, Frame, FrameGeometry, FrameInterpretation, FrameTiming, Subsampling},
     operation::{
         DestinationFacts, FrameConversionOffer, FrameFacts, FrameRoute, FrameRouteOffer,
-        FrameRouteState, OperationReport, PolicyResolver, PolicySet, resolve_frame_route,
+        FrameRouteState, OperationReport, OperationPolicy, PolicySet, resolve_frame_route,
     },
     storage::StorageBudget,
     time::TimeBase,
@@ -120,7 +120,7 @@ pub struct Candidate<R> {
     live: Arc<AtomicUsize>,
     report: OperationReport,
 }
-impl<R: PolicyResolver> Candidate<R> {
+impl<R: OperationPolicy> Candidate<R> {
     pub fn new(
         resolver: R,
         segmented: bool,

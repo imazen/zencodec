@@ -355,7 +355,7 @@ pub const fn zencodec_media::policy::PolicyDecoder<D, R>::is_failed(&self) -> bo
 pub fn zencodec_media::policy::PolicyDecoder<D, R>::new(decoder: D, resolver: R) -> Self
 pub fn zencodec_media::policy::PolicyDecoder<D, R>::report(&self) -> &zencodec::operation::policy::OperationReport
 pub fn zencodec_media::policy::PolicyDecoder<D, R>::with_policy_set(self, preset: zencodec::operation::policy::PolicySet) -> Self
-impl<D: zencodec_media::session::VideoDecoder, R: zencodec::operation::policy::PolicyResolver> zencodec_media::session::VideoDecoder for zencodec_media::policy::PolicyDecoder<D, R>
+impl<D: zencodec_media::session::VideoDecoder, R: zencodec::operation::binding::OperationPolicy> zencodec_media::session::VideoDecoder for zencodec_media::policy::PolicyDecoder<D, R>
 pub type zencodec_media::policy::PolicyDecoder<D, R>::Error = zencodec_media::policy::Error
 pub fn zencodec_media::policy::PolicyDecoder<D, R>::configure(&mut self, config: &zencodec_media::session::CodecConfig, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec_media::policy::Error>>
 pub fn zencodec_media::policy::PolicyDecoder<D, R>::end_input(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec_media::policy::Error>>
@@ -490,7 +490,7 @@ pub fn alloc::boxed::Box<D>::receive(&mut self, pulse: &dyn how_far::pulse::Puls
 pub fn alloc::boxed::Box<D>::reset(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
 pub fn alloc::boxed::Box<D>::send(&mut self, packet: &mut zencodec_media::packet::Packet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::session::SendStatus, zencodec_media::session::SessionError<<D as zencodec_media::session::VideoDecoder>::Error>>
 pub fn alloc::boxed::Box<D>::stream_info(&self) -> core::option::Option<&zencodec_media::session::VideoStreamInfo>
-impl<D: zencodec_media::session::VideoDecoder, R: zencodec::operation::policy::PolicyResolver> zencodec_media::session::VideoDecoder for zencodec_media::policy::PolicyDecoder<D, R>
+impl<D: zencodec_media::session::VideoDecoder, R: zencodec::operation::binding::OperationPolicy> zencodec_media::session::VideoDecoder for zencodec_media::policy::PolicyDecoder<D, R>
 pub type zencodec_media::policy::PolicyDecoder<D, R>::Error = zencodec_media::policy::Error
 pub fn zencodec_media::policy::PolicyDecoder<D, R>::configure(&mut self, config: &zencodec_media::session::CodecConfig, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec_media::policy::Error>>
 pub fn zencodec_media::policy::PolicyDecoder<D, R>::end_input(&mut self) -> core::result::Result<(), zencodec_media::session::SessionError<zencodec_media::policy::Error>>
@@ -587,7 +587,7 @@ pub fn zencodec_media::staged::Failure::fmt(&self, f: &mut core::fmt::Formatter<
 impl core::fmt::Display for zencodec_media::staged::Failure
 pub fn zencodec_media::staged::Failure::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct zencodec_media::staged::StagedEncode<E, M, D, R>
-impl<E: zencodec_media::session::VideoEncoder, M: zencodec_media::container::Muxer, D: zencodec_io::destination::Destination, R: zencodec::operation::policy::PolicyResolver> zencodec_media::staged::StagedEncode<E, M, D, R>
+impl<E: zencodec_media::session::VideoEncoder, M: zencodec_media::container::Muxer, D: zencodec_io::destination::Destination, R: zencodec::operation::binding::OperationPolicy> zencodec_media::staged::StagedEncode<E, M, D, R>
 pub fn zencodec_media::staged::StagedEncode<E, M, D, R>::finish(self, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec_media::staged::Completed, whereat::at::At<zencodec_media::staged::Failure>>
 pub fn zencodec_media::staged::StagedEncode<E, M, D, R>::is_failed(&self) -> bool
 pub fn zencodec_media::staged::StagedEncode<E, M, D, R>::new(encoder: E, mux: M, destination: D, resolver: R, storage: zencodec::storage::StorageBudget, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<Self, whereat::at::At<zencodec_media::staged::Failure>>

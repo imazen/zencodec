@@ -1,7 +1,7 @@
 //! Resolve an actual source/encoder/output route before publishing bytes.
 use super::{
-    DecisionContext, DecisionRecord, PolicyFailure, PolicyResolver, PolicySet, Question, Selection,
-    policy,
+    DecisionContext, DecisionRecord, OperationPolicy, PolicyFailure, PolicySet, Question,
+    Selection, policy,
 };
 use crate::{At, encode::OutputTiming};
 
@@ -74,7 +74,7 @@ impl OutputScheduleOffer {
 ///
 /// Live output is not offered when begin reported no streaming. This resolver
 /// validates selection tokens, not the adapter's retention claims.
-pub fn resolve_output_schedule<R: PolicyResolver + ?Sized>(
+pub fn resolve_output_schedule<R: OperationPolicy + ?Sized>(
     facts: OutputScheduleFacts,
     offers: &[OutputScheduleOffer],
     resolver: &mut R,

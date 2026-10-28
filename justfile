@@ -739,7 +739,7 @@ planned-row-check:
     cargo test -p zencodec-io --all-features --tests --locked
     cargo clippy -p zencodec-io --all-features --all-targets --locked -- -D warnings
 
-# Private concrete policy-binding experiment; no production API added.
+# Operation-bound requirements, callback composition and diagnostic controls.
 policy-binding-check:
     cargo test -p zencodec-testkit --test policy_binding --locked
     cargo clippy -p zencodec-testkit --test policy_binding --locked -- -D warnings
@@ -750,6 +750,12 @@ api-usability-runner-check:
 
 api-usability-replay artifacts revision:
     bash perf/api-usability-validation/head-replay.sh "{{artifacts}}" "{{revision}}"
+
+operation-policy-binding-check:
+    cargo test --workspace --all-features --locked
+    cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+    cargo test --manifest-path perf/api-usability-validation/Cargo.toml --locked
+    cargo clippy --manifest-path perf/api-usability-validation/Cargo.toml --all-targets --locked -- -D warnings
 
 operation-policy-check:
     cargo test -p zencodec-testkit --test operation_policy --test operation_requests --locked

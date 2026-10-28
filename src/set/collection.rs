@@ -6,7 +6,7 @@ use crate::{
         Collection, CollectionFactory, CollectionOpenContext, CollectionOpenError, Discovery,
         ErasedCollection, OpenRequest, SelectionError,
     },
-    operation::{CheckedCollection, CollectionOperationError, PolicyResolver},
+    operation::{CheckedCollection, CollectionOperationError, OperationPolicy},
     source::DynReadAt,
 };
 use alloc::{boxed::Box, sync::Arc};
@@ -28,7 +28,7 @@ impl CodecSet {
     /// The set's pulse/pulse and this call's pulse all remain active throughout the
     /// opened operation; the first observed pulse is latched. No implicit source
     /// staging or format probing occurs. Register concrete factories separately.
-    pub fn open_collection<'a, R: PolicyResolver>(
+    pub fn open_collection<'a, R: OperationPolicy>(
         &self,
         format: ImageFormat,
         source: &'a mut dyn DynReadAt,

@@ -150,6 +150,7 @@ fn direct_choose_sees_only_admitted_routes() {
 /// encode carries no metadata/profile/workspace evidence, so the transcode-shaped
 /// tenant preset refuses it with or without a callback (review A2: scoped evidence).
 #[test]
+#[allow(deprecated)] // Regression control for legacy request-bound policy.
 fn strict_encode_refuses_with_and_without_callback() {
     let data = vec![0u8; 16 * 16 * 3];
     let pixels = PixelSlice::new(&data, 16, 16, 48, PixelDescriptor::RGB8_SRGB).unwrap();

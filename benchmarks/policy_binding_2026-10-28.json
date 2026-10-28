@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-28",
+  "baseline": "054f5fd991c2c873d71131ab66fb768db578df2b",
+  "source": "operation-policy binding change containing this record",
+  "kind": "correctness and build resource receipts; not a throughput benchmark",
+  "workspace": {
+    "command": "just operation-policy-binding-check (isolated export)",
+    "result": "workspace all-features tests including doctests; strict all-target Clippy; API probe 9+4 tests and strict Clippy passed",
+    "receipt": "run-heavy: done rc=0 55s | peak-RSS 0.43GiB | min-avail 5248MiB | peak-load 1.99"
+  },
+  "renderer": {
+    "result": "standalone tests/doctests and strict Clippy passed"
+  },
+  "catalog": {
+    "result": "all eight compiler-derived catalogs regenerated",
+    "receipt": "run-heavy: done rc=0 16s | peak-RSS 0.33GiB | min-avail 5166MiB | peak-load 0.63"
+  },
+  "site": {
+    "result": "20 source checks and full browser passed; original 12-card and 13-card assertions retained, added card checked separately",
+    "receipt": "run-heavy: done rc=0 35s | peak-RSS 0.31GiB | min-avail 4772MiB | peak-load 0.73"
+  },
+  "native_compile": {
+    "result": "TIFF/JXL spatial and AV1 adapters: strict all-target Clippy passed; multipass 11 tests passed",
+    "receipt": "run-heavy: done rc=0 40s | peak-RSS 0.87GiB | min-avail 4900MiB | peak-load 1.33"
+  },
+  "initial_failures": [
+    "site: new flow lacked graduated explanation entries",
+    "site: two adjacent PolicySet impls made source selection ambiguous; combined impls",
+    "browser: added card entered historical counts; excluded only new card from original counts and checked it separately"
+  ],
+  "open": [
+    "published consumer repin and locked replay",
+    "operation-wide deferred obligation ownership",
+    "throughput, allocations and compile-time comparisons not measured"
+  ],
+  "zenpipe": {
+    "source": "4f8245fd69889cb2c289886dd17d704f8a168b67 + dd9f78adbf416505e9c321a1a97c70eb4d9a44ba + 6c5d3d9a942839c8f1a3e104bc992b54050a17c3",
+    "result": "two unchanged issue173 controls pass; io-check56/56; sync16/16 and async23/23 checked transcode; metadata21/21; Pulse1/1; adapter Clippy and examples pass",
+    "graph": "one core-family copy; 550 non-family package records unchanged",
+    "receipt": "run-heavy: done rc=0 72s | peak-RSS 0.64GiB | min-avail 4885MiB | peak-load 1.25"
+  },
+  "jpeg_guide": {
+    "result": "47 native controls including executable guide and effective preflight pass; harness Clippy passes",
+    "graph": "same native pins; zencodecs4f8245fd exported and patched by path",
+    "receipt": "run-heavy: done rc=0 28s | peak-RSS 0.66GiB | min-avail 4921MiB | peak-load 0.99",
+    "dependency_warning": "zencodecs uses existing deprecated ConvertOptions::forbid_lossy against newer harness pixel pin; no behavior changed"
+  }
+}

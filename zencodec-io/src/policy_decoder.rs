@@ -7,7 +7,7 @@ use zencodec::decode::{
     IncrementalDecode, Input, InputRequest, MetadataUpdate, Progress, StepError,
 };
 use zencodec::operation::{
-    OperationReport, PolicyFailure, PolicyResolver, PolicySet, resolve_boundary,
+    OperationPolicy, OperationReport, PolicyFailure, PolicySet, resolve_boundary,
 };
 use zencodec::source::AccessPattern;
 use zencodec::{At, ImageInfo};
@@ -66,6 +66,9 @@ impl<D, R> PolicyDecoder<D, R> {
         }
     }
     /// Configure the built-in policy used for explicit delegation.
+    /// During migration, these requirements and the policy argument
+    /// both apply. A bound policy supplies preferences in place of these.
+    #[deprecated(note = "Pass PolicySet or BoundPolicy as the operation policy argument")]
     pub fn with_policy_set(mut self, preset: PolicySet) -> Self {
         self.preset = preset;
         self
@@ -75,7 +78,7 @@ impl<D, R> PolicyDecoder<D, R> {
         &self.report
     }
 }
-impl<D: ControlledIncrementalDecode, R: PolicyResolver> IncrementalDecode for PolicyDecoder<D, R> {
+impl<D: ControlledIncrementalDecode, R: OperationPolicy> IncrementalDecode for PolicyDecoder<D, R> {
     type Error = PolicyDecodeError<D::Error>;
     fn step(
         &mut self,

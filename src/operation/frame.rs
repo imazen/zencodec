@@ -1,7 +1,7 @@
 //! Policy before publishing an owned native video frame.
 use super::{
-    DecisionContext, DecisionRecord, PolicyFailure, PolicyResolver, PolicySet, Question, Selection,
-    policy,
+    DecisionContext, DecisionRecord, OperationPolicy, PolicyFailure, PolicySet, Question,
+    Selection, policy,
 };
 use crate::{
     At,
@@ -67,7 +67,7 @@ pub enum PublicationOffer {
 /// frame only on success. This does not decode, convert or admit native storage.
 /// Invoke for every presentation; an epoch alone cannot justify reusing a prior
 /// decision, and application policy may depend on the presentation timestamp.
-pub fn resolve_frame<R: PolicyResolver + ?Sized>(
+pub fn resolve_frame<R: OperationPolicy + ?Sized>(
     interpretation: &FrameInterpretation,
     timing: FrameTiming,
     resolver: &mut R,

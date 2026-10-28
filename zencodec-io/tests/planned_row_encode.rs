@@ -12,7 +12,7 @@ use zencodec::{
         BoxedError, DynEncoderConfig, EncodeDeclaration, EncodeJob, EncodeOutput, EncodePlan,
         EncodePlanError, Encoder, EncoderConfig, OutputTiming,
     },
-    operation::{Decision, PolicyResolver, PolicySet, Question},
+    operation::{BoundPolicy, Decision, OperationPolicy, PolicyResolver, PolicySet, Question},
     storage::StorageBudget,
 };
 use zencodec_io::row_encode::{self, Description, Options, Source, Stage};
@@ -88,7 +88,7 @@ fn run_job(
     job: Job,
     rows: Rows,
     writer: Writer,
-    resolver: impl PolicyResolver,
+    resolver: impl OperationPolicy,
     options: Options,
     pulse: &dyn zencodec::Pulse,
 ) -> Result<row_encode::Completed, At<row_encode::Failure>> {
@@ -289,11 +289,14 @@ fn policy_precedes_construction_and_finish_precedes_destination_waits() {
             s.job(),
             s.rows(),
             s.writer(),
-            Resolver(|| {
-                assert_eq!(storage.reserved_bytes(), 0);
-                assert_eq!(*s.events.lock().unwrap(), ["plan"]);
-                event(&s.events, "policy");
-            }),
+            BoundPolicy::new(
+                PolicySet::new(),
+                Resolver(|| {
+                    assert_eq!(storage.reserved_bytes(), 0);
+                    assert_eq!(*s.events.lock().unwrap(), ["plan"]);
+                    event(&s.events, "policy");
+                }),
+            ),
             Options::new(storage.clone(), 4096),
             &zencodec::NoPulse,
         )
@@ -325,9 +328,11 @@ fn strict_unknown_workspace_refuses_before_callback_allocation_or_start() {
             s.job(),
             s.rows(),
             s.writer(),
-            Resolver(|| panic!("inadmissible route reached callback")),
-            s.options()
-                .with_policy_set(PolicySet::new().with_workspace_limit(0)),
+            BoundPolicy::new(
+                PolicySet::new().with_workspace_limit(0),
+                Resolver(|| panic!("inadmissible route reached callback")),
+            ),
+            s.options(),
             &zencodec::NoPulse,
         )
         .unwrap_err();
@@ -346,9 +351,12 @@ fn source_changed_by_policy_refuses_before_native_startup() {
             s.job(),
             s.rows(),
             s.writer(),
-            Resolver(|| {
-                s.description.lock().unwrap().width = 3;
-            }),
+            BoundPolicy::new(
+                PolicySet::new(),
+                Resolver(|| {
+                    s.description.lock().unwrap().width = 3;
+                }),
+            ),
             s.options(),
             &zencodec::NoPulse,
         )

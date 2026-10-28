@@ -1,5 +1,5 @@
 //! Typed offers for adapters that prepare conversion and encode together.
-use super::{DecisionRecord, EncodeOffer, PolicyFailure, PolicyResolver, PolicySet};
+use super::{DecisionRecord, EncodeOffer, OperationPolicy, PolicyFailure, PolicySet};
 use crate::{
     At,
     decode::{BoundaryAction, DecodeBoundary},
@@ -76,7 +76,7 @@ impl TranscodeOffer {
 /// No alternative is offered for provisional/unavailable interpretation. This
 /// function neither resumes a decoder nor validates an adapter's factual claims.
 /// It applies the shared callback, cancellation, token and bounded-report rules.
-pub fn resolve_transcode<R: PolicyResolver + ?Sized>(
+pub fn resolve_transcode<R: OperationPolicy + ?Sized>(
     boundary: DecodeBoundary,
     offers: &[TranscodeOffer],
     resolver: &mut R,

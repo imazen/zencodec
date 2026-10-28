@@ -457,3 +457,36 @@ All three strict Clippy configurations, examples and locked metadata checks for
 the four other dependency graphs pass. Receipt: `rc=1`, 51 seconds, peak RSS
 0.63 GiB, minimum available memory 4374 MiB, peak load 1.25. The main-branch
 padding fix and registry-based shared row-driver adoption remain separate gates.
+
+## Operation-bound requirements qualification (2026-10-28)
+
+The review API now accepts `PolicySet` directly, a bare closure, or
+`BoundPolicy::new(requirements, callback)`. Custom callback structs remain
+`PolicyResolver`; operation adapters accept `OperationPolicy`. Requirements
+are read before invoking the callback. Deprecated `with_policy_set` values
+remain mandatory alongside the binding; bound preferences take priority.
+
+The full shared workspace, strict Clippy, standalone policy probes, renderer
+checks and site browser pass. Native spatial and AV1 adapters pass strict
+all-target Clippy, and the multipass controls pass. The source and browser
+checks retain their existing expectations. See the
+[qualification receipt](../benchmarks/policy_binding_2026-10-28.json).
+
+The path-patched native integration also passes: both unchanged zenpipe
+diagnostics controls, all 56 I/O controls, sync/async transcode and Pulse/metadata
+checks. The graph retains one core-family copy and identical records for the
+550 other packages. The 47-control JPEG harness, including the migrated guide
+and native preflight, passes against the same zencodecs source. Publishing and
+replaying the coordinated git pins remains a separate gate. These results do
+not discharge output obligations during decode. The public `Renderer::render`
+now has one policy argument; the deprecated `render_with_preset` form retains
+explicit compatibility placement.
+
+The JPEG carrier candidate `4933461f2b6d760b7b112dc94397718fdadb5119` is on
+main. The unchanged legacy stripping control passes alongside strict current
+color-context refusal. The candidate's user-feature and default suites,
+three Clippy configurations, fuzz compilation and API snapshot pass. Run-heavy
+reported `rc=0`, 879 seconds, peak RSS 2.81 GiB, minimum available memory
+3396 MiB and peak load 3.06. These are build/test resources, not codec
+performance. The general malformed-profile heuristic remains an unmerged
+experiment; one ICC reader's refusal does not prove all readers reject it.

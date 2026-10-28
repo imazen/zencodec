@@ -369,6 +369,7 @@ fn prepared_choices_are_filtered_but_the_selected_job_and_original_index_survive
 }
 
 #[test]
+#[allow(deprecated)] // Qualify the compatibility setter alongside the policy argument.
 fn builtin_policy_is_configurable_directly_or_through_one_delegation() {
     let (_, set, pixels) = setup();
     let first = request().encode(&set, pixels.as_slice()).unwrap();

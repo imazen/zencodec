@@ -58,6 +58,7 @@ fn direct_choose_bypasses_mandatory_requirements_today() {
 }
 
 #[test]
+#[allow(deprecated)] // Regression control for legacy request-bound policy.
 fn encode_without_evidence_succeeds_when_callback_chooses() {
     let data = vec![0u8; 16 * 16 * 3];
     let pixels = PixelSlice::new(&data, 16, 16, 48, PixelDescriptor::RGB8_SRGB).unwrap();

@@ -300,6 +300,7 @@ fn staged_native_refusal_conversion_drift_and_unwind_never_publish_or_resume() {
 }
 
 #[test]
+#[allow(deprecated)] // Preserve the legacy-placement regression during migration.
 fn staged_native_changing_ycbcr_converts_to_fixed_rgb_before_owned_output() {
     use crate::coupled_route;
     use zencodec::operation::{PolicyFailure, Selection};

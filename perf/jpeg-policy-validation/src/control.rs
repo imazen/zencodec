@@ -195,6 +195,7 @@ fn registered_native_refusal_preserves_reason_without_output_or_owned_storage() 
 }
 
 #[test]
+#[allow(deprecated)] // Preserve the legacy-placement regression during migration.
 fn native_final_boundary_cannot_bypass_unproven_preset_requirements() {
     use zencodec::{
         CodecSet,
@@ -225,7 +226,7 @@ fn native_final_boundary_cannot_bypass_unproven_preset_requirements() {
                     if delegated {
                         Ok(Decision::UsePreset)
                     } else {
-                        zencodec::operation::PolicyResolver::resolve(&mut direct, q)
+                        zencodec::operation::OperationPolicy::decide(&mut direct, q)
                     }
                 };
                 let mut session = PolicyDecoder::new(native, resolver).with_policy_set(preset);
@@ -563,6 +564,7 @@ fn native_late_or_incomplete_profiles_refuse_before_decoder_and_sink_effects() {
 }
 
 #[test]
+#[allow(deprecated)] // Preserve the legacy-placement regression during migration.
 fn native_input_admission_and_policy_decline_precede_affected_work() {
     let bytes = fixtures::base(true);
     for too_small in [true, false] {

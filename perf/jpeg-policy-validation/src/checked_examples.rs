@@ -62,18 +62,25 @@ fn public_guide_executes_all_transport_and_policy_recipes() {
                 panic!("{detail}")
             });
             assert_eq!(&retained.data()[..8], b"\x89PNG\r\n\x1a\n");
-            let request = guide::web_request();
-            let expected = request.transcode(&codecs, source).unwrap();
-            let conditional = guide::for_tenant(&request, &codecs, source, false).unwrap();
+            let (request, mut policy) = guide::web_request();
+            let expected = request
+                .transcode_with(&codecs, source, &mut policy)
+                .unwrap();
+            let conditional = guide::for_tenant(&request, &codecs, source, policy, false).unwrap();
             assert_eq!(conditional.data(), expected.data());
-            let refusal = guide::for_tenant(&request, &codecs, source, true).unwrap_err();
+            let refusal = guide::for_tenant(&request, &codecs, source, policy, true).unwrap_err();
             assert!(zencodec::find_cause::<guide::WorkspaceEvidenceRequired>(&refusal).is_some());
             let path = artifacts.join(format!("checked-guide-{progressive}.{format}"));
             std::fs::write(&path, source).unwrap();
-            let file = guide::from_file(&request, &codecs, &path).unwrap();
+            let file = guide::from_file(&request, &codecs, &path, &mut policy).unwrap();
             assert_eq!(file.data(), expected.data());
-            let network =
-                complete(guide::from_network(&request, &codecs, &mut Bytes(source))).unwrap();
+            let network = complete(guide::from_network(
+                &request,
+                &codecs,
+                &mut Bytes(source),
+                &mut policy,
+            ))
+            .unwrap();
             assert_eq!(network.data(), expected.data());
             assert_eq!(
                 network.report().decisions().count(),

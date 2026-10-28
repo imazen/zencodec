@@ -42,6 +42,7 @@ impl io::Write for Unwritten {
     }
 }
 
+#[allow(deprecated)] // Preserve the legacy-placement regression during migration.
 fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let args: Vec<_> = std::env::args().collect();
     if args.len() != 4 {

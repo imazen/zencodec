@@ -3,7 +3,9 @@
 mod requirements;
 pub use requirements::{PolicyRequirement, RequirementEvidence, UnmetRequirements};
 
-use super::{FrameFacts, ImageFacts, MetadataTransfer, PublicationOffer, TranscodeOffer};
+use super::{
+    FrameFacts, ImageFacts, MetadataTransfer, OperationPolicy, PublicationOffer, TranscodeOffer,
+};
 use crate::decode::{BoundaryAction, DecodeBoundary, InterpretationFacts, InterpretationState};
 use crate::frame::{FrameInterpretation, FrameTiming};
 use crate::{At, ImageFormat, encode::Fidelity};
@@ -320,6 +322,8 @@ impl Decision {
 
 /// One callback interface for application policy. A closure can capture tenant,
 /// latency or resource policy without putting application types in codec traits.
+/// Put custom callback structs inside [`super::BoundPolicy`]. Mandatory
+/// requirements belong to that binding, not a callback decorator.
 pub trait PolicyResolver {
     /// Application-specific callback failure, preserved with its original trace.
     type Error: Error + Send + Sync + 'static;
@@ -458,10 +462,10 @@ impl PolicySet {
                     .is_some_and(|bound| bound <= limit)
             })
     }
-}
-impl PolicyResolver for PolicySet {
-    type Error = Infallible;
-    fn resolve(&mut self, question: Question<'_>) -> Result<Decision, At<Infallible>> {
+    pub(super) fn resolve_builtin(
+        &mut self,
+        question: Question<'_>,
+    ) -> Result<Decision, At<Infallible>> {
         if (self.output_schedule.is_some() || self.output_wait_limit.is_some())
             && !matches!(
                 question,
@@ -689,7 +693,8 @@ pub struct DecisionRecord {
     pub unmet_requirements: UnmetRequirements,
     /// Selected contract, including its original request preference index.
     pub selected: Option<Selection>,
-    /// Whether the built-in policy resolved this decision after delegation.
+    /// True when a callback returned `UsePreset`. A `PolicySet` passed directly
+    /// as the operation policy selects without delegation and records false.
     pub used_preset: bool,
     /// Selection or refusal category.
     pub code: DecisionCode,
@@ -816,7 +821,7 @@ fn ticket(counter: &AtomicUsize) -> Option<u64> {
     }
 }
 
-pub(super) fn choose_encode<R: PolicyResolver + ?Sized>(
+pub(super) fn choose_encode<R: OperationPolicy + ?Sized>(
     facts: EncodeFacts,
     offers: &[EncodeOffer],
     resolver: &mut R,
@@ -837,7 +842,7 @@ pub(super) fn choose_encode<R: PolicyResolver + ?Sized>(
 /// Resolve a real decoder boundary through the operation's one policy
 /// interface. Adapter API: the caller must apply the returned mechanism to this
 /// same suspended decoder and retain the decision record, including on failure.
-pub fn resolve_boundary<R: PolicyResolver + ?Sized>(
+pub fn resolve_boundary<R: OperationPolicy + ?Sized>(
     boundary: DecodeBoundary,
     resolver: &mut R,
     preset: PolicySet,
@@ -868,15 +873,16 @@ pub fn resolve_boundary<R: PolicyResolver + ?Sized>(
     Ok((offers[index].action, record))
 }
 
-pub(super) fn choose<'a, T: Copy, R: PolicyResolver + ?Sized>(
+pub(super) fn choose<'a, T: Copy, R: OperationPolicy + ?Sized>(
     offers: &'a [T],
     context: DecisionContext,
     question: impl Fn(Choices<'a, T>) -> Question<'a>,
     selection: impl FnOnce(T) -> Selection,
     resolver: &mut R,
-    mut preset: PolicySet,
+    preset: PolicySet,
     pulse: &dyn crate::Pulse,
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>> {
+    let bound = resolver.requirements();
     let mut record = DecisionRecord {
         question: 0,
         context,
@@ -901,17 +907,22 @@ pub(super) fn choose<'a, T: Copy, R: PolicyResolver + ?Sized>(
     } else {
         (1u64 << offers.len()) - 1
     };
-    let mut admitted = if preset.has_requirements() { 0 } else { all };
-    for index in 0..if preset.has_requirements() {
-        offers.len()
-    } else {
-        0
-    } {
-        let failures = preset.unmet(question(Choices {
+    let has_requirements =
+        preset.has_requirements() || bound.is_some_and(PolicySet::has_requirements);
+    let mut admitted = if has_requirements { 0 } else { all };
+    for index in 0..if has_requirements { offers.len() } else { 0 } {
+        let mut failures = preset.unmet(question(Choices {
             ticket: record.question,
             entries: offers,
             admitted: 1u64 << index,
         }));
+        if let Some(required) = bound {
+            failures.merge(required.unmet(question(Choices {
+                ticket: record.question,
+                entries: offers,
+                admitted: 1u64 << index,
+            })));
+        }
         if failures.is_empty() {
             admitted |= 1u64 << index;
         } else {
@@ -923,17 +934,24 @@ pub(super) fn choose<'a, T: Copy, R: PolicyResolver + ?Sized>(
         record.code = DecisionCode::Declined;
         // Retain existing domain refusal causes; the record adds precise,
         // payload-free requirement evidence without breaking cause inspection.
-        let reason = match preset
-            .resolve(question(Choices {
-                ticket: record.question,
-                entries: offers,
-                admitted: all,
-            }))
-            .unwrap_or_else(|never| match *never.error() {})
-        {
-            Decision::Decline(reason) => reason,
-            _ => At::wrap(Decline::NoPreferredChoice).at(),
-        };
+        let reason = [bound, Some(preset)]
+            .into_iter()
+            .flatten()
+            .filter(|set| set.has_requirements())
+            .find_map(|mut set| {
+                match set
+                    .resolve_builtin(question(Choices {
+                        ticket: record.question,
+                        entries: offers,
+                        admitted: all,
+                    }))
+                    .unwrap_or_else(|never| match *never.error() {})
+                {
+                    Decision::Decline(reason) => Some(reason),
+                    _ => None,
+                }
+            })
+            .unwrap_or_else(|| At::wrap(Decline::NoPreferredChoice).at());
         return Err(At::wrap(PolicyFailure::new(record, Cause::Declined(reason))).at());
     }
     let choices = Choices {
@@ -944,7 +962,7 @@ pub(super) fn choose<'a, T: Copy, R: PolicyResolver + ?Sized>(
     let question = question(choices);
     // The resolver acquires no resource-budget locks. Prepared jobs remain
     // owned by the caller of this function while application code runs.
-    let mut decision = resolver.resolve(question).map_err(|error| {
+    let mut decision = resolver.decide(question).map_err(|error| {
         record.code = DecisionCode::CallbackFailed;
         At::wrap(PolicyFailure::new(record, Cause::Callback(Box::new(error))))
             .at_named("application policy callback")
@@ -955,8 +973,9 @@ pub(super) fn choose<'a, T: Copy, R: PolicyResolver + ?Sized>(
     }
     if matches!(decision, Decision::UsePreset) {
         record.used_preset = true;
-        decision = preset
-            .resolve(question)
+        decision = bound
+            .unwrap_or(preset)
+            .resolve_builtin(question)
             .unwrap_or_else(|never| match *never.error() {});
     }
     match decision {

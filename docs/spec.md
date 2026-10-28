@@ -9,6 +9,44 @@ for the public API surface.
 
 `#![no_std]` + `alloc`. `#![forbid(unsafe_code)]`.
 
+### Operation policy binding (review API)
+
+Pass `PolicySet` directly for built-in selection. Add a callback with
+`BoundPolicy::new(requirements, callback)` when a decision depends on the
+current offers. Custom callback structs implement `PolicyResolver` and go
+inside the binding; closures with no mandatory requirements may be passed
+alone. All operation entry points accept the sealed `OperationPolicy` trait.
+
+```rust
+let mut policy = BoundPolicy::new(
+    PolicySet::new().with_output_wait_limit(8 * 1024 * 1024),
+    |question: Question<'_>| -> Result<Decision, At<MyError>> {
+        record_question(&question);
+        Ok(Decision::UsePreset)
+    },
+);
+```
+
+Admission reads the binding before invoking the callback. Unknown or
+contradictory required evidence excludes a route and contributes to the bounded
+`DecisionRecord::unmet_requirements`. A callback cannot select an excluded
+route. `UsePreset` applies the binding's preferences to the remaining choices.
+A direct `PolicySet` selects without callback delegation, so `used_preset`
+remains false; this field records delegation, not the origin of every choice.
+
+`with_policy_set` is deprecated. During migration its requirements and the
+policy argument's requirements both apply; a bound policy supplies preferences
+in place of the legacy setter's preferences. Low-level `resolve_*` adapters
+retain their explicit preset parameter for compatibility; new callers use
+`PolicySet::new()` there and carry requirements in the policy argument.
+`Renderer::render` now takes one policy argument; `render_with_preset` is the
+deprecated compatibility form.
+
+Bindings contain configuration and callback state, not pending obligations.
+Reusing one across decode and encode does not discharge output requirements at
+a decode boundary. Unproven final-effect obligations still refuse. Native
+adapter evidence remains the adapter's responsibility.
+
 ### zenpixels: use but never re-export
 
 `zenpixels` defines the cross-crate pixel interchange types: `PixelDescriptor`,

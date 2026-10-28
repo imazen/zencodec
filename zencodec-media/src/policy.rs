@@ -13,7 +13,7 @@ use crate::{
 use alloc::boxed::Box;
 use core::{error::Error as StdError, fmt};
 
-use zencodec::operation::{OperationReport, PolicyResolver, PolicySet, resolve_frame};
+use zencodec::operation::{OperationPolicy, OperationReport, PolicySet, resolve_frame};
 
 /// Which part of the controlled session failed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -102,6 +102,9 @@ impl<D, R> PolicyDecoder<D, R> {
         }
     }
     /// The built-in policy used when this resolver returns `UsePreset`.
+    /// During migration, these requirements and the policy argument
+    /// both apply. A bound policy supplies preferences in place of these.
+    #[deprecated(note = "Pass PolicySet or BoundPolicy as the operation policy argument")]
     pub fn with_policy_set(mut self, preset: PolicySet) -> Self {
         self.preset = preset;
         self
@@ -115,7 +118,7 @@ impl<D, R> PolicyDecoder<D, R> {
         self.decoder.is_none()
     }
 }
-impl<D: VideoDecoder, R: PolicyResolver> PolicyDecoder<D, R> {
+impl<D: VideoDecoder, R: OperationPolicy> PolicyDecoder<D, R> {
     fn run<T>(
         &mut self,
         f: impl FnOnce(
@@ -144,7 +147,7 @@ fn native<E: StdError + Send + Sync + 'static>(
 ) -> SessionError<Error> {
     error.map_codec(|error| Error::new(Stage::Decode, report, error))
 }
-impl<D: VideoDecoder, R: PolicyResolver> VideoDecoder for PolicyDecoder<D, R> {
+impl<D: VideoDecoder, R: OperationPolicy> VideoDecoder for PolicyDecoder<D, R> {
     type Error = Error;
     fn configure(
         &mut self,

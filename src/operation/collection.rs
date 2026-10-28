@@ -1,5 +1,5 @@
 //! Checked consumer for the shared collection mechanism.
-use super::{OperationReport, Outcome, PolicyResolver, PolicySet, resolve_image};
+use super::{OperationPolicy, OperationReport, Outcome, PolicySet, resolve_image};
 use crate::{
     At, SharedPulse,
     collection::{Cause, Collection, Composition, ImageDescription, ImageId, ImageRequest},
@@ -136,7 +136,7 @@ pub struct CheckedCollection<C, R> {
     report: OperationReport,
     observed_stop: Option<StopReason>,
 }
-impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
+impl<C: Collection, R: OperationPolicy> CheckedCollection<C, R> {
     /// Bind the same token to the native adapter and publication checks. The
     /// factory is adapter setup; ordinary selection methods need no callback args.
     pub fn open(
@@ -179,6 +179,9 @@ impl<C: Collection, R: PolicyResolver> CheckedCollection<C, R> {
         run().map_err(At::wrap)
     }
     /// Configure the preset used when the callback returns `Decision::UsePreset`.
+    /// During migration, these requirements and the policy argument
+    /// both apply. A bound policy supplies preferences in place of these.
+    #[deprecated(note = "Pass PolicySet or BoundPolicy as the operation policy argument")]
     pub fn with_policy_set(mut self, preset: PolicySet) -> Self {
         self.preset = preset;
         self

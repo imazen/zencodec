@@ -45,6 +45,41 @@ fn words() -> Arc<dyn Picture> {
 }
 
 #[test]
+fn requirement_refusal_keeps_its_cause_when_default_preferences_also_decline() {
+    use zencodec::operation::{
+        Decline, ImageConversionOffer, MetadataTransfer, PolicyRequirement, PolicySet,
+        RequirementEvidence, resolve_image_conversion,
+    };
+    use zenpixels::{Orientation, PixelDescriptor};
+    let image = frame(words(), 3, 10);
+    let mut offer = ImageConversionOffer::new(
+        PixelDescriptor::RGB16_SRGB,
+        image.interpretation().geometry,
+        Orientation::Identity,
+    );
+    offer.assumed_chroma_siting = Some(ChromaSiting::Unknown);
+    let required = PolicySet::new().require_metadata(MetadataTransfer::DiscardDescriptive);
+    for (mut policy, legacy) in [(required, PolicySet::new()), (PolicySet::new(), required)] {
+        let error =
+            resolve_image_conversion(&image, &[offer], &mut policy, legacy, &zencodec::NoPulse)
+                .unwrap_err();
+        assert_eq!(
+            zencodec::find_cause::<Decline>(&error),
+            Some(&Decline::UnsupportedQuestion)
+        );
+        assert_eq!(
+            error
+                .error()
+                .record()
+                .unmet_requirements
+                .iter()
+                .collect::<Vec<_>>(),
+            [(PolicyRequirement::Metadata, RequirementEvidence::Unknown)]
+        );
+    }
+}
+
+#[test]
 fn conversion_policy_selects_only_qualified_choices_and_keeps_source_facts() {
     use zencodec::operation::{
         Decision, DecisionContext, ImageConversionOffer, PolicySet, Question, Selection,
