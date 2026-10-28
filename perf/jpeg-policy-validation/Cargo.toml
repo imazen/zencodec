@@ -27,6 +27,9 @@ zencodecs = { git = "https://github.com/imazen/zenpipe", rev = "874a3856841bfcf5
 zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "8672e549793a7e1b515f292bd9fd77109118cb83" }
 zenpng = { git = "https://github.com/imazen/zenpng", rev = "5422b6d213e41f9764e7c4cf98e5c44eb8acbd85" }
 zencodec = { path = "../.." }
+zencodec-io = { path = "../../zencodec-io" }
+zencodec-coroutine = { path = "../../zencodec-coroutine" }
+zenmeta = { path = "../../zenmeta" }
 # zenjpeg depends on ultrahdr-core unconditionally; crates.io 0.6.0 requires
 # zencodec ^0.1, so use the review revision on the zencodec 0.2 family pin.
 ultrahdr-core = { git = "https://github.com/imazen/ultrahdr", rev = "cc57c57abc491001c69ca85dab8213102df93825" }
