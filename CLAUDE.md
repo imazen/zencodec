@@ -231,6 +231,11 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed during independent policy-probe integration (2026-10-28): two
+  `planned-row-check` recipes made the whole justfile fail to parse. The
+  consolidated recipe retains both std and all-feature test/Clippy commands.
+  `just --show planned-row-check` and the runner-control recipe verify parsing.
+
 - Fixed during the zenpipe integration loop (2026-10-28): coroutine delivery
   split a native batch into small sink loans but filled all loans before
   returning, exhausting a bounded pull adapter's object allowance. It now

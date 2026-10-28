@@ -736,11 +736,20 @@ spatial-samples-check:
 planned-row-check:
     cargo test -p zencodec-io --features std --locked
     cargo clippy -p zencodec-io --features std --all-targets --locked -- -D warnings
+    cargo test -p zencodec-io --all-features --tests --locked
+    cargo clippy -p zencodec-io --all-features --all-targets --locked -- -D warnings
 
 # Private concrete policy-binding experiment; no production API added.
 policy-binding-check:
     cargo test -p zencodec-testkit --test policy_binding --locked
     cargo clippy -p zencodec-testkit --test policy_binding --locked -- -D warnings
+
+# Independent review probes, kept outside the product dependency graph.
+api-usability-runner-check:
+    timeout 60s bash perf/api-usability-validation/head-replay-controls.sh
+
+api-usability-replay artifacts revision:
+    bash perf/api-usability-validation/head-replay.sh "{{artifacts}}" "{{revision}}"
 
 operation-policy-check:
     cargo test -p zencodec-testkit --test operation_policy --test operation_requests --locked
@@ -1398,11 +1407,6 @@ pulse-test:
 encode-plan-check:
     cargo test -p zencodec --lib --locked
     cargo clippy -p zencodec --all-targets --locked -- -D warnings
-
-# Planned row admission and the existing row/output regression coverage.
-planned-row-check:
-    cargo test -p zencodec-io --all-features --tests --locked
-    cargo clippy -p zencodec-io --all-features --all-targets --locked -- -D warnings
 
 # Capture a pinned converter surface; CHECKOUT may be --github for remote source.
 capture-ycbcr-api checkout revision:

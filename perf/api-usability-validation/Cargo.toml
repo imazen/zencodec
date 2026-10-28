@@ -1,0 +1,37 @@
+[package]
+name = "api-usability-validation"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Count-based probes behind docs/api-usability-review-2026-10-27.md"
+
+[workspace]
+
+[dependencies]
+zencodec = { path = "../..", features = ["std"] }
+zencodec-io = { path = "../../zencodec-io", features = ["std"] }
+zencodec-testkit = { path = "../../zencodec-testkit" }
+zenpixels = ">=0.2.16, <0.4.0"
+enough = "0.4.4"
+# Heap counters only; the probe binary installs dhat as its global allocator.
+dhat = "0.3.3"
+
+[features]
+# Expected semantics for core issue 173 at base 6b0caf34; fails there by design.
+proposed = []
+# The historical tree at base 6b0caf34 (`enough::Stop` arguments, no `NoPulse`).
+# Its tests and the probe stop argument compile only against that base; the
+# default build targets the current Pulse core.
+baseline-6b0caf34 = []
+
+# Historical receipts for base 6b0caf34 (results_2026-10-27.tsv), unchanged.
+[[test]]
+name = "policy_present"
+required-features = ["baseline-6b0caf34"]
+
+[[test]]
+name = "policy_proposed"
+required-features = ["baseline-6b0caf34", "proposed"]
+
+[patch.crates-io]
+zencodec = { path = "../.." }

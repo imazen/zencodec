@@ -1,0 +1,35 @@
+# api-usability count probes, 2026-10-27
+# host r7900x (Zen 4, 24 threads); base 6b0caf34 + this lane's probe crate; rustc 1.99.1
+# command: run-heavy --mem 4G --jobs 2 -- cargo run --release (in perf/api-usability-validation)
+# run-heavy: rc=0 0s | peak-RSS 0.19GiB | min-avail 8805MiB | peak-load 0.55 (rerun after build; build run rc=0 12s peak-RSS 0.45GiB)
+# counts are dhat allocation calls / requested bytes; no timings
+registry_clone	pairs=0	clone_allocs=0	clone_bytes=0
+start_controlled	pairs=0	ok=true	allocs=2	bytes=472
+registry_clone	pairs=1	clone_allocs=2	clone_bytes=32
+start_controlled	pairs=1	ok=true	allocs=4	bytes=504
+registry_clone	pairs=4	clone_allocs=2	clone_bytes=128
+start_controlled	pairs=4	ok=true	allocs=4	bytes=600
+registry_clone	pairs=16	clone_allocs=2	clone_bytes=512
+start_controlled	pairs=16	ok=true	allocs=4	bytes=984
+required_descriptor	required_match	raster_bytes=786432	allocs=3	bytes=786616	ok
+required_descriptor	required_mismatch	raster_bytes=786432	allocs=6	bytes=786880	err=OutputDescriptor { requested: PixelDescriptor { format: Bgra8, transfer: Srgb, alpha: Some(Straight), primaries: Bt709, signal_range: Full }, actual: PixelDescriptor { format: Rgb8, transfer: Srgb, alpha: None, primaries: Bt709, signal_range: Full } }
+row_encode	objects_4096	pushes=64	pushes_borrowing_caller_raster=0	raster_bytes=49152	allocs=80	bytes=7904	ok emitted=64 schedule=FinishFirst
+row_encode	objects_8	pushes=8	pushes_borrowing_caller_raster=0	raster_bytes=49152	allocs=15	bytes=13151	err stage=Encode cause=Some(Objects { limit: 8 })
+tenant_preset_encode	default	ok
+tenant_preset_encode	require_metadata_discard	display="policy Declined at question 4" debug=Policy(PolicyFailure { record: DecisionRecord { question: 4, context: Encode(EncodeFacts { width: 16, height: 16, descriptor: PixelDescriptor { format: Rgb8, transfer: Srgb, alpha: None, primaries: Bt709, signal_range: Full } }), offered: 1, selected: None, used_preset: true, code: Declined }, .. })
+tenant_preset_encode	forbid_opaque_profiles	display="policy Declined at question 5" debug=Policy(PolicyFailure { record: DecisionRecord { question: 5, context: Encode(EncodeFacts { width: 16, height: 16, descriptor: PixelDescriptor { format: Rgb8, transfer: Srgb, alpha: None, primaries: Bt709, signal_range: Full } }), offered: 1, selected: None, used_preset: true, code: Declined }, .. })
+tenant_preset_encode	workspace_limit	display="policy Declined at question 6" debug=Policy(PolicyFailure { record: DecisionRecord { question: 6, context: Encode(EncodeFacts { width: 16, height: 16, descriptor: PixelDescriptor { format: Rgb8, transfer: Srgb, alpha: None, primaries: Bt709, signal_range: Full } }), offered: 1, selected: None, used_preset: true, code: Declined }, .. })
+tenant_preset_encode	callback_chooses_with_unproven_requirements	ok used_preset=[false]
+policy_matrix	transcode/compliant	use_preset: selected index=0 used_preset=true
+policy_matrix	transcode/compliant	direct_choose_first: selected index=0 used_preset=false
+policy_matrix	transcode/conflicting_metadata	use_preset: refused code=Declined display="policy Declined at question 10"
+policy_matrix	transcode/conflicting_metadata	direct_choose_first: selected index=0 used_preset=false
+policy_matrix	transcode/unknown_evidence	use_preset: refused code=Declined display="policy Declined at question 12"
+policy_matrix	transcode/unknown_evidence	direct_choose_first: selected index=0 used_preset=false
+policy_matrix	transcode/noncompliant_then_compliant	use_preset: selected index=1 used_preset=true
+policy_matrix	transcode/noncompliant_then_compliant	direct_choose_first: selected index=0 used_preset=false
+policy_matrix	boundary/Pending	use_preset: selected index=0 used_preset=true action=Some(ContinueReading)
+policy_matrix	boundary/Provisional	use_preset: selected index=0 used_preset=true action=Some(ContinueReading)
+policy_matrix	output_schedule/metadata_requirement	use_preset: refused code=Declined display="policy Declined at question 18"
+policy_matrix	output_schedule/wait_limit_proven	use_preset: selected index=0 used_preset=true
+policy_matrix	output_schedule/wait_limit_unknown	use_preset: refused code=Declined display="policy Declined at question 20"
