@@ -367,3 +367,37 @@ CI substitutes zencodec main 0.1.27 for the 0.2 dependency needed by merged JPEG
 Coordinated core integration remains tracked in
 [issue 159](https://github.com/imazen/zencodec/issues/159) and
 [PR 168](https://github.com/imazen/zencodec/pull/168).
+
+## Pipeline orientation repair and remaining adapter gates
+
+Zenresize main
+[`5b4e14e3`](https://github.com/imazen/zenresize/commit/5b4e14e33a1cd49bd9e08287858d2f534526ac25)
+fixes stale padding samples during oriented row output. The two regression
+controls fail before the repair and pass afterward; all 21 golden tests pass
+without regenerating their 24 baselines. Default, no-default library and
+`pretty-safe` suites, strict Clippy and formatting pass locally. The full
+[CI matrix](https://github.com/imazen/zenresize/actions/runs/40644463135) also
+passes on this revision.
+
+The local before/after batch reports `rc=1` because it includes the two expected
+pre-fix failures: 157 seconds, peak RSS 0.46 GiB, minimum available memory
+3594 MiB, peak load 2.02. Each repaired test/configuration command succeeds.
+The receipt is not a throughput or native memory-bound measurement.
+
+The zenpipe adapter stack is pushed at
+[`66a5f34b`](https://github.com/imazen/zenpipe/commit/66a5f34b8070007d4573d7d991a632287274c0e6),
+on [PR 108](https://github.com/imazen/zenpipe/pull/108). Its existing pins do not
+yet include that zenresize fix; the pin change needs a separate consumer replay.
+The two policy-placement diagnostic controls remain failing and unchanged.
+
+Orientation support is also inconsistent across zenresize's output methods:
+`with_orientation` affects `next_output_row`, while the other row-output
+methods remain unqualified for that setting. This is tracked separately in
+[zenresize issue 26](https://github.com/imazen/zenresize/issues/26), rather than
+being treated as resolved by the padding repair.
+
+SIMD compatibility validation remains pending. Its first batch stopped before
+the intended tests because the sibling dependency did not match the committed
+lock and a probe requested a tier outside the adapter's configured support.
+Matching empty result inventories from failed commands do not establish parity;
+the rerun requires both test commands to succeed and nonempty matching outcomes.
