@@ -166,26 +166,14 @@ main integration obligation this API cannot make automatic.
 
 ## Qualification
 
-This change was prepared source-only. Rust formatting/parser checks are the only
-executed checks; compilation, tests, Clippy, native parity and driver admission
-order remain unrun. The regression source covers caps 0/1/2/unknown, immutable
-versus weaker replay evidence, coupled choices, original slot preservation,
-callback exclusion, bound+legacy conjunction, metadata/workspace/range evidence,
-raw versus compressed staging, final-phase/timing, wrong-domain refusal, plan-derived one-pass exemption, typed
-invalid-plan causes and shared-job metadata admission across route alternatives.
+The integrated candidate passed workspace tests and doctests on 2026-10-28.
+The initial run stopped at one strict Clippy conditional-style diagnostic;
+after the equivalent conditional rewrite, all 16 joint-route controls and
+workspace Clippy passed. API snapshots, eight compiler-derived catalogs, all
+24 site source checks and the WASM build passed. Full receipts and the original
+failure are recorded in
+[`benchmarks/encoding_route_2026-10-28.json`](../benchmarks/encoding_route_2026-10-28.json).
 
-Run these commands serially in an authorized heavy slot from the integrated
-workspace (capture full logs under the operator's durable scratch directory):
-
-```sh
-cargo test -p zencodec --lib operation::encoding_route
-cargo test -p zencodec --lib operation::policy
-cargo test --workspace --all-features
-cargo test -p zencodec --doc
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-```
-
-Apply the build host's resource controls to each command. Standalone native driver
-qualification must additionally prove refusal before preparation/source reads,
-retained job identity through startup, exact sample parity, failed-fill handling,
-original causes and cancellation before final destination effects.
+The real retained-job driver, replay storage and native codec integration still
+need qualification. These policy controls do not establish those guarantees or
+measure codec throughput, compile-time change or whole-operation memory.

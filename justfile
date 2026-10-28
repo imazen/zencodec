@@ -1430,6 +1430,12 @@ encoder-pull-check:
     cargo clippy -p zencodec --all-targets --all-features --locked -- -D warnings
     cargo test -p zencodec --all-features --locked --doc
 
+# Joint prepared input/replay/output route admission and existing policy domains.
+encoding-route-check:
+    cargo test --workspace --all-features --locked
+    cargo test -p zencodec --all-features --locked --doc
+    cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
 # Refuse unknown preparation workspace before native planning, typed and erased.
 row-preparation-check:
     cargo test -p zencodec-io --features std --locked --test planned_row_encode

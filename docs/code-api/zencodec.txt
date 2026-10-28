@@ -1990,11 +1990,13 @@ pub zencodec::operation::DecisionCode::CallbackFailed
 pub zencodec::operation::DecisionCode::Declined
 pub zencodec::operation::DecisionCode::Exhausted
 pub zencodec::operation::DecisionCode::InvalidChoice
+pub zencodec::operation::DecisionCode::InvalidOffers
 pub zencodec::operation::DecisionCode::Selected
 pub zencodec::operation::DecisionCode::Stopped
 #[non_exhaustive] pub enum zencodec::operation::DecisionContext
 pub zencodec::operation::DecisionContext::Boundary(zencodec::decode::InterpretationFacts)
 pub zencodec::operation::DecisionContext::Encode(zencodec::operation::EncodeFacts)
+pub zencodec::operation::DecisionContext::EncodeRoute(zencodec::operation::EncodeRouteFacts)
 pub zencodec::operation::DecisionContext::Frame(zencodec::operation::FrameFacts)
 pub zencodec::operation::DecisionContext::FrameRoute(zencodec::operation::FrameRouteFacts)
 pub zencodec::operation::DecisionContext::Image(zencodec::operation::ImageFacts)
@@ -2011,6 +2013,12 @@ pub fn zencodec::operation::Decline::fmt(&self, f: &mut core::fmt::Formatter<'_>
 #[non_exhaustive] pub enum zencodec::operation::FrameRoute
 pub zencodec::operation::FrameRoute::BeginSegment
 pub zencodec::operation::FrameRoute::Continue
+#[non_exhaustive] pub enum zencodec::operation::InputAcquisition
+pub zencodec::operation::InputAcquisition::BorrowedRaster
+pub zencodec::operation::InputAcquisition::DirectRows
+pub zencodec::operation::InputAcquisition::DiskReplay
+pub zencodec::operation::InputAcquisition::MemorySnapshot
+pub zencodec::operation::InputAcquisition::Unknown
 #[non_exhaustive] pub enum zencodec::operation::MetadataTransfer
 pub zencodec::operation::MetadataTransfer::DiscardDescriptive
 pub zencodec::operation::MetadataTransfer::PreserveReported
@@ -2044,11 +2052,15 @@ pub zencodec::operation::OutputSource::BorrowedRaster
 pub zencodec::operation::OutputSource::PullRows
 pub zencodec::operation::OutputSource::Unknown
 #[non_exhaustive] pub enum zencodec::operation::PolicyRequirement
+pub zencodec::operation::PolicyRequirement::EncodeRoute
+pub zencodec::operation::PolicyRequirement::ExactReplay
 pub zencodec::operation::PolicyRequirement::ExtendedRange
 pub zencodec::operation::PolicyRequirement::Metadata
 pub zencodec::operation::PolicyRequirement::OpaqueProfiles
 pub zencodec::operation::PolicyRequirement::OutputSchedule
 pub zencodec::operation::PolicyRequirement::OutputWait
+pub zencodec::operation::PolicyRequirement::RawMemoryStaging
+pub zencodec::operation::PolicyRequirement::SourcePasses
 pub zencodec::operation::PolicyRequirement::Workspace
 #[non_exhaustive] pub enum zencodec::operation::PublicationOffer
 pub zencodec::operation::PublicationOffer::ReturnHeld
@@ -2059,6 +2071,11 @@ pub zencodec::operation::Question::Boundary::facts: zencodec::decode::Interpreta
 pub zencodec::operation::Question::Encode
 pub zencodec::operation::Question::Encode::choices: zencodec::operation::Choices<'a, zencodec::operation::EncodeOffer>
 pub zencodec::operation::Question::Encode::facts: zencodec::operation::EncodeFacts
+pub zencodec::operation::Question::EncodeRoute
+pub zencodec::operation::Question::EncodeRoute::choices: zencodec::operation::Choices<'a, zencodec::operation::EncodeRouteOffer>
+pub zencodec::operation::Question::EncodeRoute::declaration: &'a zencodec::encode::EncodeDeclaration<'a>
+pub zencodec::operation::Question::EncodeRoute::facts: zencodec::operation::EncodeRouteFacts
+pub zencodec::operation::Question::EncodeRoute::plan: &'a zencodec::encode::EncodePlan
 pub zencodec::operation::Question::Frame
 pub zencodec::operation::Question::Frame::choices: zencodec::operation::Choices<'a, zencodec::operation::PublicationOffer>
 pub zencodec::operation::Question::Frame::interpretation: &'a zencodec::frame::FrameInterpretation
@@ -2081,12 +2098,19 @@ pub zencodec::operation::Question::OutputSchedule::facts: zencodec::operation::O
 pub zencodec::operation::Question::Transcode
 pub zencodec::operation::Question::Transcode::choices: zencodec::operation::Choices<'a, zencodec::operation::TranscodeOffer>
 pub zencodec::operation::Question::Transcode::facts: zencodec::decode::InterpretationFacts
+#[non_exhaustive] pub enum zencodec::operation::ReplayEvidence
+pub zencodec::operation::ReplayEvidence::ImmutableBorrow
+pub zencodec::operation::ReplayEvidence::PrivateSnapshot
+pub zencodec::operation::ReplayEvidence::Unknown
+pub zencodec::operation::ReplayEvidence::VerifiedHash
+pub zencodec::operation::ReplayEvidence::VerifiedIdentity
 #[non_exhaustive] pub enum zencodec::operation::RequirementEvidence
 pub zencodec::operation::RequirementEvidence::Contradicted
 pub zencodec::operation::RequirementEvidence::Unknown
 #[non_exhaustive] pub enum zencodec::operation::Selection
 pub zencodec::operation::Selection::Boundary(zencodec::decode::BoundaryAction)
 pub zencodec::operation::Selection::Encode(zencodec::operation::EncodeOffer)
+pub zencodec::operation::Selection::EncodeRoute(zencodec::operation::EncodeRouteOffer)
 pub zencodec::operation::Selection::Frame(zencodec::operation::PublicationOffer)
 pub zencodec::operation::Selection::FrameRoute(zencodec::operation::FrameRouteOffer)
 pub zencodec::operation::Selection::Image(zencodec::operation::PublicationOffer)
@@ -2181,6 +2205,12 @@ pub zencodec::operation::DestinationFacts::seek_back: bool
 pub zencodec::operation::DestinationFacts::streams: bool
 impl zencodec::operation::DestinationFacts
 pub const fn zencodec::operation::DestinationFacts::new(seek_back: bool, streams: bool, patches_at_finish: bool, exact_timing: bool) -> Self
+#[non_exhaustive] pub struct zencodec::operation::EncodeEvidence
+pub zencodec::operation::EncodeEvidence::encoder: zencodec::operation::EncodeOffer
+pub zencodec::operation::EncodeEvidence::metadata: core::option::Option<zencodec::operation::MetadataTransfer>
+pub zencodec::operation::EncodeEvidence::retains_opaque_profile: core::option::Option<bool>
+impl zencodec::operation::EncodeEvidence
+pub const fn zencodec::operation::EncodeEvidence::new(encoder: zencodec::operation::EncodeOffer) -> Self
 #[non_exhaustive] pub struct zencodec::operation::EncodeFacts
 pub zencodec::operation::EncodeFacts::descriptor: zenpixels::descriptor::PixelDescriptor
 pub zencodec::operation::EncodeFacts::height: u32
@@ -2203,6 +2233,23 @@ pub const fn zencodec::operation::EncodeRequest::with_policy(self, policy: zenco
 pub const fn zencodec::operation::EncodeRequest::with_policy_defaults(self, defaults: zencodec::encode::EncodePolicy) -> Self
 pub const fn zencodec::operation::EncodeRequest::with_policy_set(self, preset: zencodec::operation::PolicySet) -> Self
 pub const fn zencodec::operation::EncodeRequest::with_resolution(self, resolution: zencodec::Resolution) -> Self
+#[non_exhaustive] pub struct zencodec::operation::EncodeRouteFacts
+pub zencodec::operation::EncodeRouteFacts::evidence: zencodec::operation::EncodeEvidence
+pub zencodec::operation::EncodeRouteFacts::input: zencodec::encode::InputRequirement
+pub zencodec::operation::EncodeRouteFacts::output_phase: zencodec::encode::OutputPhase
+pub zencodec::operation::EncodeRouteFacts::pixels: zencodec::operation::EncodeFacts
+pub zencodec::operation::EncodeRouteFacts::timing: zencodec::encode::OutputTiming
+impl zencodec::operation::EncodeRouteFacts
+pub const fn zencodec::operation::EncodeRouteFacts::new(declaration: &zencodec::encode::EncodeDeclaration<'_>, plan: &zencodec::encode::EncodePlan, evidence: zencodec::operation::EncodeEvidence) -> Self
+#[non_exhaustive] pub struct zencodec::operation::EncodeRouteOffer
+pub zencodec::operation::EncodeRouteOffer::acquisition: zencodec::operation::InputAcquisition
+pub zencodec::operation::EncodeRouteOffer::output: zencodec::operation::OutputScheduleOffer
+pub zencodec::operation::EncodeRouteOffer::preserves_extended_range: core::option::Option<bool>
+pub zencodec::operation::EncodeRouteOffer::replay: zencodec::operation::ReplayEvidence
+pub zencodec::operation::EncodeRouteOffer::workspace_upper_bound: core::option::Option<u64>
+impl zencodec::operation::EncodeRouteOffer
+pub const fn zencodec::operation::EncodeRouteOffer::external_source_passes(&self, plan: &zencodec::encode::EncodePlan) -> core::option::Option<zencodec::encode::SourcePasses>
+pub const fn zencodec::operation::EncodeRouteOffer::new(acquisition: zencodec::operation::InputAcquisition, output: zencodec::operation::OutputScheduleOffer) -> Self
 #[non_exhaustive] pub struct zencodec::operation::FrameConversionOffer
 pub zencodec::operation::FrameConversionOffer::admitted_bytes: usize
 pub zencodec::operation::FrameConversionOffer::assumed_chroma_siting: core::option::Option<zencodec::frame::ChromaSiting>
@@ -2308,11 +2355,14 @@ pub struct zencodec::operation::PolicySet
 impl zencodec::operation::PolicySet
 pub const fn zencodec::operation::PolicySet::allow_assumed_chroma_siting(self, allowed: bool) -> Self
 pub const fn zencodec::operation::PolicySet::allow_opaque_profiles(self, allowed: bool) -> Self
+pub const fn zencodec::operation::PolicySet::allow_raw_memory_staging(self, allowed: bool) -> Self
 pub const fn zencodec::operation::PolicySet::new() -> Self
 pub const fn zencodec::operation::PolicySet::prefer_lossless(self, enabled: bool) -> Self
+pub const fn zencodec::operation::PolicySet::require_exact_replay(self, required: bool) -> Self
 pub const fn zencodec::operation::PolicySet::require_extended_range(self, required: bool) -> Self
 pub const fn zencodec::operation::PolicySet::require_metadata(self, treatment: zencodec::operation::MetadataTransfer) -> Self
 pub const fn zencodec::operation::PolicySet::require_output_schedule(self, schedule: zencodec::operation::OutputSchedule) -> Self
+pub const fn zencodec::operation::PolicySet::with_max_source_passes(self, passes: u32) -> Self
 pub const fn zencodec::operation::PolicySet::with_output_wait_limit(self, bytes: u64) -> Self
 pub const fn zencodec::operation::PolicySet::with_workspace_limit(self, bytes: u64) -> Self
 impl zencodec::operation::PolicySet
@@ -2397,6 +2447,7 @@ impl<F, E> zencodec::operation::PolicyResolver for F where F: core::ops::functio
 pub type F::Error = E
 pub fn F::resolve(&mut self, question: zencodec::operation::Question<'_>) -> core::result::Result<zencodec::operation::Decision, whereat::at::At<E>>
 pub fn zencodec::operation::resolve_boundary<R: zencodec::operation::OperationPolicy + ?core::marker::Sized>(boundary: zencodec::decode::DecodeBoundary, resolver: &mut R, preset: zencodec::operation::PolicySet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(zencodec::decode::BoundaryAction, zencodec::operation::DecisionRecord), whereat::at::At<zencodec::operation::PolicyFailure>>
+pub fn zencodec::operation::resolve_encode_route<R: zencodec::operation::OperationPolicy + ?core::marker::Sized>(declaration: &zencodec::encode::EncodeDeclaration<'_>, plan: &zencodec::encode::EncodePlan, evidence: zencodec::operation::EncodeEvidence, offers: &[zencodec::operation::EncodeRouteOffer], resolver: &mut R, preset: zencodec::operation::PolicySet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, zencodec::operation::DecisionRecord), whereat::at::At<zencodec::operation::PolicyFailure>>
 pub fn zencodec::operation::resolve_frame<R: zencodec::operation::OperationPolicy + ?core::marker::Sized>(interpretation: &zencodec::frame::FrameInterpretation, timing: zencodec::frame::FrameTiming, resolver: &mut R, preset: zencodec::operation::PolicySet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec::operation::DecisionRecord, whereat::at::At<zencodec::operation::PolicyFailure>>
 pub fn zencodec::operation::resolve_frame_route<R: zencodec::operation::OperationPolicy + ?core::marker::Sized>(interpretation: &zencodec::frame::FrameInterpretation, timing: zencodec::frame::FrameTiming, output: zencodec::operation::FrameRouteState, offers: &[zencodec::operation::FrameRouteOffer], resolver: &mut R, preset: zencodec::operation::PolicySet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, zencodec::operation::DecisionRecord), whereat::at::At<zencodec::operation::PolicyFailure>>
 pub fn zencodec::operation::resolve_image<R: zencodec::operation::OperationPolicy + ?core::marker::Sized>(image: zencodec::image::ImageOutput, resolver: &mut R, preset: zencodec::operation::PolicySet, pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec::operation::Outcome<zencodec::image::ImageOutput>, whereat::at::At<zencodec::operation::PolicyFailure>>

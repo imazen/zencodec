@@ -10,7 +10,7 @@
 ## summary
 #
 #   inherent methods                           85
-#   trait roster entries (type × trait)       148
+#   trait roster entries (type × trait)       153
 #
 # per-module pub lines:
 #   (root)                           18
@@ -118,7 +118,7 @@ pub fn source::SourceError::assert_fields_are_eq(&self)
 pub fn time::TimeBase::assert_fields_are_eq(&self)
 pub fn time::Timestamp::assert_fields_are_eq(&self)
 
-## trait impls (148 types)
+## trait impls (153 types)
 
 AllocPreference: TrivialClone
 CicpEmission: TrivialClone
@@ -237,8 +237,11 @@ operation::DecisionContext: TrivialClone
 operation::DecisionRecord: TrivialClone
 operation::Decline: TrivialClone
 operation::DestinationFacts: TrivialClone
+operation::EncodeEvidence: TrivialClone
 operation::EncodeFacts: TrivialClone
 operation::EncodeOffer: TrivialClone
+operation::EncodeRouteFacts: TrivialClone
+operation::EncodeRouteOffer: TrivialClone
 operation::FrameConversionOffer: TrivialClone
 operation::FrameFacts: TrivialClone
 operation::FrameRoute: TrivialClone
@@ -247,6 +250,7 @@ operation::FrameRouteOffer: TrivialClone
 operation::FrameRouteState: TrivialClone
 operation::ImageConversionOffer: TrivialClone
 operation::ImageFacts: TrivialClone
+operation::InputAcquisition: TrivialClone
 operation::MetadataTransfer: TrivialClone
 operation::OutputSchedule: TrivialClone
 operation::OutputScheduleFacts: TrivialClone
@@ -256,6 +260,7 @@ operation::PolicyRequirement: TrivialClone
 operation::PolicySet: TrivialClone
 operation::PublicationOffer: TrivialClone
 operation::Question<'a>: TrivialClone
+operation::ReplayEvidence: TrivialClone
 operation::RequirementEvidence: TrivialClone
 operation::Selection: TrivialClone
 operation::StagingFacts: TrivialClone

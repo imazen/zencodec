@@ -1007,11 +1007,10 @@ pub(super) fn choose<'a, T: Copy, R: OperationPolicy + ?Sized>(
         ticket: record.question,
         entries: offers,
         admitted: all,
-    }) {
-        if let Err(error) = plan.validate(declaration) {
-            record.code = DecisionCode::InvalidOffers;
-            return Err(At::wrap(PolicyFailure::new(record, Cause::EncodePlan(error))).at());
-        }
+    }) && let Err(error) = plan.validate(declaration)
+    {
+        record.code = DecisionCode::InvalidOffers;
+        return Err(At::wrap(PolicyFailure::new(record, Cause::EncodePlan(error))).at());
     }
     // Joint encode routes also enforce structural compatibility with an empty
     // policy. Preserve the existing behavior for all other question domains.
