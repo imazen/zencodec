@@ -58,6 +58,7 @@ struct Scripted {
     steps: Vec<Step>,
     at: usize,
     buf: Vec<u8>,
+    stride: usize,
     seen: Rc<Cell<u32>>,
     finished: Rc<Cell<bool>>,
     started: Rc<Cell<bool>>,
@@ -69,6 +70,7 @@ impl Scripted {
             steps,
             at: 0,
             buf: vec![0; RB * H as usize],
+            stride: RB,
             seen: Rc::new(Cell::new(0)),
             finished: Rc::new(Cell::new(false)),
             started: Rc::new(Cell::new(false)),
@@ -96,10 +98,10 @@ impl Scripted {
         n: u32,
     ) -> Result<(), Interrupted> {
         let view = PixelSliceMut::new(
-            &mut self.buf[..RB * n as usize],
+            &mut self.buf[..self.stride * n as usize],
             W,
             n,
-            RB,
+            self.stride,
             PixelDescriptor::RGB8_SRGB,
         )
         .unwrap();
@@ -322,6 +324,38 @@ fn incompatible_sample_claim_refuses_before_native_startup_or_source_read() {
     assert!(!started.get());
     assert_eq!(calls.get(), 0);
     assert!(output.is_empty());
+}
+
+#[test]
+fn truthful_sample_claim_ignores_padding_and_survives_staged_replay() {
+    use zenpixels::{ChannelType, SignalRange, sample::ExactDepth};
+    let claim = ExactDepth::new(ChannelType::U8, SignalRange::Full, 1, 8).unwrap();
+    for replay in [Replay::Positional, Replay::Forward] {
+        let mut enc = Scripted::full(3, 2);
+        enc.stride = RB + 3;
+        // Padding is deliberately off-grid; active samples are only 0/255.
+        enc.buf = vec![1; enc.stride * H as usize];
+        let seen = enc.seen.clone();
+        let src = Claimed(
+            Callback {
+                make: |_: u32, row: u32| if row % 2 == 0 { 0 } else { 255 },
+                calls: Rc::new(Cell::new(0)),
+                fail_at: None,
+                replay,
+            },
+            claim,
+        );
+        let (result, output) = run(enc, src, options());
+        let completed = result.unwrap();
+        assert_eq!(completed.trace.passes, 3);
+        assert_eq!(seen.get(), 3 * H);
+        assert_eq!(output, b"ok");
+        if replay == Replay::Forward {
+            assert_eq!(completed.route, ReplayRoute::Stage(StagingKind::Memory));
+        } else {
+            assert_eq!(completed.route, ReplayRoute::Source);
+        }
+    }
 }
 
 #[test]

@@ -246,6 +246,48 @@ fn run_borrowed(
 // --------------------------------------------------------------- parity gates
 
 #[test]
+fn verified_sample_claim_preserves_native_bytes_and_strided_source_passes() {
+    for c in cases() {
+        let (raster, stride) = c.raster(2 * c.desc.bytes_per_pixel());
+        for seek in [false, true] {
+            let pixels = PixelSlice::new(&raster, c.w, c.h, stride, c.desc).unwrap();
+            let exact = zenpixels::sample::ExactDepth::measure(&pixels).unwrap();
+            let pixels = pixels.with_exact_depth(exact).unwrap();
+            let mut out = Cursor::new(Vec::new());
+            let result = if seek {
+                encode_passes(
+                    c.encoder(),
+                    Input::raster(pixels),
+                    SeekBack::new(&mut out).unwrap(),
+                    PolicySet::new(),
+                    Preset,
+                    options(),
+                    &NoPulse,
+                )
+            } else {
+                encode_passes(
+                    c.encoder(),
+                    Input::raster(pixels),
+                    Forward(&mut out),
+                    PolicySet::new(),
+                    Preset,
+                    options(),
+                    &NoPulse,
+                )
+            };
+            let done = result.unwrap();
+            let (unclaimed, baseline) = run_borrowed(&c, &raster, stride, seek);
+            assert_eq!(out.into_inner(), unclaimed, "{} seek={seek}", c.name);
+            assert_eq!(done.trace.source_bytes, baseline.trace.source_bytes);
+            assert_eq!(done.trace.passes, baseline.trace.passes);
+            assert_eq!(done.route, ReplayRoute::Source);
+            assert_eq!(done.trace.staging_admitted, 0);
+            assert_eq!(done.trace.digest_bytes, 0);
+        }
+    }
+}
+
+#[test]
 fn borrowed_replay_matches_native_bytes_and_ordinary_decoded_samples() {
     for c in cases() {
         let (raster, stride) = c.raster(0);

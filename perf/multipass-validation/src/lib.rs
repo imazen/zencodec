@@ -28,15 +28,18 @@ use std::{
 use zencodec::how_far::Total;
 use zencodec::{
     At,
-    encode::{EncodeOutput, OutputTiming},
+    encode::{EncodeDeclaration, EncodeOutput, OutputTiming},
     operation::{
-        OperationReport, OutputSchedule, OutputScheduleFacts, OutputScheduleOffer, OutputSource,
-        OperationPolicy, PolicySet, StagingFacts, StagingKind, resolve_output_schedule,
+        OperationPolicy, OperationReport, OutputSchedule, OutputScheduleFacts, OutputScheduleOffer,
+        OutputSource, PolicySet, StagingFacts, StagingKind, resolve_output_schedule,
     },
     output_patch::{OutputAccess, OutputFinish},
     storage::{OwnedStorage, PreparedStorage, StorageBudget},
 };
-use zencodec_io::{destination::Destination, row_encode::Description};
+use zencodec_io::{
+    destination::Destination,
+    row_encode::{Description, ExactDepthContradiction},
+};
 use zenpixels::PixelSliceMut;
 
 // ---------------------------------------------------------------- source side
@@ -800,6 +803,28 @@ impl<S: PassSource> Filler<'_, S> {
                     .map_err(|e| (Stage::Staging, Box::new(e) as Cause))?,
                 (Staging::None, _) => {}
             }
+            if let Some(exact) = self.desc.exact_depth {
+                check(self.stop).map_err(|e| (Stage::Read, e))?;
+                // Every supplied strip must satisfy the source declaration,
+                // including rows replayed from private staging. Keep the whole
+                // request unaccepted when any active sample contradicts it.
+                let pixels =
+                    zenpixels::PixelSlice::new(row, self.desc.width, 1, rb, self.desc.descriptor)
+                        .map_err(|e| (Stage::Read, Box::new(e) as Cause))?;
+                if !exact
+                    .holds_for(&pixels)
+                    .map_err(|e| (Stage::Read, Box::new(e) as Cause))?
+                {
+                    return Err((
+                        Stage::Read,
+                        ExactDepthContradiction {
+                            first_row: first + y,
+                            claim: exact,
+                        }
+                        .into(),
+                    ));
+                }
+            }
             if let Some(d) = &mut self.digests {
                 let h = digest(row);
                 let slot = &mut d.as_mut_slice()[at];
@@ -817,6 +842,10 @@ impl<S: PassSource> Filler<'_, S> {
         }
         if from == ReadFrom::Staging {
             self.trace.staging_reads += (rb * count as usize) as u64;
+        }
+        // Cancellation callbacks during verification may change source facts.
+        if self.desc.exact_depth.is_some() {
+            self.validate(pass).map_err(|e| (Stage::Read, e))?;
         }
         // Progress is rows supplied to the encoder, never a cancellation check.
         self.stop.advance(u64::from(count));
@@ -986,6 +1015,13 @@ where
         } else {
             OutputAccess::Forward
         };
+        // Reuse the production declaration rules before even legacy native
+        // startup. A source assertion is not a scan or a fidelity certificate.
+        if let Some(exact) = desc.exact_depth {
+            EncodeDeclaration::new(desc.width, desc.height, desc.descriptor)
+                .with_exact_depth(exact)
+                .validate_exact_depth()?;
+        }
         let plan = encoder.begin_passes(&desc, access)?;
         if plan.timing.patches_at_finish() && !writer.can_patch() {
             return Err(Refusal::Patches.into());
