@@ -15,6 +15,10 @@ api-doc:
 api-doc-check:
     ZEN_API_DOC=check cargo test --manifest-path apidoc/Cargo.toml
 
+# Generate Rustdoc for the same eight crates as the guide's signature catalog.
+docs-reference:
+    python3 docs/build-reference.py
+
 # CI-exact clippy
 clippy:
     cargo clippy --all-targets -- -D warnings

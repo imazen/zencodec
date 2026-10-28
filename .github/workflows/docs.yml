@@ -224,6 +224,15 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: docs/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build the matching Rustdoc reference
+        timeout-minutes: 5
+        env:
+          CARGO_BUILD_JOBS: 2
+        run: |
+          cp zencodec-render/dependencies.lock zencodec-render/Cargo.lock
+          python3 docs/build-reference.py
       - run: npm ci --prefix docs --ignore-scripts
       - run: npm run build --prefix docs
       - run: npm test --prefix docs
@@ -244,6 +253,12 @@ jobs:
             sleep 1
           done
           npm run test:browser --prefix docs
+      - name: Retain the browsable reference and guide
+        uses: actions/upload-artifact@v7
+        with:
+          name: zencodec-reference-guide-${{ github.sha }}
+          path: docs/_site
+          if-no-files-found: error
       - name: Configure Pages
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/configure-pages@v6
