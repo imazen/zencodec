@@ -234,3 +234,41 @@ The paired pixel proposal's 32-bit fixture-overflow repair is pushed at
 passes with overflow checks enabled. Full exact-head CI is
 [run 40625957534](https://github.com/imazen/zenpixels/actions/runs/40625957534).
 No crate has been published by this work.
+
+## Exact-output controls for the memory experiment
+
+The sixth zenpipe batch independently decoded all seven successful memory-matrix
+outputs with the `png` crate and compared every sample against the authored
+2048 × 2048 RGB8 fixture. All seven match exactly. Effort 2 with live output
+refuses at policy admission and produces no output; its refusal-process memory
+must not be presented as an encoding result. These controls use the preserved
+measured executable, SHA-256
+`bdc74846f9dd469fc25a1f003d026bf5ffa3a84cf2883121ba842ab3c1f8ab94`,
+and fixture SHA-256
+`2d3cb5fd8276d290b1a05b61274b6b81015f7b7202e168291343946ab41b1aab`.
+
+For the buffering configuration (effort 2), heaptrack reports peak heap of
+63.82 MB with memory staging and 63.78 MB with disk staging. Corresponding
+`/usr/bin/time -v` maximum RSS values are 84,768 and 85,136 KiB. Disk staging
+does not remove the native encoder's retained image in this experiment.
+For effort 0, live output reports 17.58 MB peak heap and 21,516 KiB maximum RSS,
+but heaptrack attributes two full compressed-input allocations to the controlled
+decode path. Lower memory than the buffering route does not establish bounded
+network streaming. These are individual memory observations, not throughput
+measurements or whole-operation upper bounds.
+
+The control batch receipt is `rc=1`, 16 seconds, peak RSS 0.65 GiB, minimum
+available memory 4586 MiB and peak load 0.45. Its failure is explicit: the two
+ImageJob composition controls still fail (three of five ImageJob tests pass).
+The standalone consumer's two tests pass with one shared zencodec and zenpixels
+instance after pinning zenpixels `86d0e2d3`, which supplies the guide's
+`ConvertOptions::retain_channels` method. Native codec pins remain those in the
+preceding section; no adoption of the new erased row driver is implied.
+
+The paired zenpixels proposal at `0bdc0db5` now passes its full CI run linked
+above, including i686, Linux ARM64, macOS ARM64 and Windows ARM64. Core
+`534ee4ea` likewise passes [CI](https://github.com/imazen/zencodec/actions/runs/40627250712)
+and [fuzz checks](https://github.com/imazen/zencodec/actions/runs/40627250793).
+Its [documentation workflow](https://github.com/imazen/zencodec/actions/runs/40627250847)
+passes guide execution, browser checks, TIFF/JXL and AV1 qualification; native
+JPEG qualification still fails and prevents deployment.
