@@ -5,7 +5,6 @@ use core::fmt;
 use zencodec::{
     At, CodecError,
     collection::{Cause, Composition},
-    enough::Stop,
     image::{
         Auxiliary, AuxiliaryGrid, AuxiliaryImageOwner, ImageGeometry, ImageOutput, Meaning,
         OutputError, PackedImageOwner, Rect, Samples, ValueSlice,

@@ -3,7 +3,6 @@ use core::fmt;
 use zencodec::{
     At, CodecError,
     collection::{Cause, Collection, ImageId, ImageRequest},
-    enough::Stop,
     image::{ImageOutput, OutputError, PackedImageOwner, Rect},
     operation::{
         CheckedCollection, CollectionOperationError, Outcome, PolicyResolver, PolicySet,

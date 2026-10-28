@@ -1,6 +1,6 @@
 //! First-image discovery must distinguish exhaustion from failure.
 use zencodec::{
-    At, SharedPulse, NoPulse,
+    At, SharedPulse,
     collection::{
         Collection, CollectionError, Composition, ImageDescription, ImageId, ImageRequest,
         SelectionError,
