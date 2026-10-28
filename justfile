@@ -1090,6 +1090,10 @@ source-details-check:
     cargo test -p zencodec --test source_encoding_details --locked
     cargo clippy -p zencodec --test source_encoding_details --locked -- -D warnings
 
+# Arithmetic controls only; these do not qualify native codec fidelity.
+precision-grid-check:
+    python3 perf/precision-validation/grid_oracles.py
+
 docs-site-check:
     node docs/build-site.mjs
     node --test docs/site/site.test.mjs docs/site/source.test.mjs docs/site/code-first.test.mjs docs/site/source-catalog.test.mjs
