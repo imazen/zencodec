@@ -169,9 +169,9 @@ pub(crate) use tenant::{WorkspaceEvidenceRequired, for_tenant};
 mod transports {
     // EXAMPLE: checked_file
     use zencodec::{
-        At, CodecSet,
+        CodecSet,
         encode::EncodeOutput,
-        operation::{OperationError, OperationPolicy, Outcome},
+        operation::{OperationPolicy, Outcome},
     };
     use zencodecs::checked_transcode::TranscodeRequest;
 
