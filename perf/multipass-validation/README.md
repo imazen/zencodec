@@ -128,9 +128,29 @@ Planning must obtain the same facts without constructing that state. Safe
 native mobility must be implemented and tested before claiming erased parity;
 no unsafe Send implementation or implicit thread bridge is proposed.
 
-The same review found remaining candidate gates: validate reader/file row
-geometry before consumption, preserve typed source-side stop reasons, check
-cancellation before final cursor/flush effects, and bound the diagnostic trace.
-These are source findings, not executed regressions. Async pending-buffer
+The same review found remaining candidate gates: check cancellation before
+final cursor/flush effects and bound the diagnostic trace. These are source
+findings, not executed regressions. Reader/file validation and typed source-side
+stop causes are qualified below. Async pending-buffer
 ownership, total retained memory and metadata/carrier qualification also remain
 unproven. Passing the tests above does not close these production gates.
+
+## Source validation and padding (2026-10-28)
+
+The concrete file/reader adapters now validate width, descriptor, color context,
+row extent and source stride before touching input or destination samples. File
+requests also check the final active-byte offset for overflow before the first
+read. File pitch need not be pixel-aligned; destination views retain their own
+stride. Reader padding uses a fallibly reserved buffer of at most 4096 bytes,
+with cancellation checks between chunks, instead of allocating the whole pad.
+An I/O failure remains the original error; Pulse refusal carries a typed
+`CodecError` with its original stop category through `io::Error`.
+
+Four regression controls fail before the fix: invalid reader input consumption,
+invalid file destination effects, unbounded/uninterruptible padding, and lost
+typed cancellation. A fifth control preserves active samples and destination
+padding with a seven-byte source pitch. All 31 public and 19 native controls
+pass after the fix, with strict Clippy for both harnesses. The existing native
+byte/sample and forward/seek-back controls remain unchanged. This does not
+bound an arbitrary reader's allocations or make blocking reads interruptible.
+Receipt: [source validation](../../benchmarks/multipass_sources_2026-10-28.json).

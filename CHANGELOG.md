@@ -247,6 +247,10 @@
 
 ### Other changes
 
+- Validate experimental multipass reader/file geometry before input or sample
+  effects; bound padding discard and preserve typed cancellation causes.
+  Existing strided native parity remains qualified.
+
 - Enforce strict sample-grid declarations in the multipass experiment, retaining
   typed refusal before successful row delivery (`310f7fa7`). Refuse unmapped
   descriptor primaries/range in its native adapter before sRGB startup. Native

@@ -246,6 +246,14 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed in the multipass experiment (2026-10-28): a short source stride could
+  consume input before subtraction panicked; malformed file requests could
+  change destination samples before refusal. Source validation now precedes
+  these effects. Padding discard uses at most 4096 retained bytes and checks
+  Pulse between chunks; stop causes remain typed. Four failing-first controls,
+  strided parity and unchanged native gates qualify this candidate fix; see
+  `benchmarks/multipass_sources_2026-10-28.json`. Production promotion remains open.
+
 - Fixed in the multipass experiment (2026-10-28): source `exact_depth`
   declarations were carried but never checked. Incompatible claims now refuse
   before native startup; every active row is verified before successful fill,

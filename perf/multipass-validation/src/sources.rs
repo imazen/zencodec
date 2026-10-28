@@ -9,6 +9,31 @@ use std::{
 use zencodec_io::row_encode::{Description, Raster, Source};
 use zenpixels::{PixelSlice, PixelSliceMut};
 
+/// Validate the entire request before changing a destination or consuming input.
+fn validate_rows(desc: &Description, first: u32, rows: &PixelSliceMut<'_>) -> io::Result<usize> {
+    if rows.width() != desc.width
+        || rows.descriptor() != desc.descriptor
+        || rows.color_context() != desc.color_context.as_ref()
+        || first
+            .checked_add(rows.rows())
+            .is_none_or(|end| end > desc.height)
+    {
+        return Err(io::ErrorKind::InvalidInput.into());
+    }
+    (desc.width as usize)
+        .checked_mul(desc.descriptor.bytes_per_pixel())
+        .ok_or_else(|| io::ErrorKind::InvalidInput.into())
+}
+
+fn check(pulse: &dyn zencodec::Pulse) -> io::Result<()> {
+    pulse.check().map_err(|reason| {
+        io::Error::new(
+            io::ErrorKind::Interrupted,
+            zencodec::At::wrap(zencodec::CodecError::new(None, reason.into())),
+        )
+    })
+}
+
 /// A caller-borrowed complete raster. Delegates reads to the existing
 /// `row_encode::Raster` (stride and color-context checks unchanged).
 pub struct Borrowed<'a>(Raster<'a>);
@@ -89,17 +114,29 @@ impl PassSource for FileRows {
         &mut self,
         first: u32,
         mut rows: PixelSliceMut<'_>,
-        stop: &dyn zencodec::Pulse,
+        pulse: &dyn zencodec::Pulse,
     ) -> io::Result<()> {
+        let active = validate_rows(&self.desc, first, &rows)? as u64;
+        if self.stride < active {
+            return Err(io::ErrorKind::InvalidInput.into());
+        }
+        if rows.rows() != 0 {
+            // Validate the last active byte as well as the starting offset.
+            u64::from(first + rows.rows() - 1)
+                .checked_mul(self.stride)
+                .and_then(|offset| offset.checked_add(self.origin))
+                .and_then(|offset| offset.checked_add(active))
+                .ok_or(io::ErrorKind::InvalidInput)?;
+        }
         for y in 0..rows.rows() {
-            stop.check()
-                .map_err(|r| io::Error::new(io::ErrorKind::Interrupted, format!("{r:?}")))?;
+            check(pulse)?;
             let at = u64::from(first + y)
                 .checked_mul(self.stride)
                 .and_then(|o| o.checked_add(self.origin))
                 .ok_or(io::ErrorKind::InvalidInput)?;
             self.file.read_exact_at(rows.row_mut(y), at)?;
         }
+        check(pulse)?;
         Ok(())
     }
 }
@@ -134,26 +171,43 @@ impl<R: Read> PassSource for ReaderRows<R> {
         &mut self,
         first: u32,
         mut rows: PixelSliceMut<'_>,
-        stop: &dyn zencodec::Pulse,
+        pulse: &dyn zencodec::Pulse,
     ) -> io::Result<()> {
+        let active = validate_rows(&self.desc, first, &rows)?;
+        let padding = self
+            .stride
+            .checked_sub(active)
+            .ok_or(io::ErrorKind::InvalidInput)?;
         if first != self.next {
             return Err(io::Error::new(
                 io::ErrorKind::Unsupported,
                 "forward source cannot seek",
             ));
         }
+        check(pulse)?;
+        // File pitch can be much larger than active samples. Retain at most one
+        // bounded padding chunk, allocated before reading any part of a row.
+        let chunk = padding.min(4096);
+        if self.skip.len() < chunk {
+            self.skip
+                .try_reserve_exact(chunk - self.skip.len())
+                .map_err(|_| io::ErrorKind::OutOfMemory)?;
+            self.skip.resize(chunk, 0);
+        }
         for y in 0..rows.rows() {
-            stop.check()
-                .map_err(|r| io::Error::new(io::ErrorKind::Interrupted, format!("{r:?}")))?;
+            check(pulse)?;
             let row = rows.row_mut(y);
             self.reader.read_exact(row)?;
-            let pad = self.stride - row.len();
-            if pad != 0 {
-                self.skip.resize(pad, 0);
-                self.reader.read_exact(&mut self.skip)?;
+            let mut remaining = padding;
+            while remaining != 0 {
+                check(pulse)?;
+                let len = remaining.min(self.skip.len());
+                self.reader.read_exact(&mut self.skip[..len])?;
+                remaining -= len;
             }
             self.next += 1;
         }
+        check(pulse)?;
         Ok(())
     }
 }
