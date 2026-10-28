@@ -1,0 +1,57 @@
+{
+  "date": "2026-10-28",
+  "scope": "Code-first guide and native JPEG/PNG cancellation/publication; build/test resource receipt, not codec performance",
+  "source_commit": "fc4c8b60",
+  "source_sha256": {
+    "docs/examples/checked_operations.rs": "b1283079d4aeb202e8a17f803c04507e1c6c58d7226da1498d648e31f330bd25",
+    "perf/jpeg-policy-validation/src/checked_examples.rs": "c82316f061a31018f13d8a515d38c73a1f3a831965111b31183fa3a674404a27",
+    "perf/jpeg-policy-validation/Cargo.toml": "ab4f9d49b143188ff176a5d8e33cd25e4e9e90e3b9585124541dc24880a620ae",
+    "perf/jpeg-policy-validation/dependencies.lock": "7a453b837f4860ad8ab0af641980c39318588508c5a446cbb6e3cbd2791eedbe",
+    "docs/integration-api.json": "557cfe473b7aacbf05f679cd3013968366bf22702352c4882d966f893af18c8a"
+  },
+  "native_revisions": {
+    "zenjpeg": "d099267c37b4f91b35fe5f15ddb680455e1d4bd8",
+    "zenpng": "a2a9dc6ddb58cf0b93c69e220f3c8d8452608d85",
+    "ultrahdr": "610975047bcb0bb266e952f15bcd978ba3f34950",
+    "zenpipe": "a478b91e641eb9d9f605b547b6ff00c76ee15e1d"
+  },
+  "graph": "One local copy of zencodec, zencodec-io, zencodec-coroutine and zenmeta; unrelated locked packages unchanged",
+  "baseline_findings": [
+    "Captured PolicyResolver signatures disagreed with the OperationPolicy used by examples; new source gate failed before recapture",
+    "New publication example attempted to box StopReason directly; Rust rejected it; now uses typed OperationError::Stopped",
+    "First corrected run passed 47 native tests but strict Clippy found an extra import in an older example; removed without changing that body"
+  ],
+  "validated": {
+    "jpeg_tests": {
+      "passed": 47,
+      "failed": 0
+    },
+    "new_publication_and_cancellation_tests": {
+      "passed": 5,
+      "failed": 0
+    },
+    "preflight_tests": {
+      "passed": 5,
+      "failed": 0
+    },
+    "strict_clippy": "default and native-preflight all targets passed",
+    "site_source_tests": {
+      "passed": 21,
+      "failed": 0
+    },
+    "browser": "Full guide checks passed at 390,768,1440 px, including context, copying, signatures and basic initial consumer flow"
+  },
+  "receipt": "run-heavy: done rc=0 42s | peak-RSS 0.31GiB | min-avail 4081MiB | peak-load 1.25",
+  "reproduce": [
+    "just jpeg-policy-setup",
+    "just jpeg-policy-check <artifacts>",
+    "just jpeg-preflight-check",
+    "just docs-site-browser-check"
+  ],
+  "limits": [
+    "Synchronous fs::write can fail after partial publication and is not preemptively cancellable",
+    "No atomic replacement or rollback guarantee",
+    "No native workspace cap or whole-container privacy guarantee",
+    "Sequential agent source trial is not a blinded user study or measured newcomer success rate"
+  ]
+}

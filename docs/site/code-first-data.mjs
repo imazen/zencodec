@@ -4,7 +4,7 @@ export const codeFlows = [
     {example:'checked_registry',file:'docs/examples/checked_operations.rs',api:['operationRegistration']},
     {example:'checked_decode',file:'docs/examples/checked_operations.rs',api:['operationDecode','operationOutcome','decodedOutput']},
     {example:'checked_default',file:'docs/examples/checked_operations.rs',api:[],external:['integration-api.json']},
-    {example:'checked_png_file',file:'docs/examples/checked_operations.rs',api:['operationRegistration','operationOutcome','encodedOutput'],external:['integration-api.json'],state:'Source addition · native qualification pending'},
+    {example:'checked_png_file',file:'docs/examples/checked_operations.rs',api:['operationRegistration','operationOutcome','encodedOutput'],external:['integration-api.json'],state:'Native JPEG/PNG cancellation and publication controls'},
   ]},
   {id:'adapter-input',role:'adapter',title:'Slice → positional reads → batched ranges',steps:[
     {example:'slice',file:'docs/examples/journeys.rs',api:['sliceDriver']},
@@ -62,7 +62,7 @@ export const codeFlows = [
   ]},
   {id:'app-limits',role:'consumer',title:'Bound input → cancel → inspect errors',steps:[
     {example:'limits',file:'docs/examples/journeys.rs',api:['decodeJob','findCause'],state:'Lower-level configured decode'},
-    {example:'checked_registry_pulse',file:'docs/examples/checked_operations.rs',api:['operationRegistration'],state:'Source addition · native qualification pending'},
+    {example:'checked_registry_pulse',file:'docs/examples/checked_operations.rs',api:['operationRegistration'],state:'Native JPEG/PNG cancellation and publication controls'},
   ]},
   {id:'app-animation',role:'consumer',title:'Animation ↔ video; preserve exact timing',steps:[
     {scope:'fn animation_round_trips_through_the_video_model_with_exact_timing()',file:'zencodec-media-testkit/tests/contracts.rs',api:['animation','video'],state:'Media conformance test'},

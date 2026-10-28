@@ -25,3 +25,17 @@ successful narrow test into a claim that the complete target is implemented.
 Its canvas-rendering recommendation remains proposed; the table must not imply
 that packed or composited output is display-ready. Compile observations retain
 Zenbench resource flags and distinguish the traits consumer from codec builds.
+
+## Code-first progression qualified on 2026-10-28
+
+Each role now opens with basic usage. The consumer starts with registration,
+decode and transcode, with its dependency manifest linked beside the examples.
+Setup above and continuation below expand independently. The cancellation
+recipe accepts the application's `SharedPulse`; the file recipe keeps the
+operation policy and checks cancellation before opening the destination.
+
+The [native receipt](../../benchmarks/code_guide_2026-10-28.json) records the
+five new cancellation/publication controls, full JPEG harness, preflight, lint
+and browser checks. Captured integration signatures must match both the native
+dependency revision and the `OperationPolicy` accepted by the copied examples.
+Synchronous file writes are not transactional or preemptively cancellable.
