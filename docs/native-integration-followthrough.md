@@ -320,3 +320,50 @@ Zencodec integration `2fe20905` passes [CI](https://github.com/imazen/zencodec/a
 including native JPEG, TIFF/JXL, AV1, executable examples and browser checks.
 The deployment job is skipped on the review branch; these results do not claim a
 GitHub Pages publication.
+
+## JPEG feature repair and independent policy replay
+
+JPEG main now contains the approved feature-matrix repair at
+[`74ce6cee`](https://github.com/imazen/zenjpeg/commit/74ce6ceeebb85f637f5c33709fd4afd2a0a6821f).
+The four original gain-map assertions remain enabled with `metadata`; without
+that feature, separate controls require `UnsupportedFeature` for the same
+fixtures. The API snapshot also includes the merged declaration hooks. The
+coordinator verified that this revision is four commits ahead of `cf7b051b`,
+with no diverging commits.
+
+Local tests and strict Clippy pass in both metadata configurations, as does the
+format check. The final repair-check receipt is `rc=0`, 315 seconds, peak RSS
+0.76 GiB and minimum available memory 3515 MiB. The preceding broad batch failed
+on a gated-import lint and a separate proposed carrier-policy change; it is not
+a passing batch. The lint is repaired. The carrier change remains unmerged:
+it refuses an existing test's malformed ICC blob under `strip_all()`. Profile
+recognition failure alone must not be treated as proof that discarding color
+information is safe. That compatibility boundary needs further qualification.
+
+The independent policy review replayed its original four proposed safety
+assertions against core `e8f16683`; only the cancellation argument changed to
+Pulse. All four pass, together with nine current-behavior controls. The
+coordinator inspected the per-step results and verified that review head
+`d420712a` changes none of the tested core, I/O, testkit or root manifest files.
+Direct callback selection cannot choose an excluded route, retained choices
+keep their original indices, and admission refusals name unmet requirements.
+The receipt is `rc=0`, 12 seconds, peak RSS 0.45 GiB, minimum available memory
+4213 MiB and peak load 0.97. This is test resource usage, not policy overhead.
+
+The replay still observes three costs with the reference codec and recording
+encoder: a 786,432-byte raster requirement mismatch incurs 786,880 requested
+allocation bytes before refusal; none of 64 row pushes borrows the original
+raster; and an eight-object staging budget refuses after eight one-byte output
+chunks. These measurements do not establish native codec memory bounds. The
+two-placement diagnostic gap and cross-operation requirement scope remain open;
+the [policy-binding experiment](policy-binding-experiment.md) describes the
+unqualified ownership boundary.
+
+Core `d420712a` passes [CI](https://github.com/imazen/zencodec/actions/runs/40638206274),
+[fuzz checks](https://github.com/imazen/zencodec/actions/runs/40638206291) and
+[documentation qualification](https://github.com/imazen/zencodec/actions/runs/40638206353).
+These pinned-graph checks do not qualify the all-main consumer graph: shared
+CI substitutes zencodec main 0.1.27 for the 0.2 dependency needed by merged JPEG.
+Coordinated core integration remains tracked in
+[issue 159](https://github.com/imazen/zencodec/issues/159) and
+[PR 168](https://github.com/imazen/zencodec/pull/168).
