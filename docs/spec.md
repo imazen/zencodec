@@ -9,6 +9,10 @@ for the public API surface.
 
 `#![no_std]` + `alloc`. `#![forbid(unsafe_code)]`.
 
+The [early decode-output commitment](decode-output-commitment.md) is a separate
+proposal with native qualification gates; it is not part of the implemented
+surface below.
+
 ### Operation policy binding (review API)
 
 Pass `PolicySet` directly for built-in selection. Add a callback with
