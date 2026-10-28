@@ -16,3 +16,8 @@ whereat = { version = "0.1.5", default-features = false }
 enough = { version = "0.4.4", default-features = false }
 how-far = { version = "0.1.0", default-features = false }
 zenpixels = { version = ">=0.2.16, <0.4.0", default-features = false }
+
+# Paired precision verifier; release requires these APIs in published zenpixels.
+[patch.crates-io]
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "283655c5424e0ad7ebc6d2acd94670fac1e29158" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "283655c5424e0ad7ebc6d2acd94670fac1e29158" }

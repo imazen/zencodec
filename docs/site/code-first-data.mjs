@@ -24,6 +24,10 @@ export const codeFlows = [
   {id:'adapter-declaration',role:'adapter',title:'Declare color → plan without startup → verify start',note:'Shared trait hooks are implemented and tested. Native JPEG shared-hook adoption is qualified. PNG planning qualification and the full checked EncodeRequest-to-destination convenience remain separate gates. Carrier evidence can be unknown; planning does not establish a native memory bound.',steps:[
     {scope:'fn erased_preflight_retains_job_color_access_and_native_error()',file:'src/traits/dyn_encoding.rs',api:['encodeDeclaration','encodePlan','encodePreflight','declaredBegin'],state:'Shared contract test; scripted codec, not native qualification'},
   ]},
+  {id:'adapter-precision',role:'adapter',title:'Declare sample depth → verify rows → preserve failure effects',evidence:'docs/precision-admission.md',note:'A depth claim describes current canonical samples; it does not certify native codec fidelity. Constructor defaults stay unclaimed. With a claim, the driver checks each complete strip before push. FinishFirst withholds final publication on a late contradiction; Live may already have published earlier bytes.',steps:[
+    {scope:'fn description_defaults_builders_debug_and_eq_include_evidence()',file:'zencodec-io/tests/planned_row_encode/exact_depth.rs',api:['encodeDeclaration','plannedRowEncode'],state:'Start without a claim; add one explicitly'},
+    {scope:'fn false_initial_and_later_claims_never_push_a_partial_bad_strip_or_retry()',file:'zencodec-io/tests/planned_row_encode/exact_depth.rs',api:['plannedRowEncode'],state:'Executed strip-verification and publication controls'},
+  ]},
   {id:'codec-preflight',role:'implementor',title:'One effective plan → declared startup',steps:[
     {scope:'impl EncodeJob for Job',file:'src/traits/dyn_encoding.rs',api:['encodePreflight'],state:'Shared contract fixture: planning without encoder construction'},
     {scope:'impl Encoder for Declared',file:'src/traits/dyn_encoding.rs',api:['declaredBegin'],state:'Shared contract fixture: current color reaches startup'},
@@ -159,6 +163,10 @@ const lessons = {
   'adapter-registry-output': [
     ['Send the configured registry job to a writer', 'The gallery already chose and configured an encoder. Pass that job directly to the planned driver; it retains the job through admission and starts with the current pixel color. The example uses a small test output budget, not a production recommendation.'],
     ['Allow patches only on an actual seek-back destination', 'A layout that overwrites earlier bytes must refuse a forward writer before startup. When the destination can seek, preserve the final patch plan and account for appended and overwritten bytes separately.'],
+  ],
+  'adapter-precision': [
+    ['Keep the ordinary path simple', 'The image service starts with Description::new and no precision claim. An upstream source that deliberately preserves a canonical grid may attach ExactDepth; resizing or mutable processing must not reuse stale evidence. The declaration is an assertion, so structural validation alone cannot prove the samples.'],
+    ['Make a late contradiction observable', 'The service now reads strips. A false claim in any row prevents the entire strip from reaching the encoder. The executable control compares early and late failures through typed, erased and raw routes, checks prior Live bytes, and confirms FinishFirst publishes nothing.'],
   ],
   'adapter-declaration': [['Keep one job across admission', 'Declare actual color and destination access before native startup. Plan the retained job, admit the route, then compare every startup fact before reading pixels or publishing bytes. This fixture checks forwarding; the checked driver must enforce the sequence for callers.']],
   'codec-preflight': [

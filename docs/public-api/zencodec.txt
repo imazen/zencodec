@@ -6,29 +6,29 @@
 # impls omitted; re-export duplicates annotated `[also: path]`.
 # DO NOT EDIT BY HAND — commit regenerated changes with the code.
 #
-# files: zencodec.txt 3158 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 231 lines (231 hidden + 0 excluded-feature)
+# files: zencodec.txt 3183 lines (supported surface) | zencodec.features.txt 3 added (features: std) | zencodec.internal.txt 231 lines (231 hidden + 0 excluded-feature)
 
 ## summary
 #
 #   pub modules                                20
-#   pub types (struct/enum/trait/alias)       371
-#   pub consts/statics                        327
-#   free functions                             86
-#   inherent methods                         1093
-#   struct fields                             494
-#   enum variants                             522
+#   pub types (struct/enum/trait/alias)       378
+#   pub consts/statics                        330
+#   free functions                             94
+#   inherent methods                         1098
+#   struct fields                             496
+#   enum variants                             523
 #   re-exports                                 18
-#   trait roster entries (type × trait)      1109
-#   conditional trait impls (verbatim)          8
+#   trait roster entries (type × trait)      1115
+#   conditional trait impls (verbatim)          9
 #   auto-trait-complete types                 203
-#   auto-trait exceptions                      43
+#   auto-trait exceptions                      44
 #
 # per-module pub lines:
-#   (root)                          989
+#   (root)                         1004
 #   animation                        11
 #   collection                      100
 #   decode                          284
-#   encode                          231
+#   encode                          234
 #   estimate                         48
 #   exif                             94
 #   frame                            97
@@ -38,14 +38,14 @@
 #   image                           138
 #   inventory                       103
 #   metadata_rewrite                 59
-#   operation                       279
+#   operation                       287
 #   output_patch                     15
 #   prelude                         242
 #   source                           37
 #   storage                          38
 #   time                             22
 
-## items (2851 lines)
+## items (2871 lines)
 
 pub mod zencodec
 pub use At
@@ -608,6 +608,7 @@ pub mod encode
 pub encode::EncodePlanError::Changed
 pub encode::EncodePlanError::DestinationAccess
 pub encode::EncodePlanError::Dimensions
+pub encode::EncodePlanError::ExactDepth
 pub encode::EncodePlanError::InputProtocol
 pub encode::EncodePlanError::OutputLag
 pub encode::EncodePlanError::PassRange
@@ -710,11 +711,14 @@ pub const fn encode::EncodeCapabilities::xmp(&self) -> bool
 pub encode::EncodeDeclaration::access: output_patch::OutputAccess
 pub encode::EncodeDeclaration::color: core::option::Option<&'a zenpixels::color::ColorContext>
 pub encode::EncodeDeclaration::descriptor: zenpixels::descriptor::PixelDescriptor
+pub encode::EncodeDeclaration::exact_depth: core::option::Option<zenpixels::sample::exact::ExactDepth>
 pub encode::EncodeDeclaration::height: u32
 pub encode::EncodeDeclaration::width: u32
 pub const fn encode::EncodeDeclaration<'a>::new(u32, u32, zenpixels::descriptor::PixelDescriptor) -> Self
+pub fn encode::EncodeDeclaration<'a>::validate_exact_depth(&self) -> core::result::Result<(), zenpixels::sample::exact::ExactDepthError>
 pub const fn encode::EncodeDeclaration<'a>::with_access(self, output_patch::OutputAccess) -> Self
 pub const fn encode::EncodeDeclaration<'a>::with_color(self, &'a zenpixels::color::ColorContext) -> Self
+pub const fn encode::EncodeDeclaration<'a>::with_exact_depth(self, zenpixels::sample::exact::ExactDepth) -> Self
 #[non_exhaustive] pub struct encode::EncodeOutput
 pub fn encode::EncodeOutput::data(&self) -> &[u8]
 pub fn encode::EncodeOutput::extension(&self) -> &'static str
@@ -1710,6 +1714,14 @@ pub operation::Selection::Transcode(operation::TranscodeOffer)
 #[non_exhaustive] pub enum operation::StagingKind
 pub operation::StagingKind::Disk
 pub operation::StagingKind::Memory
+pub struct operation::BoundPolicy<R: ?core::marker::Sized>
+pub const fn operation::BoundPolicy<R>::requirements(&self) -> operation::PolicySet
+pub fn operation::BoundPolicy<R>::resolver_mut(&mut self) -> &mut R
+pub fn operation::BoundPolicy<R>::into_parts(self) -> (operation::PolicySet, R)
+pub const fn operation::BoundPolicy<R>::new(operation::PolicySet, R) -> Self
+pub type &mut operation::BoundPolicy<R>::Error = <R as operation::PolicyResolver>::Error [also: (root)]
+pub fn &mut operation::BoundPolicy<R>::decide(&mut self, operation::Question<'_>) -> core::result::Result<operation::Decision, whereat::at::At<<R as operation::PolicyResolver>::Error>> [also: (root)]
+pub fn &mut operation::BoundPolicy<R>::requirements(&self) -> core::option::Option<operation::PolicySet> [also: (root)]
 #[non_exhaustive] pub struct operation::BoundaryOffer
 pub operation::BoundaryOffer::action: decode::BoundaryAction
 pub struct operation::CheckedCollection<C, R>
@@ -1771,7 +1783,7 @@ pub operation::EncodeOffer::preference_index: usize
 pub operation::EncodeOffer::resolution: core::option::Option<Resolution>
 pub struct operation::EncodeRequest
 pub fn operation::EncodeRequest::encode(&self, &CodecSet, zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<operation::Outcome<encode::EncodeOutput>, whereat::at::At<operation::OperationError>>
-pub fn operation::EncodeRequest::encode_with<R: operation::PolicyResolver + ?core::marker::Sized>(&self, &CodecSet, zenpixels::buffer::PixelSlice<'_>, &mut R) -> core::result::Result<operation::Outcome<encode::EncodeOutput>, whereat::at::At<operation::OperationError>>
+pub fn operation::EncodeRequest::encode_with<R: operation::OperationPolicy + ?core::marker::Sized>(&self, &CodecSet, zenpixels::buffer::PixelSlice<'_>, &mut R) -> core::result::Result<operation::Outcome<encode::EncodeOutput>, whereat::at::At<operation::OperationError>>
 pub const fn operation::EncodeRequest::new(ImageFormat) -> Self
 pub fn operation::EncodeRequest::preferring_fidelity(self, impl core::convert::Into<alloc::vec::Vec<encode::Fidelity>>) -> Self
 pub fn operation::EncodeRequest::prepare(&self, &CodecSet) -> core::result::Result<alloc::vec::Vec<operation::PreparedEncode>, whereat::at::At<operation::OperationError>>
@@ -1871,6 +1883,9 @@ pub const fn operation::PolicySet::require_metadata(self, operation::MetadataTra
 pub const fn operation::PolicySet::require_output_schedule(self, operation::OutputSchedule) -> Self
 pub const fn operation::PolicySet::with_output_wait_limit(self, u64) -> Self
 pub const fn operation::PolicySet::with_workspace_limit(self, u64) -> Self
+pub type &mut operation::PolicySet::Error = never [also: (root)]
+pub fn &mut operation::PolicySet::decide(&mut self, operation::Question<'_>) -> core::result::Result<operation::Decision, whereat::at::At<core::convert::Infallible>> [also: (root)]
+pub fn &mut operation::PolicySet::requirements(&self) -> core::option::Option<operation::PolicySet> [also: (root)]
 pub struct operation::PreparedEncode
 pub fn operation::PreparedEncode::into_job(self) -> alloc::boxed::Box<dyn encode::DynEncodeJob>
 pub const fn operation::PreparedEncode::offer(&self) -> operation::EncodeOffer
@@ -1891,22 +1906,27 @@ pub operation::TranscodeOffer::admitted_bytes: usize
 pub operation::TranscodeOffer::encoder: operation::EncodeOffer
 pub operation::TranscodeOffer::metadata: operation::MetadataTransfer
 pub operation::TranscodeOffer::output: zenpixels::descriptor::PixelDescriptor
+pub operation::TranscodeOffer::output_schedule: core::option::Option<operation::OutputScheduleOffer>
 pub operation::TranscodeOffer::retains_opaque_profile: core::option::Option<bool>
 pub operation::TranscodeOffer::workspace_upper_bound: core::option::Option<u64>
 pub const fn operation::TranscodeOffer::new(operation::EncodeOffer, zenpixels::descriptor::PixelDescriptor, operation::MetadataTransfer) -> Self
 pub struct operation::UnmetRequirements
 pub const fn operation::UnmetRequirements::is_empty(self) -> bool
 pub fn operation::UnmetRequirements::iter(self) -> impl core::iter::traits::iterator::Iterator<Item = (operation::PolicyRequirement, operation::RequirementEvidence)>
+pub trait operation::OperationPolicy: operation::binding::sealed::Sealed
+pub type operation::OperationPolicy::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+pub fn operation::OperationPolicy::decide(&mut self, operation::Question<'_>) -> core::result::Result<operation::Decision, whereat::at::At<Self::Error>>
+pub fn operation::OperationPolicy::requirements(&self) -> core::option::Option<operation::PolicySet>
 pub trait operation::PolicyResolver
 pub type operation::PolicyResolver::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn operation::PolicyResolver::resolve(&mut self, operation::Question<'_>) -> core::result::Result<operation::Decision, whereat::at::At<Self::Error>>
-pub fn operation::resolve_boundary<R: operation::PolicyResolver + ?core::marker::Sized>(decode::DecodeBoundary, &mut R, operation::PolicySet, &dyn how_far::pulse::Pulse) -> core::result::Result<(decode::BoundaryAction, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
-pub fn operation::resolve_frame<R: operation::PolicyResolver + ?core::marker::Sized>(&frame::FrameInterpretation, frame::FrameTiming, &mut R, operation::PolicySet, &dyn how_far::pulse::Pulse) -> core::result::Result<operation::DecisionRecord, whereat::at::At<operation::PolicyFailure>>
-pub fn operation::resolve_frame_route<R: operation::PolicyResolver + ?core::marker::Sized>(&frame::FrameInterpretation, frame::FrameTiming, operation::FrameRouteState, &[operation::FrameRouteOffer], &mut R, operation::PolicySet, &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
-pub fn operation::resolve_image<R: operation::PolicyResolver + ?core::marker::Sized>(image::ImageOutput, &mut R, operation::PolicySet, &dyn how_far::pulse::Pulse) -> core::result::Result<operation::Outcome<image::ImageOutput>, whereat::at::At<operation::PolicyFailure>>
-pub fn operation::resolve_image_conversion<R: operation::PolicyResolver + ?core::marker::Sized>(&image::ImageOutput, &[operation::ImageConversionOffer], &mut R, operation::PolicySet, &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
-pub fn operation::resolve_output_schedule<R: operation::PolicyResolver + ?core::marker::Sized>(operation::OutputScheduleFacts, &[operation::OutputScheduleOffer], &mut R, operation::PolicySet, &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
-pub fn operation::resolve_transcode<R: operation::PolicyResolver + ?core::marker::Sized>(decode::DecodeBoundary, &[operation::TranscodeOffer], &mut R, operation::PolicySet, &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
+pub fn operation::resolve_boundary<R: operation::OperationPolicy + ?core::marker::Sized>(decode::DecodeBoundary, &mut R, operation::PolicySet, &dyn how_far::pulse::Pulse) -> core::result::Result<(decode::BoundaryAction, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
+pub fn operation::resolve_frame<R: operation::OperationPolicy + ?core::marker::Sized>(&frame::FrameInterpretation, frame::FrameTiming, &mut R, operation::PolicySet, &dyn how_far::pulse::Pulse) -> core::result::Result<operation::DecisionRecord, whereat::at::At<operation::PolicyFailure>>
+pub fn operation::resolve_frame_route<R: operation::OperationPolicy + ?core::marker::Sized>(&frame::FrameInterpretation, frame::FrameTiming, operation::FrameRouteState, &[operation::FrameRouteOffer], &mut R, operation::PolicySet, &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
+pub fn operation::resolve_image<R: operation::OperationPolicy + ?core::marker::Sized>(image::ImageOutput, &mut R, operation::PolicySet, &dyn how_far::pulse::Pulse) -> core::result::Result<operation::Outcome<image::ImageOutput>, whereat::at::At<operation::PolicyFailure>>
+pub fn operation::resolve_image_conversion<R: operation::OperationPolicy + ?core::marker::Sized>(&image::ImageOutput, &[operation::ImageConversionOffer], &mut R, operation::PolicySet, &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
+pub fn operation::resolve_output_schedule<R: operation::OperationPolicy + ?core::marker::Sized>(operation::OutputScheduleFacts, &[operation::OutputScheduleOffer], &mut R, operation::PolicySet, &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
+pub fn operation::resolve_transcode<R: operation::OperationPolicy + ?core::marker::Sized>(decode::DecodeBoundary, &[operation::TranscodeOffer], &mut R, operation::PolicySet, &dyn how_far::pulse::Pulse) -> core::result::Result<(usize, operation::DecisionRecord), whereat::at::At<operation::PolicyFailure>>
 pub mod output_patch
 #[non_exhaustive] pub enum output_patch::OutputAccess
 pub output_patch::OutputAccess::Forward
@@ -2573,7 +2593,7 @@ pub fn CodecSet::with_limits(self, ResourceLimits) -> Self
 pub fn CodecSet::with_pulse(self, how_far::pulse::SharedPulse) -> Self
 pub fn CodecSet::with_send_encoder<C>(self, C) -> Self where C: encode::EncoderConfig + 'static, <C as encode::EncoderConfig>::Job: core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::Enc: encode::Encoder + core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::AnimationFrameEnc: encode::AnimationFrameEncoder
 pub fn CodecSet::with_stop(self, almost_enough::stop_token::StopToken) -> Self
-pub fn CodecSet::open_collection<'a, R: operation::PolicyResolver>(&self, ImageFormat, &'a mut dyn source::DynReadAt, collection::OpenRequest, R, how_far::pulse::SharedPulse) -> core::result::Result<operation::CheckedCollection<collection::Discovery<collection::ErasedCollection<'a>>, R>, whereat::at::At<operation::CollectionOperationError>>
+pub fn CodecSet::open_collection<'a, R: operation::OperationPolicy>(&self, ImageFormat, &'a mut dyn source::DynReadAt, collection::OpenRequest, R, how_far::pulse::SharedPulse) -> core::result::Result<operation::CheckedCollection<collection::Discovery<collection::ErasedCollection<'a>>, R>, whereat::at::At<operation::CollectionOperationError>>
 pub fn CodecSet::with_collection(self, impl collection::CollectionFactory + 'static) -> Self
 pub struct CodecSetIncrementalDecoder
 pub fn CodecSetIncrementalDecoder::new(CodecSet, &[zenpixels::descriptor::PixelDescriptor]) -> Self
@@ -2899,10 +2919,12 @@ pub fn find_cause<'a, T: core::error::Error + 'static>(&'a (dyn core::error::Err
 pub fn icc_extract_cicp(&[u8]) -> core::option::Option<(u8, u8, u8, bool)> [also: icc]
 pub fn resolve_color_emit(&SourceColor, &encode::EncodeCapabilities, ColorEmitPolicy) -> ColorEmitPlan
 
-## trait impls (255 types)
+## trait impls (258 types)
 
 &mut D: decode::ControlledIncrementalDecode, decode::IncrementalDecode
 &mut S: source::DynReadAt
+&mut operation::BoundPolicy<R>: operation::OperationPolicy
+&mut operation::PolicySet: operation::OperationPolicy
 (): encode::AnimationFrameEncoder
 (dyn core::error::Error + 'static): CodecErrorExt
 (dyn core::error::Error + core::marker::Send + 'static): CodecErrorExt
@@ -3090,6 +3112,7 @@ metadata_rewrite::Entry: Clone, Debug, Eq, PartialEq
 metadata_rewrite::Error: Clone, Debug, Display, Eq, Error, PartialEq
 metadata_rewrite::Plan<'a>: Debug
 metadata_rewrite::RewriteRequest<'a>: Clone
+operation::BoundPolicy<R>: Clone, Copy, Debug, operation::OperationPolicy
 operation::BoundaryOffer: Clone, Copy, Debug
 operation::Choice<'_, T>: Clone, Copy
 operation::Choice<'a, T>: Debug
@@ -3126,7 +3149,7 @@ operation::OutputScheduleOffer: Clone, Copy, Debug
 operation::OutputSource: Clone, Copy, Debug, Eq, PartialEq
 operation::PolicyFailure: Debug, Display, Error
 operation::PolicyRequirement: Clone, Copy, Debug, Eq, PartialEq
-operation::PolicySet: Clone, Copy, Debug, Default, operation::PolicyResolver
+operation::PolicySet: Clone, Copy, Debug, Default, operation::OperationPolicy
 operation::PreparedEncode: Debug
 operation::PreparedSendEncode: Debug
 operation::PublicationOffer: Clone, Copy, Debug, Eq, PartialEq
@@ -3160,6 +3183,7 @@ impl<C> decode::DynDecoderConfig for C where C: decode::DecoderConfig + 'static
 impl<J, E> decode::IncrementalDecode for helpers::WholeFileIncremental<J> where J: for<'a> decode::DecodeJob<'a, Error = E> + core::marker::Send + 'static, E: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::Enc: encode::Encoder + core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::AnimationFrameEnc: encode::AnimationFrameEncoder
 impl<J, E> decode::IncrementalDecode for helpers::WholeFileIncremental<J> where J: for<'a> decode::DecodeJob<'a, Error = E> + core::marker::Send + 'static, E: core::error::Error + core::marker::Send + core::marker::Sync + 'static
+impl<F, E> operation::OperationPolicy for F where F: core::ops::function::FnMut(operation::Question<'_>) -> core::result::Result<operation::Decision, whereat::at::At<E>>, E: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 impl<F, E> operation::PolicyResolver for F where F: core::ops::function::FnMut(operation::Question<'_>) -> core::result::Result<operation::Decision, whereat::at::At<E>>, E: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 impl<C> decode::DynDecoderConfig for C where C: decode::DecoderConfig + 'static
 impl<C> encode::DynEncoderConfig for C where C: encode::EncoderConfig + 'static, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::Enc: encode::Encoder + core::marker::Send, <<C as encode::EncoderConfig>::Job as encode::EncodeJob>::AnimationFrameEnc: encode::AnimationFrameEncoder
@@ -3194,6 +3218,7 @@ image::ImageInterpretation: !RefUnwindSafe !UnwindSafe
 image::ImageOutput: !RefUnwindSafe !UnwindSafe
 image::OutputError: !RefUnwindSafe !UnwindSafe
 metadata_rewrite::RewriteRequest<'a>: !RefUnwindSafe !Send !Sync !UnwindSafe
+operation::BoundPolicy<R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 operation::CheckedCollection<C, R>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 operation::Choice<'a, T>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe
 operation::Choices<'a, T>: !Freeze !RefUnwindSafe !Send !Sync !Unpin !UnwindSafe

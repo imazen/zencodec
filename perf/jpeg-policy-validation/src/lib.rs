@@ -38,6 +38,9 @@ mod output_scheduling;
 mod row_driver;
 
 #[cfg(test)]
+mod precision;
+
+#[cfg(test)]
 mod requirement_scope;
 
 #[cfg(test)]

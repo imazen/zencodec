@@ -1,0 +1,485 @@
+{
+  "source": "ee54df4745f2b75c1fca9178a9f576869b2a05d3",
+  "paired_zenpixels": "283655c5424e0ad7ebc6d2acd94670fac1e29158",
+  "command": "just precision-cohort-resolve EXPORT RESULTS",
+  "scope": "Cargo metadata --all-features in isolated source export; no Rust compilation, no native execution, no performance claim",
+  "graphs": [
+    {
+      "graph": ".",
+      "seeded": false,
+      "initial_non_pixel_packages": 163
+    },
+    {
+      "graph": "fuzz",
+      "seeded": false,
+      "initial_non_pixel_packages": 23
+    },
+    {
+      "graph": "zencodec-render",
+      "other_removed": [],
+      "other_added": [],
+      "seeded": true
+    },
+    {
+      "graph": "perf/api-usability-validation",
+      "other_removed": [],
+      "other_added": [],
+      "seeded": true
+    },
+    {
+      "graph": "perf/native-contract-validation",
+      "other_removed": [
+        [
+          "zencodec",
+          "0.1.27",
+          "path"
+        ]
+      ],
+      "other_added": [
+        [
+          "zencodec",
+          "0.2.0",
+          "path"
+        ]
+      ],
+      "seeded": true
+    },
+    {
+      "graph": "perf/native-contract-validation/spatial-native",
+      "other_removed": [
+        [
+          "zencodec",
+          "0.1.27",
+          "path"
+        ]
+      ],
+      "other_added": [
+        [
+          "zencodec",
+          "0.2.0",
+          "path"
+        ]
+      ],
+      "seeded": true
+    },
+    {
+      "graph": "perf/native-contract-validation/video-native",
+      "other_removed": [],
+      "other_added": [],
+      "seeded": true
+    },
+    {
+      "graph": "perf/multipass-validation",
+      "other_removed": [],
+      "other_added": [],
+      "seeded": true
+    },
+    {
+      "graph": "perf/multipass-validation/native",
+      "other_removed": [],
+      "other_added": [],
+      "seeded": true
+    },
+    {
+      "graph": "perf/policy-check",
+      "other_removed": [],
+      "other_added": [],
+      "seeded": true
+    },
+    {
+      "graph": "perf/av1-policy-validation",
+      "other_removed": [],
+      "other_added": [],
+      "seeded": true
+    },
+    {
+      "graph": "perf/jpeg-policy-validation",
+      "other_removed": [],
+      "other_added": [],
+      "seeded": true
+    },
+    {
+      "graph": "perf/io-validation",
+      "other_removed": [],
+      "other_added": [],
+      "seeded": true
+    },
+    {
+      "graph": "perf/spatial-validation",
+      "other_removed": [],
+      "other_added": [],
+      "seeded": true
+    }
+  ],
+  "identity_audit": {
+    "fuzz": {
+      "zencodec": [
+        {
+          "version": "0.2.0",
+          "source": "path"
+        }
+      ],
+      "zenpixels": [
+        {
+          "version": "0.2.17",
+          "source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+        }
+      ],
+      "zenpixels-convert": [],
+      "how-far": [
+        {
+          "version": "0.1.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ]
+    },
+    "perf_api-usability-validation": {
+      "zencodec": [
+        {
+          "version": "0.2.0",
+          "source": "path"
+        }
+      ],
+      "zenpixels": [
+        {
+          "version": "0.2.17",
+          "source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+        }
+      ],
+      "zenpixels-convert": [],
+      "how-far": [
+        {
+          "version": "0.1.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ]
+    },
+    "perf_av1-policy-validation": {
+      "zencodec": [
+        {
+          "version": "0.2.0",
+          "source": "path"
+        }
+      ],
+      "zenpixels": [
+        {
+          "version": "0.2.17",
+          "source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+        }
+      ],
+      "zenpixels-convert": [
+        {
+          "version": "0.2.17",
+          "source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+        }
+      ],
+      "how-far": [
+        {
+          "version": "0.1.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ]
+    },
+    "perf_io-validation": {
+      "zencodec": [
+        {
+          "version": "0.2.0",
+          "source": "path"
+        }
+      ],
+      "zenpixels": [
+        {
+          "version": "0.2.17",
+          "source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+        }
+      ],
+      "zenpixels-convert": [
+        {
+          "version": "0.2.17",
+          "source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+        }
+      ],
+      "how-far": [
+        {
+          "version": "0.1.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ]
+    },
+    "perf_jpeg-policy-validation": {
+      "zencodec": [
+        {
+          "version": "0.2.0",
+          "source": "path"
+        }
+      ],
+      "zenpixels": [
+        {
+          "version": "0.2.17",
+          "source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+        }
+      ],
+      "zenpixels-convert": [
+        {
+          "version": "0.2.17",
+          "source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+        }
+      ],
+      "how-far": [
+        {
+          "version": "0.1.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ]
+    },
+    "perf_multipass-validation": {
+      "zencodec": [
+        {
+          "version": "0.2.0",
+          "source": "path"
+        }
+      ],
+      "zenpixels": [
+        {
+          "version": "0.2.17",
+          "source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+        }
+      ],
+      "zenpixels-convert": [],
+      "how-far": [
+        {
+          "version": "0.1.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ]
+    },
+    "perf_multipass-validation_native": {
+      "zencodec": [
+        {
+          "version": "0.2.0",
+          "source": "path"
+        }
+      ],
+      "zenpixels": [
+        {
+          "version": "0.2.17",
+          "source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+        }
+      ],
+      "zenpixels-convert": [],
+      "how-far": [
+        {
+          "version": "0.1.0",
+          "source": "git+https://github.com/imazen/how-far?rev=571bf1a2fc92e5b99c3777f8ff81bafab7666a75#571bf1a2fc92e5b99c3777f8ff81bafab7666a75"
+        }
+      ]
+    },
+    "perf_native-contract-validation": {
+      "zencodec": [
+        {
+          "version": "0.2.0",
+          "source": "path"
+        }
+      ],
+      "zenpixels": [
+        {
+          "version": "0.2.17",
+          "source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+        }
+      ],
+      "zenpixels-convert": [],
+      "how-far": [
+        {
+          "version": "0.1.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ]
+    },
+    "perf_native-contract-validation_spatial-native": {
+      "zencodec": [
+        {
+          "version": "0.2.0",
+          "source": "path"
+        }
+      ],
+      "zenpixels": [
+        {
+          "version": "0.2.17",
+          "source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+        }
+      ],
+      "zenpixels-convert": [],
+      "how-far": [
+        {
+          "version": "0.1.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ]
+    },
+    "perf_native-contract-validation_video-native": {
+      "zencodec": [
+        {
+          "version": "0.2.0",
+          "source": "path"
+        }
+      ],
+      "zenpixels": [
+        {
+          "version": "0.2.17",
+          "source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+        }
+      ],
+      "zenpixels-convert": [
+        {
+          "version": "0.2.17",
+          "source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+        }
+      ],
+      "how-far": [
+        {
+          "version": "0.1.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ]
+    },
+    "perf_policy-check": {
+      "zencodec": [
+        {
+          "version": "0.2.0",
+          "source": "path"
+        }
+      ],
+      "zenpixels": [
+        {
+          "version": "0.2.17",
+          "source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+        }
+      ],
+      "zenpixels-convert": [],
+      "how-far": [
+        {
+          "version": "0.1.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ]
+    },
+    "perf_spatial-validation": {
+      "zencodec": [
+        {
+          "version": "0.2.0",
+          "source": "path"
+        }
+      ],
+      "zenpixels": [
+        {
+          "version": "0.2.17",
+          "source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+        }
+      ],
+      "zenpixels-convert": [
+        {
+          "version": "0.2.17",
+          "source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+        }
+      ],
+      "how-far": [
+        {
+          "version": "0.1.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ]
+    },
+    "root": {
+      "zencodec": [
+        {
+          "version": "0.2.0",
+          "source": "path"
+        }
+      ],
+      "zenpixels": [
+        {
+          "version": "0.2.17",
+          "source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+        }
+      ],
+      "zenpixels-convert": [
+        {
+          "version": "0.2.17",
+          "source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+        }
+      ],
+      "how-far": [
+        {
+          "version": "0.1.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ]
+    },
+    "zencodec-render": {
+      "zencodec": [
+        {
+          "version": "0.2.0",
+          "source": "path"
+        }
+      ],
+      "zenpixels": [
+        {
+          "version": "0.2.17",
+          "source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+        }
+      ],
+      "zenpixels-convert": [
+        {
+          "version": "0.2.17",
+          "source": "git+https://github.com/imazen/zenpixels?rev=283655c5424e0ad7ebc6d2acd94670fac1e29158#283655c5424e0ad7ebc6d2acd94670fac1e29158"
+        }
+      ],
+      "how-far": [
+        {
+          "version": "0.1.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      ]
+    }
+  },
+  "receipt": "run-heavy: done rc=0 12s | peak-RSS 0.10GiB | min-avail 5172MiB | peak-load 0.97",
+  "limits": [
+    "Resolution predates approved guard update from360 to368; no Rust tests ran in this resolution step.",
+    "No native precision result. Root/fuzz locks had no seed; 163/23 non-pixel additions are initial resolution, not measured dependency growth.",
+    "Two native harness lock seeds update path zencodec0.1.27 to0.2.0; other seeded non-pixel identities unchanged."
+  ],
+  "execution": {
+    "source": "720c81a7b93d921a600277a6ffce53da84276a5a",
+    "focused": {
+      "command": "just precision-evidence-check; cargo clippy -p zencodec -p zencodec-io --features zencodec-io/std --all-targets --locked -- -D warnings",
+      "result": "3 declaration,1 erased interface,18 planned row tests pass; strict Clippy pass",
+      "receipt": "run-heavy: done rc=0 11s | peak-RSS 0.43GiB | min-avail 4621MiB | peak-load 0.99"
+    },
+    "native_jpeg": {
+      "command": "cargo test --manifest-path perf/jpeg-policy-validation/Cargo.toml --locked native_jpeg_claim_transport_preserves_configuration_bytes_and_decoded_samples -- --nocapture",
+      "result": "1 test executes raw/typed/erased x baseline/progressive x claim/no-claim; encoded bytes and djpeg samples agree within each pair",
+      "receipt": "run-heavy: done rc=0 14s | peak-RSS 0.66GiB | min-avail 4475MiB | peak-load 0.83"
+    },
+    "workspace": {
+      "command": "cargo test --workspace --all-targets --all-features --locked; cargo test --workspace --doc --all-features --locked",
+      "result": "PASS; incidental bench output is not a qualified performance comparison",
+      "receipt": "run-heavy: done rc=0 68s | peak-RSS 0.43GiB | min-avail 4616MiB | peak-load 1.09"
+    },
+    "limits": [
+      "JPEG remains lossy; no native lower-depth fidelity certificate.",
+      "Native AVIF exactness, compiler-cost comparison and verification throughput not measured.",
+      "Build/test RSS is not codec workspace memory."
+    ],
+    "catalog": {
+      "command": "just code-catalog; just api-doc; source-root catalog check",
+      "result": "PASS; generated signatures match implemented source",
+      "receipt": "run-heavy: done rc=0 19s | peak-RSS 0.33GiB | min-avail 4653MiB | peak-load 0.56"
+    },
+    "site": {
+      "command": "just site-check",
+      "result": "PASS; 24 Node checks and responsive browser suites, including source scopes and inline expansion",
+      "initial_failure": "Stale OutputPlan API snapshot referenced prior zenpixels pin. Recaptured OutputPlan and YCbCr snapshots from paired 283655c5; existing guards unchanged.",
+      "receipt": "run-heavy: done rc=0 38s | peak-RSS 0.32GiB | min-avail 3994MiB | peak-load 1.01"
+    }
+  }
+}

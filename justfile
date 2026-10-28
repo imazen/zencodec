@@ -1094,6 +1094,15 @@ source-details-check:
 precision-grid-check:
     python3 perf/precision-validation/grid_oracles.py
 
+# Run in a source export through run-heavy; review unrelated resolution changes.
+precision-cohort-resolve export results:
+    python3 perf/precision-validation/cohort.py "{{export}}" "{{results}}"
+
+precision-evidence-check:
+    cargo test -p zencodec --test encode_precision --locked
+    cargo test -p zencodec --lib evidence_survives_plain_send_and_send_sync_erased_jobs_and_encoders --locked
+    cargo test -p zencodec-io --features std --test planned_row_encode --locked
+
 # Isolated native experiment; never adds its feature to the production graph.
 publication-witness-prepare checkout export:
     python3 perf/publication-validation/prepare.py "{{checkout}}" "{{export}}"

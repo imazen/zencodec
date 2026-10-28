@@ -2,7 +2,10 @@
 
 use alloc::sync::Arc;
 use core::fmt;
-use zenpixels::{ColorContext, PixelDescriptor};
+use zenpixels::{
+    ColorContext, PixelDescriptor, PixelSlice,
+    sample::{ExactDepth, ExactDepthError},
+};
 
 use crate::{Cicp, encode::OutputTiming, output_patch::OutputAccess};
 
@@ -24,6 +27,12 @@ pub struct EncodeDeclaration<'a> {
     pub color: Option<&'a ColorContext>,
     /// Actual destination access; it does not authorize a quality change.
     pub access: OutputAccess,
+    /// Optional assertion about the current canonical sample grids.
+    /// `Some` requires verification; unsupported layouts refuse. The paired
+    /// verifier supports U8/U16 gray, gray-alpha, RGB and RGBA/BGRA,
+    /// including undefined padding. `None` makes no lower-depth assertion.
+    /// This is not a codec fidelity or whole-input preflight certificate.
+    pub exact_depth: Option<ExactDepth>,
 }
 
 impl fmt::Debug for EncodeDeclaration<'_> {
@@ -34,6 +43,7 @@ impl fmt::Debug for EncodeDeclaration<'_> {
             .field("descriptor", &self.descriptor)
             .field("has_color_context", &self.color.is_some())
             .field("access", &self.access)
+            .field("exact_depth", &self.exact_depth)
             .finish()
     }
 }
@@ -47,6 +57,7 @@ impl<'a> EncodeDeclaration<'a> {
             descriptor,
             color: None,
             access: OutputAccess::Forward,
+            exact_depth: None,
         }
     }
 
@@ -60,6 +71,28 @@ impl<'a> EncodeDeclaration<'a> {
     pub const fn with_access(mut self, access: OutputAccess) -> Self {
         self.access = access;
         self
+    }
+
+    /// Retain a sample-grid assertion without scanning or changing samples.
+    /// Consumers must check actual samples before relying on this assertion.
+    /// Planning can refuse an assertion whose layout the verifier cannot check,
+    /// even when the codec could encode the same samples without that assertion.
+    pub const fn with_exact_depth(mut self, exact: ExactDepth) -> Self {
+        self.exact_depth = Some(exact);
+        self
+    }
+
+    /// Validate the claim's storage, range and supported layout, without reading
+    /// source samples. Success does not establish that actual samples comply.
+    pub fn validate_exact_depth(&self) -> Result<(), ExactDepthError> {
+        if let Some(exact) = self.exact_depth {
+            // The paired verifier owns descriptor/layout rules. An empty view
+            // checks them without allocating a raster or adding a source pass.
+            let empty = PixelSlice::new(&[], 0, 0, 0, self.descriptor)
+                .map_err(|_| ExactDepthError::DescriptorMismatch)?;
+            exact.holds_for(&empty)?;
+        }
+        Ok(())
     }
 }
 
@@ -220,6 +253,9 @@ impl EncodePlan {
     /// Check geometry, output lag and patch access before native startup.
     /// Codec-specific validation remains the planning implementation's duty.
     pub fn validate(&self, declaration: &EncodeDeclaration<'_>) -> Result<(), EncodePlanError> {
+        declaration
+            .validate_exact_depth()
+            .map_err(|_| EncodePlanError::ExactDepth)?;
         if declaration.width == 0 || declaration.height == 0 {
             return Err(EncodePlanError::Dimensions);
         }
@@ -265,6 +301,9 @@ pub enum EncodePlanError {
     InputProtocol,
     /// Native startup differs from the admitted plan.
     Changed,
+    /// Exact-depth assertion contradicts the descriptor or uses an unsupported layout.
+    /// [`EncodeDeclaration::validate_exact_depth`] retains the detailed verifier error.
+    ExactDepth,
 }
 
 impl fmt::Display for EncodePlanError {
@@ -276,6 +315,7 @@ impl fmt::Display for EncodePlanError {
             Self::DestinationAccess => "encode patches require seek-back output",
             Self::InputProtocol => "encode input and output protocols disagree",
             Self::Changed => "encode startup changed the admitted plan",
+            Self::ExactDepth => "encode exact-depth claim is incompatible with its descriptor",
         })
     }
 }

@@ -1,23 +1,23 @@
 {
   "repository": "imazen/zenpixels",
-  "revision": "86d0e2d30406a006bf8332f142029b7f58353086",
+  "revision": "283655c5424e0ad7ebc6d2acd94670fac1e29158",
   "sources": [
     {
       "path": "zenpixels/src/sample/plane.rs",
       "line": 8,
-      "source_sha256": "b24afd5f16d57e7f620dbdad7087356fe264ec3963773b57041ddfd2493f6c97",
+      "source_sha256": "583f01e1a491cafbc63d87a667332f260531fb08417d94ef468154467cfa94a5",
       "code": "pub enum ChromaSubsampling {\n    /// Equal horizontal and vertical resolution.\n    Yuv444,\n    /// Half horizontal resolution, rounded up at an odd edge.\n    Yuv422,\n    /// Half horizontal and vertical resolution, rounded up at odd edges.\n    Yuv420,\n}"
     },
     {
       "path": "zenpixels/src/sample/plane.rs",
       "line": 20,
-      "source_sha256": "b24afd5f16d57e7f620dbdad7087356fe264ec3963773b57041ddfd2493f6c97",
+      "source_sha256": "583f01e1a491cafbc63d87a667332f260531fb08417d94ef468154467cfa94a5",
       "code": "pub enum ChromaSiting {\n    /// The source did not establish a location.\n    Unknown,\n    /// Centered horizontally and vertically in the subsampled luma cell.\n    Center,\n    /// Horizontally co-sited, vertically centered.\n    Left,\n    /// Co-sited with the top-left luma sample.\n    TopLeft,\n}"
     },
     {
       "path": "zenpixels/src/sample/plane.rs",
-      "line": 82,
-      "source_sha256": "b24afd5f16d57e7f620dbdad7087356fe264ec3963773b57041ddfd2493f6c97",
+      "line": 103,
+      "source_sha256": "583f01e1a491cafbc63d87a667332f260531fb08417d94ef468154467cfa94a5",
       "code": "impl<'a> CodePlane<'a> {\n    pub fn from_u8(\n        words: &'a [u8],\n        width: usize,\n        height: usize,\n        stride_bytes: usize,\n        encoding: SampleEncoding,\n    ) -> Result<Self, CodePlaneError>;\n\n    pub fn from_u16(\n        words: &'a [u16],\n        width: usize,\n        height: usize,\n        stride_bytes: usize,\n        encoding: SampleEncoding,\n    ) -> Result<Self, CodePlaneError>;\n\n    pub const fn width(self) -> usize;\n\n    pub const fn height(self) -> usize;\n\n    pub const fn encoding(self) -> SampleEncoding;\n\n    pub fn code(self, x: usize, y: usize) -> Option<u16>;\n}"
     },
     {

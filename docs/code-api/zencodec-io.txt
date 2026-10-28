@@ -54,11 +54,19 @@ pub zencodec_io::row_encode::Completed::schedule: zencodec::operation::schedulin
 pub struct zencodec_io::row_encode::Description
 pub zencodec_io::row_encode::Description::color_context: core::option::Option<alloc::rcs::arc::Arc<zenpixels::color::ColorContext>>
 pub zencodec_io::row_encode::Description::descriptor: zenpixels::descriptor::PixelDescriptor
+pub zencodec_io::row_encode::Description::exact_depth: core::option::Option<zenpixels::sample::exact::ExactDepth>
 pub zencodec_io::row_encode::Description::height: u32
 pub zencodec_io::row_encode::Description::width: u32
 impl zencodec_io::row_encode::Description
 pub const fn zencodec_io::row_encode::Description::new(width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor) -> Self
 pub fn zencodec_io::row_encode::Description::with_color_context(self, context: alloc::rcs::arc::Arc<zenpixels::color::ColorContext>) -> Self
+pub const fn zencodec_io::row_encode::Description::with_exact_depth(self, exact: zenpixels::sample::exact::ExactDepth) -> Self
+pub struct zencodec_io::row_encode::ExactDepthContradiction
+pub zencodec_io::row_encode::ExactDepthContradiction::claim: zenpixels::sample::exact::ExactDepth
+pub zencodec_io::row_encode::ExactDepthContradiction::first_row: u32
+impl core::error::Error for zencodec_io::row_encode::ExactDepthContradiction
+impl core::fmt::Display for zencodec_io::row_encode::ExactDepthContradiction
+pub fn zencodec_io::row_encode::ExactDepthContradiction::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct zencodec_io::row_encode::Failure
 pub zencodec_io::row_encode::Failure::emitted: u64
 pub zencodec_io::row_encode::Failure::patched_bytes: u64

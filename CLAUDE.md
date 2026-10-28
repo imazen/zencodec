@@ -2,6 +2,21 @@
 
 Shared traits and types for zen* image codecs.
 
+## Precision integration gates (2026-10-28)
+
+- The paired zenpixels verifier at `283655c5` makes `DecodeOutput` 368 bytes
+  on x86_64; the existing exact 360-byte guard fails. A compiler array-size
+  diagnostic independently reports 368. The user approved updating the exact
+  guard to 368. Focused, workspace and native JPEG controls pass; native lower-depth
+  selection remains unqualified. This is object layout,
+  not a measured heap or process-memory increase. See
+  [precision admission](docs/precision-admission.md).
+- Native GIF fuzz qualification exposed a dependency floor mismatch:
+  `src/image/owner.rs` calls `PixelSlice::clone`, absent from zenpixels 0.2.14
+  even though the pre-precision manifest admits it. The precision draft raises
+  the floor to the paired 0.2.17 and pins the unpublished verifier; release
+  still requires published dependency contents that provide those APIs.
+
 ## Workspace Layout
 
 This repo is a Cargo workspace:

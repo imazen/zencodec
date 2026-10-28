@@ -19,3 +19,8 @@ enough = "0.4.4"
 opt-level = 1
 debug-assertions = true
 overflow-checks = true
+
+# Paired precision verifier; release requires these APIs in published zenpixels.
+[patch.crates-io]
+zenpixels-convert = { git = "https://github.com/imazen/zenpixels", rev = "283655c5424e0ad7ebc6d2acd94670fac1e29158" }
+zenpixels = { git = "https://github.com/imazen/zenpixels", rev = "283655c5424e0ad7ebc6d2acd94670fac1e29158" }

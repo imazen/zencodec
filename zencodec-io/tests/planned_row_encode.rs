@@ -523,3 +523,7 @@ fn registry_job_uses_the_shared_planned_driver_without_a_caller_bridge() {
         ["plan", "construct", "start", "push", "finish"]
     );
 }
+
+// Additive draft controls: reuse the existing recording encoders and assertions.
+#[path = "planned_row_encode/exact_depth.rs"]
+mod exact_depth_tests;

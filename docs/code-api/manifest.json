@@ -5,17 +5,17 @@
       "name": "zencodec",
       "directory": ".",
       "features": "all",
-      "fingerprint": "f353e0f54ee441d173c24a4f214eb0f6743e37b6ba732f61542ab3c21f3e88b8",
-      "surface_sha256": "f673d132b0587f4d54ec545cfb0e1e3758ccb3fa6a7b569b9d77287a7b29222e",
-      "details_sha256": "f9b33cb1539bb456d984f95669cdb19f3a6f14a3e91fcab8ca9366401412fffe"
+      "fingerprint": "2afd4d7982b9bd1a999d5f26bb987b247ada06a65369d5bc85c36398da5010c6",
+      "surface_sha256": "5f2dd2ca7bc08e81b0edebc4b2470fc70bf65870187f54ba490a292220c74659",
+      "details_sha256": "35d8931b2b147a851caf732e68bfb0d33ff5368fde4c7649b5c0b11220725656"
     },
     {
       "name": "zencodec-io",
       "directory": "zencodec-io",
       "features": "all",
-      "fingerprint": "e23d1d674d6037f37e67871163d4823c33dfad9d908606e9ba32ab3440d032fc",
-      "surface_sha256": "a1cc32a0f2f51f2ca15a6f120b4c6741e23da1795b6dc6ca8749e1216658a4ab",
-      "details_sha256": "64b00f0338a8f8cde16c0d2fa3a66b6d5d6675a34578a57ff480fe06843e0b25"
+      "fingerprint": "38550a600d4ac4c90af87a3947425b9aa95a829c139c8df56ef13055c1e2d5a9",
+      "surface_sha256": "0bb01c955defdc5ba23afc82066c039352d739f5310f0ea19a398ba48b946350",
+      "details_sha256": "300bfb93a62f6f9a014f5e0d6b4ae498eddf455afe72d9380860d7e38863a9b1"
     },
     {
       "name": "zencodec-coroutine",
@@ -61,7 +61,7 @@
       "name": "zencodec-render",
       "directory": "zencodec-render",
       "features": "all",
-      "fingerprint": "bf0ed7d0eb8ad53b95ae527dab827d00423bbddddfa34c7ae97bd437e9b1540f",
+      "fingerprint": "12c0558516935f359fb87f723d59426c99c162c8e0c4522ebbe0b820efc8cf59",
       "surface_sha256": "dd0549c081e601bef81de32697caf825a660e3383c05f41814cecc5d75d38e2d",
       "details_sha256": "82784ed7963026a723da5e69d23afb74c39428377e0263fc6b04e6b7a8b93033"
     }

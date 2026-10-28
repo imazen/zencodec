@@ -4,6 +4,12 @@
 
 ### QUEUED BREAKING CHANGES
 
+- Carry canonical sample-depth assertions through encode declarations and row
+  sources; verify complete strips before native push, including typed/erased
+  routes. Exhaustive `row_encode::Description` literals add `exact_depth`.
+  Pair zenpixels `283655c5` and the approved 368-byte DecodeOutput layout;
+  lower-depth native fidelity remains separate from grid membership.
+
 - Add optional output-schedule evidence to `TranscodeOffer`, admitting metadata
   and publication requirements on the same retained route. Unknown still refuses;
   native publication-owner qualification remains separate (`40f92ed4`).

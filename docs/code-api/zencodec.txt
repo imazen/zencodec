@@ -786,6 +786,7 @@ pub mod zencodec::encode
 pub zencodec::encode::EncodePlanError::Changed
 pub zencodec::encode::EncodePlanError::DestinationAccess
 pub zencodec::encode::EncodePlanError::Dimensions
+pub zencodec::encode::EncodePlanError::ExactDepth
 pub zencodec::encode::EncodePlanError::InputProtocol
 pub zencodec::encode::EncodePlanError::OutputLag
 pub zencodec::encode::EncodePlanError::PassRange
@@ -909,12 +910,15 @@ pub fn zencodec::encode::EncodeCapabilities::fmt(&self, f: &mut core::fmt::Forma
 pub zencodec::encode::EncodeDeclaration::access: zencodec::output_patch::OutputAccess
 pub zencodec::encode::EncodeDeclaration::color: core::option::Option<&'a zenpixels::color::ColorContext>
 pub zencodec::encode::EncodeDeclaration::descriptor: zenpixels::descriptor::PixelDescriptor
+pub zencodec::encode::EncodeDeclaration::exact_depth: core::option::Option<zenpixels::sample::exact::ExactDepth>
 pub zencodec::encode::EncodeDeclaration::height: u32
 pub zencodec::encode::EncodeDeclaration::width: u32
 impl<'a> zencodec::encode::EncodeDeclaration<'a>
 pub const fn zencodec::encode::EncodeDeclaration<'a>::new(width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor) -> Self
+pub fn zencodec::encode::EncodeDeclaration<'a>::validate_exact_depth(&self) -> core::result::Result<(), zenpixels::sample::exact::ExactDepthError>
 pub const fn zencodec::encode::EncodeDeclaration<'a>::with_access(self, access: zencodec::output_patch::OutputAccess) -> Self
 pub const fn zencodec::encode::EncodeDeclaration<'a>::with_color(self, color: &'a zenpixels::color::ColorContext) -> Self
+pub const fn zencodec::encode::EncodeDeclaration<'a>::with_exact_depth(self, exact: zenpixels::sample::exact::ExactDepth) -> Self
 impl core::fmt::Debug for zencodec::encode::EncodeDeclaration<'_>
 pub fn zencodec::encode::EncodeDeclaration<'_>::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 #[non_exhaustive] pub struct zencodec::encode::EncodeOutput

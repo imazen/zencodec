@@ -46,7 +46,7 @@ use zencodec::{
     },
     storage::{OwnedStorage, StorageBudget},
 };
-use zenpixels::{ColorContext, PixelDescriptor, PixelSlice, PixelSliceMut};
+use zenpixels::{ColorContext, PixelDescriptor, PixelSlice, PixelSliceMut, sample::ExactDepth};
 
 /// Fixed sample declaration for this operation. Color conversion is not implicit.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -59,6 +59,11 @@ pub struct Description {
     pub descriptor: PixelDescriptor,
     /// Original color context carried on every source and encoder row view.
     pub color_context: Option<Arc<ColorContext>>,
+    /// Optional assertion about current canonical samples, checked before push.
+    /// `Some` is strict: unsupported layouts refuse before startup, including
+    /// full-storage CMYK claims. `None` does not restrict sample depth.
+    /// It does not prove the encoder preserves samples or bound native memory.
+    pub exact_depth: Option<ExactDepth>,
 }
 impl Description {
     /// Construct a declaration; execution checks dimensions and size arithmetic.
@@ -68,11 +73,20 @@ impl Description {
             height,
             descriptor,
             color_context: None,
+            exact_depth: None,
         }
     }
     /// Attach the actual sample context without changing the descriptor.
     pub fn with_color_context(mut self, context: Arc<ColorContext>) -> Self {
         self.color_context = Some(context);
+        self
+    }
+
+    /// State a sample-grid claim; execution verifies each active row before push.
+    /// Supported layouts follow [`EncodeDeclaration::exact_depth`]. A claim
+    /// changes admission: it must be verifiable even if the encoder ignores it.
+    pub const fn with_exact_depth(mut self, exact: ExactDepth) -> Self {
+        self.exact_depth = Some(exact);
         self
     }
 }
@@ -97,6 +111,9 @@ pub trait Source {
     ) -> Result<(), Self::Error>;
 }
 /// Borrow a complete raster through the same row-source interface.
+/// An attached exact-depth claim is preserved and verified before each push.
+/// Unsupported claimed layouts refuse before startup; this is stricter than
+/// using an otherwise identical unclaimed view.
 pub struct Raster<'a>(PixelSlice<'a>);
 impl<'a> Raster<'a> {
     /// Retain the caller's raster borrow; source padding is not copied.
@@ -109,6 +126,7 @@ impl Source for Raster<'_> {
     fn description(&self) -> Description {
         let mut desc = Description::new(self.0.width(), self.0.rows(), self.0.descriptor());
         desc.color_context = self.0.color_context().cloned();
+        desc.exact_depth = self.0.exact_depth();
         desc
     }
     fn mechanism(&self) -> OutputSource {
@@ -248,6 +266,27 @@ impl fmt::Display for Refusal {
     }
 }
 impl Error for Refusal {}
+
+/// Actual samples contradict the declared grid. The complete strip is refused.
+/// Earlier live bytes remain irrevocable; no finish or alternate route is tried.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ExactDepthContradiction {
+    /// Absolute zero-based first row containing an off-grid active sample.
+    /// This can be later than the first row of the refused strip.
+    pub first_row: u32,
+    /// The asserted grid that did not hold for that row.
+    pub claim: ExactDepth,
+}
+impl fmt::Display for ExactDepthContradiction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "row samples contradict exact-depth claim at row {}",
+            self.first_row
+        )
+    }
+}
+impl Error for ExactDepthContradiction {}
 type Cause = Box<dyn Error + Send + Sync>;
 /// Terminal error. Default formatting omits backend payloads and source data.
 pub struct Failure {
@@ -688,6 +727,12 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
         if let Some(color) = &desc.color_context {
             declaration = declaration.with_color(color);
         }
+        if let Some(exact) = desc.exact_depth {
+            declaration = declaration.with_exact_depth(exact);
+        }
+        // Includes the legacy path, whose plan() may start native headers.
+        // This validates structure only; planning must not read source samples.
+        declaration.validate_exact_depth()?;
         let plan = startup.plan(&declaration)?;
         let timing = plan.timing;
         if timing.patches_at_finish() && !writer.can_patch() {
@@ -803,6 +848,29 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
                 stride,
                 desc.descriptor,
             )?;
+            if let Some(exact) = desc.exact_depth {
+                // Check untagged rows written through the mutable source view.
+                // Per-row checks retain the first contradictory absolute row;
+                // nothing in this strip reaches the encoder until all pass.
+                for row in 0..pixels.rows() {
+                    check(pulse)?;
+                    if !exact.holds_for(&pixels.sub_rows(row, 1))? {
+                        return Err(ExactDepthContradiction {
+                            first_row: y + row,
+                            claim: exact,
+                        }
+                        .into());
+                    }
+                }
+                // A Pulse callback during verification can also mutate a
+                // source declaration. Keep that mutation from reaching push.
+                boundary = Stage::Read;
+                validate_source(&source, &desc, mechanism)?;
+                boundary = Stage::Encode;
+                pixels = pixels.with_exact_depth(exact)?;
+            }
+            // Grid verification needs no color context. Attach it only after
+            // scanning so its per-row borrowed views need no Arc clone/drop.
             if let Some(context) = &desc.color_context {
                 pixels = pixels.with_color_context(context.clone());
             }
