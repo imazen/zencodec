@@ -294,3 +294,29 @@ The site initially refused the new dependency pin because its generated
 integration signature snapshot still named the old zenpipe revision. Re-extracting
 from `874a3856` changes the revision only: the displayed checked-transcode
 signatures are identical. The snapshot/manifest equality gate remains intact.
+
+## Merged JPEG baseline and documentation qualification
+
+GitHub main at `cf7b051ba9c198ff7b1cd222552e9d17a29b0513` contains the pinned
+JPEG `8672e549` commit. The coordinator verified ancestry through GitHub's compare
+API. [PR 240](https://github.com/imazen/zenjpeg/pull/240) (controlled decoding),
+[PR 245](https://github.com/imazen/zenjpeg/pull/245) (extended JPEG capability),
+[PR 246](https://github.com/imazen/zenjpeg/pull/246) (native planning hooks) and
+[PR 248](https://github.com/imazen/zenjpeg/pull/248) (metadata feature gate) are
+merged. Remaining carrier-policy work must be qualified on that combined main;
+the existing harness pin still identifies its tested source exactly.
+
+The combined main's [CI run](https://github.com/imazen/zenjpeg/actions/runs/40630953425)
+fails its public API snapshot and all five platform test jobs. Each platform's
+explicit extended-JPEG configuration, with other defaults disabled, reaches four
+failing gain-map cases in `mpf_bounds`. The failures include the deliberate
+metadata-disabled refusal to classify XMP container items. This requires resolving
+the feature/test contract; a merged commit is not evidence of a passing matrix.
+Fuzz and coverage workflows pass on that same main revision.
+
+Zencodec integration `2fe20905` passes [CI](https://github.com/imazen/zencodec/actions/runs/40635981071),
+[fuzz checks](https://github.com/imazen/zencodec/actions/runs/40635981079) and
+[documentation qualification](https://github.com/imazen/zencodec/actions/runs/40635981082),
+including native JPEG, TIFF/JXL, AV1, executable examples and browser checks.
+The deployment job is skipped on the review branch; these results do not claim a
+GitHub Pages publication.
