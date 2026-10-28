@@ -1,6 +1,12 @@
 # Checked codec operations: target and implementation
 
-Implementation is on [PR 168](https://github.com/imazen/zencodec/pull/168).
+The checked operations from [PR 168](https://github.com/imazen/zencodec/pull/168)
+and shared encoder-driven row input from
+[PR 174](https://github.com/imazen/zencodec/pull/174) are merged into `main`.
+Joint acquisition/output admission is under review in
+[PR 175](https://github.com/imazen/zencodec/pull/175); its
+[contract and qualification](encoding-route.md) distinguish tested policy
+selection from the production driver and native integration still being qualified.
 This is an active implementation record, not a declaration that the complete
 API is implemented or stable. [spec.md](spec.md) contains current signatures;
 [the comparison review](api-review-2026-10-25.md) records the verified external
@@ -87,7 +93,7 @@ work do not gate that loop. See [the executable selection evidence](../perf/spat
 The [collection contract](collection-contract.md) documents the implemented
 selection methods, error scope, discovery accounting and remaining adapter work.
 
-## Implemented on the PR
+## Implemented contracts and their qualification
 
 | Contract | Implementation and verification |
 |---|---|

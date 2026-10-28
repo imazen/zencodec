@@ -4,8 +4,8 @@ The review API adds `operation::resolve_encode_route` for one retained configure
 `EncodeJob` and complete acquisition × output alternatives. It reuses
 `EncodeDeclaration`, `EncodePlan`, `OutputScheduleOffer` and `OperationPolicy`.
 It does not implement source acquisition, native preparation, replay execution or
-publication. Those belong to the driver; native integration remains unqualified
-by this source-only change.
+publication. Those belong to the driver. The shared policy implementation is
+tested; native integration remains unqualified by those policy tests.
 
 ## Caller policy
 
@@ -155,6 +155,38 @@ can handle the new non-exhaustive question or delegate to the preset.
 One configuration is shared by all alternatives, so lossless preference cannot
 rank its acquisition methods differently. Metadata and fidelity are facts of the
 actual effective job; accepting a setter alone is not output qualification.
+
+### What an encoder plan does not prove
+
+```text
+requested color policy + current samples + configured job
+    -> actual retained native metadata
+    -> EncodePlan.carriers
+    -> encoded file checked against those facts AND the original request
+```
+
+These are two separate checks. A truthful `carriers` value describes what the
+encoder will emit; it does not prove that the encoder honored a requested
+`ColorEmitPolicy`. For example, reporting no ICC is truthful but insufficient
+when the caller required an ICC-only output. Historical color provenance also
+does not establish the current pixel interpretation. Derive carrier facts from
+the retained native plan, and refuse unsupported requested behavior before
+native startup rather than treating setter success as evidence.
+
+The same distinction applies to orientation. Correct displayed pixels do not
+prove that the encoder preserved stored samples and carried an orientation tag.
+Baking a quarter-turn can require a different acquisition and memory strategy.
+The current route facts do not provide a portable selector between tagging and
+baking; they must not be used to claim that choice is implemented. Existing
+orientation-carriage requirements remain in force while native routes are
+qualified against both stored samples and container properties.
+
+Finally, `AT_FINISH` says when output becomes available, not where it is retained.
+A native adapter that buffers the complete compressed file still has that
+retention cost, even if the driver later selects disk staging or finish-first
+publication. Such a route cannot establish a bounded output-wait footprint
+without accounting for the native buffer too. Final-pass streaming, seek-back
+publication and finish-first storage need distinct executable native controls.
 
 The common selector retains bounded copyable facts and scans offers through a
 bit mask. The question borrows the ICC-bearing plan; reports contain no ICC
