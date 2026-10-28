@@ -666,3 +666,9 @@ The new all-feature eight-crate HTML reference exposed seven unresolved short
 links in media output module documentation. They now use explicit
 `crate::output` targets; signatures and behavior are unchanged. Strict Rustdoc
 warnings remain enabled; final reference generation verifies the correction.
+
+## Fixed reference navigation overflow (2026-10-28)
+
+Adding the Rustdoc reference link exposed a 768 px header overflow. The main
+navigation now wraps at all widths and the header grows with its contents.
+The existing browser no-overflow assertions remain unchanged.
