@@ -76,6 +76,7 @@ jobs:
       - name: Execute effective-job preflight implementation experiment
         timeout-minutes: 7
         run: |
+          python3 -m unittest discover -s perf/jpeg-policy-validation -p test_native_graph.py
           python3 perf/jpeg-policy-validation/check-native-preflight.py \
             "$HOME/tmp/zencodec-native-preflight-${{ github.run_id }}-${{ github.run_attempt }}" \
             --target "$GITHUB_WORKSPACE/perf/jpeg-policy-validation/target"

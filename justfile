@@ -1004,6 +1004,7 @@ jpeg-preflight-profile executable output revision:
     python3 perf/jpeg-policy-validation/profile-preparation.py "{{executable}}" "{{output}}" --source-revision "{{revision}}" --native-hooks
 
 jpeg-preflight-ci directory target:
+    python3 -m unittest discover -s perf/jpeg-policy-validation -p test_native_graph.py
     python3 perf/jpeg-policy-validation/check-native-preflight.py "{{directory}}" --target "{{target}}"
 
 jpeg-preparation-profile executable output revision:

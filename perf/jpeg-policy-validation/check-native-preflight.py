@@ -15,6 +15,23 @@ import subprocess
 import tarfile
 
 
+def validate_framework_graph(metadata, root):
+    """Reject duplicated or foreign framework packages before native execution."""
+    root = Path(root).resolve()
+    for name, directory in [
+        ("zencodec", root),
+        ("zencodec-io", root / "zencodec-io"),
+        ("zencodec-coroutine", root / "zencodec-coroutine"),
+        ("zenmeta", root / "zenmeta"),
+    ]:
+        packages = [p for p in metadata["packages"] if p["name"] == name]
+        if len(packages) != 1:
+            raise ValueError(f"Expected one {name}, found {len(packages)}")
+        package = packages[0]
+        if package["source"] is not None or Path(package["manifest_path"]).resolve() != directory / "Cargo.toml":
+            raise ValueError(f"Expected {name} from the framework export, found {package['manifest_path']}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path)
@@ -38,6 +55,7 @@ def main():
         "cargo", "metadata", "--locked", "--format-version", "1",
         "--manifest-path", str(manifest),
     ], cwd=export, timeout=120))
+    validate_framework_graph(metadata, export)
     native = [p for p in metadata["packages"] if p["name"] == "zenjpeg"]
     if len(native) != 1 or not (native[0]["source"] or "").startswith("git+"):
         raise ValueError("Expected one immutable git-sourced native JPEG baseline")

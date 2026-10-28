@@ -25,6 +25,15 @@ metadata serializers; there are no committed image binaries. The recipe supplies
 `JPEG_POLICY_ARTIFACTS` for independent ICC extraction; direct Cargo invocations
 must set it explicitly to a disk directory.
 
+### Framework dependency identity
+
+The preflight runner checks the resolved Cargo metadata before executing native
+tests: exactly one copy of each of `zencodec`, `zencodec-io`,
+`zencodec-coroutine`, and `zenmeta`, all from the exported framework checkout.
+It refuses missing companions, duplicate registry/git copies, and packages from
+another local checkout. This checks the preflight harness graph; each codec's
+independent feature and tooling graphs still need their own qualification.
+
 ### Native output scheduling qualification
 
 Run `just jpeg-output-scheduling-check`. At pinned zenjpeg revision
