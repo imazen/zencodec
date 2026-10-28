@@ -305,17 +305,36 @@ pub enum Refusal {
     /// Destination access changed while policy was deciding.
     DestinationChanged,
     /// Encoder requests are out of order, inconsistent or outside the declaration.
-    RequestOrder { pass: u32, first: u32 },
+    RequestOrder {
+        /// Zero-based native pass named by the request.
+        pass: u32,
+        /// First requested row, or zero when rejecting a new pass.
+        first: u32,
+    },
     /// The encoder exceeded its admitted native pass bound or final pass.
-    PassLimit { pass: u32 },
+    PassLimit {
+        /// Zero-based native pass that could not be admitted.
+        pass: u32,
+    },
     /// Completion or a new pass arrived before the current traversal completed.
-    IncompletePass { pass: u32 },
+    IncompletePass {
+        /// Current or requested zero-based native pass; zero before any fill.
+        pass: u32,
+    },
     /// A pull did not perform exactly one successful fill, or swallowed a failure.
     PullProtocol,
     /// Samples or identity changed on a repeated source/disk traversal.
-    ReplayChanged { pass: u32, first: u32 },
+    ReplayChanged {
+        /// Zero-based traversal on which a discrepancy was detected.
+        pass: u32,
+        /// Row whose digest differed, or the next row at an identity check.
+        first: u32,
+    },
     /// Final-pass-only output appeared before its final traversal started.
-    EarlyOutput { pass: Option<u32> },
+    EarlyOutput {
+        /// Last started pass; `None` means output appeared before the first fill.
+        pass: Option<u32>,
+    },
     /// No executable input route could reserve its required managed storage.
     NoInputRoute,
 }
