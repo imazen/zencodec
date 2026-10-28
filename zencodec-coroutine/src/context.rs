@@ -330,7 +330,10 @@ impl CoroutineContext {
     }
 
     /// Hand a strip of rows to the driver. Suspends until the decoder has
-    /// copied it into the sink (one `Event::Rows`).
+    /// copied it into the sink. Each `Event::Rows` delivers at most one buffer
+    /// allowed by the sink's `max_buffer_rows`; a larger batch stays retained
+    /// across steps until every row is delivered. This bounds queued sink
+    /// buffers, not the native batch's storage.
     ///
     /// Provisional rows (`!meta.is_final`) may be written only when
     /// [`accepts_provisional`](Self::accepts_provisional) is `true`.

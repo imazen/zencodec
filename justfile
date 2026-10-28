@@ -767,6 +767,11 @@ coroutine-cost-sync export:
     cp zencodec-io/Cargo.toml "{{export}}/zencodec-io/"
     cp zencodec-io/benches/coroutine_admission.rs zencodec-io/benches/fixture.rs "{{export}}/zencodec-io/benches/"
 
+# One sink loan per event, including retained final/provisional batches.
+coroutine-row-delivery-check:
+    cargo test -p zencodec-coroutine --locked
+    cargo clippy -p zencodec-coroutine --all-targets --locked -- -D warnings
+
 coroutine-cost-check:
     cargo clippy -p zencodec-io --bench coroutine_admission --locked -- -D warnings
 

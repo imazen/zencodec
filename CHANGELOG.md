@@ -2,6 +2,11 @@
 
 ## Native image selection (unreleased experiment)
 
+- Yield one admitted sink strip per coroutine progress event. Retain the
+  unfinished native batch without advancing the producer, preserve strided
+  samples/pass coordinates, and keep cancellation terminal between deliveries.
+  This bounds queued sink loans, not native workspace or batch storage.
+
 - Add job-to-writer/destination row adapters that admit policy before driver
   allocation and native construction, bind current color at startup, and reject
   changed source/destination/plan facts before pixel reads or publication.

@@ -231,6 +231,13 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed during the zenpipe integration loop (2026-10-28): coroutine delivery
+  split a native batch into small sink loans but filled all loans before
+  returning, exhausting a bounded pull adapter's object allowance. It now
+  retains the batch and yields one loan per event. The one-slot regression
+  covers striding, provisional passes, final-poll rows and cancellation; native
+  PNG requalification is separate. No queue cap or prior assertion was relaxed.
+
 - Fixed during native integration supervision (2026-10-28): the code-first
   catalog fingerprint omitted crate READMEs, so zenmeta's `include_str!` crate
   documentation could change without invalidating its generated entries.

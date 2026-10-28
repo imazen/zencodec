@@ -58,6 +58,10 @@ pub struct CoroutineDecoder<F, E> {
     need: Vec<InputRequest>,
     cached_info: Option<ImageInfo>,
     cached_info_generation: u64,
+    /// A native batch may exceed the sink's capacity for one progress event.
+    /// Keep its allocation until all strips have been delivered; do not poll
+    /// the producer while any of its rows remain unpublished.
+    pending_rows: Option<(crate::context::PendingRows, u32)>,
     _err: PhantomData<fn() -> E>,
 }
 
@@ -130,6 +134,7 @@ where
             need: Vec::new(),
             cached_info: None,
             cached_info_generation: 0,
+            pending_rows: None,
             _err: PhantomData,
         }
     }
@@ -270,13 +275,10 @@ where
         match &self.state {
             State::Done(info) => return Ok(Progress::new(0, Event::Done(info.clone())).into()),
             State::Failed => return Err(StepError::Finished),
-            State::Finishing(info) => {
-                let info = info.clone();
-                return self.finish(sink, info, 0).map(Into::into);
-            }
-            State::Running => {}
+            State::Running | State::Finishing(_) => {}
         }
         if let Err(reason) = pulse.check() {
+            self.pending_rows = None;
             self.shared.lock().cancelled = Some(reason);
             self.state = State::Failed;
             return Err(StepError::Cancelled(reason));
@@ -286,6 +288,12 @@ where
                 consumed: 0,
                 boundary,
             });
+        }
+        if let Some((rows, offset)) = self.pending_rows.take() {
+            return self.deliver_rows(rows, offset, 0, sink);
+        }
+        if let State::Finishing(info) = &self.state {
+            return self.finish(sink, info.clone(), 0).map(Into::into);
         }
         self.state = State::Failed;
         let mut consumed = Self::absorb(&mut self.shared.lock(), &input, 0)
@@ -378,22 +386,7 @@ where
                         self.state = State::Failed;
                         return Err(StepError::Codec(E::from(CoroutineError::RowsBeforeHeader)));
                     }
-                    let copied = copy_rows(sink, &rows, self.accepts_provisional);
-                    self.shared.lock().spare = rows.data;
-                    return match copied {
-                        Ok(()) => Ok(Progress::new(
-                            consumed,
-                            Event::Rows {
-                                meta: rows.meta,
-                                rows: rows.rows,
-                            },
-                        )
-                        .into()),
-                        Err(e) => {
-                            self.state = State::Failed;
-                            Err(StepError::Sink(e))
-                        }
-                    };
+                    return self.deliver_rows(rows, 0, consumed, sink);
                 }
                 Pending::Metadata(update) => {
                     let controlled = self.shared.lock().controlled;
@@ -560,6 +553,8 @@ enum Pending {
 fn copy_rows(
     sink: &mut dyn DecodeRowSink,
     rows: &crate::context::PendingRows,
+    offset: u32,
+    count: u32,
     accepts_provisional: bool,
 ) -> Result<(), SinkError> {
     if !rows.meta.is_final && !accepts_provisional {
@@ -572,7 +567,32 @@ fn copy_rows(
         rows.stride,
         rows.descriptor,
     )?;
-    zencodec::helpers::copy_rows_to_sink(sink, rows.meta, &pixels)
+    rows.meta
+        .y
+        .checked_add(rows.rows)
+        .ok_or_else(|| SinkError::from("copied rows exceed the row coordinate range"))?;
+    if count == 0 {
+        return Ok(());
+    }
+    let mut meta = rows.meta;
+    meta.y += offset;
+    let mut destination = if meta.is_final {
+        sink.provide_next_buffer(meta.y, count, rows.width, rows.descriptor)?
+    } else {
+        sink.provide_pass_buffer(meta, count, rows.width, rows.descriptor)?
+    };
+    if destination.width() != rows.width
+        || destination.rows() != count
+        || destination.descriptor() != rows.descriptor
+    {
+        return Err("sink returned a buffer with a different geometry or descriptor".into());
+    }
+    for row in 0..count {
+        destination
+            .row_mut(row)
+            .copy_from_slice(pixels.row(offset + row));
+    }
+    Ok(())
 }
 
 impl<F, E> CoroutineDecoder<F, E>
@@ -580,6 +600,31 @@ where
     F: Future<Output = Result<OutputInfo, E>> + Send + 'static,
     E: core::error::Error + Send + Sync + From<CoroutineError> + 'static,
 {
+    fn deliver_rows(
+        &mut self,
+        rows: crate::context::PendingRows,
+        offset: u32,
+        consumed: usize,
+        sink: &mut dyn DecodeRowSink,
+    ) -> Result<ControlledProgress, StepError<E>> {
+        // Keep terminal behavior even if a sink callback unwinds. The batch is
+        // local until copying succeeds, so failure releases it immediately.
+        let state = core::mem::replace(&mut self.state, State::Failed);
+        self.check_interpretation()?;
+        let count = sink.max_buffer_rows().get().min(rows.rows - offset);
+        copy_rows(sink, &rows, offset, count, self.accepts_provisional).map_err(StepError::Sink)?;
+        let mut meta = rows.meta;
+        meta.y += offset;
+        if offset + count < rows.rows {
+            self.pending_rows = Some((rows, offset + count));
+        } else {
+            self.shared.lock().spare = rows.data;
+        }
+        self.state = state;
+        self.need.clear();
+        Ok(Progress::new(consumed, Event::Rows { meta, rows: count }).into())
+    }
+
     /// The future completed with `info`: begin if the header never was,
     /// finish the sink, and report `Done`.
     fn finish(
