@@ -92,3 +92,24 @@ fixture. That native gate remains incomplete. The aggregate run therefore exits
 101: 154 s, peak RSS 1.17 GiB, minimum available 13633 MiB, peak load 2.02 under
 `run-heavy --mem 3G --jobs 2`. Its following documentation stages were unrun and
 are continued separately. No test expectation or production behavior changed.
+
+## Generated API reference and guide
+
+Frozen `c910076c379b837ffd2fd7a97777f0429187306d`: API generation/check,
+eight compiler-derived catalogs, all-feature Rustdoc HTML for eight crates,
+24 site/source checks and the full browser suite pass. Rustdoc uses
+`-D warnings`; browser assertions retain the existing 390/768/1440 px checks.
+Commands: `just api-doc`, `just api-doc-check`, `just code-catalog "$PWD"`,
+`just docs-reference`, `just docs-site-browser-check 3547`. The generated API
+snapshots and catalogs are copied back unchanged from the tested export.
+
+Two failed documentation attempts are retained: seven short intra-doc links in
+media output failed Rustdoc resolution (fixed with explicit `crate::output`
+paths), then the added reference navigation link exposed a 768 px overflow
+(fixed by allowing navigation to wrap and the header to grow). No warning or
+browser assertion was relaxed. Final serialized wrapper receipt: rc0, 58 s,
+peak RSS 0.29 GiB, minimum available 13899 MiB, peak load 0.96, 3G/jobs2.
+All eight Rustdoc crate entry points return HTTP 200 in the preview, and the
+configured-job method anchor is present. Remote access to the source-identity
+manifest is verified from another machine. This is documentation/build
+qualification on the generation host, not cross-platform release certification.
