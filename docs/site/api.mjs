@@ -127,7 +127,7 @@ export const api = {
   sliceDriver: {path:'zencodec_io::drive_from_slice',file:'zencodec-io/src/drive.rs',methods:['drive_from_slice']},
   file: {path:'zencodec_io::FileReadAt',file:'zencodec-io/src/file.rs',scope:'impl FileReadAt',methods:['new','open']},
   positionedDriver: {path:'zencodec_io::drive_from_read_at',file:'zencodec-io/src/drive.rs',methods:['drive_from_read_at']},
-  readAt: {path:'zencodec::source::ReadAt',file:'src/source.rs',scope:'pub trait ReadAt',methods:['len','len_hint','read_at','read_many_at','as_slice']},
+  readAt: {path:'zencodec::source::ReadAt',file:'src/source.rs',scope:'pub trait ReadAt',methods:['len','len_hint','read_exact_at','read_at','read_many_at','as_slice']},
   seekReader: {path:'zencodec_io::ReadAtReader',file:'zencodec-io/src/read_at_reader.rs',scope:'impl<S> ReadAtReader<S>',methods:['new','into_inner']},
   seekCursor: {path:'std::io::Seek for zencodec_io::ReadAtReader',file:'zencodec-io/src/read_at_reader.rs',scope:'impl<S: ReadAt> Seek for ReadAtReader<S>',methods:['seek','stream_position']},
   asyncDriver: {path:'zencodec_io::tokio_io::decode_async',file:'zencodec-io/src/tokio_io.rs',methods:['decode_async']},

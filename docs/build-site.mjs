@@ -58,10 +58,10 @@ function apiPanels(id, keys) {
   if (!keys?.length) throw Error(`No API selection for ${id}`);
   return `<section class="api-section" aria-labelledby="${id}-api-title"><h4 id="${id}-api-title">Signatures <small>from this revision · bodies omitted</small></h4>${keys.map((key, i) => {
     const spec = api[key], signature = (id.startsWith('codec-') && implementorSignatures.get(key)) || signatures.get(key);
-    const kind = !spec.scope ? 'Function' : spec.scope.startsWith('impl') ? 'Inherent methods' : 'Trait methods';
+    const kind = spec.item ? 'Type definition' : !spec.scope ? 'Function' : spec.scope.startsWith('impl') ? 'Inherent methods' : 'Trait methods';
     const selection = signature.omittedMethods?.length ? `<p class="api-selection">Selected methods · ${signature.omittedMethods.length} more in the full contract.</p>` : '';
     const required = spec.scope?.startsWith('pub trait') && signature.requiredMethods?.length ? `<p class="api-required">Required methods: ${signature.requiredMethods.map(name=>`<code>${escape(name)}</code>`).join(', ')}. Other methods have defaults; read them before relying on their behavior.</p>` : '';
-    const feature = spec.file === 'zencodec-io/src/tokio_io.rs' ? ' · zencodec-io feature: tokio' : spec.file === 'zencodec-io/src/file.rs' ? ' · zencodec-io feature: std' : '';
+    const feature = spec.file === 'zencodec-io/src/tokio_io.rs' ? ' · zencodec-io feature: tokio' : ['zencodec-io/src/file.rs','zencodec-io/src/row_encode.rs'].includes(spec.file) ? ' · zencodec-io feature: std' : '';
     return `<details class="api-panel" data-api="${key}"${i === 0 ? ' open' : ''}><summary><span>${kind}${feature}</span><code>${escape(spec.path)}</code></summary><pre><code>${highlight(signature.code)}</code></pre>${selection}${required}<a class="api-source" href="https://github.com/imazen/zencodec/blob/${sha}/${spec.file}#L${signature.line}">Read defaults, imports and full contract ↗</a></details>`;
   }).join('')}</section>`;
 }

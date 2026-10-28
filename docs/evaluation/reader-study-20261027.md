@@ -102,3 +102,12 @@ Receipt: `rc=0 1s | peak-RSS 0.28GiB | min-avail 7341MiB | peak-load 0.65`.
 The final browser run with visible imports, required signatures, output accessors
 and corrected YCbCr signature passed existing desktop/mobile/clipboard gates:
 `rc=0 36s | peak-RSS 0.30GiB | min-avail 6526MiB | peak-load 1.11`.
+
+## Adapter card follow-through, 2026-10-28
+
+The implementor's later positional-source attempt identified another omitted
+required signature: `ReadAt::read_exact_at`. Source inspection confirms it is
+required. The card now includes it, and row-encoding cards identify their `std`
+feature requirement. Complete struct/enum cards are labeled "Type definition"
+rather than "Trait methods". The existing source-extraction tests pass. This
+check does not count as a fresh reader trial or a browser-layout measurement.
