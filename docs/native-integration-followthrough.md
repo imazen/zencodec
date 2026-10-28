@@ -193,3 +193,44 @@ The [policy-binding experiment](policy-binding-experiment.md) exercises a concre
 binding outside callback wrappers. Its five controls and strict Clippy pass; it
 adds no production API and does not close the deferred-obligation or duplicate
 preset-placement gaps.
+
+## Aligned native graph and registry destinations
+
+The native repairs are now pushed on review branches: JPEG `8672e549`, PNG
+`5422b6d2`, and bitmaps `9ad4582b`, all using core `79676215`. The JPEG/PNG batch
+passed its orientation controls, native suites, strict lint and fuzz builds.
+The bitmap all-features build initially selected published zencodec 0.1.26 for
+its own dependency despite another graph edge using 0.2.0. Raising the required
+floor to 0.2.0 fixed that split. Its separate rerun passed all nine command gates:
+`rc=0`, 135 seconds, peak RSS 0.34 GiB, minimum available memory 5817 MiB and peak
+load 1.54. These are local qualification results; review-head CI is a separate gate.
+
+[Zenpipe PR 106](https://github.com/imazen/zenpipe/pull/106) publishes the matching
+Pulse migration at `874a3856`. Its fourth integration batch passed checked
+transcoding, Pulse retention, metadata services, native PNG strip delivery and
+crop controls, and direct orientation carriage. File, PNG-to-PNG, disk-spool and
+Tokio examples executed. Two policy-placement diagnostic controls and ImageJob
+orientation remained failing. Subsequent processing tests exposed orientation-node
+composition and resize draining failures, tracked without weakening the pixel
+oracle in [zenpipe issue 107](https://github.com/imazen/zenpipe/issues/107).
+
+Core adapter commit `f627b02b` adds `encode_dyn_job` and
+`encode_dyn_job_to_destination`. A registry job now enters the same planned row
+loop as a typed job. The private executor preserves boxed native causes, and
+planning/startup use the retained configured job. Every existing planned-row
+control now runs through both typed and erased paths; separate controls check
+registry-to-writer execution, forward rejection and seek-back patch application.
+The std I/O suite and strict Clippy pass. Test/catalog receipt: `rc=0`, 9 seconds,
+peak RSS 0.30 GiB, minimum available memory 6002 MiB, peak load 1.09. Site source
+and full browser checks pass (`rc=0`, 34 seconds, peak RSS 0.30 GiB). The new
+[code-first journey](https://imazen.github.io/zencodec/code.html#adapter-registry-output)
+ships with source-extracted signatures and expandable examples; deployment still
+requires the native JPEG harness repair. Native zenpipe adoption of these new
+entry points remains a separate gate. The already measured pipeline used the
+older pinned core, not these new adapter functions.
+
+The paired pixel proposal's 32-bit fixture-overflow repair is pushed at
+`0bdc0db5`. The local i686 conversion suite, including its zero-allocation control,
+passes with overflow checks enabled. Full exact-head CI is
+[run 40625957534](https://github.com/imazen/zenpixels/actions/runs/40625957534).
+No crate has been published by this work.
