@@ -3047,6 +3047,9 @@ There are no input owners or ICC payloads in the report.
 its `metadata: Option<MetadataTransfer>` and `retains_opaque_profile: Option<bool>`
 to unknown. Supply this value once for the configured job. It is available through
 `facts.evidence`, shared by all alternatives and retained in the bounded context.
+`EncodeEvidence::unknown()` also leaves format, fidelity and resolution unknown
+for generic retained jobs that cannot expose qualified configuration facts.
+It supplies no exception to mandatory admission.
 
 `EncodeRouteOffer::new(InputAcquisition, OutputScheduleOffer)` initializes replay,
 workspace and range evidence to unknown. Metadata/profile facts are not route

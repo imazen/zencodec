@@ -7,6 +7,49 @@ jobs refuse with the original typed `EncodePlanError::InputProtocol`; there is
 no allocating fallback. This implementation is source-only and unqualified until
 the serialized controls and native integration are completed.
 
+## Start with the configured job
+
+```rust
+use std::io::Write;
+use zencodec::{At, Pulse, encode::{EncodeJob, Encoder},
+    operation::PolicySet, storage::StorageBudget};
+use zencodec_io::row_encode::{self, Completed, Failure, Options, Raster};
+use zenpixels::PixelSlice;
+
+fn save<J: EncodeJob, W: Write>(
+    job: J, pixels: PixelSlice<'_>, writer: W, pulse: &dyn Pulse,
+) -> Result<Completed, At<Failure>>
+where J::Enc: Encoder {
+    row_encode::encode_job(
+        job, Raster::new(pixels), writer, PolicySet::new(),
+        Options::new(StorageBudget::new(64 * 1024 * 1024, 4096),
+                     64 * 1024 * 1024),
+        pulse,
+    )
+}
+```
+
+The codec's retained plan decides whether this pushes rows or answers native
+replay requests. The default stages compressed output before final publication.
+The two limits above cover driver-managed payload and total encoded bytes;
+neither is a whole-process or native-workspace limit. A borrowed raster is still
+owned by the caller for this function's lifetime.
+
+For a forward source, replace `Raster::new(pixels)` with a `Source` implementation.
+If the codec needs replay, the same call can select a private snapshot. To forbid
+that raw RAM cost, use `PolicySet::new().allow_raw_memory_staging(false)`.
+Supply a distinct owned raw file through `Options::with_raw_disk_staging` to
+offer disk replay instead. Without an admitted executable alternative, the
+operation refuses before source reads. `require_exact_replay(true)` excludes
+hash-checked mutable disk/positional replay; it does not silently weaken itself.
+
+For a seek-back destination, use `encode_job_to_destination` with
+`zencodec_io::destination::SeekBack::new(writer)?`. For an already erased job,
+the corresponding functions are `encode_dyn_job` and
+`encode_dyn_job_to_destination`. No native codec type is needed by the source or
+destination adapters. These are configured-job primitives; the checked registry
+request-to-destination convenience is still a separate integration obligation.
+
 ## Admission and execution
 
 The driver checks both bound and legacy workspace requirements before calling
