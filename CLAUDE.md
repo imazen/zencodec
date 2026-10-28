@@ -638,3 +638,17 @@ confirmed byte accounting. Both pre-fix controls failed as expected; three
 production patch controls, 33 public multipass controls and strict Clippy pass.
 The receipt preserves an initial stale shared-target artifact failure; independent
 target rebuilding qualified the corrected source.
+
+
+## Known Bugs: preparation workspace admission (2026-10-28, fixed)
+
+The planned row driver previously called `plan_encode` before refusing an
+unknown strict workspace bound. It now checks both operation-entry bound and
+legacy requirements before source declaration or native planning. The same
+requirements remain enforced at final selection. Typed and erased controls
+refuse before any planning event or managed allocation and retain named
+`Workspace(Unknown)` causes. See `benchmarks/row_preparation_2026-10-28.json`.
+
+The code-catalog generator also assumed every workspace used its local target
+folder. It now reads Cargo metadata's target directory, honoring configured
+and environment overrides. Regenerated catalogs and the site source checks pass.

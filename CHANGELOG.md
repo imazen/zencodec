@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- Refuse unknown strict workspace bounds before row-job planning, applying both
+  bound and legacy requirements and preserving typed admission diagnostics.
+
 - Stop row and experimental multipass publication before later cursor restoration
   or flush when finish, writes or seeks cancel the Pulse. Preserve confirmed
   append/overwrite counts; adversarial controls cover both output schedules.

@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-28",
+  "source": "eb488b107c0351d67db46ecf3e4ed2b1bc635a1a",
+  "before": "1fec69bb8e6a008b110f54548b7824e6b6fe425e",
+  "command": "just row-preparation-check",
+  "controls": "Before: new no-planning assertion fails. Fixed:18 planned-row tests,15 IO unit tests,strict all-target Clippy pass. Both typed/erased and legacy/bound combinations covered.",
+  "resource": "rc0 43s | peak-RSS 0.41GiB | min-avail 4330MiB | peak-load 1.33",
+  "catalog": {
+    "source": "1040dfb727b94536bbd3556ccbbf122c05533cb1",
+    "initial_failure": "Generator assumed root/target and missed CARGO_TARGET_DIR rustdoc JSON (rc1 3s).",
+    "repair": "Resolve target_directory using Cargo metadata for each workspace. Eight catalogs generated.",
+    "second_failure": "Source tests ran before site generation; missing _site inputs. No assertion changed. Catalog generation passed (aggregate rc1 16s).",
+    "final": "Existing just docs-site-check builds then tests:24/24 pass; rc0 4s | peak-RSS 0.28GiB | min-avail4550MiB | peak-load0.70"
+  },
+  "logs": "~/tmp/zencodec-row-preparation-20261028 on r7900x",
+  "limits": "3G/jobs2; timeout900s commands",
+  "scope": "Validation resources, not codec performance or a newly proven workspace bound."
+}

@@ -320,25 +320,52 @@ fn policy_precedes_construction_and_finish_precedes_destination_waits() {
 }
 
 #[test]
-fn strict_unknown_workspace_refuses_before_callback_allocation_or_start() {
+#[allow(deprecated)] // Preserve coverage of legacy and bound requirement conjunction.
+fn strict_unknown_workspace_refuses_before_planning_or_any_effect() {
+    use zencodec::operation::{PolicyRequirement, RequirementEvidence, UnmetRequirements};
     for erased in [false, true] {
-        let s = Setup::new();
-        let error = run_job(
-            erased,
-            s.job(),
-            s.rows(),
-            s.writer(),
-            BoundPolicy::new(
-                PolicySet::new().with_workspace_limit(0),
-                Resolver(|| panic!("inadmissible route reached callback")),
-            ),
-            s.options(),
-            &zencodec::NoPulse,
-        )
-        .unwrap_err();
-        assert_eq!(error.error().stage, Stage::Policy);
-        assert_eq!(*s.events.lock().unwrap(), ["plan"]);
-        assert!(s.bytes.lock().unwrap().is_empty());
+        for (legacy, bound) in [
+            (None, Some(0)),
+            (Some(0), None),
+            (Some(u64::MAX), Some(0)),
+            (Some(0), Some(u64::MAX)),
+        ] {
+            let s = Setup::new();
+            let storage = StorageBudget::new(4096, 16);
+            let mut options = Options::new(storage.clone(), 4096);
+            if let Some(limit) = legacy {
+                options = options.with_policy_set(PolicySet::new().with_workspace_limit(limit));
+            }
+            let requirements = bound.map_or(PolicySet::new(), |limit| {
+                PolicySet::new().with_workspace_limit(limit)
+            });
+            let error = run_job(
+                erased,
+                s.job(),
+                s.rows(),
+                s.writer(),
+                BoundPolicy::new(
+                    requirements,
+                    Resolver(|| panic!("inadmissible route reached callback")),
+                ),
+                options,
+                &zencodec::NoPulse,
+            )
+            .unwrap_err();
+            assert_eq!(error.error().stage, Stage::Policy);
+            assert!(
+                s.events.lock().unwrap().is_empty(),
+                "no planning/construction/read/publication before admission"
+            );
+            assert_eq!(storage.reserved_bytes(), 0);
+            assert!(s.bytes.lock().unwrap().is_empty());
+            let cause =
+                zencodec::find_cause::<UnmetRequirements>(&error).expect("typed admission cause");
+            assert_eq!(
+                cause.iter().collect::<Vec<_>>(),
+                [(PolicyRequirement::Workspace, RequirementEvidence::Unknown)]
+            );
+        }
     }
 }
 

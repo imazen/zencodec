@@ -509,7 +509,8 @@ where
 
 /// Execute a retained job's declared row route against actual destination access.
 ///
-/// Sequence: plan without native startup, admit policy, revalidate the retained
+/// Sequence: admit preparation workspace, plan without native startup, admit
+/// the route policy, revalidate the retained
 /// source/destination, reserve driver rows, construct once, begin with current
 /// color, compare the complete plan, then read/publish. A refusal or startup
 /// failure never retries another route. Strict unknown workspace/wait evidence
@@ -700,8 +701,19 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
     let mut emitted = 0;
     let mut patched_bytes = 0;
     let mut report = OperationReport::default();
+    let bound_requirements = resolver.requirements();
+    let entry_requirements = options.preset;
     let run = || -> Result<OutputSchedule, Cause> {
         check(pulse)?;
+        // This adapter has no qualified native preparation/workspace bound.
+        // Refuse before asking the job to prepare any state. These checks do
+        // not discharge the unchanged requirements at final route selection.
+        boundary = Stage::Policy;
+        entry_requirements.check_workspace(None)?;
+        if let Some(required) = bound_requirements {
+            required.check_workspace(None)?;
+        }
+        boundary = Stage::Prepare;
         let desc = source.description();
         let mechanism = source.mechanism();
         if desc.width == 0 || desc.height == 0 {
