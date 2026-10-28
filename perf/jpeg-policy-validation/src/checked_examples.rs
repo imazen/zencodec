@@ -276,10 +276,10 @@ mod cancellation_and_publication {
             let error =
                 guide::transcode_to_file(&request, &codecs, &source, destination, &mut policy)
                     .unwrap_err();
-            assert_eq!(
-                error.downcast_ref::<StopReason>(),
-                Some(&StopReason::Cancelled)
-            );
+            assert!(matches!(
+                zencodec::find_cause::<OperationError>(error.as_ref()),
+                Some(OperationError::Stopped(StopReason::Cancelled))
+            ));
             assert_untouched(&absent, &existing);
         }
     }
@@ -304,10 +304,10 @@ mod cancellation_and_publication {
         for destination in [&absent, &existing] {
             let error =
                 guide::publish_completed(&codecs, completed.output(), destination).unwrap_err();
-            assert_eq!(
-                error.downcast_ref::<StopReason>(),
-                Some(&StopReason::Cancelled)
-            );
+            assert!(matches!(
+                zencodec::find_cause::<OperationError>(error.as_ref()),
+                Some(OperationError::Stopped(StopReason::Cancelled))
+            ));
             assert_eq!(completed.data(), before.as_slice());
             assert_untouched(&absent, &existing);
         }

@@ -169,9 +169,9 @@ pub(crate) use tenant::{WorkspaceEvidenceRequired, for_tenant};
 mod transports {
     // EXAMPLE: checked_file
     use zencodec::{
-        CodecSet,
+        At, CodecSet,
         encode::EncodeOutput,
-        operation::{OperationPolicy, Outcome},
+        operation::{OperationError, OperationPolicy, Outcome},
     };
     use zencodecs::checked_transcode::TranscodeRequest;
 
@@ -246,9 +246,9 @@ mod publication {
     // EXAMPLE: checked_png_file
     use std::path::Path;
     use zencodec::{
-        CodecSet,
+        At, CodecSet,
         encode::EncodeOutput,
-        operation::{OperationPolicy, Outcome},
+        operation::{OperationError, OperationPolicy, Outcome},
     };
     use zencodecs::checked_transcode::TranscodeRequest;
 
@@ -258,7 +258,10 @@ mod publication {
         destination: &Path,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Cancellation observed here must not create or truncate the file.
-        codecs.pulse().check()?;
+        codecs
+            .pulse()
+            .check()
+            .map_err(|reason| At::wrap(OperationError::Stopped(reason)))?;
         std::fs::write(destination, output.data())?;
         Ok(())
     }
@@ -271,7 +274,10 @@ mod publication {
         policy: &mut P,
     ) -> Result<Outcome<EncodeOutput>, Box<dyn std::error::Error + Send + Sync>> {
         // ANCHOR: checked_png_file
-        codecs.pulse().check()?;
+        codecs
+            .pulse()
+            .check()
+            .map_err(|reason| At::wrap(OperationError::Stopped(reason)))?;
         let output = request.transcode_with(codecs, bytes, policy)?;
         publish_completed(codecs, output.output(), destination)?;
         // END: checked_png_file
