@@ -681,8 +681,10 @@ impl Scratch {
     fn new() -> Self {
         use std::sync::atomic::{AtomicU64, Ordering};
         static NEXT: AtomicU64 = AtomicU64::new(0);
-        let directory =
-            std::path::PathBuf::from(std::env::var_os("HOME").expect("HOME required")).join("tmp");
+        let home = std::env::var_os("HOME")
+            .or_else(|| std::env::var_os("USERPROFILE"))
+            .expect("HOME or USERPROFILE required for replay scratch");
+        let directory = std::path::PathBuf::from(home).join("tmp");
         std::fs::create_dir_all(&directory).unwrap();
         let path = directory.join(format!(
             "zencodec-replay-{}-{}",
@@ -706,6 +708,7 @@ impl Scratch {
 }
 impl Drop for Scratch {
     fn drop(&mut self) {
+        drop(self.file.take());
         let _ = std::fs::remove_file(&self.path);
     }
 }

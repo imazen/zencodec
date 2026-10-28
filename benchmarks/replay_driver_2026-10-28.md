@@ -63,3 +63,11 @@ All commands were serialized with `run-heavy --mem 3G --jobs 2`.
 
 These wrapper measurements describe the validation commands, not encoder RAM,
 application throughput, native workspace bounds or a before/after comparison.
+
+## Windows CI fixture correction
+
+CI run `40786606889` on `62b92eff` failed three new raw-disk controls on both
+Windows targets before opening a file: the fixture required `HOME`, while those
+runners expose `USERPROFILE`. The fixture now accepts that home-directory variable
+and closes any still-owned file before cleanup. No production behavior, test
+expectation or disk-control applicability changed. The Windows rerun is pending.

@@ -652,3 +652,10 @@ refuse before any planning event or managed allocation and retain named
 The code-catalog generator also assumed every workspace used its local target
 folder. It now reads Cargo metadata's target directory, honoring configured
 and environment overrides. Regenerated catalogs and the site source checks pass.
+
+## Replay fixture portability (2026-10-28)
+
+CI on Windows x64/ARM64 found the new raw-disk replay fixture assumed `HOME`.
+It now also accepts `USERPROFILE` and closes its owned file before removal.
+The three raw-disk behavioral checks remain enabled with unchanged assertions.
+Windows runtime qualification awaits the CI rerun; Linux controls already passed.
