@@ -30,10 +30,12 @@ for the intended breaking version, not a backward-compatibility certificate.
 [its manually dispatched complete CI](https://github.com/imazen/zenpixels/actions/runs/40668717147),
 including API snapshots, feature powerset, i686 and Windows/macOS ARM.
 It merged into the `output-plan` review branch at
-`9dbbdde8a4971d66deda43d6a06ed70022ac7f22`. This is **not yet on main**.
-The combined [PR 92](https://github.com/imazen/zenpixels/pull/92) is running
+`9dbbdde8a4971d66deda43d6a06ed70022ac7f22`. The combined
+[PR 92](https://github.com/imazen/zenpixels/pull/92) passed every job in
 [CI on that exact head](https://github.com/imazen/zenpixels/actions/runs/40769496153)
-before its main merge. No release was requested or performed.
+and merged to main as `7d28c4b73ab7af01d79079af30a623b46bd4041d`.
+Remote comparison verifies the tested head is its ancestor. No release was
+requested or performed.
 
 ## Dependency alignment remains a gate
 

@@ -1,5 +1,5 @@
 #![forbid(unsafe_code)]
-//! `MultiPassEncoder` over imij's public sans-IO bounded lossy session.
+//! Shared `Encoder::pull_rows` over imij's public sans-IO bounded lossy session.
 //!
 //! The session owns its band buffer; requests are filled in place. Output
 //! writes at the current end become pending bytes; earlier offsets become
@@ -10,10 +10,11 @@ use imij::stream_encode::{
     BoundedLossySession, BoundedLossyStep, BoundedStream, LossyUnitIndex, StreamEncodeError,
 };
 use imij::{Channels, ImageInfo, ImiEncoderConfig, Metadata, SampleType};
-use multipass_validation::{
-    MultiPassEncoder, PassCount, PassOutput, PassPlan, PassProgress, PassRows, RowRequest,
-};
 use std::{error::Error, fmt, fs::File, io, os::unix::fs::FileExt, sync::Arc};
+use zencodec::encode::{
+    EncodeDeclaration, EncodePlan, EncodeRows as PassRows, Encoder, OutputPhase,
+    PullProgress as PassProgress, RowDemand as RowRequest, SourcePasses,
+};
 use zencodec::{
     ImageFormat,
     encode::{EncodeOutput, OutputTiming},
@@ -31,6 +32,8 @@ use zenpixels::{
 pub enum ImiError {
     /// Native encoder error.
     Native(StreamEncodeError),
+    /// A shared protocol this native adapter does not implement.
+    Rejected(zencodec::UnsupportedOperation),
     /// Declaration this prototype does not map without relabeling.
     Unsupported(&'static str),
     /// Encoder state machine misuse.
@@ -48,6 +51,7 @@ impl fmt::Display for ImiError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Native(e) => write!(f, "IMI native encoder: {e}"),
+            Self::Rejected(e) => write!(f, "{e}"),
             Self::Unsupported(s) => write!(f, "IMI adapter unsupported: {s}"),
             Self::State(s) => write!(f, "IMI adapter state: {s}"),
             Self::Interrupted => f.write_str("IMI request interrupted by driver"),
@@ -61,6 +65,7 @@ impl Error for ImiError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Native(e) => Some(e),
+            Self::Rejected(e) => Some(e),
             Self::Scratch(e) => Some(e),
             _ => None,
         }
@@ -246,18 +251,33 @@ pub fn image_info(desc: &Description) -> Result<ImageInfo, ImiError> {
     Ok(info)
 }
 
-impl MultiPassEncoder for ImiBounded {
+impl Encoder for ImiBounded {
     type Error = ImiError;
 
-    fn begin_passes(
+    fn reject(op: zencodec::UnsupportedOperation) -> ImiError {
+        ImiError::Rejected(op)
+    }
+
+    fn encode(self, _: zenpixels::PixelSlice<'_>) -> Result<EncodeOutput, ImiError> {
+        Err(ImiError::Unsupported("use the declared pull-row protocol"))
+    }
+
+    fn begin_declared(
         &mut self,
-        desc: &Description,
-        access: OutputAccess,
-    ) -> Result<PassPlan, ImiError> {
+        declaration: &EncodeDeclaration<'_>,
+    ) -> Result<EncodePlan, ImiError> {
+        let access = declaration.access;
+        let mut desc = Description::new(
+            declaration.width,
+            declaration.height,
+            declaration.descriptor,
+        );
+        desc.color_context = declaration.color.map(|color| Arc::new(color.clone()));
+        desc.exact_depth = declaration.exact_depth;
         if self.active.is_some() {
-            return Err(ImiError::State("begin_passes called twice"));
+            return Err(ImiError::State("begin_declared called twice"));
         }
-        let info = image_info(desc)?;
+        let info = image_info(&desc)?;
         let row_bytes = info.row_bytes();
         // Seek-back output keeps the unit table at the head; forward output
         // gets a trailing table. Same pixels either way.
@@ -311,18 +331,11 @@ impl MultiPassEncoder for ImiBounded {
         if access == OutputAccess::SeekBack {
             timing = timing.with_patches();
         }
-        Ok(PassPlan {
-            passes: if planned.min == planned.max {
-                PassCount::Exact(planned.min)
-            } else {
-                PassCount::Range {
-                    min: planned.min,
-                    max: planned.max,
-                }
-            },
-            output: PassOutput::FinalPass,
+        Ok(EncodePlan::replay(
+            SourcePasses::new(planned.min, Some(planned.max)).expect("validated native range"),
             timing,
-        })
+            OutputPhase::FinalPass,
+        ))
     }
 
     fn pull_rows(
@@ -335,7 +348,7 @@ impl MultiPassEncoder for ImiBounded {
         let a = self
             .active
             .as_mut()
-            .ok_or(ImiError::State("pull_rows before begin_passes"))?;
+            .ok_or(ImiError::State("pull_rows before begin_declared"))?;
         if a.done {
             return Ok(PassProgress::Done);
         }
@@ -376,13 +389,9 @@ impl MultiPassEncoder for ImiBounded {
                     if let Some(ctx) = &desc.color_context {
                         view = view.with_color_context(Arc::clone(ctx));
                     }
-                    let request = RowRequest {
-                        pass: stats.passes - 1,
-                        final_pass: pass == CODING_PASS,
-                        label: pass,
-                        first: y0,
-                        rows: view,
-                    };
+                    let request = RowRequest::new(stats.passes - 1, y0, view)
+                        .with_final_pass(pass == CODING_PASS)
+                        .with_label(pass);
                     if rows.fill(request).is_err() {
                         session.fail(StreamEncodeError::Codec(imij::Error::Read));
                         return Err(ImiError::Interrupted);

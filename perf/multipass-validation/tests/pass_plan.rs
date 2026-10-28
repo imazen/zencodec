@@ -116,13 +116,11 @@ impl MultiPassEncoder for Script {
             PixelDescriptor::RGB8_SRGB,
         )
         .unwrap();
-        rows.fill(RowRequest {
-            pass: self.pass,
-            final_pass: self.pass == self.final_at,
-            label: self.pass as u8,
-            first: self.next,
-            rows: view,
-        })
+        rows.fill(
+            RowRequest::new(self.pass, self.next, view)
+                .with_final_pass(self.pass == self.final_at)
+                .with_label(self.pass as u8),
+        )
         .map_err(|_| MockError)?;
         if self.emit.contains(&self.pass) {
             self.pending.extend_from_slice(&[self.pass as u8; 2]);

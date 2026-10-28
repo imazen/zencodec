@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-28",
+  "source": "12ce57824569c1f34ba89aebd773750abea6f49f",
+  "documentation_source": "531899dd72d61e9ed6434f0a59ed99f4f881e5c0",
+  "scope": "Shared Encoder pull protocol, native typed adapter, source-derived API and guide; no throughput or native memory-bound claim",
+  "commands": [
+    "cargo test -p zencodec --all-features --locked --lib",
+    "cargo clippy -p zencodec --all-targets --all-features --locked -- -D warnings",
+    "cargo test -p zencodec --all-features --locked --doc",
+    "just multipass-check",
+    "just multipass-native-check <artifacts>",
+    "just api-doc",
+    "just api-doc-check",
+    "just code-catalog <export>",
+    "just docs-site-browser-check 3557",
+    "cargo check -p zencodec --no-default-features --target wasm32-wasip1 --locked"
+  ],
+  "results": {
+    "core_unit_passed": 650,
+    "core_doctest_passed": 25,
+    "core_doctest_existing_ignored": 37,
+    "public_passed": 31,
+    "native_passed": 19,
+    "clippy": "core all-targets and both harnesses pass",
+    "catalog": "eight packages generated; API snapshots generated and checked",
+    "site_source_passed": 24,
+    "browser": "all source scopes, signatures, independent expansion, clipboard, roles, search, pagination, keyboard,390/768/1440 viewports pass",
+    "wasm": "passed"
+  },
+  "retained_initial_failures": [
+    "core --locked refused missing export Cargo.lock before compilation; generated independent lock then core checks passed",
+    "site export lacked GITHUB_SHA/git metadata; set explicit source SHA",
+    "site refused stale source catalog; regenerated all compiler-derived entries without weakening freshness checks"
+  ],
+  "resource_receipts": [
+    "run-heavy: done rc=1 62s | peak-RSS 1.28GiB | min-avail 3626MiB | peak-load 1.52",
+    "run-heavy: done rc=0 35s | peak-RSS 0.46GiB | min-avail 4350MiB | peak-load 1.83",
+    "run-heavy: done rc=1 13s | peak-RSS 0.27GiB | min-avail 4455MiB | peak-load 1.17",
+    "run-heavy: done rc=1 1s | peak-RSS 0.13GiB | min-avail 4867MiB | peak-load 0.72",
+    "run-heavy: done rc=0 54s | peak-RSS 0.33GiB | min-avail 4051MiB | peak-load 0.95"
+  ],
+  "root_lock_sha256": "11e8d9596ceabbaa65f3359ceac6ec2c5964777139c01592ef374b317fe49d74",
+  "limits": [
+    "native IMI DynEncoder/Send not qualified",
+    "production joint replay/output policy and retained native preflight not implemented",
+    "async row loan ownership not implemented",
+    "no runtime/compile-time comparison or total memory bound measured"
+  ],
+  "logs": "~/tmp/zencodec-shared-pull-20261028 (original failures and subsequent runs retained)"
+}

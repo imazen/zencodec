@@ -56,6 +56,7 @@ mod color;
 mod cost;
 mod detect;
 mod encode_plan;
+mod encode_pull;
 mod error;
 pub mod estimate;
 /// Structured EXIF/TIFF parsing, pruning, and serialization.
@@ -214,6 +215,7 @@ pub mod encode {
         ColorCarriers, EncodeDeclaration, EncodePlan, EncodePlanError, InputRequirement,
         OutputPhase, SourcePasses,
     };
+    pub use crate::encode_pull::{EncodeRows, PullProgress, RowDemand, RowFillError};
     pub use crate::fidelity::{
         Fidelity, FidelityRejection, FidelitySelectionError, FidelityTargetError, LossyTarget,
     };

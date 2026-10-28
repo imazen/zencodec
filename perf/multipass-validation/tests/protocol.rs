@@ -105,13 +105,7 @@ impl Scripted {
             PixelDescriptor::RGB8_SRGB,
         )
         .unwrap();
-        let r = rows.fill(RowRequest {
-            pass,
-            final_pass: false,
-            label: pass as u8,
-            first,
-            rows: view,
-        });
+        let r = rows.fill(RowRequest::new(pass, first, view).with_label(pass as u8));
         if r.is_ok() {
             self.seen.set(self.seen.get() + n);
         }

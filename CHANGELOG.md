@@ -4,6 +4,11 @@
 
 ### QUEUED BREAKING CHANGES
 
+- Add default-refusing `Encoder::pull_rows` and erased forwarding, with shared
+  `EncodeRows`, `RowDemand`, `RowFillError` and `PullProgress`. The experimental
+  IMI adapter implements the shared typed protocol. Joint production policy,
+  retained native preparation and native erased parity remain separate gates.
+
 - Add `PolicySet::check_workspace` for adapter admission before native
   preparation, using the same typed requirement diagnostics as joint selection.
   `UnmetRequirements` now implements `core::error::Error`; early success never

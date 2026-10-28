@@ -1,7 +1,9 @@
 # Multi-pass input contract experiment
 
-This excluded harness tests a candidate driver and encoder interface. It is not
-an implementation of the production zencodec traits. The starting driver and
+This excluded harness tests a candidate driver over the shared
+`Encoder::pull_rows` protocol. Its IMI adapter implements `Encoder`; the
+`MultiPassEncoder` trait remains compatibility plumbing for the experimental
+driver and adversarial fixtures. The driver is not yet a production adapter. The starting driver and
 native adapter came from Opus review revision `0ec4726`; independent review
 replaced its detached replay token with a driver-retained raster input.
 
@@ -115,8 +117,9 @@ are retained in the [receipt](../../benchmarks/multipass_declarations_2026-10-28
 ## Production promotion gates
 
 The shared `EncodePlan` already represents source pass bounds and final-pass
-output timing. The candidate still duplicates these as `PassCount`, `PassPlan`
-and `PassOutput`, and still asks a separate `ReplayResolver`. Promotion should
+output timing. The compatibility driver projects these into `PassCount`, `PassPlan`
+and `PassOutput`, and still asks a separate `ReplayResolver`. Native execution
+uses the shared `EncodeRows`, `RowDemand` and `PullProgress` types. Promotion should
 reuse the existing plan and one joint operation-policy decision over the actual
 job, source replay and output schedule; it must not clear unrelated requirements
 to make separate questions succeed.
@@ -154,3 +157,20 @@ pass after the fix, with strict Clippy for both harnesses. The existing native
 byte/sample and forward/seek-back controls remain unchanged. This does not
 bound an arbitrary reader's allocations or make blocking reads interruptible.
 Receipt: [source validation](../../benchmarks/multipass_sources_2026-10-28.json).
+
+## Shared pull method qualification (2026-10-28)
+
+`ImiBounded` now implements the shared `Encoder` trait. The compatibility driver
+projects its `EncodePlan` into its existing experimental plan, then forwards
+`pull_rows`, pending output and finish. Native row loans use `RowDemand` and
+`EncodeRows`; there is no duplicate native pull protocol. The provided shared
+method refuses without calling a source; the erased shim preserves located
+native errors and strided row loans in focused dispatch controls.
+
+The existing 31 public and 19 native controls pass through this migration, with
+strict Clippy. Core unit tests, doctests, compiler-derived catalogs, guide browser
+controls and WASM compilation also pass. Native erased execution is still blocked
+by the pinned session's non-Send implementation; synthetic dispatch controls do
+not qualify it. The separate native retained-plan/Send work and the single-policy
+production driver remain required. See the [receipt](../../benchmarks/shared_pull_2026-10-28.json)
+for exact source identities, commands and preserved export/bootstrap failures.

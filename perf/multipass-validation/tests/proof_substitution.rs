@@ -60,13 +60,11 @@ impl MultiPassEncoder for Twice {
             return Ok(PassProgress::Done);
         }
         let mut pixels = [0; 3];
-        rows.fill(RowRequest {
-            pass: self.pass,
-            final_pass: false,
-            label: 0,
-            first: 0,
-            rows: PixelSliceMut::new(&mut pixels, 1, 1, 3, PixelDescriptor::RGB8_SRGB).unwrap(),
-        })
+        rows.fill(RowRequest::new(
+            self.pass,
+            0,
+            PixelSliceMut::new(&mut pixels, 1, 1, 3, PixelDescriptor::RGB8_SRGB).unwrap(),
+        ))
         .map_err(|_| io::Error::other("source interrupted"))?;
         self.samples.borrow_mut().push(pixels[0]);
         self.pass += 1;

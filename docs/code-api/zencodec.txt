@@ -832,6 +832,9 @@ pub zencodec::encode::LossyTarget::CodecSpecificQuality(f32)
 #[non_exhaustive] pub enum zencodec::encode::OutputPhase
 pub zencodec::encode::OutputPhase::AnyPass
 pub zencodec::encode::OutputPhase::FinalPass
+#[non_exhaustive] pub enum zencodec::encode::PullProgress
+pub zencodec::encode::PullProgress::Done
+pub zencodec::encode::PullProgress::Filled
 pub struct zencodec::encode::AnimationOutputTiming
 impl zencodec::encode::AnimationOutputTiming
 pub const zencodec::encode::AnimationOutputTiming::AT_FINISH: Self
@@ -1008,6 +1011,20 @@ pub const fn zencodec::encode::OutputTiming::streams(&self) -> bool
 pub const fn zencodec::encode::OutputTiming::with_patches(self) -> Self
 impl core::default::Default for zencodec::encode::OutputTiming
 pub fn zencodec::encode::OutputTiming::default() -> Self
+#[non_exhaustive] pub struct zencodec::encode::RowDemand<'a>
+pub zencodec::encode::RowDemand::final_pass: bool
+pub zencodec::encode::RowDemand::first: u32
+pub zencodec::encode::RowDemand::label: u8
+pub zencodec::encode::RowDemand::pass: u32
+pub zencodec::encode::RowDemand::rows: zenpixels::buffer::PixelSliceMut<'a>
+impl<'a> zencodec::encode::RowDemand<'a>
+pub fn zencodec::encode::RowDemand<'a>::new(pass: u32, first: u32, rows: zenpixels::buffer::PixelSliceMut<'a>) -> Self
+pub const fn zencodec::encode::RowDemand<'a>::with_final_pass(self, final_pass: bool) -> Self
+pub const fn zencodec::encode::RowDemand<'a>::with_label(self, label: u8) -> Self
+pub struct zencodec::encode::RowFillError
+impl core::error::Error for zencodec::encode::RowFillError
+impl core::fmt::Display for zencodec::encode::RowFillError
+pub fn zencodec::encode::RowFillError::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct zencodec::encode::SourcePasses
 impl zencodec::encode::SourcePasses
 pub const zencodec::encode::SourcePasses::ONCE: Self
@@ -1078,6 +1095,7 @@ pub fn zencodec::encode::DynEncoder::finish(self: alloc::boxed::Box<Self>) -> co
 pub fn zencodec::encode::DynEncoder::finish_output(self: alloc::boxed::Box<Self>) -> core::result::Result<zencodec::output_patch::OutputFinish<zencodec::encode::EncodeOutput>, zencodec::encode::BoxedError>
 pub fn zencodec::encode::DynEncoder::pending_output(&self) -> &[u8]
 pub fn zencodec::encode::DynEncoder::preferred_strip_height(&self) -> u32
+pub fn zencodec::encode::DynEncoder::pull_rows(&mut self, _rows: &mut dyn zencodec::encode::EncodeRows, _pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec::encode::PullProgress, zencodec::encode::BoxedError>
 pub fn zencodec::encode::DynEncoder::push_rows(&mut self, rows: zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), zencodec::encode::BoxedError>
 pub fn zencodec::encode::DynEncoder::take_output(&mut self, into: &mut alloc::vec::Vec<u8>)
 pub trait zencodec::encode::DynEncoderConfig: core::marker::Send + core::marker::Sync
@@ -1126,6 +1144,8 @@ pub fn zencodec::encode::EncodeJob::with_metadata_policy(self, meta: zencodec::M
 pub fn zencodec::encode::EncodeJob::with_policy(self, _policy: zencodec::encode::EncodePolicy) -> Self
 pub fn zencodec::encode::EncodeJob::with_pulse(self, pulse: how_far::pulse::SharedPulse) -> Self
 pub fn zencodec::encode::EncodeJob::with_stop(self, stop: almost_enough::stop_token::StopToken) -> Self
+pub trait zencodec::encode::EncodeRows
+pub fn zencodec::encode::EncodeRows::fill(&mut self, demand: zencodec::encode::RowDemand<'_>) -> core::result::Result<(), zencodec::encode::RowFillError>
 pub trait zencodec::encode::Encoder: core::marker::Sized
 pub type zencodec::encode::Encoder::Error: core::error::Error + core::marker::Send + core::marker::Sync + 'static
 pub fn zencodec::encode::Encoder::begin(&mut self, width: u32, height: u32, descriptor: zenpixels::descriptor::PixelDescriptor) -> core::result::Result<zencodec::encode::OutputTiming, Self::Error>
@@ -1139,6 +1159,7 @@ pub fn zencodec::encode::Encoder::finish(self) -> core::result::Result<zencodec:
 pub fn zencodec::encode::Encoder::finish_output(self) -> core::result::Result<zencodec::output_patch::OutputFinish<zencodec::encode::EncodeOutput>, Self::Error>
 pub fn zencodec::encode::Encoder::pending_output(&self) -> &[u8]
 pub fn zencodec::encode::Encoder::preferred_strip_height(&self) -> u32
+pub fn zencodec::encode::Encoder::pull_rows(&mut self, _rows: &mut dyn zencodec::encode::EncodeRows, _pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec::encode::PullProgress, Self::Error>
 pub fn zencodec::encode::Encoder::push_rows(&mut self, _rows: zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), Self::Error>
 pub fn zencodec::encode::Encoder::reject(op: zencodec::UnsupportedOperation) -> Self::Error
 pub fn zencodec::encode::Encoder::take_output(&mut self, into: &mut alloc::vec::Vec<u8>)
@@ -2581,6 +2602,7 @@ pub fn zencodec::prelude::DynEncoder::finish(self: alloc::boxed::Box<Self>) -> c
 pub fn zencodec::prelude::DynEncoder::finish_output(self: alloc::boxed::Box<Self>) -> core::result::Result<zencodec::output_patch::OutputFinish<zencodec::encode::EncodeOutput>, zencodec::encode::BoxedError>
 pub fn zencodec::prelude::DynEncoder::pending_output(&self) -> &[u8]
 pub fn zencodec::prelude::DynEncoder::preferred_strip_height(&self) -> u32
+pub fn zencodec::prelude::DynEncoder::pull_rows(&mut self, _rows: &mut dyn zencodec::encode::EncodeRows, _pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec::encode::PullProgress, zencodec::encode::BoxedError>
 pub fn zencodec::prelude::DynEncoder::push_rows(&mut self, rows: zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), zencodec::encode::BoxedError>
 pub fn zencodec::prelude::DynEncoder::take_output(&mut self, into: &mut alloc::vec::Vec<u8>)
 pub trait zencodec::prelude::DynEncoderConfig: core::marker::Send + core::marker::Sync
@@ -2645,6 +2667,7 @@ pub fn zencodec::prelude::Encoder::finish(self) -> core::result::Result<zencodec
 pub fn zencodec::prelude::Encoder::finish_output(self) -> core::result::Result<zencodec::output_patch::OutputFinish<zencodec::encode::EncodeOutput>, Self::Error>
 pub fn zencodec::prelude::Encoder::pending_output(&self) -> &[u8]
 pub fn zencodec::prelude::Encoder::preferred_strip_height(&self) -> u32
+pub fn zencodec::prelude::Encoder::pull_rows(&mut self, _rows: &mut dyn zencodec::encode::EncodeRows, _pulse: &dyn how_far::pulse::Pulse) -> core::result::Result<zencodec::encode::PullProgress, Self::Error>
 pub fn zencodec::prelude::Encoder::push_rows(&mut self, _rows: zenpixels::buffer::PixelSlice<'_>) -> core::result::Result<(), Self::Error>
 pub fn zencodec::prelude::Encoder::reject(op: zencodec::UnsupportedOperation) -> Self::Error
 pub fn zencodec::prelude::Encoder::take_output(&mut self, into: &mut alloc::vec::Vec<u8>)

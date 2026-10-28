@@ -10,12 +10,14 @@ use zenpixels::{PixelDescriptor, PixelSlice, PixelSliceMut};
 /// Accepts any pixel format at runtime via [`PixelSlice`] (type-erased).
 /// The encoder dispatches internally based on the pixel descriptor.
 ///
-/// Three mutually exclusive usage paths:
+/// Mutually exclusive usage paths:
 /// - [`encode()`](Encoder::encode) — all at once, consumes self
 /// - [`push_rows()`](Encoder::push_rows) + [`finish()`](Encoder::finish), after an
 ///   optional [`begin()`](Encoder::begin) — caller pushes rows, and with `begin`
 ///   may send encoded bytes as they arrive ([`pending_output`](Encoder::pending_output))
-/// - [`encode_from()`](Encoder::encode_from) — encoder pulls rows from a callback
+/// - [`encode_from()`](Encoder::encode_from) — legacy one-call callback
+/// - [`begin_declared()`](Encoder::begin_declared) + [`pull_rows()`](Encoder::pull_rows)
+///   + [`finish_output()`](Encoder::finish_output) — declared encoder-driven passes
 ///
 /// Once `begin` or `push_rows` has been called, `encode` and `encode_from`
 /// are errors. After an error from `begin`, `push_rows` or `finish`, the
@@ -186,6 +188,28 @@ pub trait Encoder: Sized {
         _declaration: &crate::encode::EncodeDeclaration<'_>,
     ) -> Result<crate::encode::EncodePlan, Self::Error> {
         Err(Self::reject(crate::UnsupportedOperation::EncodePlanning))
+    }
+
+    /// Advance an admitted encoder-driven row plan by at most one source fill.
+    ///
+    /// Use after `begin_declared` commits to `InputRequirement::Replay`.
+    /// `Filled` requires exactly one successful fill; `Done` requires none and
+    /// complete pass coverage. Do not mix this protocol with `push_rows` or
+    /// one-shot encoding. The existing `pending_output` / `consume_output` and
+    /// `finish_output` methods retain their output ownership contracts.
+    ///
+    /// Check Pulse around native work; byte timing does not bound retained
+    /// memory. A fill failure is terminal. Drivers retain its original cause
+    /// and refuse further publication even if native code swallows the marker.
+    /// This synchronous loan does not implement pending asynchronous input.
+    ///
+    /// Default: refuse without calling the source or changing encoder state.
+    fn pull_rows(
+        &mut self,
+        _rows: &mut dyn crate::encode::EncodeRows,
+        _pulse: &dyn crate::Pulse,
+    ) -> Result<crate::encode::PullProgress, Self::Error> {
+        Err(Self::reject(crate::UnsupportedOperation::PullEncode))
     }
 
     /// Prepare row encoding for actual destination access. The default uses
