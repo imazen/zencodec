@@ -1167,7 +1167,6 @@ dependencies = [
 name = "zenivf"
 version = "0.1.0"
 dependencies = [
- "enough",
  "zencodec",
  "zencodec-io",
  "zencodec-media",
@@ -1187,7 +1186,6 @@ dependencies = [
 name = "zenmp4"
 version = "0.1.0"
 dependencies = [
- "enough",
  "zencodec",
  "zencodec-io",
  "zencodec-media",
@@ -1229,7 +1227,6 @@ dependencies = [
 name = "zenwebm"
 version = "0.1.0"
 dependencies = [
- "enough",
  "zencodec",
  "zencodec-io",
  "zencodec-media",
