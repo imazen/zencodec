@@ -743,6 +743,11 @@ planned-row-check:
     cargo test -p zencodec-io --all-features --tests --locked
     cargo clippy -p zencodec-io --all-features --all-targets --locked -- -D warnings
 
+# Configured job erasure preserves the retained owner before native startup.
+configured-job-check:
+    cargo test -p zencodec --all-features --lib traits::dyn_encoding::job_erasure_tests --locked
+    cargo clippy -p zencodec --all-features --all-targets --locked -- -D warnings
+
 # Operation-bound requirements, callback composition and diagnostic controls.
 policy-binding-check:
     cargo test -p zencodec-testkit --test policy_binding --locked
