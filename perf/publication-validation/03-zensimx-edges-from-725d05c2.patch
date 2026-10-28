@@ -1,0 +1,173 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 71b974537b..b7d64d541f 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -5373,7 +5373,7 @@
+ [[package]]
+ name = "zensim"
+ version = "0.3.0"
+-source = "git+https://github.com/imazen/zensim?rev=8557758809156baba7364bd8cfe32889a61da4e8#8557758809156baba7364bd8cfe32889a61da4e8"
++source = "git+https://github.com/imazen/zensimx?rev=8557758809156baba7364bd8cfe32889a61da4e8#8557758809156baba7364bd8cfe32889a61da4e8"
+ dependencies = [
+  "archmage",
+  "bytemuck",
+@@ -5391,7 +5391,7 @@
+ [[package]]
+ name = "zensim-regress"
+ version = "0.4.0"
+-source = "git+https://github.com/imazen/zensim?rev=8557758809156baba7364bd8cfe32889a61da4e8#8557758809156baba7364bd8cfe32889a61da4e8"
++source = "git+https://github.com/imazen/zensimx?rev=8557758809156baba7364bd8cfe32889a61da4e8#8557758809156baba7364bd8cfe32889a61da4e8"
+ dependencies = [
+  "base64 0.22.1",
+  "bytemuck",
+diff --git a/Cargo.toml b/Cargo.toml
+index b6d64bf9b8..dd5f24f395 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -321,8 +321,8 @@
+ zennode = { git = "https://github.com/imazen/zennode" }
+ zennode-derive = { git = "https://github.com/imazen/zennode" }
+ # zensim 0.3.0 / zensim-regress 0.4.0 are unpublished (crates.io: 0.2.7 / 0.3.1).
+-zensim = { git = "https://github.com/imazen/zensim", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
+-zensim-regress = { git = "https://github.com/imazen/zensim", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
++zensim = { git = "https://github.com/imazen/zensimx", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
++zensim-regress = { git = "https://github.com/imazen/zensimx", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
+ # zenanalyze-api 0.1.0 IS on crates.io (zencodecs declares it from the registry),
+ # but zenpicker/zenpredict (git mains, unpublished) pull THEIR copy from the
+ # zenanalyze git checkout via an internal `{ version, path }` dep — so a bare
+diff --git a/demo/crate/Cargo.lock b/demo/crate/Cargo.lock
+index 38682232fa..b8a8a60c15 100644
+--- a/demo/crate/Cargo.lock
++++ b/demo/crate/Cargo.lock
+@@ -2097,12 +2097,12 @@
+ [[patch.unused]]
+ name = "zensim"
+ version = "0.3.0"
+-source = "git+https://github.com/imazen/zensim?rev=8557758809156baba7364bd8cfe32889a61da4e8#8557758809156baba7364bd8cfe32889a61da4e8"
++source = "git+https://github.com/imazen/zensimx?rev=8557758809156baba7364bd8cfe32889a61da4e8#8557758809156baba7364bd8cfe32889a61da4e8"
+ 
+ [[patch.unused]]
+ name = "zensim-regress"
+ version = "0.4.0"
+-source = "git+https://github.com/imazen/zensim?rev=8557758809156baba7364bd8cfe32889a61da4e8#8557758809156baba7364bd8cfe32889a61da4e8"
++source = "git+https://github.com/imazen/zensimx?rev=8557758809156baba7364bd8cfe32889a61da4e8#8557758809156baba7364bd8cfe32889a61da4e8"
+ 
+ [[patch.unused]]
+ name = "zentiff"
+diff --git a/demo/crate/Cargo.toml b/demo/crate/Cargo.toml
+index 76b2b29277..45884e819c 100644
+--- a/demo/crate/Cargo.toml
++++ b/demo/crate/Cargo.toml
+@@ -94,8 +94,8 @@
+ zennode = { git = "https://github.com/imazen/zennode" }
+ zennode-derive = { git = "https://github.com/imazen/zennode" }
+ # zensim 0.3.0 / zensim-regress 0.4.0 are unpublished (crates.io: 0.2.7 / 0.3.1).
+-zensim = { git = "https://github.com/imazen/zensim", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
+-zensim-regress = { git = "https://github.com/imazen/zensim", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
++zensim = { git = "https://github.com/imazen/zensimx", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
++zensim-regress = { git = "https://github.com/imazen/zensimx", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
+ # imageflow_types / imageflow_riapi are not published (imageflow-compat feature).
+ imageflow_types = { git = "https://github.com/imazen/imageflow" }
+ imageflow_riapi = { git = "https://github.com/imazen/imageflow" }
+diff --git a/fuzz/Cargo.lock b/fuzz/Cargo.lock
+index 5c83a9ca2d..7751b0c1ad 100644
+--- a/fuzz/Cargo.lock
++++ b/fuzz/Cargo.lock
+@@ -975,12 +975,12 @@
+ [[patch.unused]]
+ name = "zensim"
+ version = "0.3.0"
+-source = "git+https://github.com/imazen/zensim?rev=8557758809156baba7364bd8cfe32889a61da4e8#8557758809156baba7364bd8cfe32889a61da4e8"
++source = "git+https://github.com/imazen/zensimx?rev=8557758809156baba7364bd8cfe32889a61da4e8#8557758809156baba7364bd8cfe32889a61da4e8"
+ 
+ [[patch.unused]]
+ name = "zensim-regress"
+ version = "0.4.0"
+-source = "git+https://github.com/imazen/zensim?rev=8557758809156baba7364bd8cfe32889a61da4e8#8557758809156baba7364bd8cfe32889a61da4e8"
++source = "git+https://github.com/imazen/zensimx?rev=8557758809156baba7364bd8cfe32889a61da4e8#8557758809156baba7364bd8cfe32889a61da4e8"
+ 
+ [[patch.unused]]
+ name = "zentiff"
+diff --git a/fuzz/Cargo.toml b/fuzz/Cargo.toml
+index 4f5c7ff796..18d3fe5ae0 100644
+--- a/fuzz/Cargo.toml
++++ b/fuzz/Cargo.toml
+@@ -43,8 +43,8 @@
+ zenpng = { git = "https://github.com/imazen/zenpng", rev = "a2a9dc6ddb58cf0b93c69e220f3c8d8452608d85" }
+ zennode = { git = "https://github.com/imazen/zennode" }
+ zennode-derive = { git = "https://github.com/imazen/zennode" }
+-zensim = { git = "https://github.com/imazen/zensim", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
+-zensim-regress = { git = "https://github.com/imazen/zensim", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
++zensim = { git = "https://github.com/imazen/zensimx", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
++zensim-regress = { git = "https://github.com/imazen/zensimx", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
+ imageflow_types = { git = "https://github.com/imazen/imageflow" }
+ imageflow_riapi = { git = "https://github.com/imazen/imageflow" }
+ zensally = { git = "https://github.com/imazen/zensally" }
+diff --git a/tools/metadata-services/Cargo.lock b/tools/metadata-services/Cargo.lock
+index 0c6bc8cfce..ac36f4a8ec 100644
+--- a/tools/metadata-services/Cargo.lock
++++ b/tools/metadata-services/Cargo.lock
+@@ -730,12 +730,12 @@
+ [[patch.unused]]
+ name = "zensim"
+ version = "0.3.0"
+-source = "git+https://github.com/imazen/zensim?rev=8557758809156baba7364bd8cfe32889a61da4e8#8557758809156baba7364bd8cfe32889a61da4e8"
++source = "git+https://github.com/imazen/zensimx?rev=8557758809156baba7364bd8cfe32889a61da4e8#8557758809156baba7364bd8cfe32889a61da4e8"
+ 
+ [[patch.unused]]
+ name = "zensim-regress"
+ version = "0.4.0"
+-source = "git+https://github.com/imazen/zensim?rev=8557758809156baba7364bd8cfe32889a61da4e8#8557758809156baba7364bd8cfe32889a61da4e8"
++source = "git+https://github.com/imazen/zensimx?rev=8557758809156baba7364bd8cfe32889a61da4e8#8557758809156baba7364bd8cfe32889a61da4e8"
+ 
+ [[patch.unused]]
+ name = "zentiff"
+diff --git a/tools/metadata-services/Cargo.toml b/tools/metadata-services/Cargo.toml
+index 216272c087..7e5c5c5fd0 100644
+--- a/tools/metadata-services/Cargo.toml
++++ b/tools/metadata-services/Cargo.toml
+@@ -44,8 +44,8 @@
+ zenpng = { git = "https://github.com/imazen/zenpng", rev = "a2a9dc6ddb58cf0b93c69e220f3c8d8452608d85" }
+ zennode = { git = "https://github.com/imazen/zennode" }
+ zennode-derive = { git = "https://github.com/imazen/zennode" }
+-zensim = { git = "https://github.com/imazen/zensim", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
+-zensim-regress = { git = "https://github.com/imazen/zensim", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
++zensim = { git = "https://github.com/imazen/zensimx", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
++zensim-regress = { git = "https://github.com/imazen/zensimx", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
+ zenanalyze-api = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
+ zenanalyze = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
+ imageflow_types = { git = "https://github.com/imazen/imageflow" }
+diff --git a/zencodecs/fuzz/Cargo.lock b/zencodecs/fuzz/Cargo.lock
+index f82af909f1..bec9c28fa2 100644
+--- a/zencodecs/fuzz/Cargo.lock
++++ b/zencodecs/fuzz/Cargo.lock
+@@ -2010,12 +2010,12 @@
+ [[patch.unused]]
+ name = "zensim"
+ version = "0.3.0"
+-source = "git+https://github.com/imazen/zensim?rev=8557758809156baba7364bd8cfe32889a61da4e8#8557758809156baba7364bd8cfe32889a61da4e8"
++source = "git+https://github.com/imazen/zensimx?rev=8557758809156baba7364bd8cfe32889a61da4e8#8557758809156baba7364bd8cfe32889a61da4e8"
+ 
+ [[patch.unused]]
+ name = "zensim-regress"
+ version = "0.4.0"
+-source = "git+https://github.com/imazen/zensim?rev=8557758809156baba7364bd8cfe32889a61da4e8#8557758809156baba7364bd8cfe32889a61da4e8"
++source = "git+https://github.com/imazen/zensimx?rev=8557758809156baba7364bd8cfe32889a61da4e8#8557758809156baba7364bd8cfe32889a61da4e8"
+ 
+ [[patch.unused]]
+ name = "zentiff"
+diff --git a/zencodecs/fuzz/Cargo.toml b/zencodecs/fuzz/Cargo.toml
+index 0bad6c30d6..eaf62dc695 100644
+--- a/zencodecs/fuzz/Cargo.toml
++++ b/zencodecs/fuzz/Cargo.toml
+@@ -102,8 +102,8 @@
+ zennode = { git = "https://github.com/imazen/zennode" }
+ zennode-derive = { git = "https://github.com/imazen/zennode" }
+ # zensim 0.3.0 / zensim-regress 0.4.0 are unpublished (crates.io: 0.2.7 / 0.3.1).
+-zensim = { git = "https://github.com/imazen/zensim", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
+-zensim-regress = { git = "https://github.com/imazen/zensim", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
++zensim = { git = "https://github.com/imazen/zensimx", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
++zensim-regress = { git = "https://github.com/imazen/zensimx", rev = "8557758809156baba7364bd8cfe32889a61da4e8" }
+ # zenanalyze-api 0.1.0 IS on crates.io (zencodecs declares it from the registry),
+ # but zenpicker/zenpredict (git mains, unpublished) pull THEIR copy from the
+ # zenanalyze git checkout via an internal `{ version, path }` dep — so a bare

@@ -1094,6 +1094,13 @@ source-details-check:
 precision-grid-check:
     python3 perf/precision-validation/grid_oracles.py
 
+# Isolated native experiment; never adds its feature to the production graph.
+publication-witness-prepare checkout export:
+    python3 perf/publication-validation/prepare.py "{{checkout}}" "{{export}}"
+
+publication-witness-check export results:
+    python3 perf/publication-validation/check.py "{{export}}" "{{results}}"
+
 docs-site-check:
     node docs/build-site.mjs
     node --test docs/site/site.test.mjs docs/site/source.test.mjs docs/site/code-first.test.mjs docs/site/source-catalog.test.mjs

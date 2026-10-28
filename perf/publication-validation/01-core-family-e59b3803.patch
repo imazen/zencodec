@@ -1,0 +1,301 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 71b974537b..d9f2192884 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -4729,7 +4729,7 @@
+ [[package]]
+ name = "zencodec"
+ version = "0.2.0"
+-source = "git+https://github.com/imazen/zencodec?rev=6214c93c24d35769a34a9561fe844c717e4d3a3a#6214c93c24d35769a34a9561fe844c717e4d3a3a"
++source = "git+https://github.com/imazen/zencodec?rev=e59b3803fc5b212bf4c92648ead4299c4ff0640a#e59b3803fc5b212bf4c92648ead4299c4ff0640a"
+ dependencies = [
+  "almost-enough",
+  "enough",
+@@ -4742,7 +4742,7 @@
+ [[package]]
+ name = "zencodec-coroutine"
+ version = "0.1.0"
+-source = "git+https://github.com/imazen/zencodec?rev=6214c93c24d35769a34a9561fe844c717e4d3a3a#6214c93c24d35769a34a9561fe844c717e4d3a3a"
++source = "git+https://github.com/imazen/zencodec?rev=e59b3803fc5b212bf4c92648ead4299c4ff0640a#e59b3803fc5b212bf4c92648ead4299c4ff0640a"
+ dependencies = [
+  "enough",
+  "spin",
+@@ -4753,7 +4753,7 @@
+ [[package]]
+ name = "zencodec-io"
+ version = "0.1.0"
+-source = "git+https://github.com/imazen/zencodec?rev=6214c93c24d35769a34a9561fe844c717e4d3a3a#6214c93c24d35769a34a9561fe844c717e4d3a3a"
++source = "git+https://github.com/imazen/zencodec?rev=e59b3803fc5b212bf4c92648ead4299c4ff0640a#e59b3803fc5b212bf4c92648ead4299c4ff0640a"
+ dependencies = [
+  "enough",
+  "how-far",
+@@ -5025,7 +5025,7 @@
+ [[package]]
+ name = "zenmeta"
+ version = "0.1.0"
+-source = "git+https://github.com/imazen/zencodec?rev=6214c93c24d35769a34a9561fe844c717e4d3a3a#6214c93c24d35769a34a9561fe844c717e4d3a3a"
++source = "git+https://github.com/imazen/zencodec?rev=e59b3803fc5b212bf4c92648ead4299c4ff0640a#e59b3803fc5b212bf4c92648ead4299c4ff0640a"
+ dependencies = [
+  "roxmltree 0.21.1",
+  "zencodec",
+diff --git a/Cargo.toml b/Cargo.toml
+index b6d64bf9b8..1887bc5ad0 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -278,12 +278,12 @@
+ # The optional AVIF tuner resolves this unpublished predictor from the same workspace.
+ zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
+ zenresize = { git = "https://github.com/imazen/zenresize", rev = "5b4e14e33a1cd49bd9e08287858d2f534526ac25" }
+-# Core family at one revision (zencodec PR 168, 6214c93c). Dependencies name
++# Core family at one revision (zencodec PR 168, e59b3803). Dependencies name
+ # these crates by version, so this root alone decides their source.
+-zencodec = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
+-zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
+-zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
+-zenmeta = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
++zencodec = { git = "https://github.com/imazen/zencodec", rev = "e59b3803fc5b212bf4c92648ead4299c4ff0640a" }
++zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "e59b3803fc5b212bf4c92648ead4299c4ff0640a" }
++zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "e59b3803fc5b212bf4c92648ead4299c4ff0640a" }
++zenmeta = { git = "https://github.com/imazen/zencodec", rev = "e59b3803fc5b212bf4c92648ead4299c4ff0640a" }
+ # Controlled interpretation and profile-tagged byte encode (zenjpeg PR 240),
+ # with Pulse controls and effective-job planning (zenjpeg PR 246).
+ zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "d099267c37b4f91b35fe5f15ddb680455e1d4bd8" }
+diff --git a/demo/crate/Cargo.lock b/demo/crate/Cargo.lock
+index 38682232fa..8d98e86eea 100644
+--- a/demo/crate/Cargo.lock
++++ b/demo/crate/Cargo.lock
+@@ -1552,7 +1552,7 @@
+ [[package]]
+ name = "zencodec"
+ version = "0.2.0"
+-source = "git+https://github.com/imazen/zencodec?rev=6214c93c24d35769a34a9561fe844c717e4d3a3a#6214c93c24d35769a34a9561fe844c717e4d3a3a"
++source = "git+https://github.com/imazen/zencodec?rev=e59b3803fc5b212bf4c92648ead4299c4ff0640a#e59b3803fc5b212bf4c92648ead4299c4ff0640a"
+ dependencies = [
+  "almost-enough",
+  "enough",
+@@ -1743,7 +1743,7 @@
+ [[package]]
+ name = "zenmeta"
+ version = "0.1.0"
+-source = "git+https://github.com/imazen/zencodec?rev=6214c93c24d35769a34a9561fe844c717e4d3a3a#6214c93c24d35769a34a9561fe844c717e4d3a3a"
++source = "git+https://github.com/imazen/zencodec?rev=e59b3803fc5b212bf4c92648ead4299c4ff0640a#e59b3803fc5b212bf4c92648ead4299c4ff0640a"
+ dependencies = [
+  "roxmltree",
+  "zencodec",
+@@ -2062,12 +2062,12 @@
+ [[patch.unused]]
+ name = "zencodec-coroutine"
+ version = "0.1.0"
+-source = "git+https://github.com/imazen/zencodec?rev=6214c93c24d35769a34a9561fe844c717e4d3a3a#6214c93c24d35769a34a9561fe844c717e4d3a3a"
++source = "git+https://github.com/imazen/zencodec?rev=e59b3803fc5b212bf4c92648ead4299c4ff0640a#e59b3803fc5b212bf4c92648ead4299c4ff0640a"
+ 
+ [[patch.unused]]
+ name = "zencodec-io"
+ version = "0.1.0"
+-source = "git+https://github.com/imazen/zencodec?rev=6214c93c24d35769a34a9561fe844c717e4d3a3a#6214c93c24d35769a34a9561fe844c717e4d3a3a"
++source = "git+https://github.com/imazen/zencodec?rev=e59b3803fc5b212bf4c92648ead4299c4ff0640a#e59b3803fc5b212bf4c92648ead4299c4ff0640a"
+ 
+ [[patch.unused]]
+ name = "zenpdf"
+diff --git a/demo/crate/Cargo.toml b/demo/crate/Cargo.toml
+index 76b2b29277..958427492f 100644
+--- a/demo/crate/Cargo.toml
++++ b/demo/crate/Cargo.toml
+@@ -41,12 +41,12 @@
+ # The optional AVIF tuner resolves this unpublished predictor from the same workspace.
+ zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
+ zenresize = { git = "https://github.com/imazen/zenresize", rev = "5b4e14e33a1cd49bd9e08287858d2f534526ac25" }
+-# Core family at one revision (zencodec PR 168, 6214c93c). Dependencies name
++# Core family at one revision (zencodec PR 168, e59b3803). Dependencies name
+ # these crates by version, so this root alone decides their source.
+-zencodec = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
+-zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
+-zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
+-zenmeta = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
++zencodec = { git = "https://github.com/imazen/zencodec", rev = "e59b3803fc5b212bf4c92648ead4299c4ff0640a" }
++zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "e59b3803fc5b212bf4c92648ead4299c4ff0640a" }
++zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "e59b3803fc5b212bf4c92648ead4299c4ff0640a" }
++zenmeta = { git = "https://github.com/imazen/zencodec", rev = "e59b3803fc5b212bf4c92648ead4299c4ff0640a" }
+ # One entry per git-form entry at the workspace root (see the rationale
+ # comments there); keep the two tables in sync.
+ # zenjpeg main is 0.9.0 (crates.io tops out at 0.8.4); zenjxl main needs it.
+diff --git a/fuzz/Cargo.lock b/fuzz/Cargo.lock
+index 5c83a9ca2d..85daa8f24a 100644
+--- a/fuzz/Cargo.lock
++++ b/fuzz/Cargo.lock
+@@ -565,7 +565,7 @@
+ [[package]]
+ name = "zencodec"
+ version = "0.2.0"
+-source = "git+https://github.com/imazen/zencodec?rev=6214c93c24d35769a34a9561fe844c717e4d3a3a#6214c93c24d35769a34a9561fe844c717e4d3a3a"
++source = "git+https://github.com/imazen/zencodec?rev=e59b3803fc5b212bf4c92648ead4299c4ff0640a#e59b3803fc5b212bf4c92648ead4299c4ff0640a"
+ dependencies = [
+  "almost-enough",
+  "enough",
+@@ -678,7 +678,7 @@
+ [[package]]
+ name = "zenmeta"
+ version = "0.1.0"
+-source = "git+https://github.com/imazen/zencodec?rev=6214c93c24d35769a34a9561fe844c717e4d3a3a#6214c93c24d35769a34a9561fe844c717e4d3a3a"
++source = "git+https://github.com/imazen/zencodec?rev=e59b3803fc5b212bf4c92648ead4299c4ff0640a#e59b3803fc5b212bf4c92648ead4299c4ff0640a"
+ dependencies = [
+  "roxmltree",
+  "zencodec",
+@@ -930,12 +930,12 @@
+ [[patch.unused]]
+ name = "zencodec-coroutine"
+ version = "0.1.0"
+-source = "git+https://github.com/imazen/zencodec?rev=6214c93c24d35769a34a9561fe844c717e4d3a3a#6214c93c24d35769a34a9561fe844c717e4d3a3a"
++source = "git+https://github.com/imazen/zencodec?rev=e59b3803fc5b212bf4c92648ead4299c4ff0640a#e59b3803fc5b212bf4c92648ead4299c4ff0640a"
+ 
+ [[patch.unused]]
+ name = "zencodec-io"
+ version = "0.1.0"
+-source = "git+https://github.com/imazen/zencodec?rev=6214c93c24d35769a34a9561fe844c717e4d3a3a#6214c93c24d35769a34a9561fe844c717e4d3a3a"
++source = "git+https://github.com/imazen/zencodec?rev=e59b3803fc5b212bf4c92648ead4299c4ff0640a#e59b3803fc5b212bf4c92648ead4299c4ff0640a"
+ 
+ [[patch.unused]]
+ name = "zenjxl"
+diff --git a/fuzz/Cargo.toml b/fuzz/Cargo.toml
+index 4f5c7ff796..db0348b12d 100644
+--- a/fuzz/Cargo.toml
++++ b/fuzz/Cargo.toml
+@@ -24,12 +24,12 @@
+ # The optional AVIF tuner resolves this unpublished predictor from the same workspace.
+ zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
+ zenresize = { git = "https://github.com/imazen/zenresize", rev = "5b4e14e33a1cd49bd9e08287858d2f534526ac25" }
+-# Core family at one revision (zencodec PR 168, 6214c93c). Dependencies name
++# Core family at one revision (zencodec PR 168, e59b3803). Dependencies name
+ # these crates by version, so this root alone decides their source.
+-zencodec = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
+-zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
+-zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
+-zenmeta = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
++zencodec = { git = "https://github.com/imazen/zencodec", rev = "e59b3803fc5b212bf4c92648ead4299c4ff0640a" }
++zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "e59b3803fc5b212bf4c92648ead4299c4ff0640a" }
++zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "e59b3803fc5b212bf4c92648ead4299c4ff0640a" }
++zenmeta = { git = "https://github.com/imazen/zencodec", rev = "e59b3803fc5b212bf4c92648ead4299c4ff0640a" }
+ zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "d099267c37b4f91b35fe5f15ddb680455e1d4bd8" }
+ # zenjpeg main resolves `zenanalyze 0.2.0` through a patch at its OWN workspace
+ # root, which is invisible from here; the registry is frozen at 0.1.0. Without
+diff --git a/tools/metadata-services/Cargo.lock b/tools/metadata-services/Cargo.lock
+index 0c6bc8cfce..fe518b26f4 100644
+--- a/tools/metadata-services/Cargo.lock
++++ b/tools/metadata-services/Cargo.lock
+@@ -485,7 +485,7 @@
+ [[package]]
+ name = "zencodec"
+ version = "0.2.0"
+-source = "git+https://github.com/imazen/zencodec?rev=6214c93c24d35769a34a9561fe844c717e4d3a3a#6214c93c24d35769a34a9561fe844c717e4d3a3a"
++source = "git+https://github.com/imazen/zencodec?rev=e59b3803fc5b212bf4c92648ead4299c4ff0640a#e59b3803fc5b212bf4c92648ead4299c4ff0640a"
+ dependencies = [
+  "almost-enough",
+  "enough",
+@@ -498,7 +498,7 @@
+ [[package]]
+ name = "zencodec-io"
+ version = "0.1.0"
+-source = "git+https://github.com/imazen/zencodec?rev=6214c93c24d35769a34a9561fe844c717e4d3a3a#6214c93c24d35769a34a9561fe844c717e4d3a3a"
++source = "git+https://github.com/imazen/zencodec?rev=e59b3803fc5b212bf4c92648ead4299c4ff0640a#e59b3803fc5b212bf4c92648ead4299c4ff0640a"
+ dependencies = [
+  "enough",
+  "how-far",
+@@ -572,7 +572,7 @@
+ [[package]]
+ name = "zenmeta"
+ version = "0.1.0"
+-source = "git+https://github.com/imazen/zencodec?rev=6214c93c24d35769a34a9561fe844c717e4d3a3a#6214c93c24d35769a34a9561fe844c717e4d3a3a"
++source = "git+https://github.com/imazen/zencodec?rev=e59b3803fc5b212bf4c92648ead4299c4ff0640a#e59b3803fc5b212bf4c92648ead4299c4ff0640a"
+ dependencies = [
+  "roxmltree",
+  "zencodec",
+@@ -665,7 +665,7 @@
+ [[patch.unused]]
+ name = "zencodec-coroutine"
+ version = "0.1.0"
+-source = "git+https://github.com/imazen/zencodec?rev=6214c93c24d35769a34a9561fe844c717e4d3a3a#6214c93c24d35769a34a9561fe844c717e4d3a3a"
++source = "git+https://github.com/imazen/zencodec?rev=e59b3803fc5b212bf4c92648ead4299c4ff0640a#e59b3803fc5b212bf4c92648ead4299c4ff0640a"
+ 
+ [[patch.unused]]
+ name = "zengif"
+diff --git a/tools/metadata-services/Cargo.toml b/tools/metadata-services/Cargo.toml
+index 216272c087..526ac0fc58 100644
+--- a/tools/metadata-services/Cargo.toml
++++ b/tools/metadata-services/Cargo.toml
+@@ -25,12 +25,12 @@
+ # The optional AVIF tuner resolves this unpublished predictor from the same workspace.
+ zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
+ zenresize = { git = "https://github.com/imazen/zenresize", rev = "5b4e14e33a1cd49bd9e08287858d2f534526ac25" }
+-# Core family at one revision (zencodec PR 168, 6214c93c). Dependencies name
++# Core family at one revision (zencodec PR 168, e59b3803). Dependencies name
+ # these crates by version, so this root alone decides their source.
+-zencodec = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
+-zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
+-zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
+-zenmeta = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
++zencodec = { git = "https://github.com/imazen/zencodec", rev = "e59b3803fc5b212bf4c92648ead4299c4ff0640a" }
++zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "e59b3803fc5b212bf4c92648ead4299c4ff0640a" }
++zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "e59b3803fc5b212bf4c92648ead4299c4ff0640a" }
++zenmeta = { git = "https://github.com/imazen/zencodec", rev = "e59b3803fc5b212bf4c92648ead4299c4ff0640a" }
+ zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "d099267c37b4f91b35fe5f15ddb680455e1d4bd8" }
+ heic = { git = "https://github.com/imazen/heic", rev = "ac5c7cb9409875bbb09b121dee35a0d658954bf1" }
+ zentiff = { git = "https://github.com/imazen/zenextras", rev = "109a9ec367278a93751f7701f8536358e5d3f5cd" }
+diff --git a/zencodecs/fuzz/Cargo.lock b/zencodecs/fuzz/Cargo.lock
+index f82af909f1..687ff728cd 100644
+--- a/zencodecs/fuzz/Cargo.lock
++++ b/zencodecs/fuzz/Cargo.lock
+@@ -1529,7 +1529,7 @@
+ [[package]]
+ name = "zencodec"
+ version = "0.2.0"
+-source = "git+https://github.com/imazen/zencodec?rev=6214c93c24d35769a34a9561fe844c717e4d3a3a#6214c93c24d35769a34a9561fe844c717e4d3a3a"
++source = "git+https://github.com/imazen/zencodec?rev=e59b3803fc5b212bf4c92648ead4299c4ff0640a#e59b3803fc5b212bf4c92648ead4299c4ff0640a"
+ dependencies = [
+  "almost-enough",
+  "enough",
+@@ -1697,7 +1697,7 @@
+ [[package]]
+ name = "zenmeta"
+ version = "0.1.0"
+-source = "git+https://github.com/imazen/zencodec?rev=6214c93c24d35769a34a9561fe844c717e4d3a3a#6214c93c24d35769a34a9561fe844c717e4d3a3a"
++source = "git+https://github.com/imazen/zencodec?rev=e59b3803fc5b212bf4c92648ead4299c4ff0640a#e59b3803fc5b212bf4c92648ead4299c4ff0640a"
+ dependencies = [
+  "roxmltree",
+  "zencodec",
+@@ -1960,12 +1960,12 @@
+ [[patch.unused]]
+ name = "zencodec-coroutine"
+ version = "0.1.0"
+-source = "git+https://github.com/imazen/zencodec?rev=6214c93c24d35769a34a9561fe844c717e4d3a3a#6214c93c24d35769a34a9561fe844c717e4d3a3a"
++source = "git+https://github.com/imazen/zencodec?rev=e59b3803fc5b212bf4c92648ead4299c4ff0640a#e59b3803fc5b212bf4c92648ead4299c4ff0640a"
+ 
+ [[patch.unused]]
+ name = "zencodec-io"
+ version = "0.1.0"
+-source = "git+https://github.com/imazen/zencodec?rev=6214c93c24d35769a34a9561fe844c717e4d3a3a#6214c93c24d35769a34a9561fe844c717e4d3a3a"
++source = "git+https://github.com/imazen/zencodec?rev=e59b3803fc5b212bf4c92648ead4299c4ff0640a#e59b3803fc5b212bf4c92648ead4299c4ff0640a"
+ 
+ [[patch.unused]]
+ name = "zennode"
+diff --git a/zencodecs/fuzz/Cargo.toml b/zencodecs/fuzz/Cargo.toml
+index 0bad6c30d6..dc736bbb3c 100644
+--- a/zencodecs/fuzz/Cargo.toml
++++ b/zencodecs/fuzz/Cargo.toml
+@@ -52,12 +52,12 @@
+ # The optional AVIF tuner resolves this unpublished predictor from the same workspace.
+ zenpredict = { git = "https://github.com/imazen/zenanalyze", rev = "6bbcacb11313923ded6e5eeebb725878c5736453" }
+ zenresize = { git = "https://github.com/imazen/zenresize", rev = "5b4e14e33a1cd49bd9e08287858d2f534526ac25" }
+-# Core family at one revision (zencodec PR 168, 6214c93c). Dependencies name
++# Core family at one revision (zencodec PR 168, e59b3803). Dependencies name
+ # these crates by version, so this root alone decides their source.
+-zencodec = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
+-zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
+-zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
+-zenmeta = { git = "https://github.com/imazen/zencodec", rev = "6214c93c24d35769a34a9561fe844c717e4d3a3a" }
++zencodec = { git = "https://github.com/imazen/zencodec", rev = "e59b3803fc5b212bf4c92648ead4299c4ff0640a" }
++zencodec-io = { git = "https://github.com/imazen/zencodec", rev = "e59b3803fc5b212bf4c92648ead4299c4ff0640a" }
++zencodec-coroutine = { git = "https://github.com/imazen/zencodec", rev = "e59b3803fc5b212bf4c92648ead4299c4ff0640a" }
++zenmeta = { git = "https://github.com/imazen/zencodec", rev = "e59b3803fc5b212bf4c92648ead4299c4ff0640a" }
+ # zenjpeg main is 0.8.7 (hdrgm element-form XMP fix, recompress/metadata APIs);
+ # crates.io tops out at 0.8.4. zenjxl main's `jpeg-lossy` needs ^0.8.7.
+ zenjpeg = { git = "https://github.com/imazen/zenjpeg", rev = "d099267c37b4f91b35fe5f15ddb680455e1d4bd8" }

@@ -27,7 +27,8 @@ preferences. Missing evidence and contradictory evidence remain distinct named
 refusals.
 
 The shared implementation and adversarial controls are qualified. The native
-publication-owner experiment is still private and unqualified. This change does
+publication-owner experiment is now qualified as an isolated prototype; its
+public convenience API is not adopted. This change does
 not add a high-level writer convenience, establish a native workspace bound or
 implement deferred requirements across arbitrary question domains. A successful
 transcode decision does not authorize a separate bare decoder boundary.
@@ -36,10 +37,11 @@ transcode decision does not authorize a separate bare decoder boundary.
 
 A finished `EncodeOutput` may retain spare vector capacity and arbitrary backend
 extensions. Releasing the encoder alone does not establish the retained memory
-while writing. The private experiment copies verified bytes into a fixed owner
-and drops the original output before a writer is introduced. That makes a narrow
-ownership witness; its fixed capacity, stack use and copying are unsuitable as
-the proposed general API.
+while writing. The general experiment moves the encoded vector and drops backend extensions
+before a writer is introduced. It retains an arbitrary Pulse during publication
+and therefore offers no finite wait-memory bound. A test-only fixed-array/NoPulse
+variant explores a narrower ownership model; its layout calculation is not a
+measured process or stack bound and its copying is unsuitable as the general API.
 
 Production candidates should reuse existing admitted storage and staging, accept
 runtime limits, and preserve `Pulse` and typed partial-write errors. A borrowed
@@ -64,3 +66,15 @@ memory or throughput measurements. No throughput comparison was run.
 Reproduce with `just transcode-composition-check` and `just policy-layout-check`.
 The [receipt](../benchmarks/joint_transcode_2026-10-28.json) records source hashes,
 commands, scope and the build/test resource reading.
+
+## Executed native publication experiment
+
+The [standalone reproduction](../perf/publication-validation/README.md) retains
+the exact source patches and commands. It passed seven unit and 23 native
+controls, with the 16 ordinary outcomes unchanged, and strict Clippy with and
+without the feature and with async enabled. The same prepared route admits
+metadata and finish-first requirements. Arbitrary-Pulse wait retention stays
+unknown; every finite wait cap refuses before selection. Cancellation, partial
+writes, flush failure, callback unwind, output overflow and postcondition
+refusal retain their existing effects and typed causes. No final API spelling
+or whole-operation obligation ledger is established by this experiment.
