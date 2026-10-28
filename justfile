@@ -1191,6 +1191,10 @@ checked-guide-integration:
 checked-guide-api checkout revision:
     node docs/capture-integration-api.mjs "{{checkout}}" "{{revision}}"
 
+# Capture a lane-owned git-archive export with adjacent revision/hash receipts.
+checked-guide-api-export export revision:
+    node docs/capture-integration-api.mjs "{{export}}" "{{revision}}" --export
+
 # Exact conversion signatures from the same pin as the native TIFF/JXL harness.
 checked-output-api checkout revision:
     node docs/capture-output-api.mjs "{{checkout}}" "{{revision}}"
