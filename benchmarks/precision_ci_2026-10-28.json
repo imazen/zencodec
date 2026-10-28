@@ -37,5 +37,20 @@
     "The approved 0.2.0 version is a semver-major change from 0.1: semver-checks reports 0 checks and253 skipped, not backward compatibility.",
     "This does not prove unpublished dependencies are available from crates.io; paired publication order remains required.",
     "Build/test resource receipts are not codec workspace or performance comparisons."
-  ]
+  ],
+  "feature_coverage_followup": {
+    "script_sha256": "6b879fe4396e9d53c1eae85d073fe524762434c3d560c54f07a741e8cb07d194",
+    "guard": "Default-only testkit comparison fails closed if either published/current manifest acquires features or optional dependencies; current manifests are featureless, matching the old heuristic.",
+    "baseline": "Record resolved registry graph; reject inherited path/git dependencies. Published constraints are resolved now, not a historical lock reconstruction.",
+    "controls": "Featureless accepted; added feature and optional dependency each rejected.",
+    "validation": "All three full/none/testkit comparisons passed again.",
+    "receipt": "run-heavy: done rc=0 6s | peak-RSS 0.31GiB | min-avail 4406MiB | peak-load 0.38"
+  },
+  "remote_repair": {
+    "head": "20b63f4751a8267529598d2bc18a81ca182288b3",
+    "CI": 40759564193,
+    "Documentation": 40759564242,
+    "Fuzz": 40759564190,
+    "result": "all three workflows success"
+  }
 }

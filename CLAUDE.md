@@ -590,3 +590,10 @@ installed semver-checks. The approved 0.2.0 bump is semver-major: the tool skips
 compatibility lints; a green version check is not a backward-compatibility claim.
 Receipts and the two failed orchestration attempts are retained in
 `benchmarks/precision_ci_2026-10-28.json`.
+
+The testkit's former semver gate used heuristic feature inclusion. Both current
+and published testkit manifests are featureless; the new default comparison
+fails closed if either acquires features or optional dependencies, requiring an
+explicit gate update rather than silently reducing coverage. Baseline metadata
+also rejects inherited non-registry dependencies and records the graph resolved
+for this run; it does not claim to reconstruct a historical lockfile.

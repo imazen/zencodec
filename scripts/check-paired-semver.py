@@ -3,7 +3,8 @@
 cargo-semver-checks builds an isolated placeholder for the current crate, which
 does not inherit workspace [patch] entries. While the paired zenpixels release
 is unpublished, generate only the current rustdoc in the real workspace. The
-baseline still comes from the registry, with its original dependency graph.
+baseline still comes from the registry, with its published dependency constraints
+resolved for this run. It is not a reconstruction of a historical lockfile.
 No compatibility lint or release-type inference is disabled.
 """
 
@@ -24,6 +25,17 @@ import urllib.request
 RUSTDOC_TOOLCHAIN = "1.98.1"
 
 
+def require_featureless(package):
+    # The former testkit gate used semver-checks' heuristic feature selection.
+    # Cargo defaults are equivalent only while the crate has no features at all.
+    # Fail closed if that changes, rather than silently reducing future coverage.
+    if package["features"] or any(d["optional"] for d in package["dependencies"]):
+        raise RuntimeError(
+            "Default-only comparison cannot replace heuristic feature selection "
+            f"for {package['name']}; update the gate to cover its declared features"
+        )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("package", choices=["zencodec", "zencodec-testkit"])
@@ -36,6 +48,8 @@ def main():
         cwd=root, text=True, timeout=120,
     ))
     package = next(p for p in metadata["packages"] if p["name"] == args.package)
+    if args.features == "default":
+        require_featureless(package)
     library = next(t for t in package["targets"] if "lib" in t["kind"])
     current = Path(metadata["target_directory"]) / "doc" / (library["name"] + ".json")
     # A failed rustdoc must never leave a stale successful input for comparison.
@@ -80,6 +94,20 @@ def main():
     baseline_source = baseline_root / f"{args.package}-{args.baseline}"
     baseline_target = Path(metadata["target_directory"]) / "paired-semver" / args.package / args.features
     baseline_env = dict(env, CARGO_TARGET_DIR=str(baseline_target))
+    baseline_metadata = json.loads(subprocess.check_output(
+        ["cargo", f"+{RUSTDOC_TOOLCHAIN}", "metadata", "--format-version", "1",
+         *rustdoc_features[args.features]],
+        cwd=baseline_source, env=baseline_env, text=True, timeout=120,
+    ))
+    baseline_id = baseline_metadata["resolve"]["root"]
+    baseline_package = next(p for p in baseline_metadata["packages"] if p["id"] == baseline_id)
+    if args.features == "default":
+        require_featureless(baseline_package)
+    for dependency in baseline_metadata["packages"]:
+        if dependency["id"] != baseline_id and not (dependency["source"] or "").startswith("registry+"):
+            raise RuntimeError("Baseline inherited a non-registry dependency: " + dependency["name"])
+    baseline_target.mkdir(parents=True, exist_ok=True)
+    (baseline_target / "resolved-baseline.json").write_text(json.dumps(baseline_metadata) + "\n")
     subprocess.run(
         ["cargo", f"+{RUSTDOC_TOOLCHAIN}", "rustdoc", "--lib", "-p", args.package,
          *rustdoc_features[args.features], *rustdoc_args],
