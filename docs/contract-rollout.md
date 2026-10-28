@@ -75,5 +75,6 @@ single-policy production multipass driver or asynchronous row ownership.
 [all-platform CI](https://github.com/imazen/zenpng/actions/runs/40664772244),
 including ImageIO iDOT compatibility. It merged into the `checked-color`
 review branch as `c81f04cff3780d4be99dd43496d383e348ce987b`. The combined
-[PR 46](https://github.com/imazen/zenpng/pull/46) still needs its new CI result
-before a main merge. This stack merge is not a main-branch completion claim.
+[PR 46](https://github.com/imazen/zenpng/pull/46) passed [combined CI](https://github.com/imazen/zenpng/actions/runs/40773313696)
+and merged to main as `b536fce16fdac478cb1b318ee5ae0e52b9c51b33`. The tested
+head is contained in that merge; publishing remains a separate release gate.
