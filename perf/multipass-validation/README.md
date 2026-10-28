@@ -174,3 +174,15 @@ by the pinned session's non-Send implementation; synthetic dispatch controls do
 not qualify it. The separate native retained-plan/Send work and the single-policy
 production driver remain required. See the [receipt](../../benchmarks/shared_pull_2026-10-28.json)
 for exact source identities, commands and preserved export/bootstrap failures.
+
+Independent review identified that the compatibility projection can refuse a
+valid non-replay startup after the native encoder has committed state. That
+refusal is terminal: the driver discards the owned encoder without retry,
+pending-output inspection or finish. It is distinct from a failed native
+`begin_declared`, which must leave native state unchanged. The public planning
+hook remains the place to classify supported acquisition before startup.
+
+The post-start refusal control passes with all 32 public tests and strict
+Clippy. It requires exactly one startup and destruction of the owned encoder,
+and panics if the driver retries, inspects pending output or finishes. Existing
+native controls are unchanged by this review correction.

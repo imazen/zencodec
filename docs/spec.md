@@ -3005,7 +3005,8 @@ fn pull_rows(&mut self, rows: &mut dyn EncodeRows, pulse: &dyn Pulse)
 `begin_declared` binds geometry, interpretation and output access. A replay plan
 supplies source-pass bounds before the driver reads pixels. Each `RowDemand`
 contains a zero-based pass, final-pass marker, absolute first row and native
-`PixelSliceMut`; its optional diagnostic label has no scheduling meaning.
+`PixelSliceMut`; its optional diagnostic label has no scheduling meaning. The
+final-pass marker stays constant across every strip in a traversal.
 The row loan ends when `fill` returns, so it cannot cross an async suspension.
 The driver validates ordering, geometry, interpretation and any exact-depth
 assertion and retains its original typed failure. `RowFillError` is only the

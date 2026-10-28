@@ -220,8 +220,10 @@ pub use zencodec::encode::{
 };
 
 /// Compatibility interface for the experimental driver and protocol fixtures.
-/// Shared `Encoder` implementations use the blanket projection below. A failed
-/// `begin_passes` leaves the encoder unchanged so another route can be tried.
+/// Shared `Encoder` implementations use the blanket projection below. The
+/// driver owns and drops the encoder on any refusal. In particular, projection
+/// can refuse after successful `begin_declared` committed native state; callers
+/// must discard that instance instead of retrying or draining its output.
 pub trait MultiPassEncoder: Sized {
     /// Codec error.
     type Error: Error + Send + Sync + 'static;

@@ -46,5 +46,13 @@
     "async row loan ownership not implemented",
     "no runtime/compile-time comparison or total memory bound measured"
   ],
-  "logs": "~/tmp/zencodec-shared-pull-20261028 (original failures and subsequent runs retained)"
+  "logs": "~/tmp/zencodec-shared-pull-20261028 (original failures and subsequent runs retained)",
+  "review_followup": {
+    "source": "0347e46ecdfc26b3a079248e5c7d26e22b1d786b",
+    "finding": "Experimental compatibility projection may reject after successful native startup; discard instance instead of retrying",
+    "control": "shared_plan_projection_refusal_drops_committed_encoder_without_effects",
+    "public_passed": 32,
+    "strict_clippy": "pass",
+    "receipt": "run-heavy: done rc=0 8s | peak-RSS 0.35GiB | min-avail 4795MiB | peak-load 0.51"
+  }
 }
