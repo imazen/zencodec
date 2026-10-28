@@ -295,15 +295,17 @@ discovery exhaustion.
 `ImageDescription` contains local stored dimensions, optional established
 orientation and separate placement. Description does not reconstruct pixels or
 advance a cursor. `CheckedCollection::describe` validates these facts and checks
-the operation's stop token before returning them; errors identify the `Describe`
+the operation's Pulse before returning them; errors identify the `Describe`
 stage. This query establishes no rendered format, supported compression,
 complete metadata or resource admission. A later decode can still fail.
 
-`operation::CheckedCollection<C, R>::open(stop, resolver, factory)` passes one
-latched stop token to the factory and checks it before and after requests. Its
+`operation::CheckedCollection<C, R>::open(pulse, resolver, factory)` passes one
+`SharedPulse` with latched cancellation to the factory and checks cancellation
+before and after requests. Its
 `first_image` and `decode` return `Outcome<ImageOutput>` only after the existing
-resolver accepts that exact held owner. `with_policy_set` supplies preset
-decisions; `report` retains bounded diagnostics. Region/policy refusals are
+policy accepts that exact held owner. Pass `PolicySet` or `BoundPolicy` as the
+operation policy. Deprecated `with_policy_set` requirements still apply;
+`report` retains bounded diagnostics. Region/policy refusals are
 request-local; cancellation or unwind drops the native collection permanently.
 Native terminal errors remain the adapter's duty. `CollectionOperationError`
 identifies the failure stage and retains the original cause through `Error::source`.
@@ -315,7 +317,7 @@ or application errors as non-cancellation.
 
 `CheckedCollection::decode_with(image, native_request, transform)` adds an
 adapter processing boundary before that single publication decision. It passes
-the bound owned image and the same latched stop token to a fallible `FnOnce`.
+the bound owned image and the same `&dyn Pulse` to a fallible `FnOnce`.
 The completed `ImageOutput` reaches the resolver; a failed transform does not.
 `CollectionStage::Transform` preserves the original traced processing cause.
 The transform must honor its configured requirements and update interpretation
@@ -323,17 +325,18 @@ with its samples; the hook does not independently prove its math or workspace.
 Native `decode` delegates through the same path with an identity transform.
 
 `CodecSet::with_collection(factory)` registers immutable `CollectionFactory`
-configurations. `open_collection(format, source, request, resolver, stop)` returns
+configurations. `open_collection(format, source, request, resolver, pulse)` returns
 `CheckedCollection<Discovery<ErasedCollection<'a>>, R>`, borrowing the positional
 source without borrowing the registry. The first matching registration wins,
 including failures; no implicit format detection, source staging or fallback.
 The factory receives the matched format, required view, inherited resource limits
-and decode policy, and the shared latched stop token. The explicitly encode-only
+and decode policy, and the retained `SharedPulse` with latched cancellation. The explicitly encode-only
 output-byte limit does not constrain collection decoding. It must honor configured
 requirements or refuse before affected work. This is stronger than the legacy
-best-effort policy setter on still-image jobs. Inherited pulse cancellation,
-inherited stop and per-call stop all remain active after the registry drops;
-native progress reporting is not supplied by this opening contract.
+best-effort policy setter on still-image jobs. The inherited cancellation
+condition and per-call `SharedPulse` remain active after the registry drops.
+Opening preserves the supplied Pulse; it does not itself add native progress
+reporting.
 
 ```rust
 trait CollectionFactory: Send + Sync {
@@ -348,7 +351,7 @@ impl OpenRequest {
 ```
 
 `CollectionOpenContext` groups matched format, view, inherited limits/decode
-policy, the latched stop token and optional required output storage. The
+policy, the retained `SharedPulse` with latched cancellation and optional required output storage. The
 operation pool is shared by request clones; admission must precede native output
 allocation, and charges remain with the last retained image owner. This does not
 cover native workspace or metadata. Adapters that cannot enforce the pool return
@@ -419,7 +422,7 @@ impl EncodeRequest {
     fn prepare(&self, codecs: &CodecSet) -> Result<Vec<PreparedEncode>, At<OperationError>>;
     fn prepare_send(&self, codecs: &CodecSet) -> Result<Vec<PreparedSendEncode>, At<OperationError>>;
     fn encode(&self, codecs: &CodecSet, pixels: PixelSlice<'_>) -> Result<Outcome<EncodeOutput>, At<OperationError>>;
-    fn encode_with<R: PolicyResolver + ?Sized>(&self, codecs: &CodecSet,
+    fn encode_with<R: OperationPolicy + ?Sized>(&self, codecs: &CodecSet,
         pixels: PixelSlice<'_>, resolver: &mut R) -> Result<Outcome<EncodeOutput>, At<OperationError>>;
 }
 struct PreparedEncode { /* private; Debug */ }
@@ -463,7 +466,10 @@ before exposing an offer; it does not rebuild the chosen job on another thread.
 ### One application resolver
 
 The ordinary `encode` call uses its configured `PolicySet`. `encode_with` accepts
-the same built-in object, an application object, a trait object, or a closure.
+`PolicySet`, `BoundPolicy`, a compatible operation-policy trait object, or a closure.
+Custom callback objects implement `PolicyResolver` and are passed inside
+`BoundPolicy::new(requirements, callback)`; a callback object alone is not an
+`OperationPolicy`.
 The callback returns `Result<Decision, At<E>>`; the native `At<E>` survives in
 the error chain, including its trace. Annotate a closure argument as
 `question: Question<'_>` so Rust infers its borrowed-question lifetime correctly.
@@ -474,6 +480,8 @@ trait PolicyResolver {
     fn resolve(&mut self, question: Question<'_>) -> Result<Decision, At<Self::Error>>;
 }
 enum Question<'a> { // non_exhaustive
+    OutputSchedule { facts: OutputScheduleFacts,
+        choices: Choices<'a, OutputScheduleOffer> },
     ImageConversion { image: &'a image::ImageOutput, facts: &'a ImageFacts,
         choices: Choices<'a, ImageConversionOffer> },
     FrameRoute { interpretation: &'a frame::FrameInterpretation,
@@ -520,6 +528,8 @@ impl PolicySet {
     const fn with_workspace_limit(self, bytes: u64) -> Self;
     const fn allow_assumed_chroma_siting(self, allowed: bool) -> Self;
     const fn require_extended_range(self, required: bool) -> Self;
+    const fn require_output_schedule(self, schedule: OutputSchedule) -> Self;
+    const fn with_output_wait_limit(self, bytes: u64) -> Self;
 }
 ```
 
@@ -575,7 +585,9 @@ code without metadata payloads. `with_unavailable(reason)` marks the facts unava
 
 `OperationReport` keeps the latest 16 `DecisionRecord`s and counts omitted older
 records. A record carries question identity, offer count, selected typed contract
-(`Selection::Encode`, `Selection::Transcode`, `Selection::Boundary` or `Selection::Frame`),
+(`Selection::OutputSchedule`, `Selection::ImageConversion`, `Selection::FrameRoute`,
+`Selection::Image`, `Selection::Frame`, `Selection::Transcode`, `Selection::Encode`
+or `Selection::Boundary`),
 preset delegation and `DecisionCode`. Adapters append records with
 `OperationReport::record(record)`.
 The fixed history overwrites its oldest slot without moving retained records;
@@ -591,7 +603,8 @@ them. Native codec errors keep their codec's own formatting.
 The full implementation target and current gaps are recorded in
 [ideal-api.md](ideal-api.md). The resolver serves prepared encoder configuration, mandatory interpretation
 boundaries, native frame publication and complete pixel-transcode routes. The executing transcode adapter
-is in zencodecs; each native route still needs qualification.
+is in zencodecs. The pinned JPEG/PNG guide routes are qualified; other native
+routes and configurations need separate qualification.
 
 ### Prepared image conversion
 
@@ -602,7 +615,7 @@ struct ImageConversionOffer { // non_exhaustive
     preserves_extended_range: bool, admitted_bytes: usize,
     workspace_upper_bound: Option<u64>,
 }
-fn resolve_image_conversion<R: PolicyResolver + ?Sized>(
+fn resolve_image_conversion<R: OperationPolicy + ?Sized>(
     image: &image::ImageOutput, offers: &[ImageConversionOffer], resolver: &mut R,
     preset: PolicySet, pulse: &dyn Pulse,
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>>;
@@ -679,7 +692,7 @@ struct FrameConversionOffer {
     assumed_chroma_siting: Option<frame::ChromaSiting>,
     admitted_bytes: usize,
 }
-fn resolve_frame_route<R: PolicyResolver + ?Sized>(
+fn resolve_frame_route<R: OperationPolicy + ?Sized>(
     interpretation: &frame::FrameInterpretation,
     timing: frame::FrameTiming,
     output: FrameRouteState,
@@ -746,7 +759,7 @@ struct TranscodeOffer { // non_exhaustive; fields public
     workspace_upper_bound: Option<u64>,
     output_schedule: Option<OutputScheduleOffer>,
 }
-fn resolve_transcode<R: PolicyResolver + ?Sized>(
+fn resolve_transcode<R: OperationPolicy + ?Sized>(
     boundary: DecodeBoundary, offers: &[TranscodeOffer], resolver: &mut R,
     preset: PolicySet, pulse: &dyn Pulse,
 ) -> Result<(usize, DecisionRecord), At<PolicyFailure>>;
@@ -782,7 +795,7 @@ suspension, cancellation and terminal failures through `Fused`.
 
 ```rust
 // zencodec::operation: adapter entry point, not a caller coordination step
-fn resolve_boundary<R: PolicyResolver + ?Sized>(
+fn resolve_boundary<R: OperationPolicy + ?Sized>(
     boundary: DecodeBoundary,
     resolver: &mut R,
     preset: PolicySet,
@@ -898,10 +911,10 @@ impl SampleEncoding {
 
 // zencodec::operation
 enum PublicationOffer { ReturnHeld } // non_exhaustive
-fn resolve_image<R: PolicyResolver + ?Sized>(
+fn resolve_image<R: OperationPolicy + ?Sized>(
     image: image::ImageOutput, resolver: &mut R, preset: PolicySet, pulse: &dyn Pulse,
 ) -> Result<Outcome<image::ImageOutput>, At<PolicyFailure>>;
-fn resolve_frame<R: PolicyResolver + ?Sized>(
+fn resolve_frame<R: OperationPolicy + ?Sized>(
     interpretation: &frame::FrameInterpretation, timing: frame::FrameTiming,
     resolver: &mut R, preset: PolicySet, pulse: &dyn Pulse,
 ) -> Result<DecisionRecord, At<PolicyFailure>>;
@@ -1008,7 +1021,7 @@ trait EncoderConfig: Clone + Send + Sync {
 }
 ```
 
-### `EncodeJob` (per-operation, owns stop token and metadata)
+### `EncodeJob` (per-operation, owns SharedPulse and metadata)
 
 ```rust
 trait EncodeJob: Sized {
@@ -1204,7 +1217,7 @@ trait DecoderConfig: Clone + Send + Sync {
 }
 ```
 
-### `DecodeJob<'a>` (per-operation, holds limits/stop/hints)
+### `DecodeJob<'a>` (per-operation, holds limits/SharedPulse/hints)
 
 ```rust
 trait DecodeJob<'a>: Sized {
@@ -1217,7 +1230,7 @@ trait DecodeJob<'a>: Sized {
     fn with_limits(self, limits: ResourceLimits) -> Self;
     fn with_policy(self, policy: DecodePolicy) -> Self;  // default: self
 
-    // Probing (needs limits + stop context)
+    // Probing (needs limits + Pulse context)
     fn probe(&self, data: &[u8]) -> Result<ImageInfo, Self::Error>;      // header only
     fn probe_full(&self, data: &[u8]) -> Result<ImageInfo, Self::Error>; // default: probe()
 
@@ -2012,7 +2025,7 @@ struct CodecSet { /* private */ }
 
 impl CodecSet {
     fn with_collection(self, factory: impl collection::CollectionFactory + 'static) -> Self;
-    fn open_collection<'a, R: operation::PolicyResolver>(&self, format: ImageFormat,
+    fn open_collection<'a, R: operation::OperationPolicy>(&self, format: ImageFormat,
         source: &'a mut dyn source::DynReadAt, request: collection::OpenRequest,
         resolver: R, pulse: SharedPulse)
         -> Result<operation::CheckedCollection<collection::Discovery<collection::ErasedCollection<'a>>, R>,
@@ -2528,7 +2541,9 @@ from headers.
 ```rust
 pub use enough;             // cooperative cancellation (Stop trait)
 pub use enough::Unstoppable;
-pub use almost_enough::StopToken;  // owned, cloneable, type-erased stop token
+pub use almost_enough::StopToken;  // cancellation-only compatibility
+pub use how_far;
+pub use how_far::{NoPulse, Pulse, SharedPulse};  // operation control
 ```
 
 ---
@@ -2624,9 +2639,11 @@ errors without skipping selections and restarts discovery on each call.
 
 `render_selected(&mut CheckedCollection<C, R>, &ImageId)` returns
 `Result<Outcome<ImageOutput>, At<CollectionOperationError>>` and uses the stored
-operation policy once, after rendering. `render(ImageOutput, &mut resolver,
-preset, stop)` returns `Result<Outcome<ImageOutput>, At<RenderFailure>>` for an
-already-held image. `RenderFailure` exposes `RenderStage` (ColorPlan, Geometry,
+operation policy once, after rendering. `render(ImageOutput, &mut policy,
+pulse)` returns `Result<Outcome<ImageOutput>, At<RenderFailure>>` for an
+already-held image. The policy implements `OperationPolicy`; the control is
+`&dyn Pulse`. The deprecated compatibility call is
+`render_with_preset(ImageOutput, &mut resolver, preset, pulse)`. `RenderFailure` exposes `RenderStage` (ColorPlan, Geometry,
 Color, Publication) and retains the original error as its source.
 
 The companion and `geometry::project` perform no source I/O. See the
@@ -2652,13 +2669,13 @@ safe backpressure or a whole-operation memory bound.
 ## Owned finite video encoding
 
 `zencodec_media::staged::StagedEncode::new(encoder, muxer, destination, resolver,
-storage, stop)` prepares exact-timing single-track output from the retained
-encoder configuration. `push(Frame, stop)` retains the exact picture through
+storage, pulse)` prepares exact-timing single-track output from the retained
+encoder configuration. `push(Frame, pulse)` retains the exact picture through
 policy. `push_converted(Frame, &FrameInterpretation, FrameConversionOffer,
-FnOnce(Frame) -> Result<Frame, Cause>, stop)` retains a prepared conversion,
+FnOnce(Frame) -> Result<Frame, Cause>, pulse)` retains a prepared conversion,
 executes it once after selection and checks full output interpretation/timing.
 
-`finish(stop)` consumes the operation, drains and drops its encoder, then writes
+`finish(pulse)` consumes the operation, drains and drops its encoder, then writes
 the retained destination. It returns `Completed { stats, report }`. Failure or
 unwind is terminal; `report()` remains readable after a failed push. Located
 `Failure` retains its `Stage`, decision report and concrete cause. `Refusal`
@@ -2681,7 +2698,7 @@ coordination, not a query callers must perform. Preceding conversion fidelity
 remains a separate offer field.
 
 Explicit disk staging uses `StagedEncode::with_staging(..., Staging::disk(file,
-DiskLimits::new(bytes, packets, additions_per_packet), replay_budget)?, stop)`.
+DiskLimits::new(bytes, packets, additions_per_packet), replay_budget)?, pulse)`.
 The caller supplies an exclusively controlled scratch file positioned at its end;
 existing prefixes are preserved. File privacy, retention and deletion belong to
 the caller. No automatic disk fallback occurs. Policy sees `StagingFacts`
@@ -2716,9 +2733,9 @@ fallback, and retain the decision record on subsequent execution errors.
 memory during destination waits, including source, codec, conversion, metadata,
 scratch and compressed data. Unknown refuses even for finish-first. It excludes
 unrelated application state and destination-owned allocations and is not a peak
-operation bound. These are built-in resolver rules; a custom resolver owns its
-own decision logic. Hard operation requirements must still filter offers before
-any callback.
+operation bound. Pass the requirements through `PolicySet` or `BoundPolicy`.
+Mandatory admission filters offers before the callback; the callback chooses
+among admitted routes and cannot weaken those requirements.
 
 `FrameRouteOffer::output_schedule` carries the same guarantee for retained
 video routes. `StagedEncode` supplies finish-first automatically, with unknown
@@ -2731,10 +2748,10 @@ qualification remains separate.
 
 ### Owned row-source encoding
 
-`zencodec_io::row_encode::encode(encoder, source, writer, resolver, options,
-stop)` is the shared synchronous driver. `Source::description` fixes width,
+`zencodec_io::row_encode::encode(encoder, source, writer, policy, options,
+pulse)` is the shared synchronous driver. `Source::description` fixes width,
 height, descriptor and optional color context; `read_rows(first, PixelSliceMut,
-stop)` fills requested active samples with native stride support.
+pulse)` fills requested active samples with native stride support.
 `Raster::new(PixelSlice)` preserves a complete raster's stride and color
 context. The driver preserves context on each native row push and rejects
 changed declarations before accepting those samples.
@@ -2746,7 +2763,8 @@ against concurrent mutation of externally shared source state.
 
 `Options::new(storage, max_output_bytes)` admits row and staged payload
 storage from a shared pool. `with_batch_rows` sets a nonzero request size;
-`with_policy_set` configures callback delegation. Finish-first is the first
+pass `PolicySet` or `BoundPolicy` as the operation policy. Deprecated
+`with_policy_set` requirements remain mandatory. Finish-first is the first
 offer. It stages pending compressed chunks, completes/releases the encoder
 and source, then writes. Live output requires actual streaming timing.
 The final pending bytes go through finish before the last destination wait.

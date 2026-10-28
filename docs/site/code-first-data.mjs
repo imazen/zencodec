@@ -21,7 +21,7 @@ export const codeFlows = [
     {scope:'fn bound_direct_choice_sees_only_compliant_original_indices()',file:'zencodec-testkit/tests/policy_binding.rs',api:['boundPolicy','operationResolver'],state:'Callback: select only among compliant routes'},
     {scope:'fn bound_requirements_survive_a_callback_only_logging_wrapper()',file:'zencodec-testkit/tests/policy_binding.rs',api:['boundPolicy','operationDecisionRecord'],state:'Custom callback wrapper: requirements remain outside the wrapper'},
   ]},
-  {id:'adapter-declaration',role:'adapter',title:'Declare color → plan without startup → verify start',note:'Shared trait hooks are implemented and tested. Native JPEG/PNG adoption and the checked request-to-destination driver remain in progress. Carrier evidence can be unknown; planning does not establish a native memory bound.',steps:[
+  {id:'adapter-declaration',role:'adapter',title:'Declare color → plan without startup → verify start',note:'Shared trait hooks are implemented and tested. Native JPEG shared-hook adoption is qualified. PNG planning qualification and the full checked EncodeRequest-to-destination convenience remain separate gates. Carrier evidence can be unknown; planning does not establish a native memory bound.',steps:[
     {scope:'fn erased_preflight_retains_job_color_access_and_native_error()',file:'src/traits/dyn_encoding.rs',api:['encodeDeclaration','encodePlan','encodePreflight','declaredBegin'],state:'Shared contract test; scripted codec, not native qualification'},
   ]},
   {id:'codec-preflight',role:'implementor',title:'One effective plan → declared startup',steps:[
@@ -83,16 +83,16 @@ export const codeFlows = [
   {id:'adapter-output',role:'adapter',title:'Rows → schedule → forward / seek-back output',steps:[
     {scope:'fn public_row_driver_native_schedules_preserve_pixels_owners_and_failure_context()',file:'perf/jpeg-policy-validation/src/row_driver.rs',api:['rowEncode','rowSource','rowEncodeOptions'],state:'Native JPEG integration test'},
   ]},
-  {id:'adapter-planning',role:'adapter',title:'Plan before begin: native contract gap',issue:160,evidence:'docs/encode-output-preparation.md',note:'Measured 2026-10-27: four prepared progressive JPEG jobs peaked at 77,485 heap bytes; beginning them peaked at 58,070,699 bytes before pixel reads. The native template plan also misses wrapper overrides. A checked destination path needs effective-job planning before startup.',steps:[
-    {scope:'fn native_template_plan_does_not_describe_adapter_streaming_overrides()',file:'perf/jpeg-policy-validation/src/preparation.rs',api:['operationPreparation','rasterOutput'],state:'Native planning counterexample; replacement hook not implemented'},
+  {id:'adapter-planning',role:'adapter',title:'Why effective-job planning precedes begin',issue:160,evidence:'docs/encode-output-preparation.md',note:'Measured 2026-10-27: four prepared progressive JPEG jobs peaked at 77,485 heap bytes; beginning them peaked at 58,070,699 bytes before pixel reads. The native template plan also misses wrapper overrides. A checked destination path needs effective-job planning before startup.',steps:[
+    {scope:'fn native_template_plan_does_not_describe_adapter_streaming_overrides()',file:'perf/jpeg-policy-validation/src/preparation.rs',api:['operationPreparation','rasterOutput'],state:'Native template-planning counterexample; shared effective-job hooks available'},
     {scope:'fn explicit_native_and_progressive_settings_override_streaming_preference()',file:'perf/jpeg-policy-validation/src/preparation.rs',api:['outputScheduleFacts'],state:'Native override and small-image contract test'},
   ]},
   {id:'adapter-ownership',role:'adapter',title:'Admit storage → hold → publish / refuse',steps:[
     {example:'checked_output_storage',file:'perf/spatial-validation/src/jxl_packaged_storage.rs',api:['preparedStorage','imageOutput'],state:'Native JXL integration test'},
   ]},
-  {id:'adapter-preflight',role:'adapter',title:'Plan the effective job → validate → begin',issue:160,evidence:'docs/encode-output-preparation.md',note:'Private native JPEG implementation experiment: requires the committed native-preflight.patch and explicit test feature. This is not yet a zencodec method. Planning agrees with actual startup across 952 mode/geometry cases; the common checked destination contract still needs frozen jobs, input protocol and policy obligations.',steps:[
-    {scope:'fn planning_is_repeatable_and_does_not_change_strided_encode_bytes()',file:'perf/jpeg-policy-validation/src/native_preflight.rs',api:['operationPreparation','rasterOutput'],state:'Patched native JPEG preflight; byte-preserving strided control'},
-    {scope:'fn current_color_context_is_checked_before_startup()',file:'perf/jpeg-policy-validation/src/native_preflight.rs',api:['checkedEncodePolicy'],state:'Patched native JPEG preflight; current color context refusal'},
+  {id:'adapter-preflight',role:'adapter',title:'Plan the effective job → validate → begin',issue:160,evidence:'docs/encode-output-preparation.md',note:'Native JPEG shared-hook qualification: the pinned adapter implements EncodeJob::plan_encode and Encoder::begin_declared. The native-preflight feature selects the tests; no native-preflight.patch is applied. The checked mode/geometry matrix retains its 952-case assertion. Planning is not a native memory bound, and the full EncodeRequest-to-destination convenience remains a separate gate.',steps:[
+    {scope:'fn planning_is_repeatable_and_does_not_change_strided_encode_bytes()',file:'perf/jpeg-policy-validation/src/native_preflight.rs',api:['operationPreparation','rasterOutput'],state:'Native JPEG shared planning hooks; byte-preserving strided control'},
+    {scope:'fn current_color_context_is_checked_before_startup()',file:'perf/jpeg-policy-validation/src/native_preflight.rs',api:['checkedEncodePolicy'],state:'Native JPEG shared planning hooks; current color context refusal'},
   ]},
   {id:'adapter-scope',role:'adapter',title:'Keep obligations → inspect late metadata → publish',steps:[
     {scope:'impl<\'a> DeferredRewrite<\'a>',file:'perf/jpeg-policy-validation/src/requirement_scope.rs',api:['pendingPolicyPlan'],state:'Private native JPEG contract experiment'},
@@ -221,7 +221,7 @@ const lessons = {
   ],
   'adapter-ownership': [['Reserve storage before reconstruction', 'The caller holds several images at once. The allocation charge must follow the returned owner, including after the decoder is dropped.']],
   'adapter-preflight': [
-    ['Plan without beginning native work', 'This private JPEG patch validates the effective job before allocating pixel state. The test also checks repeated planning leaves strided encode bytes unchanged.'],
+    ['Plan without beginning native work', 'The native JPEG shared planning hooks validate the effective job before allocating pixel state. The test also checks repeated planning leaves strided encode bytes unchanged.'],
     ['Validate current color before headers', 'The declared samples and attached profile must agree before startup writes color headers. These tests cover the patch’s current refusal scope, not all color transforms.'],
   ],
   'adapter-scope': [['Keep a late metadata obligation alive', 'An early decision cannot certify packets not yet seen. This private experiment retains the obligation until later inspection and final-effect admission.']],

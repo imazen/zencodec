@@ -28,8 +28,10 @@ an explicit cursor with `render_selected`.
 
 `render_selected(&mut CheckedCollection, &ImageId)` uses `decode_with` so the
 collection's stored policy runs once on the final image. Cancellation is shared
-through decoding and rendering. `render(ImageOutput, resolver, preset, stop)`
-provides the corresponding operation for an already-decoded image. Failure
+through decoding and rendering. `render(ImageOutput, &mut policy, pulse)`
+provides the corresponding operation for an already-decoded image, using
+`OperationPolicy` and `&dyn Pulse`. `render_with_preset(ImageOutput,
+&mut resolver, preset, pulse)` is the deprecated compatibility call. Failure
 retains stage and concrete cause; rejected or partial output is not published.
 
 The geometric helper `geometry::project` is also available for applications

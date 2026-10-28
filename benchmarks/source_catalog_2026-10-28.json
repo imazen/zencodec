@@ -28,5 +28,21 @@
     "docs/site/source-catalog.test.mjs": "42f4122a299a2a4cdd86e9b7e1d781ea4f533cf0f90698a9670a9735435861fe",
     "docs/site/catalog-search.mjs": "c2de81bbe6afea5f4ec791566386353a92f868814b7b916dd52a318c3da6ec51",
     "tests/source_encoding_details.rs": "0f8c15d50ee49db90dc6b74f0906a28110d10d8ffeacc38b45d812ed82c1e9b4"
+  },
+  "documentation_followup": {
+    "scope": [
+      "OperationPolicy signatures and binding",
+      "Pulse parameters and reexports",
+      "renderer arity and compatibility method",
+      "qualified native planning and guide subset",
+      "implemented public renderer versus remaining universal render gaps"
+    ],
+    "checks": "24 source checks and complete browser suite passed; existing migration and viewport assertions unchanged",
+    "resource_receipt": "run-heavy: done rc=0 35s | peak-RSS 0.32GiB | min-avail 3914MiB | peak-load 0.78",
+    "regressions_found_and_fixed": [
+      "Retained historical private policy card alongside current operation contracts",
+      "Kept one migration API section",
+      "Wrapped long inline render signature at 390px"
+    ]
   }
 }

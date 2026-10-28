@@ -22,8 +22,9 @@ collapsed view; place details and evidence in the expansion. Do not turn a
 successful narrow test into a claim that the complete target is implemented.
 
 `gaps.html` lists existing API names against missing behavior and qualification.
-Its canvas-rendering recommendation remains proposed; the table must not imply
-that packed or composited output is display-ready. Compile observations retain
+Its canvas section distinguishes the implemented public rendering companion
+from remaining default rendering and composition work; the table must not imply
+that unprocessed packed or composited output is display-ready. Compile observations retain
 Zenbench resource flags and distinguish the traits consumer from codec builds.
 
 ## Code-first progression qualified on 2026-10-28

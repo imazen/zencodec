@@ -39,7 +39,8 @@ export const migrations = [
     proposed:[['consumer','One retained request','Preset or one fallible resolver with domain-specific offers.'],['adapter','Offer coherent routes','Combine metadata, conversion and encoding choices; retain hard requirements and causes.']],
     action:'Keep the callback narrow: choose a qualified offer or return At<E>. Typed offer views should remove the second Action match. Adapters construct complete routes, validate decisions and reserve resources; applications should not assemble Engine, Prepared or authorization receipts. Late facts use the same resolver after mechanical suspension.',
     gate:'Replace best-effort correctness setters only after shared enforcement covers generic/dyn and one-shot/streaming paths. Preferences may vary; requirements cannot become warnings.',
-    api:['checkedDecodePolicy','checkedEncodePolicy','policyResolver'], source:'docs/policy-resolution.md', issues:[27,159],
+    api:['checkedDecodePolicy','checkedEncodePolicy','operationPolicy','boundPolicy','operationResolver'], source:'docs/policy-resolution.md', issues:[27,159],
+    historicalApi:['policyResolver'],
   },
   {
     id:'metadata', title:'Separate retention, interpretation and the moment of commitment.', audience:'consumer adapter implementor',
@@ -55,7 +56,7 @@ export const migrations = [
     id:'io', title:'Keep byte demand separate from storage and waiting policy.', audience:'adapter implementor',
     trigger:'The same service reads disk files, HTTP ranges and gigapixel tiles while clients stall.',
     released:[['consumer','Input bound at construction','One-shot and pull-strip decode consume an available encoded source.'],['implementor','Rows do not imply input streaming','Output strip iteration alone says nothing about resumable network input.']],
-    current:[['implementor','IncrementalDecode::step','Input / Request plus caller-provided output rows.'],['adapter','ReadAt + admitted owners','Positioned reads, range reuse and coroutine drivers exist. PackedImageOwner now preserves native output charges through ImageOutput clones.']],
+    current:[['implementor','IncrementalDecode::step','Input / InputRequest plus caller-provided output rows.'],['adapter','ReadAt + admitted owners','Positioned reads, range reuse and coroutine drivers exist. PackedImageOwner now preserves native output charges through ImageOutput clones.']],
     proposed:[['adapter','Checked I/O admission','Bound bytes, descriptors, in-flight windows and CPU work per job.'],['adapter','Wait according to ownership','Pause qualified sequential configurations; otherwise stage, queue or refuse.']],
     action:'Keep network-native range requests and disk positional reads behind drivers. A narrow Read/Seek bridge can serve a synchronous parser. Tile/cache priorities belong to the application. Shared page and child selection executes on the review PR; CodecSet collection registration is implemented; native adapter packaging, full configuration mappings and pyramid semantics remain open.',
     gate:'A caller-owned raster remains live even after encoder finish. Admission must count conversion destinations, codec intermediates, queued frames and encoded staging. A memory cap can require refusal; it cannot promise successful streaming.',
