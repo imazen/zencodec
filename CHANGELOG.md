@@ -13,6 +13,14 @@
 
 ### QUEUED BREAKING CHANGES
 
+- Add joint `Question::EncodeRoute` admission over a borrowed retained plan,
+  input replay and output schedule. Source-pass caps, exact replay and raw RAM
+  staging restrictions join existing mandatory requirements; diagnostics use
+  widened masks. Exact replay needs no snapshot when the retained native plan
+  proves one pass. `EncodeEvidence` carries metadata/profile facts once per job;
+  invalid plans retain their original typed cause. Driver/native qualification
+  remains separate and unrun.
+
 - Add default-refusing `Encoder::pull_rows` and erased forwarding, with shared
   `EncodeRows`, `RowDemand`, `RowFillError` and `PullProgress`. The experimental
   IMI adapter implements the shared typed protocol. Joint production policy,

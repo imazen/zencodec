@@ -136,6 +136,8 @@ pub struct EncodeOffer {
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum Selection {
+    /// Joint input replay and output schedule for the retained configured job.
+    EncodeRoute(super::EncodeRouteOffer),
     /// Retained source/encoder/output schedule before publication.
     OutputSchedule(super::OutputScheduleOffer),
     /// Prepared conversion of a held image before destination writes.
@@ -162,6 +164,8 @@ pub enum Selection {
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum DecisionContext {
+    /// Bounded declaration and plan facts, without ICC payloads or input owners.
+    EncodeRoute(super::EncodeRouteFacts),
     /// Actual byte availability and source ownership mechanism.
     OutputSchedule(super::OutputScheduleFacts),
     /// Held image before executing a selected conversion route.
@@ -208,6 +212,17 @@ pub struct EncodeFacts {
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
 pub enum Question<'a> {
+    /// Jointly admit input replay and output for one immutable configured job.
+    EncodeRoute {
+        /// Actual retained declaration, including current color and access.
+        declaration: &'a crate::encode::EncodeDeclaration<'a>,
+        /// Borrowed effective plan; its owned ICC payload is never copied into reports.
+        plan: &'a crate::encode::EncodePlan,
+        /// Bounded job and plan summary for diagnostics.
+        facts: super::EncodeRouteFacts,
+        /// Complete executable routes, after mandatory admission.
+        choices: Choices<'a, super::EncodeRouteOffer>,
+    },
     /// Select a retained source/encoder/output schedule before any final output.
     OutputSchedule {
         /// Actual prepared encoder and retained source mechanism.
@@ -350,6 +365,9 @@ where
 /// unproven requirements because it can immediately enable native sink output.
 #[derive(Clone, Copy, Debug)]
 pub struct PolicySet {
+    max_source_passes: Option<u32>,
+    exact_replay: bool,
+    allow_raw_memory_staging: bool,
     output_schedule: Option<super::OutputSchedule>,
     output_wait_limit: Option<u64>,
     prefer_lossless: bool,
@@ -368,6 +386,9 @@ impl PolicySet {
     /// Choose the first prepared alternative in request order.
     pub const fn new() -> Self {
         Self {
+            max_source_passes: None,
+            exact_replay: false,
+            allow_raw_memory_staging: true,
             output_schedule: None,
             output_wait_limit: None,
             prefer_lossless: false,
@@ -387,7 +408,8 @@ impl PolicySet {
         self.prefer_lossless = enabled;
         self
     }
-    /// Require this descriptive-metadata treatment from a transcode route.
+    /// Require this descriptive-metadata treatment from a transcode or joint
+    /// configured-job encoding route.
     /// This does not certify pixels, opaque profiles or unreported carriers.
     /// An encode-only question lacks the evidence and is refused.
     pub const fn require_metadata(mut self, treatment: MetadataTransfer) -> Self {
@@ -395,7 +417,7 @@ impl PolicySet {
         self
     }
     /// Permit retention of opaque source ICC profiles (the default). Disabling
-    /// this requires a transcode offer proving that it does not retain one;
+    /// this requires a transcode or joint encoding offer proving no retention;
     /// encode-only questions cannot establish that and are refused.
     pub const fn allow_opaque_profiles(mut self, allowed: bool) -> Self {
         self.allow_opaque_profiles = allowed;
@@ -423,7 +445,8 @@ impl PolicySet {
     /// This is separate from encoding fidelity and tone mapping; it does not
     /// establish an end-to-end guarantee. Other output questions lack this
     /// evidence and are refused; interpretation discovery may still proceed.
-    /// Frame routes additionally require confirmed lossless encoding, so a
+    /// Frame and joint encoding routes additionally require confirmed lossless
+    /// encoding, so a
     /// range-preserving conversion cannot mask an unqualified encoder.
     pub const fn require_extended_range(mut self, required: bool) -> Self {
         self.require_extended_range = required;
@@ -440,6 +463,26 @@ impl PolicySet {
     /// This is not a peak-operation or destination-allocation bound.
     pub const fn with_output_wait_limit(mut self, bytes: u64) -> Self {
         self.output_wait_limit = Some(bytes);
+        self
+    }
+    /// Limit complete external source traversals. Zero refuses every source read.
+    /// Unknown maxima refuse finite caps. Private staging consumes one external
+    /// pass even with unknown native replay count; it does not prove termination.
+    pub const fn with_max_source_passes(mut self, passes: u32) -> Self {
+        self.max_source_passes = Some(passes);
+        self
+    }
+    /// Require exact retained replay evidence when native reads may repeat.
+    /// A retained plan proving at most one native pass needs no replay evidence.
+    /// For unknown/multiple native passes, hash/version or unknown evidence refuses.
+    pub const fn require_exact_replay(mut self, required: bool) -> Self {
+        self.exact_replay = required;
+        self
+    }
+    /// Permit private raw RAM staging (default true). Disabling this does not
+    /// ban compressed output staging or bound the source/native working set.
+    pub const fn allow_raw_memory_staging(mut self, allowed: bool) -> Self {
+        self.allow_raw_memory_staging = allowed;
         self
     }
     fn permits_output_schedule(self, offer: Option<&super::OutputScheduleOffer>) -> bool {
@@ -473,6 +516,7 @@ impl PolicySet {
             && !matches!(
                 question,
                 Question::OutputSchedule { .. }
+                    | Question::EncodeRoute { .. }
                     | Question::Transcode { .. }
                     | Question::FrameRoute { .. }
                     | Question::Boundary { .. }
@@ -484,13 +528,48 @@ impl PolicySet {
             && !matches!(
                 question,
                 Question::ImageConversion { .. }
+                    | Question::EncodeRoute { .. }
                     | Question::FrameRoute { .. }
                     | Question::Boundary { .. }
             )
         {
             return Ok(Decision::decline(Decline::UnsupportedQuestion));
         }
+        if (self.max_source_passes.is_some() || self.exact_replay || !self.allow_raw_memory_staging)
+            && !matches!(
+                question,
+                Question::EncodeRoute { .. } | Question::Boundary { .. }
+            )
+        {
+            return Ok(Decision::decline(Decline::UnsupportedQuestion));
+        }
         let choices = match question {
+            Question::EncodeRoute {
+                declaration,
+                plan,
+                facts,
+                choices,
+            } => {
+                // A single configured job: fidelity is identical across these
+                // acquisition/output alternatives. Preserve request order.
+                return Ok(choices
+                    .iter()
+                    .find(|choice| {
+                        self.unmet(Question::EncodeRoute {
+                            declaration,
+                            plan,
+                            facts,
+                            choices: Choices {
+                                ticket: choices.ticket,
+                                entries: choices.entries,
+                                admitted: 1u64 << choice.id.index,
+                            },
+                        })
+                        .is_empty()
+                    })
+                    .map(Decision::choose)
+                    .unwrap_or_else(|| Decision::decline(Decline::NoPreferredChoice)));
+            }
             Question::OutputSchedule { choices, .. } => {
                 if self.metadata.is_some()
                     || !self.allow_opaque_profiles
@@ -631,7 +710,10 @@ impl PolicySet {
                     || self.workspace_limit.is_some()
                     || self.require_extended_range
                     || self.output_schedule.is_some()
-                    || self.output_wait_limit.is_some();
+                    || self.output_wait_limit.is_some()
+                    || self.max_source_passes.is_some()
+                    || self.exact_replay
+                    || !self.allow_raw_memory_staging;
                 return Ok(choices
                     .iter()
                     .find(|choice| {
@@ -677,6 +759,8 @@ pub enum DecisionCode {
     Stopped,
     /// The finite question/ticket allowance was exhausted.
     Exhausted,
+    /// The shared configured-job plan is invalid before selection.
+    InvalidOffers,
 }
 
 /// Numeric/enum diagnostic record, deliberately excluding payloads, paths,
@@ -763,6 +847,7 @@ enum Cause {
     Declined(At<Decline>),
     Callback(Box<dyn Error + Send + Sync>),
     Stopped(StopReason),
+    EncodePlan(crate::encode::EncodePlanError),
 }
 impl PolicyFailure {
     /// The numeric decision record that explains where this failure occurred.
@@ -797,6 +882,10 @@ impl fmt::Display for PolicyFailure {
         if self.0.record.admitted == 0 && !self.0.record.unmet_requirements.is_empty() {
             write!(f, ": {}", self.0.record.unmet_requirements)?;
         }
+        if let Cause::EncodePlan(error) = &self.0.cause {
+            // This error contains only framework enums, never caller payloads.
+            write!(f, ": {error}")?;
+        }
         Ok(())
     }
 }
@@ -805,6 +894,7 @@ impl Error for PolicyFailure {
         match &self.0.cause {
             Cause::Declined(e) => Some(e),
             Cause::Callback(e) => Some(e.as_ref()),
+            Cause::EncodePlan(e) => Some(e),
             Cause::Framework | Cause::Stopped(_) => None,
         }
     }
@@ -911,8 +1001,23 @@ pub(super) fn choose<'a, T: Copy, R: OperationPolicy + ?Sized>(
     } else {
         (1u64 << offers.len()) - 1
     };
-    let has_requirements =
-        preset.has_requirements() || bound.is_some_and(PolicySet::has_requirements);
+    if let Question::EncodeRoute {
+        declaration, plan, ..
+    } = question(Choices {
+        ticket: record.question,
+        entries: offers,
+        admitted: all,
+    }) {
+        if let Err(error) = plan.validate(declaration) {
+            record.code = DecisionCode::InvalidOffers;
+            return Err(At::wrap(PolicyFailure::new(record, Cause::EncodePlan(error))).at());
+        }
+    }
+    // Joint encode routes also enforce structural compatibility with an empty
+    // policy. Preserve the existing behavior for all other question domains.
+    let has_requirements = matches!(context, DecisionContext::EncodeRoute(_))
+        || preset.has_requirements()
+        || bound.is_some_and(PolicySet::has_requirements);
     let mut admitted = if has_requirements { 0 } else { all };
     for index in 0..if has_requirements { offers.len() } else { 0 } {
         let mut failures = preset.unmet(question(Choices {

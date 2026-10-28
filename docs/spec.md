@@ -480,6 +480,8 @@ trait PolicyResolver {
     fn resolve(&mut self, question: Question<'_>) -> Result<Decision, At<Self::Error>>;
 }
 enum Question<'a> { // non_exhaustive
+    EncodeRoute { declaration: &'a EncodeDeclaration<'a>, plan: &'a EncodePlan,
+        facts: EncodeRouteFacts, choices: Choices<'a, EncodeRouteOffer> },
     OutputSchedule { facts: OutputScheduleFacts,
         choices: Choices<'a, OutputScheduleOffer> },
     ImageConversion { image: &'a image::ImageOutput, facts: &'a ImageFacts,
@@ -530,6 +532,9 @@ impl PolicySet {
     const fn require_extended_range(self, required: bool) -> Self;
     const fn require_output_schedule(self, schedule: OutputSchedule) -> Self;
     const fn with_output_wait_limit(self, bytes: u64) -> Self;
+    const fn with_max_source_passes(self, passes: u32) -> Self;
+    const fn require_exact_replay(self, required: bool) -> Self;
+    const fn allow_raw_memory_staging(self, allowed: bool) -> Self;
 }
 ```
 
@@ -545,7 +550,8 @@ the offer limit is not a total-memory guarantee.
 
 `PolicySet` requirements now constrain every callback, including direct
 `Decision::Choose`. Metadata treatment, opaque-profile exclusion, workspace,
-extended range, output schedule and output-wait limits are checked before choices
+extended range, output schedule, output-wait limits, external source passes, exact
+replay and raw RAM staging restrictions are checked before choices
 reach application code. `UsePreset` selects among the admitted choices; lossless
 preference and the decision to accept a disclosed chroma-siting assumption remain
 situational. Required request configuration still applies independently.
@@ -556,7 +562,7 @@ exclude every executable alternative, the operation refuses before invoking the
 callback. An originally empty executable set retains its existing callback
 behavior. Stale tokens still cannot select a route from another question.
 
-`DecisionRecord::offered` remains the number of executable alternatives before
+`DecisionRecord::offered` remains the number of supplied alternatives before
 admission; `admitted` counts the alternatives the callback can select.
 `unmet_requirements: UnmetRequirements` contains the union of failures across
 excluded alternatives. Its iterator yields `(PolicyRequirement,
@@ -3020,3 +3026,64 @@ admit replay, storage or publication policy, and does not implement async I/O.
 The experimental IMI adapter uses the shared typed method. Production joint
 policy, native retained preparation and native `Send` qualification remain
 separate gates; the production row job driver still refuses replay input.
+
+## Joint configured-job encoding route (review API)
+
+```rust
+fn resolve_encode_route<R: OperationPolicy + ?Sized>(
+    declaration: &EncodeDeclaration<'_>, plan: &EncodePlan, evidence: EncodeEvidence,
+    offers: &[EncodeRouteOffer], resolver: &mut R, preset: PolicySet, pulse: &dyn Pulse,
+) -> Result<(usize, DecisionRecord), At<PolicyFailure>>;
+```
+
+One retained configured job supplies the declaration, plan and common
+`EncodeEvidence`.
+The plan is borrowed in `Question::EncodeRoute`; `DecisionContext::EncodeRoute`
+copies only `EncodeRouteFacts` (pixels, evidence, input, timing, output phase).
+`Selection::EncodeRoute` copies the chosen acquisition/output/evidence offer.
+There are no input owners or ICC payloads in the report.
+
+`EncodeEvidence::new(EncodeOffer)` retains the existing encoder offer and defaults
+its `metadata: Option<MetadataTransfer>` and `retains_opaque_profile: Option<bool>`
+to unknown. Supply this value once for the configured job. It is available through
+`facts.evidence`, shared by all alternatives and retained in the bounded context.
+
+`EncodeRouteOffer::new(InputAcquisition, OutputScheduleOffer)` initializes replay,
+workspace and range evidence to unknown. Metadata/profile facts are not route
+fields. Acquisitions are
+`Unknown`, `BorrowedRaster`, `DirectRows`, `MemorySnapshot` and `DiskReplay`.
+Replay evidence distinguishes `Unknown`, `ImmutableBorrow`, `PrivateSnapshot`,
+`VerifiedIdentity` and `VerifiedHash`. The first exact form requires an actual
+held raster; the second requires a private raw memory snapshot. Source flags
+alone never establish either. Structural compatibility is always checked,
+including with `PolicySet::new()`; filtering preserves original selection indices
+and incompatible choices never reach the callback.
+
+`with_max_source_passes` counts external traversals: direct acquisition uses the
+native maximum, staging uses one external pass even when internal replay has no
+known maximum. Zero rejects all source reads. `require_exact_replay` needs no
+replay evidence when the retained native plan proves at most one pass (`Rows`,
+`WholeRaster`, or `Replay` with maximum one). Otherwise it refuses unknown, hash
+and identity evidence. The exemption is derived from the native plan, never a
+caller flag or the external staging traversal count.
+`allow_raw_memory_staging(false)` excludes raw memory snapshots, not compressed
+output stores. Other question domains keep
+these obligations unknown; final boundary adoption refuses them. Existing
+mandatory requirements apply unchanged, including strict metadata/workspace,
+range and output-wait evidence. Extended range additionally requires confirmed
+lossless fidelity, as on frame routes. Timing/FinalPass never prove retention.
+
+The driver must check both requirement snapshots before covered preparation,
+retain the selected job/source/reservations, and revalidate the complete startup
+plan before reads or publication. Core admission does not enforce driver call
+order or certify native output. Caller and adapter examples, migration scope,
+evidence semantics and unrun validation recipes: [joint route contract](encoding-route.md).
+
+Invalid retained plans refuse before any callback, even with an empty offer set:
+`DecisionCode::InvalidOffers` retains the original `EncodePlanError` directly in
+the cause chain. Incompatible alternatives under a valid plan remain individually
+filtered via `PolicyRequirement::EncodeRoute`. One configured-job evidence value
+supplies metadata/profile obligations for every route; there is no per-offer
+metadata consistency check or consistency error type. Workspace/range remain
+route-dependent. Source-pass and all other mandatory checks still apply to plans
+proving a single native pass.
