@@ -2327,6 +2327,7 @@ pub zencodec::operation::TranscodeOffer::admitted_bytes: usize
 pub zencodec::operation::TranscodeOffer::encoder: zencodec::operation::EncodeOffer
 pub zencodec::operation::TranscodeOffer::metadata: zencodec::operation::MetadataTransfer
 pub zencodec::operation::TranscodeOffer::output: zenpixels::descriptor::PixelDescriptor
+pub zencodec::operation::TranscodeOffer::output_schedule: core::option::Option<zencodec::operation::OutputScheduleOffer>
 pub zencodec::operation::TranscodeOffer::retains_opaque_profile: core::option::Option<bool>
 pub zencodec::operation::TranscodeOffer::workspace_upper_bound: core::option::Option<u64>
 impl zencodec::operation::TranscodeOffer
