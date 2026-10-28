@@ -57,30 +57,39 @@ it must retain cancellation checks.
   The local migration control compared cancellation polls across 11 operations
   with the previous head and found identical counts. It does not establish
   timing performance or add native progress reporting.
-- The WebP lane executed its local control against
-  [PR105's baseline `872289ff`](https://github.com/imazen/zenwebp/tree/872289ffd22065f02a58d3141feba57cf67b4a5f).
-  The export repairs a dependency repository URL without changing its revision
-  or native codec code.
-  Lossy decode observed 6 checks with a legacy token and 11 with a quiet Pulse;
-  animation rendering observed 99 and 193. Native still encoding observed 24
-  stop checks versus 28 pulse checks, while the adapter's quiet Pulse was checked
-  56 times. These are fixture-specific poll counts, not timings or universal
-  per-frame costs. The proposed fix is not yet qualified.
-- The same WebP control found a separate diagnostic problem: a timeout at
-  legacy decode poll 5 of 6 returned `Cancelled` instead of `TimedOut`.
-  Preserve the expected timeout reason when repairing the path; removing
-  duplicate polls alone does not certify cancellation correctness.
-- The zenpipe lane found an animation request path that did not call
-  `set_pulse` on its retained codec job. Its new failing-first control initially
-  failed to compile, so the behavioral witness and fix remain unqualified.
-  Source inspection alone is not a passing regression test.
+- [WebP PR105](https://github.com/imazen/zenwebp/pull/105), head
+  `5a6cce27`, fixes duplicate adapter polling and preserves the native timeout
+  reason. Its [20 CI jobs](https://github.com/imazen/zenwebp/actions/runs/40686426847)
+  and [three recompress jobs](https://github.com/imazen/zenwebp/actions/runs/40686426806)
+  passed. Local one-shot cancellation, job/per-call and poll controls passed
+  in run 52d. The baseline failures remain in the
+  [probe receipt](../benchmarks/pulse_review_2026-10-28.json); they describe the
+  old implementation, not the fixed head. The root test graph still includes a
+  legacy zencodec through its PNG development dependency.
+- [Zenpipe PR108](https://github.com/imazen/zenpipe/pull/108) retains the
+  request Pulse on the animation decoder job (`b13e550f`) and passes the
+  ImageJob control into native frame work (`60127aaf`). Each fix has a
+  failing-first behavioral witness. The current head `363f7c50` also checks
+  each frame's actual pixel format before passing it to the encoder; its
+  20 animation controls pass, including strided input and refusal before write.
+  These controls do not establish progress forwarding or exact timeout reasons
+  through zenpipe's older `PipeError::Cancelled` variant.
+- The native IMI migration is integrated into the shared-core multipass harness
+  at `3e9306c4`. Its 17 native tests and strict Clippy pass with a single
+  zencodec/pixels/how-far identity. A native one-shot cancellation failure from
+  child progress startup now propagates instead of being ignored. This does
+  not qualify per-call progress composition or exact stop-reason retention.
+  See [the native harness scope](../perf/multipass-validation/README.md).
 
-The WebP and zenpipe controls above are local work under review; their final
-commits and complete passing receipts must be recorded before closing the
-qualification gate. Existing pixel and timing assertions remain unchanged.
-The [probe receipt](../benchmarks/pulse_review_2026-10-28.json) retains the
-baseline, local control commit, exact command, observed counts and failed-run
-resource receipt. That build/test receipt is not a native performance result.
+Zenpipe's overall CI remains failing: AVIF, HEIC and zenextras integration
+still need migration at its pinned revisions. Its run 20d also retains two
+explicit failures: the latency step executed no tests because all ten were
+ignored, and imageflow-compat strict Clippy reported 65 existing lints.
+Functional animation qualification is not a green full run. Cancellation
+latency and throughput remain unmeasured. A separate
+[transcode sequence-loss finding](https://github.com/imazen/zenpipe/issues/111)
+remains open: success from its convenience transcode can return only the first
+frame. Sequence preservation requires its own contract, independently of Pulse.
 
 For each route, test job-only and per-call-only cancellation, quiet and reporting
 pulses, first and late cancellation, exact error reasons, progress forwarding,
