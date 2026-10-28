@@ -294,7 +294,7 @@ mod tests {
             1,
             false,
             &mut callback,
-            &Cancel,
+            &zencodec::how_far::StopOnly::new(Cancel),
         )
         .unwrap_err();
         assert_eq!(error.error().code(), Code::Stopped);

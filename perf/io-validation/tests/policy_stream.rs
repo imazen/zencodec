@@ -377,7 +377,14 @@ fn cancellation_and_panic_never_implicitly_resume_the_suspended_stream() {
         stop.0.store(true, Ordering::Relaxed);
         first(q)
     };
-    assert!(gate.resolve(&mut engine, &mut cancel, &stop).is_err());
+    assert!(
+        gate.resolve(
+            &mut engine,
+            &mut cancel,
+            &zencodec::how_far::StopOnly::borrowed(&stop),
+        )
+        .is_err()
+    );
     assert_eq!(gate.bytes_held(), 0);
     assert_eq!(gate.commitments(), Commitments::default());
     let mut gate = Gate::new(7, 8, false).unwrap();

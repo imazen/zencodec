@@ -387,7 +387,13 @@ fn cancellation_prevents_admission_and_each_later_growth() {
     let memory = storage(48);
     let disk = storage(8);
     assert!(matches!(
-        Admitted::start(plan(), context(), &memory, &disk, &Cancel)
+        Admitted::start(
+            plan(),
+            context(),
+            &memory,
+            &disk,
+            &zencodec::how_far::StopOnly::new(Cancel),
+        )
             .err()
             .unwrap()
             .error(),
@@ -397,7 +403,11 @@ fn cancellation_prevents_admission_and_each_later_growth() {
     let admitted = Admitted::start(plan(), context(), &memory, &disk, &NoPulse).unwrap();
     assert!(matches!(
         admitted
-            .allocate(ByteRange::new(0, 1), context(), &Cancel)
+            .allocate(
+                ByteRange::new(0, 1),
+                context(),
+                &zencodec::how_far::StopOnly::new(Cancel),
+            )
             .err()
             .unwrap()
             .error(),

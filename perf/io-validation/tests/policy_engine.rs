@@ -647,7 +647,7 @@ fn cancellation_before_and_after_callback_prevents_selection() {
     let offers = [alternative(Action::Execution(Execution::Buffered))];
     for initially_stopped in [true, false] {
         let flag = Arc::new(AtomicBool::new(initially_stopped));
-        let stop = FlagStop(flag.clone());
+        let stop = zencodec::how_far::StopOnly::new(FlagStop(flag.clone()));
         let mut calls = 0;
         let mut resolver = |q: Question<'_>| -> Result<Decision, At<Infallible>> {
             calls += 1;
@@ -888,7 +888,7 @@ fn callback_errors_without_frames_or_at_the_trace_limit_keep_their_cause() {
 #[test]
 fn callback_failure_remains_primary_when_cancellation_also_arrives() {
     let flag = Arc::new(AtomicBool::new(false));
-    let stop = FlagStop(flag.clone());
+    let stop = zencodec::how_far::StopOnly::new(FlagStop(flag.clone()));
     let mut callback = |_: Question<'_>| -> Result<Decision, At<ApplicationError>> {
         flag.store(true, Ordering::SeqCst);
         Err(At::wrap(ApplicationError("native resolver failure")).at())
