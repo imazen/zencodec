@@ -1,0 +1,63 @@
+# Shared-contract rollout
+
+Observed 2026-10-28. Merging these changes does not publish a crate or establish
+release completeness. The [implementation record](ideal-api.md) and
+[multipass gates](../perf/multipass-validation/README.md#production-promotion-gates)
+retain the remaining design and qualification work.
+
+## Verified merges
+
+| Repository | Reviewed change | Tested source | Remote main contains it |
+| --- | --- | --- | --- |
+| zencodec | [PR 168](https://github.com/imazen/zencodec/pull/168) | `f552d338fc5af8dbc623129f3040b65c9f074a71` | Merge `f02a17ec6001a9efcad1267f92a3ea928ed06e57`; ancestry verified |
+| zenextras | [PR 54](https://github.com/imazen/zenextras/pull/54) | `3e5267e363e339a2af86c6bb838e3ab0c4a7f0b2` | Merge `635609fba4bf073ff68a1e1ccb55fa3dd170b1d8`; remote comparison verified |
+| zenjxl | [PR 31](https://github.com/imazen/zenjxl/pull/31) | `f2c0177e153c9308042bfd5fe51a4be1ebac11b0` | Merge `bf3a4a801cd293bb59b13ecf3791c50c0acf9059`; remote comparison verified |
+
+Before merging, every job passed in zencodec's
+[core CI](https://github.com/imazen/zencodec/actions/runs/40767258138),
+[native/guide qualification](https://github.com/imazen/zencodec/actions/runs/40767258147)
+and [fuzz build](https://github.com/imazen/zencodec/actions/runs/40767258149),
+zenextras' [CI](https://github.com/imazen/zenextras/actions/runs/40766323747),
+and zenjxl's [CI](https://github.com/imazen/zenjxl/actions/runs/40429930768).
+The native/guide workflow skips deployment on a PR; that is distinct from its
+successful source, browser and native-oracle checks. Core semver acceptance is
+for the intended breaking version, not a backward-compatibility certificate.
+
+## Paired pixels stack
+
+[zenpixels PR 95](https://github.com/imazen/zenpixels/pull/95), tested at
+`283655c5424e0ad7ebc6d2acd94670fac1e29158`, passed
+[its manually dispatched complete CI](https://github.com/imazen/zenpixels/actions/runs/40668717147),
+including API snapshots, feature powerset, i686 and Windows/macOS ARM.
+It merged into the `output-plan` review branch at
+`9dbbdde8a4971d66deda43d6a06ed70022ac7f22`. This is **not yet on main**.
+The combined [PR 92](https://github.com/imazen/zenpixels/pull/92) is running
+[CI on that exact head](https://github.com/imazen/zenpixels/actions/runs/40769496153)
+before its main merge. No release was requested or performed.
+
+## Dependency alignment remains a gate
+
+Merged implementations can still resolve different trait crates. Inspect every
+standalone consumer graph outside inherited local path patches before claiming
+one contract. Confirm source IDs and features, not just package names or equal
+source files. Keep the chosen zencodec family and paired zenpixels revision
+consistent across direct and transitive edges.
+
+Zenpipe's current full API profile still pins AVIF `a7638f6e`, whose animation
+signature takes `Stop` where the shared contract requires `Pulse`.
+[AVIF PR 75](https://github.com/imazen/zenavif/pull/75) at `b25f7604` matches and
+is qualified by the core AV1 harness. Consumer adoption must move its direct
+parse member with all AVIF patch entries and account for the corresponding
+rav1d revision. The old and new parse trees are identical but their Cargo source
+IDs differ. The existing full-profile failure stays visible until that graph
+and its native controls pass.
+
+The merged TIFF adapter still has direct git edges to an earlier zencodec and
+zenmeta. A registry-only consumer patch cannot replace those edges. Prefer
+owned dependency alignment with registry requirements and a coordinated root
+patch during the unpublished rollout; an isolated same-path patch can diagnose
+the graph but does not establish a portable landing.
+
+The shared pull-row extension, retained native multipass preparation and movable
+session are under implementation and validation. These do not yet qualify the
+single-policy production multipass driver or asynchronous row ownership.
