@@ -178,3 +178,57 @@ fn finish_first_without_wait_evidence_stays_unknown() {
     )
     .unwrap();
 }
+
+#[test]
+fn missing_or_contradictory_publication_evidence_names_both_requirements() {
+    use crate::operation::{DecisionCode, PolicyRequirement, RequirementEvidence};
+    use core::cell::Cell;
+    for contradiction in [false, true] {
+        let mut candidate = offer();
+        let evidence = if contradiction {
+            let schedule = candidate.output_schedule.as_mut().unwrap();
+            schedule.schedule = OutputSchedule::Live;
+            schedule.wait_retained_upper_bound = Some(4097);
+            RequirementEvidence::Contradicted
+        } else {
+            candidate.output_schedule = None;
+            RequirementEvidence::Unknown
+        };
+        let called = Cell::new(false);
+        let mut policy = BoundPolicy::new(
+            requirements(),
+            |q: Question<'_>| -> Result<Decision, At<Infallible>> {
+                called.set(true);
+                let Question::Transcode { choices, .. } = q else {
+                    panic!("wrong question")
+                };
+                Ok(Decision::choose(choices.first().unwrap()))
+            },
+        );
+        let error = resolve_transcode(
+            boundary(InterpretationState::Final),
+            &[candidate],
+            &mut policy,
+            PolicySet::new(),
+            &NoPulse,
+        )
+        .unwrap_err();
+        assert!(
+            !called.get(),
+            "unqualified routes reached application selection"
+        );
+        let record = error.error().record();
+        assert_eq!(record.code, DecisionCode::Declined);
+        assert_eq!((record.offered, record.admitted), (1, 0));
+        assert_eq!(
+            record
+                .unmet_requirements
+                .iter()
+                .collect::<alloc::vec::Vec<_>>(),
+            [
+                (PolicyRequirement::OutputSchedule, evidence),
+                (PolicyRequirement::OutputWait, evidence),
+            ]
+        );
+    }
+}
