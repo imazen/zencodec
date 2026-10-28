@@ -744,6 +744,7 @@ struct TranscodeOffer { // non_exhaustive; fields public
     retains_opaque_profile: Option<bool>,
     admitted_bytes: usize,
     workspace_upper_bound: Option<u64>,
+    output_schedule: Option<OutputScheduleOffer>,
 }
 fn resolve_transcode<R: PolicyResolver + ?Sized>(
     boundary: DecodeBoundary, offers: &[TranscodeOffer], resolver: &mut R,

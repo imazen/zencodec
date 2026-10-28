@@ -4,6 +4,10 @@
 
 ### QUEUED BREAKING CHANGES
 
+- Add optional output-schedule evidence to `TranscodeOffer`, admitting metadata
+  and publication requirements on the same retained route. Unknown still refuses;
+  native publication-owner qualification remains separate (`40f92ed4`).
+
 - Refuse staged video completion without an admitted frame, and refuse further
   execution if the legacy preset is replaced after accepted input. Reject
   controlled-decoder completion facts that contradict the adopted interpretation.

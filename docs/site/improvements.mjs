@@ -2,6 +2,19 @@
 // Signatures come from Rust through apiPanels; examples remain executable files.
 export const improvements = [
   {
+    id:'joint-transcode-publication', title:'Admit metadata and publication on the same route',
+    state:'Shared admission qualified · native owner experiment pending', date:'2026-10-28',
+    summary:'TranscodeOffer carries optional OutputScheduleOffer evidence alongside metadata and profile treatment. One policy can require both.',
+    why:'Separate metadata and scheduling questions cannot establish a complete route when neither carries the other obligation.',
+    consumer:'Keep one PolicySet or BoundPolicy. A required finish-first schedule still refuses on existing routes whose evidence is unknown.',
+    adapter:'Retain the real encoder job, conversion and publication mechanism. Fill output_schedule only for that route. Check output before constructing a publication owner.',
+    implementor:'Supply facts for the actual configuration. Encoder completion alone does not prove that output extras or borrowed input are released.',
+    open:'The fixed-capacity publication owner is a private experiment, not a proposed convenience API. Universal Pulse, reusable admitted storage, runtime limits and complete wait retention need native qualification. No whole-operation memory or PII claim.',
+    signatures:['transcodeOffer','outputScheduleOffer','boundPolicy'],
+    flow:[['consumer','Bind requirements','metadata and output schedule'],['adapter','Retain one route','configured job and storage'],['consumer','Choose admitted route','one resolver'],['adapter','Verify before publication','unknown retention stays unknown']],
+    evidence:[['Contract, ownership questions and limits','docs/joint-transcode-publication.md'],['Adversarial admission controls','src/operation/transcode_composition_tests.rs'],['Executed results and value layouts','benchmarks/joint_transcode_2026-10-28.json']],
+  },
+  {
     id:'bound-operation-policy', title:'Carry requirements outside the callback',
     state:'Implemented on review API · native consumer migration in progress', date:'2026-10-28',
     summary:'Pass PolicySet directly, or bind it to a callback with BoundPolicy. Admission filters choices before application code and names unmet requirements.',

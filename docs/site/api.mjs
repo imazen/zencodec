@@ -46,6 +46,7 @@ export const api = {
   rowEncodeOptions: {path:'zencodec_io::row_encode::Options',file:'zencodec-io/src/row_encode.rs',scope:'impl Options',methods:['new','with_batch_rows','with_policy_set','with_disk_staging']},
   rowEncodeFailure: {path:'zencodec_io::row_encode::Failure',file:'zencodec-io/src/row_encode.rs',scope:'pub struct Failure',methods:[],item:true},
   outputSchedule: {path:'zencodec::operation::resolve_output_schedule',file:'src/operation/scheduling.rs',methods:['resolve_output_schedule']},
+  transcodeOffer: {path:'zencodec::operation::TranscodeOffer',file:'src/operation/transcode.rs',scope:'pub struct TranscodeOffer',methods:[],item:true},
   outputScheduleOffer: {path:'zencodec::operation::OutputScheduleOffer',file:'src/operation/scheduling.rs',scope:'pub struct OutputScheduleOffer',methods:[],item:true},
   outputScheduleFacts: {path:'zencodec::operation::OutputScheduleFacts',file:'src/operation/scheduling.rs',scope:'pub struct OutputScheduleFacts',methods:[],item:true},
   stagedEncode: {path:'zencodec_media::staged::StagedEncode (std)',file:'zencodec-media/src/staged.rs',scope:'impl<E: VideoEncoder, M: Muxer, D: Destination, R: OperationPolicy> StagedEncode<E, M, D, R>',methods:['new','with_staging','with_policy_set','report','is_failed','push','push_converted','finish']},
