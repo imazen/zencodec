@@ -272,3 +272,25 @@ and [fuzz checks](https://github.com/imazen/zencodec/actions/runs/40627250793).
 Its [documentation workflow](https://github.com/imazen/zencodec/actions/runs/40627250847)
 passes guide execution, browser checks, TIFF/JXL and AV1 qualification; native
 JPEG qualification still fails and prevents deployment.
+
+## JPEG harness migration: current-core local qualification
+
+The harness now pins the qualified native graph above and calls
+`EncodeJob::plan_encode` / `Encoder::begin_declared` directly. The historical
+native patch is retained as measurement provenance, but the test runner no longer
+applies it. The 952 planning/startup combinations and the existing pixel, refusal,
+ownership and cancellation assertions are preserved. Stop-only test fixtures use
+the explicit `StopOnly` adapter at Pulse boundaries.
+
+An isolated export of core integration commit `d9c84dff` passed all 47 JPEG
+controls and strict all-target Clippy with `native-preflight` enabled, plus the
+three preparation-profiler parser tests. Receipt: `rc=0`, 27 seconds, peak RSS
+0.65 GiB, minimum available memory 4962 MiB, peak load 1.21. This qualifies the
+harness on the current row driver, including the preceding erased-job addition;
+it is not a native adoption test of those erased entry points or a performance
+measurement. GitHub documentation CI must still pass before deployment is claimed.
+
+The site initially refused the new dependency pin because its generated
+integration signature snapshot still named the old zenpipe revision. Re-extracting
+from `874a3856` changes the revision only: the displayed checked-transcode
+signatures are identical. The snapshot/manifest equality gate remains intact.
