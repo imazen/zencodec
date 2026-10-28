@@ -15,7 +15,8 @@ def run(args, **kwargs):
 
 def prepare(root, main, ideal):
     root.mkdir(parents=True, exist_ok=False)
-    script = Path(__file__).resolve()
+    script = root / "runner-measured.py"
+    script.write_bytes(Path(__file__).read_bytes())
     main = run(["git", "rev-parse", main], capture_output=True, text=True).stdout.strip()
     ideal = run(["git", "rev-parse", ideal], capture_output=True, text=True).stdout.strip()
     revisions = {"published": "crates.io 0.1.26", "main": main, "ideal": ideal}
