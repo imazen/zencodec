@@ -137,10 +137,21 @@ Sink capacity is independent of a native decoder's batch size. After `begin`,
 `DecodeRowSink::max_buffer_rows` reports the admitted height per borrowed buffer.
 `helpers::copy_rows_to_sink`, whole-image/frame copy helpers and coroutine
 delivery split larger native batches into consecutive buffer requests. They
-preserve source/destination stride and provisional pass coordinates. A single
-`Event::Rows` still reports the native batch as a whole. The held native batch
-and reconstruction workspace remain outside this sink-capacity guarantee.
+preserve source/destination stride and provisional pass coordinates. The copy
+helpers deliver their whole batch before returning. Coroutine delivery instead
+returns one `Event::Rows` per admitted buffer, retaining the rest of the batch
+without polling the producer or consuming more input. A pull consumer can drain
+that buffer before the next step. The held native batch and reconstruction
+workspace remain outside this sink-capacity guarantee.
 Legacy direct sinks must refuse oversized requests rather than grow silently.
+
+Qualification (2026-10-28): a single native PNG batch exhausted a bounded pull
+adapter's object allowance because the coroutine filled every sub-strip before
+returning. `just coroutine-row-delivery-check` reproduces the same failure with
+a one-slot sink, then verifies 129-row batches, different source/destination
+strides, final/provisional coordinates, completion in the producer's final poll,
+and cancellation between deliveries. All prior coroutine tests remain unchanged.
+The native PNG consumer rerun is a separate qualification gate.
 
 Qualification (2026-10-25): the 97x65 PNG guide input exposed a 65-row native
 batch against an admitted 64-row transcode buffer. Shared helper controls use
