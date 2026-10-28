@@ -1,0 +1,46 @@
+{
+  "tested_source": "a12658bed8fce5fab8658f3d8f252aba95dd5134",
+  "native_pin": "0007b75a9d2bd965b96433e3dd0ed8ba74aac4f5",
+  "pixels_pin": "283655c5424e0ad7ebc6d2acd94670fac1e29158",
+  "scope": "Experimental multipass driver declaration enforcement; no production API promotion",
+  "before": {
+    "precision_source": "3eb8572e",
+    "precision_command": "cargo test --manifest-path perf/multipass-validation/Cargo.toml --locked --test protocol sample_claim",
+    "precision_result": "2 tests executed and failed behaviorally; no compilation failure",
+    "color_source": "00e10753ed1f849a64d7506407b6a74ef4ffbbbc",
+    "color_command": "cargo test --manifest-path perf/multipass-validation/native/Cargo.toml --locked --test imi_native descriptor_color_cannot_be_relabelled_by_native_defaults",
+    "color_result": "1 test executed and failed behaviorally; no compilation failure"
+  },
+  "fixed": {
+    "commands": [
+      "just multipass-check",
+      "just multipass-native-check <artifacts>"
+    ],
+    "public_tests": 26,
+    "native_tests": 19,
+    "failures": 0,
+    "ignored": 0,
+    "clippy": "both harnesses strict all-targets passed",
+    "native_claim_matrix": "four existing configurations, forward and seek-back; strided samples; claimed/unclaimed encoded bytes equal; source pass/byte counts unchanged; no raw staging/digest reservation"
+  },
+  "locks": {
+    "perf/multipass-validation": {
+      "zencodec": 1,
+      "zenpixels": 1,
+      "how-far": 1
+    },
+    "perf/multipass-validation/native": {
+      "zencodec": 1,
+      "zenpixels": 1,
+      "how-far": 1
+    }
+  },
+  "resources": "run-heavy: done rc=0 60s | peak-RSS 1.29GiB | min-avail 4129MiB | peak-load 1.49",
+  "initial_run": "Both failing-first gates passed; fixed public tests passed, then strict Clippy rejected manual_is_multiple_of in new test. rc101 63s peakRSS1.26GiB minavail4178MiB load1.66. Corrected test style only; failure retained.",
+  "limitations": [
+    "Native byte parity is not a new lossy-fidelity guarantee.",
+    "Input claims are checked after filling native-owned buffers and before successful delivery; a malformed codec is not memory-isolated.",
+    "No throughput, compilation-time comparison or native workspace bound measured.",
+    "Production single-resolver promotion, lightweight native planning, Send session support, bounded diagnostics and async source ownership remain open."
+  ]
+}

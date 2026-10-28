@@ -247,6 +247,11 @@
 
 ### Other changes
 
+- Enforce strict sample-grid declarations in the multipass experiment, retaining
+  typed refusal before successful row delivery (`310f7fa7`). Refuse unmapped
+  descriptor primaries/range in its native adapter before sRGB startup. Native
+  claimed/unclaimed byte parity passes; production protocol promotion remains open.
+
 - Qualify packaged JXL input-size limits through the registry: actual resident
   length controls admission, both composition views retain exact native samples,
   and mixed refusals exclude the handled field. This is not workspace admission.

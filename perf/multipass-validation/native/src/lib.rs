@@ -20,7 +20,10 @@ use zencodec::{
     output_patch::{OutputAccess, OutputFinish, Patch},
 };
 use zencodec_io::row_encode::Description;
-use zenpixels::{AlphaMode, ChannelLayout, ChannelType, PixelSliceMut, TransferFunction};
+use zenpixels::{
+    AlphaMode, ChannelLayout, ChannelType, ColorPrimaries, PixelSliceMut, SignalRange,
+    TransferFunction,
+};
 
 /// Adapter error. Native errors keep their original value.
 #[derive(Debug)]
@@ -212,6 +215,12 @@ pub fn image_info(desc: &Description) -> Result<ImageInfo, ImiError> {
     };
     if d.transfer() != TransferFunction::Srgb {
         return Err(ImiError::Unsupported("transfer other than sRGB"));
+    }
+    if d.primaries != ColorPrimaries::Bt709 {
+        return Err(ImiError::Unsupported("primaries other than sRGB"));
+    }
+    if d.signal_range != SignalRange::Full {
+        return Err(ImiError::Unsupported("signal range other than full"));
     }
     match (channels, d.alpha()) {
         (Channels::GrayAlpha | Channels::Rgba, Some(AlphaMode::Straight)) => {}

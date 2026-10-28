@@ -338,7 +338,7 @@ fn truthful_sample_claim_ignores_padding_and_survives_staged_replay() {
         let seen = enc.seen.clone();
         let src = Claimed(
             Callback {
-                make: |_: u32, row: u32| if row % 2 == 0 { 0 } else { 255 },
+                make: |_: u32, row: u32| if row.is_multiple_of(2) { 0 } else { 255 },
                 calls: Rc::new(Cell::new(0)),
                 fail_at: None,
                 replay,

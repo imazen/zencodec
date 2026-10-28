@@ -246,6 +246,16 @@ CHANGELOGs. Full design context:
 
 ## Known Bugs
 
+- Fixed in the multipass experiment (2026-10-28): source `exact_depth`
+  declarations were carried but never checked. Incompatible claims now refuse
+  before native startup; every active row is verified before successful fill,
+  with the original typed cause retained even if a codec swallows interruption.
+  The native IMI adapter also refused non-sRGB contexts but omitted descriptor
+  primaries/range checks, permitting descriptor-only relabeling. Both failing-first
+  regressions and native byte-parity controls are recorded in
+  `benchmarks/multipass_declarations_2026-10-28.json`. The protocol remains an
+  experiment; native planning/Send and source/diagnostic gates remain open.
+
 - Fixed during independent policy-probe integration (2026-10-28): two
   `planned-row-check` recipes made the whole justfile fail to parse. The
   consolidated recipe retains both std and all-feature test/Clippy commands.

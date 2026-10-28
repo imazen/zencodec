@@ -1,4 +1,4 @@
-//! Prototype of bounded multi-pass raster input (docs/multipass-contract.md).
+//! Prototype of bounded multi-pass raster input (see this harness's README.md).
 //!
 //! The codec drives passes by asking for rows; the driver decides where a
 //! later pass gets them. A borrowed raster is read again through the retained immutable view. A positional

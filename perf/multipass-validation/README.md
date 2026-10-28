@@ -25,8 +25,9 @@ Run public controls with `just multipass-check`. The isolated native crate
 requires access to the private IMI repository and is explicitly opt-in:
 `just multipass-native-check <artifact-directory>`. It calls the native codec's
 public session API; no private codec implementation is copied here. Its pinned
-graph contains a separate zencodec copy used inside IMI; no zencodec types cross
-that boundary. The prototype and adapter share the current local interface.
+graph now shares one zencodec, zenpixels and how-far family with the harness,
+as recorded in the shared-core validation below. The driver protocol is still
+experimental; dependency unification does not promote it into the public API.
 
 The public controls exercise protocol misuse, swallowed interruptions, replay
 changes, staging choices, pass limits, detached-proof substitution and direct
@@ -82,3 +83,54 @@ the lock used by the run. This qualifies the existing multipass experiment;
 it does not promote the candidate driver into the production API or qualify
 the separate zenpixels precision migration. The run receipt is in
 [`benchmarks/imij_core_unification_2026-10-28.json`](../../benchmarks/imij_core_unification_2026-10-28.json).
+
+## Precision and descriptor admission (2026-10-28)
+
+The candidate now enforces the production `Description::exact_depth` contract.
+An incompatible claim refuses before native startup. Each filled request checks
+active samples, including staged replay, before returning success to the codec.
+The first contradictory absolute row remains available as the existing typed
+`row_encode::ExactDepthContradiction`; swallowing the interrupted fill cannot
+turn the operation into success. Padding is not part of the claim. The request
+buffer belongs to the codec and has already been filled when verification runs;
+the guarantee is refusal of successful delivery and subsequent publication,
+not isolation from a codec that reads its buffer after an error. Earlier live
+output is not rolled back.
+
+The native adapter also checks descriptor primaries and signal range before
+constructing its sRGB output description. Display-P3, unknown primaries and
+narrow-range declarations refuse instead of being relabeled. This adapter does
+not add color conversion, even when a separate supplied context contradicts the
+descriptor. The existing matching-sRGB context control remains unchanged.
+
+Both precision controls and the native color control fail behaviorally before
+their fixes. The fixed public suite passes 26 tests; the native suite passes
+19 tests, including the existing byte/sample controls and claimed-versus-unclaimed
+byte parity for four native configurations with forward and seek-back output.
+Strict Clippy passes for both harnesses. This is input-grid verification, not a
+lossless guarantee for IMI's lossy output. No performance or native workspace
+bound was measured. Exact revisions, commands and the initial test-lint failure
+are retained in the [receipt](../../benchmarks/multipass_declarations_2026-10-28.json).
+
+## Production promotion gates
+
+The shared `EncodePlan` already represents source pass bounds and final-pass
+output timing. The candidate still duplicates these as `PassCount`, `PassPlan`
+and `PassOutput`, and still asks a separate `ReplayResolver`. Promotion should
+reuse the existing plan and one joint operation-policy decision over the actual
+job, source replay and output schedule; it must not clear unrelated requirements
+to make separate questions succeed.
+
+Source review of the pinned native session identified two prerequisites:
+discovering pass bounds currently constructs native session state, and the
+session's `Rc` mailbox/non-Send future cannot satisfy `DynEncoder: Send`.
+Planning must obtain the same facts without constructing that state. Safe
+native mobility must be implemented and tested before claiming erased parity;
+no unsafe Send implementation or implicit thread bridge is proposed.
+
+The same review found remaining candidate gates: validate reader/file row
+geometry before consumption, preserve typed source-side stop reasons, check
+cancellation before final cursor/flush effects, and bound the diagnostic trace.
+These are source findings, not executed regressions. Async pending-buffer
+ownership, total retained memory and metadata/carrier qualification also remain
+unproven. Passing the tests above does not close these production gates.
