@@ -855,6 +855,10 @@ frame-cost-check:
     cargo run --example frame_policy_probe --locked -- combined 1000
     cargo clippy -p zencodec --bench frame_policy --example frame_policy_probe --locked -- -D warnings
 
+# Rust value layout, distinct from process memory and throughput measurement.
+policy-layout-check:
+    cargo run --example frame_policy_probe --locked -- layout
+
 frame-cost-build:
     CARGO_PROFILE_RELEASE_DEBUG=1 CARGO_PROFILE_RELEASE_LTO=thin cargo build --release --example frame_policy_probe --locked
     CARGO_PROFILE_BENCH_DEBUG=1 CARGO_PROFILE_BENCH_LTO=thin cargo bench --bench frame_policy --no-run --locked
@@ -1431,3 +1435,8 @@ guide-starter-check checkout:
 policy-completion-check:
     cargo test --locked -p zencodec-media-testkit --features zencodec-media/std --test policy_completion_review
     cargo test --locked -p zencodec-testkit --test policy_final_facts_review
+
+# Metadata and output schedule must belong to the same executable offer.
+transcode-composition-check:
+    cargo test --locked -p zencodec operation::transcode::composition_tests
+    cargo clippy --locked -p zencodec --all-features --all-targets -- -D warnings
