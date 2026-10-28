@@ -219,3 +219,69 @@ mod network {
     // END EXAMPLE: checked_async
 }
 pub(crate) use network::from_network;
+
+mod cancellation {
+    // EXAMPLE: checked_registry_pulse
+    use zencodec::{CodecSet, ResourceLimits, SharedPulse};
+    use zencodecs::{JpegDecoderConfig, PngDecoderConfig, PngEncoderConfig};
+
+    pub fn gallery_codecs_with_cancellation(pulse: SharedPulse, max_pixels: u64) -> CodecSet {
+        // ANCHOR: checked_registry_pulse
+        CodecSet::new()
+            .with_limits(ResourceLimits::for_untrusted_input().with_max_pixels(max_pixels))
+            .with_pulse(pulse)
+            .with_decoder(JpegDecoderConfig::new())
+            .with_decoder(PngDecoderConfig::new())
+            .with_send_encoder(PngEncoderConfig::new())
+        // END: checked_registry_pulse
+    }
+    // Keep the application's signalling handle so it can cancel during work.
+    // Passing SharedPulse preserves progress reporting and phase planning too.
+    // Adapt a legacy Stop at the application boundary with StopOnly when needed.
+    // END EXAMPLE: checked_registry_pulse
+}
+pub(crate) use cancellation::gallery_codecs_with_cancellation;
+
+mod publication {
+    // EXAMPLE: checked_png_file
+    use std::path::Path;
+    use zencodec::{
+        CodecSet,
+        encode::EncodeOutput,
+        operation::{OperationPolicy, Outcome},
+    };
+    use zencodecs::checked_transcode::TranscodeRequest;
+
+    pub fn publish_completed(
+        codecs: &CodecSet,
+        output: &EncodeOutput,
+        destination: &Path,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        // Cancellation observed here must not create or truncate the file.
+        codecs.pulse().check()?;
+        std::fs::write(destination, output.data())?;
+        Ok(())
+    }
+
+    pub fn transcode_to_file<P: OperationPolicy + ?Sized>(
+        request: &TranscodeRequest<'_>,
+        codecs: &CodecSet,
+        bytes: &[u8],
+        destination: &Path,
+        policy: &mut P,
+    ) -> Result<Outcome<EncodeOutput>, Box<dyn std::error::Error + Send + Sync>> {
+        // ANCHOR: checked_png_file
+        codecs.pulse().check()?;
+        let output = request.transcode_with(codecs, bytes, policy)?;
+        publish_completed(codecs, output.output(), destination)?;
+        // END: checked_png_file
+        // Pass the PNG request from the preceding recipes, along with its
+        // mandatory PolicySet or BoundPolicy. No policy is replaced or relaxed.
+        // The successful report remains available to the application.
+        // fs::write is synchronous: cancellation during that call is not
+        // preemptive, and an I/O failure may leave partial destination bytes.
+        Ok(output)
+    }
+    // END EXAMPLE: checked_png_file
+}
+pub(crate) use publication::{publish_completed, transcode_to_file};

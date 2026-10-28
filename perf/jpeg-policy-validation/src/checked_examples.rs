@@ -140,3 +140,216 @@ fn public_guide_required_density_survives_or_refuses_before_encoding() {
         Some(ResolutionError::NotRepresentable)
     ));
 }
+
+mod cancellation_and_publication {
+    use super::{fixtures, guide};
+    use std::{
+        cell::Cell,
+        path::{Path, PathBuf},
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        },
+    };
+    use zencodec::operation::{BoundPolicy, Decision, OperationError, Question};
+    use zencodec::{
+        At, SharedPulse,
+        enough::{Stop, StopReason},
+        how_far::StopOnly,
+    };
+
+    #[derive(Clone)]
+    struct Cancel(Arc<AtomicBool>);
+    impl Stop for Cancel {
+        fn check(&self) -> Result<(), StopReason> {
+            if self.0.load(Ordering::SeqCst) {
+                Err(StopReason::Cancelled)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    const SENTINEL: &[u8] = b"existing destination must survive refusal";
+
+    fn destinations(label: &str) -> (PathBuf, PathBuf) {
+        let artifacts = PathBuf::from(
+            std::env::var_os("JPEG_POLICY_ARTIFACTS")
+                .expect("the caller must select the native fixture output directory"),
+        );
+        std::fs::create_dir_all(&artifacts).unwrap();
+        // Never reuse or remove an earlier run's artifacts. A collision fails.
+        let directory = artifacts.join(format!(
+            "checked-publication-{label}-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let absent = directory.join("new.png");
+        let existing = directory.join("existing.png");
+        std::fs::write(&existing, SENTINEL).unwrap();
+        (absent, existing)
+    }
+
+    fn assert_untouched(absent: &Path, existing: &Path) {
+        assert!(
+            !absent.try_exists().unwrap(),
+            "refusal created a destination"
+        );
+        assert_eq!(std::fs::read(existing).unwrap(), SENTINEL);
+    }
+
+    #[test]
+    fn public_guide_cancellation_handle_reaches_registered_decode() {
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let codecs = guide::gallery_codecs_with_cancellation(
+            SharedPulse::new(StopOnly::new(Cancel(cancelled.clone()))),
+            4_000_000,
+        );
+        let source = fixtures::fixture(false, fixtures::Placement::Header);
+        let decoded = guide::preview(&codecs, &source).unwrap();
+        assert_eq!(
+            (decoded.width(), decoded.height()),
+            (fixtures::WIDTH, fixtures::HEIGHT)
+        );
+        cancelled.store(true, Ordering::SeqCst);
+        assert_eq!(codecs.pulse().check(), Err(StopReason::Cancelled));
+        let error = guide::preview(&codecs, &source).unwrap_err();
+        assert!(matches!(
+            zencodec::find_cause::<OperationError>(&error),
+            Some(OperationError::Stopped(StopReason::Cancelled))
+        ));
+    }
+
+    #[test]
+    fn public_guide_png_file_matches_completed_bytes_and_report() {
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let codecs = guide::gallery_codecs_with_cancellation(
+            SharedPulse::new(StopOnly::new(Cancel(cancelled))),
+            4_000_000,
+        );
+        for progressive in [false, true] {
+            let source = fixtures::fixture(progressive, fixtures::Placement::Header);
+            let (request, mut policy) = guide::web_request();
+            let expected = request
+                .transcode_with(&codecs, &source, &mut policy)
+                .unwrap();
+            let (destination, existing) = destinations(if progressive {
+                "progressive"
+            } else {
+                "baseline"
+            });
+            let output =
+                guide::transcode_to_file(&request, &codecs, &source, &destination, &mut policy)
+                    .unwrap();
+            let stored = std::fs::read(&destination).unwrap();
+            assert!(stored.starts_with(b"\x89PNG\r\n\x1a\n"));
+            assert_eq!(stored.as_slice(), expected.data());
+            assert_eq!(stored.as_slice(), output.data());
+            assert_eq!(
+                output.report().decisions().count(),
+                expected.report().decisions().count()
+            );
+            let decoded = guide::preview(&codecs, &stored).unwrap();
+            let expected_pixels = guide::preview(&codecs, expected.data()).unwrap();
+            assert_eq!(
+                (decoded.width(), decoded.height()),
+                (fixtures::WIDTH, fixtures::HEIGHT)
+            );
+            for row in 0..decoded.height() {
+                assert_eq!(decoded.pixels().row(row), expected_pixels.pixels().row(row));
+            }
+            assert_eq!(std::fs::read(existing).unwrap(), SENTINEL);
+        }
+    }
+
+    #[test]
+    fn public_guide_pre_cancelled_png_file_never_touches_destinations() {
+        let cancelled = Arc::new(AtomicBool::new(true));
+        let codecs = guide::gallery_codecs_with_cancellation(
+            SharedPulse::new(StopOnly::new(Cancel(cancelled))),
+            4_000_000,
+        );
+        let source = fixtures::fixture(false, fixtures::Placement::Header);
+        let (request, mut policy) = guide::web_request();
+        let (absent, existing) = destinations("pre-cancelled");
+        for destination in [&absent, &existing] {
+            let error =
+                guide::transcode_to_file(&request, &codecs, &source, destination, &mut policy)
+                    .unwrap_err();
+            assert_eq!(
+                error.downcast_ref::<StopReason>(),
+                Some(&StopReason::Cancelled)
+            );
+            assert_untouched(&absent, &existing);
+        }
+    }
+
+    #[test]
+    fn public_guide_cancellation_after_encode_prevents_publication() {
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let codecs = guide::gallery_codecs_with_cancellation(
+            SharedPulse::new(StopOnly::new(Cancel(cancelled.clone()))),
+            4_000_000,
+        );
+        let source = fixtures::fixture(false, fixtures::Placement::Header);
+        let (request, mut policy) = guide::web_request();
+        let completed = request
+            .transcode_with(&codecs, &source, &mut policy)
+            .unwrap();
+        assert!(completed.data().starts_with(b"\x89PNG\r\n\x1a\n"));
+        let before = completed.data().to_vec();
+        let (absent, existing) = destinations("post-encode-cancelled");
+        // Deterministic boundary injection, independent of codec check counts.
+        cancelled.store(true, Ordering::SeqCst);
+        for destination in [&absent, &existing] {
+            let error =
+                guide::publish_completed(&codecs, completed.output(), destination).unwrap_err();
+            assert_eq!(
+                error.downcast_ref::<StopReason>(),
+                Some(&StopReason::Cancelled)
+            );
+            assert_eq!(completed.data(), before.as_slice());
+            assert_untouched(&absent, &existing);
+        }
+    }
+
+    #[derive(Debug)]
+    struct ExportRefused;
+    impl std::fmt::Display for ExportRefused {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("application refused the export")
+        }
+    }
+    impl std::error::Error for ExportRefused {}
+
+    #[test]
+    fn public_guide_refused_encode_never_touches_destinations() {
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let codecs = guide::gallery_codecs_with_cancellation(
+            SharedPulse::new(StopOnly::new(Cancel(cancelled))),
+            4_000_000,
+        );
+        let source = fixtures::fixture(false, fixtures::Placement::Header);
+        let (request, requirements) = guide::web_request();
+        let (absent, existing) = destinations("policy-refusal");
+        for destination in [&absent, &existing] {
+            let called = Cell::new(false);
+            let mut policy = BoundPolicy::new(
+                requirements,
+                |_: Question<'_>| -> Result<Decision, At<ExportRefused>> {
+                    called.set(true);
+                    Err(At::wrap(ExportRefused))
+                },
+            );
+            let error =
+                guide::transcode_to_file(&request, &codecs, &source, destination, &mut policy)
+                    .unwrap_err();
+            assert!(
+                called.get(),
+                "the bound application callback was not consulted"
+            );
+            assert!(zencodec::find_cause::<ExportRefused>(error.as_ref()).is_some());
+            assert_untouched(&absent, &existing);
+        }
+    }
+}

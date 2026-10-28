@@ -4,6 +4,7 @@ export const codeFlows = [
     {example:'checked_registry',file:'docs/examples/checked_operations.rs',api:['operationRegistration']},
     {example:'checked_decode',file:'docs/examples/checked_operations.rs',api:['operationDecode','operationOutcome','decodedOutput']},
     {example:'checked_default',file:'docs/examples/checked_operations.rs',api:[],external:['integration-api.json']},
+    {example:'checked_png_file',file:'docs/examples/checked_operations.rs',api:['operationRegistration','operationOutcome','encodedOutput'],external:['integration-api.json'],state:'Source addition · native qualification pending'},
   ]},
   {id:'adapter-input',role:'adapter',title:'Slice → positional reads → batched ranges',steps:[
     {example:'slice',file:'docs/examples/journeys.rs',api:['sliceDriver']},
@@ -61,6 +62,7 @@ export const codeFlows = [
   ]},
   {id:'app-limits',role:'consumer',title:'Bound input → cancel → inspect errors',steps:[
     {example:'limits',file:'docs/examples/journeys.rs',api:['decodeJob','findCause'],state:'Lower-level configured decode'},
+    {example:'checked_registry_pulse',file:'docs/examples/checked_operations.rs',api:['operationRegistration'],state:'Source addition · native qualification pending'},
   ]},
   {id:'app-animation',role:'consumer',title:'Animation ↔ video; preserve exact timing',steps:[
     {scope:'fn animation_round_trips_through_the_video_model_with_exact_timing()',file:'zencodec-media-testkit/tests/contracts.rs',api:['animation','video'],state:'Media conformance test'},
@@ -167,6 +169,7 @@ const lessons = {
     ['Choose the formats once', 'The gallery accepts JPEG and PNG and writes PNG. Register those implementations once; pass the set to each operation. with_send_encoder registers jobs that may move between threads for the later async path; with_encoder also exists for thread-affine jobs. Send does not mean writing to a destination.'],
     ['Open one upload', 'The caller has encoded bytes and wants their native pixels. DecodeRequest detects the format; the result retains pixel interpretation and the operation report.'],
     ['Save a derivative', 'Now the gallery needs a PNG file. TranscodeRequest belongs to zencodecs, which composes the codecs and conversion; unsupported preservation can refuse.'],
+    ['Write the completed PNG file', 'Keep the PNG request and its mandatory policy from the preceding recipes. Encode successfully before opening the destination, then check the same operation Pulse and write the completed bytes synchronously. The successful operation report remains available. A stopped or refused encode must not create or truncate the destination; an I/O failure after writing starts can leave partial bytes.'],
   ],
   'app-render': [
     ['Open the first display image', 'A collection can contain pages, children or layers. Select through the common collection interface before assuming that the first stored raster is a complete canvas.'],
@@ -198,7 +201,10 @@ const lessons = {
     ['Inspect before decoding', 'A large collection may contain images the caller never wants. Read the selected description before allocating its pixels.'],
     ['Select a JXL layer deliberately', 'The application now edits layers. Preserve layer placement and distinguish a layer raster from a composited presentation.'],
   ],
-  'app-limits': [['Bound and cancel an operation', 'An upload is untrusted or the user closes the viewer. Configure resource limits and a Pulse, and retain the typed cause when work refuses or stops.']],
+  'app-limits': [
+    ['Bound and cancel an operation', 'An upload is untrusted or the user closes the viewer. Configure resource limits and a Pulse, and retain the typed cause when work refuses or stops.'],
+    ['Keep one cancellation source across the codecs', 'Extend the registered gallery with the pixel limit and the application’s SharedPulse. CodecSet supplies that same control to each checked operation, preserving cancellation, progress and phase planning. Keep the application handle that signals cancellation. Adapt a legacy Stop with StopOnly at the application boundary when needed.'],
+  ],
   'app-animation': [['Keep exact animation timing', 'An animation enters a video pipeline. The conformance test preserves rational timing through both adapters rather than rounding it at the boundary.']],
   'app-layout': [['Require both layout and color', 'A native image has auxiliary channels and a particular color interpretation. Prepare one output plan and execute it on the held source; layout conversion alone is insufficient.']],
   'adapter-input': [
