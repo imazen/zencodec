@@ -117,7 +117,14 @@ def main():
         if not surface.startswith("pub mod ") or "pub fn " not in surface:
             raise RuntimeError(f"Invalid API output for {package}")
         (output / f"{package}.txt").write_text(surface)
-        target = root / ("zencodec-render/target" if package == "zencodec-render" else "target")
+        metadata = subprocess.run(
+            ["cargo", "metadata", "--manifest-path", str(cargo_manifest),
+             "--no-deps", "--format-version", "1"],
+            cwd=root, check=True, capture_output=True, text=True, timeout=180,
+        )
+        # Cargo resolves environment and config overrides, including each
+        # independent workspace. Do not assume artifacts live under root/target.
+        target = Path(json.loads(metadata.stdout)["target_directory"])
         details = source_details(target / "doc" / (package.replace("-", "_") + ".json"), root, directory)
         details_text = json.dumps(details, ensure_ascii=False) + "\n"
         (output / f"{package}.json").write_text(details_text)
