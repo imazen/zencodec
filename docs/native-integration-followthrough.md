@@ -67,3 +67,39 @@ The [implementation record](ideal-api.md) remains the wider scope checklist.
 Native video delay/late metadata, TIFF collection packaging, complete workspace
 admission, and full-container privacy guarantees are not closed by these native
 encoding CI results.
+
+## Second pipeline batch: failures now reach native execution
+
+The subsequent integration batch executed 14 command gates: six passed and eight
+failed. The Tokio bridge and modeled HTTP tests passed, as did the I/O library
+check/lint and two output/image-job targets. These do not establish whole-pipeline
+correctness. The failing gates exposed:
+
+- A JPEG controlled decode overflowing the default test-thread stack, including
+  the checked transcode path. Increasing the stack is not the acceptance gate.
+- Native JPEG timeout cancellation reported as `Cancelled` instead of `TimedOut`.
+- A supplied `Rotate90` orientation without an EXIF blob returning as `Identity`.
+- A required output-wait bound refusing without named unmet requirements when
+  the `PolicySet` is passed as the callback rather than installed on the operation.
+- Remaining example lifetimes/imports and a custom cancellation fixture that
+  still implemented the older control interface.
+
+The original failures remain recorded; repairs must pass the same assertions.
+Unmigrated GIF/WebP and the root test graph remain separate coverage gaps.
+
+### One requirement set, including diagnostics
+
+The fourth failure has a source-confirmed explanation in
+[`policy::choose`](../src/operation/policy.rs): the operation's preset filters
+offers before the callback and fills `DecisionRecord::unmet_requirements`.
+A second `PolicySet` used as the callback can independently decline a choice,
+but `Decision::Decline` carries only the predefined reason and trace. That path
+does not populate the named-requirement record. Refusal still happens; the
+diagnostic and admission behavior depend on where the same configuration is put.
+
+The intended replacement should bind mandatory requirements once, before route
+selection, and let the callback choose among those admitted routes. Tests must
+compare direct built-in policy use with a custom callback, retaining requirement
+names and typed causes without exposing metadata payloads. This is an API design
+item in [issue 173](https://github.com/imazen/zencodec/issues/173), not a reason to
+weaken the integration test or silently move the caller's requirements.
