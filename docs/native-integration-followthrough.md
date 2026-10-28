@@ -151,3 +151,40 @@ accounts for the larger object-size changes. Other targets and throughput remain
 unmeasured. The standalone layout build/run receipts were 0.24 GiB and 0.18 GiB
 peak RSS, respectively; those compiler/process readings are separate from the
 struct sizes above.
+
+## Third pipeline batch and bounded coroutine delivery
+
+The third pipeline batch ran each test in a separate process: 256 of 264 tests
+passed, and 11 of 19 command gates passed. These denominators cover this batch,
+not the release requirements. The receipt was `rc=1`, 306 seconds, peak RSS
+0.65 GiB, minimum available memory 6107 MiB and peak load 1.99. The remaining
+failures include orientation carriage, named policy refusals, the metadata
+verification witness, and PNG delivery/cropping. Passing library and transport
+tests do not close those failures.
+
+PNG exposed a distinction between a bounded buffer loan and bounded delivery
+per decoder step. The coroutine split a large native batch into small sink loans,
+but delivered all of them before returning control to a pull consumer. Its queue
+could reach the unchanged 64-object cap even though every loan fit.
+
+Core commit `4be34b03` retains the native batch and returns after one sink loan.
+The next step delivers the next strip without consuming more input or polling
+the producer. The regression uses a one-slot sink, 129 rows, distinct source and
+destination strides, provisional/final passes, and a producer that finishes with
+rows still pending. Both controls fail against the previous implementation;
+all coroutine tests and strict Clippy pass with the repair. Cancellation between
+strips remains terminal. The complete test/catalog receipt was `rc=0`, 6 seconds,
+peak RSS 0.26 GiB, minimum available memory 6419 MiB and peak load 0.89.
+
+This bounds delivery, not native memory: the pending native batch remains owned
+until its last strip is delivered. Handwritten decoders do not acquire this
+coroutine-specific guarantee. Native PNG and the complete consumer pipeline must
+qualify the change separately. Core CI and fuzz checks passed at `79676215`;
+the documentation workflow's native JPEG harness still fails, so Pages deployment
+remains blocked even though the guide, TIFF/JXL and AV1 qualification jobs pass.
+
+The checked-policy migration also exposes fields that native adapters currently
+refuse. Acceptance must be implemented and tested in those adapters; replacing a
+checked setter with the deprecated best-effort setter would restore silent
+policy loss. Native capability work and named policy diagnostics are separate
+acceptance gates.
