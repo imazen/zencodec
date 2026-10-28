@@ -10,6 +10,7 @@ retain the remaining design and qualification work.
 | Repository | Reviewed change | Tested source | Remote main contains it |
 | --- | --- | --- | --- |
 | zencodec | [PR 168](https://github.com/imazen/zencodec/pull/168) | `f552d338fc5af8dbc623129f3040b65c9f074a71` | Merge `f02a17ec6001a9efcad1267f92a3ea928ed06e57`; ancestry verified |
+| zencodec | [PR 174](https://github.com/imazen/zencodec/pull/174), shared pull rows | `426804c8ef4840edc0ed5e7f6b1fe5e76bf11908` | Merge `9f9bd3cecf05c3b2cdcd7ee70a6a6da4f8b923df`; ancestry verified |
 | zenextras | [PR 54](https://github.com/imazen/zenextras/pull/54) | `3e5267e363e339a2af86c6bb838e3ab0c4a7f0b2` | Merge `635609fba4bf073ff68a1e1ccb55fa3dd170b1d8`; remote comparison verified |
 | zenbitmaps | [PR 34](https://github.com/imazen/zenbitmaps/pull/34) | `9ad4582bc51b6259829a421fe1e6564f617d31ce` | Merge `9cab06f86eb6582d2253410285f38a76185ba39b`; remote comparison verified |
 | zenjxl | [PR 31](https://github.com/imazen/zenjxl/pull/31) | `f2c0177e153c9308042bfd5fe51a4be1ebac11b0` | Merge `bf3a4a801cd293bb59b13ecf3791c50c0acf9059`; remote comparison verified |
@@ -63,10 +64,9 @@ Default/all-feature tests, strict Clippy, public API snapshots and all five fuzz
 target compilations pass locally. The new graph requires the paired canonical
 P3 ICC test expectation; exact carrier and sample checks remain.
 [Portable graph evidence](https://github.com/imazen/zenextras/blob/a5e792612145e0d544fa0243677d935fbcd487f0/docs/shared-contract-graph.md)
-records the preserved initial failures and remaining platform-CI gate.
+records the preserved initial failures. Its [platform CI](https://github.com/imazen/zenextras/actions/runs/40774551950) passed all twelve jobs, including Windows ARM64, macOS ARM64 and i686.
 
-The shared pull-row extension, retained native multipass preparation and movable
-session are under implementation and validation. These do not yet qualify the
+The shared pull-row extension is on main after [core CI](https://github.com/imazen/zencodec/actions/runs/40774823759), [native/guide checks](https://github.com/imazen/zencodec/actions/runs/40774823490) and [fuzz builds](https://github.com/imazen/zencodec/actions/runs/40774823515). Retained native multipass preparation and movable sessions passed focused native controls and static checks; cross-revision byte qualification and retained-job integration remain outstanding. These do not yet qualify the
 single-policy production multipass driver or asynchronous row ownership.
 
 ## PNG review stack

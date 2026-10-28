@@ -626,3 +626,15 @@ binding, strict Clippy and guide controls pass; the actual native call-order and
 metadata-completeness controls belong to the retained publication adapter and
 remain a separate integration gate. See `docs/spec.md` and
 `benchmarks/workspace_admission_2026-10-28.json`.
+
+
+## Known Bugs: final publication cancellation (2026-10-28)
+
+Source review found that cancellation raised by the final patch write could
+still be followed by cursor restoration and flush in `row_encode`; the
+multipass experiment also lacked its post-finish and pre-flush checks.
+Fixed with checks at those boundaries and adversarial writer controls, retaining
+confirmed byte accounting. Both pre-fix controls failed as expected; three
+production patch controls, 33 public multipass controls and strict Clippy pass.
+The receipt preserves an initial stale shared-target artifact failure; independent
+target rebuilding qualified the corrected source.

@@ -2,6 +2,12 @@
 
 ## Native image selection (unreleased experiment)
 
+### Fixed
+
+- Stop row and experimental multipass publication before later cursor restoration
+  or flush when finish, writes or seeks cancel the Pulse. Preserve confirmed
+  append/overwrite counts; adversarial controls cover both output schedules.
+
 ### QUEUED BREAKING CHANGES
 
 - Add default-refusing `Encoder::pull_rows` and erased forwarding, with shared

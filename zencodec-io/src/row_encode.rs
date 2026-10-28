@@ -924,9 +924,11 @@ fn run_rows<P: RowStartup, S: Source, D: Destination, R: OperationPolicy>(
                 writer.position(patch.offset)?;
                 write_all(&mut writer, &patch.bytes, &mut patched_bytes, pulse)?;
             }
+            check(pulse)?;
             writer.position(produced)?;
         }
         boundary = Stage::Write;
+        check(pulse)?;
         writer.flush()?;
         check(pulse)?;
         Ok(schedule)
@@ -1055,6 +1057,105 @@ mod patch_tests {
     }
     fn options() -> Options {
         Options::new(StorageBudget::new(1024, 16), 1024)
+    }
+    #[test]
+    fn cancellation_during_patch_or_restore_prevents_later_effects() {
+        use core::sync::atomic::{AtomicBool, Ordering::Relaxed};
+        use zencodec::how_far::{Child, Execution, PhaseSpec, PlanError, Report};
+        struct Cancel(AtomicBool);
+        impl zencodec::enough::Stop for Cancel {
+            fn check(&self) -> Result<(), zencodec::enough::StopReason> {
+                if self.0.load(Relaxed) {
+                    Err(zencodec::enough::StopReason::Cancelled)
+                } else {
+                    Ok(())
+                }
+            }
+        }
+        impl Report for Cancel {
+            fn advance(&self, _: u64) {}
+        }
+        impl zencodec::Pulse for Cancel {
+            fn split(
+                &self,
+                _: Execution,
+                _: &[PhaseSpec<'_>],
+            ) -> Result<alloc::vec::Vec<Child<'_>>, PlanError> {
+                Err(PlanError::Unsupported)
+            }
+        }
+        struct Writer<'a> {
+            cursor: io::Cursor<alloc::vec::Vec<u8>>,
+            pulse: &'a Cancel,
+            positions: usize,
+            flushes: usize,
+            cancel_on_patch: bool,
+            cancel_on_restore: bool,
+        }
+        impl Write for Writer<'_> {
+            fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+                let n = self.cursor.write(bytes)?;
+                if self.positions == 2 && self.cancel_on_patch {
+                    self.pulse.0.store(true, Relaxed);
+                }
+                Ok(n)
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                self.flushes += 1;
+                Ok(())
+            }
+        }
+        impl Seek for Writer<'_> {
+            fn seek(&mut self, at: SeekFrom) -> io::Result<u64> {
+                self.positions += 1;
+                let pos = self.cursor.seek(at)?;
+                if self.positions == 3 && self.cancel_on_restore {
+                    self.pulse.0.store(true, Relaxed);
+                }
+                Ok(pos)
+            }
+        }
+        for schedule in [OutputSchedule::FinishFirst, OutputSchedule::Live] {
+            for mode in 0..3 {
+                let pulse = Cancel(AtomicBool::new(false));
+                let mut writer = Writer {
+                    cursor: io::Cursor::new(alloc::vec::Vec::new()),
+                    pulse: &pulse,
+                    positions: 0,
+                    flushes: 0,
+                    cancel_on_patch: mode == 0,
+                    cancel_on_restore: mode == 1,
+                };
+                let result = encode_to_destination(
+                    Patching {
+                        pending: false,
+                        bad: false,
+                    },
+                    source(),
+                    SeekBack::new(&mut writer).unwrap(),
+                    PolicySet::new().require_output_schedule(schedule),
+                    options(),
+                    &pulse,
+                );
+                assert_eq!(writer.cursor.get_ref(), &[1, 2, 3]);
+                if mode == 2 {
+                    let completed = result.unwrap();
+                    assert_eq!((completed.emitted, completed.patched_bytes), (3, 2));
+                    assert_eq!((writer.positions, writer.flushes), (3, 1));
+                } else {
+                    let error = result.unwrap_err();
+                    assert_eq!(
+                        zencodec::find_cause::<zencodec::CodecError>(&error)
+                            .unwrap()
+                            .category(),
+                        zencodec::ErrorCategory::Stopped(zencodec::enough::StopReason::Cancelled)
+                    );
+                    assert_eq!((error.error().emitted, error.error().patched_bytes), (3, 2));
+                    assert_eq!(writer.flushes, 0);
+                    assert_eq!(writer.positions, if mode == 0 { 2 } else { 3 });
+                }
+            }
+        }
     }
     #[test]
     fn incompatible_destination_refuses_before_policy_or_any_output() {

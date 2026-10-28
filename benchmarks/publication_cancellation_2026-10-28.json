@@ -1,0 +1,34 @@
+{
+  "date": "2026-10-28",
+  "tested_source": "8eb8cc0afb5c22a55da897607f49d3ca17b07014",
+  "command": "just publication-cancellation-check",
+  "limits": {
+    "memory": "3G",
+    "jobs": 2,
+    "timeout_seconds": 900
+  },
+  "before": {
+    "multipass": "014fa490996690b9b249cf573338344d56f56010",
+    "production_rows": "b3e422706bbc4231b7ccb3aef554300253b23ee7",
+    "result": "Both regression controls executed and failed at unwanted flush assertions, rc101 each."
+  },
+  "initial_aggregate": {
+    "exit": 101,
+    "resource": "23s | peak-RSS 0.42GiB | min-avail 4337MiB | peak-load 1.04",
+    "issue": "Fixed export reused pre-fix Cargo test artifact from shared target. Failure location1133 is the baseline flush assertion but a struct initializer in corrected source. Initial failed logs retained."
+  },
+  "corrected_orchestration": {
+    "source_changes": false,
+    "target": "separate initially empty target-fixed",
+    "exit": 0,
+    "resource": "34s | peak-RSS 0.41GiB | min-avail 4014MiB | peak-load 1.43",
+    "production_patch_controls": 3,
+    "public_multipass_controls": 33,
+    "strict_clippy": [
+      "zencodec-io --features std --all-targets",
+      "multipass-validation --all-targets"
+    ]
+  },
+  "logs": "~/tmp/zencodec-publication-cancel-20261028 on r7900x",
+  "scope": "Validation resource use, not encoder performance. Native byte gate not repeated."
+}

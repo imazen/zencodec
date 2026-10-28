@@ -186,3 +186,16 @@ The post-start refusal control passes with all 32 public tests and strict
 Clippy. It requires exactly one startup and destruction of the owned encoder,
 and panics if the driver retries, inspects pending output or finishes. Existing
 native controls are unchanged by this review correction.
+
+## Cancellation at final publication
+
+The driver checks Pulse after native finish, before restoring a seek-back
+cursor, and before flushing the destination. A callback that raises cancellation
+may already have written bytes; the error retains confirmed append and overwrite
+counts. Later publication callbacks must not run. `just publication-cancellation-check`
+exercises finish, append, patch and cursor-restoration cancellation plus successful
+controls, including the production row driver's finish-first and live schedules.
+Both pre-fix controls reproduced the unwanted final callback. The corrected
+source passed three production patch controls, all 33 public multipass controls
+and strict Clippy for both crates. Receipt: [publication cancellation](../../benchmarks/publication_cancellation_2026-10-28.json).
+This does not establish new native byte parity.

@@ -65,6 +65,8 @@ struct Script {
     buf: Vec<u8>,
     pending: Vec<u8>,
     taken: usize,
+    cancel_at_finish: Option<Arc<AtomicU32>>,
+    patch: bool,
 }
 impl Script {
     /// `passes` passes, the last flagged final, no bytes before finish.
@@ -82,6 +84,8 @@ impl Script {
             buf: vec![0; RB * H as usize],
             pending: Vec::new(),
             taken: 0,
+            cancel_at_finish: None,
+            patch: false,
         }
     }
     fn emitting(mut self, passes: &[u32]) -> Self {
@@ -139,11 +143,21 @@ impl MultiPassEncoder for Script {
         self.taken = (self.taken + n).min(self.pending.len());
     }
     fn finish_output(self) -> Result<OutputFinish<EncodeOutput>, MockError> {
+        if let Some(cancel) = self.cancel_at_finish {
+            cancel.store(1, Relaxed);
+        }
         let mut tail = self.pending[self.taken..].to_vec();
         tail.extend_from_slice(b"end");
         Ok(OutputFinish::new(
             EncodeOutput::new(tail, zencodec::ImageFormat::Unknown),
-            Vec::new(),
+            if self.patch {
+                vec![zencodec::output_patch::Patch {
+                    offset: 0,
+                    bytes: vec![b'E'],
+                }]
+            } else {
+                Vec::new()
+            },
         ))
     }
 }
@@ -519,4 +533,122 @@ fn progress_counts_supplied_rows_and_totals_are_exact_only_when_known() {
     assert_eq!(r.unwrap().route, ReplayRoute::Stage(StagingKind::Memory));
     assert_eq!(rows_read.load(Relaxed), PASS);
     assert_eq!(pulse.advanced.load(Relaxed), rows);
+}
+
+/// Cancellation may be raised by native finish or any destination callback.
+/// Completed appends/patches remain counted, but no later cursor or flush
+/// callback may run after the cancellation becomes observable.
+#[test]
+fn cancellation_prevents_later_publication_callbacks() {
+    use std::io::{Seek, SeekFrom, Write};
+    use zencodec_io::destination::SeekBack;
+
+    #[derive(Clone, Copy)]
+    enum Trip {
+        Finish,
+        Append,
+        Patch,
+        Restore,
+        Never,
+    }
+    struct Writer {
+        bytes: io::Cursor<Vec<u8>>,
+        trip: Trip,
+        cancel: Arc<AtomicU32>,
+        writes: usize,
+        positions: usize,
+        flushes: usize,
+    }
+    impl Write for Writer {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.writes += 1;
+            let n = self.bytes.write(bytes)?;
+            if matches!(
+                (self.trip, self.writes),
+                (Trip::Append, 1) | (Trip::Patch, 2)
+            ) {
+                self.cancel.store(1, Relaxed);
+            }
+            Ok(n)
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            self.flushes += 1;
+            Ok(())
+        }
+    }
+    impl Seek for Writer {
+        fn seek(&mut self, at: SeekFrom) -> io::Result<u64> {
+            self.positions += 1;
+            let pos = self.bytes.seek(at)?;
+            // Capture origin, seek to patch, restore end.
+            if matches!(self.trip, Trip::Restore) && self.positions == 3 {
+                self.cancel.store(1, Relaxed);
+            }
+            Ok(pos)
+        }
+    }
+    for trip in [
+        Trip::Finish,
+        Trip::Append,
+        Trip::Patch,
+        Trip::Restore,
+        Trip::Never,
+    ] {
+        let cancel = Arc::new(AtomicU32::new(0));
+        let pulse = Recording {
+            trip: Some((cancel.clone(), 1)),
+            ..Default::default()
+        };
+        let mut enc = Script::new(PassCount::Exact(1), 1);
+        enc.patch = true;
+        enc.timing = OutputTiming::AT_FINISH.with_patches();
+        if matches!(trip, Trip::Finish) {
+            enc.cancel_at_finish = Some(cancel.clone());
+        }
+        let mut writer = Writer {
+            bytes: io::Cursor::new(Vec::new()),
+            trip,
+            cancel,
+            writes: 0,
+            positions: 0,
+            flushes: 0,
+        };
+        let result = encode_passes(
+            enc,
+            Input::source(positional().0),
+            SeekBack::new(&mut writer).unwrap(),
+            PolicySet::new(),
+            Preset,
+            options(ReplayPolicy::default()),
+            &pulse,
+        );
+        if matches!(trip, Trip::Never) {
+            let done = result.unwrap();
+            assert_eq!(done.emitted, 3);
+            assert_eq!(done.patched_bytes, 1);
+            assert_eq!(writer.bytes.into_inner(), b"End");
+            assert_eq!((writer.positions, writer.flushes), (3, 1));
+            continue;
+        }
+        let error = result.unwrap_err();
+        assert_eq!(
+            find_cause::<zencodec::CodecError>(&error)
+                .expect("typed cancellation")
+                .category(),
+            zencodec::ErrorCategory::Stopped(StopReason::Cancelled)
+        );
+        assert_eq!(writer.flushes, 0);
+        let (writes, positions, emitted, patched) = match trip {
+            Trip::Finish => (0, 1, 0, 0),
+            Trip::Append => (1, 1, 3, 0),
+            Trip::Patch => (2, 2, 3, 1),
+            Trip::Restore => (2, 3, 3, 1),
+            Trip::Never => unreachable!(),
+        };
+        assert_eq!((writer.writes, writer.positions), (writes, positions));
+        assert_eq!(
+            (error.error().emitted, error.error().patched_bytes),
+            (emitted, patched)
+        );
+    }
 }

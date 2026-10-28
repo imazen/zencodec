@@ -1333,6 +1333,7 @@ where
         boundary = Stage::Finish;
         check(stop)?;
         let finished = encoder.finish_output()?;
+        check(stop)?;
         finished.validate(produced)?;
         if !finished.patches.is_empty() && (!writer.can_patch() || !plan.timing.patches_at_finish())
         {
@@ -1353,9 +1354,11 @@ where
                 writer.position(patch.offset)?;
                 write_all(&mut writer, &patch.bytes, &mut patched_bytes, stop)?;
             }
+            check(stop)?;
             writer.position(produced)?;
         }
         boundary = Stage::Write;
+        check(stop)?;
         writer.flush()?;
         check(stop)?;
         Ok(schedule)

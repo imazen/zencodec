@@ -1430,6 +1430,12 @@ encoder-pull-check:
     cargo clippy -p zencodec --all-targets --all-features --locked -- -D warnings
     cargo test -p zencodec --all-features --locked --doc
 
+# Final writes may cancel: no later cursor/flush callbacks are permitted.
+publication-cancellation-check:
+    cargo test -p zencodec-io --features std --locked --lib row_encode::patch_tests
+    cargo clippy -p zencodec-io --features std --all-targets --locked -- -D warnings
+    just multipass-check
+
 multipass-check:
     cp perf/multipass-validation/dependencies.lock perf/multipass-validation/Cargo.lock
     cargo test --manifest-path perf/multipass-validation/Cargo.toml --locked
