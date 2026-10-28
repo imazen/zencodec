@@ -27,3 +27,16 @@ The dated TSV files retain the original observations. The
 callback bypass from current admission behavior and remaining costs. The
 [policy-binding experiment](../../docs/policy-binding-experiment.md) covers the
 separate, unresolved requirement-placement and intermediate-ownership problem.
+
+## Integration qualification
+
+An isolated export of `97695dba` passed the nine current-behavior tests, all four
+original proposed safety assertions, the allocation probes, and strict
+all-target Clippy. The tracked dependency lock remained unchanged. The resource
+wrapper reported `rc=0`, 16 seconds, peak RSS 0.45 GiB, minimum available memory
+5297 MiB and peak load 0.66. These are build/test resource readings.
+
+The runner's 22 fault controls also pass. They cover failed test/probe commands,
+failed exports (including failure after producing a valid archive), unresolved
+revisions, timeouts, lock changes, occupied directories and changed assertions.
+Control logs remain available after success as well as failure.
