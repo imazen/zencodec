@@ -23,16 +23,17 @@ Clippy correction qualified. See [the receipts](../benchmarks/replay_driver_2026
 
 1. Complete the native retained-job integration/Clippy gate on the corrected
    Undefined-slot fixture. Preserve the established opaque-slot contract.
-2. Execute the corrected native/public-driver matrix, including direct configured
-   job erasure and its core ownership tests. Keep the previous failed run and all
-   no-effect, exact-byte, cleanup and typed-cause assertions. Audit one core/pixel
-   dependency family before building. Finish strict Clippy.
-3. Refresh API snapshots/catalogs and run the full site browser suite on the
-   candidate's own server. Shared-driver controls and the isolated browser suite
-   already pass on `03b91e5d`; new API signatures require fresh capture.
+2. **Passed on `a39616ba`:** corrected native/public-driver matrix, direct
+   configured-job erasure, core ownership tests and strict Clippy. The graph audit
+   confirms one core/pixel family. Previous failures and all no-effect, exact-byte,
+   cleanup and typed-cause assertions are retained.
+3. **Passed on `c910076c`:** refreshed API snapshots and eight catalogs,
+   eight-crate Rustdoc HTML, 24 site/source controls and the full browser suite on
+   its own server. Generated snapshots are committed unchanged from that export.
 4. Require green PR CI on Linux, Windows x64/ARM64, macOS ARM64, i686, WASM,
    MSRV, Clippy, format and API/semver gates. The first Windows run found a
-   fixture's HOME assumption; the USERPROFILE correction is awaiting CI.
+   fixture's HOME assumption; the USERPROFILE correction passes on `d7b5a159`.
+   The subsequent configured-job/reference update has fresh CI in progress.
 5. Review the exact public API diff, deprecated replacements, README, changelog
    and supported-mode matrix. Record remaining unmeasured performance/memory/
    compile-time costs explicitly; validation-wrapper RSS is not an encoder bound.
